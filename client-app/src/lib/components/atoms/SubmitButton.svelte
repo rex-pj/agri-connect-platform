@@ -7,20 +7,18 @@
         icon: string;           // Font Awesome solid class, e.g. "fa-check"
         label: string;
         loadingLabel?: string;
-        variant?: string;
         class?: string;
     }
-    let { 
-        submitting, 
-        icon, 
-        label, 
-        loadingLabel = 'Đang xử lý…', 
-        variant = 'primary',
-        class: extraClass = '' 
+    let {
+        submitting,
+        icon,
+        label,
+        loadingLabel = 'Đang xử lý…',
+        class: extraClass = ''
     }: Props = $props();
 </script>
 
-<Button type="submit" {variant} class="w-100 {extraClass}" disabled={submitting}>
+<Button type="submit" class="btn-success w-100 {extraClass}" disabled={submitting}>
     {#if submitting}
         <Spinner size="sm" />
         <span>{loadingLabel}</span>

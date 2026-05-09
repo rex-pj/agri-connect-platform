@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"\\\\.\\(css|scss|svelte\\)$\")",
+      "Bash(Remove-Item -Recurse -Force \"d:\\\\Workspace\\\\agri-connect-platform\\\\client-app\\\\src\\\\routes\\\\\\(admin\\)\\\\admin\\\\login\")",
+      "Bash(xargs sed -i 's|/admin/login|/login|g')",
+      "Bash(Get-ChildItem -Path \"d:\\\\Workspace\\\\agri-connect-platform\\\\client-app\\\\src\" -Recurse -Directory)",
+      "Bash(node -e \"console.log\\(require\\('./node_modules/@sveltejs/kit/package.json'\\).version\\)\")"
+    ]
+  }
+}

@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Agri-Connect — Kết nối nông dân với dịch vụ nông nghiệp</title>
+    <meta name="description" content="Tìm thợ múc bùn, phun thuốc, sửa máy nổ nhanh chóng gần bạn nhất." />
+    <meta name="theme-color" content="#064E3B" />
+    <meta property="og:type"        content="website" />
+    <meta property="og:site_name"   content="Agri-Connect" />
+    <meta property="og:title"       content="Agri-Connect — Kết nối nông dân với dịch vụ nông nghiệp" />
+    <meta property="og:description" content="Tìm thợ múc bùn, phun thuốc, sửa máy nổ nhanh chóng gần bạn nhất." />
+    <meta property="og:locale"      content="vi_VN" />
+
+    <!-- Be Vietnam Pro -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+    <!-- Font Awesome 6 Free -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" />
+
+    <!-- Bootstrap 5.3 -->
+    <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+        crossorigin="anonymous" />
+
+    <style>
+        /* ── Design Tokens ─────────────────────────────────── */
+        :root {
+            /* Primary — premium deep emerald */
+            --p900: #022C22;
+            --p800: #064E3B;
+            --p700: #065F46;
+            --p600: #047857;
+            --p500: #059669;
+            --p100: #D1FAE5;
+            --p50:  #ECFDF5;
+
+            /* CTA — vivid amber */
+            --a600: #D97706;
+            --a500: #F59E0B;
+            --a50:  #FFFBEB;
+
+            /* Neutrals */
+            --bg:     #F5F8F6;
+            --surface:#FFFFFF;
+            --border: #C8D8CE;
+            --text:   #0C1A12;
+            --text2:  #2D4A38;
+            --muted:  #5E7A68;
+
+            /* Shadows */
+            --shadow-card: 0 1px 3px rgba(6,78,59,.06), 0 4px 14px rgba(6,78,59,.09);
+            --shadow-btn:  0 2px 8px rgba(6,78,59,.22);
+
+            /* Layout */
+            --header-h: 58px;
+            --nav-h:    64px;
+
+            font-size: 17px;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; }
+
+        body {
+            font-family: 'Be Vietnam Pro', 'Segoe UI', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ── Bootstrap overrides ───────────────────────────── */
+        .btn { min-height: 48px; font-size: 1rem; font-weight: 600; border-radius: 12px; transition: transform .1s ease, opacity .15s ease; }
+        .btn:active { transform: scale(.97); }
+        .btn-lg { min-height: 52px; }
+        .form-control, .form-select { min-height: 52px; font-size: 1rem; border-radius: 12px; border-color: var(--border); }
+        .form-control:focus, .form-select:focus { border-color: var(--p600); box-shadow: 0 0 0 3px rgba(4,120,87,.15); }
+        .card { border-radius: 16px !important; border: none !important; box-shadow: var(--shadow-card) !important; }
+
+        /* Suppress Bootstrap success/warning defaults — use tokens */
+        .bg-success  { background-color: var(--p700) !important; }
+        .text-success{ color: var(--p600) !important; }
+        .btn-success { background: var(--p700) !important; border-color: var(--p700) !important; }
+        .btn-success:hover { background: var(--p600) !important; }
+        .btn-warning { background: var(--a500) !important; border-color: var(--a500) !important; color: var(--text) !important; }
+    </style>
+
+    %sveltekit.head%
+</head>
+<body data-sveltekit-preload-data="hover">
+    <div style="display:contents">%sveltekit.body%</div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+        crossorigin="anonymous"></script>
+</body>
+</html>

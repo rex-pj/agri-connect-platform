@@ -1,0 +1,313 @@
+use chrono::{DateTime, Utc};
+use serde::Serialize;
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct LoginResponse {
+    pub token:    String,
+    pub username: String,
+    pub role:     String,
+}
+
+#[derive(Serialize)]
+pub struct MeResponse {
+    pub username:   String,
+    pub email:      String,
+    pub full_name:  Option<String>,
+    pub created_on: String,
+}
+
+// ── Products (shared between public and provider views) ───────────────────────
+
+#[derive(Serialize)]
+pub struct ProductDto {
+    pub id:           i32,
+    pub name:         String,
+    pub description:  Option<String>,
+    pub price:        Option<i64>,
+    pub unit:         Option<String>,
+    pub image_url:    Option<String>,
+    pub category:     String,
+    pub vendor_name:  String,
+    pub vendor_phone: String,
+    pub is_available: bool,
+    pub created_on:   DateTime<Utc>,
+}
+
+#[derive(Serialize)]
+pub struct ProductBrowseResponse {
+    pub products:    Vec<ProductDto>,
+    pub total:       i64,
+    pub page:        i64,
+    pub total_pages: i64,
+}
+
+// ── Agri-Connect / public provider views ─────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct BusinessSearchDto {
+    pub id:          i32,
+    pub name:        String,
+    pub phone:       String,
+    pub address:     Option<String>,
+    pub is_verified: bool,
+    pub distance_m:  f64,
+    pub services:    Vec<String>,
+}
+
+#[derive(Serialize)]
+pub struct BusinessBrowseDto {
+    pub id:          i32,
+    pub name:        String,
+    pub phone:       String,
+    pub address:     Option<String>,
+    pub is_verified: bool,
+    pub services:    Vec<String>,
+    pub created_on:  DateTime<Utc>,
+}
+
+#[derive(Serialize)]
+pub struct BrowseResponse {
+    pub providers:   Vec<BusinessBrowseDto>,
+    pub total:       i64,
+    pub page:        i64,
+    pub total_pages: i64,
+}
+
+#[derive(Serialize)]
+pub struct ServiceDto {
+    pub id:          i32,
+    pub name:        String,
+    pub description: Option<String>,
+    pub price_note:  Option<String>,
+    pub category:    String,
+}
+
+#[derive(Serialize)]
+pub struct BusinessDetailDto {
+    pub id:          i32,
+    pub name:        String,
+    pub phone:       String,
+    pub description: Option<String>,
+    pub address:     Option<String>,
+    pub is_verified: bool,
+    pub services:    Vec<ServiceDto>,
+}
+
+#[derive(Serialize)]
+pub struct ExploreData {
+    pub featured_providers: Vec<BusinessBrowseDto>,
+    pub featured_products:  Vec<ProductDto>,
+}
+
+#[derive(Serialize)]
+pub struct ContactResponse {
+    pub success: bool,
+    pub message: String,
+}
+
+#[derive(Serialize)]
+pub struct CategoryDto {
+    pub id:            i32,
+    pub name:          String,
+    pub slug:          String,
+    pub icon:          Option<String>,
+    pub display_order: i16,
+}
+
+// ── Provider dashboard ────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct ProviderProfileDto {
+    pub id:          i32,
+    pub name:        String,
+    pub phone:       String,
+    pub email:       Option<String>,
+    pub description: Option<String>,
+    pub address:     Option<String>,
+    pub is_verified: bool,
+    pub lat:         Option<f64>,
+    pub lng:         Option<f64>,
+}
+
+#[derive(Serialize)]
+pub struct ProviderProductDto {
+    pub id:          i32,
+    pub name:        String,
+    pub description: Option<String>,
+    pub price:       Option<i64>,
+    pub unit:        Option<String>,
+    pub image_url:   Option<String>,
+    pub category:    String,
+    pub category_id: i32,
+    pub is_active:   bool,
+    pub created_on:  DateTime<Utc>,
+}
+
+#[derive(Serialize)]
+pub struct DeleteResponse {
+    pub success: bool,
+    pub message: String,
+}
+
+// ── Admin ─────────────────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct AdminStatsDto {
+    pub total_businesses:    i64,
+    pub verified_businesses: i64,
+    pub active_products:     i64,
+    pub total_users:         i64,
+}
+
+#[derive(Serialize)]
+pub struct AdminProviderDto {
+    pub id:              i32,
+    pub name:            String,
+    pub phone:           String,
+    pub address:         Option<String>,
+    pub is_verified:     bool,
+    pub is_active:       bool,
+    pub service_count:   i64,
+    pub product_count:   i64,
+    pub created_on:      DateTime<Utc>,
+    pub linked_username: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct AdminServiceItemDto {
+    pub id:         i32,
+    pub name:       String,
+    pub category:   String,
+    pub price_note: Option<String>,
+    pub is_active:  bool,
+}
+
+#[derive(Serialize)]
+pub struct AdminProductItemDto {
+    pub id:        i32,
+    pub name:      String,
+    pub price:     Option<i64>,
+    pub unit:      Option<String>,
+    pub category:  String,
+    pub is_active: bool,
+}
+
+#[derive(Serialize)]
+pub struct AdminProviderDetailDto {
+    pub id:              i32,
+    pub name:            String,
+    pub phone:           String,
+    pub email:           Option<String>,
+    pub description:     Option<String>,
+    pub address:         Option<String>,
+    pub is_verified:     bool,
+    pub is_active:       bool,
+    pub created_on:      DateTime<Utc>,
+    pub linked_username: Option<String>,
+    pub services:        Vec<AdminServiceItemDto>,
+    pub products:        Vec<AdminProductItemDto>,
+}
+
+#[derive(Serialize)]
+pub struct AdminUserDto {
+    pub id:        i32,
+    pub username:  String,
+    pub email:     String,
+    pub full_name: Option<String>,
+    pub role_code: String,
+    pub role_name: String,
+    pub is_active: bool,
+}
+
+#[derive(Serialize)]
+pub struct AdminUserDetailDto {
+    pub id:         i32,
+    pub username:   String,
+    pub email:      String,
+    pub full_name:  Option<String>,
+    pub role_code:  String,
+    pub role_name:  String,
+    pub is_active:  bool,
+    pub created_on: DateTime<Utc>,
+}
+
+#[derive(Serialize)]
+pub struct VerifyToggleDto {
+    pub id:          i32,
+    pub name:        String,
+    pub is_verified: bool,
+    pub message:     String,
+}
+
+#[derive(Serialize)]
+pub struct AssignUserDto {
+    pub business_id: i32,
+    pub username:    String,
+    pub message:     String,
+}
+
+#[derive(Serialize)]
+pub struct AdminCategoryDto {
+    pub id:            i32,
+    pub name:          String,
+    pub slug:          String,
+    pub category_type: String,
+    pub icon:          Option<String>,
+    pub display_order: i16,
+    pub is_active:     bool,
+}
+
+#[derive(Serialize)]
+pub struct AdminInquiryDto {
+    pub id:              i32,
+    pub business_id:     i32,
+    pub business_name:   String,
+    pub requester_name:  String,
+    pub requester_phone: String,
+    pub topic:           String,
+    pub status:          String,
+    pub created_on:      DateTime<Utc>,
+}
+
+#[derive(Serialize)]
+pub struct AdminReviewDto {
+    pub id:            i32,
+    pub business_id:   i32,
+    pub business_name: String,
+    pub reviewer_name: String,
+    pub rating:        i16,
+    pub comment:       Option<String>,
+    pub is_visible:    bool,
+    pub created_on:    DateTime<Utc>,
+}
+
+#[derive(Serialize)]
+pub struct AdminPagedResponse<T: Serialize> {
+    pub items:       Vec<T>,
+    pub total:       i64,
+    pub page:        i64,
+    pub total_pages: i64,
+}
+
+// ── Setup ─────────────────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct SetupStatusDto {
+    pub database_connected: bool,
+    pub is_seeded:          bool,
+    pub business_count:     i64,
+    pub user_count:         i64,
+}
+
+// ── Roles ─────────────────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct RoleDto {
+    pub id:          i32,
+    pub code:        String,
+    pub name:        String,
+    pub description: Option<String>,
+    pub is_active:   bool,
+}

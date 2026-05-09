@@ -1,0 +1,58 @@
+// Input parameter types passed from handlers into use cases.
+// These are internal application-layer types — not HTTP request structs.
+
+// ── Agri-connect ──────────────────────────────────────────────────────────────
+
+pub struct GeoSearchParams {
+    pub lat:        f64,
+    pub lng:        f64,
+    pub radius:     f64,
+    pub service_id: Option<i32>,
+}
+
+pub struct BrowseParams {
+    pub service_id: Option<i32>,
+    pub page:       i64,
+}
+
+pub struct ContactInput {
+    pub business_id:     i32,
+    pub topic:           String,
+    pub requester_name:  String,
+    pub requester_phone: String,
+    pub note:            Option<String>,
+    pub service_id:      Option<i32>,
+}
+
+// ── Provider dashboard ────────────────────────────────────────────────────────
+
+pub struct UpdateProfileInput {
+    pub user_id:     i32,
+    pub name:        String,
+    pub phone:       String,
+    pub description: Option<String>,
+    pub address:     Option<String>,
+    pub lat:         Option<f64>,
+    pub lng:         Option<f64>,
+}
+
+pub struct CreateProductInput {
+    pub user_id:     i32,
+    pub category_id: i32,
+    pub name:        String,
+    pub description: Option<String>,
+    pub price:       Option<i64>,
+    pub unit:        Option<String>,
+    pub image_url:   Option<String>,
+}
+
+pub struct UpdateProductInput {
+    pub product_id:  i32,
+    pub user_id:     i32,
+    pub category_id: i32,
+    pub name:        String,
+    pub description: Option<String>,
+    pub price:       Option<i64>,
+    pub unit:        Option<String>,
+    pub image_url:   Option<String>,
+}

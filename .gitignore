@@ -1,0 +1,22 @@
+# Rust
+target/
+*.pdb
+
+# SvelteKit
+node_modules/
+.svelte-kit/
+build/
+.env
+.env.local
+.env.*.local
+
+# Secrets — keep examples, ignore real values
+backend/environments/.env.dev
+backend/environments/.env.prod
+backend/.env
+
+# IDE
+.vscode/settings.json
+.idea/
+*.suo
+*.user

@@ -108,7 +108,7 @@
 
   <!-- ── Stat cards ──────────────────────────────────────────────────── -->
   {#if stats.length}
-    <div class="row g-3 mb-4">
+    <div class="row g-3 g-md-4 mb-4">
       {#each stats as s}
         <div class="col-6 col-lg-3">
           <div class="stat-card">
@@ -131,7 +131,7 @@
   {/if}
 
   <!-- ── Feature cards ──────────────────────────────────────────────── -->
-  <Heading level={2} class="section-title">Công cụ quản lý</Heading>
+  <Heading level={2} class="mgmt-label">Công cụ quản lý</Heading>
   <div class="row g-3">
     {#each features as f}
       <div class="col-md-4">
@@ -216,19 +216,23 @@
     line-height: 1;
   }
 
-  /* ── Section title ───────────────────────────────── */
-  :global(.section-title) {
+  /* — Management section label ————————————————————— */
+  :global(.mgmt-label) {
     font-size: 0.72rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.1em;
     color: #5e7a68;
-    margin: 0 0 14px;
+    margin: 0 0 20px;
+    padding-top: 4px;
   }
 
-  /* ── Feature card ────────────────────────────────── */
+  /* — Feature card ————————————————————————————————— */
   :global(.feature-card) {
-    display: block;
+    display: flex !important;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
     background: #fff;
     border-radius: 16px;
     border: 1px solid #e5e7eb;
@@ -238,7 +242,10 @@
       transform 0.15s,
       box-shadow 0.15s;
     cursor: pointer;
+    text-align: left;
+    white-space: normal !important;
   }
+
   :global(.feature-card:hover:not(.feature-card--disabled)) {
     transform: translateY(-4px);
     box-shadow: 0 8px 24px rgba(6, 78, 59, 0.12);

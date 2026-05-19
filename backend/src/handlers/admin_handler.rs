@@ -1,5 +1,6 @@
 use axum::{
     extract::{Path, Query, State},
+    http::StatusCode,
     Json,
 };
 
@@ -92,8 +93,8 @@ impl AdminHandler {
         Path(id): Path<i32>,
         Json(req): Json<UpdateUserRoleRequest>,
     ) -> HandlerResult<impl axum::response::IntoResponse> {
-        state.usecases.admin.update_user_role(id, req.role_code).await.map_err(HandlerError::from)?;
-        Ok(Json(serde_json::json!({ "success": true })))
+        let result = state.usecases.admin.update_user_role(id, req.role_code).await.map_err(HandlerError::from)?;
+        Ok(Json(result))
     }
 
     /// PATCH /api/admin/users/{id}/active
@@ -103,8 +104,8 @@ impl AdminHandler {
         Path(id): Path<i32>,
         Json(req): Json<ToggleActiveRequest>,
     ) -> HandlerResult<impl axum::response::IntoResponse> {
-        state.usecases.admin.toggle_user_active(id, req.is_active).await.map_err(HandlerError::from)?;
-        Ok(Json(serde_json::json!({ "success": true })))
+        let result = state.usecases.admin.toggle_user_active(id, req.is_active).await.map_err(HandlerError::from)?;
+        Ok(Json(result))
     }
 
     /// GET /api/admin/categories/{id}
@@ -132,13 +133,13 @@ impl AdminHandler {
         State(state): State<AppState>,
         Json(req): Json<CreateCategoryRequest>,
     ) -> HandlerResult<impl axum::response::IntoResponse> {
-        let id = state
+        let result = state
             .usecases
             .admin
             .create_category(req.name, req.slug, req.category_type, req.icon, req.display_order)
             .await
             .map_err(HandlerError::from)?;
-        Ok(Json(serde_json::json!({ "id": id })))
+        Ok((StatusCode::CREATED, Json(result)))
     }
 
     /// PUT /api/admin/categories/{id}
@@ -148,13 +149,13 @@ impl AdminHandler {
         Path(id): Path<i32>,
         Json(req): Json<UpdateCategoryRequest>,
     ) -> HandlerResult<impl axum::response::IntoResponse> {
-        state
+        let result = state
             .usecases
             .admin
             .update_category(id, req.name, req.slug, req.icon, req.display_order)
             .await
             .map_err(HandlerError::from)?;
-        Ok(Json(serde_json::json!({ "success": true })))
+        Ok(Json(result))
     }
 
     /// PATCH /api/admin/categories/{id}/active
@@ -164,8 +165,8 @@ impl AdminHandler {
         Path(id): Path<i32>,
         Json(req): Json<ToggleActiveRequest>,
     ) -> HandlerResult<impl axum::response::IntoResponse> {
-        state.usecases.admin.toggle_category_active(id, req.is_active).await.map_err(HandlerError::from)?;
-        Ok(Json(serde_json::json!({ "success": true })))
+        let result = state.usecases.admin.toggle_category_active(id, req.is_active).await.map_err(HandlerError::from)?;
+        Ok(Json(result))
     }
 
     /// GET /api/admin/inquiries
@@ -185,8 +186,8 @@ impl AdminHandler {
         Path(id): Path<i32>,
         Json(req): Json<UpdateInquiryStatusRequest>,
     ) -> HandlerResult<impl axum::response::IntoResponse> {
-        state.usecases.admin.update_inquiry_status(id, req.status).await.map_err(HandlerError::from)?;
-        Ok(Json(serde_json::json!({ "success": true })))
+        let result = state.usecases.admin.update_inquiry_status(id, req.status).await.map_err(HandlerError::from)?;
+        Ok(Json(result))
     }
 
     /// GET /api/admin/reviews
@@ -206,7 +207,7 @@ impl AdminHandler {
         Path(id): Path<i32>,
         Json(req): Json<ToggleVisibleRequest>,
     ) -> HandlerResult<impl axum::response::IntoResponse> {
-        state.usecases.admin.toggle_review_visible(id, req.is_visible).await.map_err(HandlerError::from)?;
-        Ok(Json(serde_json::json!({ "success": true })))
+        let result = state.usecases.admin.toggle_review_visible(id, req.is_visible).await.map_err(HandlerError::from)?;
+        Ok(Json(result))
     }
 }

@@ -35,6 +35,6 @@ impl RoleUseCase {
                 id: r.id, code: r.code, name: r.name,
                 description: r.description, is_active: r.is_active,
             })
-            .ok_or_else(|| AppError::NotFound("Không tìm thấy vai trò.".into()))
+            .ok_or_else(|| AppError::NotFound("Role not found.".into()))
     }
 }

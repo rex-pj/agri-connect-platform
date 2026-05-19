@@ -1,9 +1,9 @@
 <script lang="ts">
   import AdminPageHeader from "$lib/components/molecules/AdminPageHeader.svelte";
-  import Button from '$lib/components/atoms/Button.svelte';
-  import Text from '$lib/components/atoms/Text.svelte';
+  import Button from "$lib/components/atoms/Button.svelte";
+  import Text from "$lib/components/atoms/Text.svelte";
   import type { PageData } from "./$types";
-  import { ROUTES } from '$lib/routes';
+  import { ROUTES } from "$lib/routes";
 
   const { data }: { data: PageData } = $props();
 </script>
@@ -65,7 +65,7 @@
               <td class="text-center">
                 <Button
                   href={ROUTES.ADMIN.ROLE(role.id)}
-                  class="btn btn-sm btn-outline-secondary"
+                  class="btn-sm btn-outline-secondary"
                 >
                   <i class="fa-solid fa-eye"></i>
                 </Button>
@@ -77,4 +77,3 @@
     </div>
   {/if}
 </div>
-

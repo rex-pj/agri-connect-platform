@@ -13,5 +13,7 @@ pub trait InquiryRepositoryTrait {
 
     async fn list_admin(&self, limit: i64, offset: i64) -> Result<Vec<InquiryAdmin>, AppError>;
 
+    async fn find_by_id_admin(&self, id: i32) -> Result<Option<InquiryAdmin>, AppError>;
+
     async fn update_status(&self, id: i32, status: &str) -> Result<(), AppError>;
 }

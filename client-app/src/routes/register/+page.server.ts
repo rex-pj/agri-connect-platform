@@ -1,4 +1,4 @@
-import { fail, redirect } from '@sveltejs/kit';
+import { fail, redirect, isRedirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { setAuthCookie, ServiceError, PHONE_REGEX } from '$lib/server/api';
 import { AuthService } from '$lib/server/services/auth.service';
@@ -37,7 +37,7 @@ export const actions: Actions = {
             setAuthCookie(cookies, token);
             throw redirect(302, ROUTES.PROVIDER_DASHBOARD);
         } catch (err) {
-            if (err instanceof Response) throw err;
+            if (isRedirect(err)) throw err;
             if (err instanceof ServiceError) return fail(err.status, { error: err.message });
             return fail(503, { error: 'Không thể kết nối máy chủ. Vui lòng thử lại.' });
         }

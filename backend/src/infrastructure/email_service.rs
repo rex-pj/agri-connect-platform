@@ -27,15 +27,15 @@ impl EmailService {
     pub async fn send_password_reset(&self, to_email: &str, token: &str) {
         let reset_url = format!("{}/reset-password?token={}", self.app_url, token);
 
-        let subject = "Đặt lại mật khẩu – Agri-Connect";
+        let subject = "Password Reset – Agri-Connect";
         let body = format!(
-            "Chào bạn,\n\n\
-             Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn.\n\n\
-             Vui lòng nhấn vào liên kết dưới đây để đặt lại mật khẩu (hiệu lực trong 1 giờ):\n\n\
+            "Hello,\n\n\
+             We received a request to reset the password for your account.\n\n\
+             Please click the link below to reset your password (valid for 1 hour):\n\n\
              {reset_url}\n\n\
-             Nếu bạn không yêu cầu điều này, hãy bỏ qua email này.\n\n\
-             Trân trọng,\n\
-             Đội ngũ Agri-Connect"
+             If you did not request this, you can safely ignore this email.\n\n\
+             Best regards,\n\
+             The Agri-Connect Team"
         );
 
         match build_transport() {

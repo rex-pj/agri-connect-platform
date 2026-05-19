@@ -46,7 +46,7 @@ impl SetupUseCase {
 
         if category_count == 0 {
             return Err(AppError::Internal(
-                "Danh mục chưa được khởi tạo. Hãy chạy migration trước.".into(),
+                "Categories not initialised. Run migrations first.".into(),
             ));
         }
 

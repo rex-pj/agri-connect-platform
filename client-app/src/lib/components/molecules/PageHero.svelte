@@ -19,7 +19,7 @@
     class:page-hero--detail={variant === 'detail'}
     class:page-hero--compact={variant === 'compact'}>
     {#if backLink}
-        <Button href={backLink.href} class="back-link">
+        <Button variant="ghost" size="sm" href={backLink.href} class="back-link">
             <i class="fa-solid fa-arrow-left"></i> {backLink.label}
         </Button>
     {/if}

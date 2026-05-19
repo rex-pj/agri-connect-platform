@@ -22,7 +22,7 @@ export const load: PageServerLoad = async ({ params, fetch, url }) => {
 
     if (providersResult.status === 'rejected') {
         return {
-            result: { providers: [], total: 0, page: 1, total_pages: 0 },
+            result: { items: [], total: 0, page: 1, total_pages: 0 },
             categories,
             currentCategory,
             error: 'Không thể tải danh sách dịch vụ.',

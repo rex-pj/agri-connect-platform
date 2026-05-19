@@ -1,18 +1,20 @@
+// std
+use std::{collections::HashMap, sync::Arc};
+
+// external
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, DbBackend,
-    EntityTrait, FromQueryResult, JoinType, PaginatorTrait,
-    QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set, Statement,
+    sea_query::{
+        extension::postgres::PgExpr, Alias, Expr, Func, Order, Query, SimpleExpr, SubQueryStatement,
+    },
+    ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection,
+    EntityTrait, FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
+    QueryTrait, RelationTrait, Set, Value,
 };
-use sea_orm::sea_query::{Expr, Func};
-use sea_orm::QueryTrait;
-use std::collections::HashMap;
-use std::sync::Arc;
 use tracing::error;
 
 use crate::{
-    infrastructure::db_types::DateTimeWithTimeZone,
     domain::{
         models::business::{
             BusinessAdminDetail, BusinessAdminView, BusinessBrowse, BusinessDetail,
@@ -27,6 +29,7 @@ use crate::{
         service::{self, Entity as ServiceEntity},
         user,
     },
+    infrastructure::db_types::DateTimeWithTimeZone,
     view_models::AppError,
 };
 
@@ -43,84 +46,110 @@ impl BusinessRepository {
 // ── Row structs for JOIN queries ─────────────────────────────────────────────
 
 #[derive(FromQueryResult)]
-struct BusinessBrowseRow {
-    id:          i32,
-    name:        String,
-    phone:       String,
-    address:     Option<String>,
+struct GeoRow {
+    id: i32,
+    name: String,
+    phone: String,
+    address: Option<String>,
     is_verified: bool,
-    created_on:  DateTimeWithTimeZone,
+    distance_m: f64,
+}
+
+#[derive(FromQueryResult)]
+struct BusinessProfileRow {
+    id: i32,
+    name: String,
+    phone: String,
+    email: Option<String>,
+    description: Option<String>,
+    address: Option<String>,
+    is_verified: bool,
+    lat: Option<f64>,
+    lng: Option<f64>,
+}
+
+#[derive(FromQueryResult)]
+struct BusinessBrowseRow {
+    id: i32,
+    name: String,
+    phone: String,
+    address: Option<String>,
+    is_verified: bool,
+    created_on: DateTimeWithTimeZone,
 }
 
 #[derive(FromQueryResult)]
 struct SvcNameRow {
     business_id: i32,
-    svc_name:    String,
+    svc_name: String,
 }
 
 #[derive(FromQueryResult)]
 struct ServiceDetailRow {
-    id:          i32,
-    name:        String,
+    id: i32,
+    name: String,
     description: Option<String>,
-    price_note:  Option<String>,
-    category:    String,
+    price_note: Option<String>,
+    category: String,
 }
 
 #[derive(FromQueryResult)]
 struct BusinessAdminRow {
-    id:              i32,
-    name:            String,
-    phone:           String,
-    address:         Option<String>,
-    is_verified:     bool,
-    is_active:       bool,
-    created_on:      DateTimeWithTimeZone,
+    id: i32,
+    name: String,
+    phone: String,
+    address: Option<String>,
+    is_verified: bool,
+    is_active: bool,
+    created_on: DateTimeWithTimeZone,
+    updated_on: DateTimeWithTimeZone,
     linked_username: Option<String>,
+    created_by_name: Option<String>,
+    updated_by_name: Option<String>,
 }
 
 #[derive(FromQueryResult)]
 struct BizCount {
     business_id: i32,
-    count:       i64,
+    count: i64,
 }
 
 #[derive(FromQueryResult)]
 struct BusinessAdminDetailRow {
-    id:              i32,
-    name:            String,
-    phone:           String,
-    email:           Option<String>,
-    description:     Option<String>,
-    address:         Option<String>,
-    is_verified:     bool,
-    is_active:       bool,
-    created_on:      DateTimeWithTimeZone,
+    id: i32,
+    name: String,
+    phone: String,
+    email: Option<String>,
+    description: Option<String>,
+    address: Option<String>,
+    is_verified: bool,
+    is_active: bool,
+    created_on: DateTimeWithTimeZone,
     linked_username: Option<String>,
 }
 
 #[derive(FromQueryResult)]
 struct ServiceAdminRow {
-    id:         i32,
-    name:       String,
-    category:   String,
+    id: i32,
+    name: String,
+    category: String,
     price_note: Option<String>,
-    is_active:  bool,
+    is_active: bool,
 }
 
 #[derive(FromQueryResult)]
 struct ProductAdminRow {
-    id:        i32,
-    name:      String,
-    price:     Option<i64>,
-    unit:      Option<String>,
-    category:  String,
+    id: i32,
+    name: String,
+    price: Option<i64>,
+    unit: Option<String>,
+    category: String,
     is_active: bool,
 }
 
 #[async_trait]
 impl BusinessRepositoryTrait for BusinessRepository {
-    // ── PostGIS geo search — must stay as raw SQL (no query builder support) ───
+    // ── Geo search: PostGIS expressions embedded via Expr::cust_with_values ─────
 
     async fn search_geo(
         &self,
@@ -128,71 +157,73 @@ impl BusinessRepositoryTrait for BusinessRepository {
         radius: f64,
         service_id: Option<i32>,
     ) -> Result<Vec<BusinessGeoResult>, AppError> {
-        let stmt = if let Some(svc_id) = service_id {
-            Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
-                SELECT
-                    b.id, b.name, b.phone, b.address, b.is_verified,
-                    ST_Distance(b.location, ST_GeographyFromText($1)) AS distance_m,
-                    ARRAY_AGG(DISTINCT c.name ORDER BY c.name) AS services
-                FROM businesses b
-                JOIN services sl
-                    ON  sl.business_id = b.id AND sl.is_active = TRUE AND sl.deleted_at IS NULL
-                JOIN categories c
-                    ON  c.id = sl.category_id AND c.is_active = TRUE
-                WHERE
-                    b.is_active = TRUE AND b.deleted_at IS NULL
-                    AND ST_DWithin(b.location, ST_GeographyFromText($2), $3)
-                    AND EXISTS (
-                        SELECT 1 FROM services sl2
-                        WHERE sl2.business_id = b.id AND sl2.category_id = $4
-                          AND sl2.is_active = TRUE AND sl2.deleted_at IS NULL
-                    )
-                GROUP BY b.id, b.name, b.phone, b.address, b.is_verified, b.location
-                ORDER BY distance_m ASC
-                LIMIT 50
-                "#,
-                [point_wkt.into(), point_wkt.into(), radius.into(), svc_id.into()],
-            )
-        } else {
-            Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
-                SELECT
-                    b.id, b.name, b.phone, b.address, b.is_verified,
-                    ST_Distance(b.location, ST_GeographyFromText($1)) AS distance_m,
-                    ARRAY_AGG(DISTINCT c.name ORDER BY c.name) AS services
-                FROM businesses b
-                JOIN services sl
-                    ON  sl.business_id = b.id AND sl.is_active = TRUE AND sl.deleted_at IS NULL
-                JOIN categories c
-                    ON  c.id = sl.category_id AND c.is_active = TRUE
-                WHERE b.is_active = TRUE AND b.deleted_at IS NULL
-                    AND ST_DWithin(b.location, ST_GeographyFromText($2), $3)
-                GROUP BY b.id, b.name, b.phone, b.address, b.is_verified, b.location
-                ORDER BY distance_m ASC
-                LIMIT 50
-                "#,
-                [point_wkt.into(), point_wkt.into(), radius.into()],
-            )
-        };
+        let db = self.db.as_ref();
 
-        let rows = self.db.query_all(stmt).await.map_err(|e| {
+        // EXISTS subquery: business must have at least one active service
+        let mut svc_subq = ServiceEntity::find()
+            .select_only()
+            .column(service::Column::Id)
+            .filter(
+                Expr::col((service::Entity, service::Column::BusinessId))
+                    .equals((business::Entity, business::Column::Id)),
+            )
+            .filter(service::Column::IsActive.eq(true))
+            .filter(service::Column::DeletedAt.is_null());
+
+        if let Some(svc_id) = service_id {
+            svc_subq = svc_subq.filter(service::Column::CategoryId.eq(svc_id));
+        }
+
+        let distance_expr = Expr::cust_with_values(
+            r#"ST_Distance("businesses".location, ST_GeographyFromText(?))"#,
+            [Value::from(point_wkt.to_owned())],
+        );
+        let within_filter = Expr::cust_with_values(
+            r#"ST_DWithin("businesses".location, ST_GeographyFromText(?), ?)"#,
+            [Value::from(point_wkt.to_owned()), Value::from(radius)],
+        );
+
+        let mut query = Business::find()
+            .select_only()
+            .column(business::Column::Id)
+            .column(business::Column::Name)
+            .column(business::Column::Phone)
+            .column(business::Column::Address)
+            .column(business::Column::IsVerified)
+            .expr_as(distance_expr, "distance_m")
+            .filter(business::Column::IsActive.eq(true))
+            .filter(business::Column::DeletedAt.is_null())
+            .filter(within_filter)
+            .filter(Expr::exists(svc_subq.into_query()))
+            .limit(50);
+
+        QueryTrait::query(&mut query).order_by_expr(Expr::cust("distance_m"), Order::Asc);
+
+        let businesses = query.into_model::<GeoRow>().all(db).await.map_err(|e| {
             error!("business search_geo error: {e}");
             AppError::Internal("Failed to search services.".into())
         })?;
 
-        Ok(rows
+        if businesses.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let ids: Vec<i32> = businesses.iter().map(|b| b.id).collect();
+        let svc_map = load_service_names(db, &ids).await?;
+
+        Ok(businesses
             .into_iter()
-            .map(|row| BusinessGeoResult {
-                id:          row.try_get("", "id").unwrap_or_default(),
-                name:        row.try_get("", "name").unwrap_or_default(),
-                phone:       row.try_get("", "phone").unwrap_or_default(),
-                address:     row.try_get("", "address").unwrap_or_default(),
-                is_verified: row.try_get("", "is_verified").unwrap_or_default(),
-                distance_m:  row.try_get("", "distance_m").unwrap_or_default(),
-                services:    row.try_get("", "services").unwrap_or_default(),
+            .map(|b| {
+                let services = svc_map.get(&b.id).cloned().unwrap_or_default();
+                BusinessGeoResult {
+                    id: b.id,
+                    name: b.name,
+                    phone: b.phone,
+                    address: b.address,
+                    is_verified: b.is_verified,
+                    distance_m: b.distance_m,
+                    services,
+                }
             })
             .collect())
     }
@@ -202,6 +233,8 @@ impl BusinessRepositoryTrait for BusinessRepository {
     async fn browse(
         &self,
         service_id: Option<i32>,
+        name: Option<String>,
+        sort: Option<String>,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<BusinessBrowse>, AppError> {
@@ -222,7 +255,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             svc_subq = svc_subq.filter(service::Column::CategoryId.eq(id));
         }
 
-        let businesses = Business::find()
+        let mut query = Business::find()
             .select_only()
             .column(business::Column::Id)
             .column(business::Column::Name)
@@ -232,9 +265,26 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .column(business::Column::CreatedOn)
             .filter(business::Column::IsActive.eq(true))
             .filter(business::Column::DeletedAt.is_null())
-            .filter(Expr::exists(svc_subq.into_query()))
-            .order_by_desc(business::Column::IsVerified)
-            .order_by_desc(business::Column::CreatedOn)
+            .filter(Expr::exists(svc_subq.into_query()));
+
+        if let Some(ref q) = name {
+            let pattern = format!("%{}%", q);
+            query = query.filter(
+                Condition::any()
+                    .add(Expr::col(business::Column::Name).ilike(pattern.clone()))
+                    .add(Expr::col(business::Column::Description).ilike(pattern)),
+            );
+        }
+
+        let query = match sort.as_deref() {
+            Some("newest") => query.order_by_desc(business::Column::CreatedOn),
+            Some("name_asc") => query.order_by_asc(business::Column::Name),
+            _ => query
+                .order_by_desc(business::Column::IsVerified)
+                .order_by_desc(business::Column::CreatedOn),
+        };
+
+        let businesses = query
             .limit(limit as u64)
             .offset(offset as u64)
             .into_model::<BusinessBrowseRow>()
@@ -257,19 +307,23 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .map(|b| {
                 let services = svc_map.get(&b.id).cloned().unwrap_or_default();
                 BusinessBrowse {
-                    id:          b.id,
-                    name:        b.name,
-                    phone:       b.phone,
-                    address:     b.address,
+                    id: b.id,
+                    name: b.name,
+                    phone: b.phone,
+                    address: b.address,
                     is_verified: b.is_verified,
                     services,
-                    created_on:  b.created_on.with_timezone(&Utc),
+                    created_on: b.created_on.with_timezone(&Utc),
                 }
             })
             .collect())
     }
 
-    async fn count_browse(&self, service_id: Option<i32>) -> Result<i64, AppError> {
+    async fn count_browse(
+        &self,
+        service_id: Option<i32>,
+        name: Option<String>,
+    ) -> Result<i64, AppError> {
         let mut svc_subq = ServiceEntity::find()
             .select_only()
             .column(service::Column::Id)
@@ -284,10 +338,21 @@ impl BusinessRepositoryTrait for BusinessRepository {
             svc_subq = svc_subq.filter(service::Column::CategoryId.eq(id));
         }
 
-        Business::find()
+        let mut query = Business::find()
             .filter(business::Column::IsActive.eq(true))
             .filter(business::Column::DeletedAt.is_null())
-            .filter(Expr::exists(svc_subq.into_query()))
+            .filter(Expr::exists(svc_subq.into_query()));
+
+        if let Some(ref q) = name {
+            let pattern = format!("%{}%", q);
+            query = query.filter(
+                Condition::any()
+                    .add(Expr::col(business::Column::Name).ilike(pattern.clone()))
+                    .add(Expr::col(business::Column::Description).ilike(pattern)),
+            );
+        }
+
+        query
             .count(self.db.as_ref())
             .await
             .map(|c| c as i64)
@@ -345,13 +410,13 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .map(|b| {
                 let services = svc_map.get(&b.id).cloned().unwrap_or_default();
                 BusinessBrowse {
-                    id:          b.id,
-                    name:        b.name,
-                    phone:       b.phone,
-                    address:     b.address,
+                    id: b.id,
+                    name: b.name,
+                    phone: b.phone,
+                    address: b.address,
                     is_verified: b.is_verified,
                     services,
-                    created_on:  b.created_on.with_timezone(&Utc),
+                    created_on: b.created_on.with_timezone(&Utc),
                 }
             })
             .collect())
@@ -371,7 +436,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
                 error!("business find_detail error: {e}");
                 AppError::Internal("Failed to load provider details.".into())
             })? {
-            None    => return Ok(None),
+            None => return Ok(None),
             Some(b) => b,
         };
 
@@ -398,20 +463,20 @@ impl BusinessRepositoryTrait for BusinessRepository {
             })?;
 
         Ok(Some(BusinessDetail {
-            id:          b.id,
-            name:        b.name,
-            phone:       b.phone,
+            id: b.id,
+            name: b.name,
+            phone: b.phone,
             description: b.description,
-            address:     b.address,
+            address: b.address,
             is_verified: b.is_verified,
-            services:    svc_rows
+            services: svc_rows
                 .into_iter()
                 .map(|r| Service {
-                    id:          r.id,
-                    name:        r.name,
+                    id: r.id,
+                    name: r.name,
                     description: r.description,
-                    price_note:  r.price_note,
-                    category:    r.category,
+                    price_note: r.price_note,
+                    category: r.category,
                 })
                 .collect(),
         }))
@@ -448,7 +513,11 @@ impl BusinessRepositoryTrait for BusinessRepository {
 
     // ── Admin list ────────────────────────────────────────────────────────────
 
-    async fn list_for_admin(&self, limit: i64, offset: i64) -> Result<Vec<BusinessAdminView>, AppError> {
+    async fn list_for_admin(
+        &self,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<BusinessAdminView>, AppError> {
         let db = self.db.as_ref();
 
         let businesses = Business::find()
@@ -460,7 +529,40 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .column(business::Column::IsVerified)
             .column(business::Column::IsActive)
             .column(business::Column::CreatedOn)
+            .column(business::Column::UpdatedOn)
             .column_as(user::Column::Username, "linked_username")
+            .expr_as(
+                SimpleExpr::SubQuery(
+                    None,
+                    Box::new(SubQueryStatement::SelectStatement(
+                        Query::select()
+                            .from(user::Entity)
+                            .column(user::Column::Username)
+                            .and_where(
+                                Expr::col((user::Entity, user::Column::Id))
+                                    .equals((business::Entity, business::Column::CreatedBy)),
+                            )
+                            .to_owned(),
+                    )),
+                ),
+                "created_by_name",
+            )
+            .expr_as(
+                SimpleExpr::SubQuery(
+                    None,
+                    Box::new(SubQueryStatement::SelectStatement(
+                        Query::select()
+                            .from(user::Entity)
+                            .column(user::Column::Username)
+                            .and_where(
+                                Expr::col((user::Entity, user::Column::Id))
+                                    .equals((business::Entity, business::Column::UpdatedBy)),
+                            )
+                            .to_owned(),
+                    )),
+                ),
+                "updated_by_name",
+            )
             .join(JoinType::LeftJoin, business::Relation::Owner.def())
             .filter(business::Column::DeletedAt.is_null())
             .order_by_desc(business::Column::IsVerified)
@@ -479,60 +581,60 @@ impl BusinessRepositoryTrait for BusinessRepository {
             return Ok(vec![]);
         }
 
-        let svc_counts = ServiceEntity::find()
-            .select_only()
-            .column(service::Column::BusinessId)
-            .expr_as(
-                Func::count(Expr::col(service::Column::Id)),
-                "count",
-            )
-            .filter(service::Column::IsActive.eq(true))
-            .filter(service::Column::DeletedAt.is_null())
-            .group_by(service::Column::BusinessId)
-            .into_model::<BizCount>()
-            .all(db)
-            .await
-            .map_err(|e| {
-                error!("business list_for_admin svc_counts error: {e}");
-                AppError::Internal("Failed to load providers.".into())
-            })?;
+        let page_ids: Vec<i32> = businesses.iter().map(|b| b.id).collect();
 
-        let prod_counts = ProductEntity::find()
-            .select_only()
-            .column(product::Column::BusinessId)
-            .expr_as(
-                Func::count(Expr::col(product::Column::Id)),
-                "count",
-            )
-            .filter(product::Column::IsActive.eq(true))
-            .filter(product::Column::DeletedAt.is_null())
-            .group_by(product::Column::BusinessId)
-            .into_model::<BizCount>()
-            .all(db)
-            .await
-            .map_err(|e| {
-                error!("business list_for_admin prod_counts error: {e}");
-                AppError::Internal("Failed to load providers.".into())
-            })?;
+        let (svc_counts, prod_counts) = tokio::try_join!(
+            ServiceEntity::find()
+                .select_only()
+                .column(service::Column::BusinessId)
+                .expr_as(Func::count(Expr::col(service::Column::Id)), "count")
+                .filter(service::Column::BusinessId.is_in(page_ids.clone()))
+                .filter(service::Column::IsActive.eq(true))
+                .filter(service::Column::DeletedAt.is_null())
+                .group_by(service::Column::BusinessId)
+                .into_model::<BizCount>()
+                .all(db),
+            ProductEntity::find()
+                .select_only()
+                .column(product::Column::BusinessId)
+                .expr_as(Func::count(Expr::col(product::Column::Id)), "count")
+                .filter(product::Column::BusinessId.is_in(page_ids))
+                .filter(product::Column::IsActive.eq(true))
+                .filter(product::Column::DeletedAt.is_null())
+                .group_by(product::Column::BusinessId)
+                .into_model::<BizCount>()
+                .all(db),
+        )
+        .map_err(|e| {
+            error!("business list_for_admin counts error: {e}");
+            AppError::Internal("Failed to load providers.".into())
+        })?;
 
-        let svc_map: HashMap<i32, i64> =
-            svc_counts.into_iter().map(|r| (r.business_id, r.count)).collect();
-        let prod_map: HashMap<i32, i64> =
-            prod_counts.into_iter().map(|r| (r.business_id, r.count)).collect();
+        let svc_map: HashMap<i32, i64> = svc_counts
+            .into_iter()
+            .map(|r| (r.business_id, r.count))
+            .collect();
+        let prod_map: HashMap<i32, i64> = prod_counts
+            .into_iter()
+            .map(|r| (r.business_id, r.count))
+            .collect();
 
         Ok(businesses
             .into_iter()
             .map(|b| BusinessAdminView {
-                id:              b.id,
-                name:            b.name,
-                phone:           b.phone,
-                address:         b.address,
-                is_verified:     b.is_verified,
-                is_active:       b.is_active,
-                service_count:   *svc_map.get(&b.id).unwrap_or(&0),
-                product_count:   *prod_map.get(&b.id).unwrap_or(&0),
-                created_on:      b.created_on.with_timezone(&Utc),
+                id: b.id,
+                name: b.name,
+                phone: b.phone,
+                address: b.address,
+                is_verified: b.is_verified,
+                is_active: b.is_active,
+                service_count: *svc_map.get(&b.id).unwrap_or(&0),
+                product_count: *prod_map.get(&b.id).unwrap_or(&0),
+                created_on: b.created_on.with_timezone(&Utc),
+                updated_on: b.updated_on.with_timezone(&Utc),
                 linked_username: b.linked_username,
+                created_by_name: b.created_by_name,
+                updated_by_name: b.updated_by_name,
             })
             .collect())
     }
@@ -562,7 +664,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
                 error!("business find_admin_detail core error: {e}");
                 AppError::Internal("Failed to load provider details.".into())
             })? {
-            None    => return Ok(None),
+            None => return Ok(None),
             Some(r) => r,
         };
 
@@ -608,34 +710,34 @@ impl BusinessRepositoryTrait for BusinessRepository {
             })?;
 
         Ok(Some(BusinessAdminDetail {
-            id:              core.id,
-            name:            core.name,
-            phone:           core.phone,
-            email:           core.email,
-            description:     core.description,
-            address:         core.address,
-            is_verified:     core.is_verified,
-            is_active:       core.is_active,
-            created_on:      core.created_on.with_timezone(&Utc),
+            id: core.id,
+            name: core.name,
+            phone: core.phone,
+            email: core.email,
+            description: core.description,
+            address: core.address,
+            is_verified: core.is_verified,
+            is_active: core.is_active,
+            created_on: core.created_on.with_timezone(&Utc),
             linked_username: core.linked_username,
-            services:        svc_rows
+            services: svc_rows
                 .into_iter()
                 .map(|r| ServiceAdminItem {
-                    id:         r.id,
-                    name:       r.name,
-                    category:   r.category,
+                    id: r.id,
+                    name: r.name,
+                    category: r.category,
                     price_note: r.price_note,
-                    is_active:  r.is_active,
+                    is_active: r.is_active,
                 })
                 .collect(),
-            products:        prod_rows
+            products: prod_rows
                 .into_iter()
                 .map(|r| ProductAdminItem {
-                    id:        r.id,
-                    name:      r.name,
-                    price:     r.price,
-                    unit:      r.unit,
-                    category:  r.category,
+                    id: r.id,
+                    name: r.name,
+                    price: r.price,
+                    unit: r.unit,
+                    category: r.category,
                     is_active: r.is_active,
                 })
                 .collect(),
@@ -647,28 +749,30 @@ impl BusinessRepositoryTrait for BusinessRepository {
     async fn toggle_verify(&self, id: i32) -> Result<Option<(i32, String, bool)>, AppError> {
         let db = self.db.as_ref();
 
-        let model = match Business::find_by_id(id)
+        let b = Business::find()
+            .filter(business::Column::Id.eq(id))
             .filter(business::Column::DeletedAt.is_null())
             .one(db)
             .await
             .map_err(|e| {
                 error!("business toggle_verify find error (id={id}): {e}");
                 AppError::Internal("Failed to update verification status.".into())
-            })? {
-            None    => return Ok(None),
-            Some(b) => b,
-        };
+            })?;
 
-        let new_verified = !model.is_verified;
-        let mut active: business::ActiveModel = model.into();
+        let Some(b) = b else { return Ok(None) };
+
+        let name = b.name.clone();
+        let new_verified = !b.is_verified;
+        let mut active: business::ActiveModel = b.into();
         active.is_verified = Set(new_verified);
+        active.updated_on = Set(Utc::now().fixed_offset());
 
-        let updated = active.update(db).await.map_err(|e| {
+        active.update(db).await.map_err(|e| {
             error!("business toggle_verify update error (id={id}): {e}");
             AppError::Internal("Failed to update verification status.".into())
         })?;
 
-        Ok(Some((updated.id, updated.name, updated.is_verified)))
+        Ok(Some((id, name, new_verified)))
     }
 
     // ── Assign user ───────────────────────────────────────────────────────────
@@ -686,38 +790,47 @@ impl BusinessRepositoryTrait for BusinessRepository {
             })
     }
 
-    // ── PostGIS profile — must stay as raw SQL ────────────────────────────────
+    // ── Profile (includes PostGIS ST_Y/ST_X via Expr::cust) ──────────────────
 
     async fn get_profile_by_user(&self, user_id: i32) -> Result<Option<BusinessProfile>, AppError> {
-        let stmt = Statement::from_sql_and_values(
-            DbBackend::Postgres,
-            r#"
-            SELECT
-                b.id, b.name, b.phone, b.email, b.description, b.address, b.is_verified,
-                ST_Y(b.location::geometry) AS lat,
-                ST_X(b.location::geometry) AS lng
-            FROM businesses b
-            WHERE b.owner_id = $1 AND b.deleted_at IS NULL
-            LIMIT 1
-            "#,
-            [user_id.into()],
-        );
-
-        let row = self.db.query_one(stmt).await.map_err(|e| {
-            error!("business get_profile_by_user error (user_id={user_id}): {e}");
-            AppError::Internal("Failed to load profile.".into())
-        })?;
+        let row = Business::find()
+            .select_only()
+            .column(business::Column::Id)
+            .column(business::Column::Name)
+            .column(business::Column::Phone)
+            .column(business::Column::Email)
+            .column(business::Column::Description)
+            .column(business::Column::Address)
+            .column(business::Column::IsVerified)
+            .expr_as(
+                Expr::cust(r#"ST_Y("businesses".location::geometry)"#),
+                "lat",
+            )
+            .expr_as(
+                Expr::cust(r#"ST_X("businesses".location::geometry)"#),
+                "lng",
+            )
+            .filter(business::Column::OwnerId.eq(user_id))
+            .filter(business::Column::DeletedAt.is_null())
+            .limit(1)
+            .into_model::<BusinessProfileRow>()
+            .one(self.db.as_ref())
+            .await
+            .map_err(|e| {
+                error!("business get_profile_by_user error (user_id={user_id}): {e}");
+                AppError::Internal("Failed to load profile.".into())
+            })?;
 
         Ok(row.map(|r| BusinessProfile {
-            id:          r.try_get("", "id").unwrap_or_default(),
-            name:        r.try_get("", "name").unwrap_or_default(),
-            phone:       r.try_get("", "phone").unwrap_or_default(),
-            email:       r.try_get("", "email").unwrap_or_default(),
-            description: r.try_get("", "description").unwrap_or_default(),
-            address:     r.try_get("", "address").unwrap_or_default(),
-            is_verified: r.try_get("", "is_verified").unwrap_or_default(),
-            lat:         r.try_get("", "lat").unwrap_or_default(),
-            lng:         r.try_get("", "lng").unwrap_or_default(),
+            id: r.id,
+            name: r.name,
+            phone: r.phone,
+            email: r.email,
+            description: r.description,
+            address: r.address,
+            is_verified: r.is_verified,
+            lat: r.lat,
+            lng: r.lng,
         }))
     }
 
@@ -730,11 +843,20 @@ impl BusinessRepositoryTrait for BusinessRepository {
         address: Option<&str>,
     ) -> Result<bool, AppError> {
         Business::update_many()
-            .col_expr(business::Column::Name,        Expr::value(name.to_string()))
-            .col_expr(business::Column::Phone,       Expr::value(phone.to_string()))
-            .col_expr(business::Column::Description, Expr::value(description.map(str::to_string)))
-            .col_expr(business::Column::Address,     Expr::value(address.map(str::to_string)))
-            .col_expr(business::Column::UpdatedOn,   Expr::current_timestamp().into())
+            .col_expr(business::Column::Name, Expr::value(name.to_string()))
+            .col_expr(business::Column::Phone, Expr::value(phone.to_string()))
+            .col_expr(
+                business::Column::Description,
+                Expr::value(description.map(str::to_string)),
+            )
+            .col_expr(
+                business::Column::Address,
+                Expr::value(address.map(str::to_string)),
+            )
+            .col_expr(
+                business::Column::UpdatedOn,
+                Expr::current_timestamp().into(),
+            )
             .filter(business::Column::OwnerId.eq(user_id))
             .filter(business::Column::DeletedAt.is_null())
             .exec(self.db.as_ref())
@@ -746,27 +868,23 @@ impl BusinessRepositoryTrait for BusinessRepository {
             })
     }
 
-    // ── PostGIS location update — must stay as raw SQL ────────────────────────
+    // ── Location update (PostGIS ST_GeographyFromText via Expr::cust_with_values) ─
 
     async fn update_location(&self, user_id: i32, point_wkt: &str) -> Result<(), AppError> {
-        let stmt = Statement::from_sql_and_values(
-            DbBackend::Postgres,
-            r#"
-            UPDATE businesses
-               SET location = ST_GeographyFromText($1), updated_on = NOW()
-             WHERE owner_id = $2 AND deleted_at IS NULL
-            "#,
-            [point_wkt.into(), user_id.into()],
+        let mut update = Business::update_many()
+            .col_expr(business::Column::UpdatedOn, Expr::current_timestamp().into())
+            .filter(business::Column::OwnerId.eq(user_id))
+            .filter(business::Column::DeletedAt.is_null());
+
+        QueryTrait::query(&mut update).value(
+            Alias::new("location"),
+            Expr::cust_with_values("ST_GeographyFromText(?)", [point_wkt.to_owned()]),
         );
 
-        self.db
-            .execute(stmt)
-            .await
-            .map(|_| ())
-            .map_err(|e| {
-                error!("business update_location error (user_id={user_id}): {e}");
-                AppError::Internal("Failed to update GPS location.".into())
-            })
+        update.exec(self.db.as_ref()).await.map(|_| ()).map_err(|e| {
+            error!("business update_location error (user_id={user_id}): {e}");
+            AppError::Internal("Failed to update GPS location.".into())
+        })
     }
 
     // ── Entity API helpers ────────────────────────────────────────────────────
@@ -805,22 +923,22 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .map(|c| c as i64)
             .map_err(|e| {
                 error!("business count_verified error: {e}");
-                AppError::Internal("Không thể tải thống kê.".into())
+                AppError::Internal("Failed to load statistics.".into())
             })
     }
 
     async fn create_for_registration(
         &self,
-        name:    &str,
-        phone:   &str,
+        name: &str,
+        phone: &str,
         user_id: i32,
     ) -> Result<i32, AppError> {
         let new_business = business::ActiveModel {
-            name:        Set(name.to_string()),
-            phone:       Set(phone.to_string()),
-            owner_id:    Set(Some(user_id)),
+            name: Set(name.to_string()),
+            phone: Set(phone.to_string()),
+            owner_id: Set(Some(user_id)),
             is_verified: Set(false),
-            is_active:   Set(true),
+            is_active: Set(true),
             ..Default::default()
         };
 
@@ -830,7 +948,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .map(|r| r.last_insert_id)
             .map_err(|e| {
                 error!("business create_for_registration error: {e}");
-                AppError::Internal("Không thể tạo hồ sơ doanh nghiệp.".into())
+                AppError::Internal("Failed to create business profile.".into())
             })
     }
 }
@@ -866,4 +984,3 @@ async fn load_service_names(
     }
     Ok(map)
 }
-

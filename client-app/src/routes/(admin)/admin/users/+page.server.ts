@@ -32,7 +32,7 @@ export const load: PageServerLoad = async ({ fetch, cookies, url }) => {
     return {
         result,
         roles,
-        error: usersResult.status === 'rejected' ? 'Không thể tải danh sách người dùng.' : null,
+        error: usersResult.status === 'rejected' ? 'Failed to load users.' : null,
     };
 };
 

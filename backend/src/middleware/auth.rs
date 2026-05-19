@@ -26,14 +26,42 @@
 //! Set `JWT_SECRET` to a long random string in `.env`.
 //! The application will panic on startup if `JWT_SECRET` is not set.
 
+use std::sync::OnceLock;
+
 use axum::{
     extract::FromRequestParts,
     http::{request::Parts, StatusCode},
     response::{IntoResponse, Response},
     Json,
 };
-use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
+use jsonwebtoken::{decode, Algorithm, DecodingKey, EncodingKey, Validation};
 use serde::{Deserialize, Serialize};
+
+// ── JWT key cache ─────────────────────────────────────────────────────────────
+
+static DECODING_KEY: OnceLock<DecodingKey> = OnceLock::new();
+static ENCODING_KEY: OnceLock<EncodingKey> = OnceLock::new();
+
+/// Parse and cache JWT keys from `JWT_SECRET`. Must be called once at startup
+/// before the router is built. Panics if the env var is absent.
+pub fn init_jwt_keys() {
+    let secret = std::env::var("JWT_SECRET")
+        .expect("JWT_SECRET environment variable must be set");
+    DECODING_KEY
+        .set(DecodingKey::from_secret(secret.as_bytes()))
+        .unwrap_or_else(|_| panic!("JWT keys already initialized"));
+    ENCODING_KEY
+        .set(EncodingKey::from_secret(secret.as_bytes()))
+        .unwrap_or_else(|_| panic!("JWT keys already initialized"));
+}
+
+pub fn decoding_key() -> &'static DecodingKey {
+    DECODING_KEY.get().expect("JWT keys not initialized")
+}
+
+pub fn encoding_key() -> &'static EncodingKey {
+    ENCODING_KEY.get().expect("JWT keys not initialized")
+}
 
 // ── Role ─────────────────────────────────────────────────────────────────────
 
@@ -74,18 +102,11 @@ pub struct Claims {
 /// `RequireProvider`.
 #[derive(Debug, Clone)]
 pub struct AuthUser {
-    pub id:       i32,
-    pub role:     Role,
-    #[allow(dead_code)]
-    pub username: String,
+    pub id:   i32,
+    pub role: Role,
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
-
-fn jwt_secret() -> String {
-    std::env::var("JWT_SECRET")
-        .expect("JWT_SECRET environment variable must be set")
-}
 
 /// Pull the raw token string from `Authorization: Bearer <token>`.
 fn bearer_token(parts: &Parts) -> Option<&str> {
@@ -98,10 +119,9 @@ fn bearer_token(parts: &Parts) -> Option<&str> {
 
 /// Decode and validate a JWT, returning its claims on success.
 fn decode_claims(token: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
-    let key = DecodingKey::from_secret(jwt_secret().as_bytes());
     let mut validation = Validation::new(Algorithm::HS256);
     validation.validate_exp = true;
-    decode::<Claims>(token, &key, &validation).map(|data| data.claims)
+    decode::<Claims>(token, decoding_key(), &validation).map(|data| data.claims)
 }
 
 /// Build a JSON error response. Matches the `HandlerError` shape used
@@ -118,19 +138,18 @@ impl<S: Send + Sync> FromRequestParts<S> for AuthUser {
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         let token = bearer_token(parts)
-            .ok_or_else(|| error_response(StatusCode::UNAUTHORIZED, "Yêu cầu đăng nhập."))?;
+            .ok_or_else(|| error_response(StatusCode::UNAUTHORIZED, "Authentication required."))?;
 
         let claims = decode_claims(token).map_err(|_| {
             error_response(
                 StatusCode::UNAUTHORIZED,
-                "Token không hợp lệ hoặc đã hết hạn.",
+                "Invalid or expired token.",
             )
         })?;
 
         Ok(AuthUser {
-            id: claims.sub,
+            id:   claims.sub,
             role: claims.role,
-            username: claims.username,
         })
     }
 }
@@ -156,7 +175,7 @@ impl<S: Send + Sync> FromRequestParts<S> for RequireAdmin {
         if user.role != Role::Admin {
             return Err(error_response(
                 StatusCode::FORBIDDEN,
-                "Chỉ quản trị viên mới có quyền thực hiện thao tác này.",
+                "Only administrators are allowed to perform this action.",
             ));
         }
 
@@ -188,7 +207,7 @@ impl<S: Send + Sync> FromRequestParts<S> for RequireProvider {
         if !matches!(user.role, Role::Admin | Role::Provider) {
             return Err(error_response(
                 StatusCode::FORBIDDEN,
-                "Bạn không có quyền truy cập.",
+                "Access denied.",
             ));
         }
 

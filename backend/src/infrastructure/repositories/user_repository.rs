@@ -1,11 +1,14 @@
+// std
+use std::sync::Arc;
+
+// external
 use async_trait::async_trait;
 use chrono::Utc;
-use sea_orm::sea_query::{Expr, SimpleExpr};
 use sea_orm::{
     ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, JoinType, PaginatorTrait,
     QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
+    sea_query::{Expr, SimpleExpr},
 };
-use std::sync::Arc;
 use tracing::error;
 
 use crate::{
@@ -59,13 +62,17 @@ struct UserByUsernameRow {
 
 #[derive(FromQueryResult)]
 struct UserAdminRow {
-    id: i32,
-    username: String,
-    email: String,
-    full_name: Option<String>,
-    role_code: String,
-    role_name: String,
-    is_active: bool,
+    id:               i32,
+    username:         String,
+    email:            String,
+    full_name:        Option<String>,
+    role_code:        String,
+    role_name:        String,
+    is_active:        bool,
+    created_on:       DateTimeWithTimeZone,
+    updated_on:       DateTimeWithTimeZone,
+    created_by_name:  Option<String>,
+    updated_by_name:  Option<String>,
 }
 
 #[derive(FromQueryResult)]
@@ -205,6 +212,16 @@ impl UserRepositoryTrait for UserRepository {
             .column_as(role::Column::Code, "role_code")
             .column_as(role::Column::Name, "role_name")
             .column(user::Column::IsActive)
+            .column(user::Column::CreatedOn)
+            .column(user::Column::UpdatedOn)
+            .expr_as(
+                Expr::cust("(SELECT u2.username FROM users u2 WHERE u2.id = \"user\".created_by)"),
+                "created_by_name",
+            )
+            .expr_as(
+                Expr::cust("(SELECT u2.username FROM users u2 WHERE u2.id = \"user\".updated_by)"),
+                "updated_by_name",
+            )
             .join(JoinType::InnerJoin, user::Relation::Role.def())
             .filter(user::Column::DeletedAt.is_null())
             .order_by_asc(user::Column::Id)
@@ -216,13 +233,17 @@ impl UserRepositoryTrait for UserRepository {
             .map(|rows| {
                 rows.into_iter()
                     .map(|r| UserAdmin {
-                        id: r.id,
-                        username: r.username,
-                        email: r.email,
-                        full_name: r.full_name,
-                        role_code: r.role_code,
-                        role_name: r.role_name,
-                        is_active: r.is_active,
+                        id:               r.id,
+                        username:         r.username,
+                        email:            r.email,
+                        full_name:        r.full_name,
+                        role_code:        r.role_code,
+                        role_name:        r.role_name,
+                        is_active:        r.is_active,
+                        created_on:       r.created_on.with_timezone(&Utc),
+                        updated_on:       r.updated_on.with_timezone(&Utc),
+                        created_by_name:  r.created_by_name,
+                        updated_by_name:  r.updated_by_name,
                     })
                     .collect()
             })
@@ -482,29 +503,24 @@ impl UserRepositoryTrait for UserRepository {
         max_attempts: i32,
         lockout_minutes: i64,
     ) -> Result<(), AppError> {
-        use sea_orm::ConnectionTrait;
-        use sea_orm::DbBackend;
-        use sea_orm::Statement;
-
-        // Atomically increment and, if threshold is reached, set locked_until.
-        let sql = r#"
-            UPDATE users
-            SET
-                failed_login_attempts = failed_login_attempts + 1,
-                locked_until = CASE
-                    WHEN failed_login_attempts + 1 >= $1
-                    THEN NOW() + ($2 * INTERVAL '1 minute')
-                    ELSE locked_until
-                END
-            WHERE id = $3
-        "#;
-
-        self.db
-            .execute(Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                sql,
-                [max_attempts.into(), lockout_minutes.into(), user_id.into()],
-            ))
+        // Atomically increment failed_login_attempts and, once the threshold is
+        // reached, set locked_until — all in a single UPDATE with CASE WHEN.
+        UserEntity::update_many()
+            .col_expr(
+                user::Column::FailedLoginAttempts,
+                Expr::cust("failed_login_attempts + 1"),
+            )
+            .col_expr(
+                user::Column::LockedUntil,
+                Expr::cust_with_exprs(
+                    "CASE WHEN failed_login_attempts + 1 >= ? \
+                     THEN NOW() + (? * INTERVAL '1 minute') \
+                     ELSE locked_until END",
+                    [Expr::value(max_attempts), Expr::value(lockout_minutes)],
+                ),
+            )
+            .filter(user::Column::Id.eq(user_id))
+            .exec(self.db.as_ref())
             .await
             .map(|_| ())
             .map_err(|e| {

@@ -12,10 +12,20 @@
   let searchInput = $state<HTMLInputElement | null>(null);
   let profileOpen = $state(false);
 
-  afterNavigate(() => {
+  afterNavigate(({ type, from, to }) => {
     document.documentElement.style.overflow = "";
     document.body.style.overflow = "";
     profileOpen = false;
+    const q = to?.url.searchParams.get("q") ?? "";
+    const onSearchPage = to?.url.pathname === ROUTES.SEARCH;
+    // Keep navbar search open only when NOT on the dedicated search page
+    // (which has its own inline search bar)
+    searchQuery = onSearchPage ? "" : q;
+    searchOpen  = !!q && !onSearchPage;
+    const sameRoute = from?.url.pathname === to?.url.pathname;
+    if (type !== "popstate" && !sameRoute) {
+      window.scrollTo({ top: 0, behavior: "instant" });
+    }
   });
 
   function toggleSearch() {
@@ -37,11 +47,7 @@
     e.preventDefault();
     const q = searchQuery.trim();
     if (!q) return;
-    goto(`${ROUTES.SERVICES}?service=${encodeURIComponent(q)}`, {
-      replaceState: false,
-    });
-    searchQuery = "";
-    searchOpen = false;
+    goto(`${ROUTES.SEARCH}?q=${encodeURIComponent(q)}`, { replaceState: false });
   }
 </script>
 
@@ -55,7 +61,7 @@
     </Button>
 
     <div class="app-nav__actions">
-      <Button
+      <button
         type="button"
         class="app-nav__search-toggle{searchOpen ? ' active' : ''}"
         onclick={toggleSearch}
@@ -63,7 +69,7 @@
       >
         <i class="fa-solid {searchOpen ? 'fa-xmark' : 'fa-magnifying-glass'}"
         ></i>
-      </Button>
+      </button>
 
       {#if data.isLoggedIn}
         <div class="app-nav__profile">
@@ -176,17 +182,17 @@
           placeholder="Tìm dịch vụ, nông sản..."
           bind:value={searchQuery}
           aria-label="Tìm kiếm"
+          enterkeyhint="search"
           tabindex={searchOpen ? 0 : -1}
         />
-        {#if searchQuery}
-          <Button
-            type="submit"
-            class="app-nav__search-btn"
-            aria-label="Tìm kiếm"
-          >
-            <i class="fa-solid fa-arrow-right"></i>
-          </Button>
-        {/if}
+        <button
+          type="submit"
+          class="app-nav__search-btn"
+          aria-label="Tìm kiếm"
+          tabindex={searchOpen ? 0 : -1}
+        >
+          <i class="fa-solid fa-arrow-right"></i>
+        </button>
       </form>
     </div>
   </div>
@@ -238,6 +244,10 @@
     letter-spacing: -0.02em;
   }
 
+  :global(.app-nav__brand:hover) {
+    color: #fff;
+  }
+
   .app-nav__logo {
     width: 32px;
     height: 32px;
@@ -255,25 +265,35 @@
     gap: 8px;
   }
 
-  :global(.app-nav__search-toggle) {
-    width: 36px;
-    height: 32px;
+  .app-nav__search-toggle {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.25);
-    border-radius: 20px;
+    border-radius: 50%;
     color: #fff;
     font-size: 0.88rem;
     cursor: pointer;
     transition: background 0.15s;
     -webkit-tap-highlight-color: transparent;
+    appearance: none;
+    -webkit-appearance: none;
   }
 
-  :global(.app-nav__search-toggle.active),
-  :global(.app-nav__search-toggle:hover) {
+  .app-nav__search-toggle.active,
+  .app-nav__search-toggle:hover {
     background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+  }
+
+  .app-nav__search-toggle:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.6);
+    outline-offset: 2px;
   }
 
   :global(.app-nav__login) {
@@ -289,13 +309,21 @@
     border: 1px solid rgba(255, 255, 255, 0.3);
     background: rgba(255, 255, 255, 0.1);
     transition: background 0.2s ease;
-    min-height: 32px;
+    min-height: 44px;
     white-space: nowrap;
   }
 
   :global(.app-nav__login:hover) {
     background: rgba(255, 255, 255, 0.2);
     color: #fff;
+  }
+
+  :global(.app-nav__login:active),
+  :global(.app-nav__login.active) {
+    background: rgba(255, 255, 255, 0.28) !important;
+    color: #fff !important;
+    border-color: rgba(255, 255, 255, 0.45) !important;
+    box-shadow: none !important;
   }
 
   /* Collapsible search row */
@@ -325,7 +353,7 @@
     background: rgba(255, 255, 255, 0.12);
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 100px;
-    padding: 0 14px;
+    padding: 0 4px 0 14px;
     min-height: 38px;
     transition:
       background 0.15s,
@@ -357,26 +385,33 @@
     color: rgba(255, 255, 255, 0.5);
   }
 
-  :global(.app-nav__search-btn) {
+  .app-nav__search-btn {
     flex-shrink: 0;
-    width: 26px;
-    height: 26px;
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(255, 255, 255, 0.9);
-    color: var(--p800, #064e3b);
-    border: none;
+    background: rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 50%;
-    font-size: 0.75rem;
+    color: #fff;
+    font-size: 0.78rem;
     cursor: pointer;
-    transition:
-      background 0.15s,
-      transform 0.1s;
+    transition: background 0.15s;
+    -webkit-tap-highlight-color: transparent;
+    appearance: none;
+    -webkit-appearance: none;
   }
 
-  :global(.app-nav__search-btn:active) {
-    transform: scale(0.92);
+  .app-nav__search-btn:hover,
+  .app-nav__search-btn:active {
+    background: rgba(255, 255, 255, 0.32);
+  }
+
+  .app-nav__search-btn:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.6);
+    outline-offset: 2px;
   }
 
   .app-main {
@@ -434,6 +469,13 @@
 
   :global(.app-nav__dropdown-item:hover) {
     background: #f0fdf4;
+    color: #1a2e24;
+  }
+
+  :global(.app-nav__dropdown-item:active) {
+    background: #dcfce7 !important;
+    color: #1a2e24 !important;
+    box-shadow: none !important;
   }
 
   :global(.app-nav__dropdown-item--danger) {
@@ -442,6 +484,13 @@
 
   :global(.app-nav__dropdown-item--danger:hover) {
     background: #fff1f1;
+    color: #dc2626;
+  }
+
+  :global(.app-nav__dropdown-item--danger:active) {
+    background: #fee2e2 !important;
+    color: #dc2626 !important;
+    box-shadow: none !important;
   }
 
   .app-nav__dropdown-divider {
@@ -457,5 +506,9 @@
     background: transparent;
     border: none;
     cursor: default;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+    appearance: none;
+    -webkit-appearance: none;
   }
 </style>

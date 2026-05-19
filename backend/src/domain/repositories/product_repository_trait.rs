@@ -10,11 +10,21 @@ pub trait ProductRepositoryTrait {
     async fn browse(
         &self,
         category_id: Option<i32>,
+        name: Option<String>,
+        min_price: Option<i64>,
+        max_price: Option<i64>,
+        sort: Option<String>,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<ProductView>, AppError>;
 
-    async fn count_browse(&self, category_id: Option<i32>) -> Result<i64, AppError>;
+    async fn count_browse(
+        &self,
+        category_id: Option<i32>,
+        name: Option<String>,
+        min_price: Option<i64>,
+        max_price: Option<i64>,
+    ) -> Result<i64, AppError>;
 
     async fn featured(&self, limit: i64) -> Result<Vec<ProductView>, AppError>;
 

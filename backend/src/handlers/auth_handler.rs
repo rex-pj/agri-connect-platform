@@ -1,4 +1,4 @@
-use axum::{extract::{Path, State}, Json};
+use axum::{extract::{Path, State}, http::StatusCode, Json};
 
 use crate::{
     app_state::AppState,
@@ -64,7 +64,7 @@ impl AuthHandler {
             .await
             .map_err(HandlerError::from)?;
 
-        Ok(Json(result))
+        Ok((StatusCode::CREATED, Json(result)))
     }
 
     /// GET /api/users/me  — return the authenticated user's own profile
@@ -95,7 +95,7 @@ impl AuthHandler {
             .await
             .map_err(HandlerError::from)?;
 
-        Ok(Json(serde_json::json!({ "message": "Đổi mật khẩu thành công." })))
+        Ok(Json(serde_json::json!({ "message": "Password changed successfully." })))
     }
 
     /// POST /api/auth/password-resets  — request a reset email
@@ -111,7 +111,7 @@ impl AuthHandler {
             .map_err(HandlerError::from)?;
 
         Ok(Json(serde_json::json!({
-            "message": "Nếu email tồn tại trong hệ thống, chúng tôi đã gửi hướng dẫn đặt lại mật khẩu."
+            "message": "If the email exists in our system, we have sent password reset instructions."
         })))
     }
 
@@ -128,6 +128,6 @@ impl AuthHandler {
             .await
             .map_err(HandlerError::from)?;
 
-        Ok(Json(serde_json::json!({ "message": "Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại." })))
+        Ok(Json(serde_json::json!({ "message": "Password reset successfully. Please log in again." })))
     }
 }

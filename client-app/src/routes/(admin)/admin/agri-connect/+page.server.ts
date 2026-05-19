@@ -21,7 +21,7 @@ export const load: PageServerLoad = async ({ fetch, cookies, url }) => {
         }
         return {
             result: { items: [], total: 0, page: 1, total_pages: 1 },
-            error: 'Không thể tải danh sách nhà cung cấp.',
+            error: 'Failed to load providers.',
         };
     }
 };

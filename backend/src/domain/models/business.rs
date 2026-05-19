@@ -33,16 +33,19 @@ pub struct BusinessProfile {
 }
 
 pub struct BusinessAdminView {
-    pub id:              i32,
-    pub name:            String,
-    pub phone:           String,
-    pub address:         Option<String>,
-    pub is_verified:     bool,
-    pub is_active:       bool,
-    pub service_count:   i64,
-    pub product_count:   i64,
-    pub created_on:      DateTime<Utc>,
-    pub linked_username: Option<String>,
+    pub id:               i32,
+    pub name:             String,
+    pub phone:            String,
+    pub address:          Option<String>,
+    pub is_verified:      bool,
+    pub is_active:        bool,
+    pub service_count:    i64,
+    pub product_count:    i64,
+    pub created_on:       DateTime<Utc>,
+    pub updated_on:       DateTime<Utc>,
+    pub linked_username:  Option<String>,
+    pub created_by_name:  Option<String>,
+    pub updated_by_name:  Option<String>,
 }
 
 pub struct Service {

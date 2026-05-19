@@ -6,11 +6,14 @@ import { ServiceError, PHONE_REGEX } from '$lib/server/api';
 export type { Category, BrowseProvider, BrowseResult } from '$lib/server/services/agri-connect.service';
 
 export const load: PageServerLoad = async ({ fetch, url }) => {
-    const page = url.searchParams.get('page') ?? '1';
-    const svc  = new AgriConnectService(fetch);
+    const page        = url.searchParams.get('page') ?? '1';
+    const searchQuery = url.searchParams.get('q')          || null;
+    const serviceId   = url.searchParams.get('service_id') || undefined;
+    const sort        = url.searchParams.get('sort')        || undefined;
+    const svc         = new AgriConnectService(fetch);
 
     const [providersResult, categoriesResult] = await Promise.allSettled([
-        svc.browseProviders(page),
+        svc.browseProviders(page, serviceId, searchQuery ?? undefined, sort),
         svc.getCategories('service'),
     ]);
 
@@ -18,13 +21,23 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
 
     if (providersResult.status === 'rejected') {
         return {
-            result: { providers: [], total: 0, page: 1, total_pages: 0 },
+            result: { items: [], total: 0, page: 1, total_pages: 0 },
             categories,
+            searchQuery,
+            serviceId: serviceId ?? null,
+            sort:      sort      ?? null,
             error: 'Máy chủ không phản hồi. Vui lòng thử lại.',
         };
     }
 
-    return { result: providersResult.value, categories, error: null };
+    return {
+        result:     providersResult.value,
+        categories,
+        searchQuery,
+        serviceId:  serviceId ?? null,
+        sort:       sort      ?? null,
+        error:      null,
+    };
 };
 
 export const actions: Actions = {

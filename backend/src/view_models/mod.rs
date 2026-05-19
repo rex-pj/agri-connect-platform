@@ -50,17 +50,20 @@ impl From<AppError> for HandlerError {
 
 #[derive(Serialize)]
 pub struct HandlerErrorResponse {
-    pub error: String,
-    pub field_errors: Option<HashMap<String, String>>,
+    pub status:       u16,
+    pub error:        String,
+    pub message:      String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub field_errors: Option<HashMap<String, Vec<String>>>,
 }
 
-// ── Internal error carrier (mirrors rex_game HandlerError) ────────────────────
+// ── Internal error carrier ────────────────────────────────────────────────────
 
 #[derive(Default)]
 pub struct HandlerError {
-    pub status: StatusCode,
-    pub message: String,
-    pub field_errors: Option<HashMap<String, String>>,
+    pub status:       StatusCode,
+    pub message:      String,
+    pub field_errors: Option<HashMap<String, Vec<String>>>,
 }
 
 impl HandlerError {
@@ -132,8 +135,15 @@ impl HandlerError {
 
 impl IntoResponse for HandlerError {
     fn into_response(self) -> Response {
+        let code = self.status.as_u16();
+        let reason = self.status
+            .canonical_reason()
+            .unwrap_or("Unknown")
+            .to_owned();
         let body = Json(HandlerErrorResponse {
-            error: self.message,
+            status:      code,
+            error:       reason,
+            message:     self.message,
             field_errors: self.field_errors,
         });
         (self.status, body).into_response()

@@ -24,8 +24,8 @@
 </div>
 
 <style>
-    .field { display: flex; flex-direction: column; gap: 6px; }
-    .field__label { font-size: 0.9rem; font-weight: 700; color: #1A1A1A; }
+    .field { display: flex; flex-direction: column; gap: 8px; }
+    .field__label { font-size: 0.9rem; font-weight: 700; color: var(--text); }
     .req { color: #C0392B; }
     .field__error {
         font-size: 0.8rem;
@@ -33,6 +33,6 @@
         color: #C0392B;
         display: flex;
         align-items: center;
-        gap: 5px;
+        gap: 8px;
     }
 </style>

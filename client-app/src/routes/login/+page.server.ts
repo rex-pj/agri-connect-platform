@@ -1,4 +1,4 @@
-import { fail, redirect } from '@sveltejs/kit';
+import { fail, redirect, isRedirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { setAuthCookie } from '$lib/server/api';
 import { AuthService } from '$lib/server/services/auth.service';
@@ -35,7 +35,7 @@ export const actions: Actions = {
             setAuthCookie(cookies, token);
             throw redirect(302, ROUTES.ADMIN.DASHBOARD);
         } catch (err) {
-            if (err instanceof Response) throw err; // re-throw redirects
+            if (isRedirect(err)) throw err;
             if (err instanceof ServiceError) {
                 return fail(err.status, { error: err.message, locked: err.status === 423 });
             }
@@ -46,11 +46,12 @@ export const actions: Actions = {
     setup: async ({ request, fetch, cookies }) => {
         const data      = await request.formData();
         const username  = (data.get('username')  as string ?? '').trim();
+        const email     = (data.get('email')     as string ?? '').trim();
         const password  = (data.get('password')  as string ?? '');
         const password2 = (data.get('password2') as string ?? '');
         const full_name = (data.get('full_name')  as string ?? '').trim() || null;
 
-        if (!username || !password) {
+        if (!username || !email || !password) {
             return fail(400, { error: 'Vui lòng điền đầy đủ thông tin.' });
         }
         if (password !== password2) {
@@ -59,7 +60,7 @@ export const actions: Actions = {
 
         const svc = new AuthService(fetch);
         try {
-            const { token } = await svc.createFirstAdmin({ username, password, full_name });
+            const { token } = await svc.createFirstAdmin({ username, email, password, full_name });
             setAuthCookie(cookies, token);
             throw redirect(302, ROUTES.ADMIN.DASHBOARD);
         } catch (err) {

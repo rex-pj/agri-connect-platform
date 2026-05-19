@@ -1,9 +1,9 @@
 <script lang="ts">
   import { enhance } from "$app/forms";
-  import Button from '$lib/components/atoms/Button.svelte';
-  import Heading from '$lib/components/atoms/Heading.svelte';
+  import Button from "$lib/components/atoms/Button.svelte";
+  import Heading from "$lib/components/atoms/Heading.svelte";
   import type { PageData, ActionData } from "./$types";
-  import { ROUTES } from '$lib/routes';
+  import { ROUTES } from "$lib/routes";
 
   const { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -38,7 +38,10 @@
 <nav aria-label="breadcrumb" class="mx-4 mt-4">
   <ol class="breadcrumb mb-0">
     <li class="breadcrumb-item">
-      <Button href={ROUTES.ADMIN.AGRI_CONNECT} class="text-success fw-semibold text-decoration-none">
+      <Button
+        href={ROUTES.ADMIN.AGRI_CONNECT}
+        class="text-success fw-semibold text-decoration-none"
+      >
         <i class="fa-solid fa-store me-1"></i>Nhà cung cấp
       </Button>
     </li>
@@ -48,13 +51,13 @@
 
 <!-- ── Alert strip ─────────────────────────────────────────────────────────── -->
 {#if (form as any)?.success && (form as any)?.message}
-  <div class="alert alert-success d-flex align-items-center gap-2 mx-4 mb-0">
+  <div class="alert alert-success d-flex align-items-center gap-2 mx-4 mt-2 mb-0">
     <i class="fa-solid fa-circle-check flex-shrink-0"></i>{(form as any)
       .message}
   </div>
 {/if}
 {#if (form as any) && !(form as any)?.success && (form as any)?.error}
-  <div class="alert alert-danger d-flex align-items-center gap-2 mx-4 mb-0">
+  <div class="alert alert-danger d-flex align-items-center gap-2 mx-4 mt-2 mb-0">
     <i class="fa-solid fa-triangle-exclamation flex-shrink-0"></i>{(form as any)
       .error}
   </div>
@@ -191,14 +194,13 @@
 </div>
 
 <!-- ── Services ────────────────────────────────────────────────────────────── -->
-<div class="mx-4 mt-3">
-  <Heading level={3} class="fs-6 fw-bold d-flex align-items-center gap-2 mb-0">
-    <i class="fa-solid fa-wrench text-info"></i>Dịch vụ
-    <span class="badge bg-secondary rounded-pill">{p.services.length}</span>
-  </Heading>
-</div>
-
-<div class="admin-card mx-4 mt-2">
+<div class="admin-card mx-4 mt-3">
+  <div class="px-3 py-3 border-bottom">
+    <Heading level={3} class="fs-6 fw-bold d-flex align-items-center gap-2 mb-0">
+      <i class="fa-solid fa-wrench text-info"></i>Dịch vụ
+      <span class="badge bg-secondary rounded-pill">{p.services.length}</span>
+    </Heading>
+  </div>
   {#if p.services.length === 0}
     <div class="text-center py-4 text-muted">
       <i class="fa-solid fa-inbox d-block mb-2 opacity-50"></i>
@@ -250,14 +252,13 @@
 </div>
 
 <!-- ── Products ────────────────────────────────────────────────────────────── -->
-<div class="mx-4 mt-3">
-  <Heading level={3} class="fs-6 fw-bold d-flex align-items-center gap-2 mb-0">
-    <i class="fa-solid fa-box text-warning"></i>Sản phẩm
-    <span class="badge bg-secondary rounded-pill">{p.products.length}</span>
-  </Heading>
-</div>
-
-<div class="admin-card mx-4 mt-2 mb-4">
+<div class="admin-card mx-4 mt-3">
+  <div class="px-3 py-3 border-bottom">
+    <Heading level={3} class="fs-6 fw-bold d-flex align-items-center gap-2 mb-0">
+      <i class="fa-solid fa-box text-warning"></i>Sản phẩm
+      <span class="badge bg-secondary rounded-pill">{p.products.length}</span>
+    </Heading>
+  </div>
   {#if p.products.length === 0}
     <div class="text-center py-4 text-muted">
       <i class="fa-solid fa-inbox d-block mb-2 opacity-50"></i>
@@ -311,10 +312,18 @@
 
 <style>
   .provider-avatar {
-    width: 56px; height: 56px; flex-shrink: 0;
-    background: #f0f4f2; border-radius: 14px;
-    display: flex; align-items: center; justify-content: center;
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+    background: #f0f4f2;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     color: #5e7a68;
   }
-  .provider-avatar--verified { background: #ecfdf5; color: #047857; }
+  .provider-avatar--verified {
+    background: #ecfdf5;
+    color: #047857;
+  }
 </style>

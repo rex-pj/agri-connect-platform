@@ -217,6 +217,7 @@
                 class="form-control"
                 value={data.profile.phone}
                 pattern={"0\\d{9}"}
+                autocomplete="tel"
                 required
               />
             </div>
@@ -285,7 +286,7 @@
                 <div class="col-auto">
                   <Button
                     type="button"
-                    class="btn btn-outline-success"
+                    class="btn-outline-success"
                     onclick={detectGps}
                     disabled={detecting}
                   >
@@ -305,7 +306,7 @@
           </div>
 
           <div class="mt-4 d-flex justify-content-end">
-            <Button type="submit" class="btn btn-success px-4">
+            <Button type="submit" class="btn-success px-4">
               {#if submittingProfile}
                 <Spinner class="me-2" />Đang lưu…
               {:else}
@@ -333,7 +334,7 @@
       <!-- Add product button — triggers Bootstrap modal -->
       <Button
         type="button"
-        class="btn btn-success btn-sm"
+        class="btn-sm btn-success"
         data-bs-toggle="modal"
         data-bs-target="#addProductModal"
         disabled={!data.profile}
@@ -397,7 +398,7 @@
                 <div class="product-tile__actions d-flex flex-column gap-1">
                   <Button
                     type="button"
-                    class="btn btn-sm btn-outline-secondary"
+                    class="btn-sm btn-outline-secondary"
                     onclick={() => openEditModal(product)}
                     title="Chỉnh sửa sản phẩm"
                   >
@@ -420,7 +421,7 @@
                     <input type="hidden" name="id" value={product.id} />
                     <Button
                       type="submit"
-                      class="btn btn-sm btn-outline-danger"
+                      class="btn-sm btn-outline-danger"
                       onclick={(e) => {
                         if (!confirm(`Xoá sản phẩm "${product.name}"?`))
                           e.preventDefault();
@@ -584,10 +585,10 @@
             <div class="modal-footer border-0 pt-0">
               <Button
                 type="button"
-                class="btn btn-outline-secondary"
+                class="btn-outline-secondary"
                 data-bs-dismiss="modal">Huỷ</Button
               >
-              <Button type="submit" class="btn btn-success px-4">
+              <Button type="submit" class="btn-success px-4">
                 {#if submittingAdd}
                   <Spinner class="me-1" />Đang lưu…
                 {:else}
@@ -770,10 +771,10 @@
             <div class="modal-footer border-0 pt-0">
               <Button
                 type="button"
-                class="btn btn-outline-secondary"
+                class="btn-outline-secondary"
                 data-bs-dismiss="modal">Huỷ</Button
               >
-              <Button type="submit" class="btn btn-warning px-4">
+              <Button type="submit" class="btn-warning px-4">
                 {#if submittingEdit}
                   <Spinner class="me-1" />Đang lưu…
                 {:else}
@@ -790,17 +791,21 @@
 
 <style>
   /* ── Security link ───────────────────────────────────── */
-  .security-link {
-    display: flex;
+  :global(.security-link) {
+    display: flex !important;
     align-items: center;
     gap: 14px;
     padding: 16px 20px;
-    text-decoration: none;
-    color: inherit;
+    text-decoration: none !important;
+    color: inherit !important;
+    text-align: left;
+    width: 100%;
     transition: background 0.15s;
   }
-  .security-link:hover {
+
+  :global(.security-link:hover) {
     background: #f8faf9;
+    color: inherit;
   }
   .security-link__icon {
     width: 40px;

@@ -1,4 +1,4 @@
-import { API_BASE, ServiceError, type Fetch } from '$lib/server/api';
+import { API_BASE, parseServiceError, type Fetch } from '$lib/server/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -48,7 +48,7 @@ export interface ProviderDetail {
 }
 
 export interface BrowseResult {
-    providers:   BrowseProvider[];
+    items:       BrowseProvider[];
     total:       number;
     page:        number;
     total_pages: number;
@@ -72,15 +72,18 @@ export interface ProductDetail extends Product {
 }
 
 export interface ProductsResult {
-    products:    Product[];
+    items:       Product[];
     total:       number;
     page:        number;
     total_pages: number;
 }
 
+export type FeaturedProvider = Provider;
+export type FeaturedProduct  = Product;
+
 export interface ExploreData {
-    featured_providers: Provider[];
-    featured_products:  Product[];
+    featured_providers: FeaturedProvider[];
+    featured_products:  FeaturedProduct[];
 }
 
 export interface ContactInput {
@@ -99,13 +102,13 @@ export class AgriConnectService {
 
     async getExploreData(): Promise<ExploreData> {
         const res = await this.fetch(`${API_BASE}/api/agri-connect/explore`);
-        if (!res.ok) throw new ServiceError(res.status, 'Không thể tải dữ liệu trang chủ.');
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load home data.');
         return res.json();
     }
 
     async getCategories(type: 'product' | 'service'): Promise<Category[]> {
         const res = await this.fetch(`${API_BASE}/api/agri-connect/categories?type=${type}`);
-        if (!res.ok) throw new ServiceError(res.status, 'Không thể tải danh mục.');
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load categories.');
         return res.json();
     }
 
@@ -115,44 +118,48 @@ export class AgriConnectService {
         const qs = new URLSearchParams({ lat: params.lat, lng: params.lng, radius: params.radius });
         if (params.service_id) qs.set('service_id', params.service_id);
         const res = await this.fetch(`${API_BASE}/api/agri-connect/providers?${qs}`);
-        if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            throw new ServiceError(res.status, (body as { error?: string }).error ?? 'Không thể tải dữ liệu.');
-        }
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load providers.');
         return res.json();
     }
 
-    async browseProviders(page: string, serviceId?: string): Promise<BrowseResult> {
+    async browseProviders(page: string, serviceId?: string, name?: string, sort?: string): Promise<BrowseResult> {
         const qs = new URLSearchParams({ page });
         if (serviceId) qs.set('service_id', serviceId);
+        if (name)      qs.set('name', name);
+        if (sort)      qs.set('sort', sort);
         const res = await this.fetch(`${API_BASE}/api/agri-connect/providers/browse?${qs}`);
-        if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            throw new ServiceError(res.status, (body as { error?: string }).error ?? 'Không thể tải danh sách dịch vụ.');
-        }
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load providers.');
         return res.json();
     }
 
     async getProvider(id: number | string): Promise<ProviderDetail> {
         const res = await this.fetch(`${API_BASE}/api/agri-connect/providers/${id}`);
-        if (!res.ok) throw new ServiceError(res.status, 'Không thể tải thông tin nhà cung cấp.');
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load provider.');
         return res.json();
     }
 
-    async browseProducts(page: string, categoryId?: string): Promise<ProductsResult> {
+    async browseProducts(
+        page: string,
+        categoryId?: string,
+        name?: string,
+        minPrice?: string,
+        maxPrice?: string,
+        sort?: string,
+    ): Promise<ProductsResult> {
         const qs = new URLSearchParams({ page });
         if (categoryId) qs.set('category_id', categoryId);
+        if (name)       qs.set('name', name);
+        if (minPrice)   qs.set('min_price', minPrice);
+        if (maxPrice)   qs.set('max_price', maxPrice);
+        if (sort)       qs.set('sort', sort);
         const res = await this.fetch(`${API_BASE}/api/agri-connect/products/browse?${qs}`);
-        if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            throw new ServiceError(res.status, (body as { error?: string }).error ?? 'Không thể tải danh sách sản phẩm.');
-        }
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load products.');
         return res.json();
     }
 
     async getProduct(id: number | string): Promise<ProductDetail> {
         const res = await this.fetch(`${API_BASE}/api/agri-connect/products/${id}`);
-        if (!res.ok) throw new ServiceError(res.status, 'Không thể tải thông tin sản phẩm.');
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load product.');
         return res.json();
     }
 
@@ -162,12 +169,6 @@ export class AgriConnectService {
             headers: { 'Content-Type': 'application/json' },
             body:    JSON.stringify(data),
         });
-        if (!res.ok) {
-            const body = await res.json().catch(() => ({})) as {
-                error?: string;
-                field_errors?: Record<string, string>;
-            };
-            throw new ServiceError(res.status, body.error ?? 'Gửi yêu cầu thất bại.', body.field_errors);
-        }
+        if (!res.ok) throw await parseServiceError(res, 'Failed to submit request.');
     }
 }

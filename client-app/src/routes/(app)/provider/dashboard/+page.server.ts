@@ -38,7 +38,7 @@ export const load: PageServerLoad = async ({ fetch, cookies }) => {
     const products     = productsResult.status === 'fulfilled' ? productsResult.value : [];
     const categories   = categoriesResult.status === 'fulfilled' ? categoriesResult.value : [];
     const profileError = profileResult.status === 'rejected'
-        ? (profileResult.reason instanceof ServiceError ? profileResult.reason.message : 'Không thể tải hồ sơ.')
+        ? (profileResult.reason instanceof ServiceError ? profileResult.reason.message : 'Failed to load profile.')
         : null;
 
     return { profile, products, categories, profileError };

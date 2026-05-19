@@ -16,4 +16,6 @@ pub struct InquiryAdmin {
     pub topic:           String,
     pub status:          String,
     pub created_on:      chrono::DateTime<chrono::Utc>,
+    pub updated_on:      chrono::DateTime<chrono::Utc>,
+    pub updated_by_name: Option<String>,
 }

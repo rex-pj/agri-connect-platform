@@ -15,7 +15,7 @@ pub fn validate_vn_phone(phone: &str) -> Result<(), ValidationError> {
     } else {
         let mut err = ValidationError::new("invalid_phone");
         err.message = Some(
-            "Số điện thoại không hợp lệ (10 chữ số, bắt đầu bằng 0)".into(),
+            "Invalid phone number (10 digits, starting with 0)".into(),
         );
         Err(err)
     }
@@ -24,15 +24,19 @@ pub fn validate_vn_phone(phone: &str) -> Result<(), ValidationError> {
 pub struct ValidationHelper;
 
 impl ValidationHelper {
-    pub fn flatten_errors(e: ValidationErrors) -> HashMap<String, String> {
+    pub fn flatten_errors(e: ValidationErrors) -> HashMap<String, Vec<String>> {
         let mut map = HashMap::new();
         for (field, errors) in e.field_errors() {
-            let msg = errors
-                .first()
-                .and_then(|e| e.message.as_ref())
-                .map(|m| m.to_string())
-                .unwrap_or_else(|| format!("Giá trị không hợp lệ: {}", field));
-            map.insert(field.to_string(), msg);
+            let msgs: Vec<String> = errors
+                .iter()
+                .map(|e| {
+                    e.message
+                        .as_ref()
+                        .map(|m| m.to_string())
+                        .unwrap_or_else(|| format!("Invalid value: {}", field))
+                })
+                .collect();
+            map.insert(field.to_string(), msgs);
         }
         map
     }

@@ -13,7 +13,7 @@ use crate::{
         },
     },
     view_models::{
-        responses::{DeleteResponse, ProviderProductDto, ProviderProfileDto},
+        responses::{ProviderProductDto, ProviderProfileDto},
         AppError,
     },
 };
@@ -41,7 +41,7 @@ impl ProviderDashboardUseCase {
             .await?
             .ok_or_else(|| {
                 AppError::NotFound(
-                    "Tài khoản chưa được liên kết với doanh nghiệp nào.".into(),
+                    "Account is not linked to any business.".into(),
                 )
             })?;
 
@@ -64,7 +64,7 @@ impl ProviderDashboardUseCase {
     ) -> Result<ProviderProfileDto, AppError> {
         if input.name.trim().is_empty() {
             return Err(AppError::BadRequest(
-                "Tên doanh nghiệp không được để trống.".into(),
+                "Business name must not be empty.".into(),
             ));
         }
         validate_phone(&input.phone)?;
@@ -85,7 +85,7 @@ impl ProviderDashboardUseCase {
 
         if !updated {
             return Err(AppError::NotFound(
-                "Không tìm thấy doanh nghiệp để cập nhật.".into(),
+                "Business not found for update.".into(),
             ));
         }
 
@@ -118,14 +118,14 @@ impl ProviderDashboardUseCase {
         let name = input.name.trim().to_owned();
         if name.is_empty() {
             return Err(AppError::BadRequest(
-                "Tên sản phẩm không được để trống.".into(),
+                "Product name must not be empty.".into(),
             ));
         }
         validate_price(input.price)?;
 
         let cat_ok = self.product_repo.check_category_is_product(input.category_id).await?;
         if !cat_ok {
-            return Err(AppError::BadRequest("Danh mục sản phẩm không hợp lệ.".into()));
+            return Err(AppError::BadRequest("Invalid product category.".into()));
         }
 
         let business_id = self
@@ -133,7 +133,7 @@ impl ProviderDashboardUseCase {
             .get_business_id_by_user(input.user_id)
             .await?
             .ok_or_else(|| {
-                AppError::NotFound("Tài khoản chưa được liên kết với doanh nghiệp.".into())
+                AppError::NotFound("Account is not linked to a business.".into())
             })?;
 
         let new_id = self
@@ -155,7 +155,7 @@ impl ProviderDashboardUseCase {
             .find_provider_product_by_id(new_id)
             .await?
             .ok_or_else(|| {
-                AppError::Internal("Sản phẩm đã được thêm nhưng không thể tải lại.".into())
+                AppError::Internal("Product was created but could not be reloaded.".into())
             })?;
 
         Ok(map_provider_product(product))
@@ -168,14 +168,14 @@ impl ProviderDashboardUseCase {
         let name = input.name.trim().to_owned();
         if name.is_empty() {
             return Err(AppError::BadRequest(
-                "Tên sản phẩm không được để trống.".into(),
+                "Product name must not be empty.".into(),
             ));
         }
         validate_price(input.price)?;
 
         let cat_ok = self.product_repo.check_category_is_product(input.category_id).await?;
         if !cat_ok {
-            return Err(AppError::BadRequest("Danh mục sản phẩm không hợp lệ.".into()));
+            return Err(AppError::BadRequest("Invalid product category.".into()));
         }
 
         let updated = self
@@ -194,7 +194,7 @@ impl ProviderDashboardUseCase {
 
         if !updated {
             return Err(AppError::NotFound(
-                "Không tìm thấy sản phẩm hoặc bạn không có quyền chỉnh sửa.".into(),
+                "Product not found or you do not have permission to edit it.".into(),
             ));
         }
 
@@ -203,7 +203,7 @@ impl ProviderDashboardUseCase {
             .find_provider_product_by_id(input.product_id)
             .await?
             .ok_or_else(|| {
-                AppError::Internal("Sản phẩm đã được cập nhật nhưng không thể tải lại.".into())
+                AppError::Internal("Product was updated but could not be reloaded.".into())
             })?;
 
         Ok(map_provider_product(product))
@@ -213,19 +213,16 @@ impl ProviderDashboardUseCase {
         &self,
         product_id: i32,
         user_id: i32,
-    ) -> Result<DeleteResponse, AppError> {
+    ) -> Result<(), AppError> {
         let deleted = self.product_repo.soft_delete(product_id, user_id).await?;
 
         if !deleted {
             return Err(AppError::NotFound(
-                "Không tìm thấy sản phẩm hoặc bạn không có quyền xoá.".into(),
+                "Product not found or you do not have permission to delete it.".into(),
             ));
         }
 
-        Ok(DeleteResponse {
-            success: true,
-            message: "Sản phẩm đã được xoá thành công.".into(),
-        })
+        Ok(())
     }
 }
 
@@ -234,7 +231,7 @@ impl ProviderDashboardUseCase {
 fn validate_price(price: Option<i64>) -> Result<(), AppError> {
     if let Some(p) = price {
         if p <= 0 {
-            return Err(AppError::BadRequest("Giá sản phẩm phải lớn hơn 0.".into()));
+            return Err(AppError::BadRequest("Product price must be greater than 0.".into()));
         }
     }
     Ok(())

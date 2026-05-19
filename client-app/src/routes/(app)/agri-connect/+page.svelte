@@ -1,31 +1,88 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
-  import ProviderCard   from "$lib/components/organisms/ProviderCard.svelte";
-  import ProductCard    from "$lib/components/organisms/ProductCard.svelte";
-  import FilterChips    from "$lib/components/molecules/FilterChips.svelte";
-  import CategoryGrid   from "$lib/components/organisms/CategoryGrid.svelte";
-  import ContactSheet   from "$lib/components/organisms/ContactSheet.svelte";
-  import AlertBanner    from "$lib/components/atoms/AlertBanner.svelte";
-  import EmptyState     from "$lib/components/molecules/EmptyState.svelte";
-  import SectionHeader  from "$lib/components/molecules/SectionHeader.svelte";
-  import { PRODUCT_DISPLAY, SERVICE_DISPLAY, DEFAULT_DISPLAY } from '$lib/categoryIcons';
-  import Spinner from '$lib/components/atoms/Spinner.svelte';
-  import Heading from '$lib/components/atoms/Heading.svelte';
-  import Text from '$lib/components/atoms/Text.svelte';
-  import Button from '$lib/components/atoms/Button.svelte';
+  import ProviderCard from "$lib/components/organisms/ProviderCard.svelte";
+  import ProductCard from "$lib/components/organisms/ProductCard.svelte";
+  import FilterChips from "$lib/components/molecules/FilterChips.svelte";
+  import CategoryGrid from "$lib/components/organisms/CategoryGrid.svelte";
+  import ContactSheet from "$lib/components/organisms/ContactSheet.svelte";
+  import AlertBanner from "$lib/components/atoms/AlertBanner.svelte";
+  import EmptyState from "$lib/components/molecules/EmptyState.svelte";
+  import SectionHeader from "$lib/components/molecules/SectionHeader.svelte";
+  import {
+    PRODUCT_DISPLAY,
+    SERVICE_DISPLAY,
+    DEFAULT_DISPLAY,
+  } from "$lib/categoryIcons";
+  import Spinner from "$lib/components/atoms/Spinner.svelte";
+  import Heading from "$lib/components/atoms/Heading.svelte";
+  import Text from "$lib/components/atoms/Text.svelte";
+  import Button from "$lib/components/atoms/Button.svelte";
   import type { PageData, ActionData } from "./$types";
   import type { Provider } from "./+page.server";
 
   const { data, form }: { data: PageData; form: ActionData } = $props();
 
-  let locating    = $state(false);
-  let locError    = $state<string | null>(null);
+  let locating = $state(false);
+  let locError = $state<string | null>(null);
   let selectedSvcId = $state(page.url.searchParams.get("service_id") ?? "");
+  let selectedRadius = $state(page.url.searchParams.get("radius") ?? "10000");
+
+  const radiusOptions = [
+    { value: "5000", label: "5 km" },
+    { value: "10000", label: "10 km" },
+    { value: "25000", label: "25 km" },
+    { value: "50000", label: "50 km" },
+  ];
+
+  function handleRadius(r: string) {
+    selectedRadius = r;
+    const params = new URLSearchParams(page.url.searchParams);
+    params.set("radius", r);
+    goto(`/agri-connect?${params.toString()}`, { replaceState: false, noScroll: true });
+  }
+
+  // Fallback: tìm kiếm theo tỉnh/huyện (sử dụng Nominatim geocoding)
+  let manualAddress = $state("");
+  let geocoding = $state(false);
+
+  async function searchByAddress() {
+    const q = manualAddress.trim();
+    if (!q) return;
+    geocoding = true;
+    locError = null;
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q + ", Việt Nam")}&format=json&limit=1&countrycodes=vn`,
+        { headers: { "Accept-Language": "vi" } },
+      );
+
+      const results = await res.json();
+      if (!results.length) {
+        locError =
+          "Không tìm thấy địa chỉ này. Hãy thử nhập tên huyện hoặc tỉnh.";
+        return;
+      }
+
+      const { lat, lon } = results[0];
+      const params = new URLSearchParams(page.url.searchParams);
+      params.set("lat", parseFloat(lat).toFixed(6));
+      params.set("lng", parseFloat(lon).toFixed(6));
+
+      if (selectedSvcId) params.set("service_id", selectedSvcId);
+
+      goto(`/agri-connect?${params.toString()}`, { replaceState: false });
+    } catch {
+      locError = "Không thể tra cứu địa chỉ. Vui lòng kiểm tra kết nối mạng.";
+    } finally {
+      geocoding = false;
+    }
+  }
 
   function detectLocation() {
     if (!navigator.geolocation) {
-      locError = "Trình duyệt không hỗ trợ định vị. Vui lòng dùng Chrome hoặc Safari.";
+      locError =
+        "Trình duyệt không hỗ trợ định vị. Vui lòng dùng Chrome hoặc Safari.";
       return;
     }
     locating = true;
@@ -41,9 +98,10 @@
       },
       (err) => {
         locating = false;
-        locError = err.code === 1
-          ? "Bạn đã chặn quyền định vị. Vui lòng cho phép trong cài đặt trình duyệt."
-          : "Không lấy được vị trí. Hãy thử lại hoặc kiểm tra GPS.";
+        locError =
+          err.code === 1
+            ? "Bạn đã chặn quyền định vị. Vui lòng cho phép trong cài đặt trình duyệt."
+            : "Không lấy được vị trí. Hãy thử lại hoặc kiểm tra GPS.";
       },
       { timeout: 10_000, enableHighAccuracy: true },
     );
@@ -54,22 +112,31 @@
     const params = new URLSearchParams(page.url.searchParams);
     if (id) params.set("service_id", id);
     else params.delete("service_id");
-    goto(`/agri-connect?${params.toString()}`, { replaceState: false });
+    goto(`/agri-connect?${params.toString()}`, { replaceState: false, noScroll: true });
   }
 
   let activeProvider = $state<Provider | null>(null);
   let contactSuccess = $state(false);
 
-  function openContact(p: Provider) { activeProvider = p; contactSuccess = false; }
+  function openContact(p: Provider) {
+    activeProvider = p;
+    contactSuccess = false;
+  }
 
   $effect(() => {
-    if (form?.success) { contactSuccess = true; activeProvider = null; }
+    if (form?.success) {
+      contactSuccess = true;
+      activeProvider = null;
+    }
   });
 </script>
 
 <svelte:head>
   <title>Tìm dịch vụ gần bạn — Agri-Connect</title>
-  <meta name="description" content="Tìm nhà cung cấp dịch vụ nông nghiệp gần bạn nhất: cơ giới, phân bón, thuốc BVTV, máy bay phun thuốc và nhiều hơn nữa. Bật định vị để lọc theo khoảng cách." />
+  <meta
+    name="description"
+    content="Tìm nhà cung cấp dịch vụ nông nghiệp gần bạn nhất: cơ giới, phân bón, thuốc BVTV, máy bay phun thuốc và nhiều hơn nữa. Bật định vị để lọc theo khoảng cách."
+  />
 </svelte:head>
 
 <!-- ═══════════════════════════════════════════════════════════════════
@@ -89,11 +156,16 @@
 
       <Heading level={2} class="loc-hero__title">Tìm thợ gần bạn</Heading>
       <Text class="loc-hero__sub">
-        Cho phép xác định vị trí để tìm nhà cung cấp<br/>
+        Cho phép xác định vị trí để tìm nhà cung cấp<br />
         trong bán kính <strong class="loc-hero__em">10 km</strong> từ bạn
       </Text>
 
-      <Button type="button" class="loc-btn" onclick={detectLocation} disabled={locating}>
+      <Button
+        type="button"
+        class="loc-btn"
+        onclick={detectLocation}
+        disabled={locating}
+      >
         {#if locating}
           <Spinner /> Đang xác định vị trí…
         {:else}
@@ -102,9 +174,43 @@
       </Button>
 
       {#if locError}
-        <Text class="loc-error"><i class="fa-solid fa-triangle-exclamation"></i> {locError}</Text>
+        <Text class="loc-error"
+          ><i class="fa-solid fa-triangle-exclamation"></i> {locError}</Text
+        >
       {/if}
-      <Text class="loc-privacy"><i class="fa-solid fa-shield-halved"></i> Vị trí chỉ dùng để tìm thợ, không được lưu lại</Text>
+      <Text class="loc-privacy"
+        ><i class="fa-solid fa-shield-halved"></i> Vị trí chỉ dùng để tìm thợ, không
+        được lưu lại</Text
+      >
+      <div class="loc-manual">
+        <p class="loc-manual__label">Hoặc nhập tên huyện / tỉnh</p>
+        <form
+          class="loc-manual__form"
+          onsubmit={(e) => {
+            e.preventDefault();
+            searchByAddress();
+          }}
+        >
+          <input
+            type="text"
+            class="loc-manual__input"
+            placeholder="VD: Cai Lậy, Tiền Giang"
+            bind:value={manualAddress}
+            disabled={geocoding}
+          />
+          <button
+            type="submit"
+            class="loc-manual__btn"
+            disabled={geocoding || !manualAddress.trim()}
+          >
+            {#if geocoding}
+              <Spinner size="sm" />
+            {:else}
+              <i class="fa-solid fa-magnifying-glass"></i>
+            {/if}
+          </button>
+        </form>
+      </div>
     </div>
   </section>
 {/if}
@@ -116,9 +222,16 @@
   <div class="page-hero">
     <div class="page-hero__row">
       <Heading level={1} class="page-hero__title">
-        <i class="fa-solid fa-location-dot hero-icon--yellow"></i> Tìm dịch vụ gần tôi
+        <i class="fa-solid fa-location-dot hero-icon--yellow"></i> Tìm dịch vụ gần
+        tôi
       </Heading>
-      <Button type="button" class="page-hero__refresh" onclick={detectLocation} disabled={locating} aria-label="Cập nhật vị trí">
+      <Button
+        type="button"
+        class="page-hero__refresh"
+        onclick={detectLocation}
+        disabled={locating}
+        aria-label="Cập nhật vị trí"
+      >
         {#if locating}
           <Spinner />
         {:else}
@@ -128,28 +241,55 @@
       </Button>
     </div>
     <Text class="page-hero__sub">
-      <i class="fa-solid fa-circle-check hero-icon--check"></i>Đã xác định vị trí
+      <i class="fa-solid fa-circle-check hero-icon--check"></i>Đã xác định vị
+      trí
     </Text>
   </div>
 
   <FilterChips
-    options={data.serviceCategories.map(c => ({ value: String(c.id), label: c.name }))}
+    options={data.serviceCategories.map((c) => ({
+      value: String(c.id),
+      label: c.name,
+    }))}
     selected={selectedSvcId}
     onSelect={handleFilter}
   />
+  <div class="radius-chips">
+    <span class="radius-chips__label"
+      ><i class="fa-solid fa-circle-dot"></i> Bán kính:</span
+    >
+    {#each radiusOptions as opt}
+      <button
+        type="button"
+        class="radius-chip"
+        class:radius-chip--active={selectedRadius === opt.value}
+        onclick={() => handleRadius(opt.value)}>{opt.label}</button
+      >
+    {/each}
+  </div>
 {/if}
 
 <!-- ═══════════════════════════════════════════════════════════════════
      SERVICE CATEGORY GRID
      ═══════════════════════════════════════════════════════════════════ -->
 {#if data.serviceCategories.length > 0}
-<div class="cat-grid-wrap">
-  <Text class="cat-label">Danh mục dịch vụ</Text>
-  <CategoryGrid items={data.serviceCategories.map(cat => {
-    const d = SERVICE_DISPLAY[cat.slug] ?? DEFAULT_DISPLAY;
-    return { name: cat.name, icon: d.icon, active: selectedSvcId === String(cat.id), onSelect: () => handleFilter(selectedSvcId === String(cat.id) ? '' : String(cat.id)) };
-  })} />
-</div>
+  <div class="cat-grid-wrap">
+    <Text class="cat-section-label">Danh mục dịch vụ</Text>
+    <CategoryGrid
+      items={data.serviceCategories.map((cat) => {
+        const d = SERVICE_DISPLAY[cat.slug] ?? DEFAULT_DISPLAY;
+        return {
+          name: cat.name,
+          icon: d.icon,
+          active: selectedSvcId === String(cat.id),
+          onSelect: () =>
+            handleFilter(
+              selectedSvcId === String(cat.id) ? "" : String(cat.id),
+            ),
+        };
+      })}
+    />
+  </div>
 {/if}
 
 <!-- ═══════════════════════════════════════════════════════════════════
@@ -161,7 +301,10 @@
       <AlertBanner type="error" message={data.error} />
     {/if}
     {#if contactSuccess}
-      <AlertBanner type="success" message="Đã gửi yêu cầu! Nhà cung cấp sẽ liên hệ lại với bạn sớm." />
+      <AlertBanner
+        type="success"
+        message="Đã gửi yêu cầu! Nhà cung cấp sẽ liên hệ lại với bạn sớm."
+      />
     {/if}
 
     {#if data.providers.length === 0 && !data.error}
@@ -171,7 +314,9 @@
         hint="Hãy thử bỏ bộ lọc hoặc mở rộng phạm vi."
       />
     {:else}
-      <Text class="small text-muted mb-3"><strong>{data.providers.length}</strong> nhà cung cấp gần bạn</Text>
+      <Text class="small text-muted mb-3"
+        ><strong>{data.providers.length}</strong> nhà cung cấp gần bạn</Text
+      >
       <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
         {#each data.providers as provider (provider.id)}
           <div class="col">
@@ -201,13 +346,19 @@
      PRODUCT CATEGORY GRID
      ═══════════════════════════════════════════════════════════════════ -->
 {#if data.productCategories.length > 0}
-<div class="cat-grid-wrap">
-  <Text class="cat-label">Danh mục sản phẩm</Text>
-  <CategoryGrid items={data.productCategories.map(cat => {
-    const d = PRODUCT_DISPLAY[cat.slug] ?? DEFAULT_DISPLAY;
-    return { name: cat.name, icon: d.icon, href: `/products/category/${cat.id}/${cat.slug}` };
-  })} />
-</div>
+  <div class="cat-grid-wrap">
+    <Text class="cat-section-label">Danh mục sản phẩm</Text>
+    <CategoryGrid
+      items={data.productCategories.map((cat) => {
+        const d = PRODUCT_DISPLAY[cat.slug] ?? DEFAULT_DISPLAY;
+        return {
+          name: cat.name,
+          icon: d.icon,
+          href: `/products/category/${cat.id}/${cat.slug}`,
+        };
+      })}
+    />
+  </div>
 {/if}
 
 <!-- ═══════════════════════════════════════════════════════════════════
@@ -228,15 +379,22 @@
      CONTACT SHEET
      ═══════════════════════════════════════════════════════════════════ -->
 {#if activeProvider}
-  <ContactSheet provider={activeProvider} {form} onClose={() => activeProvider = null} />
+  <ContactSheet
+    provider={activeProvider}
+    {form}
+    onClose={() => (activeProvider = null)}
+  />
 {/if}
 
 <style>
   /* ── Location ripple ──────────────────────────────── */
   .loc-ripple {
     position: relative;
-    width: 88px; height: 88px;
-    display: flex; align-items: center; justify-content: center;
+    width: 88px;
+    height: 88px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     margin: 0 auto 24px;
   }
   .ripple {
@@ -245,70 +403,272 @@
     border: 3px solid var(--p500, #059669);
     animation: pulse 2.4s ease-out infinite;
   }
-  .r1 { width: 88px;  height: 88px;  animation-delay: 0s;   }
-  .r2 { width: 120px; height: 120px; animation-delay: .7s;  }
-  .r3 { width: 152px; height: 152px; animation-delay: 1.4s; }
+  .r1 {
+    width: 88px;
+    height: 88px;
+    animation-delay: 0s;
+  }
+  .r2 {
+    width: 120px;
+    height: 120px;
+    animation-delay: 0.7s;
+  }
+  .r3 {
+    width: 152px;
+    height: 152px;
+    animation-delay: 1.4s;
+  }
   @keyframes pulse {
-    0%   { opacity: .8; transform: scale(.75); }
-    100% { opacity: 0;  transform: scale(1.1); }
+    0% {
+      opacity: 0.8;
+      transform: scale(0.75);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1.1);
+    }
   }
   .loc-icon {
-    width: 68px; height: 68px;
-    background: var(--p50, #ECFDF5);
+    width: 68px;
+    height: 68px;
+    background: var(--p50, #ecfdf5);
     border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 4px 24px rgba(5,150,105,.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 24px rgba(5, 150, 105, 0.3);
     z-index: 1;
   }
-  .loc-icon__glyph { font-size: 2.4rem; color: var(--p700, #065F46); }
-  .loc-hero__em    { color: #1B6B3A; }
-  .hero-icon--yellow { color: #FCD34D; }
-  .hero-icon--check  { color: #6EE7B7; margin-right: 4px; }
+  .loc-icon__glyph {
+    font-size: 2.4rem;
+    color: var(--p700);
+  }
+  .loc-hero__em {
+    color: var(--p700);
+  }
+  .hero-icon--yellow {
+    color: #fcd34d;
+  }
+  .hero-icon--check {
+    color: #6ee7b7;
+    margin-right: 4px;
+  }
 
   /* ── Location onboarding hero ─────────────────────── */
   .loc-hero {
     background: #fff;
     text-align: center;
-    padding: 40px 24px 32px;
-    border-bottom: 1px solid var(--border, #C8D8CE);
-    box-shadow: 0 2px 12px rgba(0,0,0,.06);
+    padding: 55px 24px 32px;
+    border-bottom: 1px solid var(--border, #c8d8ce);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   }
-  .loc-hero__inner { max-width: 420px; margin: 0 auto; }
-  :global(.loc-hero__title) { font-size: 1.6rem; font-weight: 800; margin: 0 0 8px; letter-spacing: -.02em; }
-  :global(.loc-hero__sub)   { font-size: .9rem; color: #5E7A68; margin: 0 0 24px; line-height: 1.6; }
+  .loc-hero__inner {
+    max-width: 420px;
+    margin: 0 auto;
+  }
+  :global(.loc-hero__title) {
+    font-size: 1.6rem;
+    font-weight: 800;
+    margin: 0 0 8px;
+    letter-spacing: -0.02em;
+  }
+  :global(.loc-hero__sub) {
+    font-size: 0.9rem;
+    color: #5e7a68;
+    margin: 0 0 24px;
+    line-height: 1.6;
+  }
   :global(.loc-btn) {
-    width: 100%; min-height: 52px;
-    display: flex; align-items: center; justify-content: center; gap: 10px;
-    background: #F59E0B; color: #1C1917;
-    border: none; border-radius: 14px;
-    font-size: 1rem; font-weight: 800; letter-spacing: .04em;
+    width: 100%;
+    min-height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: #f59e0b;
+    color: #1c1917;
+    border: none;
+    border-radius: 14px;
+    font-size: 1rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
     cursor: pointer;
-    transition: transform .1s;
+    transition: transform 0.1s;
   }
-  :global(.loc-btn):active { transform: scale(.98); }
-  :global(.loc-btn):disabled { opacity: .7; cursor: not-allowed; }
-  :global(.loc-error)   { font-size: .85rem; color: #B91C1C; margin: 12px 0 0; display: flex; align-items: center; justify-content: center; gap: 6px; }
-  :global(.loc-privacy) { font-size: .8rem; color: #5E7A68; margin: 12px 0 0; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  :global(.loc-btn):active {
+    transform: scale(0.98);
+  }
+  :global(.loc-btn):disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+  :global(.loc-error) {
+    font-size: 0.85rem;
+    color: #b91c1c;
+    margin: 12px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  :global(.loc-privacy) {
+    font-size: 0.8rem;
+    color: #5e7a68;
+    margin: 12px 0 0 !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
 
   /* ── Location known hero: refresh button only ────────── */
   :global(.page-hero__refresh) {
     flex-shrink: 0;
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 8px 14px; min-height: 40px;
-    background: rgba(255,255,255,.12); color: #fff;
-    border: 1.5px solid rgba(255,255,255,.25); border-radius: 10px;
-    font-size: .82rem; font-weight: 600;
-    cursor: pointer; white-space: nowrap;
-    transition: background .15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    min-height: 40px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    border: 1.5px solid rgba(255, 255, 255, 0.25);
+    border-radius: 10px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s;
   }
-  :global(.page-hero__refresh):disabled { opacity: .6; cursor: not-allowed; }
+  :global(.page-hero__refresh):disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 
   /* ── Category grid ────────────────────────────────── */
-  .cat-grid-wrap { padding: 16px 16px 0; }
-  :global(.cat-label) {
-    font-size: .68rem; font-weight: 700;
-    color: var(--muted, #5E7A68);
-    text-transform: uppercase; letter-spacing: .08em;
+  .cat-grid-wrap {
+    padding: 16px 16px 0;
+  }
+  .cat-grid-wrap :global(.cat-section-label) {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--muted, #5e7a68);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
     margin: 0 0 12px;
+  }
+
+  /* — Manual address fallback ————————————————————— */
+  .loc-manual {
+    margin-top: 20px;
+  }
+
+  .loc-manual__label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--muted, #5e7a68);
+    margin: 0 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .loc-manual__label::before,
+  .loc-manual__label::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border, #c8d8ce);
+  }
+
+  .loc-manual__form {
+    display: flex;
+    gap: 6px;
+  }
+
+  .loc-manual__input {
+    flex: 1;
+    min-height: 44px;
+    border: 1.5px solid var(--border, #c8d8ce);
+    border-radius: 10px;
+    padding: 0 12px;
+    font-size: 0.9rem;
+    color: var(--text, #0c1a12);
+    background: #fff;
+    outline: none;
+  }
+
+  .loc-manual__input:focus {
+    border-color: var(--p600, #047857);
+    box-shadow: 0 0 0 3px rgba(4, 120, 87, 0.12);
+  }
+
+  .loc-manual__btn {
+    width: 44px;
+    min-height: 44px;
+    flex-shrink: 0;
+    border: none;
+    border-radius: 10px;
+    background: var(--p700, #065f46);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background 0.15s;
+  }
+
+  .loc-manual__btn:hover {
+    background: var(--p600, #047857);
+  }
+  .loc-manual__btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* — Radius chips ————————————————————————————————— */
+  .radius-chips {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    background: var(--bg, #f5f8f6);
+    border-bottom: 1px solid var(--border, #c8d8ce);
+  }
+
+  .radius-chips__label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--muted, #5e7a68);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .radius-chip {
+    flex-shrink: 0;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border: 1.5px solid var(--border, #c8d8ce);
+    background: #fff;
+    color: var(--text2, #2d4a38);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .radius-chip:hover {
+    border-color: var(--p600, #047857);
+    color: var(--p600, #047857);
+  }
+
+  .radius-chip--active {
+    background: var(--p700, #065f46);
+    color: #fff;
+    border-color: var(--p700, #065f46);
   }
 </style>

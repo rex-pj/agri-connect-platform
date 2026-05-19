@@ -22,7 +22,6 @@ dotenvy        = "0.15"
 tracing        = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 thiserror      = "1.0"
-uuid           = { version = "1",   features = ["v4", "serde"] }
 jsonwebtoken   = "9"
 bcrypt         = "0.15"
 lettre         = { version = "0.11", features = ["tokio1-native-tls", "smtp-transport", "builder"] }

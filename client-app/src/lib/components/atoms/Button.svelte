@@ -5,6 +5,8 @@
   interface Props {
     href?: string;
     type?: "button" | "submit" | "reset";
+    variant?: string;
+    size?: "sm" | "lg";
     class?: ClassValue;
     disabled?: boolean;
     onclick?: (e: MouseEvent) => void;
@@ -15,6 +17,8 @@
   let {
     href,
     type = "button",
+    variant,
+    size,
     class: extraClass = "",
     disabled = false,
     onclick,
@@ -22,7 +26,16 @@
     ...rest
   }: Props = $props();
 
-  const cls = ["btn", extraClass].filter(Boolean).join(" ");
+  const cls = $derived(
+    [
+      "btn",
+      variant ? `btn-${variant}` : "",
+      size ? `btn-${size}` : "",
+      extraClass,
+    ]
+      .filter(Boolean)
+      .join(" "),
+  );
 </script>
 
 {#if href}
@@ -43,27 +56,178 @@
 {/if}
 
 <style>
+  /* - Structural / behavioural only - no visual overrides */
   .btn {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    font-weight: 600;
-    font-size: 0.9375rem;
-    padding: 0.625rem 1.25rem;
-    border-radius: 0.75rem;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    cursor: pointer;
-    border: 1px solid transparent;
     gap: 0.5rem;
     text-decoration: none;
     line-height: 1.25;
+    white-space: nowrap;
+    cursor: pointer;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
     pointer-events: none;
+  }
+
+  /* - Standard sizing / layout - only for our named variants */
+  .btn-primary,
+  .btn-secondary,
+  .btn-outline,
+  .btn-danger,
+  .btn-ghost {
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.9375rem;
+    padding: 0.625rem 1.25rem;
+    border: 1px solid transparent;
+    border-radius: 0.75rem;
+  }
+
+  /*- Colours*/
+  .btn-primary {
+    background-color: var(--p600, #047857);
+    color: white;
+  }
+
+  .btn-primary:hover {
+    color: white;
+    background-color: var(--p700, #065f46);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(4, 120, 87, 0.25);
+  }
+
+  .btn-secondary {
+    background-color: var(--s100, #f0fdf4);
+    color: var(--p700, #065f46);
+    border-color: var(--p200, #bbf7d0);
+  }
+
+  .btn-secondary:hover {
+    background-color: var(--s200, #dcfce7);
+    color: var(--p700, #065f46);
+  }
+
+  .btn-primary:active {
+    color: white !important;
+    background-color: var(--p800, #064e3b) !important;
+    border-color: var(--p800, #064e3b) !important;
+    box-shadow: none;
+  }
+
+  .btn-primary:focus-visible {
+    outline: 2px solid var(--p400, #34d399);
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+
+  .btn-secondary:active {
+    color: var(--p700, #065f46) !important;
+    background-color: var(--s200, #dcfce7) !important;
+    border-color: var(--p200, #bbf7d0) !important;
+    box-shadow: none;
+  }
+
+  /* --- Outline Buttons --- */
+  .btn-secondary:focus-visible {
+    outline: 2px solid var(--p400, #34d399);
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+
+  .btn-outline {
+    background-color: transparent;
+    border-color: var(--border, #e5e7eb);
+    color: var(--text, #0c1a12);
+  }
+
+  .btn-outline:hover {
+    border-color: var(--p600, #047857);
+    color: var(--p600, #047857);
+    background-color: var(--p50, #f0fdf4);
+  }
+
+  .btn-outline:active {
+    color: var(--p700, #065f46) !important;
+    background-color: var(--p100, #d1fae5) !important;
+    border-color: var(--p600, #047857) !important;
+    box-shadow: none;
+  }
+
+  .btn-outline:focus-visible {
+    outline: 2px solid var(--p600, #047857);
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+
+  /* --- Danger Buttons --- */
+  .btn-danger {
+    background-color: #fef2f2;
+    color: #dc2626;
+    border-color: #fecaca;
+  }
+
+  .btn-danger:hover {
+    background-color: #fee2e2;
+    border-color: #f9a8d4;
+    color: #dc2626;
+  }
+
+  .btn-danger:active {
+    color: #dc2626 !important;
+    background-color: #fecaca !important;
+    border-color: #fca5a5 !important;
+    box-shadow: none;
+  }
+
+  .btn-danger:focus-visible {
+    outline: 2px solid #ef4444;
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+
+  /* --- Ghost Buttons --- */
+  .btn-ghost {
+    background-color: transparent;
+    border-color: transparent;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
+  .btn-ghost:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+    color: inherit;
+  }
+
+  .btn-ghost:active {
+    color: inherit !important;
+    background-color: rgba(0, 0, 0, 0.08) !important;
+    border-color: transparent !important;
+    box-shadow: none;
+  }
+
+  .btn-ghost:focus-visible {
+    outline: 2px solid var(--p400, #34d399);
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+
+  /* --- Size Modifiers --- */
+  .btn-sm {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8125rem;
+    border-radius: 0.5rem;
+  }
+
+  .btn-lg {
+    padding: 0.75rem 1.5rem;
+    font-size: 1.0625rem;
+    border-radius: 0.875rem;
   }
 </style>

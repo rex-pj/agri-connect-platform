@@ -12,6 +12,9 @@ pub struct GeoSearchParams {
 
 pub struct BrowseParams {
     pub service_id: Option<i32>,
+    pub name:       Option<String>,
+    /// "verified_first" (default) | "newest" | "name_asc"
+    pub sort:       Option<String>,
     pub page:       i64,
 }
 

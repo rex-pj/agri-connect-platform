@@ -16,7 +16,7 @@
     <span class="cat-icon" class:cat-icon--active={active}>
       <i class="fa-solid {icon}"></i>
     </span>
-    <span class="cat-label">{name}</span>
+    <span class="cat-label" class:cat-label--active={active}>{name}</span>
   </Button>
 {:else}
   <Button
@@ -28,38 +28,60 @@
     <span class="cat-icon" class:cat-icon--active={active}>
       <i class="fa-solid {icon}"></i>
     </span>
-    <span class="cat-label">{name}</span>
+    <span class="cat-label" class:cat-label--active={active}>{name}</span>
   </Button>
 {/if}
 
 <style>
   :global(.btn.cat-item) {
-    display: flex !important;
+    display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
-    width: 72px;
-    box-shadow: none !important;
+    gap: 6px;
+    width: 100%;
+    padding: 8px 4px;
+    box-shadow: none;
+    white-space: normal;
+    border-radius: 12px;
+    background: transparent;
+    border: none;
+  }
+
+  :global(.btn.cat-item:hover) {
+    background: var(--p50, #ecfdf5);
   }
 
   .cat-icon {
-    width: 60px;
-    height: 60px;
+    width: 56px;
+    height: 56px;
     background: var(--p50, #ecfdf5);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.4rem;
+    font-size: 1.35rem;
     color: var(--p700, #065f46);
-    box-shadow: 0 2px 8px rgba(4, 120, 87, 0.12);
-    border: 2px solid rgba(4, 120, 87, 0.15);
-    transition: all 0.15s;
+    box-shadow: 0 1px 4px rgba(4, 120, 87, 0.10);
+    border: 2px solid rgba(4, 120, 87, 0.12);
+    transition:
+      transform 0.15s ease,
+      background 0.15s ease,
+      color 0.15s ease,
+      box-shadow 0.15s ease,
+      border-color 0.15s ease;
     flex-shrink: 0;
   }
 
-  :global(.cat-item:active) .cat-icon {
-    transform: scale(0.93);
+  :global(.btn.cat-item:hover) .cat-icon {
+    background: var(--p100, #d1fae5);
+    border-color: var(--p300, #6ee7b7);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(4, 120, 87, 0.16);
+  }
+
+  :global(.btn.cat-item:active) .cat-icon {
+    transform: scale(0.92);
+    box-shadow: none;
   }
 
   :global(.cat-item:focus-visible) .cat-icon {
@@ -70,16 +92,37 @@
     background: var(--p700, #065f46);
     color: #fff;
     border-color: var(--p700, #065f46);
-    box-shadow: 0 4px 14px rgba(4, 120, 87, 0.35);
+    box-shadow: 0 3px 10px rgba(4, 120, 87, 0.30);
+  }
+
+  :global(.btn.cat-item:hover) .cat-icon--active {
+    background: var(--p800, #064e3b);
+    border-color: var(--p800, #064e3b);
+    transform: translateY(-2px);
   }
 
   .cat-label {
-    font-size: 0.72rem;
-    font-weight: 700;
-    color: #374151;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted, #6b7280);
     text-align: center;
     line-height: 1.25;
     white-space: normal;
     word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    width: 100%;
+    transition: color 0.15s ease;
+  }
+
+  :global(.btn.cat-item:hover) .cat-label {
+    color: var(--p700, #065f46);
+  }
+
+  .cat-label--active {
+    color: var(--p700, #065f46);
+    font-weight: 700;
   }
 </style>

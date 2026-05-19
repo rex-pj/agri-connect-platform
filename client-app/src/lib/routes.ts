@@ -13,6 +13,7 @@ export const ROUTES = {
     AGRI_CONNECT:     '/agri-connect',
     PRODUCTS:         '/products',
     SERVICES:         '/services',
+    SEARCH:           '/search',
     PROVIDER_DASHBOARD: '/provider/dashboard',
 
     // ── Dynamic app routes ───────────────────────────────────────────────────

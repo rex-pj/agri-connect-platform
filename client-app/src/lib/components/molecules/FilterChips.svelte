@@ -51,9 +51,9 @@
   :global(.chip) {
     flex-shrink: 0;
     padding: 0 16px;
-    min-height: 36px;
+    min-height: 44px;
     border: 1.5px solid var(--border, #c8d8ce);
-    border-radius: 18px;
+    border-radius: 22px;
     background: var(--surface, #fff);
     color: var(--text2, #2d4a38);
     font-size: 0.82rem;
@@ -76,5 +76,11 @@
     background: var(--p700, #065f46);
     border-color: var(--p700, #065f46);
     color: #fff;
+  }
+
+  :global(.chip:hover:not(.chip--on)) {
+    background: var(--p50, #f0fdf4);
+    border-color: var(--p400, #34d399);
+    color: var(--p700, #065f46);
   }
 </style>

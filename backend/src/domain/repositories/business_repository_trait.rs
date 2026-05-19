@@ -20,11 +20,13 @@ pub trait BusinessRepositoryTrait {
     async fn browse(
         &self,
         service_id: Option<i32>,
+        name: Option<String>,
+        sort: Option<String>,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<BusinessBrowse>, AppError>;
 
-    async fn count_browse(&self, service_id: Option<i32>) -> Result<i64, AppError>;
+    async fn count_browse(&self, service_id: Option<i32>, name: Option<String>) -> Result<i64, AppError>;
 
     async fn featured(&self, limit: i64) -> Result<Vec<BusinessBrowse>, AppError>;
 

@@ -40,7 +40,8 @@
 <style>
   :global(.geo-cta) {
     position: relative;
-    display: flex;
+    display: flex !important;
+    width: 100%;
     align-items: center;
     justify-content: space-between;
     gap: 12px;

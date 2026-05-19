@@ -7,7 +7,7 @@ export type { AdminUserDetail, Role } from '$lib/server/services/admin.service';
 
 export const load: PageServerLoad = async ({ fetch, cookies, params }) => {
     const id = Number(params.id);
-    if (!id || isNaN(id)) throw error(400, 'ID không hợp lệ.');
+    if (!id || isNaN(id)) throw error(400, 'Invalid ID.');
 
     const svc = new AdminService(fetch, cookies.get('auth_token') ?? '');
 
@@ -20,9 +20,9 @@ export const load: PageServerLoad = async ({ fetch, cookies, params }) => {
         const err = userResult.reason;
         if (err instanceof ServiceError) {
             checkAuth(err.status);
-            if (err.status === 404) throw error(404, 'Không tìm thấy người dùng.');
+            if (err.status === 404) throw error(404, 'User not found.');
         }
-        throw error(500, 'Không thể tải thông tin người dùng.');
+        throw error(500, 'Failed to load user.');
     }
 
     const roles = rolesResult.status === 'fulfilled' ? rolesResult.value : [];

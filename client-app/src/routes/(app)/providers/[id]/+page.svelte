@@ -216,6 +216,7 @@
   }
   :global(.btn-call):active {
     opacity: 0.88;
+    color: #fff;
   }
   :global(.btn-contact) {
     flex: 1;
@@ -235,6 +236,7 @@
   }
   :global(.btn-contact):active {
     background: var(--p50, #ecfdf5);
+    color: var(--p700, #065f46);
   }
 
   /* Service list */

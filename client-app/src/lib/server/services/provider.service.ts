@@ -1,4 +1,4 @@
-import { API_BASE, ServiceError, type Fetch } from '$lib/server/api';
+import { API_BASE, parseServiceError, type Fetch } from '$lib/server/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -39,7 +39,7 @@ export class ProviderService {
     async getProfile(): Promise<ProviderProfile | null> {
         const res = await this.fetch(`${API_BASE}/api/provider/profile`, { headers: this.auth });
         if (res.status === 404) return null;
-        if (!res.ok) throw new ServiceError(res.status, 'Không thể tải hồ sơ.');
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load profile.');
         return res.json();
     }
 
@@ -56,15 +56,12 @@ export class ProviderService {
             headers: { ...this.auth, 'Content-Type': 'application/json' },
             body:    JSON.stringify(data),
         });
-        if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            throw new ServiceError(res.status, (body as { error?: string }).error ?? 'Cập nhật thất bại.');
-        }
+        if (!res.ok) throw await parseServiceError(res, 'Update failed.');
     }
 
     async listProducts(): Promise<ProviderProduct[]> {
         const res = await this.fetch(`${API_BASE}/api/provider/products`, { headers: this.auth });
-        if (!res.ok) throw new ServiceError(res.status, 'Không thể tải danh sách sản phẩm.');
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load products.');
         return res.json();
     }
 
@@ -81,10 +78,7 @@ export class ProviderService {
             headers: { ...this.auth, 'Content-Type': 'application/json' },
             body:    JSON.stringify(data),
         });
-        if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            throw new ServiceError(res.status, (body as { error?: string }).error ?? 'Thêm sản phẩm thất bại.');
-        }
+        if (!res.ok) throw await parseServiceError(res, 'Failed to add product.');
     }
 
     async updateProduct(id: number, data: {
@@ -100,10 +94,7 @@ export class ProviderService {
             headers: { ...this.auth, 'Content-Type': 'application/json' },
             body:    JSON.stringify(data),
         });
-        if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            throw new ServiceError(res.status, (body as { error?: string }).error ?? 'Cập nhật sản phẩm thất bại.');
-        }
+        if (!res.ok) throw await parseServiceError(res, 'Failed to update product.');
     }
 
     async deleteProduct(id: number): Promise<void> {
@@ -111,9 +102,6 @@ export class ProviderService {
             method:  'DELETE',
             headers: this.auth,
         });
-        if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            throw new ServiceError(res.status, (body as { error?: string }).error ?? 'Xoá thất bại.');
-        }
+        if (!res.ok) throw await parseServiceError(res, 'Delete failed.');
     }
 }

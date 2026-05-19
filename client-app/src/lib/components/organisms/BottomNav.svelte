@@ -1,12 +1,12 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { ROUTES } from '$lib/routes';
+  import { ROUTES } from "$lib/routes";
 
   const tabs = [
-    { href: ROUTES.HOME,        icon: "fa-compass",      label: "Khám phá" },
-    { href: ROUTES.AGRI_CONNECT,icon: "fa-location-dot", label: "Gần tôi" },
-    { href: ROUTES.SERVICES,    icon: "fa-border-all",   label: "Dịch vụ" },
-    { href: ROUTES.PRODUCTS,    icon: "fa-bag-shopping", label: "Sản phẩm" },
+    { href: ROUTES.HOME, icon: "fa-compass", label: "Khám phá" },
+    { href: ROUTES.AGRI_CONNECT, icon: "fa-location-dot", label: "Gần tôi" },
+    { href: ROUTES.SERVICES, icon: "fa-border-all", label: "Dịch vụ" },
+    { href: ROUTES.PRODUCTS, icon: "fa-bag-shopping", label: "Sản phẩm" },
   ];
 
   function isActive(href: string): boolean {
@@ -51,8 +51,8 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 2px;
-    padding: 8px 4px 6px;
+    gap: 4px;
+    padding: 8px 8px 6px;
     text-decoration: none;
     color: var(--muted, #5e7a68);
     -webkit-tap-highlight-color: transparent;
@@ -87,7 +87,7 @@
   }
 
   .tab__label {
-    font-size: 0.68rem;
+    font-size: 0.75rem;
     font-weight: 600;
     letter-spacing: 0.01em;
     transition: color 0.2s ease;

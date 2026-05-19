@@ -16,7 +16,7 @@ export const load: PageServerLoad = async ({ fetch, cookies, url }) => {
             checkAuth(err.status);
             return { result: { items: [], total: 0, page: 1, total_pages: 1 }, error: err.message };
         }
-        return { result: { items: [], total: 0, page: 1, total_pages: 1 }, error: 'Không thể tải danh sách yêu cầu.' };
+        return { result: { items: [], total: 0, page: 1, total_pages: 1 }, error: 'Failed to load inquiries.' };
     }
 };
 

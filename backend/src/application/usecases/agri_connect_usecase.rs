@@ -6,11 +6,14 @@ use crate::{
         shared::validate_coordinates,
     },
     constants::{
-        FEATURED_PRODUCTS_COUNT, FEATURED_PROVIDERS_COUNT, PAGE_SIZE,
-        RADIUS_MAX_M, RADIUS_MIN_M,
+        FEATURED_PRODUCTS_COUNT, FEATURED_PROVIDERS_COUNT, PAGE_SIZE, RADIUS_MAX_M, RADIUS_MIN_M,
     },
     domain::{
-        models::inquiry::NewInquiry,
+        models::{
+            business::BusinessBrowse,
+            inquiry::NewInquiry,
+            product::ProductView,
+        },
         repositories::{
             business_repository_trait::BusinessRepositoryTrait,
             category_repository_trait::CategoryRepositoryTrait,
@@ -21,8 +24,8 @@ use crate::{
     helpers::{paginate, total_pages},
     view_models::{
         responses::{
-            BrowseResponse, BusinessBrowseDto, BusinessDetailDto, BusinessSearchDto,
-            CategoryDto, ContactResponse, ExploreData, ProductDto, ServiceDto,
+            BrowseResponse, BusinessBrowseDto, BusinessDetailDto, BusinessSearchDto, CategoryDto,
+            ExploreData, ProductDto, ServiceDto,
         },
         AppError,
     },
@@ -32,20 +35,25 @@ use crate::{
 
 #[derive(Clone)]
 pub struct AgriConnectUseCase {
-    business_repo:  Arc<dyn BusinessRepositoryTrait  + Send + Sync>,
-    category_repo:  Arc<dyn CategoryRepositoryTrait  + Send + Sync>,
-    inquiry_repo:   Arc<dyn InquiryRepositoryTrait   + Send + Sync>,
-    product_repo:   Arc<dyn ProductRepositoryTrait   + Send + Sync>,
+    business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
+    category_repo: Arc<dyn CategoryRepositoryTrait + Send + Sync>,
+    inquiry_repo: Arc<dyn InquiryRepositoryTrait + Send + Sync>,
+    product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
 }
 
 impl AgriConnectUseCase {
     pub fn new(
-        business_repo:  Arc<dyn BusinessRepositoryTrait  + Send + Sync>,
-        category_repo:  Arc<dyn CategoryRepositoryTrait  + Send + Sync>,
-        inquiry_repo:   Arc<dyn InquiryRepositoryTrait   + Send + Sync>,
-        product_repo:   Arc<dyn ProductRepositoryTrait   + Send + Sync>,
+        business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
+        category_repo: Arc<dyn CategoryRepositoryTrait + Send + Sync>,
+        inquiry_repo: Arc<dyn InquiryRepositoryTrait + Send + Sync>,
+        product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
     ) -> Self {
-        Self { business_repo, category_repo, inquiry_repo, product_repo }
+        Self {
+            business_repo,
+            category_repo,
+            inquiry_repo,
+            product_repo,
+        }
     }
 
     pub async fn search_providers(
@@ -54,9 +62,9 @@ impl AgriConnectUseCase {
     ) -> Result<Vec<BusinessSearchDto>, AppError> {
         validate_coordinates(params.lat, params.lng)?;
         if !(RADIUS_MIN_M..=RADIUS_MAX_M).contains(&params.radius) {
-            return Err(AppError::BadRequest(
-                format!("Bán kính phải từ {RADIUS_MIN_M} m đến {RADIUS_MAX_M} m."),
-            ));
+            return Err(AppError::BadRequest(format!(
+                "Radius must be between {RADIUS_MIN_M} m and {RADIUS_MAX_M} m."
+            )));
         }
 
         let point_wkt = format!("SRID=4326;POINT({} {})", params.lng, params.lat);
@@ -68,62 +76,57 @@ impl AgriConnectUseCase {
         Ok(results
             .into_iter()
             .map(|b| BusinessSearchDto {
-                id: b.id, name: b.name, phone: b.phone,
-                address: b.address, is_verified: b.is_verified,
-                distance_m: b.distance_m, services: b.services,
+                id: b.id,
+                name: b.name,
+                phone: b.phone,
+                address: b.address,
+                is_verified: b.is_verified,
+                distance_m: b.distance_m,
+                services: b.services,
             })
             .collect())
     }
 
-    pub async fn browse_providers(
-        &self,
-        params: BrowseParams,
-    ) -> Result<BrowseResponse, AppError> {
+    pub async fn browse_providers(&self, params: BrowseParams) -> Result<BrowseResponse, AppError> {
         let (page, offset) = paginate(params.page, PAGE_SIZE);
 
         let (providers, total) = tokio::try_join!(
-            self.business_repo.browse(params.service_id, PAGE_SIZE, offset),
-            self.business_repo.count_browse(params.service_id),
+            self.business_repo
+                .browse(params.service_id, params.name.clone(), params.sort, PAGE_SIZE, offset),
+            self.business_repo.count_browse(params.service_id, params.name),
         )?;
 
         Ok(BrowseResponse {
-            providers: providers
-                .into_iter()
-                .map(|b| BusinessBrowseDto {
-                    id: b.id, name: b.name, phone: b.phone,
-                    address: b.address, is_verified: b.is_verified,
-                    services: b.services, created_on: b.created_on,
-                })
-                .collect(),
+            items: providers.into_iter().map(map_business_browse).collect(),
             total,
             page,
             total_pages: total_pages(total, PAGE_SIZE),
         })
     }
 
-    pub async fn get_provider_detail(
-        &self,
-        id: i32,
-    ) -> Result<BusinessDetailDto, AppError> {
+    pub async fn get_provider_detail(&self, id: i32) -> Result<BusinessDetailDto, AppError> {
         let detail = self
             .business_repo
             .find_detail(id)
             .await?
-            .ok_or_else(|| AppError::NotFound("Không tìm thấy nhà cung cấp.".into()))?;
+            .ok_or_else(|| AppError::NotFound("Provider not found.".into()))?;
 
         Ok(BusinessDetailDto {
-            id:          detail.id,
-            name:        detail.name,
-            phone:       detail.phone,
+            id: detail.id,
+            name: detail.name,
+            phone: detail.phone,
             description: detail.description,
-            address:     detail.address,
+            address: detail.address,
             is_verified: detail.is_verified,
             services: detail
                 .services
                 .into_iter()
                 .map(|s| ServiceDto {
-                    id: s.id, name: s.name, description: s.description,
-                    price_note: s.price_note, category: s.category,
+                    id: s.id,
+                    name: s.name,
+                    description: s.description,
+                    price_note: s.price_note,
+                    category: s.category,
                 })
                 .collect(),
         })
@@ -136,63 +139,40 @@ impl AgriConnectUseCase {
         )?;
 
         Ok(ExploreData {
-            featured_providers: featured_businesses
-                .into_iter()
-                .map(|b| BusinessBrowseDto {
-                    id: b.id, name: b.name, phone: b.phone,
-                    address: b.address, is_verified: b.is_verified,
-                    services: b.services, created_on: b.created_on,
-                })
-                .collect(),
-            featured_products: featured_product_views
-                .into_iter()
-                .map(|p| ProductDto {
-                    id: p.id, name: p.name, description: p.description,
-                    price: p.price, unit: p.unit, image_url: p.image_url,
-                    category: p.category, vendor_name: p.vendor_name,
-                    vendor_phone: p.vendor_phone, is_available: p.is_available,
-                    created_on: p.created_on,
-                })
-                .collect(),
+            featured_providers: featured_businesses.into_iter().map(map_business_browse).collect(),
+            featured_products:  featured_product_views.into_iter().map(map_product_dto).collect(),
         })
     }
 
-    pub async fn contact_request(
-        &self,
-        input: ContactInput,
-    ) -> Result<ContactResponse, AppError> {
+    pub async fn contact_request(&self, input: ContactInput) -> Result<(), AppError> {
         if input.requester_name.trim().is_empty() || input.requester_phone.trim().is_empty() {
             return Err(AppError::BadRequest(
-                "Vui lòng điền tên và số điện thoại.".into(),
+                "Please provide your name and phone number.".into(),
             ));
         }
         if input.topic.trim().is_empty() {
             return Err(AppError::BadRequest(
-                "Vui lòng chọn dịch vụ cần liên hệ.".into(),
+                "Please select the service you want to enquire about.".into(),
             ));
         }
 
         let exists = self.business_repo.check_exists(input.business_id).await?;
         if !exists {
-            return Err(AppError::NotFound("Không tìm thấy nhà cung cấp.".into()));
+            return Err(AppError::NotFound("Provider not found.".into()));
         }
 
         self.inquiry_repo
             .create(NewInquiry {
-                business_id:     input.business_id,
-                service_id:      input.service_id,
-                topic:           input.topic.trim().to_owned(),
-                requester_name:  input.requester_name.trim().to_owned(),
+                business_id: input.business_id,
+                service_id: input.service_id,
+                topic: input.topic.trim().to_owned(),
+                requester_name: input.requester_name.trim().to_owned(),
                 requester_phone: input.requester_phone.trim().to_owned(),
-                note:            input.note.as_deref().map(str::trim).map(str::to_owned),
+                note: input.note.as_deref().map(str::trim).map(str::to_owned),
             })
             .await?;
 
-        Ok(ContactResponse {
-            success: true,
-            message: "Yêu cầu liên hệ đã được ghi nhận. Nhà cung cấp sẽ liên hệ lại với bạn."
-                .into(),
-        })
+        Ok(())
     }
 
     pub async fn get_categories(
@@ -204,12 +184,32 @@ impl AgriConnectUseCase {
         Ok(categories
             .into_iter()
             .map(|c| CategoryDto {
-                id:            c.id,
-                name:          c.name,
-                slug:          c.slug,
-                icon:          c.icon,
+                id: c.id,
+                name: c.name,
+                slug: c.slug,
+                icon: c.icon,
                 display_order: c.display_order,
             })
             .collect())
+    }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+fn map_business_browse(b: BusinessBrowse) -> BusinessBrowseDto {
+    BusinessBrowseDto {
+        id: b.id, name: b.name, phone: b.phone,
+        address: b.address, is_verified: b.is_verified,
+        services: b.services, created_on: b.created_on,
+    }
+}
+
+fn map_product_dto(p: ProductView) -> ProductDto {
+    ProductDto {
+        id: p.id, name: p.name, description: p.description,
+        price: p.price, unit: p.unit, image_url: p.image_url,
+        category: p.category, vendor_name: p.vendor_name,
+        vendor_phone: p.vendor_phone, is_available: p.is_available,
+        created_on: p.created_on,
     }
 }

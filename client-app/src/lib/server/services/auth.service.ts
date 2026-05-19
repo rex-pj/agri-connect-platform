@@ -1,4 +1,4 @@
-import { API_BASE, ServiceError, type Fetch } from '$lib/server/api';
+import { API_BASE, parseServiceError, type Fetch } from '$lib/server/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -40,10 +40,7 @@ export class AuthService {
             headers: { 'Content-Type': 'application/json' },
             body:    JSON.stringify({ username, password }),
         });
-        if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            throw new ServiceError(res.status, (body as { error?: string }).error ?? 'Đăng nhập thất bại.');
-        }
+        if (!res.ok) throw await parseServiceError(res, 'Login failed.');
         return res.json();
     }
 
@@ -60,15 +57,13 @@ export class AuthService {
             headers: { 'Content-Type': 'application/json' },
             body:    JSON.stringify(data),
         });
-        if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            throw new ServiceError(res.status, (body as { error?: string }).error ?? 'Đăng ký thất bại.');
-        }
+        if (!res.ok) throw await parseServiceError(res, 'Registration failed.');
         return res.json();
     }
 
     async createFirstAdmin(data: {
         username:  string;
+        email:     string;
         password:  string;
         full_name: string | null;
     }): Promise<LoginResult> {
@@ -77,10 +72,7 @@ export class AuthService {
             headers: { 'Content-Type': 'application/json' },
             body:    JSON.stringify(data),
         });
-        if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            throw new ServiceError(res.status, (body as { error?: string }).error ?? 'Tạo tài khoản thất bại.');
-        }
+        if (!res.ok) throw await parseServiceError(res, 'Account creation failed.');
         return res.json();
     }
 
@@ -88,7 +80,7 @@ export class AuthService {
         const res = await this.fetch(`${API_BASE}/api/users/me`, {
             headers: { Authorization: `Bearer ${token}` },
         });
-        if (!res.ok) throw new ServiceError(res.status, 'Không thể tải thông tin người dùng.');
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load user profile.');
         return res.json();
     }
 
@@ -98,10 +90,7 @@ export class AuthService {
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body:    JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
         });
-        if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            throw new ServiceError(res.status, (body as { error?: string }).error ?? 'Đổi mật khẩu thất bại.');
-        }
+        if (!res.ok) throw await parseServiceError(res, 'Password change failed.');
     }
 
     async forgotPassword(email: string): Promise<void> {
@@ -119,9 +108,6 @@ export class AuthService {
             headers: { 'Content-Type': 'application/json' },
             body:    JSON.stringify({ new_password: newPassword }),
         });
-        if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            throw new ServiceError(res.status, (body as { error?: string }).error ?? 'Đặt lại mật khẩu thất bại.');
-        }
+        if (!res.ok) throw await parseServiceError(res, 'Password reset failed.');
     }
 }

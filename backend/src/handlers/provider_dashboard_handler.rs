@@ -1,5 +1,6 @@
 use axum::{
     extract::{Path, State},
+    http::StatusCode,
     Json,
 };
 
@@ -91,7 +92,7 @@ impl ProviderDashboardHandler {
             .await
             .map_err(HandlerError::from)?;
 
-        Ok(Json(result))
+        Ok((StatusCode::CREATED, Json(result)))
     }
 
     /// PUT /api/provider/products/{id}
@@ -126,13 +127,13 @@ impl ProviderDashboardHandler {
         State(state): State<AppState>,
         Path(id): Path<i32>,
     ) -> HandlerResult<impl axum::response::IntoResponse> {
-        let result = state
+        state
             .usecases
             .provider_dashboard
             .delete_product(id, caller.id)
             .await
             .map_err(HandlerError::from)?;
 
-        Ok(Json(result))
+        Ok(StatusCode::NO_CONTENT)
     }
 }

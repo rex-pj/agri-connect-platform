@@ -1,11 +1,16 @@
+// std
+use std::sync::Arc;
+
+// external
 use async_trait::async_trait;
 use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait,
-    QueryFilter, QueryOrder, Set,
+    ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, PaginatorTrait,
+    QueryFilter, QueryOrder, QuerySelect, Set,
+    sea_query::Expr,
 };
-use sea_orm::sea_query::Expr;
-use std::sync::Arc;
 use tracing::error;
+
+use crate::infrastructure::db_types::DateTimeWithTimeZone;
 
 use crate::{
     domain::{
@@ -26,6 +31,21 @@ impl CategoryRepository {
     }
 }
 
+#[derive(FromQueryResult)]
+struct CategoryAdminRow {
+    id:               i32,
+    name:             String,
+    slug:             String,
+    category_type:    String,
+    icon:             Option<String>,
+    display_order:    i16,
+    is_active:        bool,
+    created_on:       DateTimeWithTimeZone,
+    updated_on:       DateTimeWithTimeZone,
+    created_by_name:  Option<String>,
+    updated_by_name:  Option<String>,
+}
+
 fn to_category(r: category::Model) -> Category {
     Category {
         id:            r.id,
@@ -36,15 +56,19 @@ fn to_category(r: category::Model) -> Category {
     }
 }
 
-fn to_category_admin(r: category::Model) -> CategoryAdmin {
+fn to_category_admin(r: CategoryAdminRow) -> CategoryAdmin {
     CategoryAdmin {
-        id:            r.id,
-        name:          r.name,
-        slug:          r.slug,
-        category_type: r.r#type,
-        icon:          r.icon,
-        display_order: r.display_order,
-        is_active:     r.is_active,
+        id:               r.id,
+        name:             r.name,
+        slug:             r.slug,
+        category_type:    r.category_type,
+        icon:             r.icon,
+        display_order:    r.display_order,
+        is_active:        r.is_active,
+        created_on:       r.created_on.with_timezone(&chrono::Utc),
+        updated_on:       r.updated_on.with_timezone(&chrono::Utc),
+        created_by_name:  r.created_by_name,
+        updated_by_name:  r.updated_by_name,
     }
 }
 
@@ -89,8 +113,27 @@ impl CategoryRepositoryTrait for CategoryRepository {
 
     async fn list_admin(&self) -> Result<Vec<CategoryAdmin>, AppError> {
         CategoryEntity::find()
+            .select_only()
+            .column(category::Column::Id)
+            .column(category::Column::Name)
+            .column(category::Column::Slug)
+            .column_as(category::Column::Type, "category_type")
+            .column(category::Column::Icon)
+            .column(category::Column::DisplayOrder)
+            .column(category::Column::IsActive)
+            .column(category::Column::CreatedOn)
+            .column(category::Column::UpdatedOn)
+            .expr_as(
+                Expr::cust("(SELECT u.username FROM users u WHERE u.id = \"categories\".created_by)"),
+                "created_by_name",
+            )
+            .expr_as(
+                Expr::cust("(SELECT u.username FROM users u WHERE u.id = \"categories\".updated_by)"),
+                "updated_by_name",
+            )
             .order_by_asc(category::Column::Type)
             .order_by_asc(category::Column::DisplayOrder)
+            .into_model::<CategoryAdminRow>()
             .all(self.db.as_ref())
             .await
             .map(|rows| rows.into_iter().map(to_category_admin).collect())
@@ -102,6 +145,25 @@ impl CategoryRepositoryTrait for CategoryRepository {
 
     async fn find_by_id_admin(&self, id: i32) -> Result<Option<CategoryAdmin>, AppError> {
         CategoryEntity::find_by_id(id)
+            .select_only()
+            .column(category::Column::Id)
+            .column(category::Column::Name)
+            .column(category::Column::Slug)
+            .column_as(category::Column::Type, "category_type")
+            .column(category::Column::Icon)
+            .column(category::Column::DisplayOrder)
+            .column(category::Column::IsActive)
+            .column(category::Column::CreatedOn)
+            .column(category::Column::UpdatedOn)
+            .expr_as(
+                Expr::cust("(SELECT u.username FROM users u WHERE u.id = \"categories\".created_by)"),
+                "created_by_name",
+            )
+            .expr_as(
+                Expr::cust("(SELECT u.username FROM users u WHERE u.id = \"categories\".updated_by)"),
+                "updated_by_name",
+            )
+            .into_model::<CategoryAdminRow>()
             .one(self.db.as_ref())
             .await
             .map(|opt| opt.map(to_category_admin))

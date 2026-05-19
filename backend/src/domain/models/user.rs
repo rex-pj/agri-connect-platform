@@ -21,13 +21,17 @@ pub struct ExistingUser {
 }
 
 pub struct UserAdmin {
-    pub id:        i32,
-    pub username:  String,
-    pub email:     String,
-    pub full_name: Option<String>,
-    pub role_code: String,
-    pub role_name: String,
-    pub is_active: bool,
+    pub id:               i32,
+    pub username:         String,
+    pub email:            String,
+    pub full_name:        Option<String>,
+    pub role_code:        String,
+    pub role_name:        String,
+    pub is_active:        bool,
+    pub created_on:       DateTime<Utc>,
+    pub updated_on:       DateTime<Utc>,
+    pub created_by_name:  Option<String>,
+    pub updated_by_name:  Option<String>,
 }
 
 pub struct UserAdminDetail {

@@ -1,8 +1,9 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, DatabaseConnection, EntityTrait,
-    FromQueryResult, JoinType, PaginatorTrait, QueryOrder, QuerySelect, RelationTrait, Set,
+    ColumnTrait, DatabaseConnection, EntityTrait,
+    FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait,
+    Set, sea_query::Expr,
 };
 use std::sync::Arc;
 use tracing::error;
@@ -40,6 +41,8 @@ struct InquiryAdminRow {
     topic:           String,
     status:          String,
     created_on:      DateTimeWithTimeZone,
+    updated_on:      DateTimeWithTimeZone,
+    updated_by_name: Option<String>,
 }
 
 #[async_trait]
@@ -87,6 +90,11 @@ impl InquiryRepositoryTrait for InquiryRepository {
             .column(inquiry::Column::Topic)
             .column(inquiry::Column::Status)
             .column(inquiry::Column::CreatedOn)
+            .column(inquiry::Column::UpdatedOn)
+            .expr_as(
+                Expr::cust("(SELECT u.username FROM users u WHERE u.id = \"inquiries\".updated_by)"),
+                "updated_by_name",
+            )
             .join(JoinType::InnerJoin, inquiry::Relation::Business.def())
             .order_by_desc(inquiry::Column::CreatedOn)
             .limit(limit as u64)
@@ -105,6 +113,8 @@ impl InquiryRepositoryTrait for InquiryRepository {
                         topic:           r.topic,
                         status:          r.status,
                         created_on:      r.created_on.with_timezone(&Utc),
+                        updated_on:      r.updated_on.with_timezone(&Utc),
+                        updated_by_name: r.updated_by_name,
                     })
                     .collect()
             })
@@ -114,27 +124,61 @@ impl InquiryRepositoryTrait for InquiryRepository {
             })
     }
 
-    async fn update_status(&self, id: i32, status: &str) -> Result<(), AppError> {
-        let mut inquiry: inquiry::ActiveModel = Inquiry::find_by_id(id)
+    async fn find_by_id_admin(&self, id: i32) -> Result<Option<InquiryAdmin>, AppError> {
+        Inquiry::find()
+            .filter(inquiry::Column::Id.eq(id))
+            .select_only()
+            .column(inquiry::Column::Id)
+            .column(inquiry::Column::BusinessId)
+            .column_as(business::Column::Name, "business_name")
+            .column(inquiry::Column::RequesterName)
+            .column(inquiry::Column::RequesterPhone)
+            .column(inquiry::Column::Topic)
+            .column(inquiry::Column::Status)
+            .column(inquiry::Column::CreatedOn)
+            .column(inquiry::Column::UpdatedOn)
+            .expr_as(
+                Expr::cust("(SELECT u.username FROM users u WHERE u.id = \"inquiries\".updated_by)"),
+                "updated_by_name",
+            )
+            .join(JoinType::InnerJoin, inquiry::Relation::Business.def())
+            .into_model::<InquiryAdminRow>()
             .one(self.db.as_ref())
             .await
+            .map(|opt| opt.map(|r| InquiryAdmin {
+                id:              r.id,
+                business_id:     r.business_id,
+                business_name:   r.business_name,
+                requester_name:  r.requester_name,
+                requester_phone: r.requester_phone,
+                topic:           r.topic,
+                status:          r.status,
+                created_on:      r.created_on.with_timezone(&Utc),
+                updated_on:      r.updated_on.with_timezone(&Utc),
+                updated_by_name: r.updated_by_name,
+            }))
             .map_err(|e| {
-                error!("inquiry update_status find error: {e}");
-                AppError::Internal("Failed to update status.".into())
-            })?
-            .ok_or_else(|| AppError::NotFound("Inquiry not found.".into()))?
-            .into();
+                error!("inquiry find_by_id_admin error: {e}");
+                AppError::Internal("Failed to load inquiry.".into())
+            })
+    }
 
-        inquiry.status = Set(status.to_string());
-
-        inquiry
-            .update(self.db.as_ref())
+    async fn update_status(&self, id: i32, status: &str) -> Result<(), AppError> {
+        let result = Inquiry::update_many()
+            .col_expr(inquiry::Column::Status, Expr::value(status.to_string()))
+            .col_expr(inquiry::Column::UpdatedOn, Expr::current_timestamp().into())
+            .filter(inquiry::Column::Id.eq(id))
+            .exec(self.db.as_ref())
             .await
-            .map(|_| ())
             .map_err(|e| {
                 error!("inquiry update_status error: {e}");
                 AppError::Internal("Failed to update status.".into())
-            })
+            })?;
+
+        if result.rows_affected == 0 {
+            return Err(AppError::NotFound("Inquiry not found.".into()));
+        }
+        Ok(())
     }
 }
 

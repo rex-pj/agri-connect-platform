@@ -1,9 +1,9 @@
 <script lang="ts">
-  import CategoryItem from '$lib/components/molecules/CategoryItem.svelte';
+  import CategoryItem from "$lib/components/molecules/CategoryItem.svelte";
 
   export interface CategoryGridItem {
     name: string;
-    icon: string;  // Font Awesome solid class, e.g. "fa-water"
+    icon: string; // Font Awesome solid class, e.g. "fa-water"
     href?: string;
     active?: boolean;
     onSelect?: () => void;
@@ -29,18 +29,23 @@
 <style>
   .cat-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
     margin: 0;
     padding: 0;
     list-style: none;
-    justify-items: center;
-  }
-  .cat-grid::-webkit-scrollbar {
-    display: none;
   }
 
-  .cat-item-wrapper {
-    flex-shrink: 0;
+  @media (min-width: 480px) {
+    .cat-grid {
+      grid-template-columns: repeat(5, 1fr);
+    }
+  }
+
+  @media (min-width: 768px) {
+    .cat-grid {
+      grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+      gap: 6px;
+    }
   }
 </style>

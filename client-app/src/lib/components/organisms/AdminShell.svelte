@@ -89,10 +89,6 @@
   function groupHasActive(group: MenuGroup): boolean {
     return group.items.some((i) => isActive(i.href));
   }
-
-  function groupId(name: string): string {
-    return "sidebar-group-" + name.replace(/\s+/g, "-").toLowerCase();
-  }
 </script>
 
 <div class="ash-layout">
@@ -130,20 +126,15 @@
     {#each menus as entry}
       {#if isGroup(entry)}
         <div class="ash-group">
-          <Button
-            class="ash-group-toggle{groupHasActive(entry)
-              ? ' ash-group-toggle--active'
+          <div
+            class="ash-group-label {groupHasActive(entry)
+              ? ' ash-group-label--active'
               : ''}"
-            data-bs-toggle="collapse"
-            data-bs-target="#{groupId(entry.name)}"
-            aria-expanded="true"
-            aria-controls={groupId(entry.name)}
           >
             <i class="{entry.icon} ash-icon"></i>
             <span class="flex-grow-1">{entry.name}</span>
-            <i class="fa-solid fa-chevron-right ash-chevron"></i>
-          </Button>
-          <div id={groupId(entry.name)} class="collapse show ash-group-items">
+          </div>
+          <div class="ash-group-items">
             {#each entry.items as item}
               <Button
                 href={item.href}
@@ -253,45 +244,29 @@
     font-size: 0.83rem;
   }
 
-  :global(.ash-group-toggle) {
-    width: 100%;
+  :global(.ash-group-label) {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 9px 10px;
-    border: none;
-    background: none;
-    border-radius: 8px;
-    color: #374151;
-    font-size: 0.875rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition:
-      background 0.12s,
-      color 0.12s;
+    padding: 6px 10px 4px;
+    color: #9ca3af;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    cursor: default;
+    user-select: none;
+    margin-top: 8px;
   }
-  :global(.ash-group-toggle:hover) {
-    background: #e6f0ec;
-    color: #065f46;
-  }
-  :global(.ash-group-toggle--active) {
+
+  :global(.ash-group-label--active) {
     color: #065f46;
   }
   :global(.ash-group-items) {
-    padding-top: 2px;
-  }
-  :global(.ash-group-items.show) {
     display: flex;
     flex-direction: column;
     gap: 2px;
   }
-
-  :global(.ash-chevron) {
-    font-size: 0.65rem;
-    transition: transform 0.2s;
-    transform: rotate(90deg);
-  }
-
   :global(.ash-icon) {
     width: 16px;
     text-align: center;

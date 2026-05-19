@@ -15,7 +15,7 @@ export const load: PageServerLoad = async ({ fetch, cookies }) => {
             checkAuth(err.status);
             return { categories: [], error: err.message };
         }
-        return { categories: [], error: 'Không thể tải danh mục.' };
+        return { categories: [], error: 'Failed to load categories.' };
     }
 };
 

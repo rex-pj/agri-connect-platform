@@ -136,6 +136,11 @@ pub struct UpdateProductRequest {
 #[derive(Deserialize)]
 pub struct ProductBrowseQuery {
     pub category_id: Option<i32>,
+    pub name:        Option<String>,
+    pub min_price:   Option<i64>,
+    pub max_price:   Option<i64>,
+    /// Accepted values: "newest" (default) | "price_asc" | "price_desc"
+    pub sort:        Option<String>,
     pub page:        Option<i64>,
 }
 
@@ -143,11 +148,11 @@ pub struct ProductBrowseQuery {
 
 #[derive(Deserialize, Validate)]
 pub struct SearchQuery {
-    #[validate(range(min = LAT_MIN, max = LAT_MAX, message = "Vĩ độ phải trong khoảng -90 đến 90"))]
+    #[validate(range(min = LAT_MIN, max = LAT_MAX, message = "Latitude must be between -90 and 90"))]
     pub lat:        f64,
-    #[validate(range(min = LNG_MIN, max = LNG_MAX, message = "Kinh độ phải trong khoảng -180 đến 180"))]
+    #[validate(range(min = LNG_MIN, max = LNG_MAX, message = "Longitude must be between -180 and 180"))]
     pub lng:        f64,
-    #[validate(range(min = RADIUS_MIN_M, max = RADIUS_MAX_M, message = "Bán kính phải từ 100 đến 50000 mét"))]
+    #[validate(range(min = RADIUS_MIN_M, max = RADIUS_MAX_M, message = "Radius must be between 100 and 50000 metres"))]
     pub radius:     Option<f64>,
     pub service_id: Option<i32>,
 }
@@ -155,7 +160,10 @@ pub struct SearchQuery {
 #[derive(Deserialize, Validate)]
 pub struct BrowseQuery {
     pub service_id: Option<i32>,
-    #[validate(range(min = 1, message = "Số trang phải lớn hơn 0"))]
+    pub name:       Option<String>,
+    /// Accepted values: "verified_first" (default) | "newest" | "name_asc"
+    pub sort:       Option<String>,
+    #[validate(range(min = 1, message = "Page number must be greater than 0"))]
     pub page:       Option<i64>,
 }
 
@@ -167,16 +175,16 @@ pub struct CategoriesQuery {
 
 #[derive(Deserialize, Validate)]
 pub struct InquiryRequest {
-    #[validate(range(min = 1, message = "Nhà cung cấp không hợp lệ"))]
+    #[validate(range(min = 1, message = "Invalid provider"))]
     pub business_id:     i32,
-    #[validate(length(min = 1, max = 255, message = "Chủ đề không được để trống và tối đa 255 ký tự"))]
+    #[validate(length(min = 1, max = 255, message = "Topic must not be empty and at most 255 characters"))]
     pub topic:           String,
-    #[validate(length(min = 1, max = 100, message = "Họ tên không được để trống và tối đa 100 ký tự"))]
+    #[validate(length(min = 1, max = 100, message = "Full name must not be empty and at most 100 characters"))]
     pub requester_name:  String,
     #[validate(custom(function = "validate_vn_phone"))]
     pub requester_phone: String,
-    #[validate(length(max = 1000, message = "Ghi chú tối đa 1000 ký tự"))]
+    #[validate(length(max = 1000, message = "Note must be at most 1000 characters"))]
     pub note:            Option<String>,
-    #[validate(range(min = 1, message = "Dịch vụ không hợp lệ"))]
+    #[validate(range(min = 1, message = "Invalid service"))]
     pub service_id:      Option<i32>,
 }

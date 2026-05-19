@@ -22,7 +22,7 @@ impl AgriConnectHandler {
         State(state): State<AppState>,
         Query(q): Query<SearchQuery>,
     ) -> HandlerResult<impl axum::response::IntoResponse> {
-        q.validate().map_err(|e| HandlerError::validation("Tham số tìm kiếm không hợp lệ", e))?;
+        q.validate().map_err(|e| HandlerError::validation("Invalid search parameters", e))?;
 
         let result = state
             .usecases
@@ -44,13 +44,15 @@ impl AgriConnectHandler {
         State(state): State<AppState>,
         Query(q): Query<BrowseQuery>,
     ) -> HandlerResult<impl axum::response::IntoResponse> {
-        q.validate().map_err(|e| HandlerError::validation("Tham số không hợp lệ", e))?;
+        q.validate().map_err(|e| HandlerError::validation("Invalid parameters", e))?;
 
         let result = state
             .usecases
             .agri_connect
             .browse_providers(BrowseParams {
                 service_id: q.service_id,
+                name:       q.name,
+                sort:       q.sort,
                 page:       q.page.unwrap_or(1),
             })
             .await
@@ -108,9 +110,9 @@ impl AgriConnectHandler {
         State(state): State<AppState>,
         Json(req): Json<InquiryRequest>,
     ) -> HandlerResult<impl axum::response::IntoResponse> {
-        req.validate().map_err(|e| HandlerError::validation("Dữ liệu không hợp lệ", e))?;
+        req.validate().map_err(|e| HandlerError::validation("Invalid request data", e))?;
 
-        let result = state
+        state
             .usecases
             .agri_connect
             .contact_request(ContactInput {
@@ -124,6 +126,8 @@ impl AgriConnectHandler {
             .await
             .map_err(HandlerError::from)?;
 
-        Ok(Json(result))
+        Ok(Json(serde_json::json!({
+            "message": "Your enquiry has been recorded. The provider will get back to you."
+        })))
     }
 }

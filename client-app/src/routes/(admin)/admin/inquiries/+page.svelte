@@ -3,8 +3,8 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import AdminPageHeader from "$lib/components/molecules/AdminPageHeader.svelte";
-  import Button from '$lib/components/atoms/Button.svelte';
-  import Text from '$lib/components/atoms/Text.svelte';
+  import Button from "$lib/components/atoms/Button.svelte";
+  import Text from "$lib/components/atoms/Text.svelte";
   import type { PageData, ActionData } from "./$types";
 
   const { data, form }: { data: PageData; form: ActionData } = $props();
@@ -38,8 +38,14 @@
   };
 </script>
 
-<AdminPageHeader title="Yêu cầu liên hệ" icon="fa-envelope-open-text" sub="Theo dõi và cập nhật trạng thái yêu cầu từ nông dân">
-  <span class="badge bg-secondary rounded-pill fs-6">{data.result.total} yêu cầu</span>
+<AdminPageHeader
+  title="Yêu cầu liên hệ"
+  icon="fa-envelope-open-text"
+  sub="Theo dõi và cập nhật trạng thái yêu cầu từ nông dân"
+>
+  <span class="badge bg-secondary rounded-pill fs-6"
+    >{data.result.total} yêu cầu</span
+  >
 </AdminPageHeader>
 
 {#if (form as any)?.success && (form as any)?.message}
@@ -70,9 +76,9 @@
             <th>#</th>
             <th>Nhà cung cấp</th>
             <th>Người yêu cầu</th>
-            <th>Số điện thoại</th>
             <th>Chủ đề</th>
-            <th class="text-center">Ngày gửi</th>
+            <th class="text-center">Tạo lúc</th>
+            <th class="text-center">Cập nhật bởi</th>
             <th class="text-center">Trạng thái</th>
           </tr>
         </thead>
@@ -81,24 +87,36 @@
             <tr>
               <td class="text-muted small">{inq.id}</td>
               <td class="fw-semibold">{inq.business_name}</td>
-              <td>{inq.requester_name}</td>
               <td>
+                <div>{inq.requester_name}</div>
                 <Button
                   href="tel:{inq.requester_phone}"
-                  class="text-decoration-none"
+                  class="text-decoration-none small text-muted"
                 >
-                  {inq.requester_phone}
+                  <i class="fa-solid fa-phone me-1" style="font-size:0.7rem"></i>{inq.requester_phone}
                 </Button>
               </td>
-              <td
-                class="text-muted small"
-                style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
-              >
-                {inq.topic}
+              <td>
+                <div
+                  class="small"
+                  style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
+                >
+                  {inq.topic}
+                </div>
               </td>
-              <td class="text-center text-muted small"
-                >{fmtDate(inq.created_on)}</td
-              >
+              <td class="text-center">
+                <div class="d-flex flex-column" style="font-size:0.75rem; color:#5e7a68">
+                  <span>{fmtDate(inq.created_on)}</span>
+                </div>
+              </td>
+              <td class="text-center">
+                <div class="d-flex flex-column" style="font-size:0.75rem; color:#5e7a68">
+                  {#if inq.updated_by_name}
+                    <span class="fw-semibold text-dark">{inq.updated_by_name}</span>
+                  {/if}
+                  <span>{fmtDate(inq.updated_on)}</span>
+                </div>
+              </td>
               <td class="text-center">
                 <form
                   method="POST"
@@ -130,18 +148,39 @@
 </div>
 
 {#if data.result.total_pages > 1}
-  <nav class="d-flex justify-content-center align-items-center gap-1 my-3" aria-label="Phân trang">
-    <Button type="button" class="btn btn-sm btn-outline-secondary" onclick={() => goToPage(data.result.page - 1)}
-      disabled={data.result.page <= 1}><i class="fa-solid fa-chevron-left"></i></Button>
+  <nav
+    class="d-flex justify-content-center align-items-center gap-1 my-3"
+    aria-label="Phân trang"
+  >
+    <Button
+      type="button"
+      class="btn-sm btn-outline-secondary"
+      onclick={() => goToPage(data.result.page - 1)}
+      disabled={data.result.page <= 1}
+      ><i class="fa-solid fa-chevron-left"></i></Button
+    >
     {#each Array.from({ length: data.result.total_pages }, (_, i) => i + 1) as p}
-      <Button type="button" class="btn btn-sm {p === data.result.page ? 'btn-success' : 'btn-outline-secondary'}"
-        onclick={() => goToPage(p)}>{p}</Button>
+      <Button
+        type="button"
+        class="btn-sm {p === data.result.page
+          ? 'btn-success'
+          : 'btn-outline-secondary'}"
+        onclick={() => goToPage(p)}>{p}</Button
+      >
     {/each}
-    <Button type="button" class="btn btn-sm btn-outline-secondary" onclick={() => goToPage(data.result.page + 1)}
-      disabled={data.result.page >= data.result.total_pages}><i class="fa-solid fa-chevron-right"></i></Button>
+    <Button
+      type="button"
+      class="btn-sm btn-outline-secondary"
+      onclick={() => goToPage(data.result.page + 1)}
+      disabled={data.result.page >= data.result.total_pages}
+      ><i class="fa-solid fa-chevron-right"></i></Button
+    >
   </nav>
 {/if}
 
 <style>
-  .status-select { font-size: 0.8rem; min-width: 120px; }
+  .status-select {
+    font-size: 0.8rem;
+    min-width: 120px;
+  }
 </style>

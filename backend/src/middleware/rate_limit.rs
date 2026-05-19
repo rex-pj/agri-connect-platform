@@ -44,7 +44,7 @@ pub async fn enforce(
         return (
             StatusCode::TOO_MANY_REQUESTS,
             Json(serde_json::json!({
-                "message": "Quá nhiều yêu cầu. Vui lòng thử lại sau."
+                "message": "Too many requests. Please try again later."
             })),
         )
             .into_response();

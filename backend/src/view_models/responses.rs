@@ -37,7 +37,7 @@ pub struct ProductDto {
 
 #[derive(Serialize)]
 pub struct ProductBrowseResponse {
-    pub products:    Vec<ProductDto>,
+    pub items:       Vec<ProductDto>,
     pub total:       i64,
     pub page:        i64,
     pub total_pages: i64,
@@ -69,7 +69,7 @@ pub struct BusinessBrowseDto {
 
 #[derive(Serialize)]
 pub struct BrowseResponse {
-    pub providers:   Vec<BusinessBrowseDto>,
+    pub items:       Vec<BusinessBrowseDto>,
     pub total:       i64,
     pub page:        i64,
     pub total_pages: i64,
@@ -101,11 +101,6 @@ pub struct ExploreData {
     pub featured_products:  Vec<ProductDto>,
 }
 
-#[derive(Serialize)]
-pub struct ContactResponse {
-    pub success: bool,
-    pub message: String,
-}
 
 #[derive(Serialize)]
 pub struct CategoryDto {
@@ -145,11 +140,6 @@ pub struct ProviderProductDto {
     pub created_on:  DateTime<Utc>,
 }
 
-#[derive(Serialize)]
-pub struct DeleteResponse {
-    pub success: bool,
-    pub message: String,
-}
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
 
@@ -163,16 +153,19 @@ pub struct AdminStatsDto {
 
 #[derive(Serialize)]
 pub struct AdminProviderDto {
-    pub id:              i32,
-    pub name:            String,
-    pub phone:           String,
-    pub address:         Option<String>,
-    pub is_verified:     bool,
-    pub is_active:       bool,
-    pub service_count:   i64,
-    pub product_count:   i64,
-    pub created_on:      DateTime<Utc>,
-    pub linked_username: Option<String>,
+    pub id:               i32,
+    pub name:             String,
+    pub phone:            String,
+    pub address:          Option<String>,
+    pub is_verified:      bool,
+    pub is_active:        bool,
+    pub service_count:    i64,
+    pub product_count:    i64,
+    pub created_on:       DateTime<Utc>,
+    pub updated_on:       DateTime<Utc>,
+    pub linked_username:  Option<String>,
+    pub created_by_name:  Option<String>,
+    pub updated_by_name:  Option<String>,
 }
 
 #[derive(Serialize)]
@@ -212,13 +205,17 @@ pub struct AdminProviderDetailDto {
 
 #[derive(Serialize)]
 pub struct AdminUserDto {
-    pub id:        i32,
-    pub username:  String,
-    pub email:     String,
-    pub full_name: Option<String>,
-    pub role_code: String,
-    pub role_name: String,
-    pub is_active: bool,
+    pub id:               i32,
+    pub username:         String,
+    pub email:            String,
+    pub full_name:        Option<String>,
+    pub role_code:        String,
+    pub role_name:        String,
+    pub is_active:        bool,
+    pub created_on:       DateTime<Utc>,
+    pub updated_on:       DateTime<Utc>,
+    pub created_by_name:  Option<String>,
+    pub updated_by_name:  Option<String>,
 }
 
 #[derive(Serialize)]
@@ -250,13 +247,17 @@ pub struct AssignUserDto {
 
 #[derive(Serialize)]
 pub struct AdminCategoryDto {
-    pub id:            i32,
-    pub name:          String,
-    pub slug:          String,
-    pub category_type: String,
-    pub icon:          Option<String>,
-    pub display_order: i16,
-    pub is_active:     bool,
+    pub id:               i32,
+    pub name:             String,
+    pub slug:             String,
+    pub category_type:    String,
+    pub icon:             Option<String>,
+    pub display_order:    i16,
+    pub is_active:        bool,
+    pub created_on:       DateTime<Utc>,
+    pub updated_on:       DateTime<Utc>,
+    pub created_by_name:  Option<String>,
+    pub updated_by_name:  Option<String>,
 }
 
 #[derive(Serialize)]
@@ -269,18 +270,22 @@ pub struct AdminInquiryDto {
     pub topic:           String,
     pub status:          String,
     pub created_on:      DateTime<Utc>,
+    pub updated_on:      DateTime<Utc>,
+    pub updated_by_name: Option<String>,
 }
 
 #[derive(Serialize)]
 pub struct AdminReviewDto {
-    pub id:            i32,
-    pub business_id:   i32,
-    pub business_name: String,
-    pub reviewer_name: String,
-    pub rating:        i16,
-    pub comment:       Option<String>,
-    pub is_visible:    bool,
-    pub created_on:    DateTime<Utc>,
+    pub id:              i32,
+    pub business_id:     i32,
+    pub business_name:   String,
+    pub reviewer_name:   String,
+    pub rating:          i16,
+    pub comment:         Option<String>,
+    pub is_visible:      bool,
+    pub created_on:      DateTime<Utc>,
+    pub updated_on:      DateTime<Utc>,
+    pub updated_by_name: Option<String>,
 }
 
 #[derive(Serialize)]

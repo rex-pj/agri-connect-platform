@@ -1,4 +1,4 @@
-import { API_BASE, ServiceError, type Fetch } from '$lib/server/api';
+import { API_BASE, parseServiceError, type Fetch } from '$lib/server/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -10,13 +10,17 @@ export interface AdminStats {
 }
 
 export interface AdminUser {
-    id:        number;
-    username:  string;
-    email:     string;
-    full_name: string | null;
-    role_code: string;
-    role_name: string;
-    is_active: boolean;
+    id:               number;
+    username:         string;
+    email:            string;
+    full_name:        string | null;
+    role_code:        string;
+    role_name:        string;
+    is_active:        boolean;
+    created_on:       string;
+    updated_on:       string;
+    created_by_name:  string | null;
+    updated_by_name:  string | null;
 }
 
 export interface AdminUserDetail {
@@ -46,28 +50,35 @@ export interface Role {
 }
 
 export interface AdminCategory {
-    id:            number;
-    name:          string;
-    slug:          string;
-    category_type: string;
-    icon:          string | null;
-    display_order: number;
-    is_active:     boolean;
+    id:               number;
+    name:             string;
+    slug:             string;
+    category_type:    string;
+    icon:             string | null;
+    display_order:    number;
+    is_active:        boolean;
+    created_on:       string;
+    updated_on:       string;
+    created_by_name:  string | null;
+    updated_by_name:  string | null;
 }
 
 export interface AdminCategoryDetail extends AdminCategory {}
 
 export interface AdminProvider {
-    id:              number;
-    name:            string;
-    phone:           string;
-    address:         string | null;
-    is_verified:     boolean;
-    is_active:       boolean;
-    service_count:   number;
-    product_count:   number;
-    created_on:      string;
-    linked_username: string | null;
+    id:               number;
+    name:             string;
+    phone:            string;
+    address:          string | null;
+    is_verified:      boolean;
+    is_active:        boolean;
+    service_count:    number;
+    product_count:    number;
+    created_on:       string;
+    updated_on:       string;
+    linked_username:  string | null;
+    created_by_name:  string | null;
+    updated_by_name:  string | null;
 }
 
 export interface AdminProviderPaged {
@@ -118,6 +129,8 @@ export interface AdminInquiry {
     topic:           string;
     status:          string;
     created_on:      string;
+    updated_on:      string;
+    updated_by_name: string | null;
 }
 
 export interface AdminInquiryPaged {
@@ -128,14 +141,16 @@ export interface AdminInquiryPaged {
 }
 
 export interface AdminReview {
-    id:            number;
-    business_id:   number;
-    business_name: string;
-    reviewer_name: string;
-    rating:        number;
-    comment:       string | null;
-    is_visible:    boolean;
-    created_on:    string;
+    id:              number;
+    business_id:     number;
+    business_name:   string;
+    reviewer_name:   string;
+    rating:          number;
+    comment:         string | null;
+    is_visible:      boolean;
+    created_on:      string;
+    updated_on:      string;
+    updated_by_name: string | null;
 }
 
 export interface AdminReviewPaged {
@@ -158,7 +173,7 @@ export class AdminService {
 
     async getStats(): Promise<AdminStats> {
         const res = await this.fetch(`${API_BASE}/api/admin/stats`, { headers: this.auth });
-        if (!res.ok) throw new ServiceError(res.status, 'Không thể tải thống kê.');
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load stats.');
         return res.json();
     }
 
@@ -166,13 +181,13 @@ export class AdminService {
 
     async listUsers(page: string): Promise<AdminUserPaged> {
         const res = await this.fetch(`${API_BASE}/api/admin/users?page=${page}`, { headers: this.auth });
-        if (!res.ok) throw new ServiceError(res.status, 'Không thể tải danh sách người dùng.');
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load users.');
         return res.json();
     }
 
     async getUser(id: number): Promise<AdminUserDetail> {
         const res = await this.fetch(`${API_BASE}/api/admin/users/${id}`, { headers: this.auth });
-        if (!res.ok) throw new ServiceError(res.status, 'Không thể tải thông tin người dùng.');
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load user.');
         return res.json();
     }
 
@@ -182,7 +197,7 @@ export class AdminService {
             headers: { ...this.auth, 'Content-Type': 'application/json' },
             body:    JSON.stringify({ role_code: roleCode }),
         });
-        if (!res.ok) throw new ServiceError(res.status, 'Cập nhật vai trò thất bại.');
+        if (!res.ok) throw await parseServiceError(res, 'Failed to update role.');
     }
 
     async toggleUserActive(id: number, isActive: boolean): Promise<void> {
@@ -191,20 +206,20 @@ export class AdminService {
             headers: { ...this.auth, 'Content-Type': 'application/json' },
             body:    JSON.stringify({ is_active: isActive }),
         });
-        if (!res.ok) throw new ServiceError(res.status, 'Cập nhật trạng thái thất bại.');
+        if (!res.ok) throw await parseServiceError(res, 'Failed to update status.');
     }
 
     // ── Roles ──────────────────────────────────────────────────────────────
 
     async listRoles(): Promise<Role[]> {
         const res = await this.fetch(`${API_BASE}/api/admin/roles`, { headers: this.auth });
-        if (!res.ok) throw new ServiceError(res.status, 'Không thể tải danh sách vai trò.');
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load roles.');
         return res.json();
     }
 
     async getRole(id: number): Promise<Role> {
         const res = await this.fetch(`${API_BASE}/api/admin/roles/${id}`, { headers: this.auth });
-        if (!res.ok) throw new ServiceError(res.status, 'Không thể tải thông tin vai trò.');
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load role.');
         return res.json();
     }
 
@@ -212,29 +227,26 @@ export class AdminService {
 
     async listCategories(): Promise<AdminCategory[]> {
         const res = await this.fetch(`${API_BASE}/api/admin/categories`, { headers: this.auth });
-        if (!res.ok) throw new ServiceError(res.status, 'Không thể tải danh mục.');
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load categories.');
         return res.json();
     }
 
     async getCategory(id: number): Promise<AdminCategoryDetail> {
         const res = await this.fetch(`${API_BASE}/api/admin/categories/${id}`, { headers: this.auth });
-        if (!res.ok) throw new ServiceError(res.status, 'Không thể tải thông tin danh mục.');
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load category.');
         return res.json();
     }
 
     async createCategory(data: {
         name: string; slug: string; category_type: string;
         icon: string | null; display_order: number;
-    }): Promise<{ id: number }> {
+    }): Promise<AdminCategory> {
         const res = await this.fetch(`${API_BASE}/api/admin/categories`, {
             method:  'POST',
             headers: { ...this.auth, 'Content-Type': 'application/json' },
             body:    JSON.stringify(data),
         });
-        if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            throw new ServiceError(res.status, (body as { error?: string }).error ?? 'Tạo danh mục thất bại.');
-        }
+        if (!res.ok) throw await parseServiceError(res, 'Failed to create category.');
         return res.json();
     }
 
@@ -246,10 +258,7 @@ export class AdminService {
             headers: { ...this.auth, 'Content-Type': 'application/json' },
             body:    JSON.stringify(data),
         });
-        if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            throw new ServiceError(res.status, (body as { error?: string }).error ?? 'Cập nhật danh mục thất bại.');
-        }
+        if (!res.ok) throw await parseServiceError(res, 'Failed to update category.');
     }
 
     async toggleCategoryActive(id: number, isActive: boolean): Promise<void> {
@@ -258,20 +267,20 @@ export class AdminService {
             headers: { ...this.auth, 'Content-Type': 'application/json' },
             body:    JSON.stringify({ is_active: isActive }),
         });
-        if (!res.ok) throw new ServiceError(res.status, 'Cập nhật trạng thái thất bại.');
+        if (!res.ok) throw await parseServiceError(res, 'Failed to update status.');
     }
 
     // ── Providers ──────────────────────────────────────────────────────────
 
     async listProviders(page: string): Promise<AdminProviderPaged> {
         const res = await this.fetch(`${API_BASE}/api/admin/providers?page=${page}`, { headers: this.auth });
-        if (!res.ok) throw new ServiceError(res.status, 'Không thể tải danh sách nhà cung cấp.');
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load providers.');
         return res.json();
     }
 
     async getProvider(id: number): Promise<AdminProviderDetail> {
         const res = await this.fetch(`${API_BASE}/api/admin/providers/${id}`, { headers: this.auth });
-        if (!res.ok) throw new ServiceError(res.status, 'Không thể tải thông tin nhà cung cấp.');
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load provider.');
         return res.json();
     }
 
@@ -280,10 +289,7 @@ export class AdminService {
             method:  'PATCH',
             headers: this.auth,
         });
-        if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            throw new ServiceError(res.status, (body as { error?: string }).error ?? 'Cập nhật thất bại.');
-        }
+        if (!res.ok) throw await parseServiceError(res, 'Update failed.');
         return res.json();
     }
 
@@ -295,10 +301,7 @@ export class AdminService {
             headers: { ...this.auth, 'Content-Type': 'application/json' },
             body:    JSON.stringify(data),
         });
-        if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            throw new ServiceError(res.status, (body as { error?: string }).error ?? 'Gán tài khoản thất bại.');
-        }
+        if (!res.ok) throw await parseServiceError(res, 'Failed to assign account.');
         return res.json();
     }
 
@@ -306,7 +309,7 @@ export class AdminService {
 
     async listInquiries(page: string): Promise<AdminInquiryPaged> {
         const res = await this.fetch(`${API_BASE}/api/admin/inquiries?page=${page}`, { headers: this.auth });
-        if (!res.ok) throw new ServiceError(res.status, 'Không thể tải danh sách yêu cầu.');
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load inquiries.');
         return res.json();
     }
 
@@ -316,14 +319,14 @@ export class AdminService {
             headers: { ...this.auth, 'Content-Type': 'application/json' },
             body:    JSON.stringify({ status }),
         });
-        if (!res.ok) throw new ServiceError(res.status, 'Cập nhật trạng thái thất bại.');
+        if (!res.ok) throw await parseServiceError(res, 'Failed to update status.');
     }
 
     // ── Reviews ────────────────────────────────────────────────────────────
 
     async listReviews(page: string): Promise<AdminReviewPaged> {
         const res = await this.fetch(`${API_BASE}/api/admin/reviews?page=${page}`, { headers: this.auth });
-        if (!res.ok) throw new ServiceError(res.status, 'Không thể tải danh sách đánh giá.');
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load reviews.');
         return res.json();
     }
 
@@ -333,6 +336,6 @@ export class AdminService {
             headers: { ...this.auth, 'Content-Type': 'application/json' },
             body:    JSON.stringify({ is_visible: isVisible }),
         });
-        if (!res.ok) throw new ServiceError(res.status, 'Cập nhật hiển thị thất bại.');
+        if (!res.ok) throw await parseServiceError(res, 'Failed to update visibility.');
     }
 }

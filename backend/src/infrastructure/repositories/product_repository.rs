@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult,
+    ColumnTrait, Condition, DatabaseConnection, EntityTrait, FromQueryResult,
     JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
 };
-use sea_orm::sea_query::Expr;
+use sea_orm::sea_query::{Expr, extension::postgres::PgExpr};
 use std::sync::Arc;
 use tracing::error;
 
@@ -103,6 +103,10 @@ impl ProductRepositoryTrait for ProductRepository {
     async fn browse(
         &self,
         category_id: Option<i32>,
+        name: Option<String>,
+        min_price: Option<i64>,
+        max_price: Option<i64>,
+        sort: Option<String>,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<ProductView>, AppError> {
@@ -113,10 +117,28 @@ impl ProductRepositoryTrait for ProductRepository {
         if let Some(id) = category_id {
             query = query.filter(product::Column::CategoryId.eq(id));
         }
+        if let Some(ref q) = name {
+            let pattern = format!("%{}%", q);
+            query = query.filter(
+                Condition::any()
+                    .add(Expr::col((product::Entity, product::Column::Name)).ilike(pattern.clone()))
+                    .add(Expr::col((product::Entity, product::Column::Description)).ilike(pattern)),
+            );
+        }
+        if let Some(min) = min_price {
+            query = query.filter(product::Column::Price.gte(min));
+        }
+        if let Some(max) = max_price {
+            query = query.filter(product::Column::Price.lte(max));
+        }
+
+        let query = match sort.as_deref() {
+            Some("price_asc")  => query.order_by_asc(product::Column::Price),
+            Some("price_desc") => query.order_by_desc(product::Column::Price),
+            _                  => query.order_by_desc(product::Column::CreatedOn),
+        };
 
         query
-            .order_by_desc(product::Column::IsActive)
-            .order_by_desc(product::Column::CreatedOn)
             .limit(limit as u64)
             .offset(offset as u64)
             .into_model::<ProductViewRow>()
@@ -129,7 +151,13 @@ impl ProductRepositoryTrait for ProductRepository {
             })
     }
 
-    async fn count_browse(&self, category_id: Option<i32>) -> Result<i64, AppError> {
+    async fn count_browse(
+        &self,
+        category_id: Option<i32>,
+        name: Option<String>,
+        min_price: Option<i64>,
+        max_price: Option<i64>,
+    ) -> Result<i64, AppError> {
         let mut query = ProductEntity::find()
             .join(JoinType::InnerJoin, product::Relation::Business.def())
             .join(JoinType::InnerJoin, product::Relation::Category.def())
@@ -141,6 +169,20 @@ impl ProductRepositoryTrait for ProductRepository {
 
         if let Some(id) = category_id {
             query = query.filter(product::Column::CategoryId.eq(id));
+        }
+        if let Some(ref q) = name {
+            let pattern = format!("%{}%", q);
+            query = query.filter(
+                Condition::any()
+                    .add(Expr::col((product::Entity, product::Column::Name)).ilike(pattern.clone()))
+                    .add(Expr::col((product::Entity, product::Column::Description)).ilike(pattern)),
+            );
+        }
+        if let Some(min) = min_price {
+            query = query.filter(product::Column::Price.gte(min));
+        }
+        if let Some(max) = max_price {
+            query = query.filter(product::Column::Price.lte(max));
         }
 
         query
@@ -341,7 +383,7 @@ impl ProductRepositoryTrait for ProductRepository {
             .map(|c| c as i64)
             .map_err(|e| {
                 error!("product count_active error: {e}");
-                AppError::Internal("Không thể tải thống kê.".into())
+                AppError::Internal("Failed to load statistics.".into())
             })
     }
 }

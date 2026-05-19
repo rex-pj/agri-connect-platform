@@ -49,10 +49,25 @@ export const PASSWORD_MIN_LEN = 8;
 
 // ── Response parsing helper ───────────────────────────────────────────────────
 
-/** Extracts the `error` field from a JSON response body, with a fallback message. */
+type ApiErrorBody = {
+    message?: string;
+    field_errors?: Record<string, string[]>;
+};
+
+/** Extracts the `message` field from a JSON response body, with a fallback. */
 export async function extractError(res: Response, fallback: string): Promise<string> {
-    const body = await res.json().catch(() => ({}));
-    return (body as { error?: string }).error ?? fallback;
+    const body = await res.json().catch(() => ({})) as ApiErrorBody;
+    return body.message ?? fallback;
+}
+
+/** Converts backend `field_errors: Record<string, string[]>` to a flat map (first error per field). */
+export function flattenFieldErrors(
+    raw: Record<string, string[]> | undefined,
+): Record<string, string> | undefined {
+    if (!raw) return undefined;
+    return Object.fromEntries(
+        Object.entries(raw).map(([k, v]) => [k, v[0] ?? '']),
+    );
 }
 
 // ── Service error ─────────────────────────────────────────────────────────────
@@ -67,6 +82,16 @@ export class ServiceError extends Error {
         super(message);
         this.name = 'ServiceError';
     }
+}
+
+/** Parse a non-2xx response body into a ServiceError. */
+export async function parseServiceError(res: Response, fallback: string): Promise<ServiceError> {
+    const body = await res.json().catch(() => ({})) as ApiErrorBody;
+    return new ServiceError(
+        res.status,
+        body.message ?? fallback,
+        flattenFieldErrors(body.field_errors),
+    );
 }
 
 export type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;

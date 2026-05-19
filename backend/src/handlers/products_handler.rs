@@ -22,7 +22,7 @@ impl ProductsHandler {
         let result = state
             .usecases
             .product
-            .browse_products(q.category_id, q.page.unwrap_or(1))
+            .browse_products(q.category_id, q.name, q.min_price, q.max_price, q.sort, q.page.unwrap_or(1))
             .await
             .map_err(HandlerError::from)?;
 

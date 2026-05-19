@@ -109,12 +109,10 @@
             <th scope="col" style="width:40px">#</th>
             <th scope="col">Tên / Địa chỉ</th>
             <th scope="col">Số điện thoại</th>
-            <th scope="col" class="text-center">Dịch vụ</th>
-            <th scope="col" class="text-center">Sản phẩm</th>
+            <th scope="col" class="text-center">DV / SP</th>
             <th scope="col" class="text-center">Trạng thái</th>
-            <th scope="col" class="text-center">Ngày đăng ký</th>
-            <th scope="col" class="text-center">Tài khoản</th>
-            <th scope="col" class="text-center">Xác minh</th>
+            <th scope="col" class="text-center">Tạo bởi</th>
+            <th scope="col" class="text-center">Cập nhật bởi</th>
             <th scope="col" class="text-center">Hành động</th>
           </tr>
         </thead>
@@ -165,101 +163,87 @@
                 </Button>
               </td>
 
-              <!-- Service count -->
+              <!-- Service + Product counts -->
               <td class="text-center">
-                <span class="badge rounded-pill bg-light text-dark border">
-                  {provider.service_count}
+                <span class="badge rounded-pill bg-light text-dark border" title="Dịch vụ / Sản phẩm">
+                  {provider.service_count} / {provider.product_count}
                 </span>
               </td>
 
-              <!-- Product count -->
-              <td class="text-center">
-                <span class="badge rounded-pill bg-light text-dark border">
-                  {provider.product_count}
-                </span>
-              </td>
-
-              <!-- Active status -->
+              <!-- Status -->
               <td class="text-center">
                 {#if provider.is_active}
-                  <span
-                    class="badge bg-success-subtle text-success border border-success-subtle"
-                    >Hoạt động</span
-                  >
+                  <span class="badge bg-success-subtle text-success border border-success-subtle">Hoạt động</span>
                 {:else}
-                  <span
-                    class="badge bg-secondary-subtle text-secondary border border-secondary-subtle"
-                    >Tắt</span
-                  >
+                  <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Tắt</span>
                 {/if}
               </td>
 
-              <!-- Registration date -->
-              <td class="text-center text-muted small"
-                >{fmtDate(provider.created_on)}</td
-              >
-
-              <!-- Account link -->
+              <!-- Created by -->
               <td class="text-center">
-                {#if provider.linked_username}
-                  <span
-                    class="badge bg-success-subtle text-success border border-success-subtle account-badge"
-                  >
-                    <i class="fa-solid fa-user-check me-1"
-                    ></i>{provider.linked_username}
-                  </span>
-                {:else}
-                  <Button
-                    type="button"
-                    class="btn btn-sm btn-outline-primary assign-btn"
-                    onclick={() => openAssignModal(provider)}
-                  >
-                    <i class="fa-solid fa-user-plus me-1"></i>Gán tài khoản
-                  </Button>
-                {/if}
+                <div class="d-flex flex-column" style="font-size:0.75rem; color:#5e7a68">
+                  {#if provider.created_by_name}
+                    <span class="fw-semibold text-dark">{provider.created_by_name}</span>
+                  {/if}
+                  <span>{fmtDate(provider.created_on)}</span>
+                </div>
               </td>
 
-              <!-- Verify toggle -->
+              <!-- Updated by -->
               <td class="text-center">
-                <form
-                  method="POST"
-                  action="?/toggle_verify"
-                  use:enhance={({ formData }) => {
-                    // Optimistic update: flip the badge before the response arrives.
-                    const id = Number(formData.get("id"));
-                    overrides.set(id, !verified);
-                    overrides = new Map(overrides); // trigger reactivity
-                    return async ({ update }) => {
-                      await update();
-                    };
-                  }}
-                >
-                  <input type="hidden" name="id" value={provider.id} />
-                  <Button
-                    type="submit"
-                    class="btn btn-sm {verified
-                      ? 'btn-outline-secondary'
-                      : 'btn-primary'} verify-btn"
-                    title={verified ? "Huỷ xác minh" : "Xác minh nhà cung cấp"}
-                  >
-                    {#if verified}
-                      <i class="fa-solid fa-circle-xmark me-1"></i>Huỷ
-                    {:else}
-                      <i class="fa-solid fa-circle-check me-1"></i>Xác minh
-                    {/if}
-                  </Button>
-                </form>
+                <div class="d-flex flex-column" style="font-size:0.75rem; color:#5e7a68">
+                  {#if provider.updated_by_name}
+                    <span class="fw-semibold text-dark">{provider.updated_by_name}</span>
+                  {/if}
+                  <span>{fmtDate(provider.updated_on)}</span>
+                </div>
               </td>
 
-              <!-- Detail link -->
+              <!-- Actions: account, verify, detail -->
               <td class="text-center">
-                <Button
-                  href={ROUTES.ADMIN.PROVIDER(provider.id)}
-                  class="btn btn-sm btn-outline-secondary"
-                  title="Chi tiết"
-                >
-                  <i class="fa-solid fa-eye"></i>
-                </Button>
+                <div class="d-flex flex-column align-items-center gap-1">
+                  {#if provider.linked_username}
+                    <span class="badge bg-success-subtle text-success border border-success-subtle account-badge">
+                      <i class="fa-solid fa-user-check me-1"></i>{provider.linked_username}
+                    </span>
+                  {:else}
+                    <Button
+                      type="button"
+                      class="btn-sm btn-outline-primary assign-btn"
+                      onclick={() => openAssignModal(provider)}
+                    >
+                      <i class="fa-solid fa-user-plus me-1"></i>Gán TK
+                    </Button>
+                  {/if}
+                  <div class="d-flex gap-1">
+                    <form
+                      method="POST"
+                      action="?/toggle_verify"
+                      use:enhance={({ formData }) => {
+                        const id = Number(formData.get("id"));
+                        overrides.set(id, !verified);
+                        overrides = new Map(overrides);
+                        return async ({ update }) => { await update(); };
+                      }}
+                    >
+                      <input type="hidden" name="id" value={provider.id} />
+                      <Button
+                        type="submit"
+                        class="btn-sm {verified ? 'btn-outline-secondary' : 'btn-primary'}"
+                        title={verified ? "Huỷ xác minh" : "Xác minh"}
+                      >
+                        <i class="fa-solid {verified ? 'fa-circle-xmark' : 'fa-circle-check'}"></i>
+                      </Button>
+                    </form>
+                    <Button
+                      href={ROUTES.ADMIN.PROVIDER(provider.id)}
+                      class="btn-sm btn-outline-secondary"
+                      title="Chi tiết"
+                    >
+                      <i class="fa-solid fa-eye"></i>
+                    </Button>
+                  </div>
+                </div>
               </td>
             </tr>
           {/each}
@@ -276,7 +260,7 @@
   >
     <Button
       type="button"
-      class="btn btn-sm btn-outline-secondary"
+      class="btn-sm btn-outline-secondary"
       onclick={() => goToPage(data.result.page - 1)}
       disabled={data.result.page <= 1}
       ><i class="fa-solid fa-chevron-left"></i></Button
@@ -284,7 +268,7 @@
     {#each Array.from({ length: data.result.total_pages }, (_, i) => i + 1) as p}
       <Button
         type="button"
-        class="btn btn-sm {p === data.result.page
+        class="btn-sm {p === data.result.page
           ? 'btn-success'
           : 'btn-outline-secondary'}"
         onclick={() => goToPage(p)}>{p}</Button
@@ -292,7 +276,7 @@
     {/each}
     <Button
       type="button"
-      class="btn btn-sm btn-outline-secondary"
+      class="btn-sm btn-outline-secondary"
       onclick={() => goToPage(data.result.page + 1)}
       disabled={data.result.page >= data.result.total_pages}
       ><i class="fa-solid fa-chevron-right"></i></Button
@@ -384,7 +368,7 @@
                 />
                 <Button
                   type="button"
-                  class="btn btn-outline-secondary pw-toggle"
+                  class="btn-outline-secondary pw-toggle"
                   onclick={() => (showPassword = !showPassword)}
                   title={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
                 >
@@ -408,10 +392,10 @@
           <div class="modal-footer">
             <Button
               type="button"
-              class="btn btn-outline-secondary"
+              class="btn-outline-secondary"
               onclick={closeAssignModal}>Huỷ</Button
             >
-            <Button type="submit" class="btn btn-primary px-4">
+            <Button type="submit" class="btn-primary px-4">
               <i class="fa-solid fa-user-plus me-1"></i>Gán tài khoản
             </Button>
           </div>

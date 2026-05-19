@@ -4,11 +4,16 @@ import { AgriConnectService } from '$lib/server/services/agri-connect.service';
 export type { Category, Product, ProductsResult } from '$lib/server/services/agri-connect.service';
 
 export const load: PageServerLoad = async ({ fetch, url }) => {
-    const page = url.searchParams.get('page') ?? '1';
-    const svc  = new AgriConnectService(fetch);
+    const page        = url.searchParams.get('page') ?? '1';
+    const searchQuery = url.searchParams.get('q')         || null;
+    const categoryId  = url.searchParams.get('category_id') || undefined;
+    const minPrice    = url.searchParams.get('min_price') || undefined;
+    const maxPrice    = url.searchParams.get('max_price') || undefined;
+    const sort        = url.searchParams.get('sort')      || undefined;
+    const svc         = new AgriConnectService(fetch);
 
     const [productsResult, categoriesResult] = await Promise.allSettled([
-        svc.browseProducts(page),
+        svc.browseProducts(page, categoryId, searchQuery ?? undefined, minPrice, maxPrice, sort),
         svc.getCategories('product'),
     ]);
 
@@ -16,11 +21,25 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
 
     if (productsResult.status === 'rejected') {
         return {
-            result: { products: [], total: 0, page: 1, total_pages: 0 },
+            result: { items: [], total: 0, page: 1, total_pages: 0 },
             categories,
+            searchQuery,
+            categoryId:  categoryId  ?? null,
+            minPrice:    minPrice    ?? null,
+            maxPrice:    maxPrice    ?? null,
+            sort:        sort        ?? null,
             error: 'Máy chủ không phản hồi. Vui lòng thử lại.',
         };
     }
 
-    return { result: productsResult.value, categories, error: null };
+    return {
+        result:     productsResult.value,
+        categories,
+        searchQuery,
+        categoryId:  categoryId  ?? null,
+        minPrice:    minPrice    ?? null,
+        maxPrice:    maxPrice    ?? null,
+        sort:        sort        ?? null,
+        error:       null,
+    };
 };

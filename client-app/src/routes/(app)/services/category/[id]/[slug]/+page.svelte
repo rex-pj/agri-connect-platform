@@ -6,7 +6,7 @@
   import GeoCta from "$lib/components/molecules/GeoCta.svelte";
   import ContactSheet from "$lib/components/organisms/ContactSheet.svelte";
   import PageHero from "$lib/components/molecules/PageHero.svelte";
-  import AlertBanner from "$lib/components/atoms/AlertBanner.svelte";
+  import AlertBanner from "$lib/components/molecules/AlertBanner.svelte";
   import EmptyState from "$lib/components/molecules/EmptyState.svelte";
   import PaginationNav from "$lib/components/molecules/PaginationNav.svelte";
   import { SERVICE_DISPLAY, DEFAULT_DISPLAY } from "$lib/categoryIcons";
@@ -16,6 +16,10 @@
   import type { BrowseProvider } from "./+page.server";
 
   const { data, form }: { data: PageData; form: ActionData } = $props();
+
+  const catDisplay = $derived(
+    data.currentCategory ? (SERVICE_DISPLAY[data.currentCategory.slug] ?? DEFAULT_DISPLAY) : DEFAULT_DISPLAY
+  );
 
   let activeProvider = $state<BrowseProvider | null>(null);
   let contactSuccess = $state(false);
@@ -52,7 +56,8 @@
 
 <PageHero
   title={data.currentCategory?.name ?? "Danh mục dịch vụ"}
-  icon="fa-border-all"
+  icon={catDisplay.icon}
+  sub={catDisplay.desc ? `${catDisplay.desc}${data.result.total > 0 ? ` · ${data.result.total} nhà cung cấp` : ''}` : undefined}
   backLink={{ href: ROUTES.SERVICES, label: "Dịch vụ" }}
 />
 

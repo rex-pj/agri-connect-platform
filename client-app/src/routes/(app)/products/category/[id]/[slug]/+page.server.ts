@@ -1,15 +1,15 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { AgriConnectService } from '$lib/server/services/agri-connect.service';
+import { ExploreService } from '$lib/server/services/explore.service';
 
-export type { Category, Product, ProductsResult } from '$lib/server/services/agri-connect.service';
+export type { Category, Product, ProductsResult } from '$lib/server/services/explore.service';
 
 export const load: PageServerLoad = async ({ params, fetch, url }) => {
     const categoryId = Number(params.id);
     if (!categoryId) throw error(400, 'Danh mục không hợp lệ');
 
     const page = url.searchParams.get('page') ?? '1';
-    const svc  = new AgriConnectService(fetch);
+    const svc  = new ExploreService(fetch);
 
     const [productsResult, categoriesResult] = await Promise.allSettled([
         svc.browseProducts(page, String(categoryId)),

@@ -1,8 +1,8 @@
 import type { PageServerLoad } from './$types';
-import { AgriConnectService } from '$lib/server/services/agri-connect.service';
-import type { Category } from '$lib/server/services/agri-connect.service';
+import { ExploreService } from '$lib/server/services/explore.service';
+import type { Category } from '$lib/server/services/explore.service';
 
-export type { FeaturedProvider, FeaturedProduct } from '$lib/server/services/agri-connect.service';
+export type { FeaturedProvider, FeaturedProduct } from '$lib/server/services/explore.service';
 
 export interface NavCategory {
     name:  string;
@@ -13,11 +13,11 @@ export interface NavCategory {
 
 const NAV_SHORTCUTS: NavCategory[] = [
     { name: 'Dịch vụ', icon: 'fa-border-all',   href: '/services' },
-    { name: 'Gần tôi',  icon: 'fa-location-dot', href: '/agri-connect' },
+    { name: 'Gần tôi',  icon: 'fa-location-dot', href: '/explore' },
 ];
 
 export const load: PageServerLoad = async ({ fetch }) => {
-    const svc = new AgriConnectService(fetch);
+    const svc = new ExploreService(fetch);
 
     const [exploreResult, catResult] = await Promise.allSettled([
         svc.getExploreData(),

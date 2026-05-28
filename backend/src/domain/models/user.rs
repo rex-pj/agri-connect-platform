@@ -4,6 +4,10 @@ pub struct UserCredentials {
     pub id:            i32,
     pub password_hash: String,
     pub role:          String,
+    /// Whether the account is active. Use cases must reject login for
+    /// inactive accounts — this field makes that invariant explicit at the
+    /// domain model level rather than relying on a silent SQL filter.
+    pub is_active:     bool,
     pub locked_until:  Option<DateTime<Utc>>,
 }
 
@@ -50,6 +54,7 @@ pub struct UserMe {
     pub username:   String,
     pub email:      String,
     pub full_name:  Option<String>,
+    pub role:       String,
     pub created_on: chrono::DateTime<chrono::Utc>,
 }
 

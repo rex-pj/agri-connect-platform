@@ -1,6 +1,6 @@
 <script lang="ts">
   import { enhance } from "$app/forms";
-  import SubmitButton from "$lib/components/atoms/SubmitButton.svelte";
+  import SubmitButton from "$lib/components/molecules/SubmitButton.svelte";
   import Button from "$lib/components/atoms/Button.svelte";
   import Heading from "$lib/components/atoms/Heading.svelte";
   import Text from "$lib/components/atoms/Text.svelte";

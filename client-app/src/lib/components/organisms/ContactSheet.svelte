@@ -24,7 +24,6 @@
   const vals = $derived(form?.values ?? {});
 
   let submitting = $state(false);
-  let showNote = $state(false);
 </script>
 
 <dialog
@@ -133,29 +132,18 @@
           />
         </FormField>
 
-        <button
-          type="button"
-          class="add-note-toggle"
-          onclick={() => (showNote = !showNote)}
-        >
-          <i class="fa-solid {showNote ? 'fa-minus' : 'fa-plus'}"></i>
-          {showNote ? "Bỏ ghi chú" : "Thêm ghi chú (tùy chọn)"}
-        </button>
-
-        {#if showNote}
-          <FormField label="Ghi chú thêm" forId="cs_note" error={fe.note}>
-            <textarea
-              id="cs_note"
-              name="note"
-              class="field__input"
-              class:field__input--error={fe.note}
-              rows="3"
-              maxlength="1000"
-              placeholder="Ví dụ: ruộng 5 sào, cần thợ sáng sớm..."
-              >{vals.note ?? ""}</textarea
-            >
-          </FormField>
-        {/if}
+        <FormField label="Ghi chú (tùy chọn)" forId="cs_note" error={fe.note}>
+          <textarea
+            id="cs_note"
+            name="note"
+            class="field__input"
+            class:field__input--error={fe.note}
+            rows="2"
+            maxlength="500"
+            placeholder="Ví dụ: ruộng 5 sào, cần thợ sáng sớm..."
+            >{vals.note ?? ""}</textarea
+          >
+        </FormField>
 
         <div class="sheet__actions">
           <Button type="button" class="btn-cancel" onclick={onClose}>Huỷ</Button
@@ -266,29 +254,6 @@
     display: flex;
     gap: 12px;
     margin-top: 4px;
-  }
-
-  .add-note-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: none;
-    border: 1.5px dashed #c8d8ce;
-    border-radius: 8px;
-    padding: 8px 14px;
-    font-size: 0.82rem;
-    font-weight: 600;
-    color: #5a6b5d;
-    cursor: pointer;
-    width: 100%;
-    transition:
-      border-color 0.15s,
-      color 0.15s;
-  }
-
-  .add-note-toggle:hover {
-    border-color: var(--p600, #047857);
-    color: var(--p700, #065f46);
   }
 
   .status-banner {

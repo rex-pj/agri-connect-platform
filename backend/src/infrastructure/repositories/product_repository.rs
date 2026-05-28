@@ -11,7 +11,7 @@ use tracing::error;
 use crate::{
     infrastructure::db_types::DateTimeWithTimeZone,
     domain::{
-        models::product::{NewProduct, ProductView, ProviderProduct, UpdateProduct},
+        models::product::{AdminProduct, NewProduct, ProductView, ProviderProduct, UpdateProduct},
         repositories::product_repository_trait::ProductRepositoryTrait,
     },
     entities::{
@@ -45,6 +45,23 @@ struct ProductViewRow {
     vendor_phone: String,
     is_available: bool,
     created_on:   DateTimeWithTimeZone,
+}
+
+#[derive(FromQueryResult)]
+struct AdminProductRow {
+    id:            i32,
+    name:          String,
+    description:   Option<String>,
+    price:         Option<i64>,
+    unit:          Option<String>,
+    image_url:     Option<String>,
+    category:      String,
+    category_id:   i32,
+    business_id:   i32,
+    business_name: String,
+    is_active:     bool,
+    created_on:    DateTimeWithTimeZone,
+    updated_on:    DateTimeWithTimeZone,
 }
 
 #[derive(FromQueryResult)]
@@ -98,8 +115,115 @@ fn base_provider_product_query() -> sea_orm::Select<ProductEntity> {
         .join(JoinType::InnerJoin, product::Relation::Category.def())
 }
 
+fn base_admin_product_query() -> sea_orm::Select<ProductEntity> {
+    ProductEntity::find()
+        .select_only()
+        .column(product::Column::Id)
+        .column(product::Column::Name)
+        .column(product::Column::Description)
+        .column(product::Column::Price)
+        .column(product::Column::Unit)
+        .column(product::Column::ImageUrl)
+        .column_as(category::Column::Name, "category")
+        .column(product::Column::CategoryId)
+        .column(product::Column::BusinessId)
+        .column_as(business::Column::Name, "business_name")
+        .column(product::Column::IsActive)
+        .column(product::Column::CreatedOn)
+        .column(product::Column::UpdatedOn)
+        .join(JoinType::InnerJoin, product::Relation::Business.def())
+        .join(JoinType::InnerJoin, product::Relation::Category.def())
+        .filter(product::Column::DeletedAt.is_null())
+        .filter(business::Column::DeletedAt.is_null())
+}
+
 #[async_trait]
 impl ProductRepositoryTrait for ProductRepository {
+    async fn list_admin(
+        &self,
+        provider_id: Option<i32>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<AdminProduct>, AppError> {
+        let mut query = base_admin_product_query();
+        if let Some(bid) = provider_id {
+            query = query.filter(product::Column::BusinessId.eq(bid));
+        }
+        query
+            .order_by_desc(product::Column::CreatedOn)
+            .limit(limit as u64)
+            .offset(offset as u64)
+            .into_model::<AdminProductRow>()
+            .all(self.db.as_ref())
+            .await
+            .map(|rows| rows.into_iter().map(map_admin_row).collect())
+            .map_err(|e| {
+                error!("product list_admin error: {e}");
+                AppError::Internal("Failed to load products.".into())
+            })
+    }
+
+    async fn count_admin(&self, provider_id: Option<i32>) -> Result<i64, AppError> {
+        let mut query = ProductEntity::find()
+            .join(JoinType::InnerJoin, product::Relation::Business.def())
+            .filter(product::Column::DeletedAt.is_null())
+            .filter(business::Column::DeletedAt.is_null());
+        if let Some(bid) = provider_id {
+            query = query.filter(product::Column::BusinessId.eq(bid));
+        }
+        query
+            .count(self.db.as_ref())
+            .await
+            .map(|c| c as i64)
+            .map_err(|e| {
+                error!("product count_admin error: {e}");
+                AppError::Internal("Failed to count products.".into())
+            })
+    }
+
+    async fn find_by_id_admin(&self, id: i32) -> Result<Option<AdminProduct>, AppError> {
+        base_admin_product_query()
+            .filter(product::Column::Id.eq(id))
+            .into_model::<AdminProductRow>()
+            .one(self.db.as_ref())
+            .await
+            .map(|opt| opt.map(map_admin_row))
+            .map_err(|e| {
+                error!("product find_by_id_admin error (id={id}): {e}");
+                AppError::Internal("Failed to load product.".into())
+            })
+    }
+
+    async fn admin_toggle_active(&self, id: i32, is_active: bool) -> Result<bool, AppError> {
+        ProductEntity::update_many()
+            .col_expr(product::Column::IsActive,  Expr::value(is_active))
+            .col_expr(product::Column::UpdatedOn, Expr::current_timestamp().into())
+            .filter(product::Column::Id.eq(id))
+            .filter(product::Column::DeletedAt.is_null())
+            .exec(self.db.as_ref())
+            .await
+            .map(|r| r.rows_affected > 0)
+            .map_err(|e| {
+                error!("product admin_toggle_active error (id={id}): {e}");
+                AppError::Internal("Failed to update product.".into())
+            })
+    }
+
+    async fn admin_delete(&self, id: i32) -> Result<bool, AppError> {
+        ProductEntity::update_many()
+            .col_expr(product::Column::DeletedAt, Expr::current_timestamp().into())
+            .filter(product::Column::Id.eq(id))
+            .filter(product::Column::DeletedAt.is_null())
+            .exec(self.db.as_ref())
+            .await
+            .map(|r| r.rows_affected > 0)
+            .map_err(|e| {
+                error!("product admin_delete error (id={id}): {e}");
+                AppError::Internal("Failed to delete product.".into())
+            })
+    }
+
+
     async fn browse(
         &self,
         category_id: Option<i32>,
@@ -199,7 +323,6 @@ impl ProductRepositoryTrait for ProductRepository {
         base_product_view_query()
             .filter(product::Column::IsActive.eq(true))
             .filter(product::Column::DeletedAt.is_null())
-            .order_by_desc(product::Column::IsActive)
             .order_by_desc(product::Column::CreatedOn)
             .limit(limit as u64)
             .into_model::<ProductViewRow>()
@@ -385,6 +508,24 @@ impl ProductRepositoryTrait for ProductRepository {
                 error!("product count_active error: {e}");
                 AppError::Internal("Failed to load statistics.".into())
             })
+    }
+}
+
+fn map_admin_row(r: AdminProductRow) -> AdminProduct {
+    AdminProduct {
+        id:            r.id,
+        name:          r.name,
+        description:   r.description,
+        price:         r.price,
+        unit:          r.unit,
+        image_url:     r.image_url,
+        category:      r.category,
+        category_id:   r.category_id,
+        business_id:   r.business_id,
+        business_name: r.business_name,
+        is_active:     r.is_active,
+        created_on:    r.created_on.with_timezone(&Utc),
+        updated_on:    r.updated_on.with_timezone(&Utc),
     }
 }
 

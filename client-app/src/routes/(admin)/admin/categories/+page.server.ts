@@ -34,7 +34,7 @@ export const actions: Actions = {
         const svc = new AdminService(fetch, cookies.get('auth_token') ?? '');
         try {
             await svc.createCategory({ name, slug, category_type, icon, display_order });
-            return { success: true, message: `Đã tạo danh mục «${name}».` };
+            return { success: true };
         } catch (err) {
             if (err instanceof ServiceError) {
                 checkAuth(err.status);
@@ -57,7 +57,7 @@ export const actions: Actions = {
         const svc = new AdminService(fetch, cookies.get('auth_token') ?? '');
         try {
             await svc.updateCategory(id, { name, slug, icon, display_order });
-            return { success: true, message: 'Đã cập nhật danh mục.' };
+            return { success: true };
         } catch (err) {
             if (err instanceof ServiceError) {
                 checkAuth(err.status);
@@ -71,12 +71,13 @@ export const actions: Actions = {
         const data      = await request.formData();
         const id        = Number(data.get('id'));
         const is_active = data.get('is_active') === 'true';
+        const reason    = (data.get('reason') as string ?? '').trim() || null;
         if (!id) return fail(400, { error: 'ID không hợp lệ.' });
 
         const svc = new AdminService(fetch, cookies.get('auth_token') ?? '');
         try {
-            await svc.toggleCategoryActive(id, is_active);
-            return { success: true, message: `Đã ${is_active ? 'bật' : 'tắt'} danh mục.` };
+            await svc.toggleCategoryActive(id, is_active, reason);
+            return { success: true };
         } catch (err) {
             if (err instanceof ServiceError) {
                 checkAuth(err.status);

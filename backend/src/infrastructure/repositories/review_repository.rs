@@ -142,10 +142,11 @@ impl ReviewRepositoryTrait for ReviewRepository {
             })
     }
 
-    async fn toggle_visible(&self, id: i32, is_visible: bool) -> Result<(), AppError> {
+    async fn toggle_visible(&self, id: i32, is_visible: bool, admin_id: i32) -> Result<(), AppError> {
         let result = Review::update_many()
             .col_expr(review::Column::IsVisible, Expr::value(is_visible))
             .col_expr(review::Column::UpdatedOn, Expr::current_timestamp().into())
+            .col_expr(review::Column::UpdatedBy, Expr::value(Some(admin_id)))
             .filter(review::Column::Id.eq(id))
             .exec(self.db.as_ref())
             .await

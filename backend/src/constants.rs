@@ -40,6 +40,21 @@ pub const SERVER_BIND_ADDR: &str = "0.0.0.0:3000";
 pub const ROLE_ADMIN:    &str = "admin";
 pub const ROLE_PROVIDER: &str = "provider";
 
+// ── Permission codes (must match rows seeded in the init migration) ────────────
+/// Provider permissions — automatically assigned on registration.
+pub const PERM_PROVIDER_PROFILE_UPDATE: &str = "ProviderProfileUpdate";
+pub const PERM_PROVIDER_LISTING_CREATE: &str = "ProviderListingCreate";
+pub const PERM_PROVIDER_LISTING_UPDATE: &str = "ProviderListingUpdate";
+pub const PERM_PROVIDER_LISTING_DELETE: &str = "ProviderListingDelete";
+
+/// The full set granted to every newly registered provider.
+pub const PROVIDER_DEFAULT_PERMISSIONS: &[&str] = &[
+    PERM_PROVIDER_PROFILE_UPDATE,
+    PERM_PROVIDER_LISTING_CREATE,
+    PERM_PROVIDER_LISTING_UPDATE,
+    PERM_PROVIDER_LISTING_DELETE,
+];
+
 // ── Business rules ────────────────────────────────────────────────────────────
 pub const CATEGORY_TYPES:   &[&str] = &["service", "product"];
 pub const INQUIRY_STATUSES: &[&str] = &["new", "contacted", "closed", "spam"];

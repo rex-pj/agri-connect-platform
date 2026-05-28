@@ -59,7 +59,7 @@
 
   const features: FeatureCard[] = [
     {
-      href: "/admin/agri-connect",
+      href: "/admin/explore",
       icon: "fa-solid fa-store",
       title: "Nhà cung cấp",
       desc: "Xem danh sách, xác minh và quản lý nhà cung cấp trên nền tảng.",

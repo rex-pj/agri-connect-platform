@@ -1,7 +1,10 @@
 use async_trait::async_trait;
 
 use crate::{
-    domain::models::user::{ExistingUser, NewResetToken, NewUser, ResetToken, UserAdmin, UserAdminDetail, UserByEmail, UserCredentials, UserMe},
+    domain::models::{
+        role::UserRole,
+        user::{ExistingUser, NewResetToken, NewUser, ResetToken, UserAdmin, UserAdminDetail, UserByEmail, UserCredentials, UserMe},
+    },
     view_models::AppError,
 };
 
@@ -40,7 +43,7 @@ pub trait UserRepositoryTrait {
 
     async fn find_by_id_for_admin(&self, id: i32) -> Result<Option<UserAdminDetail>, AppError>;
 
-    async fn update_role(&self, user_id: i32, role_code: &str) -> Result<(), AppError>;
+    async fn update_role(&self, user_id: i32, role: &UserRole) -> Result<(), AppError>;
 
     async fn toggle_active(&self, user_id: i32, is_active: bool) -> Result<(), AppError>;
 

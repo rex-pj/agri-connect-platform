@@ -7,10 +7,14 @@ export const ROUTES = {
     FORGOT_PASSWORD: '/forgot-password',
     RESET_PASSWORD:  '/reset-password',
 
+    // ── First-run setup wizard ────────────────────────────────────────────────
+    SETUP:           '/setup',
+    SETUP_SEED:      '/setup/seed',
+
     // ── App (authenticated / public) ─────────────────────────────────────────
     ACCOUNT:          '/account',
     ACCOUNT_SECURITY: '/account#security',
-    AGRI_CONNECT:     '/agri-connect',
+    EXPLORE:          '/explore',
     PRODUCTS:         '/products',
     SERVICES:         '/services',
     SEARCH:           '/search',
@@ -33,10 +37,15 @@ export const ROUTES = {
         ROLE:        (id: string | number) => `/admin/roles/${id}`,
         CATEGORIES:  '/admin/categories',
         CATEGORY:    (id: string | number) => `/admin/categories/${id}`,
-        AGRI_CONNECT: '/admin/agri-connect',
-        PROVIDER:    (id: string | number) => `/admin/agri-connect/${id}`,
+        EXPLORE:     '/admin/explore',
+        PROVIDER:    (id: string | number) => `/admin/explore/${id}`,
         INQUIRIES:   '/admin/inquiries',
         REVIEWS:     '/admin/reviews',
+        LOCATIONS:   '/admin/locations',
+        LOCATION:    (id: string | number) => `/admin/locations/${id}`,
+        PRODUCTS:    '/admin/products',
+        SERVICES:    '/admin/services',
+        PERMISSIONS: '/admin/permissions',
         LOGOUT:      '/admin/logout',
     },
 };

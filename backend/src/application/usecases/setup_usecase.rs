@@ -5,7 +5,7 @@ use tracing::info;
 use crate::{
     domain::repositories::{
         business_repository_trait::BusinessRepositoryTrait,
-        category_repository_trait::CategoryRepositoryTrait,
+        seed_runner_trait::SeedRunnerTrait,
         user_repository_trait::UserRepositoryTrait,
     },
     view_models::{responses::SetupStatusDto, AppError},
@@ -13,18 +13,18 @@ use crate::{
 
 #[derive(Clone)]
 pub struct SetupUseCase {
-    business_repo:  Arc<dyn BusinessRepositoryTrait  + Send + Sync>,
-    category_repo:  Arc<dyn CategoryRepositoryTrait  + Send + Sync>,
-    user_repo:      Arc<dyn UserRepositoryTrait       + Send + Sync>,
+    seed_runner:   Arc<dyn SeedRunnerTrait    + Send + Sync>,
+    business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
+    user_repo:     Arc<dyn UserRepositoryTrait + Send + Sync>,
 }
 
 impl SetupUseCase {
     pub fn new(
-        business_repo: Arc<dyn BusinessRepositoryTrait  + Send + Sync>,
-        category_repo: Arc<dyn CategoryRepositoryTrait  + Send + Sync>,
-        user_repo:     Arc<dyn UserRepositoryTrait       + Send + Sync>,
+        seed_runner:   Arc<dyn SeedRunnerTrait    + Send + Sync>,
+        business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
+        user_repo:     Arc<dyn UserRepositoryTrait + Send + Sync>,
     ) -> Self {
-        Self { business_repo, category_repo, user_repo }
+        Self { seed_runner, business_repo, user_repo }
     }
 
     pub async fn get_status(&self) -> Result<SetupStatusDto, AppError> {
@@ -41,16 +41,14 @@ impl SetupUseCase {
         })
     }
 
-    pub async fn verify_seed(&self) -> Result<SetupStatusDto, AppError> {
-        let category_count = self.category_repo.count_active().await?;
-
-        if category_count == 0 {
-            return Err(AppError::Internal(
-                "Categories not initialised. Run migrations first.".into(),
-            ));
+    pub async fn run_seed(&self) -> Result<SetupStatusDto, AppError> {
+        if self.business_repo.count_all().await? > 0 {
+            return Err(AppError::Conflict("Demo data has already been seeded.".into()));
         }
 
-        info!("Setup check passed — {category_count} categories present");
+        self.seed_runner.run_seed().await?;
+
+        info!("Demo seed completed via SeedMigrator");
         self.get_status().await
     }
 }

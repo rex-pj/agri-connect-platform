@@ -4,7 +4,7 @@ use std::sync::Arc;
 // external
 use async_trait::async_trait;
 use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, PaginatorTrait,
+    ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult,
     QueryFilter, QueryOrder, QuerySelect, Set,
     sea_query::Expr,
 };
@@ -99,18 +99,6 @@ impl CategoryRepositoryTrait for CategoryRepository {
             })
     }
 
-    async fn count_active(&self) -> Result<i64, AppError> {
-        CategoryEntity::find()
-            .filter(category::Column::IsActive.eq(true))
-            .count(self.db.as_ref())
-            .await
-            .map(|c| c as i64)
-            .map_err(|e| {
-                error!("category count_active error: {e}");
-                AppError::Internal("Failed to read categories.".into())
-            })
-    }
-
     async fn list_admin(&self) -> Result<Vec<CategoryAdmin>, AppError> {
         CategoryEntity::find()
             .select_only()
@@ -180,6 +168,7 @@ impl CategoryRepositoryTrait for CategoryRepository {
             r#type:        Set(category.category_type),
             icon:          Set(category.icon),
             display_order: Set(category.display_order),
+            created_by:    Set(Some(category.created_by)),
             ..Default::default()
         };
 
@@ -199,6 +188,7 @@ impl CategoryRepositoryTrait for CategoryRepository {
             .col_expr(category::Column::Slug,         Expr::value(category.slug))
             .col_expr(category::Column::Icon,         Expr::value(category.icon))
             .col_expr(category::Column::DisplayOrder, Expr::value(category.display_order))
+            .col_expr(category::Column::UpdatedBy,    Expr::value(Some(category.updated_by)))
             .filter(category::Column::Id.eq(id))
             .exec(self.db.as_ref())
             .await
@@ -213,9 +203,10 @@ impl CategoryRepositoryTrait for CategoryRepository {
         Ok(())
     }
 
-    async fn toggle_active(&self, id: i32, is_active: bool) -> Result<(), AppError> {
+    async fn toggle_active(&self, id: i32, is_active: bool, admin_id: i32) -> Result<(), AppError> {
         let result = CategoryEntity::update_many()
-            .col_expr(category::Column::IsActive, Expr::value(is_active))
+            .col_expr(category::Column::IsActive,  Expr::value(is_active))
+            .col_expr(category::Column::UpdatedBy, Expr::value(Some(admin_id)))
             .filter(category::Column::Id.eq(id))
             .exec(self.db.as_ref())
             .await

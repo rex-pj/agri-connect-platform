@@ -2,6 +2,7 @@
   import { enhance } from "$app/forms";
   import Spinner from "$lib/components/atoms/Spinner.svelte";
   import AdminPageHeader from "$lib/components/molecules/AdminPageHeader.svelte";
+  import ConfirmModal from "$lib/components/molecules/ConfirmModal.svelte";
   import Button from "$lib/components/atoms/Button.svelte";
   import Heading from "$lib/components/atoms/Heading.svelte";
   import Text from "$lib/components/atoms/Text.svelte";
@@ -13,6 +14,8 @@
 
   let showCreate = $state(false);
   let editTarget = $state<AdminCategory | null>(null);
+  let confirmHide = $state<AdminCategory | null>(null);
+  let loadingShowId = $state<number | null>(null);
 
   let submittingCreate = $state(false);
   let submittingUpdate = $state(false);
@@ -151,27 +154,46 @@
                   >
                     <i class="fa-solid fa-pen-to-square"></i>
                   </Button>
-                  <form method="POST" action="?/toggle_active" use:enhance>
-                    <input type="hidden" name="id" value={cat.id} />
-                    <input
-                      type="hidden"
-                      name="is_active"
-                      value={String(!cat.is_active)}
-                    />
+                  {#if cat.is_active}
+                    <!-- Hide: requires confirmation with reason -->
                     <Button
-                      type="submit"
-                      class="btn-sm {cat.is_active
-                        ? 'btn-outline-secondary'
-                        : 'btn-outline-success'}"
-                      title={cat.is_active ? "Ẩn" : "Hiện"}
+                      type="button"
+                      class="btn-sm btn-outline-warning"
+                      title="Ẩn danh mục"
+                      onclick={() => confirmHide = cat}
                     >
-                      <i
-                        class="fa-solid {cat.is_active
-                          ? 'fa-eye-slash'
-                          : 'fa-eye'}"
-                      ></i>
+                      <i class="fa-solid fa-eye-slash me-1"></i>Ẩn
                     </Button>
-                  </form>
+                  {:else}
+                    <!-- Show: direct submit with loading indicator -->
+                    <form
+                      method="POST"
+                      action="?/toggle_active"
+                      use:enhance={() => {
+                        loadingShowId = cat.id;
+                        return async ({ update }) => {
+                          loadingShowId = null;
+                          await update();
+                        };
+                      }}
+                    >
+                      <input type="hidden" name="id" value={cat.id} />
+                      <input type="hidden" name="is_active" value="true" />
+                      <Button
+                        type="submit"
+                        class="btn-sm btn-outline-success"
+                        title="Hiện danh mục"
+                        disabled={loadingShowId === cat.id}
+                      >
+                        {#if loadingShowId === cat.id}
+                          <Spinner class="me-1" />
+                        {:else}
+                          <i class="fa-solid fa-eye me-1"></i>
+                        {/if}
+                        Hiện
+                      </Button>
+                    </form>
+                  {/if}
                 </div>
               </td>
             </tr>
@@ -199,6 +221,7 @@
           <button
             type="button"
             class="btn-close"
+            aria-label="Đóng"
             onclick={() => (showCreate = false)}
           ></button>
         </div>
@@ -275,7 +298,7 @@
                   name="icon"
                   type="text"
                   class="form-control"
-                  placeholder="vd: bi-water"
+                  placeholder="vd: fa-solid fa-water"
                 />
               </div>
             </div>
@@ -313,7 +336,7 @@
             <i class="fa-solid fa-pen-to-square text-primary me-2"></i>Sửa danh
             mục
           </Heading>
-          <button type="button" class="btn-close" onclick={closeEdit}></button>
+          <button type="button" class="btn-close" aria-label="Đóng" onclick={closeEdit}></button>
         </div>
         <form
           method="POST"
@@ -398,4 +421,22 @@
       </div>
     </div>
   </div>
+{/if}
+
+<!-- Hide confirmation modal -->
+{#if confirmHide}
+  <ConfirmModal
+    action="?/toggle_active"
+    hiddenFields={{ id: confirmHide.id, is_active: 'false' }}
+    title="Ẩn danh mục"
+    message="Danh mục này sẽ bị ẩn khỏi giao diện người dùng. Các dịch vụ / sản phẩm thuộc danh mục này sẽ không hiển thị."
+    targetName={confirmHide.name}
+    icon="fa-solid fa-eye-slash text-warning"
+    confirmLabel="Ẩn danh mục"
+    confirmClass="btn-outline-warning"
+    requireReason={true}
+    reasonLabel="Lý do ẩn danh mục"
+    reasonPlaceholder="vd: Danh mục không còn phù hợp, tạm ngưng hoạt động..."
+    onCancel={() => confirmHide = null}
+  />
 {/if}

@@ -37,39 +37,38 @@
   class:opacity-75={!product.is_available}
 >
   <!-- 1:1 image / placeholder -->
-  <div class="product-card__img position-relative">
-    <div class="ratio ratio-1x1">
-      {#if product.image_url}
-        <img
-          src={product.image_url}
-          alt={product.name}
-          class="object-fit-cover w-100 h-100"
-          loading="lazy"
-        />
-      {:else}
-        <div
-          class="product-card__placeholder d-flex flex-column align-items-center justify-content-center gap-1"
+  <a href={detailHref} class="product-card__img-link" tabindex="-1" aria-hidden="true">
+    <div class="product-card__img position-relative">
+      <div class="ratio ratio-1x1">
+        {#if product.image_url}
+          <img
+            src={product.image_url}
+            alt={product.name}
+            class="object-fit-cover w-100 h-100"
+            loading="lazy"
+          />
+        {:else}
+          <div
+            class="product-card__placeholder d-flex flex-column align-items-center justify-content-center gap-1"
+          >
+            <i class="fa-solid {icon} product-card__placeholder-icon"></i>
+            <span class="product-card__placeholder-cat">{product.category}</span>
+          </div>
+        {/if}
+      </div>
+
+      {#if !product.is_available}
+        <Badge variant="danger" class="position-absolute top-0 end-0 m-2"
+          >Hết hàng</Badge
         >
-          <i class="fa-solid {icon} product-card__placeholder-icon"></i>
-          <span class="product-card__placeholder-cat">{product.category}</span>
-        </div>
       {/if}
     </div>
-
-    {#if !product.is_available}
-      <Badge variant="danger" class="position-absolute top-0 end-0 m-2"
-        >Hết hàng</Badge
-      >
-    {/if}
-  </div>
+  </a>
 
   <div class="card-body d-flex flex-column p-3 gap-2">
-    <!-- Product name — stretched-link covers the whole card -->
+    <!-- Product name -->
     <Heading level={3} class="card-title fs-6 fw-bold mb-0 product-card__name">
-      <a
-        href={detailHref}
-        class="stretched-link text-decoration-none text-dark"
-      >
+      <a href={detailHref} class="text-decoration-none text-dark">
         {product.name}
       </a>
     </Heading>
@@ -95,16 +94,19 @@
     </p>
 
     <!-- CTA — raised above the stretched-link overlay -->
-    <Button href={telHref} variant="primary" class="mt-1 cta-btn">
-      <i class="fa-solid fa-phone"></i> Gọi tư vấn
+    <Button href={telHref} variant="primary" class="mt-1">
+      <i class="fa-solid fa-phone"></i> Gọi đặt hàng
     </Button>
   </div>
 </div>
 
 <style>
   .product-card {
-    position: relative;
     overflow: hidden;
+  }
+  .product-card__img-link {
+    display: block;
+    text-decoration: none;
   }
   .product-card__img {
     border-bottom: 1px solid var(--border, #e5e7eb);
@@ -149,9 +151,5 @@
   }
   .product-card__price-contact {
     color: #b45309;
-  }
-  .cta-btn {
-    position: relative;
-    z-index: 2;
   }
 </style>

@@ -4,10 +4,13 @@
   import { page } from "$app/state";
   import AdminPageHeader from "$lib/components/molecules/AdminPageHeader.svelte";
   import Button from "$lib/components/atoms/Button.svelte";
+  import Spinner from "$lib/components/atoms/Spinner.svelte";
   import Text from "$lib/components/atoms/Text.svelte";
   import type { PageData, ActionData } from "./$types";
 
   const { data, form }: { data: PageData; form: ActionData } = $props();
+
+  let loadingStatusId = $state<number | null>(null);
 
   function goToPage(p: number) {
     const params = new URLSearchParams(page.url.searchParams);
@@ -28,13 +31,6 @@
     contacted: "Đã liên hệ",
     closed: "Đã đóng",
     spam: "Spam",
-  };
-
-  const statusClass: Record<string, string> = {
-    new: "bg-primary-subtle text-primary border-primary-subtle",
-    contacted: "bg-success-subtle text-success border-success-subtle",
-    closed: "bg-secondary-subtle text-secondary border-secondary-subtle",
-    spam: "bg-danger-subtle text-danger border-danger-subtle",
   };
 </script>
 
@@ -121,8 +117,14 @@
                 <form
                   method="POST"
                   action="?/update_status"
-                  use:enhance
-                  class="d-inline-flex"
+                  use:enhance={() => {
+                    loadingStatusId = inq.id;
+                    return async ({ update }) => {
+                      loadingStatusId = null;
+                      await update();
+                    };
+                  }}
+                  class="d-inline-flex align-items-center gap-1"
                 >
                   <input type="hidden" name="id" value={inq.id} />
                   <select
@@ -130,6 +132,7 @@
                     class="form-select form-select-sm status-select"
                     onchange={(e) => e.currentTarget.form?.requestSubmit()}
                     value={inq.status}
+                    disabled={loadingStatusId === inq.id}
                   >
                     {#each Object.entries(statusLabel) as [val, label]}
                       <option value={val} selected={inq.status === val}
@@ -137,6 +140,9 @@
                       >
                     {/each}
                   </select>
+                  {#if loadingStatusId === inq.id}
+                    <Spinner />
+                  {/if}
                 </form>
               </td>
             </tr>

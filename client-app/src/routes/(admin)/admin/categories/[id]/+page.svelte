@@ -1,7 +1,10 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { enhance } from "$app/forms";
   import Button from "$lib/components/atoms/Button.svelte";
   import Heading from "$lib/components/atoms/Heading.svelte";
+  import Spinner from "$lib/components/atoms/Spinner.svelte";
+  import ConfirmModal from "$lib/components/molecules/ConfirmModal.svelte";
   import type { PageData, ActionData } from "./$types";
   import { ROUTES } from "$lib/routes";
 
@@ -9,15 +12,19 @@
 
   const c = $derived(data.category);
   let showEdit = $state(false);
-  let isActive = $state(data.category.is_active);
-  let editName = $state(data.category.name);
-  let editSlug = $state(data.category.slug);
-  let editIcon = $state(data.category.icon ?? "");
-  let editOrder = $state(data.category.display_order);
+  let confirmHide = $state(false);
+  let submittingEdit = $state(false);
+  let loadingShow = $state(false);
+  let isActive = $state(untrack(() => data.category.is_active));
+  let editName = $state(untrack(() => data.category.name));
+  let editSlug = $state(untrack(() => data.category.slug));
+  let editIcon = $state(untrack(() => data.category.icon ?? ""));
+  let editOrder = $state(untrack(() => data.category.display_order));
 
   $effect(() => {
     if ((form as any)?.success) {
       showEdit = false;
+      confirmHide = false;
       if ((form as any).message?.includes("hiện")) isActive = true;
       if ((form as any).message?.includes("ẩn")) isActive = false;
     }
@@ -33,12 +40,9 @@
 <nav aria-label="breadcrumb" class="mx-4 mt-4">
   <ol class="breadcrumb mb-0">
     <li class="breadcrumb-item">
-      <Button
-        href={ROUTES.ADMIN.CATEGORIES}
-        class="text-success fw-semibold text-decoration-none"
-      >
+      <a href={ROUTES.ADMIN.CATEGORIES} class="text-success fw-semibold text-decoration-none">
         <i class="fa-solid fa-tags me-1"></i>Danh mục
-      </Button>
+      </a>
     </li>
     <li class="breadcrumb-item active" aria-current="page">{c.name}</li>
   </ol>
@@ -111,18 +115,42 @@
       >
         <i class="fa-solid fa-pen-to-square me-1"></i>Sửa
       </Button>
-      <form method="POST" action="?/toggle_active" use:enhance>
-        <input type="hidden" name="is_active" value={String(!isActive)} />
+      {#if isActive}
+        <!-- Hide: requires confirmation with reason -->
         <Button
-          type="submit"
-          class="btn {isActive
-            ? 'btn-outline-secondary'
-            : 'btn-outline-success'}"
+          type="button"
+          class="btn btn-outline-warning"
+          onclick={() => (confirmHide = true)}
         >
-          <i class="fa-solid {isActive ? 'fa-eye-slash' : 'fa-eye'} me-1"></i>
-          {isActive ? "Ẩn" : "Hiện"}
+          <i class="fa-solid fa-eye-slash me-1"></i>Ẩn
         </Button>
-      </form>
+      {:else}
+        <!-- Show: direct submit with loading indicator -->
+        <form
+          method="POST"
+          action="?/toggle_active"
+          use:enhance={() => {
+            loadingShow = true;
+            return async ({ update }) => {
+              loadingShow = false;
+              await update();
+            };
+          }}
+        >
+          <input type="hidden" name="is_active" value="true" />
+          <Button
+            type="submit"
+            class="btn btn-outline-success"
+            disabled={loadingShow}
+          >
+            {#if loadingShow}
+              <Spinner class="me-1" />Đang xử lý…
+            {:else}
+              <i class="fa-solid fa-eye me-1"></i>Hiện
+            {/if}
+          </Button>
+        </form>
+      {/if}
     </div>
   </div>
 
@@ -186,77 +214,111 @@
             onclick={() => (showEdit = false)}
           ></button>
         </div>
-        <form method="POST" action="?/update" use:enhance>
-          <div class="modal-body d-flex flex-column gap-3">
-            <div class="row g-3">
-              <div class="col-8">
-                <label class="form-label fw-semibold" for="e_name"
-                  >Tên <span class="text-danger">*</span></label
+        <form
+          method="POST"
+          action="?/update"
+          use:enhance={() => {
+            submittingEdit = true;
+            return async ({ update }) => {
+              submittingEdit = false;
+              await update();
+            };
+          }}
+        >
+          <fieldset class="form-fieldset" disabled={submittingEdit}>
+            <div class="modal-body d-flex flex-column gap-3">
+              <div class="row g-3">
+                <div class="col-8">
+                  <label class="form-label fw-semibold" for="e_name"
+                    >Tên <span class="text-danger">*</span></label
+                  >
+                  <input
+                    id="e_name"
+                    name="name"
+                    type="text"
+                    class="form-control"
+                    bind:value={editName}
+                    required
+                  />
+                </div>
+                <div class="col-4">
+                  <label class="form-label fw-semibold" for="e_order"
+                    >Thứ tự</label
+                  >
+                  <input
+                    id="e_order"
+                    name="display_order"
+                    type="number"
+                    class="form-control"
+                    bind:value={editOrder}
+                    min="0"
+                  />
+                </div>
+              </div>
+              <div>
+                <label class="form-label fw-semibold" for="e_slug"
+                  >Slug <span class="text-danger">*</span></label
                 >
                 <input
-                  id="e_name"
-                  name="name"
+                  id="e_slug"
+                  name="slug"
                   type="text"
                   class="form-control"
-                  bind:value={editName}
+                  bind:value={editSlug}
                   required
                 />
               </div>
-              <div class="col-4">
-                <label class="form-label fw-semibold" for="e_order"
-                  >Thứ tự</label
+              <div>
+                <label class="form-label fw-semibold" for="e_icon"
+                  >Icon class</label
                 >
                 <input
-                  id="e_order"
-                  name="display_order"
-                  type="number"
+                  id="e_icon"
+                  name="icon"
+                  type="text"
                   class="form-control"
-                  bind:value={editOrder}
-                  min="0"
+                  bind:value={editIcon}
+                  placeholder="vd: bi-water, fa-solid fa-tractor"
                 />
               </div>
             </div>
-            <div>
-              <label class="form-label fw-semibold" for="e_slug"
-                >Slug <span class="text-danger">*</span></label
+            <div class="modal-footer">
+              <Button
+                type="button"
+                class="btn-outline-secondary"
+                onclick={() => (showEdit = false)}>Huỷ</Button
               >
-              <input
-                id="e_slug"
-                name="slug"
-                type="text"
-                class="form-control"
-                bind:value={editSlug}
-                required
-              />
+              <Button type="submit" class="btn-primary px-4">
+                {#if submittingEdit}
+                  <Spinner class="me-1" />Đang lưu…
+                {:else}
+                  <i class="fa-solid fa-floppy-disk me-1"></i>Lưu
+                {/if}
+              </Button>
             </div>
-            <div>
-              <label class="form-label fw-semibold" for="e_icon"
-                >Icon class</label
-              >
-              <input
-                id="e_icon"
-                name="icon"
-                type="text"
-                class="form-control"
-                bind:value={editIcon}
-                placeholder="vd: bi-water, fa-solid fa-tractor"
-              />
-            </div>
-          </div>
-          <div class="modal-footer">
-            <Button
-              type="button"
-              class="btn-outline-secondary"
-              onclick={() => (showEdit = false)}>Huỷ</Button
-            >
-            <Button type="submit" class="btn-primary px-4"
-              ><i class="fa-solid fa-floppy-disk me-1"></i>Lưu</Button
-            >
-          </div>
+          </fieldset>
         </form>
       </div>
     </div>
   </div>
+{/if}
+
+<!-- ── Hide confirmation modal ────────────────────────────────────────────── -->
+{#if confirmHide}
+  <ConfirmModal
+    action="?/toggle_active"
+    hiddenFields={{ is_active: 'false' }}
+    title="Ẩn danh mục"
+    message="Danh mục này sẽ bị ẩn khỏi giao diện người dùng. Các dịch vụ / sản phẩm thuộc danh mục này sẽ không hiển thị."
+    targetName={c.name}
+    icon="fa-solid fa-eye-slash text-warning"
+    confirmLabel="Ẩn danh mục"
+    confirmClass="btn-outline-warning"
+    requireReason={true}
+    reasonLabel="Lý do ẩn danh mục"
+    reasonPlaceholder="vd: Danh mục không còn phù hợp, tạm ngưng hoạt động..."
+    onCancel={() => (confirmHide = false)}
+  />
 {/if}
 
 <style>

@@ -2,12 +2,26 @@
   import { page } from "$app/state";
   import { ROUTES } from "$lib/routes";
 
-  const tabs = [
+  interface Props {
+    role?: string | null;
+  }
+
+  const { role = null }: Props = $props();
+
+  const staticTabs = [
     { href: ROUTES.HOME, icon: "fa-compass", label: "Khám phá" },
-    { href: ROUTES.AGRI_CONNECT, icon: "fa-location-dot", label: "Gần tôi" },
+    { href: ROUTES.EXPLORE, icon: "fa-location-dot", label: "Gần tôi" },
     { href: ROUTES.SERVICES, icon: "fa-border-all", label: "Dịch vụ" },
     { href: ROUTES.PRODUCTS, icon: "fa-bag-shopping", label: "Sản phẩm" },
   ];
+
+  const accountTab = $derived(
+    role === "provider"
+      ? { href: ROUTES.PROVIDER_DASHBOARD, icon: "fa-store", label: "Dashboard" }
+      : role === "admin"
+        ? { href: ROUTES.ADMIN.DASHBOARD, icon: "fa-shield-halved", label: "Admin" }
+        : { href: ROUTES.ACCOUNT, icon: "fa-circle-user", label: "Tài khoản" },
+  );
 
   function isActive(href: string): boolean {
     if (href === "/") return page.url.pathname === "/";
@@ -16,7 +30,7 @@
 </script>
 
 <nav class="bottom-nav" aria-label="Điều hướng chính">
-  {#each tabs as tab}
+  {#each staticTabs as tab}
     {@const active = isActive(tab.href)}
     <a
       href={tab.href}
@@ -30,6 +44,17 @@
       <span class="tab__label">{tab.label}</span>
     </a>
   {/each}
+  <a
+    href={accountTab.href}
+    class="tab"
+    class:tab--active={isActive(accountTab.href)}
+    aria-current={isActive(accountTab.href) ? "page" : undefined}
+  >
+    <span class="tab__pill">
+      <i class="fa-solid {accountTab.icon} tab__icon"></i>
+    </span>
+    <span class="tab__label">{accountTab.label}</span>
+  </a>
 </nav>
 
 <style>
@@ -87,7 +112,7 @@
   }
 
   .tab__label {
-    font-size: 0.75rem;
+    font-size: 0.85rem;
     font-weight: 600;
     letter-spacing: 0.01em;
     transition: color 0.2s ease;

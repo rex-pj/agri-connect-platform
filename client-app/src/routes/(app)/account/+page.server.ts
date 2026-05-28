@@ -1,31 +1,13 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { ServiceError, PASSWORD_MIN_LEN } from '$lib/server/api';
+import { ServiceError, PASSWORD_MIN_LEN, decodeJwtClaims } from '$lib/server/api';
 import { AuthService } from '$lib/server/services/auth.service';
 import { ROUTES } from '$lib/routes';
 
-interface TokenClaims {
-    role: string;
-    exp:  number;
-}
+export const load: PageServerLoad = async ({ fetch, parent }) => {
+    const { token } = await parent();
 
-function decodeToken(token: string): TokenClaims | null {
-    try {
-        const payload = token.split('.')[1];
-        const json    = Buffer.from(payload, 'base64url').toString('utf8');
-        const claims  = JSON.parse(json);
-        if (!claims.role || !claims.exp) return null;
-        return { role: claims.role, exp: claims.exp };
-    } catch {
-        return null;
-    }
-}
-
-export const load: PageServerLoad = async ({ fetch, cookies }) => {
-    const token = cookies.get('auth_token');
-    if (!token) throw redirect(302, ROUTES.LOGIN);
-
-    const claims = decodeToken(token);
+    const claims = decodeJwtClaims(token);
     if (!claims) throw redirect(302, ROUTES.LOGIN);
 
     const svc = new AuthService(fetch);

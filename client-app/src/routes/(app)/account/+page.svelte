@@ -1,6 +1,6 @@
 <script lang="ts">
   import { enhance } from "$app/forms";
-  import SubmitButton from "$lib/components/atoms/SubmitButton.svelte";
+  import SubmitButton from "$lib/components/molecules/SubmitButton.svelte";
   import Heading from "$lib/components/atoms/Heading.svelte";
   import Text from "$lib/components/atoms/Text.svelte";
   import Button from "$lib/components/atoms/Button.svelte";
@@ -11,6 +11,9 @@
 
   let submittingPw = $state(false);
   let submittingLogout = $state(false);
+  let showCur = $state(false);
+  let showNew = $state(false);
+  let showNew2 = $state(false);
 
   const roleLabel: Record<string, string> = {
     admin: "Quản trị viên",
@@ -70,45 +73,42 @@
         <i class="fa-solid fa-id-card me-2 text-success"></i>Thông tin tài khoản
       </Heading>
     </div>
-    <div class="card-body px-4 py-3 d-flex flex-column gap-3">
+    <div class="card-body px-4 py-3 d-flex flex-column gap-0">
       {#if data.fullName}
-        <div class="d-flex justify-content-between align-items-center">
-          <span class="text-muted small">Họ và tên</span>
-          <span class="fw-semibold text-end">{data.fullName}</span>
+        <div class="acct-row">
+          <span class="acct-row__label">Họ và tên</span>
+          <span class="acct-row__value">{data.fullName}</span>
         </div>
       {/if}
 
-      <div class="d-flex justify-content-between align-items-center">
-        <span class="text-muted small">Tên đăng nhập</span>
-        <span class="fw-semibold text-end">{data.username}</span>
+      <div class="acct-row">
+        <span class="acct-row__label">Tên đăng nhập</span>
+        <span class="acct-row__value">{data.username}</span>
       </div>
 
-      <div class="d-flex justify-content-between align-items-center">
-        <span class="text-muted small">Email</span>
-        <span class="fw-semibold text-end">{data.email}</span>
+      <div class="acct-row">
+        <span class="acct-row__label">Email</span>
+        <span class="acct-row__value">{data.email}</span>
       </div>
 
-      <div class="d-flex justify-content-between align-items-center">
-        <span class="text-muted small">Vai trò</span>
-        <span class="fw-semibold text-end">
-          <i
-            class="fa-solid {roleIcon[data.role] ??
-              'fa-user'} me-1 text-success"
-          ></i>
+      <div class="acct-row">
+        <span class="acct-row__label">Vai trò</span>
+        <span class="acct-row__value">
+          <i class="fa-solid {roleIcon[data.role] ?? 'fa-user'} me-1 text-success"></i>
           {roleLabel[data.role] ?? data.role}
         </span>
       </div>
 
-      <div class="d-flex justify-content-between align-items-center">
-        <span class="text-muted small">Ngày tham gia</span>
-        <span class="text-muted small text-end">
+      <div class="acct-row">
+        <span class="acct-row__label">Ngày tham gia</span>
+        <span class="acct-row__value acct-row__value--muted">
           <i class="fa-regular fa-calendar me-1"></i>{fmtDate(createdAt)}
         </span>
       </div>
 
-      <div class="d-flex justify-content-between align-items-center">
-        <span class="text-muted small">Phiên hết hạn</span>
-        <span class="text-muted small text-end">
+      <div class="acct-row">
+        <span class="acct-row__label">Phiên hết hạn</span>
+        <span class="acct-row__value acct-row__value--muted">
           <i class="fa-regular fa-clock me-1"></i>{fmtDate(expiresAt)}
         </span>
       </div>
@@ -120,6 +120,14 @@
           class="btn-outline-success btn-sm"
         >
           <i class="fa-solid fa-gauge me-2"></i>Quản lý hồ sơ doanh nghiệp
+        </Button>
+      {:else if data.role === "admin"}
+        <hr class="my-1" />
+        <Button
+          href={ROUTES.ADMIN.DASHBOARD}
+          class="btn-outline-danger btn-sm"
+        >
+          <i class="fa-solid fa-shield-halved me-2"></i>Quản trị hệ thống
         </Button>
       {/if}
     </div>
@@ -171,29 +179,40 @@
             <label class="form-label fw-semibold" for="cp_cur">
               Mật khẩu hiện tại <span class="text-danger">*</span>
             </label>
-            <input
-              id="cp_cur"
-              name="current_password"
-              type="password"
-              class="form-control"
-              autocomplete="current-password"
-              required
-            />
+            <div class="pw-wrap">
+              <input
+                id="cp_cur"
+                name="current_password"
+                type={showCur ? 'text' : 'password'}
+                class="form-control pw-input"
+                autocomplete="current-password"
+                required
+              />
+              <button type="button" class="pw-eye" onclick={() => (showCur = !showCur)} aria-label={showCur ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}>
+                <i class="fa-solid {showCur ? 'fa-eye-slash' : 'fa-eye'}"></i>
+              </button>
+            </div>
           </div>
           <div>
             <label class="form-label fw-semibold" for="cp_new">
               Mật khẩu mới <span class="text-danger">*</span>
             </label>
-            <input
-              id="cp_new"
-              name="new_password"
-              type="password"
-              class="form-control"
-              autocomplete="new-password"
-              minlength="8"
-              required
-            />
-            <div class="form-text">
+            <div class="pw-wrap">
+              <input
+                id="cp_new"
+                name="new_password"
+                type={showNew ? 'text' : 'password'}
+                class="form-control pw-input"
+                autocomplete="new-password"
+                minlength="8"
+                required
+              />
+              <button type="button" class="pw-eye" onclick={() => (showNew = !showNew)} aria-label={showNew ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}>
+                <i class="fa-solid {showNew ? 'fa-eye-slash' : 'fa-eye'}"></i>
+              </button>
+            </div>
+            <div class="pw-hint">
+              <i class="fa-solid fa-circle-info"></i>
               Ít nhất 8 ký tự · 1 chữ hoa · 1 chữ số · 1 ký tự đặc biệt
             </div>
           </div>
@@ -201,15 +220,20 @@
             <label class="form-label fw-semibold" for="cp_new2">
               Xác nhận mật khẩu mới <span class="text-danger">*</span>
             </label>
-            <input
-              id="cp_new2"
-              name="password2"
-              type="password"
-              class="form-control"
-              autocomplete="new-password"
-              minlength="8"
-              required
-            />
+            <div class="pw-wrap">
+              <input
+                id="cp_new2"
+                name="password2"
+                type={showNew2 ? 'text' : 'password'}
+                class="form-control pw-input"
+                autocomplete="new-password"
+                minlength="8"
+                required
+              />
+              <button type="button" class="pw-eye" onclick={() => (showNew2 = !showNew2)} aria-label={showNew2 ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}>
+                <i class="fa-solid {showNew2 ? 'fa-eye-slash' : 'fa-eye'}"></i>
+              </button>
+            </div>
           </div>
 
           <div class="d-flex justify-content-end">
@@ -258,6 +282,65 @@
 </div>
 
 <style>
+  .acct-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid #f0f4f1;
+    gap: 12px;
+  }
+  .acct-row:last-of-type { border-bottom: none; }
+  .acct-row__label {
+    font-size: 0.92rem;
+    color: #5e7a68;
+    flex-shrink: 0;
+  }
+  .acct-row__value {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #0c1a12;
+    text-align: right;
+    word-break: break-all;
+  }
+  .acct-row__value--muted {
+    font-weight: 400;
+    color: #5e7a68;
+  }
+
+  .pw-wrap {
+    position: relative;
+  }
+  .pw-input {
+    padding-right: 48px;
+  }
+  .pw-eye {
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 44px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: #5e7a68;
+    font-size: 1rem;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .pw-eye:hover { color: #065f46; }
+  .pw-hint {
+    margin-top: 6px;
+    font-size: 0.88rem;
+    color: #4b7a5e;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .pw-hint i { font-size: 0.82rem; flex-shrink: 0; }
+
   .acct-header {
     display: flex;
     align-items: center;

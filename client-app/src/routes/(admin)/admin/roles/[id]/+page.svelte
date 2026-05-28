@@ -28,9 +28,9 @@
 <nav aria-label="breadcrumb" class="mx-4 mt-4">
     <ol class="breadcrumb mb-0">
         <li class="breadcrumb-item">
-            <Button href={ROUTES.ADMIN.ROLES} class="text-success fw-semibold text-decoration-none">
+            <a href={ROUTES.ADMIN.ROLES} class="text-success fw-semibold text-decoration-none">
                 <i class="fa-solid fa-shield-halved me-1"></i>Vai trò
-            </Button>
+            </a>
         </li>
         <li class="breadcrumb-item active" aria-current="page">{r.name}</li>
     </ol>

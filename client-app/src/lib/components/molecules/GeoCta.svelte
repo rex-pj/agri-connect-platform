@@ -15,7 +15,7 @@
 </script>
 
 <Button
-  href={ROUTES.AGRI_CONNECT}
+  href={ROUTES.EXPLORE}
   class="geo-cta"
   aria-label="Tìm dịch vụ gần tôi"
 >

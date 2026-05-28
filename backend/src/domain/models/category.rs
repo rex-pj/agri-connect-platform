@@ -26,6 +26,7 @@ pub struct NewCategory {
     pub category_type: String,
     pub icon:          Option<String>,
     pub display_order: i16,
+    pub created_by:    i32,
 }
 
 pub struct UpdateCategory {
@@ -33,4 +34,5 @@ pub struct UpdateCategory {
     pub slug:          String,
     pub icon:          Option<String>,
     pub display_order: i16,
+    pub updated_by:    i32,
 }

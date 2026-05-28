@@ -3,11 +3,16 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import AdminPageHeader from "$lib/components/molecules/AdminPageHeader.svelte";
+  import ConfirmModal from "$lib/components/molecules/ConfirmModal.svelte";
   import Button from "$lib/components/atoms/Button.svelte";
+  import Spinner from "$lib/components/atoms/Spinner.svelte";
   import Text from "$lib/components/atoms/Text.svelte";
   import type { PageData, ActionData } from "./$types";
 
   const { data, form }: { data: PageData; form: ActionData } = $props();
+
+  let confirmHide = $state<{ id: number; reviewer_name: string } | null>(null);
+  let loadingShowId = $state<number | null>(null);
 
   function goToPage(p: number) {
     const params = new URLSearchParams(page.url.searchParams);
@@ -68,7 +73,7 @@
             <th>Nội dung</th>
             <th class="text-center">Tạo lúc</th>
             <th class="text-center">Cập nhật bởi</th>
-            <th class="text-center">Hiển thị</th>
+            <th class="text-center">Hành động</th>
           </tr>
         </thead>
         <tbody>
@@ -102,28 +107,46 @@
                 </div>
               </td>
               <td class="text-center">
-                <form method="POST" action="?/toggle_visible" use:enhance>
-                  <input type="hidden" name="id" value={review.id} />
-                  <input
-                    type="hidden"
-                    name="is_visible"
-                    value={String(!review.is_visible)}
-                  />
+                {#if review.is_visible}
+                  <!-- Hide: requires confirmation with reason -->
                   <Button
-                    type="submit"
-                    class="btn-sm {review.is_visible
-                      ? 'btn-outline-secondary'
-                      : 'btn-outline-success'}"
-                    title={review.is_visible ? "Ẩn đánh giá" : "Hiện đánh giá"}
+                    type="button"
+                    class="btn-sm btn-outline-warning"
+                    title="Ẩn đánh giá"
+                    onclick={() => confirmHide = { id: review.id, reviewer_name: review.reviewer_name }}
                   >
-                    <i
-                      class="fa-solid {review.is_visible
-                        ? 'fa-eye-slash'
-                        : 'fa-eye'} me-1"
-                    ></i>
-                    {review.is_visible ? "Ẩn" : "Hiện"}
+                    <i class="fa-solid fa-eye-slash me-1"></i>Ẩn
                   </Button>
-                </form>
+                {:else}
+                  <!-- Show: direct submit with loading indicator -->
+                  <form
+                    method="POST"
+                    action="?/toggle_visible"
+                    use:enhance={() => {
+                      loadingShowId = review.id;
+                      return async ({ update }) => {
+                        loadingShowId = null;
+                        await update();
+                      };
+                    }}
+                  >
+                    <input type="hidden" name="id" value={review.id} />
+                    <input type="hidden" name="is_visible" value="true" />
+                    <Button
+                      type="submit"
+                      class="btn-sm btn-outline-success"
+                      title="Hiện đánh giá"
+                      disabled={loadingShowId === review.id}
+                    >
+                      {#if loadingShowId === review.id}
+                        <Spinner class="me-1" />
+                      {:else}
+                        <i class="fa-solid fa-eye me-1"></i>
+                      {/if}
+                      Hiện
+                    </Button>
+                  </form>
+                {/if}
               </td>
             </tr>
           {/each}
@@ -162,6 +185,23 @@
       ><i class="fa-solid fa-chevron-right"></i></Button
     >
   </nav>
+{/if}
+
+{#if confirmHide}
+  <ConfirmModal
+    action="?/toggle_visible"
+    hiddenFields={{ id: confirmHide.id, is_visible: 'false' }}
+    title="Ẩn đánh giá"
+    message="Đánh giá này sẽ bị ẩn khỏi trang nhà cung cấp và không hiển thị cho người dùng."
+    targetName={confirmHide.reviewer_name}
+    icon="fa-solid fa-eye-slash text-warning"
+    confirmLabel="Ẩn đánh giá"
+    confirmClass="btn-outline-warning"
+    requireReason={true}
+    reasonLabel="Lý do ẩn đánh giá"
+    reasonPlaceholder="vd: Vi phạm quy định, nội dung không phù hợp..."
+    onCancel={() => confirmHide = null}
+  />
 {/if}
 
 <style>

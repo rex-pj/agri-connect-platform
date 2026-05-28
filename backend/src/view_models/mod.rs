@@ -50,8 +50,6 @@ impl From<AppError> for HandlerError {
 
 #[derive(Serialize)]
 pub struct HandlerErrorResponse {
-    pub status:       u16,
-    pub error:        String,
     pub message:      String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub field_errors: Option<HashMap<String, Vec<String>>>,
@@ -123,26 +121,39 @@ impl HandlerError {
         }
     }
 
+    /// Build a 400 response from `validator::ValidationErrors`.
+    ///
+    /// Error formatting is inlined here so `view_models` does not import from
+    /// the `validators` utility module (S3 — presentational layer must not
+    /// depend on cross-cutting validators).
     pub fn validation(msg: impl Into<String>, errors: validator::ValidationErrors) -> Self {
-        use crate::validators::ValidationHelper;
+        let field_errors = errors
+            .field_errors()
+            .into_iter()
+            .map(|(field, errs)| {
+                let msgs: Vec<String> = errs
+                    .iter()
+                    .map(|e| {
+                        e.message
+                            .as_ref()
+                            .map(|m| m.to_string())
+                            .unwrap_or_else(|| format!("Invalid value: {field}"))
+                    })
+                    .collect();
+                (field.to_string(), msgs)
+            })
+            .collect();
         Self {
-            status: StatusCode::BAD_REQUEST,
-            message: msg.into(),
-            field_errors: Some(ValidationHelper::flatten_errors(errors)),
+            status:       StatusCode::BAD_REQUEST,
+            message:      msg.into(),
+            field_errors: Some(field_errors),
         }
     }
 }
 
 impl IntoResponse for HandlerError {
     fn into_response(self) -> Response {
-        let code = self.status.as_u16();
-        let reason = self.status
-            .canonical_reason()
-            .unwrap_or("Unknown")
-            .to_owned();
         let body = Json(HandlerErrorResponse {
-            status:      code,
-            error:       reason,
             message:     self.message,
             field_errors: self.field_errors,
         });

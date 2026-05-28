@@ -53,12 +53,12 @@
 
 <nav class="app-nav">
   <div class="app-nav__top">
-    <Button href={ROUTES.HOME} class="app-nav__brand">
+    <a href={ROUTES.HOME} class="app-nav__brand">
       <span class="app-nav__logo">
         <i class="fa-solid fa-seedling"></i>
       </span>
       Agri-Connect
-    </Button>
+    </a>
 
     <div class="app-nav__actions">
       <button
@@ -91,6 +91,27 @@
 
           {#if profileOpen}
             <div class="app-nav__dropdown" role="menu">
+              {#if data.role === 'provider'}
+                <Button
+                  href={ROUTES.PROVIDER_DASHBOARD}
+                  class="app-nav__dropdown-item"
+                  role="menuitem"
+                >
+                  <i class="fa-solid fa-store"></i>
+                  Dashboard
+                </Button>
+                <div class="app-nav__dropdown-divider"></div>
+              {:else if data.role === 'admin'}
+                <Button
+                  href={ROUTES.ADMIN.DASHBOARD}
+                  class="app-nav__dropdown-item"
+                  role="menuitem"
+                >
+                  <i class="fa-solid fa-shield-halved"></i>
+                  Quản trị
+                </Button>
+                <div class="app-nav__dropdown-divider"></div>
+              {/if}
               <Button
                 href={ROUTES.ACCOUNT}
                 class="app-nav__dropdown-item"
@@ -202,7 +223,7 @@
   {@render children()}
 </main>
 
-<BottomNav />
+<BottomNav role={data.role} />
 
 <style>
   :global(html) {
@@ -246,6 +267,20 @@
 
   :global(.app-nav__brand:hover) {
     color: #fff;
+  }
+
+  :global(.app-nav__brand:active) {
+    color: #fff;
+    box-shadow: none;
+    outline: none;
+  }
+
+  :global(.app-nav__brand:focus-visible) {
+    color: #fff;
+    box-shadow: none;
+    outline: 2px solid rgba(255, 255, 255, 0.6);
+    outline-offset: 3px;
+    border-radius: 4px;
   }
 
   .app-nav__logo {

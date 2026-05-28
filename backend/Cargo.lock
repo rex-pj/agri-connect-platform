@@ -15,6 +15,7 @@ dependencies = [
 name = "agri_connect"
 version = "0.1.0"
 dependencies = [
+ "agri-connect-migration",
  "async-trait",
  "axum",
  "bcrypt",

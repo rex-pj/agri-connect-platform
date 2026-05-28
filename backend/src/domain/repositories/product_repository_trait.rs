@@ -1,12 +1,22 @@
 use async_trait::async_trait;
 
 use crate::{
-    domain::models::product::{NewProduct, ProductView, ProviderProduct, UpdateProduct},
+    domain::models::product::{AdminProduct, NewProduct, ProductView, ProviderProduct, UpdateProduct},
     view_models::AppError,
 };
 
 #[async_trait]
 pub trait ProductRepositoryTrait {
+    async fn list_admin(&self, provider_id: Option<i32>, limit: i64, offset: i64) -> Result<Vec<AdminProduct>, AppError>;
+
+    async fn count_admin(&self, provider_id: Option<i32>) -> Result<i64, AppError>;
+
+    async fn find_by_id_admin(&self, id: i32) -> Result<Option<AdminProduct>, AppError>;
+
+    async fn admin_toggle_active(&self, id: i32, is_active: bool) -> Result<bool, AppError>;
+
+    async fn admin_delete(&self, id: i32) -> Result<bool, AppError>;
+
     async fn browse(
         &self,
         category_id: Option<i32>,

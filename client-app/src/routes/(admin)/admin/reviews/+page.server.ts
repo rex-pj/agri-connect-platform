@@ -25,12 +25,13 @@ export const actions: Actions = {
         const data       = await request.formData();
         const id         = Number(data.get('id'));
         const is_visible = data.get('is_visible') === 'true';
+        const reason     = (data.get('reason') as string ?? '').trim() || null;
         if (!id) return fail(400, { error: 'ID không hợp lệ.' });
 
         const svc = new AdminService(fetch, cookies.get('auth_token') ?? '');
         try {
-            await svc.toggleReviewVisible(id, is_visible);
-            return { success: true, message: `Đã ${is_visible ? 'hiện' : 'ẩn'} đánh giá.` };
+            await svc.toggleReviewVisible(id, is_visible, reason);
+            return { success: true };
         } catch (err) {
             if (err instanceof ServiceError) {
                 checkAuth(err.status);

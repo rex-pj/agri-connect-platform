@@ -3,13 +3,18 @@
   import { page } from "$app/state";
   import ProductCard from "$lib/components/organisms/ProductCard.svelte";
   import PageHero from "$lib/components/molecules/PageHero.svelte";
-  import AlertBanner from "$lib/components/atoms/AlertBanner.svelte";
+  import AlertBanner from "$lib/components/molecules/AlertBanner.svelte";
   import EmptyState from "$lib/components/molecules/EmptyState.svelte";
   import PaginationNav from "$lib/components/molecules/PaginationNav.svelte";
+  import { PRODUCT_DISPLAY, DEFAULT_DISPLAY } from "$lib/categoryIcons";
   import { ROUTES } from "$lib/routes";
   import type { PageData } from "./$types";
 
   const { data }: { data: PageData } = $props();
+
+  const catDisplay = $derived(
+    data.currentCategory ? (PRODUCT_DISPLAY[data.currentCategory.slug] ?? DEFAULT_DISPLAY) : DEFAULT_DISPLAY
+  );
 
   function goToPage(p: number) {
     const params = new URLSearchParams(page.url.searchParams);
@@ -31,7 +36,8 @@
 
 <PageHero
   title={data.currentCategory?.name ?? "Danh mục sản phẩm"}
-  icon="fa-bag-shopping"
+  icon={catDisplay.icon}
+  sub={catDisplay.desc ? `${catDisplay.desc}${data.result.total > 0 ? ` · ${data.result.total} sản phẩm` : ''}` : undefined}
   backLink={{ href: ROUTES.PRODUCTS, label: "Sản phẩm" }}
 />
 

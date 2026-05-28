@@ -3,12 +3,20 @@ use std::sync::Arc;
 use crate::{
     application::{
         inputs::{CreateProductInput, UpdateProductInput, UpdateProfileInput},
-        shared::{validate_coordinates, validate_phone},
+        shared::{validate_coordinates, validate_phone, validate_price},
+    },
+    constants::{
+        PERM_PROVIDER_LISTING_CREATE, PERM_PROVIDER_LISTING_DELETE,
+        PERM_PROVIDER_LISTING_UPDATE, PERM_PROVIDER_PROFILE_UPDATE,
     },
     domain::{
-        models::product::{NewProduct, UpdateProduct},
+        models::{
+            product::{NewProduct, UpdateProduct},
+            role::UserRole,
+        },
         repositories::{
             business_repository_trait::BusinessRepositoryTrait,
+            permission_repository_trait::PermissionRepositoryTrait,
             product_repository_trait::ProductRepositoryTrait,
         },
     },
@@ -22,28 +30,46 @@ use crate::{
 
 #[derive(Clone)]
 pub struct ProviderDashboardUseCase {
-    business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
-    product_repo:  Arc<dyn ProductRepositoryTrait  + Send + Sync>,
+    business_repo:   Arc<dyn BusinessRepositoryTrait   + Send + Sync>,
+    product_repo:    Arc<dyn ProductRepositoryTrait    + Send + Sync>,
+    permission_repo: Arc<dyn PermissionRepositoryTrait + Send + Sync>,
 }
 
 impl ProviderDashboardUseCase {
     pub fn new(
-        business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
-        product_repo:  Arc<dyn ProductRepositoryTrait  + Send + Sync>,
+        business_repo:   Arc<dyn BusinessRepositoryTrait   + Send + Sync>,
+        product_repo:    Arc<dyn ProductRepositoryTrait    + Send + Sync>,
+        permission_repo: Arc<dyn PermissionRepositoryTrait + Send + Sync>,
     ) -> Self {
-        Self { business_repo, product_repo }
+        Self { business_repo, product_repo, permission_repo }
     }
+
+    async fn require_permission(
+        &self,
+        caller_role: &UserRole,
+        user_id: i32,
+        code: &str,
+    ) -> Result<(), AppError> {
+        if *caller_role == UserRole::Admin {
+            return Ok(());
+        }
+        if self.permission_repo.has_permission(user_id, code).await? {
+            Ok(())
+        } else {
+            Err(AppError::Forbidden(
+                "Bạn không có quyền thực hiện thao tác này.".into(),
+            ))
+        }
+    }
+
+    // ── Read (no permission required — viewing is always allowed) ─────────────
 
     pub async fn get_profile(&self, user_id: i32) -> Result<ProviderProfileDto, AppError> {
         let profile = self
             .business_repo
             .get_profile_by_user(user_id)
             .await?
-            .ok_or_else(|| {
-                AppError::NotFound(
-                    "Account is not linked to any business.".into(),
-                )
-            })?;
+            .ok_or_else(|| AppError::NotFound("Account is not linked to any business.".into()))?;
 
         Ok(ProviderProfileDto {
             id:          profile.id,
@@ -58,14 +84,33 @@ impl ProviderDashboardUseCase {
         })
     }
 
+    pub async fn list_products(&self, user_id: i32) -> Result<Vec<ProviderProductDto>, AppError> {
+        let products = self.product_repo.list_by_user(user_id).await?;
+
+        Ok(products
+            .into_iter()
+            .map(|p| ProviderProductDto {
+                id: p.id, name: p.name, description: p.description,
+                price: p.price, unit: p.unit, image_url: p.image_url,
+                category: p.category, category_id: p.category_id,
+                is_active: p.is_active, created_on: p.created_on,
+            })
+            .collect())
+    }
+
+    // ── Write (permission-gated) ───────────────────────────────────────────────
+
     pub async fn update_profile(
         &self,
-        input: UpdateProfileInput,
+        caller_role: &UserRole,
+        caller_id:   i32,
+        input:       UpdateProfileInput,
     ) -> Result<ProviderProfileDto, AppError> {
+        self.require_permission(caller_role, caller_id,PERM_PROVIDER_PROFILE_UPDATE)
+            .await?;
+
         if input.name.trim().is_empty() {
-            return Err(AppError::BadRequest(
-                "Business name must not be empty.".into(),
-            ));
+            return Err(AppError::BadRequest("Business name must not be empty.".into()));
         }
         validate_phone(&input.phone)?;
         if let (Some(lat), Some(lng)) = (input.lat, input.lng) {
@@ -84,9 +129,7 @@ impl ProviderDashboardUseCase {
             .await?;
 
         if !updated {
-            return Err(AppError::NotFound(
-                "Business not found for update.".into(),
-            ));
+            return Err(AppError::NotFound("Business not found for update.".into()));
         }
 
         if let (Some(lat), Some(lng)) = (input.lat, input.lng) {
@@ -97,29 +140,18 @@ impl ProviderDashboardUseCase {
         self.get_profile(input.user_id).await
     }
 
-    pub async fn list_products(&self, user_id: i32) -> Result<Vec<ProviderProductDto>, AppError> {
-        let products = self.product_repo.list_by_user(user_id).await?;
-
-        Ok(products
-            .into_iter()
-            .map(|p| ProviderProductDto {
-                id: p.id, name: p.name, description: p.description,
-                price: p.price, unit: p.unit, image_url: p.image_url,
-                category: p.category, category_id: p.category_id,
-                is_active: p.is_active, created_on: p.created_on,
-            })
-            .collect())
-    }
-
     pub async fn create_product(
         &self,
-        input: CreateProductInput,
+        caller_role: &UserRole,
+        caller_id:   i32,
+        input:       CreateProductInput,
     ) -> Result<ProviderProductDto, AppError> {
+        self.require_permission(caller_role, caller_id,PERM_PROVIDER_LISTING_CREATE)
+            .await?;
+
         let name = input.name.trim().to_owned();
         if name.is_empty() {
-            return Err(AppError::BadRequest(
-                "Product name must not be empty.".into(),
-            ));
+            return Err(AppError::BadRequest("Product name must not be empty.".into()));
         }
         validate_price(input.price)?;
 
@@ -132,9 +164,7 @@ impl ProviderDashboardUseCase {
             .business_repo
             .get_business_id_by_user(input.user_id)
             .await?
-            .ok_or_else(|| {
-                AppError::NotFound("Account is not linked to a business.".into())
-            })?;
+            .ok_or_else(|| AppError::NotFound("Account is not linked to a business.".into()))?;
 
         let new_id = self
             .product_repo
@@ -150,26 +180,25 @@ impl ProviderDashboardUseCase {
             })
             .await?;
 
-        let product = self
-            .product_repo
+        self.product_repo
             .find_provider_product_by_id(new_id)
             .await?
-            .ok_or_else(|| {
-                AppError::Internal("Product was created but could not be reloaded.".into())
-            })?;
-
-        Ok(map_provider_product(product))
+            .map(map_provider_product)
+            .ok_or_else(|| AppError::Internal("Product was created but could not be reloaded.".into()))
     }
 
     pub async fn update_product(
         &self,
-        input: UpdateProductInput,
+        caller_role: &UserRole,
+        caller_id:   i32,
+        input:       UpdateProductInput,
     ) -> Result<ProviderProductDto, AppError> {
+        self.require_permission(caller_role, caller_id,PERM_PROVIDER_LISTING_UPDATE)
+            .await?;
+
         let name = input.name.trim().to_owned();
         if name.is_empty() {
-            return Err(AppError::BadRequest(
-                "Product name must not be empty.".into(),
-            ));
+            return Err(AppError::BadRequest("Product name must not be empty.".into()));
         }
         validate_price(input.price)?;
 
@@ -198,23 +227,23 @@ impl ProviderDashboardUseCase {
             ));
         }
 
-        let product = self
-            .product_repo
+        self.product_repo
             .find_provider_product_by_id(input.product_id)
             .await?
-            .ok_or_else(|| {
-                AppError::Internal("Product was updated but could not be reloaded.".into())
-            })?;
-
-        Ok(map_provider_product(product))
+            .map(map_provider_product)
+            .ok_or_else(|| AppError::Internal("Product was updated but could not be reloaded.".into()))
     }
 
     pub async fn delete_product(
         &self,
-        product_id: i32,
-        user_id: i32,
+        caller_role: &UserRole,
+        caller_id:   i32,
+        product_id:  i32,
     ) -> Result<(), AppError> {
-        let deleted = self.product_repo.soft_delete(product_id, user_id).await?;
+        self.require_permission(caller_role, caller_id,PERM_PROVIDER_LISTING_DELETE)
+            .await?;
+
+        let deleted = self.product_repo.soft_delete(product_id, caller_id).await?;
 
         if !deleted {
             return Err(AppError::NotFound(
@@ -227,15 +256,6 @@ impl ProviderDashboardUseCase {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-fn validate_price(price: Option<i64>) -> Result<(), AppError> {
-    if let Some(p) = price {
-        if p <= 0 {
-            return Err(AppError::BadRequest("Product price must be greater than 0.".into()));
-        }
-    }
-    Ok(())
-}
 
 fn map_provider_product(p: crate::domain::models::product::ProviderProduct) -> ProviderProductDto {
     ProviderProductDto {

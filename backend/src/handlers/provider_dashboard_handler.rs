@@ -7,7 +7,7 @@ use axum::{
 use crate::{
     app_state::AppState,
     application::inputs::{CreateProductInput, UpdateProductInput, UpdateProfileInput},
-    middleware::auth::RequireProvider,
+    middleware::auth::RequireProviderOrAdmin,
     view_models::{
         requests::{CreateProductRequest, UpdateProductRequest, UpdateProfileRequest},
         HandlerError, HandlerResult,
@@ -19,7 +19,7 @@ pub struct ProviderDashboardHandler;
 impl ProviderDashboardHandler {
     /// GET /api/provider/profile
     pub async fn get_profile(
-        RequireProvider(caller): RequireProvider,
+        RequireProviderOrAdmin(caller): RequireProviderOrAdmin,
         State(state): State<AppState>,
     ) -> HandlerResult<impl axum::response::IntoResponse> {
         let result = state
@@ -34,22 +34,26 @@ impl ProviderDashboardHandler {
 
     /// PUT /api/provider/profile
     pub async fn update_profile(
-        RequireProvider(caller): RequireProvider,
+        RequireProviderOrAdmin(caller): RequireProviderOrAdmin,
         State(state): State<AppState>,
         Json(req): Json<UpdateProfileRequest>,
     ) -> HandlerResult<impl axum::response::IntoResponse> {
         let result = state
             .usecases
             .provider_dashboard
-            .update_profile(UpdateProfileInput {
-                user_id:     caller.id,
-                name:        req.name,
-                phone:       req.phone,
-                description: req.description,
-                address:     req.address,
-                lat:         req.lat,
-                lng:         req.lng,
-            })
+            .update_profile(
+                &caller.role,
+                caller.id,
+                UpdateProfileInput {
+                    user_id:     caller.id,
+                    name:        req.name,
+                    phone:       req.phone,
+                    description: req.description,
+                    address:     req.address,
+                    lat:         req.lat,
+                    lng:         req.lng,
+                },
+            )
             .await
             .map_err(HandlerError::from)?;
 
@@ -58,7 +62,7 @@ impl ProviderDashboardHandler {
 
     /// GET /api/provider/products
     pub async fn list_products(
-        RequireProvider(caller): RequireProvider,
+        RequireProviderOrAdmin(caller): RequireProviderOrAdmin,
         State(state): State<AppState>,
     ) -> HandlerResult<impl axum::response::IntoResponse> {
         let result = state
@@ -73,22 +77,26 @@ impl ProviderDashboardHandler {
 
     /// POST /api/provider/products
     pub async fn create_product(
-        RequireProvider(caller): RequireProvider,
+        RequireProviderOrAdmin(caller): RequireProviderOrAdmin,
         State(state): State<AppState>,
         Json(req): Json<CreateProductRequest>,
     ) -> HandlerResult<impl axum::response::IntoResponse> {
         let result = state
             .usecases
             .provider_dashboard
-            .create_product(CreateProductInput {
-                user_id:     caller.id,
-                category_id: req.category_id,
-                name:        req.name,
-                description: req.description,
-                price:       req.price,
-                unit:        req.unit,
-                image_url:   req.image_url,
-            })
+            .create_product(
+                &caller.role,
+                caller.id,
+                CreateProductInput {
+                    user_id:     caller.id,
+                    category_id: req.category_id,
+                    name:        req.name,
+                    description: req.description,
+                    price:       req.price,
+                    unit:        req.unit,
+                    image_url:   req.image_url,
+                },
+            )
             .await
             .map_err(HandlerError::from)?;
 
@@ -97,7 +105,7 @@ impl ProviderDashboardHandler {
 
     /// PUT /api/provider/products/{id}
     pub async fn update_product(
-        RequireProvider(caller): RequireProvider,
+        RequireProviderOrAdmin(caller): RequireProviderOrAdmin,
         State(state): State<AppState>,
         Path(id): Path<i32>,
         Json(req): Json<UpdateProductRequest>,
@@ -105,16 +113,20 @@ impl ProviderDashboardHandler {
         let result = state
             .usecases
             .provider_dashboard
-            .update_product(UpdateProductInput {
-                product_id:  id,
-                user_id:     caller.id,
-                category_id: req.category_id,
-                name:        req.name,
-                description: req.description,
-                price:       req.price,
-                unit:        req.unit,
-                image_url:   req.image_url,
-            })
+            .update_product(
+                &caller.role,
+                caller.id,
+                UpdateProductInput {
+                    product_id:  id,
+                    user_id:     caller.id,
+                    category_id: req.category_id,
+                    name:        req.name,
+                    description: req.description,
+                    price:       req.price,
+                    unit:        req.unit,
+                    image_url:   req.image_url,
+                },
+            )
             .await
             .map_err(HandlerError::from)?;
 
@@ -123,14 +135,14 @@ impl ProviderDashboardHandler {
 
     /// DELETE /api/provider/products/{id}
     pub async fn delete_product(
-        RequireProvider(caller): RequireProvider,
+        RequireProviderOrAdmin(caller): RequireProviderOrAdmin,
         State(state): State<AppState>,
         Path(id): Path<i32>,
     ) -> HandlerResult<impl axum::response::IntoResponse> {
         state
             .usecases
             .provider_dashboard
-            .delete_product(id, caller.id)
+            .delete_product(&caller.role, caller.id, id)
             .await
             .map_err(HandlerError::from)?;
 

@@ -9,10 +9,11 @@ use tower_http::{cors::CorsLayer, set_header::SetResponseHeaderLayer};
 use crate::{
     app_state::AppState,
     handlers::{
-        admin_handler::AdminHandler, agri_connect_handler::AgriConnectHandler,
+        admin_handler::AdminHandler, explore_handler::ExploreHandler,
         auth_handler::AuthHandler, health_handler::HealthHandler,
-        products_handler::ProductsHandler, provider_dashboard_handler::ProviderDashboardHandler,
-        role_handler::RoleHandler, setup_handler::SetupHandler, stats_handler::StatsHandler,
+        permission_handler::PermissionHandler, products_handler::ProductsHandler,
+        provider_dashboard_handler::ProviderDashboardHandler, role_handler::RoleHandler,
+        setup_handler::SetupHandler, stats_handler::StatsHandler,
     },
     middleware::rate_limit,
 };
@@ -57,47 +58,52 @@ impl AppRouting {
         // Contact form is rate-limited separately to prevent spam.
         let public_routes = Router::new()
             .route("/health", get(HealthHandler::health))
+            // GET /api/explore/providers — geo-search when lat+lng present, browse otherwise
             .route(
-                "/api/agri-connect/providers",
-                get(AgriConnectHandler::search_providers),
+                "/api/explore/providers",
+                get(ExploreHandler::list_providers),
             )
             .route(
-                "/api/agri-connect/providers/browse",
-                get(AgriConnectHandler::browse_providers),
+                "/api/explore/providers/{id}",
+                get(ExploreHandler::get_provider_by_id),
+            )
+            // /featured replaces the old /explore verb
+            .route(
+                "/api/explore/featured",
+                get(ExploreHandler::get_explore_data),
             )
             .route(
-                "/api/agri-connect/providers/{id}",
-                get(AgriConnectHandler::get_provider_by_id),
+                "/api/explore/categories",
+                get(ExploreHandler::get_categories),
             )
             .route(
-                "/api/agri-connect/explore",
-                get(AgriConnectHandler::get_explore_data),
+                "/api/explore/locations",
+                get(ExploreHandler::get_locations),
             )
+            // GET /api/explore/products — replaces the old /products/browse verb path
             .route(
-                "/api/agri-connect/categories",
-                get(AgriConnectHandler::get_categories),
-            )
-            .route(
-                "/api/agri-connect/products/browse",
+                "/api/explore/products",
                 get(ProductsHandler::browse_products),
             )
             .route(
-                "/api/agri-connect/products/{id}",
+                "/api/explore/products/{id}",
                 get(ProductsHandler::get_product_by_id),
             );
 
         let contact_routes = Router::new()
             .route(
-                "/api/agri-connect/contact",
-                post(AgriConnectHandler::contact_request),
+                "/api/explore/contact",
+                post(ExploreHandler::contact_request),
             )
             .layer(middleware::from_fn(rate_limit::enforce))
             .layer(Extension(public_write_limiter));
 
         // ── AUTH routes (no token required, rate-limited) ────────────────────
         let auth_routes = Router::new()
-            .route("/api/auth/login", post(AuthHandler::login))
-            .route("/api/auth/register", post(AuthHandler::register))
+            // /tokens replaces the old /login verb
+            .route("/api/auth/tokens", post(AuthHandler::login))
+            // POST /api/users replaces the old /auth/register verb
+            .route("/api/users", post(AuthHandler::register))
             .route(
                 "/api/auth/password-resets",
                 post(AuthHandler::forgot_password),
@@ -106,8 +112,9 @@ impl AppRouting {
                 "/api/auth/password-resets/{token}",
                 patch(AuthHandler::reset_password),
             )
+            // /setup replaces the old /initialize verb
             .route(
-                "/api/admin/initialize",
+                "/api/admin/setup",
                 post(AuthHandler::create_first_admin),
             )
             .layer(middleware::from_fn(rate_limit::enforce))
@@ -124,7 +131,7 @@ impl AppRouting {
         // ── ADMIN routes ─────────────────────────────────────────────────────
         let admin_routes = Router::new()
             .route("/api/setup/status", get(SetupHandler::get_status))
-            .route("/api/setup/data", post(SetupHandler::seed))
+            .route("/api/setup/seed", post(SetupHandler::seed))
             .route("/api/admin/stats", get(StatsHandler::get_stats))
             // Providers
             .route("/api/admin/providers", get(AdminHandler::list_providers))
@@ -151,7 +158,7 @@ impl AppRouting {
                 patch(AdminHandler::update_user_role),
             )
             .route(
-                "/api/admin/users/{id}/active",
+                "/api/admin/users/{id}/status",
                 patch(AdminHandler::toggle_user_active),
             )
             // Categories
@@ -166,7 +173,7 @@ impl AppRouting {
                 put(AdminHandler::update_category),
             )
             .route(
-                "/api/admin/categories/{id}/active",
+                "/api/admin/categories/{id}/status",
                 patch(AdminHandler::toggle_category_active),
             )
             // Inquiries
@@ -178,9 +185,45 @@ impl AppRouting {
             // Reviews
             .route("/api/admin/reviews", get(AdminHandler::list_reviews))
             .route(
-                "/api/admin/reviews/{id}/visible",
+                "/api/admin/reviews/{id}/visibility",
                 patch(AdminHandler::toggle_review_visible),
-            );
+            )
+            // Permissions (list all + per-user assignment)
+            .route("/api/admin/permissions", get(PermissionHandler::list_all))
+            .route(
+                "/api/admin/users/{id}/permissions",
+                get(PermissionHandler::list_by_user),
+            )
+            .route(
+                "/api/admin/users/{id}/permissions",
+                post(PermissionHandler::assign),
+            )
+            .route(
+                "/api/admin/users/{id}/permissions/{pid}",
+                delete(PermissionHandler::revoke),
+            )
+            // Locations
+            .route("/api/admin/locations", get(AdminHandler::list_locations))
+            .route("/api/admin/locations", post(AdminHandler::create_location))
+            .route("/api/admin/locations/{id}", get(AdminHandler::get_location))
+            .route("/api/admin/locations/{id}", put(AdminHandler::update_location))
+            .route(
+                "/api/admin/locations/{id}/status",
+                patch(AdminHandler::toggle_location_active),
+            )
+            .route("/api/admin/locations/{id}", delete(AdminHandler::delete_location))
+            // Products
+            .route("/api/admin/products", get(AdminHandler::list_products))
+            .route("/api/admin/products/{id}", get(AdminHandler::get_product))
+            .route("/api/admin/products/{id}/active", patch(AdminHandler::toggle_product_active))
+            .route("/api/admin/products/{id}", delete(AdminHandler::delete_product))
+            // Services
+            .route("/api/admin/services", get(AdminHandler::list_services))
+            .route("/api/admin/services", post(AdminHandler::create_service))
+            .route("/api/admin/services/{id}", get(AdminHandler::get_service))
+            .route("/api/admin/services/{id}", put(AdminHandler::update_service))
+            .route("/api/admin/services/{id}/active", patch(AdminHandler::toggle_service_active))
+            .route("/api/admin/services/{id}", delete(AdminHandler::delete_service));
 
         // ── PROVIDER routes ──────────────────────────────────────────────────
         let provider_routes = Router::new()

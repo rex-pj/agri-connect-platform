@@ -18,6 +18,9 @@
 <div class="page-hero"
     class:page-hero--detail={variant === 'detail'}
     class:page-hero--compact={variant === 'compact'}>
+    {#if icon}
+        <i class="fa-solid {icon} page-hero__watermark" aria-hidden="true"></i>
+    {/if}
     {#if backLink}
         <Button variant="ghost" size="sm" href={backLink.href} class="back-link">
             <i class="fa-solid fa-arrow-left"></i> {backLink.label}

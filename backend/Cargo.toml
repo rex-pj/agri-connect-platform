@@ -37,3 +37,7 @@ features = [
     "with-chrono",
     "macros",
 ]
+
+[dependencies.migration]
+package = "agri-connect-migration"
+path    = "migration"

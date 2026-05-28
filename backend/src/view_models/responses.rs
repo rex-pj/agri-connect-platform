@@ -1,6 +1,26 @@
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 
+// ── Location presets ──────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct LocationDto {
+    pub id:    i32,
+    pub label: String,
+    pub lat:   f64,
+    pub lng:   f64,
+}
+
+#[derive(Serialize)]
+pub struct AdminLocationDto {
+    pub id:            i32,
+    pub label:         String,
+    pub lat:           f64,
+    pub lng:           f64,
+    pub display_order: i32,
+    pub is_active:     bool,
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 #[derive(Serialize)]
@@ -15,6 +35,9 @@ pub struct MeResponse {
     pub username:   String,
     pub email:      String,
     pub full_name:  Option<String>,
+    /// The caller's role code, e.g. `"admin"` or `"provider"`.
+    /// Used by frontend layouts to gate access without a separate role endpoint.
+    pub role:       String,
     pub created_on: String,
 }
 
@@ -40,6 +63,7 @@ pub struct ProductBrowseResponse {
     pub items:       Vec<ProductDto>,
     pub total:       i64,
     pub page:        i64,
+    pub per_page:    i64,
     pub total_pages: i64,
 }
 
@@ -72,6 +96,7 @@ pub struct BrowseResponse {
     pub items:       Vec<BusinessBrowseDto>,
     pub total:       i64,
     pub page:        i64,
+    pub per_page:    i64,
     pub total_pages: i64,
 }
 
@@ -235,14 +260,12 @@ pub struct VerifyToggleDto {
     pub id:          i32,
     pub name:        String,
     pub is_verified: bool,
-    pub message:     String,
 }
 
 #[derive(Serialize)]
 pub struct AssignUserDto {
     pub business_id: i32,
     pub username:    String,
-    pub message:     String,
 }
 
 #[derive(Serialize)]
@@ -293,7 +316,51 @@ pub struct AdminPagedResponse<T: Serialize> {
     pub items:       Vec<T>,
     pub total:       i64,
     pub page:        i64,
+    pub per_page:    i64,
     pub total_pages: i64,
+}
+
+// ── Admin products ────────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct AdminProductDto {
+    pub id:            i32,
+    pub name:          String,
+    pub description:   Option<String>,
+    pub price:         Option<i64>,
+    pub unit:          Option<String>,
+    pub image_url:     Option<String>,
+    pub category:      String,
+    pub category_id:   i32,
+    pub business_id:   i32,
+    pub business_name: String,
+    pub is_active:     bool,
+    pub created_on:    DateTime<Utc>,
+    pub updated_on:    DateTime<Utc>,
+}
+
+// ── Admin services ────────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct AdminServiceDto {
+    pub id:            i32,
+    pub name:          String,
+    pub description:   Option<String>,
+    pub price_note:    Option<String>,
+    pub category:      String,
+    pub category_id:   i32,
+    pub business_id:   i32,
+    pub business_name: String,
+    pub is_active:     bool,
+    pub created_on:    DateTime<Utc>,
+    pub updated_on:    DateTime<Utc>,
+}
+
+// ── Inquiry ───────────────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct InquiryCreatedDto {
+    pub id: i32,
 }
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
@@ -315,4 +382,25 @@ pub struct RoleDto {
     pub name:        String,
     pub description: Option<String>,
     pub is_active:   bool,
+}
+
+// ── Permissions ───────────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct PermissionDto {
+    pub id:   i32,
+    pub code: String,
+    pub name: String,
+}
+
+impl PermissionDto {
+    pub fn from_model(m: crate::domain::models::permission::PermissionModel) -> Self {
+        Self { id: m.id, code: m.code, name: m.name }
+    }
+}
+
+#[derive(Serialize)]
+pub struct UserPermissionsDto {
+    pub user_id:     i32,
+    pub permissions: Vec<PermissionDto>,
 }

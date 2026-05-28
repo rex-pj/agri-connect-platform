@@ -4,7 +4,7 @@
     import { untrack } from 'svelte';
     import ProductCard   from '$lib/components/organisms/ProductCard.svelte';
     import PageHero      from '$lib/components/molecules/PageHero.svelte';
-    import AlertBanner   from '$lib/components/atoms/AlertBanner.svelte';
+    import AlertBanner   from '$lib/components/molecules/AlertBanner.svelte';
     import EmptyState    from '$lib/components/molecules/EmptyState.svelte';
     import PaginationNav from '$lib/components/molecules/PaginationNav.svelte';
     import { PRODUCT_DISPLAY, DEFAULT_DISPLAY } from '$lib/categoryIcons';
@@ -225,7 +225,13 @@
                 icon="fa-bag-shopping"
                 title="Không tìm thấy sản phẩm nào"
                 hint="Thử từ khóa khác hoặc xóa bộ lọc để xem tất cả sản phẩm."
-            />
+            >
+                {#snippet action()}
+                    <button type="button" class="btn-empty-reset" onclick={resetFilters}>
+                        <i class="fa-solid fa-xmark"></i> Xóa bộ lọc
+                    </button>
+                {/snippet}
+            </EmptyState>
         {:else}
             <EmptyState icon="fa-inbox" title="Chưa có sản phẩm nào" hint="Hãy thử chọn một danh mục bên trên." />
         {/if}
@@ -416,19 +422,19 @@
         display: inline-flex;
         align-items: center;
         gap: 5px;
-        padding: 5px 12px;
+        padding: 5px 14px;
         border-radius: 100px;
         border: 1.5px solid #d1e7d9;
         background: #f5f7f5;
         color: #4b7a5e;
-        font-size: 0.82rem;
+        font-size: 0.88rem;
         font-weight: 500;
         cursor: pointer;
         transition: background 0.15s, border-color 0.15s, color 0.15s;
         -webkit-tap-highlight-color: transparent;
         appearance: none;
         -webkit-appearance: none;
-        min-height: 34px;
+        min-height: 44px;
     }
 
     .chip:hover:not(.active) {
@@ -521,4 +527,21 @@
 
     .btn-apply:hover { background: #15803d; }
     .btn-apply:active { background: #166534; }
+
+    .btn-empty-reset {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 44px;
+        padding: 0 20px;
+        border: 1.5px solid #16a34a;
+        border-radius: 100px;
+        background: #fff;
+        color: #16a34a;
+        font-size: 0.92rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+    .btn-empty-reset:hover { background: #f0fdf4; }
 </style>

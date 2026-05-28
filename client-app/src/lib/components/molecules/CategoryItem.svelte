@@ -54,15 +54,15 @@
   .cat-icon {
     width: 56px;
     height: 56px;
-    background: var(--p50, #ecfdf5);
-    border-radius: 50%;
+    background: var(--p100, #d1fae5);
+    border-radius: 16px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.35rem;
+    font-size: 1.5rem;
     color: var(--p700, #065f46);
-    box-shadow: 0 1px 4px rgba(4, 120, 87, 0.10);
-    border: 2px solid rgba(4, 120, 87, 0.12);
+    box-shadow: 0 1px 4px rgba(4, 120, 87, 0.15);
+    border: 2px solid var(--p300, #6ee7b7);
     transition:
       transform 0.15s ease,
       background 0.15s ease,
@@ -73,10 +73,10 @@
   }
 
   :global(.btn.cat-item:hover) .cat-icon {
-    background: var(--p100, #d1fae5);
-    border-color: var(--p300, #6ee7b7);
+    background: var(--p200, #a7f3d0);
+    border-color: var(--p400, #34d399);
     transform: translateY(-2px);
-    box-shadow: 0 4px 10px rgba(4, 120, 87, 0.16);
+    box-shadow: 0 4px 10px rgba(4, 120, 87, 0.20);
   }
 
   :global(.btn.cat-item:active) .cat-icon {

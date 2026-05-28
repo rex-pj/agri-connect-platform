@@ -45,6 +45,7 @@ impl ProductUseCase {
             items: products.into_iter().map(map_product_dto).collect(),
             total,
             page,
+            per_page: PAGE_SIZE,
             total_pages: total_pages(total, PAGE_SIZE),
         })
     }

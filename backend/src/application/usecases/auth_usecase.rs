@@ -1,25 +1,29 @@
 use std::sync::Arc;
 
 use chrono::{Duration, Utc};
-use jsonwebtoken::{encode, Header};
 use rand::{rngs::OsRng, Rng};
-use tracing::error;
 
 use crate::{
-    application::shared::{bcrypt_hash, bcrypt_verify, validate_password, validate_username},
+    application::{
+        ports::{EmailService, PasswordHasher, TokenService},
+        shared::{validate_password, validate_phone, validate_username},
+    },
     constants::{
-        JWT_EXPIRY_HOURS, LOGIN_FAIL_MAX_ATTEMPTS, LOGIN_LOCK_MINUTES, PASSWORD_RESET_EXPIRY_HOURS,
-        ROLE_ADMIN, ROLE_PROVIDER,
+        LOGIN_FAIL_MAX_ATTEMPTS, LOGIN_LOCK_MINUTES, PASSWORD_RESET_EXPIRY_HOURS,
+        PROVIDER_DEFAULT_PERMISSIONS, ROLE_ADMIN, ROLE_PROVIDER,
     },
     domain::{
-        models::user::{NewResetToken, NewUser},
+        models::{
+            role::UserRole,
+            user::{NewResetToken, NewUser},
+        },
         repositories::{
             business_repository_trait::BusinessRepositoryTrait,
+            permission_repository_trait::PermissionRepositoryTrait,
+            role_repository_trait::RoleRepositoryTrait,
             user_repository_trait::UserRepositoryTrait,
         },
     },
-    infrastructure::email_service::EmailService,
-    middleware::auth::{encoding_key, Claims, Role},
     view_models::{
         responses::{LoginResponse, MeResponse},
         AppError,
@@ -30,22 +34,29 @@ use crate::{
 
 #[derive(Clone)]
 pub struct AuthUseCase {
-    user_repo: Arc<dyn UserRepositoryTrait + Send + Sync>,
-    business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
-    email: EmailService,
+    user_repo:       Arc<dyn UserRepositoryTrait       + Send + Sync>,
+    business_repo:   Arc<dyn BusinessRepositoryTrait   + Send + Sync>,
+    role_repo:       Arc<dyn RoleRepositoryTrait        + Send + Sync>,
+    permission_repo: Arc<dyn PermissionRepositoryTrait + Send + Sync>,
+    /// Email sending is an infrastructure concern injected via port.
+    email:           Arc<dyn EmailService>,
+    /// Password hashing is an infrastructure concern injected via port.
+    password_hasher: Arc<dyn PasswordHasher>,
+    /// Token minting is an infrastructure concern injected via port.
+    token_svc:       Arc<dyn TokenService>,
 }
 
 impl AuthUseCase {
     pub fn new(
-        user_repo: Arc<dyn UserRepositoryTrait + Send + Sync>,
-        business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
-        email: EmailService,
+        user_repo:       Arc<dyn UserRepositoryTrait       + Send + Sync>,
+        business_repo:   Arc<dyn BusinessRepositoryTrait   + Send + Sync>,
+        role_repo:       Arc<dyn RoleRepositoryTrait        + Send + Sync>,
+        permission_repo: Arc<dyn PermissionRepositoryTrait + Send + Sync>,
+        email:           Arc<dyn EmailService>,
+        password_hasher: Arc<dyn PasswordHasher>,
+        token_svc:       Arc<dyn TokenService>,
     ) -> Self {
-        Self {
-            user_repo,
-            business_repo,
-            email,
-        }
+        Self { user_repo, business_repo, role_repo, permission_repo, email, password_hasher, token_svc }
     }
 
     // ── Login ─────────────────────────────────────────────────────────────────
@@ -61,9 +72,14 @@ impl AuthUseCase {
             .user_repo
             .find_credentials_by_username(&username)
             .await?
-            .ok_or_else(|| {
-                AppError::Unauthorized("Invalid username or password.".into())
-            })?;
+            .ok_or_else(|| AppError::Unauthorized("Invalid username or password.".into()))?;
+
+        // Explicit domain invariant: inactive accounts cannot log in.
+        if !credentials.is_active {
+            return Err(AppError::Forbidden(
+                "This account has been deactivated. Please contact support.".into(),
+            ));
+        }
 
         if let Some(locked_until) = credentials.locked_until {
             if locked_until > Utc::now() {
@@ -73,31 +89,22 @@ impl AuthUseCase {
             }
         }
 
-        let ok = bcrypt_verify(&password, &credentials.password_hash).await?;
+        let ok = self.password_hasher.verify(&password, &credentials.password_hash).await?;
 
         if !ok {
             let _ = self
                 .user_repo
                 .record_failed_login(credentials.id, LOGIN_FAIL_MAX_ATTEMPTS, LOGIN_LOCK_MINUTES)
                 .await;
-            return Err(AppError::Unauthorized(
-                "Invalid username or password.".into(),
-            ));
+            return Err(AppError::Unauthorized("Invalid username or password.".into()));
         }
 
         let _ = self.user_repo.reset_failed_login(credentials.id).await;
 
-        let role = match credentials.role.as_str() {
-            ROLE_ADMIN => Role::Admin,
-            ROLE_PROVIDER => Role::Provider,
-            _ => {
-                return Err(AppError::Forbidden(
-                    "Account does not have access.".into(),
-                ))
-            }
-        };
+        let role = UserRole::from_code(&credentials.role)
+            .ok_or_else(|| AppError::Forbidden("Account does not have access.".into()))?;
 
-        let token = mint_token(credentials.id, &username, role)?;
+        let token = self.token_svc.mint(credentials.id, &username, &role)?;
         Ok(LoginResponse {
             token,
             username,
@@ -121,11 +128,13 @@ impl AuthUseCase {
             ));
         }
 
+        self.seed_reference_data().await?;
+
         let username = username.trim().to_lowercase();
         validate_username(&username)?;
         validate_password(&password)?;
 
-        let password_hash = bcrypt_hash(&password).await?;
+        let password_hash = self.password_hasher.hash(&password).await?;
         let email = email.trim().to_lowercase();
         let full_name = full_name.as_deref().unwrap_or("Administrator").to_owned();
 
@@ -141,12 +150,16 @@ impl AuthUseCase {
             .await
             .map_err(|_| AppError::Internal("Failed to create admin account.".into()))?;
 
-        let token = mint_token(user_id, &username, Role::Admin)?;
+        let token = self.token_svc.mint(user_id, &username, &UserRole::Admin)?;
         Ok(LoginResponse {
             token,
             username,
             role: ROLE_ADMIN.into(),
         })
+    }
+
+    async fn seed_reference_data(&self) -> Result<(), AppError> {
+        self.role_repo.seed_defaults().await
     }
 
     // ── Provider self-registration ────────────────────────────────────────────
@@ -167,15 +180,12 @@ impl AuthUseCase {
         let business_name = business_name.trim().to_owned();
         let business_phone = business_phone.trim().to_owned();
         if business_name.is_empty() {
-            return Err(AppError::BadRequest(
-                "Business name must not be empty.".into(),
-            ));
+            return Err(AppError::BadRequest("Business name must not be empty.".into()));
         }
         if business_phone.is_empty() {
-            return Err(AppError::BadRequest(
-                "Business phone must not be empty.".into(),
-            ));
+            return Err(AppError::BadRequest("Business phone must not be empty.".into()));
         }
+        validate_phone(&business_phone)?;
 
         let email = email.trim().to_lowercase();
 
@@ -186,7 +196,7 @@ impl AuthUseCase {
             return Err(AppError::Conflict("Email is already in use.".into()));
         }
 
-        let password_hash = bcrypt_hash(&password).await?;
+        let password_hash = self.password_hasher.hash(&password).await?;
 
         let user_id = self
             .user_repo
@@ -204,7 +214,14 @@ impl AuthUseCase {
             .create_for_registration(&business_name, &business_phone, user_id)
             .await?;
 
-        let token = mint_token(user_id, &username, Role::Provider)?;
+        // Grant every default provider permission so the new account can manage
+        // its profile and products immediately. Admins can revoke specific
+        // permissions later if needed.
+        self.permission_repo
+            .assign_defaults_to_user(user_id, PROVIDER_DEFAULT_PERMISSIONS)
+            .await?;
+
+        let token = self.token_svc.mint(user_id, &username, &UserRole::Provider)?;
         Ok(LoginResponse {
             token,
             username,
@@ -222,9 +239,10 @@ impl AuthUseCase {
             .ok_or_else(|| AppError::NotFound("Account not found.".into()))?;
 
         Ok(MeResponse {
-            username: user.username,
-            email: user.email,
-            full_name: user.full_name,
+            username:   user.username,
+            email:      user.email,
+            full_name:  user.full_name,
+            role:       user.role,
             created_on: user.created_on.to_rfc3339(),
         })
     }
@@ -245,15 +263,20 @@ impl AuthUseCase {
             .await?
             .ok_or_else(|| AppError::NotFound("Account not found.".into()))?;
 
-        let ok = bcrypt_verify(&current_password, &credentials.password_hash).await?;
-
-        if !ok {
-            return Err(AppError::Unauthorized(
-                "Current password is incorrect.".into(),
+        // Inactive accounts must not be allowed to change their password.
+        if !credentials.is_active {
+            return Err(AppError::Forbidden(
+                "This account has been deactivated.".into(),
             ));
         }
 
-        let new_hash = bcrypt_hash(&new_password).await?;
+        let ok = self.password_hasher.verify(&current_password, &credentials.password_hash).await?;
+
+        if !ok {
+            return Err(AppError::Unauthorized("Current password is incorrect.".into()));
+        }
+
+        let new_hash = self.password_hasher.hash(&new_password).await?;
         self.user_repo.update_password(user_id, &new_hash).await
     }
 
@@ -302,7 +325,7 @@ impl AuthUseCase {
                 )
             })?;
 
-        let new_hash = bcrypt_hash(&new_password).await?;
+        let new_hash = self.password_hasher.hash(&new_password).await?;
         self.user_repo
             .update_password(reset_token.user_id, &new_hash)
             .await?;
@@ -314,20 +337,6 @@ impl AuthUseCase {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-fn mint_token(user_id: i32, username: &str, role: Role) -> Result<String, AppError> {
-    let exp = (Utc::now() + Duration::hours(JWT_EXPIRY_HOURS)).timestamp() as usize;
-    let claims = Claims {
-        sub: user_id,
-        role,
-        username: username.to_owned(),
-        exp,
-    };
-    encode(&Header::default(), &claims, encoding_key()).map_err(|e| {
-        error!("JWT encode error: {e}");
-        AppError::Internal("Failed to create session.".into())
-    })
-}
 
 fn generate_token() -> String {
     let bytes: [u8; 32] = OsRng.gen();

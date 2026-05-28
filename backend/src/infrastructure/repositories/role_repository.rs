@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use sea_orm::{DatabaseConnection, EntityTrait, QueryOrder};
+use sea_orm::{ConnectionTrait, DatabaseConnection, EntityTrait, QueryOrder};
 use std::sync::Arc;
 use tracing::error;
 
@@ -59,6 +59,23 @@ impl RoleRepositoryTrait for RoleRepository {
             .map_err(|e| {
                 error!("role find_by_id error: {e}");
                 AppError::Internal("Failed to load role.".into())
+            })
+    }
+
+    async fn seed_defaults(&self) -> Result<(), AppError> {
+        self.db
+            .as_ref()
+            .execute_unprepared(
+                "INSERT INTO roles (code, name) VALUES
+                    ('admin',    'Quản trị viên'),
+                    ('provider', 'Nhà cung cấp')
+                 ON CONFLICT (code) DO NOTHING",
+            )
+            .await
+            .map(|_| ())
+            .map_err(|e| {
+                error!("role seed_defaults error: {e}");
+                AppError::Internal("Failed to seed roles.".into())
             })
     }
 }

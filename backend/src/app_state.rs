@@ -1,22 +1,22 @@
 use crate::application::usecases::{
     admin_usecase::AdminUseCase,
-    agri_connect_usecase::AgriConnectUseCase,
+    explore_usecase::ExploreUseCase,
     auth_usecase::AuthUseCase,
+    permission_usecase::PermissionUseCase,
     product_usecase::ProductUseCase,
     provider_dashboard_usecase::ProviderDashboardUseCase,
-    role_usecase::RoleUseCase,
     setup_usecase::SetupUseCase,
     stats_usecase::StatsUseCase,
 };
 
 #[derive(Clone)]
 pub struct UseCases {
-    pub agri_connect:       AgriConnectUseCase,
+    pub explore:            ExploreUseCase,
     pub product:            ProductUseCase,
     pub admin:              AdminUseCase,
     pub auth:               AuthUseCase,
+    pub permission:         PermissionUseCase,
     pub provider_dashboard: ProviderDashboardUseCase,
-    pub role:               RoleUseCase,
     pub setup:              SetupUseCase,
     pub stats:              StatsUseCase,
 }

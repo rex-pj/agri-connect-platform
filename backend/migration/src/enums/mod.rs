@@ -1,10 +1,12 @@
-pub mod agri_permission;
-pub mod role;
+pub mod permission;
 pub mod business;
 pub mod category;
 pub mod inquiry;
+pub mod location;
+pub mod password_reset_token;
 pub mod product;
 pub mod review;
+pub mod role;
 pub mod service;
 pub mod user;
 pub mod user_permission;

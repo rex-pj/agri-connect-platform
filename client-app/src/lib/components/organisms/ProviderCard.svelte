@@ -31,7 +31,10 @@
   );
 
   function fmtDist(m: number): string {
-    return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`;
+    if (m < 1000) return `${Math.round(m)} m`;
+    const km = m / 1000;
+    const mins = Math.round((km / 30) * 60); // ~30 km/h by motorbike
+    return `${km.toFixed(1)} km (~${mins} phút xe máy)`;
   }
 
   function districtFromAddress(addr: string | null): string | null {
@@ -102,11 +105,11 @@
     <div class="mt-auto pt-3 border-top">
       <div class="d-flex align-items-center justify-content-between mb-2">
         <small class="text-muted provider-card__phone-label"
-          >Số điện thoại</small
+          ><i class="fa-solid fa-phone me-1"></i>Điện thoại</small
         >
-        <strong class="fs-6" title="Nhấn để sao chép: {provider.phone}"
-          >{provider.phone}</strong
-        >
+        <a href={telHref} class="fw-bold fs-6 text-decoration-none provider-card__phone-num">
+          {provider.phone}
+        </a>
       </div>
       <div class="d-grid gap-2 d-md-flex">
         <Button href={telHref} variant="primary" class="flex-md-grow-1">
@@ -136,6 +139,13 @@
   }
   .provider-card__phone-label {
     font-size: 0.75rem;
+  }
+  .provider-card__phone-num {
+    color: var(--p700, #065f46);
+  }
+  .provider-card__phone-num:hover {
+    color: var(--p800, #064e3b);
+    text-decoration: underline !important;
   }
   .provider-card__chevron {
     font-size: 0.76rem;

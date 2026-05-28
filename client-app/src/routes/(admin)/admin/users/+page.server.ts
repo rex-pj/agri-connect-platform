@@ -46,7 +46,7 @@ export const actions: Actions = {
         const svc = new AdminService(fetch, cookies.get('auth_token') ?? '');
         try {
             await svc.updateUserRole(id, role_code);
-            return { success: true, message: 'Đã cập nhật vai trò người dùng.' };
+            return { success: true };
         } catch (err) {
             if (err instanceof ServiceError) {
                 checkAuth(err.status);
@@ -60,12 +60,13 @@ export const actions: Actions = {
         const data      = await request.formData();
         const id        = Number(data.get('id'));
         const is_active = data.get('is_active') === 'true';
+        const reason    = (data.get('reason') as string ?? '').trim() || null;
         if (!id) return fail(400, { error: 'ID không hợp lệ.' });
 
         const svc = new AdminService(fetch, cookies.get('auth_token') ?? '');
         try {
-            await svc.toggleUserActive(id, is_active);
-            return { success: true, message: `Đã ${is_active ? 'kích hoạt' : 'vô hiệu hoá'} tài khoản.` };
+            await svc.toggleUserActive(id, is_active, reason);
+            return { success: true };
         } catch (err) {
             if (err instanceof ServiceError) {
                 checkAuth(err.status);

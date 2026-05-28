@@ -47,7 +47,7 @@ struct InquiryAdminRow {
 
 #[async_trait]
 impl InquiryRepositoryTrait for InquiryRepository {
-    async fn create(&self, inquiry: NewInquiry) -> Result<(), AppError> {
+    async fn create(&self, inquiry: NewInquiry) -> Result<i32, AppError> {
         let new_inquiry = inquiry::ActiveModel {
             business_id:     Set(inquiry.business_id),
             service_id:      Set(inquiry.service_id),
@@ -61,7 +61,7 @@ impl InquiryRepositoryTrait for InquiryRepository {
         Inquiry::insert(new_inquiry)
             .exec(self.db.as_ref())
             .await
-            .map(|_| ())
+            .map(|r| r.last_insert_id)
             .map_err(|e| {
                 error!("inquiry create error: {e}");
                 AppError::Internal("Failed to save contact request.".into())
@@ -163,10 +163,11 @@ impl InquiryRepositoryTrait for InquiryRepository {
             })
     }
 
-    async fn update_status(&self, id: i32, status: &str) -> Result<(), AppError> {
+    async fn update_status(&self, id: i32, status: &str, admin_id: i32) -> Result<(), AppError> {
         let result = Inquiry::update_many()
-            .col_expr(inquiry::Column::Status, Expr::value(status.to_string()))
+            .col_expr(inquiry::Column::Status,    Expr::value(status.to_string()))
             .col_expr(inquiry::Column::UpdatedOn, Expr::current_timestamp().into())
+            .col_expr(inquiry::Column::UpdatedBy, Expr::value(Some(admin_id)))
             .filter(inquiry::Column::Id.eq(id))
             .exec(self.db.as_ref())
             .await

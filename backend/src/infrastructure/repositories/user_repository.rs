@@ -13,9 +13,12 @@ use tracing::error;
 
 use crate::{
     domain::{
-        models::user::{
-            ExistingUser, NewResetToken, NewUser, ResetToken, UserAdmin, UserAdminDetail,
-            UserByEmail, UserCredentials, UserMe,
+        models::{
+            role::UserRole,
+            user::{
+                ExistingUser, NewResetToken, NewUser, ResetToken, UserAdmin, UserAdminDetail,
+                UserByEmail, UserCredentials, UserMe,
+            },
         },
         repositories::user_repository_trait::UserRepositoryTrait,
     },
@@ -40,17 +43,21 @@ impl UserRepository {
 
 #[derive(FromQueryResult)]
 struct CredentialsRow {
-    id: i32,
+    id:            i32,
     password_hash: String,
-    role: String,
-    locked_until: Option<DateTimeWithTimeZone>,
+    role:          String,
+    /// Fetched explicitly so the application layer can enforce the
+    /// "inactive accounts may not log in" invariant — not a silent SQL filter.
+    is_active:     bool,
+    locked_until:  Option<DateTimeWithTimeZone>,
 }
 
 #[derive(FromQueryResult)]
 struct UserMeRow {
-    username: String,
-    email: String,
-    full_name: Option<String>,
+    username:   String,
+    email:      String,
+    full_name:  Option<String>,
+    role_code:  String,
     created_on: DateTimeWithTimeZone,
 }
 
@@ -93,25 +100,29 @@ impl UserRepositoryTrait for UserRepository {
         &self,
         username: &str,
     ) -> Result<Option<UserCredentials>, AppError> {
+        // Note: `is_active` is NOT filtered here; the use case enforces the
+        // "inactive accounts may not log in" invariant explicitly so the
+        // business rule is visible at the application layer.
         UserEntity::find()
             .select_only()
             .column(user::Column::Id)
             .column(user::Column::PasswordHash)
+            .column(user::Column::IsActive)
             .column(user::Column::LockedUntil)
             .column_as(role::Column::Code, "role")
             .join(JoinType::InnerJoin, user::Relation::Role.def())
             .filter(user::Column::Username.eq(username))
-            .filter(user::Column::IsActive.eq(true))
             .filter(user::Column::DeletedAt.is_null())
             .into_model::<CredentialsRow>()
             .one(self.db.as_ref())
             .await
             .map(|opt| {
                 opt.map(|r| UserCredentials {
-                    id: r.id,
+                    id:            r.id,
                     password_hash: r.password_hash,
-                    role: r.role,
-                    locked_until: r.locked_until.map(|t| t.with_timezone(&Utc)),
+                    role:          r.role,
+                    is_active:     r.is_active,
+                    locked_until:  r.locked_until.map(|t| t.with_timezone(&Utc)),
                 })
             })
             .map_err(|e| {
@@ -215,14 +226,14 @@ impl UserRepositoryTrait for UserRepository {
             .column(user::Column::CreatedOn)
             .column(user::Column::UpdatedOn)
             .expr_as(
-                Expr::cust("(SELECT u2.username FROM users u2 WHERE u2.id = \"user\".created_by)"),
+                Expr::cust("(SELECT u2.username FROM users u2 WHERE u2.id = created_by)"),
                 "created_by_name",
             )
             .expr_as(
-                Expr::cust("(SELECT u2.username FROM users u2 WHERE u2.id = \"user\".updated_by)"),
+                Expr::cust("(SELECT u2.username FROM users u2 WHERE u2.id = updated_by)"),
                 "updated_by_name",
             )
-            .join(JoinType::InnerJoin, user::Relation::Role.def())
+            .join(JoinType::LeftJoin, user::Relation::Role.def())
             .filter(user::Column::DeletedAt.is_null())
             .order_by_asc(user::Column::Id)
             .limit(limit as u64)
@@ -288,11 +299,11 @@ impl UserRepositoryTrait for UserRepository {
             })
     }
 
-    async fn update_role(&self, user_id: i32, role_code: &str) -> Result<(), AppError> {
+    async fn update_role(&self, user_id: i32, role: &UserRole) -> Result<(), AppError> {
         let db = self.db.as_ref();
 
         let role_model = Role::find()
-            .filter(role::Column::Code.eq(role_code))
+            .filter(role::Column::Code.eq(role.as_code()))
             .one(db)
             .await
             .map_err(|e| {
@@ -343,6 +354,8 @@ impl UserRepositoryTrait for UserRepository {
             .column(user::Column::Email)
             .column(user::Column::FullName)
             .column(user::Column::CreatedOn)
+            .column_as(role::Column::Code, "role_code")
+            .join(JoinType::InnerJoin, user::Relation::Role.def())
             .filter(user::Column::Id.eq(user_id))
             .filter(user::Column::IsActive.eq(true))
             .filter(user::Column::DeletedAt.is_null())
@@ -351,9 +364,10 @@ impl UserRepositoryTrait for UserRepository {
             .await
             .map(|opt| {
                 opt.map(|r| UserMe {
-                    username: r.username,
-                    email: r.email,
-                    full_name: r.full_name,
+                    username:   r.username,
+                    email:      r.email,
+                    full_name:  r.full_name,
+                    role:       r.role_code,
                     created_on: r.created_on.with_timezone(&Utc),
                 })
             })
@@ -368,21 +382,22 @@ impl UserRepositoryTrait for UserRepository {
             .select_only()
             .column(user::Column::Id)
             .column(user::Column::PasswordHash)
+            .column(user::Column::IsActive)
             .column(user::Column::LockedUntil)
             .column_as(role::Column::Code, "role")
             .join(JoinType::InnerJoin, user::Relation::Role.def())
             .filter(user::Column::Id.eq(id))
-            .filter(user::Column::IsActive.eq(true))
             .filter(user::Column::DeletedAt.is_null())
             .into_model::<CredentialsRow>()
             .one(self.db.as_ref())
             .await
             .map(|opt| {
                 opt.map(|r| UserCredentials {
-                    id: r.id,
+                    id:            r.id,
                     password_hash: r.password_hash,
-                    role: r.role,
-                    locked_until: r.locked_until.map(|t| t.with_timezone(&Utc)),
+                    role:          r.role,
+                    is_active:     r.is_active,
+                    locked_until:  r.locked_until.map(|t| t.with_timezone(&Utc)),
                 })
             })
             .map_err(|e| {

@@ -11,6 +11,7 @@ pub struct SetupHandler;
 impl SetupHandler {
     /// GET /api/setup/status
     pub async fn get_status(
+        RequireAdmin(_admin): RequireAdmin,
         State(state): State<AppState>,
     ) -> HandlerResult<impl axum::response::IntoResponse> {
         let result = state
@@ -23,7 +24,7 @@ impl SetupHandler {
         Ok(Json(result))
     }
 
-    /// POST /api/setup/data — requires admin JWT
+    /// POST /api/setup/seed — requires admin JWT; idempotent guard inside use case
     pub async fn seed(
         RequireAdmin(_admin): RequireAdmin,
         State(state): State<AppState>,
@@ -31,7 +32,7 @@ impl SetupHandler {
         let result = state
             .usecases
             .setup
-            .verify_seed()
+            .run_seed()
             .await
             .map_err(HandlerError::from)?;
 

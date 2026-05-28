@@ -95,3 +95,30 @@ export async function parseServiceError(res: Response, fallback: string): Promis
 }
 
 export type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+// ── JWT helpers ───────────────────────────────────────────────────────────────
+
+/** Extracts the `role` claim from a JWT without verifying the signature. */
+export function decodeJwtRole(token: string): string | null {
+    try {
+        const payload = token.split('.')[1];
+        const json = Buffer.from(payload, 'base64url').toString('utf8');
+        const claims = JSON.parse(json) as Record<string, unknown>;
+        return typeof claims.role === 'string' ? claims.role : null;
+    } catch {
+        return null;
+    }
+}
+
+/** Extracts `role` and `exp` from a JWT without verifying the signature. */
+export function decodeJwtClaims(token: string): { role: string; exp: number } | null {
+    try {
+        const payload = token.split('.')[1];
+        const json = Buffer.from(payload, 'base64url').toString('utf8');
+        const claims = JSON.parse(json) as Record<string, unknown>;
+        if (typeof claims.role !== 'string' || typeof claims.exp !== 'number') return null;
+        return { role: claims.role, exp: claims.exp };
+    } catch {
+        return null;
+    }
+}

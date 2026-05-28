@@ -15,7 +15,7 @@ impl RoleHandler {
         RequireAdmin(_admin): RequireAdmin,
         State(state): State<AppState>,
     ) -> HandlerResult<impl axum::response::IntoResponse> {
-        let result = state.usecases.role.list().await.map_err(HandlerError::from)?;
+        let result = state.usecases.admin.list_roles().await.map_err(HandlerError::from)?;
         Ok(Json(result))
     }
 
@@ -25,7 +25,7 @@ impl RoleHandler {
         State(state): State<AppState>,
         Path(id): Path<i32>,
     ) -> HandlerResult<impl axum::response::IntoResponse> {
-        let result = state.usecases.role.get_by_id(id).await.map_err(HandlerError::from)?;
+        let result = state.usecases.admin.get_role_by_id(id).await.map_err(HandlerError::from)?;
         Ok(Json(result))
     }
 }

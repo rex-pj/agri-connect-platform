@@ -12,6 +12,8 @@ export interface MeResponse {
     username:   string;
     email:      string;
     full_name:  string | null;
+    /** Role code from the DB — `"admin"` or `"provider"`. */
+    role:       string;
     created_on: string;
 }
 
@@ -35,7 +37,7 @@ export class AuthService {
     }
 
     async login(username: string, password: string): Promise<LoginResult> {
-        const res = await this.fetch(`${API_BASE}/api/auth/login`, {
+        const res = await this.fetch(`${API_BASE}/api/auth/tokens`, {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
             body:    JSON.stringify({ username, password }),
@@ -52,7 +54,7 @@ export class AuthService {
         business_name:  string;
         business_phone: string;
     }): Promise<LoginResult> {
-        const res = await this.fetch(`${API_BASE}/api/auth/register`, {
+        const res = await this.fetch(`${API_BASE}/api/users`, {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
             body:    JSON.stringify(data),
@@ -67,7 +69,7 @@ export class AuthService {
         password:  string;
         full_name: string | null;
     }): Promise<LoginResult> {
-        const res = await this.fetch(`${API_BASE}/api/admin/initialize`, {
+        const res = await this.fetch(`${API_BASE}/api/admin/setup`, {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
             body:    JSON.stringify(data),

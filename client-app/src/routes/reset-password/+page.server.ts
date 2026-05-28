@@ -1,4 +1,4 @@
-import { fail, redirect, isRedirect } from '@sveltejs/kit';
+import { error, fail, redirect, isRedirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { ServiceError, PASSWORD_MIN_LEN } from '$lib/server/api';
 import { AuthService } from '$lib/server/services/auth.service';
@@ -32,7 +32,7 @@ export const actions: Actions = {
         } catch (err) {
             if (isRedirect(err)) throw err;
             if (err instanceof ServiceError) return fail(err.status, { token, error: err.message });
-            return fail(503, { token, error: 'Không thể kết nối máy chủ. Vui lòng thử lại.' });
+            throw error(503, 'Không thể kết nối máy chủ. Vui lòng thử lại.');
         }
     },
 };

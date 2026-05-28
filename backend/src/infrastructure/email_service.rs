@@ -1,8 +1,11 @@
+use async_trait::async_trait;
 use lettre::{
     message::header::ContentType, transport::smtp::authentication::Credentials, AsyncSmtpTransport,
     AsyncTransport, Message, Tokio1Executor,
 };
 use tracing::{error, info, warn};
+
+use crate::application::ports::EmailService as EmailServiceTrait;
 
 /// Thin wrapper around lettre for sending transactional emails.
 ///
@@ -21,10 +24,7 @@ impl EmailService {
         Self { from, app_url }
     }
 
-    /// Send a password-reset email.
-    ///
-    /// In dev (no `SMTP_HOST` configured) the reset URL is only logged.
-    pub async fn send_password_reset(&self, to_email: &str, token: &str) {
+    async fn send_password_reset_impl(&self, to_email: &str, token: &str) {
         let reset_url = format!("{}/reset-password?token={}", self.app_url, token);
 
         let subject = "Password Reset – Agri-Connect";
@@ -76,6 +76,13 @@ impl EmailService {
             let _ = e;
             lettre::error::Error::MissingTo // placeholder — actual error is already logged
         })
+    }
+}
+
+#[async_trait]
+impl EmailServiceTrait for EmailService {
+    async fn send_password_reset(&self, to_email: &str, token: &str) {
+        self.send_password_reset_impl(to_email, token).await;
     }
 }
 

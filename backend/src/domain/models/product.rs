@@ -1,5 +1,21 @@
 use chrono::{DateTime, Utc};
 
+pub struct AdminProduct {
+    pub id:            i32,
+    pub name:          String,
+    pub description:   Option<String>,
+    pub price:         Option<i64>,
+    pub unit:          Option<String>,
+    pub image_url:     Option<String>,
+    pub category:      String,
+    pub category_id:   i32,
+    pub business_id:   i32,
+    pub business_name: String,
+    pub is_active:     bool,
+    pub created_on:    DateTime<Utc>,
+    pub updated_on:    DateTime<Utc>,
+}
+
 pub struct ProductView {
     pub id:           i32,
     pub name:         String,

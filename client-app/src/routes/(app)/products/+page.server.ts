@@ -1,7 +1,7 @@
 import type { PageServerLoad } from './$types';
-import { AgriConnectService } from '$lib/server/services/agri-connect.service';
+import { ExploreService } from '$lib/server/services/explore.service';
 
-export type { Category, Product, ProductsResult } from '$lib/server/services/agri-connect.service';
+export type { Category, Product, ProductsResult } from '$lib/server/services/explore.service';
 
 export const load: PageServerLoad = async ({ fetch, url }) => {
     const page        = url.searchParams.get('page') ?? '1';
@@ -10,7 +10,7 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
     const minPrice    = url.searchParams.get('min_price') || undefined;
     const maxPrice    = url.searchParams.get('max_price') || undefined;
     const sort        = url.searchParams.get('sort')      || undefined;
-    const svc         = new AgriConnectService(fetch);
+    const svc         = new ExploreService(fetch);
 
     const [productsResult, categoriesResult] = await Promise.allSettled([
         svc.browseProducts(page, categoryId, searchQuery ?? undefined, minPrice, maxPrice, sort),

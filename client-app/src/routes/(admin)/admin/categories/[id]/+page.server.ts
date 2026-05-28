@@ -3,7 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { checkAuth, ServiceError } from '$lib/server/api';
 import { AdminService } from '$lib/server/services/admin.service';
 
-export type { AdminCategoryDetail } from '$lib/server/services/admin.service';
+export type { AdminCategory } from '$lib/server/services/admin.service';
 
 export const load: PageServerLoad = async ({ fetch, cookies, params }) => {
     const id = Number(params.id);
@@ -36,7 +36,7 @@ export const actions: Actions = {
         const svc = new AdminService(fetch, cookies.get('auth_token') ?? '');
         try {
             await svc.updateCategory(id, { name, slug, icon, display_order });
-            return { success: true, message: 'Đã cập nhật danh mục.' };
+            return { success: true };
         } catch (err) {
             if (err instanceof ServiceError) {
                 checkAuth(err.status);
@@ -50,11 +50,12 @@ export const actions: Actions = {
         const id        = Number(params.id);
         const data      = await request.formData();
         const is_active = data.get('is_active') === 'true';
+        const reason    = (data.get('reason') as string ?? '').trim() || null;
 
         const svc = new AdminService(fetch, cookies.get('auth_token') ?? '');
         try {
-            await svc.toggleCategoryActive(id, is_active);
-            return { success: true, message: `Đã ${is_active ? 'hiện' : 'ẩn'} danh mục.` };
+            await svc.toggleCategoryActive(id, is_active, reason);
+            return { success: true };
         } catch (err) {
             if (err instanceof ServiceError) {
                 checkAuth(err.status);

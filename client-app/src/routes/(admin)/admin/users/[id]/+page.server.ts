@@ -3,7 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { checkAuth, ServiceError } from '$lib/server/api';
 import { AdminService } from '$lib/server/services/admin.service';
 
-export type { AdminUserDetail, Role } from '$lib/server/services/admin.service';
+export type { AdminUserDetail, Role, Permission, UserPermissions } from '$lib/server/services/admin.service';
 
 export const load: PageServerLoad = async ({ fetch, cookies, params }) => {
     const id = Number(params.id);
@@ -11,9 +11,11 @@ export const load: PageServerLoad = async ({ fetch, cookies, params }) => {
 
     const svc = new AdminService(fetch, cookies.get('auth_token') ?? '');
 
-    const [userResult, rolesResult] = await Promise.allSettled([
+    const [userResult, rolesResult, allPermsResult, userPermsResult] = await Promise.allSettled([
         svc.getUser(id),
         svc.listRoles(),
+        svc.listPermissions(),
+        svc.getUserPermissions(id),
     ]);
 
     if (userResult.status === 'rejected') {
@@ -25,8 +27,13 @@ export const load: PageServerLoad = async ({ fetch, cookies, params }) => {
         throw error(500, 'Failed to load user.');
     }
 
-    const roles = rolesResult.status === 'fulfilled' ? rolesResult.value : [];
-    return { user: userResult.value, roles };
+    const roles       = rolesResult.status      === 'fulfilled' ? rolesResult.value      : [];
+    const allPerms    = allPermsResult.status    === 'fulfilled' ? allPermsResult.value    : [];
+    const userPermIds = userPermsResult.status   === 'fulfilled'
+        ? new Set(userPermsResult.value.permissions.map((p) => p.id))
+        : new Set<number>();
+
+    return { user: userResult.value, roles, allPerms, userPermIds: [...userPermIds] };
 };
 
 export const actions: Actions = {
@@ -53,17 +60,60 @@ export const actions: Actions = {
         const id        = Number(params.id);
         const data      = await request.formData();
         const is_active = data.get('is_active') === 'true';
+        const reason    = (data.get('reason') as string ?? '').trim() || null;
 
         const svc = new AdminService(fetch, cookies.get('auth_token') ?? '');
         try {
-            await svc.toggleUserActive(id, is_active);
-            return { success: true, message: `Đã ${is_active ? 'kích hoạt' : 'vô hiệu hoá'} tài khoản.` };
+            await svc.toggleUserActive(id, is_active, reason);
+            return {
+                success: true,
+                action: 'toggle_active',
+                message: is_active ? 'Tài khoản đã được kích hoạt.' : 'Tài khoản đã bị vô hiệu hoá.',
+            };
         } catch (err) {
             if (err instanceof ServiceError) {
                 checkAuth(err.status);
-                return fail(err.status, { error: err.message });
+                return fail(err.status, { error: err.message, action: 'toggle_active' });
             }
-            return fail(500, { error: 'Cập nhật trạng thái thất bại.' });
+            return fail(500, { error: 'Cập nhật trạng thái thất bại.', action: 'toggle_active' });
+        }
+    },
+
+    assign_permission: async ({ params, request, fetch, cookies }) => {
+        const userId       = Number(params.id);
+        const data         = await request.formData();
+        const permissionId = Number(data.get('permission_id'));
+        if (!permissionId) return fail(400, { error: 'Thiếu permission_id.', action: 'assign_permission' });
+
+        const svc = new AdminService(fetch, cookies.get('auth_token') ?? '');
+        try {
+            await svc.assignPermission(userId, permissionId);
+            return { success: true, action: 'assign_permission', permissionId, message: 'Đã cấp quyền.' };
+        } catch (err) {
+            if (err instanceof ServiceError) {
+                checkAuth(err.status);
+                return fail(err.status, { error: err.message, action: 'assign_permission' });
+            }
+            return fail(500, { error: 'Gán quyền thất bại.', action: 'assign_permission' });
+        }
+    },
+
+    revoke_permission: async ({ params, request, fetch, cookies }) => {
+        const userId       = Number(params.id);
+        const data         = await request.formData();
+        const permissionId = Number(data.get('permission_id'));
+        if (!permissionId) return fail(400, { error: 'Thiếu permission_id.', action: 'revoke_permission' });
+
+        const svc = new AdminService(fetch, cookies.get('auth_token') ?? '');
+        try {
+            await svc.revokePermission(userId, permissionId);
+            return { success: true, action: 'revoke_permission', permissionId, message: 'Đã thu hồi quyền.' };
+        } catch (err) {
+            if (err instanceof ServiceError) {
+                checkAuth(err.status);
+                return fail(err.status, { error: err.message, action: 'revoke_permission' });
+            }
+            return fail(500, { error: 'Thu hồi quyền thất bại.', action: 'revoke_permission' });
         }
     },
 };

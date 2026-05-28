@@ -10,4 +10,6 @@ pub trait RoleRepositoryTrait {
     async fn list(&self) -> Result<Vec<RoleModel>, AppError>;
 
     async fn find_by_id(&self, id: i32) -> Result<Option<RoleModel>, AppError>;
+
+    async fn seed_defaults(&self) -> Result<(), AppError>;
 }

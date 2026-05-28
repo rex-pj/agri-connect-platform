@@ -64,7 +64,7 @@
     <p class="empty-home__hint">
       Chưa có dữ liệu. Hãy thử tìm dịch vụ gần bạn.
     </p>
-    <a href="/agri-connect" class="empty-home__cta">
+    <a href="/explore" class="empty-home__cta">
       <i class="fa-solid fa-location-dot"></i> Tìm thợ gần tôi
     </a>
   </div>

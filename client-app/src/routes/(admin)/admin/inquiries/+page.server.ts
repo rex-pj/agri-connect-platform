@@ -30,7 +30,7 @@ export const actions: Actions = {
         const svc = new AdminService(fetch, cookies.get('auth_token') ?? '');
         try {
             await svc.updateInquiryStatus(id, status);
-            return { success: true, message: 'Đã cập nhật trạng thái yêu cầu.' };
+            return { success: true };
         } catch (err) {
             if (err instanceof ServiceError) {
                 checkAuth(err.status);

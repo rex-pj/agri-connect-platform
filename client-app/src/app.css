@@ -82,6 +82,8 @@
 }
 /* ── Page hero banner ─────────────────────────────────────────────────── */
 .page-hero {
+  position: relative;
+  overflow: hidden;
   padding: 20px 16px 28px;
   background: linear-gradient(
     160deg,
@@ -91,6 +93,16 @@
   );
   color: #fff;
   border-radius: 0 0 20px 20px;
+}
+.page-hero__watermark {
+  position: absolute;
+  right: -12px;
+  bottom: -16px;
+  font-size: 7rem;
+  color: rgba(255, 255, 255, 0.06);
+  pointer-events: none;
+  user-select: none;
+  line-height: 1;
 }
 @media (min-width: 768px) {
   .page-hero {

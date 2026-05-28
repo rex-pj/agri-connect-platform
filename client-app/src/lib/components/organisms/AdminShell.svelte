@@ -42,8 +42,18 @@
       items: [
         {
           name: "Nhà cung cấp",
-          href: ROUTES.ADMIN.AGRI_CONNECT,
+          href: ROUTES.ADMIN.EXPLORE,
           icon: "fa-solid fa-store",
+        },
+        {
+          name: "Sản phẩm",
+          href: ROUTES.ADMIN.PRODUCTS,
+          icon: "fa-solid fa-box-open",
+        },
+        {
+          name: "Dịch vụ",
+          href: ROUTES.ADMIN.SERVICES,
+          icon: "fa-solid fa-screwdriver-wrench",
         },
         {
           name: "Danh mục",
@@ -60,6 +70,11 @@
           href: ROUTES.ADMIN.REVIEWS,
           icon: "fa-solid fa-star",
         },
+        {
+          name: "Khu vực",
+          href: ROUTES.ADMIN.LOCATIONS,
+          icon: "fa-solid fa-map-location-dot",
+        },
       ],
     },
     {
@@ -75,6 +90,11 @@
           name: "Vai trò",
           href: ROUTES.ADMIN.ROLES,
           icon: "fa-solid fa-shield-halved",
+        },
+        {
+          name: "Quyền hạn",
+          href: ROUTES.ADMIN.PERMISSIONS,
+          icon: "fa-solid fa-key",
         },
       ],
     },
@@ -94,10 +114,10 @@
 <div class="ash-layout">
   <!-- ── Top header ──────────────────────────────────────────────────── -->
   <header class="ash-header">
-    <div class="d-flex align-items-center gap-3">
+    <a href={ROUTES.ADMIN.DASHBOARD} class="ash-logo-link d-flex align-items-center gap-3">
       <i class="fa-solid fa-seedling ash-logo-icon"></i>
       <span class="ash-logo-text">Agri Admin</span>
-    </div>
+    </a>
     <div class="d-flex align-items-center gap-2">
       <span class="ash-welcome d-none d-md-inline">
         <i class="fa-regular fa-circle-user me-1"></i>{username}
@@ -191,6 +211,13 @@
     padding: 0 16px;
     min-height: 54px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  :global(.ash-logo-link) {
+    text-decoration: none;
+    color: inherit;
+  }
+  :global(.ash-logo-link:hover) {
+    opacity: 0.85;
   }
   :global(.ash-logo-icon) {
     font-size: 1.15rem;

@@ -1,12 +1,21 @@
-use tracing::error;
+//! Application-layer validation helpers.
+//!
+//! All functions here take plain Rust types and return `AppError` so use
+//! cases can call them directly. No HTTP or infrastructure types are used.
+//!
+//! Password hashing/verification is NOT here — those are infrastructure
+//! concerns injected via the `PasswordHasher` port in `application/ports`.
 
 use crate::{
     constants::{
-        LAT_MAX, LAT_MIN, LNG_MAX, LNG_MIN, PASSWORD_MIN_LEN, USERNAME_MIN_LEN,
+        LAT_MAX, LAT_MIN, LNG_MAX, LNG_MIN, PASSWORD_MIN_LEN, ROLE_ADMIN, ROLE_PROVIDER,
+        USERNAME_MIN_LEN,
     },
     validators::is_valid_vn_phone,
     view_models::AppError,
 };
+
+// ── Identity validation ───────────────────────────────────────────────────────
 
 pub fn validate_username(username: &str) -> Result<(), AppError> {
     if username.len() < USERNAME_MIN_LEN {
@@ -41,6 +50,8 @@ pub fn validate_password(password: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+// ── Geo validation ────────────────────────────────────────────────────────────
+
 pub fn validate_coordinates(lat: f64, lng: f64) -> Result<(), AppError> {
     if !(LAT_MIN..=LAT_MAX).contains(&lat) || !(LNG_MIN..=LNG_MAX).contains(&lng) {
         return Err(AppError::BadRequest(
@@ -49,6 +60,8 @@ pub fn validate_coordinates(lat: f64, lng: f64) -> Result<(), AppError> {
     }
     Ok(())
 }
+
+// ── Contact validation ────────────────────────────────────────────────────────
 
 pub fn validate_phone(phone: &str) -> Result<(), AppError> {
     if !is_valid_vn_phone(phone) {
@@ -59,35 +72,44 @@ pub fn validate_phone(phone: &str) -> Result<(), AppError> {
     Ok(())
 }
 
-/// Hash a password using bcrypt. Offloaded to a blocking thread pool so the
-/// Tokio worker thread is never stalled by this CPU-intensive KDF.
-pub async fn bcrypt_hash(password: &str) -> Result<String, AppError> {
-    let password = password.to_owned();
-    tokio::task::spawn_blocking(move || bcrypt::hash(&password, bcrypt::DEFAULT_COST))
-        .await
-        .map_err(|e| {
-            error!("bcrypt hash join error: {e}");
-            AppError::Internal("Password hashing error.".into())
-        })?
-        .map_err(|e| {
-            error!("bcrypt hash error: {e}");
-            AppError::Internal("Password hashing error.".into())
-        })
+// ── Business entity validation ────────────────────────────────────────────────
+
+/// Validate a (name, slug) pair used by categories and similar entities.
+/// Both fields must be non-empty after trimming.
+pub fn validate_name_and_slug(name: &str, slug: &str) -> Result<(), AppError> {
+    if name.is_empty() || slug.is_empty() {
+        return Err(AppError::BadRequest(
+            "Name and slug must not be empty.".into(),
+        ));
+    }
+    Ok(())
 }
 
-/// Verify a bcrypt hash. Offloaded to a blocking thread pool for the same
-/// reason as `bcrypt_hash`.
-pub async fn bcrypt_verify(password: &str, hash: &str) -> Result<bool, AppError> {
-    let password = password.to_owned();
-    let hash     = hash.to_owned();
-    tokio::task::spawn_blocking(move || bcrypt::verify(&password, &hash))
-        .await
-        .map_err(|e| {
-            error!("bcrypt verify join error: {e}");
-            AppError::Internal("Authentication error.".into())
-        })?
-        .map_err(|e| {
-            error!("bcrypt verify error: {e}");
-            AppError::Internal("Authentication error.".into())
-        })
+/// Validate a product price: if supplied, it must be a positive integer.
+pub fn validate_price(price: Option<i64>) -> Result<(), AppError> {
+    if let Some(p) = price {
+        if p <= 0 {
+            return Err(AppError::BadRequest(
+                "Product price must be greater than 0.".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+// ── Role code validation ──────────────────────────────────────────────────────
+
+/// Validate that a role code is one of the recognised application roles.
+/// Returns the valid code on success so callers can use it directly.
+pub fn validate_role_code(role_code: &str) -> Result<&str, AppError> {
+    let trimmed = role_code.trim();
+    if trimmed.is_empty() {
+        return Err(AppError::BadRequest("Role code must not be empty.".into()));
+    }
+    if trimmed != ROLE_ADMIN && trimmed != ROLE_PROVIDER {
+        return Err(AppError::BadRequest(format!(
+            "Invalid role code. Must be one of: {ROLE_ADMIN}, {ROLE_PROVIDER}."
+        )));
+    }
+    Ok(trimmed)
 }

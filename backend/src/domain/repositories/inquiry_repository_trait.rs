@@ -7,7 +7,7 @@ use crate::{
 
 #[async_trait]
 pub trait InquiryRepositoryTrait {
-    async fn create(&self, inquiry: NewInquiry) -> Result<(), AppError>;
+    async fn create(&self, inquiry: NewInquiry) -> Result<i32, AppError>;
 
     async fn count_admin(&self) -> Result<i64, AppError>;
 
@@ -15,5 +15,5 @@ pub trait InquiryRepositoryTrait {
 
     async fn find_by_id_admin(&self, id: i32) -> Result<Option<InquiryAdmin>, AppError>;
 
-    async fn update_status(&self, id: i32, status: &str) -> Result<(), AppError>;
+    async fn update_status(&self, id: i32, status: &str, admin_id: i32) -> Result<(), AppError>;
 }

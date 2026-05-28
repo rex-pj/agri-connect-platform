@@ -14,7 +14,7 @@ use crate::{
 pub struct ProductsHandler;
 
 impl ProductsHandler {
-    /// GET /api/agri-connect/products/browse?category=&page=
+    /// GET /api/explore/products?category_id=&name=&page=
     pub async fn browse_products(
         State(state): State<AppState>,
         Query(q): Query<ProductBrowseQuery>,
@@ -29,7 +29,7 @@ impl ProductsHandler {
         Ok(Json(result))
     }
 
-    /// GET /api/agri-connect/products/:id
+    /// GET /api/explore/products/:id
     pub async fn get_product_by_id(
         State(state): State<AppState>,
         Path(id): Path<i32>,

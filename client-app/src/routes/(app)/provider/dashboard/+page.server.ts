@@ -2,18 +2,17 @@ import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { ServiceError } from '$lib/server/api';
 import { ROUTES } from '$lib/routes';
-import { AgriConnectService } from '$lib/server/services/agri-connect.service';
+import { ExploreService } from '$lib/server/services/explore.service';
 import { ProviderService } from '$lib/server/services/provider.service';
 
 export type { ProviderProfile, ProviderProduct } from '$lib/server/services/provider.service';
-export type { Category } from '$lib/server/services/agri-connect.service';
+export type { Category } from '$lib/server/services/explore.service';
 
-export const load: PageServerLoad = async ({ fetch, cookies }) => {
-    const token = cookies.get('auth_token');
-    if (!token) throw redirect(302, ROUTES.LOGIN);
+export const load: PageServerLoad = async ({ fetch, parent }) => {
+    const { token } = await parent();
 
     const providerSvc = new ProviderService(fetch, token);
-    const publicSvc   = new AgriConnectService(fetch);
+    const publicSvc   = new ExploreService(fetch);
 
     const [profileResult, productsResult, categoriesResult] = await Promise.allSettled([
         providerSvc.getProfile(),

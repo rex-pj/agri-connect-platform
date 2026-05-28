@@ -9,6 +9,13 @@ export interface AdminStats {
     total_users:         number;
 }
 
+export interface SetupStatus {
+    database_connected: boolean;
+    is_seeded:          boolean;
+    business_count:     number;
+    user_count:         number;
+}
+
 export interface AdminUser {
     id:               number;
     username:         string;
@@ -38,6 +45,7 @@ export interface AdminUserPaged {
     items:       AdminUser[];
     total:       number;
     page:        number;
+    per_page:    number;
     total_pages: number;
 }
 
@@ -63,8 +71,6 @@ export interface AdminCategory {
     updated_by_name:  string | null;
 }
 
-export interface AdminCategoryDetail extends AdminCategory {}
-
 export interface AdminProvider {
     id:               number;
     name:             string;
@@ -85,6 +91,7 @@ export interface AdminProviderPaged {
     items:       AdminProvider[];
     total:       number;
     page:        number;
+    per_page:    number;
     total_pages: number;
 }
 
@@ -137,6 +144,7 @@ export interface AdminInquiryPaged {
     items:       AdminInquiry[];
     total:       number;
     page:        number;
+    per_page:    number;
     total_pages: number;
 }
 
@@ -157,7 +165,74 @@ export interface AdminReviewPaged {
     items:       AdminReview[];
     total:       number;
     page:        number;
+    per_page:    number;
     total_pages: number;
+}
+
+export interface AdminLocation {
+    id:            number;
+    label:         string;
+    lat:           number;
+    lng:           number;
+    display_order: number;
+    is_active:     boolean;
+}
+
+export interface AdminProduct {
+    id:            number;
+    name:          string;
+    description:   string | null;
+    price:         number | null;
+    unit:          string | null;
+    image_url:     string | null;
+    category:      string;
+    category_id:   number;
+    business_id:   number;
+    business_name: string;
+    is_active:     boolean;
+    created_on:    string;
+    updated_on:    string;
+}
+
+export interface AdminProductPaged {
+    items:       AdminProduct[];
+    total:       number;
+    page:        number;
+    per_page:    number;
+    total_pages: number;
+}
+
+export interface AdminServiceEntry {
+    id:            number;
+    name:          string;
+    description:   string | null;
+    price_note:    string | null;
+    category:      string;
+    category_id:   number;
+    business_id:   number;
+    business_name: string;
+    is_active:     boolean;
+    created_on:    string;
+    updated_on:    string;
+}
+
+export interface AdminServicePaged {
+    items:       AdminServiceEntry[];
+    total:       number;
+    page:        number;
+    per_page:    number;
+    total_pages: number;
+}
+
+export interface Permission {
+    id:   number;
+    code: string;
+    name: string;
+}
+
+export interface UserPermissions {
+    user_id:     number;
+    permissions: Permission[];
 }
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -174,6 +249,23 @@ export class AdminService {
     async getStats(): Promise<AdminStats> {
         const res = await this.fetch(`${API_BASE}/api/admin/stats`, { headers: this.auth });
         if (!res.ok) throw await parseServiceError(res, 'Failed to load stats.');
+        return res.json();
+    }
+
+    // ── Setup / seed ───────────────────────────────────────────────────────
+
+    async getSetupStatus(): Promise<SetupStatus> {
+        const res = await this.fetch(`${API_BASE}/api/setup/status`, { headers: this.auth });
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load setup status.');
+        return res.json();
+    }
+
+    async seedDemoData(): Promise<SetupStatus> {
+        const res = await this.fetch(`${API_BASE}/api/setup/seed`, {
+            method:  'POST',
+            headers: this.auth,
+        });
+        if (!res.ok) throw await parseServiceError(res, 'Failed to seed demo data.');
         return res.json();
     }
 
@@ -200,11 +292,11 @@ export class AdminService {
         if (!res.ok) throw await parseServiceError(res, 'Failed to update role.');
     }
 
-    async toggleUserActive(id: number, isActive: boolean): Promise<void> {
-        const res = await this.fetch(`${API_BASE}/api/admin/users/${id}/active`, {
+    async toggleUserActive(id: number, isActive: boolean, reason?: string | null): Promise<void> {
+        const res = await this.fetch(`${API_BASE}/api/admin/users/${id}/status`, {
             method:  'PATCH',
             headers: { ...this.auth, 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ is_active: isActive }),
+            body:    JSON.stringify({ is_active: isActive, reason: reason ?? null }),
         });
         if (!res.ok) throw await parseServiceError(res, 'Failed to update status.');
     }
@@ -231,7 +323,7 @@ export class AdminService {
         return res.json();
     }
 
-    async getCategory(id: number): Promise<AdminCategoryDetail> {
+    async getCategory(id: number): Promise<AdminCategory> {
         const res = await this.fetch(`${API_BASE}/api/admin/categories/${id}`, { headers: this.auth });
         if (!res.ok) throw await parseServiceError(res, 'Failed to load category.');
         return res.json();
@@ -261,11 +353,11 @@ export class AdminService {
         if (!res.ok) throw await parseServiceError(res, 'Failed to update category.');
     }
 
-    async toggleCategoryActive(id: number, isActive: boolean): Promise<void> {
-        const res = await this.fetch(`${API_BASE}/api/admin/categories/${id}/active`, {
+    async toggleCategoryActive(id: number, isActive: boolean, reason?: string | null): Promise<void> {
+        const res = await this.fetch(`${API_BASE}/api/admin/categories/${id}/status`, {
             method:  'PATCH',
             headers: { ...this.auth, 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ is_active: isActive }),
+            body:    JSON.stringify({ is_active: isActive, reason: reason ?? null }),
         });
         if (!res.ok) throw await parseServiceError(res, 'Failed to update status.');
     }
@@ -284,10 +376,11 @@ export class AdminService {
         return res.json();
     }
 
-    async toggleProviderVerification(id: number): Promise<{ message: string; is_verified: boolean }> {
+    async toggleProviderVerification(id: number, reason?: string | null): Promise<{ id: number; name: string; is_verified: boolean }> {
         const res = await this.fetch(`${API_BASE}/api/admin/providers/${id}/verification`, {
             method:  'PATCH',
-            headers: this.auth,
+            headers: { ...this.auth, 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ reason: reason ?? null }),
         });
         if (!res.ok) throw await parseServiceError(res, 'Update failed.');
         return res.json();
@@ -295,7 +388,7 @@ export class AdminService {
 
     async assignProviderUser(id: number, data: {
         username: string; password: string; email?: string;
-    }): Promise<{ message: string }> {
+    }): Promise<{ business_id: number; username: string }> {
         const res = await this.fetch(`${API_BASE}/api/admin/providers/${id}/users`, {
             method:  'POST',
             headers: { ...this.auth, 'Content-Type': 'application/json' },
@@ -330,12 +423,184 @@ export class AdminService {
         return res.json();
     }
 
-    async toggleReviewVisible(id: number, isVisible: boolean): Promise<void> {
-        const res = await this.fetch(`${API_BASE}/api/admin/reviews/${id}/visible`, {
+    async toggleReviewVisible(id: number, isVisible: boolean, reason?: string | null): Promise<void> {
+        const res = await this.fetch(`${API_BASE}/api/admin/reviews/${id}/visibility`, {
             method:  'PATCH',
             headers: { ...this.auth, 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ is_visible: isVisible }),
+            body:    JSON.stringify({ is_visible: isVisible, reason: reason ?? null }),
         });
         if (!res.ok) throw await parseServiceError(res, 'Failed to update visibility.');
+    }
+
+    // ── Locations ──────────────────────────────────────────────────────────
+
+    async listLocations(): Promise<AdminLocation[]> {
+        const res = await this.fetch(`${API_BASE}/api/admin/locations`, { headers: this.auth });
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load locations.');
+        return res.json();
+    }
+
+    async getLocation(id: number): Promise<AdminLocation> {
+        const res = await this.fetch(`${API_BASE}/api/admin/locations/${id}`, { headers: this.auth });
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load location.');
+        return res.json();
+    }
+
+    async createLocation(data: {
+        label: string; lat: number; lng: number; display_order: number;
+    }): Promise<AdminLocation> {
+        const res = await this.fetch(`${API_BASE}/api/admin/locations`, {
+            method:  'POST',
+            headers: { ...this.auth, 'Content-Type': 'application/json' },
+            body:    JSON.stringify(data),
+        });
+        if (!res.ok) throw await parseServiceError(res, 'Failed to create location.');
+        return res.json();
+    }
+
+    async updateLocation(id: number, data: {
+        label: string; lat: number; lng: number; display_order: number;
+    }): Promise<AdminLocation> {
+        const res = await this.fetch(`${API_BASE}/api/admin/locations/${id}`, {
+            method:  'PUT',
+            headers: { ...this.auth, 'Content-Type': 'application/json' },
+            body:    JSON.stringify(data),
+        });
+        if (!res.ok) throw await parseServiceError(res, 'Failed to update location.');
+        return res.json();
+    }
+
+    async toggleLocationActive(id: number, isActive: boolean, reason?: string | null): Promise<AdminLocation> {
+        const res = await this.fetch(`${API_BASE}/api/admin/locations/${id}/status`, {
+            method:  'PATCH',
+            headers: { ...this.auth, 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ is_active: isActive, reason: reason ?? null }),
+        });
+        if (!res.ok) throw await parseServiceError(res, 'Failed to update location status.');
+        return res.json();
+    }
+
+    async deleteLocation(id: number, reason?: string | null): Promise<void> {
+        const res = await this.fetch(`${API_BASE}/api/admin/locations/${id}`, {
+            method:  'DELETE',
+            headers: { ...this.auth, 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ reason: reason ?? null }),
+        });
+        if (!res.ok) throw await parseServiceError(res, 'Failed to delete location.');
+    }
+
+    // ── Permissions ────────────────────────────────────────────────────────
+
+    async listPermissions(): Promise<Permission[]> {
+        const res = await this.fetch(`${API_BASE}/api/admin/permissions`, { headers: this.auth });
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load permissions.');
+        return res.json();
+    }
+
+    async getUserPermissions(userId: number): Promise<UserPermissions> {
+        const res = await this.fetch(`${API_BASE}/api/admin/users/${userId}/permissions`, { headers: this.auth });
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load user permissions.');
+        return res.json();
+    }
+
+    async assignPermission(userId: number, permissionId: number): Promise<void> {
+        const res = await this.fetch(`${API_BASE}/api/admin/users/${userId}/permissions`, {
+            method:  'POST',
+            headers: { ...this.auth, 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ permission_id: permissionId }),
+        });
+        if (!res.ok) throw await parseServiceError(res, 'Failed to assign permission.');
+    }
+
+    async revokePermission(userId: number, permissionId: number): Promise<void> {
+        const res = await this.fetch(`${API_BASE}/api/admin/users/${userId}/permissions/${permissionId}`, {
+            method:  'DELETE',
+            headers: this.auth,
+        });
+        if (!res.ok) throw await parseServiceError(res, 'Failed to revoke permission.');
+    }
+
+    // ── Admin Products ─────────────────────────────────────────────────
+
+    async listProducts(page: string, providerId?: number): Promise<AdminProductPaged> {
+        const q = new URLSearchParams({ page });
+        if (providerId) q.set('provider_id', String(providerId));
+        const res = await this.fetch(`${API_BASE}/api/admin/products?${q}`, { headers: this.auth });
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load products.');
+        return res.json();
+    }
+
+    async toggleProductActive(id: number, isActive: boolean, reason?: string | null): Promise<AdminProduct> {
+        const res = await this.fetch(`${API_BASE}/api/admin/products/${id}/active`, {
+            method:  'PATCH',
+            headers: { ...this.auth, 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ is_active: isActive, reason: reason ?? null }),
+        });
+        if (!res.ok) throw await parseServiceError(res, 'Failed to update product.');
+        return res.json();
+    }
+
+    async deleteProduct(id: number, reason?: string | null): Promise<void> {
+        const res = await this.fetch(`${API_BASE}/api/admin/products/${id}`, {
+            method:  'DELETE',
+            headers: { ...this.auth, 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ reason: reason ?? null }),
+        });
+        if (!res.ok) throw await parseServiceError(res, 'Failed to delete product.');
+    }
+
+    // ── Admin Services ─────────────────────────────────────────────────
+
+    async listServices(page: string, providerId?: number): Promise<AdminServicePaged> {
+        const q = new URLSearchParams({ page });
+        if (providerId) q.set('provider_id', String(providerId));
+        const res = await this.fetch(`${API_BASE}/api/admin/services?${q}`, { headers: this.auth });
+        if (!res.ok) throw await parseServiceError(res, 'Failed to load services.');
+        return res.json();
+    }
+
+    async createService(data: {
+        business_id: number; category_id: number; name: string;
+        description: string | null; price_note: string | null;
+    }): Promise<AdminServiceEntry> {
+        const res = await this.fetch(`${API_BASE}/api/admin/services`, {
+            method:  'POST',
+            headers: { ...this.auth, 'Content-Type': 'application/json' },
+            body:    JSON.stringify(data),
+        });
+        if (!res.ok) throw await parseServiceError(res, 'Failed to create service.');
+        return res.json();
+    }
+
+    async updateService(id: number, data: {
+        category_id: number; name: string;
+        description: string | null; price_note: string | null;
+    }): Promise<AdminServiceEntry> {
+        const res = await this.fetch(`${API_BASE}/api/admin/services/${id}`, {
+            method:  'PUT',
+            headers: { ...this.auth, 'Content-Type': 'application/json' },
+            body:    JSON.stringify(data),
+        });
+        if (!res.ok) throw await parseServiceError(res, 'Failed to update service.');
+        return res.json();
+    }
+
+    async toggleServiceActive(id: number, isActive: boolean, reason?: string | null): Promise<AdminServiceEntry> {
+        const res = await this.fetch(`${API_BASE}/api/admin/services/${id}/active`, {
+            method:  'PATCH',
+            headers: { ...this.auth, 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ is_active: isActive, reason: reason ?? null }),
+        });
+        if (!res.ok) throw await parseServiceError(res, 'Failed to update service.');
+        return res.json();
+    }
+
+    async deleteService(id: number, reason?: string | null): Promise<void> {
+        const res = await this.fetch(`${API_BASE}/api/admin/services/${id}`, {
+            method:  'DELETE',
+            headers: { ...this.auth, 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ reason: reason ?? null }),
+        });
+        if (!res.ok) throw await parseServiceError(res, 'Failed to delete service.');
     }
 }

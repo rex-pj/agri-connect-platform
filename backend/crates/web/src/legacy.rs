@@ -6,15 +6,15 @@
 //! form's Origin with the host it believes it serves, so rewriting Host to the
 //! Node address would reject every form POST as cross-site.
 
-use std::net::SocketAddr;
-
 use axum::{
     body::Body,
-    extract::{ConnectInfo, Request},
+    extract::Request,
     http::{header, uri::PathAndQuery, HeaderMap, HeaderName, HeaderValue, Uri},
     response::Response,
 };
 use domain::{Error, ErrorCode};
+
+use crate::middleware::client_ip::ClientIp;
 use hyper_util::{
     client::legacy::{connect::HttpConnector, Client},
     rt::TokioExecutor,
@@ -72,10 +72,8 @@ impl LegacyProxy {
     }
 
     pub async fn forward(&self, mut req: Request) -> Result<Response, Error> {
-        let peer = req
-            .extensions()
-            .get::<ConnectInfo<SocketAddr>>()
-            .map(|c| c.0.ip());
+        // The resolved client, not the TCP peer (which is Caddy in production).
+        let peer = req.extensions().get::<ClientIp>().map(|c| c.0);
         let path = req
             .uri()
             .path_and_query()

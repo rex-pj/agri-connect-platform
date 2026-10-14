@@ -196,10 +196,21 @@ fn router_config() -> Result<RouterConfig, StartupError> {
         }
     };
 
+    let trusted_proxy_hops = match optional_env("TRUSTED_PROXY_HOPS") {
+        None => 0,
+        Some(v) => v
+            .parse()
+            .map_err(|e: std::num::ParseIntError| StartupError::InvalidEnv {
+                name: "TRUSTED_PROXY_HOPS",
+                reason: e.to_string(),
+            })?,
+    };
+
     Ok(RouterConfig {
         cors_origins,
         https,
         legacy,
+        trusted_proxy_hops,
     })
 }
 
@@ -401,4 +412,35 @@ pub async fn start() -> Result<(), StartupError> {
     .map_err(StartupError::Serve)?;
     info!("shut down cleanly");
     Ok(())
+}
+
+/// `agri-connect healthcheck [live|ready]`: probes the running server on
+/// BIND_ADDR's port. Exists because the runtime image is distroless (no curl
+/// or shell), and both the container healthcheck and the deploy gate need one.
+pub async fn healthcheck(probe: &str) -> Result<(), String> {
+    let path = match probe {
+        "live" => "/health/live",
+        "ready" => "/health/ready",
+        other => return Err(format!("unknown probe {other:?}; use live or ready")),
+    };
+    let bind = optional_env("BIND_ADDR").unwrap_or_else(|| DEFAULT_BIND_ADDR.to_owned());
+    let port = bind
+        .rsplit(':')
+        .next()
+        .ok_or_else(|| format!("BIND_ADDR {bind:?} has no port"))?;
+    let uri: axum::http::Uri = format!("http://127.0.0.1:{port}{path}")
+        .parse()
+        .map_err(|e| format!("probe uri: {e}"))?;
+
+    let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+        .build_http::<axum::body::Body>();
+    let response = tokio::time::timeout(std::time::Duration::from_secs(5), client.get(uri))
+        .await
+        .map_err(|_| "no answer within 5 s".to_owned())?
+        .map_err(|e| format!("request failed: {e}"))?;
+    if response.status().is_success() {
+        Ok(())
+    } else {
+        Err(format!("{path} answered {}", response.status()))
+    }
 }

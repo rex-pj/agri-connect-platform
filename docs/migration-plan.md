@@ -772,3 +772,33 @@ Verified against local PostgreSQL 18 + PostGIS: all 47 tests pass with `--includ
 Bugs the smoke run caught and fixed:
 - Field messages shared one parameter list, so the password error said "at least 3" (the username's limit). Parameters now belong to each field, with a regression test.
 - An empty `RUST_LOG` parsed as a filter that hid WARN, silencing the fallback warnings. Empty now means "use the default".
+
+### S1 — web shell, CI/CD, deployment (same branch)
+
+Done:
+- **Ops:** `/health/live`, `/health/ready` (503 `database_unavailable` only when the primary is down); `x-request-id` on every response and in every JSON log line; graceful shutdown; `Databases { primary, read }` with optional `DATABASE_READ_URL`; `BIND_ADDR`.
+- **Web shell:**
+  - `views::render_page` is the only renderer; page CSP `script-src 'self'` (Alpine CSP build, no `unsafe-eval`).
+  - Templates and static files are embedded with rust-embed.
+  - Tera functions `url_for` (port of `routes.ts`, typo-proof) and `asset_url` (content-hashed, immutable caching); filters `vnd`, `vn_datetime`, `utc_iso`.
+  - Browsers get a localised HTML error page; API callers keep JSON.
+- **Assets:** self-hosted Bootstrap 5.3.8 CSS, Font Awesome 6.5.1 solid, Be Vietnam Pro (latin + vietnamese), Alpine CSP 3.14.9; provenance and hashes in `static/vendor/VERSIONS`.
+- **Proxy:** `LEGACY_FRONTEND_URL` forwards unmigrated pages to SvelteKit, keeping the browser Host so its CSRF check passes. Verified end to end against `vite dev`: home page, and a login form action whose API error comes back in Vietnamese.
+- **Client IP:** `TRUSTED_PROXY_HOPS` resolves the real client behind Caddy; rate limits are per client, and a forged `X-Forwarded-For` prefix buys nothing.
+- **Deployment:**
+  - Images: `backend/Dockerfile` (distroless, non-root, built-in `healthcheck` subcommand) and `client-app/Dockerfile`.
+  - On the VM: `deploy/compose.yaml` (Caddy, web, legacy, PostGIS on a separate disk, non-superuser app role) and `remote-deploy.sh` (secrets from Secret Manager, readiness gate, automatic rollback).
+  - Backups: nightly `pg_dump` to GCS plus weekly disk snapshots.
+  - GitHub Actions: CI (fmt, clippy, all tests incl. database, svelte-check/build, image builds, shellcheck, compose config) and Deploy (Workload Identity Federation, production environment approval).
+- **Restore:** rehearsed locally. It caught a broken first draft (`spatial_ref_sys` data); the backup now excludes it.
+
+Deviations from §5/§8:
+- **Moved into S1:** `TRUSTED_PROXY_HOPS` (planned for S2). The first deploy sits behind Caddy, so it could not wait.
+- **Deferred to the page slices:** the bulk of the Svelte component styles. Each one moves into `app.css` with the page that uses it, so no CSS ships unused. Likewise `js/app.js` arrives with the first Alpine component (S5) and `file_url` with media (S4).
+- **Simpler build than planned:** Docker cache mounts instead of cargo-chef, one fewer tool to pin.
+- **Image versions:** PostGIS `16-3.5` instead of `16-3.4`, in CI and production alike.
+- **SvelteKit fixes:** the 6 pre-existing `svelte-check` errors are fixed so CI can gate on it. `CategoryGrid` got its `<script module>`, and the two never-rendered redirect pages were emptied.
+
+Not verified here: no Docker on this machine, so the image builds, the compose stack and both workflows run for the first time on GitHub. Everything else ran locally: 88 Rust tests, svelte-check, npm build, shellcheck, YAML parsing, and the restore rehearsal.
+
+Still needed from you before the first deploy: the domain, the GCP project, and the one-time setup in `deploy/README.md` (steps 1–8).

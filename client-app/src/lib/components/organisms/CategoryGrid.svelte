@@ -1,6 +1,4 @@
-<script lang="ts">
-  import CategoryItem from "$lib/components/molecules/CategoryItem.svelte";
-
+<script lang="ts" module>
   export interface CategoryGridItem {
     name: string;
     icon: string; // Font Awesome solid class, e.g. "fa-water"
@@ -8,6 +6,10 @@
     active?: boolean;
     onSelect?: () => void;
   }
+</script>
+
+<script lang="ts">
+  import CategoryItem from "$lib/components/molecules/CategoryItem.svelte";
 
   const { items }: { items: CategoryGridItem[] } = $props();
 </script>

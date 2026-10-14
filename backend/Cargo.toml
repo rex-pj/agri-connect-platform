@@ -47,6 +47,7 @@ tokio = { version = "1", default-features = false, features = [
     "macros",          # #[tokio::main], #[tokio::test] and try_join! in use cases
     "net",             # TcpListener for axum::serve
     "signal",          # SIGTERM/Ctrl-C for graceful shutdown
+    "time",            # timeout on the healthcheck probe
 ] }
 serde = { version = "1", default-features = false, features = [
     "std",    # String/Vec/HashMap impls

@@ -500,6 +500,14 @@ cargo test --workspace
 # TEST_DATABASE_URL=postgres://... cargo test --workspace -- --include-ignored
 ```
 
+### Rust in front of SvelteKit (how production runs)
+
+Set `LEGACY_FRONTEND_URL=http://localhost:5173` in `backend/.env`, start both, and browse `http://localhost:3000`: Rust serves its own pages and proxies the rest to SvelteKit, which calls the API back on :3000.
+
+### Deployment
+
+GitHub Actions (`.github/workflows/ci.yml`, `deploy.yml`) builds and deploys to one Compute Engine VM; one-time setup, backups and the restore procedure are in `deploy/README.md`.
+
 ### Frontend
 
 ```powershell

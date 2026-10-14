@@ -23,7 +23,7 @@ use crate::{
         role_handler::RoleHandler, setup_handler::SetupHandler, stats_handler::StatsHandler,
     },
     legacy::{is_rust_only, LegacyProxy},
-    middleware::rate_limit,
+    middleware::{client_ip, rate_limit},
     views,
 };
 
@@ -37,6 +37,10 @@ pub struct RouterConfig {
     pub https: bool,
     /// Where pages Rust does not serve yet are forwarded. `None`: they 404.
     pub legacy: Option<LegacyProxy>,
+    /// Reverse proxies in front of us whose X-Forwarded-For entry is trusted.
+    /// 0: use the TCP peer. Too low behind Caddy: every user shares one rate
+    /// limit. Too high: clients can forge their address.
+    pub trusted_proxy_hops: usize,
 }
 
 pub struct AppRouting;
@@ -45,6 +49,7 @@ impl AppRouting {
     pub fn build(state: AppState, config: RouterConfig) -> Router {
         let error_renderer = middleware::from_fn_with_state(state.clone(), render_errors);
         let legacy = config.legacy.clone();
+        let hops = config.trusted_proxy_hops;
         // ── Rate limiters (per-IP, in-memory) ────────────────────────────────
         let auth_limiter = rate_limit::new_auth_limiter();
         let public_write_limiter = rate_limit::new_public_write_limiter();
@@ -327,6 +332,9 @@ impl AppRouting {
                     .make_span_with(request_span)
                     .on_response(DefaultOnResponse::new().level(tracing::Level::INFO)),
             )
+            .layer(middleware::from_fn(move |req, next| {
+                client_ip::resolve(hops, req, next)
+            }))
             .layer(PropagateRequestIdLayer::new(request_id.clone()))
             .layer(SetRequestIdLayer::new(request_id, MakeRequestUuid))
             .with_state(state)

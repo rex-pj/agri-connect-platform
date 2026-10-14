@@ -1,0 +1,74 @@
+# Production stack on the single Compute Engine VM. Started by
+# remote-deploy.sh with --env-file compose.env (DOMAIN, image tags, database
+# passwords); the app's own secrets come from /etc/agri-connect/web.env.
+name: agri-connect
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data        # certificates: losing this re-requests them (rate-limited by Let's Encrypt)
+      - caddy_config:/config
+    depends_on:
+      - web
+
+  web:
+    image: ${WEB_IMAGE}
+    restart: unless-stopped
+    env_file:
+      - /etc/agri-connect/web.env
+    environment:
+      BIND_ADDR: 0.0.0.0:8080
+      DATABASE_URL: postgres://agri_app:${APP_DB_PASSWORD}@db:5432/agri_connect
+      APP_ENV: prod
+      APP_URL: https://${DOMAIN}
+      HTTPS_ENABLED: "true"
+      # Caddy is the one proxy in front; it appends the client address.
+      TRUSTED_PROXY_HOPS: "1"
+      LEGACY_FRONTEND_URL: http://legacy:3001
+      LOG_FORMAT: json
+      RUST_LOG: info,sea_orm=warn,sqlx=warn
+    depends_on:
+      db:
+        condition: service_healthy
+    # Long enough for in-flight requests to drain after SIGTERM.
+    stop_grace_period: 30s
+
+  legacy:
+    image: ${LEGACY_IMAGE}
+    restart: unless-stopped
+    environment:
+      PORT: "3001"
+      # adapter-node compares form Origins against this; it must be the public URL.
+      ORIGIN: https://${DOMAIN}
+
+  db:
+    image: postgis/postgis:16-3.5
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: agri_connect
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+    volumes:
+      # On the separate persistent disk, so the data outlives the VM.
+      - /mnt/disks/pgdata/postgres:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d agri_connect"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    shm_size: 256mb
+    # No ports: reachable only on the compose network.
+
+volumes:
+  caddy_data:
+  caddy_config:

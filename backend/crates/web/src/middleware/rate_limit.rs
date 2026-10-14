@@ -1,10 +1,7 @@
-use std::{
-    net::{IpAddr, SocketAddr},
-    sync::Arc,
-};
+use std::{net::IpAddr, sync::Arc};
 
 use axum::{
-    extract::{ConnectInfo, Request},
+    extract::Request,
     middleware::Next,
     response::{IntoResponse, Response},
     Extension,
@@ -12,7 +9,10 @@ use axum::{
 use domain::{Error, ErrorCode};
 use governor::{clock::DefaultClock, state::keyed::DefaultKeyedStateStore, Quota, RateLimiter};
 
-use crate::constants::{AUTH_RATE_LIMIT_PER_MIN, PUBLIC_WRITE_RATE_LIMIT_PER_MIN};
+use crate::{
+    constants::{AUTH_RATE_LIMIT_PER_MIN, PUBLIC_WRITE_RATE_LIMIT_PER_MIN},
+    middleware::client_ip::ClientIp,
+};
 
 pub type SharedLimiter = Arc<RateLimiter<IpAddr, DefaultKeyedStateStore<IpAddr>, DefaultClock>>;
 
@@ -28,15 +28,15 @@ pub fn new_public_write_limiter() -> SharedLimiter {
     )))
 }
 
-/// Keys on the TCP peer address. Behind a reverse proxy every request shares
-/// the proxy's address; slice S2 adds `TRUSTED_PROXY_HOPS` to fix that.
+/// Keys on the client address resolved by `client_ip::resolve`, so users behind
+/// the same reverse proxy do not share one bucket.
 pub async fn enforce(
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Extension(ClientIp(ip)): Extension<ClientIp>,
     Extension(limiter): Extension<SharedLimiter>,
     req: Request,
     next: Next,
 ) -> Response {
-    if limiter.check_key(&addr.ip()).is_err() {
+    if limiter.check_key(&ip).is_err() {
         return Error::new(ErrorCode::TooManyRequests).into_response();
     }
     next.run(req).await

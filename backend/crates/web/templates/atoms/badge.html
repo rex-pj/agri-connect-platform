@@ -1,0 +1,5 @@
+{#- Small rounded label. variant: primary (green) or danger. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro badge(text, variant="primary", icon="", class="") -%}
+<span class="ac-badge ac-badge--{{ variant }}{% if class %} {{ class }}{% endif %}">{% if icon %}{{ atoms::icon(name=icon) }}{% endif %}{{ text }}</span>
+{%- endmacro badge %}

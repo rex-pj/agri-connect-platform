@@ -40,3 +40,9 @@ pub const IMAGE_FIELD: &str = "image";
 pub const FILE_CACHE_CONTROL: &str = "public, max-age=31536000, immutable";
 /// Used when GCS_BUCKET and UPLOAD_DIR are both unset.
 pub const DEFAULT_UPLOAD_DIR: &str = "./data/uploads";
+
+// ── Home page ─────────────────────────────────────────────────────────────────
+/// Featured products shown: one row on a wide screen, three on a phone.
+pub const HOME_PRODUCT_COUNT: usize = 6;
+/// Featured providers under the near-me banner.
+pub const HOME_PROVIDER_COUNT: usize = 3;

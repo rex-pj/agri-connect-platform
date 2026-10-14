@@ -869,3 +869,33 @@ Tests:
 - Database: upload and serve (headers, both variants, id in the public product JSON); a replaced image is removed; deleting the product removes its image; another provider's product answers 404 and nothing is stored; too large (both limits), a renamed script, a missing field and an empty file each get their code, and nothing is stored.
 
 Not done: a run of the real server over TCP. There is no `psql` on this machine to create a throwaway database, and I did not want test accounts in the dev database. The router tests cover the same path in-process.
+
+### S5 — app layout, home, error pages (same branch)
+
+Done:
+- **`/` is served by Rust** (`web/src/pages/home.rs`). It shows product-category tiles from the catalogue plus the two shortcuts, 6 featured products, the near-me banner and 3 featured providers, and the empty state when there is nothing to show. The SvelteKit `(app)/+page.svelte` and `+page.server.ts` are deleted; `svelte-check` reports 0 errors.
+- **App frame** (`layouts/app.html`): top bar with search and account menu, plus the bottom tab bar. `web::shell::Shell` builds it on the server from the session:
+  - the last tab and the menu entry point to the admin panel when the user has `admin.dashboard.view`, to the provider dashboard when they have `own.listing.create`, and to the account page otherwise. Permissions decide, never role names;
+  - an expired or forged cookie renders the page signed out instead of a 401.
+- **Error pages** now sit in the frame, without the account menu: the renderer does not resolve the session.
+- **Alpine:** `static/js/app.js` registers `navSearch` and `profileMenu`. Without JS, the search button is a link to `/search` and the account button a link to `/account`. Opening one closes the other, and Escape closes the menu.
+- **Templates by atomic level:**
+  - atoms `badge`, `tag`;
+  - molecules `category_item`, `section_header`, `geo_cta`, `empty_state`;
+  - organisms `app_nav`, `bottom_nav`, `category_grid`, `product_card`, `provider_card`.
+  Their styles moved from the Svelte `<style>` blocks into `app.css`.
+- **Data:** products now carry `category_icon` from the catalogue, so a card without a photo shows its category icon. This replaces the hard-coded name→icon map in `categoryIcons.ts`. Cards with a photo use `file_url(variant="thumb")`.
+- **Slugs:** `web::slug::slugify`, exposed as a Tera filter, mirrors `slugify.ts`. Its fixtures were run through the TS logic with Node and give the same output.
+- **Logout** in the menu posts to SvelteKit's `/account?/logout` action (route `account_logout`) until S12 brings the Rust auth pages.
+
+Tests:
+- Unit: tab and menu choice by permission, a single active tab, query decoding for the search bar, slug fixtures, provider district.
+- Database:
+  - with demo data, the home page has product and provider links using the SvelteKit slugs, `tel:` links and category tiles;
+  - an empty platform shows the empty state;
+  - the frame for anonymous, provider and admin sessions;
+  - a stale cookie renders the page signed out.
+- Router: error pages have the frame but no account menu; `app.js` is served versioned (existing asset test).
+- Smoke: the real server answered `/` over HTTP against the local dev database (read-only), with page CSP, category tiles and the empty state. That database has no demo data, so the populated case rests on the integration test.
+
+Deferred: the distance line on provider cards waits for the explore page (S11), which is the only page that knows a distance.

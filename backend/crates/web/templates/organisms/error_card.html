@@ -2,7 +2,7 @@
     the user can quote so support can find the request in the logs. -#}
 {% import "atoms/icon.html" as atoms %}
 {% macro error_card(status, message, request_id="") -%}
-<main class="error-page">
+<section class="error-page">
   <div class="error-card">
     <div class="error-card__icon">
       {% if status == 404 %}{{ atoms::icon(name="fa-map-location-dot") }}{% else %}{{ atoms::icon(name="fa-triangle-exclamation") }}{% endif %}
@@ -14,5 +14,5 @@
     <p class="error-card__ref">Mã tham chiếu: {{ request_id }}</p>
     {% endif %}
   </div>
-</main>
+</section>
 {%- endmacro error_card %}

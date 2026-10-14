@@ -101,6 +101,10 @@ object_store = { version = "0.12", default-features = false, features = [
     "fs",  # local-disk storage in development and on a VM without a bucket
 ] }
 
+unicode-normalization = { version = "0.1", default-features = false, features = [
+    "std", # NFD for slugs: "Gạo Thơm" -> "gao-thom", the same as the SvelteKit slugify.ts
+] }
+
 regex = { version = "1", default-features = false, features = [
     "std", # test-only: template convention scans; ASCII patterns need nothing more
 ] }

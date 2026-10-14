@@ -24,6 +24,8 @@ pub struct ProductView {
     pub price: Option<i64>,
     pub unit: Option<String>,
     pub category: String,
+    /// Font Awesome class of the category, for the no-image placeholder.
+    pub category_icon: Option<String>,
     pub vendor_name: String,
     pub vendor_phone: String,
     pub image_file_id: Option<Uuid>,

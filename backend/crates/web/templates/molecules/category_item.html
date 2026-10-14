@@ -1,0 +1,8 @@
+{#- One tile of the category grid: a big icon over a short label. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro category_item(name, icon, href, active=false) -%}
+<a class="cat-item{% if active %} cat-item--active{% endif %}" href="{{ href }}"{% if active %} aria-current="page"{% endif %}>
+  <span class="cat-item__icon">{{ atoms::icon(name=icon) }}</span>
+  <span class="cat-item__label">{{ name }}</span>
+</a>
+{%- endmacro category_item %}

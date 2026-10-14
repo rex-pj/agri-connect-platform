@@ -1,0 +1,9 @@
+{#- Grid of category tiles; each item has name, icon, href and active. -#}
+{% import "molecules/category_item.html" as molecules %}
+{% macro category_grid(items) -%}
+<ul class="cat-grid">
+  {% for item in items %}
+  <li>{{ molecules::category_item(name=item.name, icon=item.icon, href=item.href, active=item.active) }}</li>
+  {% endfor %}
+</ul>
+{%- endmacro category_grid %}

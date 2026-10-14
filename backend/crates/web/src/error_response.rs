@@ -16,7 +16,8 @@ use domain::{Error, ErrorKind};
 use serde::Serialize;
 
 use crate::{
-    app_state::AppState, legacy::is_rust_only, routings::app_routing::REQUEST_ID_HEADER, views,
+    app_state::AppState, legacy::is_rust_only, routings::app_routing::REQUEST_ID_HEADER,
+    shell::Shell, views,
 };
 
 #[derive(Serialize)]
@@ -63,6 +64,7 @@ pub fn error_body(state: &AppState, err: &Error) -> ErrorBody {
 pub async fn render_errors(State(state): State<AppState>, req: Request, next: Next) -> Response {
     let method = req.method().clone();
     let path = req.uri().path().to_owned();
+    let query = req.uri().query().map(str::to_owned);
     let html = wants_html(&req);
     let request_id = req
         .headers()
@@ -97,16 +99,18 @@ pub async fn render_errors(State(state): State<AppState>, req: Request, next: Ne
         message: body.message.clone(),
         request_id,
     };
-    let mut rendered =
-        match html.then(|| views::render_page_status(&state, status, "pages/error.html", &page)) {
-            Some(Ok(page)) => page,
-            Some(Err(render_err)) => {
-                // The error page itself failed; JSON still tells the user something.
-                tracing::error!(error = %render_err, "error page failed to render");
-                (status, Json(body)).into_response()
-            }
-            None => (status, Json(body)).into_response(),
-        };
+    let mut rendered = match html.then(|| {
+        let shell = Shell::without_session(&path, query.as_deref());
+        views::render_page_status(&state, &shell, status, "pages/error.html", &page)
+    }) {
+        Some(Ok(page)) => page,
+        Some(Err(render_err)) => {
+            // The error page itself failed; JSON still tells the user something.
+            tracing::error!(error = %render_err, "error page failed to render");
+            (status, Json(body)).into_response()
+        }
+        None => (status, Json(body)).into_response(),
+    };
     for (name, value) in headers.iter() {
         rendered
             .headers_mut()

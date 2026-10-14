@@ -276,7 +276,7 @@ All routes are defined as SvelteKit file-system pages under `client-app/src/rout
 
 | Route                            | Description                                    |
 | -------------------------------- | ---------------------------------------------- |
-| `/`                              | Home: featured products, providers, categories |
+| `/`                              | Home: featured products, providers, categories (**served by Rust**, `web/src/pages/home.rs`) |
 | `/products`                      | Product listing                                |
 | `/products/[id]`                 | Redirect → `/products/[id]/[slug]`             |
 | `/products/[id]/[slug]`          | Product detail                                 |
@@ -460,6 +460,13 @@ middleware / handlers  →  application (use cases, ports)  →  domain  ←  in
 
 **Errors (`domain/src/error.rs`, `web/src/error_response.rs`)**
 - `IntoResponse for Error` (behind domain's `axum` feature) only sets the status and parks the error; `render_errors` writes the localised body. Every router must sit under that layer.
+
+### Rust pages (replacing SvelteKit route by route)
+
+- A page is a handler in `web/src/pages/` that takes `Shell` (the frame: top bar, account menu, bottom tabs, built from the session) and renders through `views::render_page`. A stale session cookie renders the page signed out; it never fails it.
+- Templates follow the same atomic levels as the Svelte components (`templates/atoms|molecules|organisms`, pages extend `layouts/app.html`). Links come from `url_for`, product and provider slugs from the `slugify` filter (identical to `slugify.ts`), images from `file_url`.
+- Interactive bits are Alpine components registered in `static/js/app.js`; markup must work without them (links and plain forms first).
+- When a route moves to Rust, delete its SvelteKit `+page*` files in the same change.
 
 ### Frontend (SvelteKit)
 

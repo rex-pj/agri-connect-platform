@@ -1,0 +1,12 @@
+{#- The thumb-reach tab bar. Tabs and the active one come from the server. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro bottom_nav(tabs) -%}
+<nav class="bottom-nav" aria-label="Điều hướng chính">
+  {% for tab in tabs %}
+  <a class="bottom-nav__tab{% if tab.active %} bottom-nav__tab--active{% endif %}" href="{{ tab.href }}"{% if tab.active %} aria-current="page"{% endif %}>
+    <span class="bottom-nav__pill">{{ atoms::icon(name=tab.icon, class="bottom-nav__icon") }}</span>
+    <span class="bottom-nav__label">{{ tab.label }}</span>
+  </a>
+  {% endfor %}
+</nav>
+{%- endmacro bottom_nav %}

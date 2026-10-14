@@ -46,6 +46,7 @@ struct ProductViewRow {
     price: Option<i64>,
     unit: Option<String>,
     category: String,
+    category_icon: Option<String>,
     vendor_name: String,
     vendor_phone: String,
     is_available: bool,
@@ -93,6 +94,7 @@ fn base_product_view_query() -> sea_orm::Select<ProductEntity> {
         .column(product::Column::Price)
         .column(product::Column::Unit)
         .column_as(category::Column::Name, "category")
+        .column_as(category::Column::Icon, "category_icon")
         .column_as(business::Column::Name, "vendor_name")
         .column_as(business::Column::Phone, "vendor_phone")
         .column_as(product::Column::IsActive, "is_available")
@@ -549,6 +551,7 @@ fn map_view_row(r: ProductViewRow) -> ProductView {
         price: r.price,
         unit: r.unit,
         category: r.category,
+        category_icon: r.category_icon,
         vendor_name: r.vendor_name,
         vendor_phone: r.vendor_phone,
         is_available: r.is_available,

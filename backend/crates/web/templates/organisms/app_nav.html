@@ -1,0 +1,49 @@
+{#- Top bar: brand, search toggle, account menu. Without JS the search button
+    is a link to the search page and the account button a link to /account;
+    Alpine (navSearch, profileMenu) turns them into the bar and the menu. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro app_nav(shell, site_name) -%}
+<nav class="app-nav" aria-label="Thanh trên cùng" x-data="navSearch" x-on:profile-menu-opened="close" data-open="{% if shell.search_query %}true{% else %}false{% endif %}">
+  <div class="app-nav__top">
+    <a class="app-nav__brand" href="{{ url_for(name='home') }}">
+      <span class="app-nav__logo">{{ atoms::icon(name="fa-seedling") }}</span>
+      {{ site_name }}
+    </a>
+    <div class="app-nav__actions">
+      <a class="app-nav__icon-btn" href="{{ shell.search_url }}" role="button" aria-label="Tìm kiếm" x-on:click.prevent="toggle" :class="buttonClass" :aria-expanded="expanded">
+        <span x-show="closed">{{ atoms::icon(name="fa-magnifying-glass") }}</span>
+        <span x-show="open" x-cloak>{{ atoms::icon(name="fa-xmark") }}</span>
+      </a>
+      {% if shell.profile %}
+      <div class="app-nav__profile" x-data="profileMenu" x-on:nav-search-opened.window="close" x-on:keydown.escape.window="close">
+        <a class="app-nav__login" href="{{ url_for(name='account') }}" role="button" aria-haspopup="true" x-on:click.prevent="toggle" :class="buttonClass" :aria-expanded="expanded">
+          {{ atoms::icon(name="fa-circle-user") }}
+          {% if shell.profile.signed_in %}<span>Tài khoản</span>{% else %}<span class="visually-hidden">Tài khoản</span>{% endif %}
+          <span class="app-nav__chevron" :class="chevronClass">{{ atoms::icon(name="fa-chevron-down") }}</span>
+        </a>
+        <div class="app-nav__dropdown" role="menu" x-show="open" x-cloak>
+          {% for item in shell.profile.items %}
+          <a class="app-nav__dropdown-item" role="menuitem" href="{{ item.href }}">{{ atoms::icon(name=item.icon) }} {{ item.label }}</a>
+          {% endfor %}
+          {% if shell.profile.logout %}
+          <form method="post" action="{{ shell.profile.logout }}">
+            <button type="submit" class="app-nav__dropdown-item app-nav__dropdown-item--danger" role="menuitem">{{ atoms::icon(name="fa-right-from-bracket") }} Đăng xuất</button>
+          </form>
+          {% endif %}
+        </div>
+        <button type="button" class="app-nav__backdrop" tabindex="-1" aria-hidden="true" x-show="open" x-cloak x-on:click="close"></button>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="app-nav__search-row" :class="rowClass" :aria-hidden="hidden">
+    <div class="app-nav__search-inner">
+      <form class="app-nav__search" action="{{ shell.search_url }}" method="get" role="search">
+        <span class="app-nav__search-icon">{{ atoms::icon(name="fa-magnifying-glass") }}</span>
+        <input class="app-nav__search-input" type="search" name="q" value="{{ shell.search_query }}" placeholder="Tìm dịch vụ, nông sản..." aria-label="Tìm kiếm" enterkeyhint="search" required x-ref="input" :tabindex="tabIndex">
+        <button type="submit" class="app-nav__search-btn" aria-label="Tìm kiếm" :tabindex="tabIndex">{{ atoms::icon(name="fa-arrow-right") }}</button>
+      </form>
+    </div>
+  </div>
+</nav>
+{%- endmacro app_nav %}

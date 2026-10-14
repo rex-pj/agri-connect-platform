@@ -1,0 +1,18 @@
+{#- The "find someone near me" banner. A plain link: the explore page asks for
+    the location, not this banner. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro geo_cta(href, title="Tìm thợ gần bạn ngay", sub="Cơ khí · Phun thuốc · Múc bùn — trong 10 km", button="Bật định vị") -%}
+<a class="geo-cta" href="{{ href }}">
+  <span class="geo-cta__ripple geo-cta__ripple--1" aria-hidden="true"></span>
+  <span class="geo-cta__ripple geo-cta__ripple--2" aria-hidden="true"></span>
+  <span class="geo-cta__ripple geo-cta__ripple--3" aria-hidden="true"></span>
+  <span class="geo-cta__body">
+    <span class="geo-cta__pin">{{ atoms::icon(name="fa-location-dot") }}</span>
+    <span class="geo-cta__text">
+      <strong class="geo-cta__title">{{ title }}</strong>
+      <span class="geo-cta__sub">{{ sub }}</span>
+    </span>
+  </span>
+  <span class="geo-cta__btn">{{ button }} {{ atoms::icon(name="fa-arrow-right") }}</span>
+</a>
+{%- endmacro geo_cta %}

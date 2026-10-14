@@ -1,0 +1,35 @@
+{#- A product in a list: photo (or the category icon), name, price, seller,
+    and a call button. `p` is a ProductDto. -#}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/badge.html" as badge %}
+{% macro product_card(p) -%}
+{% set href = url_for(name="product", id=p.id, slug=p.name | slugify) %}
+<article class="card h-100 product-card hover-lift{% if not p.is_available %} opacity-75{% endif %}">
+  <a class="product-card__img" href="{{ href }}" tabindex="-1" aria-hidden="true">
+    <div class="ratio ratio-1x1">
+      {% if p.image_file_id %}
+      <img class="object-fit-cover w-100 h-100" src="{{ file_url(id=p.image_file_id, variant="thumb") }}" alt="{{ p.name }}" loading="lazy" decoding="async">
+      {% else %}
+      <div class="product-card__placeholder">
+        {{ atoms::icon(name=p.category_icon | default(value="fa-tag"), class="product-card__placeholder-icon") }}
+        <span class="product-card__placeholder-cat">{{ p.category }}</span>
+      </div>
+      {% endif %}
+    </div>
+    {% if not p.is_available %}{{ badge::badge(text="Hết hàng", variant="danger", class="product-card__sold-out") }}{% endif %}
+  </a>
+  <div class="card-body d-flex flex-column p-3 gap-2">
+    <h3 class="card-title fs-6 fw-bold mb-0 product-card__name"><a class="text-decoration-none text-dark" href="{{ href }}">{{ p.name }}</a></h3>
+    <div class="d-flex align-items-baseline gap-1 mt-auto">
+      {% if p.price %}
+      <span class="fw-bold product-card__price">{{ p.price | vnd }}</span>
+      {% if p.unit %}<small class="text-muted">/{{ p.unit }}</small>{% endif %}
+      {% else %}
+      <span class="fw-bold product-card__price-contact">Liên hệ giá</span>
+      {% endif %}
+    </div>
+    <p class="text-muted small mb-0 d-flex align-items-center gap-1">{{ atoms::icon(name="fa-shop") }} <span class="text-truncate">{{ p.vendor_name }}</span></p>
+    <a class="btn btn-success mt-1" href="tel:{{ p.vendor_phone }}">{{ atoms::icon(name="fa-phone") }} Gọi đặt hàng</a>
+  </div>
+</article>
+{%- endmacro product_card %}

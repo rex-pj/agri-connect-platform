@@ -33,6 +33,7 @@ use crate::{
         client_ip, origin,
         rate_limit::{self, Limiters, Scope},
     },
+    pages,
     routes::{FILE_PATH, FILE_THUMB_PATH},
     views,
 };
@@ -107,6 +108,7 @@ impl AppRouting {
         // ── GUEST (public) routes ────────────────────────────────────────────
         // Contact form is rate-limited separately to prevent spam.
         let public_routes = Router::new()
+            .route("/", get(pages::home::show))
             .route("/health/live", get(HealthHandler::live))
             .route("/health/ready", get(HealthHandler::ready))
             // GET /api/explore/providers — geo-search when lat+lng present, browse otherwise

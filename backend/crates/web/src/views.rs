@@ -15,7 +15,7 @@ use rust_embed::RustEmbed;
 use serde::Serialize;
 use tera::{Tera, Value};
 
-use crate::{app_state::AppState, extract::ApiPath, routes};
+use crate::{app_state::AppState, extract::ApiPath, routes, shell::Shell, slug::slugify};
 
 #[derive(RustEmbed)]
 #[folder = "templates/"]
@@ -60,11 +60,13 @@ pub struct Views {
     site: SiteConfig,
 }
 
-/// What every template sees: `site`, `lang`, and the handler's `page`.
+/// What every template sees: `site`, `lang`, the frame (`shell`: nav, tabs,
+/// account menu) and the handler's `page`.
 #[derive(Serialize)]
 struct PageContext<'a, T: Serialize> {
     site: &'a SiteConfig,
     lang: &'static str,
+    shell: &'a Shell,
     page: &'a T,
 }
 
@@ -154,6 +156,13 @@ impl Views {
                 .map_err(|e| tera::Error::msg(format!("file_url: {e}")))
         });
 
+        tera.register_filter("slugify", |value: &Value, _: &HashMap<String, Value>| {
+            value
+                .as_str()
+                .map(|s| Value::String(slugify(s)))
+                .ok_or_else(|| tera::Error::msg("slugify: expects a string"))
+        });
+
         tera.register_filter("vnd", |value: &Value, _: &HashMap<String, Value>| {
             let amount = value
                 .as_i64()
@@ -179,10 +188,16 @@ impl Views {
         Ok(Self { tera, site })
     }
 
-    fn render<T: Serialize>(&self, template: &str, page: &T) -> Result<String, Error> {
+    fn render<T: Serialize>(
+        &self,
+        shell: &Shell,
+        template: &str,
+        page: &T,
+    ) -> Result<String, Error> {
         let context = tera::Context::from_serialize(PageContext {
             site: &self.site,
             lang: "vi",
+            shell,
             page,
         })
         .map_err(|e| Error::internal(format!("page context for {template}: {}", chain(&e))))?;
@@ -277,19 +292,21 @@ fn page_headers(headers: &mut HeaderMap) {
 /// Renders `template` with the shared context and page headers.
 pub fn render_page<T: Serialize>(
     state: &AppState,
+    shell: &Shell,
     template: &str,
     page: &T,
 ) -> Result<Response, Error> {
-    render_page_status(state, StatusCode::OK, template, page)
+    render_page_status(state, shell, StatusCode::OK, template, page)
 }
 
 pub fn render_page_status<T: Serialize>(
     state: &AppState,
+    shell: &Shell,
     status: StatusCode,
     template: &str,
     page: &T,
 ) -> Result<Response, Error> {
-    let html = state.views.render(template, page)?;
+    let html = state.views.render(shell, template, page)?;
     let mut response = (status, html).into_response();
     page_headers(response.headers_mut());
     Ok(response)

@@ -1,0 +1,10 @@
+{#- Nothing to show yet: an icon, a line of text and one way forward. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro empty_state(icon, title, hint="", action_href="", action_icon="", action_label="") -%}
+<div class="empty-state">
+  <span class="empty-state__icon">{{ atoms::icon(name=icon) }}</span>
+  <p class="empty-state__title">{{ title }}</p>
+  {% if hint %}<p class="empty-state__hint">{{ hint }}</p>{% endif %}
+  {% if action_href %}<a class="btn btn-success empty-state__action" href="{{ action_href }}">{% if action_icon %}{{ atoms::icon(name=action_icon) }} {% endif %}{{ action_label }}</a>{% endif %}
+</div>
+{%- endmacro empty_state %}

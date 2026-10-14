@@ -1,5 +1,5 @@
-{% extends "layouts/base.html" %}
+{% extends "layouts/app.html" %}
 {% import "organisms/error_card.html" as organisms %}
 {% block title %}{{ page.status }} – {{ site.name }}{% endblock title %}
 {% block meta %}<meta name="robots" content="noindex">{% endblock meta %}
-{% block body %}{{ organisms::error_card(status=page.status, message=page.message, request_id=page.request_id) }}{% endblock body %}
+{% block main %}{{ organisms::error_card(status=page.status, message=page.message, request_id=page.request_id) }}{% endblock main %}

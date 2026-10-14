@@ -1,6 +1,6 @@
 # Production stack on the single Compute Engine VM. Started by
 # remote-deploy.sh with --env-file compose.env (DOMAIN, image tags, database
-# passwords); the app's own secrets come from /etc/agri-connect/web.env.
+# passwords, uploads bucket); the app's own secrets come from /etc/agri-connect/web.env.
 name: agri-connect
 
 services:
@@ -30,6 +30,9 @@ services:
       DATABASE_URL: postgres://agri_app:${APP_DB_PASSWORD}@db:5432/agri_connect
       APP_ENV: prod
       APP_URL: https://${DOMAIN}
+      # Product images. The VM service account reaches it through the metadata
+      # server; no key file.
+      GCS_BUCKET: ${GCS_BUCKET}
       HTTPS_ENABLED: "true"
       # Caddy is the one proxy in front; it appends the client address.
       TRUSTED_PROXY_HOPS: "1"

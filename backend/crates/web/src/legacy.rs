@@ -109,7 +109,10 @@ impl LegacyProxy {
 /// Paths Rust owns even when it has no page for them: they must answer with
 /// Rust's own coded 404, never a SvelteKit page.
 pub fn is_rust_only(path: &str) -> bool {
-    path.starts_with("/api/") || path.starts_with("/static/") || path.starts_with("/health/")
+    path.starts_with("/api/")
+        || path.starts_with("/static/")
+        || path.starts_with("/health/")
+        || path.starts_with("/files/")
 }
 
 #[cfg(test)]
@@ -121,6 +124,9 @@ mod tests {
         assert!(is_rust_only("/api/explore/products"));
         assert!(is_rust_only("/static/css/app.css"));
         assert!(is_rust_only("/health/ready"));
+        assert!(is_rust_only(
+            "/files/00000000-0000-0000-0000-000000000000/thumb"
+        ));
         assert!(!is_rust_only("/products/1/gao"));
         assert!(!is_rust_only("/"));
     }

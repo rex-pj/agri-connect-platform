@@ -29,6 +29,7 @@ tracing-subscriber.workspace = true
 tera.workspace               = true
 rust-embed.workspace         = true
 hyper-util.workspace         = true
+uuid.workspace               = true
 
 [lints]
 workspace = true

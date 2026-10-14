@@ -77,3 +77,21 @@ where
             .map_err(Error::from)
     }
 }
+
+/// `multipart/form-data`, for uploads. A request of another type is refused
+/// with `invalid_request_body`.
+pub struct ApiMultipart(pub axum::extract::Multipart);
+
+impl<S> FromRequest<S> for ApiMultipart
+where
+    S: Send + Sync,
+{
+    type Rejection = Error;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        <axum::extract::Multipart as FromRequest<S>>::from_request(req, state)
+            .await
+            .map(Self)
+            .map_err(Error::from)
+    }
+}

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use domain::{
-    models::{business::BusinessBrowse, inquiry::NewInquiry, product::ProductView},
+    models::{business::BusinessBrowse, inquiry::NewInquiry},
     repositories::{
         business_repository_trait::BusinessRepositoryTrait,
         category_repository_trait::CategoryRepositoryTrait,
@@ -150,7 +150,7 @@ impl ExploreUseCase {
                 .collect(),
             featured_products: featured_product_views
                 .into_iter()
-                .map(map_product_dto)
+                .map(ProductDto::from)
                 .collect(),
         })
     }
@@ -253,20 +253,5 @@ fn map_business_browse(b: BusinessBrowse) -> BusinessBrowseDto {
         is_verified: b.is_verified,
         services: b.services,
         created_on: b.created_on,
-    }
-}
-
-fn map_product_dto(p: ProductView) -> ProductDto {
-    ProductDto {
-        id: p.id,
-        name: p.name,
-        description: p.description,
-        price: p.price,
-        unit: p.unit,
-        category: p.category,
-        vendor_name: p.vendor_name,
-        vendor_phone: p.vendor_phone,
-        is_available: p.is_available,
-        created_on: p.created_on,
     }
 }

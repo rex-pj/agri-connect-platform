@@ -51,10 +51,11 @@ jobs:
           ZONE: ${{ vars.GCE_ZONE }}
           PROJECT: ${{ vars.GCP_PROJECT_ID }}
           DOMAIN: ${{ vars.DOMAIN }}
+          UPLOAD_BUCKET: ${{ vars.UPLOAD_BUCKET }}
         run: |
           gcloud compute scp --recurse --tunnel-through-iap --zone "$ZONE" --project "$PROJECT" \
             deploy "$VM:/tmp/agri-deploy-$SHA"
           gcloud compute ssh "$VM" --tunnel-through-iap --zone "$ZONE" --project "$PROJECT" --command \
-            "DOMAIN='$DOMAIN' GCP_PROJECT_ID='$PROJECT' REGISTRY_HOST='$REGISTRY_HOST' \
+            "DOMAIN='$DOMAIN' GCP_PROJECT_ID='$PROJECT' REGISTRY_HOST='$REGISTRY_HOST' UPLOAD_BUCKET='$UPLOAD_BUCKET' \
              bash /tmp/agri-deploy-$SHA/remote-deploy.sh '$REGISTRY/web:$SHA' '$REGISTRY/legacy:$SHA' \
              && rm -rf /tmp/agri-deploy-$SHA"

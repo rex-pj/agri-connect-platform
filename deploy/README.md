@@ -123,7 +123,25 @@ printf 'no-reply@DOMAIN' | gcloud secrets create agri-from-email --data-file=-
 
 The two database passwords take effect only when the data directory is first created (`db-init/01-app-role.sh`). To rotate one later, change it in Postgres (`ALTER ROLE ... PASSWORD`) and then add a new secret version.
 
-## 7. Backups
+## 7. Buckets: uploads and backups
+
+Product images live in their own private bucket. Deploys refuse to run without it: the container has no persistent disk, so local uploads would vanish on the next deploy.
+
+```bash
+gcloud storage buckets create gs://UPLOAD_BUCKET --location=REGION --uniform-bucket-level-access \
+  --public-access-prevention
+# Deleted or replaced images stay recoverable for 30 days, so a database
+# restored from an older dump still finds the images it points at.
+gcloud storage buckets update gs://UPLOAD_BUCKET --versioning
+echo '{"rule":[{"action":{"type":"Delete"},"condition":{"isLive":false,"daysSinceNoncurrentTime":30}}]}' > /tmp/lc-uploads.json
+gcloud storage buckets update gs://UPLOAD_BUCKET --lifecycle-file=/tmp/lc-uploads.json
+gcloud storage buckets add-iam-policy-binding gs://UPLOAD_BUCKET \
+  --member="serviceAccount:$VM_SA" --role=roles/storage.objectAdmin
+```
+
+Images are served through the app (`/files/{id}`), never from the bucket, so it stays private.
+
+Backups:
 
 ```bash
 gcloud storage buckets create gs://BACKUP_BUCKET --location=REGION --uniform-bucket-level-access
@@ -158,6 +176,7 @@ Under *Settings → Environments → production*:
 | `GCE_VM` | `agri-vm` |
 | `GCE_ZONE` | `ZONE` |
 | `DOMAIN` | `DOMAIN` |
+| `UPLOAD_BUCKET` | `UPLOAD_BUCKET` (step 7, without `gs://`) |
 
 The first deploy: *Actions → Deploy → Run workflow*.
 
@@ -197,5 +216,7 @@ gcloud storage cat gs://BACKUP_BUCKET/postgres/agri_connect-YYYYMMDDTHHMMSSZ.dum
 # 5. Start the app; startup migrations and catalogue seeding are idempotent.
 sudo docker compose --env-file /etc/agri-connect/compose.env start web legacy
 ```
+
+Images are not in the dump. A restored database points at images that existed when the dump was taken; any deleted since are noncurrent versions in the uploads bucket (kept 30 days) and can be restored with `gcloud storage cp` from their generation.
 
 If the disk itself is lost, restore the latest snapshot of `agri-pgdata` to a new disk, attach it as `pgdata`, and mount it as in step 5 (skip `mkfs`).

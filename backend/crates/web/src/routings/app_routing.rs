@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use application::ports::RateLimiter;
 use axum::{
+    extract::DefaultBodyLimit,
     http::{header, HeaderValue},
     middleware,
     response::IntoResponse,
@@ -18,18 +19,21 @@ use tower_http::{
 
 use crate::{
     app_state::AppState,
+    constants::MULTIPART_OVERHEAD_BYTES,
     error_response::render_errors,
     handlers::{
         admin_handler::AdminHandler, auth_handler::AuthHandler, explore_handler::ExploreHandler,
-        health_handler::HealthHandler, permission_handler::PermissionHandler,
-        products_handler::ProductsHandler, provider_dashboard_handler::ProviderDashboardHandler,
-        role_handler::RoleHandler, setup_handler::SetupHandler, stats_handler::StatsHandler,
+        health_handler::HealthHandler, media_handler::MediaHandler,
+        permission_handler::PermissionHandler, products_handler::ProductsHandler,
+        provider_dashboard_handler::ProviderDashboardHandler, role_handler::RoleHandler,
+        setup_handler::SetupHandler, stats_handler::StatsHandler,
     },
     legacy::{is_rust_only, LegacyProxy},
     middleware::{
         client_ip, origin,
         rate_limit::{self, Limiters, Scope},
     },
+    routes::{FILE_PATH, FILE_THUMB_PATH},
     views,
 };
 
@@ -132,7 +136,10 @@ impl AppRouting {
             .route(
                 "/api/explore/products/{id}",
                 get(ProductsHandler::get_product_by_id),
-            );
+            )
+            // Uploaded images, same-origin so the page CSP can stay img-src 'self'.
+            .route(FILE_PATH, get(MediaHandler::file))
+            .route(FILE_THUMB_PATH, get(MediaHandler::thumb));
 
         let contact_routes = Router::new()
             .route(
@@ -140,6 +147,18 @@ impl AppRouting {
                 post(ExploreHandler::contact_request),
             )
             .layer(limiter(&config.limiters.public_write, Scope::AllRequests));
+
+        // ── UPLOAD routes (own budget; body capped at UPLOAD_MAX_BYTES) ───────
+        // Every request counts: a rejected upload was still read and maybe decoded.
+        let upload_routes = Router::new()
+            .route(
+                "/api/provider/products/{id}/image",
+                put(MediaHandler::put_product_image),
+            )
+            .layer(DefaultBodyLimit::max(
+                state.usecases.media.max_upload_bytes() + MULTIPART_OVERHEAD_BYTES,
+            ))
+            .layer(limiter(&config.limiters.upload, Scope::AllRequests));
 
         // ── AUTH routes (no token required, rate-limited) ────────────────────
         let auth_routes = Router::new()
@@ -310,6 +329,7 @@ impl AppRouting {
         let mut router = Router::new()
             .merge(public_routes)
             .merge(contact_routes)
+            .merge(upload_routes)
             .merge(auth_routes)
             .merge(user_routes.layer(limiter(&config.limiters.member_write, Scope::WritesOnly)))
             .merge(admin_routes.layer(limiter(&config.limiters.member_write, Scope::WritesOnly)))

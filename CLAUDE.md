@@ -160,6 +160,7 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 | GET    | `/api/explore/products`       | Browse products (paginated, filter by `category_id?`)                              |
 | GET    | `/api/explore/products/{id}`  | Product detail                                                                     |
 | POST   | `/api/explore/contact`        | Submit contact/inquiry (rate-limited: 30/min)                                      |
+| GET    | `/files/{id}`, `/files/{id}/thumb` | Uploaded image (JPEG, cached forever; ids are never reused)             |
 
 ### Auth (rate-limited: 10 req/min)
 
@@ -231,6 +232,7 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 | POST   | `/api/provider/products`      | Create product              |
 | PUT    | `/api/provider/products/{id}` | Update product              |
 | DELETE | `/api/provider/products/{id}` | Delete product              |
+| PUT    | `/api/provider/products/{id}/image` | Replace product image (multipart field `image`; 20/min) |
 
 ### Setup (first-run / development only)
 
@@ -251,7 +253,7 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 - **JWT secret:** at least 32 bytes; startup refuses a shorter one
 - **Permissions:** granted to roles only (`role_permissions`); default grants applied once, so revocations stick
 - **Username minimum:** 3 characters
-- **Rate limiting:** per client address (behind `TRUSTED_PROXY_HOPS` proxies): auth 10/min, public writes 30/min, signed-in writes 120/min
+- **Rate limiting:** per client address (behind `TRUSTED_PROXY_HOPS` proxies): auth 10/min, public writes 30/min, signed-in writes 120/min, uploads 20/min
 - **Security headers:** `X-Content-Type-Options`, `X-Frame-Options`, `Content-Security-Policy`, `Strict-Transport-Security` (HTTPS only)
 - **CORS:** configured via environment variable
 
@@ -453,6 +455,7 @@ middleware / handlers  →  application (use cases, ports)  →  domain  ←  in
 
 **Infrastructure layer (`infrastructure/`)**
 - Concrete library types (`jsonwebtoken`, `bcrypt`, Sea-ORM) are confined to `infrastructure/`. Implement the port traits from `application/ports.rs` here.
+- Uploads never reach storage as sent: `MediaUseCase` passes them through the `ImageProcessor` port (type sniffed from bytes, pixel cap checked before decoding, re-encoded as JPEG, EXIF dropped). Storage is the `FileStorage` port (`GCS_BUCKET`, else `UPLOAD_DIR`). Templates link images only with `file_url(id=…, variant="thumb")`. Old images are deleted by the file-cleanup event subscriber, never inline.
 - `JwtTokenService` (in `infrastructure/jwt_token_service.rs`) is the only file that calls `jsonwebtoken::encode`. `BcryptPasswordHasher` (in `infrastructure/bcrypt_password_hasher.rs`) is the only file that calls `bcrypt::hash` / `bcrypt::verify`.
 
 **Errors (`domain/src/error.rs`, `web/src/error_response.rs`)**

@@ -18,6 +18,8 @@ pub enum ErrorKind {
     Conflict,
     Locked,
     TooManyRequests,
+    /// An upload over the size cap.
+    PayloadTooLarge,
     Internal,
     /// A dependency (the database) is down; retrying later may succeed.
     Unavailable,
@@ -94,6 +96,13 @@ error_codes! {
     InvalidProductCategory    => (BadRequest,      "invalid_product_category"),
     InvalidServiceCategory    => (BadRequest,      "invalid_service_category"),
 
+    // ── Uploads ──────────────────────────────────────────────────────────────
+    FileTooLarge              => (PayloadTooLarge, "file_too_large"),
+    ImageRequired             => (BadRequest,      "image_required"),
+    UnsupportedImageType      => (BadRequest,      "unsupported_image_type"),
+    ImageTooManyPixels        => (BadRequest,      "image_too_many_pixels"),
+    InvalidImage              => (BadRequest,      "invalid_image"),
+
     // ── Conflicts ────────────────────────────────────────────────────────────
     UsernameTaken             => (Conflict,        "username_taken"),
     UsernameTakenByOtherRole  => (Conflict,        "username_taken_by_other_role"),
@@ -112,6 +121,7 @@ error_codes! {
     LocationNotFound          => (NotFound,        "location_not_found"),
     InquiryNotFound           => (NotFound,        "inquiry_not_found"),
     ReviewNotFound            => (NotFound,        "review_not_found"),
+    FileNotFound              => (NotFound,        "file_not_found"),
 }
 
 /// One field that failed validation. Parameters belong to the field: two rules
@@ -282,7 +292,10 @@ mod http {
     //! would answer with an empty body, which the web crate's tests guard.
 
     use axum::{
-        extract::rejection::{JsonRejection, PathRejection, QueryRejection},
+        extract::{
+            multipart::MultipartRejection,
+            rejection::{JsonRejection, PathRejection, QueryRejection},
+        },
         http::StatusCode,
         response::{IntoResponse, Response},
     };
@@ -299,6 +312,7 @@ mod http {
                 ErrorKind::Conflict => StatusCode::CONFLICT,
                 ErrorKind::Locked => StatusCode::LOCKED,
                 ErrorKind::TooManyRequests => StatusCode::TOO_MANY_REQUESTS,
+                ErrorKind::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
                 ErrorKind::Internal => StatusCode::INTERNAL_SERVER_ERROR,
                 ErrorKind::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
             }
@@ -328,6 +342,12 @@ mod http {
     impl From<QueryRejection> for Error {
         fn from(rejection: QueryRejection) -> Self {
             Error::new(ErrorCode::InvalidQuery).with_detail(rejection.body_text())
+        }
+    }
+
+    impl From<MultipartRejection> for Error {
+        fn from(rejection: MultipartRejection) -> Self {
+            Error::new(ErrorCode::InvalidRequestBody).with_detail(rejection.body_text())
         }
     }
 }

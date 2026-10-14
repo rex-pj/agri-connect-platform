@@ -80,6 +80,8 @@ fn inner_layers_name_no_framework_or_driver() {
             "tower::",
             "tower_http::",
             "tera::",
+            "image::",
+            "object_store::",
         ],
         &[],
         "domain/application must reach infrastructure only through port and repository traits",
@@ -97,9 +99,9 @@ fn inner_layers_name_no_framework_or_driver() {
 fn only_infrastructure_names_drivers() {
     assert_absent(
         &["web"],
-        &["jsonwebtoken::", "bcrypt::", "lettre::"],
+        &["jsonwebtoken::", "bcrypt::", "lettre::", "image::", "object_store::"],
         &[],
-        "the web layer must use the TokenService/PasswordHasher/EmailService ports",
+        "the web layer must use the TokenService/PasswordHasher/EmailService/ImageProcessor/FileStorage ports",
     );
 }
 
@@ -119,9 +121,15 @@ fn handlers_use_the_coded_extractors() {
     // localised error renderer.
     assert_absent(
         &["web"],
-        &["Json(req): Json<", ": Path<", ": Query<", "Option<Json<"],
+        &[
+            "Json(req): Json<",
+            ": Path<",
+            ": Query<",
+            "Option<Json<",
+            ": Multipart",
+        ],
         &[],
-        "use ApiJson/ApiPath/ApiQuery from web::extract",
+        "use ApiJson/ApiPath/ApiQuery/ApiMultipart from web::extract",
     );
 }
 

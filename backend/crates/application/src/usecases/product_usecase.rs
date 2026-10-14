@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use domain::{
-    models::product::{ProductFilter, ProductView},
-    repositories::product_repository_trait::ProductRepositoryTrait,
+    models::product::ProductFilter, repositories::product_repository_trait::ProductRepositoryTrait,
     Error, ErrorCode, Result,
 };
 
@@ -38,7 +37,7 @@ impl ProductUseCase {
         )?;
 
         Ok(ProductBrowseResponse {
-            items: products.into_iter().map(map_product_dto).collect(),
+            items: products.into_iter().map(ProductDto::from).collect(),
             total,
             page,
             per_page: PAGE_SIZE,
@@ -53,23 +52,6 @@ impl ProductUseCase {
             .await?
             .ok_or_else(|| Error::new(ErrorCode::ProductNotFound))?;
 
-        Ok(map_product_dto(product))
-    }
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-fn map_product_dto(p: ProductView) -> ProductDto {
-    ProductDto {
-        id: p.id,
-        name: p.name,
-        description: p.description,
-        price: p.price,
-        unit: p.unit,
-        category: p.category,
-        vendor_name: p.vendor_name,
-        vendor_phone: p.vendor_phone,
-        is_available: p.is_available,
-        created_on: p.created_on,
+        Ok(ProductDto::from(product))
     }
 }

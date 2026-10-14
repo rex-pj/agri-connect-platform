@@ -136,6 +136,24 @@ impl Views {
                 .map_err(|e| tera::Error::msg(format!("url_for: {e}")))
         });
 
+        // file_url(id=product.image_file_id, variant="thumb"): our own origin,
+        // so pages keep img-src 'self'.
+        tera.register_function("file_url", |args: &HashMap<String, Value>| {
+            let id = string_arg(args, "id", "file_url")?;
+            let route = match args.get("variant").and_then(Value::as_str) {
+                None | Some("main") => "file",
+                Some("thumb") => "file_thumb",
+                Some(other) => {
+                    return Err(tera::Error::msg(format!(
+                        "file_url: variant {other:?} is not main or thumb"
+                    )))
+                }
+            };
+            routes::url(route, &[("id", id)])
+                .map(Value::String)
+                .map_err(|e| tera::Error::msg(format!("file_url: {e}")))
+        });
+
         tera.register_filter("vnd", |value: &Value, _: &HashMap<String, Value>| {
             let amount = value
                 .as_i64()
@@ -360,6 +378,26 @@ mod tests {
         let views = Views::new(SiteConfig::default())?;
         assert!(views.tera.get_template_names().count() > 0);
         assert!(asset_versions().contains_key("css/app.css"));
+        Ok(())
+    }
+
+    #[test]
+    fn file_url_points_at_our_own_file_routes() -> Result<(), Error> {
+        let mut tera = Views::new(SiteConfig::default())?.tera;
+        let mut render = |src: &str| {
+            tera.render_str(src, &tera::Context::new())
+                .map_err(|e| chain(&e))
+        };
+        assert_eq!(
+            render(r#"{{ file_url(id="ab12") }}"#),
+            Ok("/files/ab12".into())
+        );
+        assert_eq!(
+            render(r#"{{ file_url(id="ab12", variant="thumb") }}"#),
+            Ok("/files/ab12/thumb".into())
+        );
+        // A typo fails the render instead of shipping a broken image.
+        assert!(render(r#"{{ file_url(id="ab12", variant="large") }}"#).is_err());
         Ok(())
     }
 }

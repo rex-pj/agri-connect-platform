@@ -32,6 +32,7 @@ axum = { version = "0.8", default-features = false, features = [
     "tokio", # axum::serve and ConnectInfo (rate limiting keys on the peer address)
     "json",  # Json extractor/response for the whole /api surface
     "query", # Query extractor for list and search endpoints
+    "multipart", # product image uploads (multipart/form-data, works without JS)
 ] }
 tower = { version = "0.5", default-features = false, features = [
     "util", # ServiceExt::oneshot drives the router in tests without a socket
@@ -84,6 +85,22 @@ hyper-util = { version = "0.1", default-features = false, features = [
     "tokio",         # TokioExecutor + connector for that client
 ] }
 
+uuid = { version = "1", default-features = false, features = [
+    "std",
+    "v4",    # random file ids: unguessable, and never reused, so served images can be cached forever
+    "serde", # file ids in JSON responses
+] }
+sha2 = { version = "0.10", default-features = false } # content hash stored with each file
+image = { version = "0.25", default-features = false, features = [
+    "jpeg", # decode phone photos; also the only format we encode and serve
+    "png",  # decode screenshots and scanned price lists
+    "webp", # decode images saved from the web or Zalo
+] }
+object_store = { version = "0.12", default-features = false, features = [
+    "gcp", # Google Cloud Storage in production (VM service account via the metadata server)
+    "fs",  # local-disk storage in development and on a VM without a bucket
+] }
+
 regex = { version = "1", default-features = false, features = [
     "std", # test-only: template convention scans; ASCII patterns need nothing more
 ] }
@@ -112,6 +129,7 @@ sea-orm = { version = "1.1", default-features = false, features = [
     "runtime-tokio-rustls", # async runtime + TLS for the pool, matching the server runtime
     "macros",               # DeriveEntityModel / FromQueryResult on entities and query rows
     "with-chrono",          # TIMESTAMPTZ <-> chrono types
+    "with-uuid",            # files.id UUID <-> uuid::Uuid
 ] }
 sea-orm-migration = { version = "1.1", default-features = false, features = [
     "sqlx-postgres",

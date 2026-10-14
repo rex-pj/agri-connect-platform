@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs on the VM, invoked by .github/workflows/deploy.yml over IAP SSH:
 #
-#   DOMAIN=... GCP_PROJECT_ID=... REGISTRY_HOST=... \
+#   DOMAIN=... GCP_PROJECT_ID=... REGISTRY_HOST=... UPLOAD_BUCKET=... \
 #   bash remote-deploy.sh <web-image> <legacy-image>
 #
 # Renders env files from Secret Manager, starts the new images, waits for
@@ -13,6 +13,9 @@ LEGACY_IMAGE="$2"
 : "${DOMAIN:?DOMAIN is required}"
 : "${GCP_PROJECT_ID:?GCP_PROJECT_ID is required}"
 : "${REGISTRY_HOST:?REGISTRY_HOST is required (e.g. asia-southeast1-docker.pkg.dev)}"
+# The container has no persistent disk for uploads: without a bucket every
+# product image would vanish on the next deploy.
+: "${UPLOAD_BUCKET:?UPLOAD_BUCKET is required (README, step 7)}"
 
 APP_DIR=/opt/agri-connect
 ETC_DIR=/etc/agri-connect
@@ -62,6 +65,7 @@ sudo install -m 600 "$tmp" "$ETC_DIR/web.env"
 compose_env() {
   cat <<ENV
 DOMAIN=$DOMAIN
+GCS_BUCKET=$UPLOAD_BUCKET
 WEB_IMAGE=$1
 LEGACY_IMAGE=$2
 POSTGRES_PASSWORD=$(secret agri-postgres-password)

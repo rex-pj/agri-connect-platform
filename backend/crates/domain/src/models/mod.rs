@@ -1,6 +1,7 @@
 pub mod business;
 pub mod catalogue;
 pub mod category;
+pub mod file;
 pub mod inquiry;
 pub mod location;
 pub mod permission;

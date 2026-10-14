@@ -9,6 +9,8 @@ pub mod db_types;
 pub mod demo_data_repository;
 pub mod email_service;
 pub mod entities;
+pub mod file_storage;
+pub mod image_processor;
 pub mod jwt_token_service;
 pub mod rate_limiter;
 pub mod repositories;

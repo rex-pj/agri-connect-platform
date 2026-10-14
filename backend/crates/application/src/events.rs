@@ -6,13 +6,20 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use domain::{
-    events::{Change, DomainEvent},
-    repositories::audit_log_repository_trait::AuditLogRepositoryTrait,
+    events::{Change, DomainEvent, Entity},
+    repositories::{
+        audit_log_repository_trait::AuditLogRepositoryTrait,
+        file_repository_trait::FileRepositoryTrait,
+        product_repository_trait::ProductRepositoryTrait,
+    },
     Result,
 };
 use tracing::warn;
 
-use crate::ports::EventBus;
+use crate::{
+    ports::{EventBus, FileStorage},
+    usecases::media_usecase::release_file,
+};
 
 #[async_trait]
 pub trait EventSubscriber: Send + Sync {
@@ -57,7 +64,6 @@ impl AuditLogSubscriber {
 }
 
 pub fn audit_action(event: &DomainEvent) -> String {
-    use domain::events::Entity;
     let entity = event.entity.as_str();
     match (&event.change, event.entity) {
         (Change::Visibility { visible: true }, Entity::Provider) => "verify_provider".into(),
@@ -68,6 +74,7 @@ pub fn audit_action(event: &DomainEvent) -> String {
         (Change::Visibility { visible: false }, _) => format!("hide_{entity}"),
         (Change::Deleted, _) => format!("delete_{entity}"),
         (Change::RoleChanged { .. }, _) => format!("change_{entity}_role"),
+        (Change::ImageReplaced { .. }, _) => format!("replace_{entity}_image"),
     }
 }
 
@@ -95,10 +102,51 @@ impl EventSubscriber for AuditLogSubscriber {
     }
 }
 
+/// Removes images nothing points at any more: the one a product just
+/// replaced, and the one of a product just deleted. A failure leaves an
+/// orphaned object (logged by the bus), never a broken image on a live page.
+pub struct FileCleanupSubscriber {
+    products: Arc<dyn ProductRepositoryTrait + Send + Sync>,
+    files: Arc<dyn FileRepositoryTrait + Send + Sync>,
+    storage: Arc<dyn FileStorage>,
+}
+
+impl FileCleanupSubscriber {
+    pub fn new(
+        products: Arc<dyn ProductRepositoryTrait + Send + Sync>,
+        files: Arc<dyn FileRepositoryTrait + Send + Sync>,
+        storage: Arc<dyn FileStorage>,
+    ) -> Self {
+        Self {
+            products,
+            files,
+            storage,
+        }
+    }
+}
+
+#[async_trait]
+impl EventSubscriber for FileCleanupSubscriber {
+    fn name(&self) -> &'static str {
+        "file_cleanup"
+    }
+
+    async fn handle(&self, event: &DomainEvent) -> Result<()> {
+        let unreferenced = match (&event.change, event.entity) {
+            (Change::ImageReplaced { previous }, _) => *previous,
+            // Products are soft-deleted, so the row still names its image.
+            (Change::Deleted, Entity::Product) => self.products.image_of(event.entity_id).await?,
+            _ => None,
+        };
+        match unreferenced {
+            Some(id) => release_file(self.files.as_ref(), self.storage.as_ref(), id).await,
+            None => Ok(()),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use domain::events::Entity;
-
     use super::*;
 
     fn event(entity: Entity, change: Change) -> DomainEvent {

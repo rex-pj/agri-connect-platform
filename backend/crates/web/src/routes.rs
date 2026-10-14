@@ -6,6 +6,11 @@
 //! stable is therefore a one-line review, not a grep.
 
 /// (name, pattern). `{param}` segments are filled from the call's arguments.
+/// Uploaded images. Also the router's patterns, so the served path and the
+/// linked one cannot differ.
+pub const FILE_PATH: &str = "/files/{id}";
+pub const FILE_THUMB_PATH: &str = "/files/{id}/thumb";
+
 pub const ROUTES: &[(&str, &str)] = &[
     ("home", "/"),
     ("login", "/login"),
@@ -45,6 +50,8 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("admin_services", "/admin/services"),
     ("admin_permissions", "/admin/permissions"),
     ("admin_logout", "/admin/logout"),
+    ("file", FILE_PATH),
+    ("file_thumb", FILE_THUMB_PATH),
 ];
 
 #[derive(Debug, PartialEq, Eq)]

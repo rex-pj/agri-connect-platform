@@ -8,21 +8,27 @@ use std::{
     },
 };
 
-use application::ports::{EmailService, TokenService};
+use application::{
+    constants::DEFAULT_UPLOAD_MAX_BYTES,
+    ports::{EmailService, TokenService},
+};
 use axum::{
     body::Body,
     extract::ConnectInfo,
     http::{Request, Response},
     Router,
 };
-use infrastructure::{email_service::LogEmailService, jwt_token_service::JwtTokenService};
+use infrastructure::{
+    email_service::LogEmailService, file_storage::ObjectFileStorage,
+    jwt_token_service::JwtTokenService,
+};
 use migration::{Migrator, MigratorTrait};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use tower::ServiceExt;
 use web::{
     app_state::AppState,
     routings::app_routing::{AppRouting, RouterConfig},
-    startup::build_state,
+    startup::{build_state, Uploads},
 };
 
 pub const TEST_JWT_SECRET: &str = "integration-test-secret-at-least-32-bytes";
@@ -35,13 +41,26 @@ pub fn email_service() -> Arc<dyn EmailService> {
     Arc::new(LogEmailService::new("http://localhost:3000".into()))
 }
 
+/// Uploads kept in memory, with the production size cap unless given.
+pub fn memory_uploads(max_bytes: Option<usize>) -> Uploads {
+    Uploads {
+        storage: Arc::new(ObjectFileStorage::in_memory()),
+        max_bytes: max_bytes.unwrap_or(DEFAULT_UPLOAD_MAX_BYTES),
+    }
+}
+
 /// State over `db`, wired exactly as production wires it.
 pub fn state(db: DatabaseConnection) -> AppState {
+    state_with_uploads(db, memory_uploads(None))
+}
+
+pub fn state_with_uploads(db: DatabaseConnection, uploads: Uploads) -> AppState {
     build_state(
         web::startup::Databases::single(db),
         token_service(),
         email_service(),
         web::views::SiteConfig::default(),
+        uploads,
     )
     .unwrap()
 }

@@ -757,23 +757,7 @@ impl AdminUseCase {
             .list_admin(provider_id, ADMIN_PAGE_SIZE, offset)
             .await?;
         Ok(AdminPagedResponse {
-            items: items
-                .into_iter()
-                .map(|p| AdminProductDto {
-                    id: p.id,
-                    name: p.name,
-                    description: p.description,
-                    price: p.price,
-                    unit: p.unit,
-                    category: p.category,
-                    category_id: p.category_id,
-                    business_id: p.business_id,
-                    business_name: p.business_name,
-                    is_active: p.is_active,
-                    created_on: p.created_on,
-                    updated_on: p.updated_on,
-                })
-                .collect(),
+            items: items.into_iter().map(AdminProductDto::from).collect(),
             total,
             page,
             per_page: ADMIN_PAGE_SIZE,
@@ -792,20 +776,7 @@ impl AdminUseCase {
             .find_by_id_admin(id)
             .await?
             .ok_or_else(|| Error::new(ErrorCode::ProductNotFound))?;
-        Ok(AdminProductDto {
-            id: p.id,
-            name: p.name,
-            description: p.description,
-            price: p.price,
-            unit: p.unit,
-            category: p.category,
-            category_id: p.category_id,
-            business_id: p.business_id,
-            business_name: p.business_name,
-            is_active: p.is_active,
-            created_on: p.created_on,
-            updated_on: p.updated_on,
-        })
+        Ok(AdminProductDto::from(p))
     }
 
     pub async fn toggle_product_active(

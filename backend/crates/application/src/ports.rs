@@ -55,3 +55,42 @@ pub trait RateLimiter: Send + Sync {
     /// table keeps one entry per address ever seen, forever.
     fn forget_idle(&self);
 }
+
+/// Where uploaded objects live (a bucket in production, a directory in
+/// development). Keys are ours (`images/<uuid>.jpg`), never user input. The
+/// content type is kept in the `files` row, not on the object.
+#[async_trait]
+pub trait FileStorage: Send + Sync {
+    async fn put(&self, key: &str, bytes: Vec<u8>) -> Result<()>;
+
+    /// Whole object in memory: stored images are re-encoded and capped at a
+    /// few hundred KB, so streaming would buy nothing.
+    async fn get(&self, key: &str) -> Result<Vec<u8>>;
+
+    /// Deleting a missing key succeeds: cleanup may run twice.
+    async fn delete(&self, key: &str) -> Result<()>;
+}
+
+/// One re-encoded image, ready to store.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EncodedImage {
+    pub bytes: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProcessedImage {
+    pub main: EncodedImage,
+    pub thumb: EncodedImage,
+    /// The encoder's type for both, e.g. `image/jpeg`.
+    pub content_type: &'static str,
+}
+
+/// Turns untrusted upload bytes into images we are willing to serve. Fails
+/// with `unsupported_image_type`, `image_too_many_pixels` or `invalid_image`.
+/// Async because the adapter must run the decoding off the async workers.
+#[async_trait]
+pub trait ImageProcessor: Send + Sync {
+    async fn process(&self, upload: Vec<u8>) -> Result<ProcessedImage>;
+}

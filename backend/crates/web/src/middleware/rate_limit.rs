@@ -16,6 +16,7 @@ use infrastructure::rate_limiter::InProcessRateLimiter;
 use crate::{
     constants::{
         AUTH_RATE_LIMIT_PER_MIN, MEMBER_WRITE_RATE_LIMIT_PER_MIN, PUBLIC_WRITE_RATE_LIMIT_PER_MIN,
+        UPLOAD_RATE_LIMIT_PER_MIN,
     },
     middleware::client_ip::ClientIp,
 };
@@ -30,6 +31,8 @@ pub struct Limiters {
     pub public_write: Arc<dyn RateLimiter>,
     /// Signed-in writes: admin and provider dashboard changes.
     pub member_write: Arc<dyn RateLimiter>,
+    /// Image uploads (decoding is CPU work).
+    pub upload: Arc<dyn RateLimiter>,
 }
 
 impl Limiters {
@@ -42,6 +45,7 @@ impl Limiters {
             member_write: Arc::new(InProcessRateLimiter::per_minute(
                 MEMBER_WRITE_RATE_LIMIT_PER_MIN,
             )),
+            upload: Arc::new(InProcessRateLimiter::per_minute(UPLOAD_RATE_LIMIT_PER_MIN)),
         }
     }
 
@@ -49,6 +53,7 @@ impl Limiters {
         self.auth.forget_idle();
         self.public_write.forget_idle();
         self.member_write.forget_idle();
+        self.upload.forget_idle();
     }
 }
 

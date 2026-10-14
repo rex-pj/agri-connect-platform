@@ -838,3 +838,34 @@ Tests (database):
 
 Found on the way:
 - sea-query 0.32 binds only `$1`-style placeholders in a custom Postgres expression; a `?` stays in the SQL unbound and Postgres reports a syntax error. So the `%` wildcards are part of the bound value, not SQL literals.
+
+### S4 — media storage (same branch)
+
+Done:
+- **Migration** `m20261014_000003_files`: the `files` table, `products.image_file_id` (FK, `ON DELETE SET NULL`), and an index on it so deleting a file does not scan products.
+- **Ports:** `FileStorage` (put/get/delete) and `ImageProcessor`. One `object_store` adapter covers GCS (`GCS_BUCKET`, VM service account through the metadata server), local disk (`UPLOAD_DIR`) and memory (tests).
+- **Pipeline** (`MediaUseCase::store_product_image`):
+  1. `own.listing.update` and ownership are checked before any decoding.
+  2. Size cap: `UPLOAD_MAX_BYTES`, enforced by the body limit and again in the use case.
+  3. Type sniffed from the magic bytes.
+  4. Pixel cap read from the header before decoding.
+  5. EXIF orientation applied, then the image is resized (1600/400) and re-encoded as JPEG q80. The test fixture's EXIF block does not survive.
+  6. Both objects are stored, then the row; whatever was written is removed again on failure.
+- **API:** `PUT /api/provider/products/{id}/image` (multipart field `image`), with its own rate-limit group (20/min). `image_file_id` appears in the product JSON. Admin and provider product DTOs are now built through `From` impls instead of four copies of the same mapping.
+- **Serving:** `GET /files/{id}` and `/files/{id}/thumb`, with the stored type, `immutable` caching and `nosniff`. Templates use `file_url(id, variant)`. `/files/` is never proxied to SvelteKit.
+- **Cleanup:** a `FileCleanupSubscriber` on the event bus removes the image a product replaced (`Change::ImageReplaced`) or the image of a product just deleted (`Change::Deleted`). Provider deletions now publish events too, so they are audited as well.
+- **Deploy:** an `UPLOAD_BUCKET` GitHub variable becomes `GCS_BUCKET`, and deploys refuse to run without it. README step 7 creates the bucket: private, versioned, noncurrent versions kept 30 days so a restored database still finds its images.
+
+Changed from §8.7, and why:
+- `FileStorage::put` takes no content type. The type lives in the `files` row, and the local-disk store cannot keep one on the object.
+- `get` returns the whole object rather than a stream. Stored images are re-encoded and capped at a few hundred KB, so streaming would buy nothing.
+- The decoding sits behind an `ImageProcessor` port: application code must not name the `image` crate.
+- There are no `ProductImageReplaced`/`ProductDeleted` event types. A `Change::ImageReplaced { previous }` variant was added instead, and the existing `Change::Deleted` is reused.
+- Phone photos are rotated by their EXIF orientation before EXIF is dropped. Without that, portrait photos would come out sideways.
+
+Tests:
+- Unit: EXIF dropped and its rotation applied, resizing, transparent PNG onto white, WebP accepted, GIF/SVG/empty refused, truncated JPEG reported as invalid, a PNG header claiming 50 000 × 50 000 refused before decoding, storage round trips (memory and disk), `file_url`.
+- Router: an anonymous upload gets 401 before its body is read.
+- Database: upload and serve (headers, both variants, id in the public product JSON); a replaced image is removed; deleting the product removes its image; another provider's product answers 404 and nothing is stored; too large (both limits), a renamed script, a missing field and an empty file each get their code, and nothing is stored.
+
+Not done: a run of the real server over TCP. There is no `psql` on this machine to create a throwaway database, and I did not want test accounts in the dev database. The router tests cover the same path in-process.

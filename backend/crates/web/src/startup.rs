@@ -5,13 +5,18 @@ use std::{net::SocketAddr, sync::Arc};
 
 use application::{
     catalogue::CATALOGUE,
-    events::{AuditLogSubscriber, InProcessEventBus},
-    ports::{EmailService, EventBus, PasswordHasher, TokenService},
+    constants::{
+        DEFAULT_UPLOAD_MAX_BYTES, IMAGE_JPEG_QUALITY, IMAGE_MAIN_MAX_SIDE, IMAGE_MAX_PIXELS,
+        IMAGE_THUMB_MAX_SIDE,
+    },
+    events::{AuditLogSubscriber, FileCleanupSubscriber, InProcessEventBus},
+    ports::{EmailService, EventBus, FileStorage, PasswordHasher, TokenService},
     usecases::{
         admin_usecase::{AdminDeps, AdminUseCase},
         auth_usecase::AuthUseCase,
         explore_usecase::ExploreUseCase,
         health_usecase::HealthUseCase,
+        media_usecase::{MediaDeps, MediaUseCase},
         permission_usecase::PermissionUseCase,
         product_usecase::ProductUseCase,
         provider_dashboard_usecase::ProviderDashboardUseCase,
@@ -24,14 +29,17 @@ use infrastructure::{
     catalogue_repository::CatalogueRepository,
     demo_data_repository::DemoDataRepository,
     email_service::{LogEmailService, SmtpConfig, SmtpEmailService},
+    file_storage::ObjectFileStorage,
+    image_processor::{ImageRules, RasterImageProcessor},
     jwt_token_service::JwtTokenService,
     repositories::{
         audit_log_repository::AuditLogRepository, business_repository::BusinessRepository,
-        category_repository::CategoryRepository, health_repository::HealthRepository,
-        inquiry_repository::InquiryRepository, location_repository::LocationRepository,
-        permission_repository::PermissionRepository, product_repository::ProductRepository,
-        review_repository::ReviewRepository, role_repository::RoleRepository,
-        service_repository::ServiceRepository, user_repository::UserRepository,
+        category_repository::CategoryRepository, file_repository::FileRepository,
+        health_repository::HealthRepository, inquiry_repository::InquiryRepository,
+        location_repository::LocationRepository, permission_repository::PermissionRepository,
+        product_repository::ProductRepository, review_repository::ReviewRepository,
+        role_repository::RoleRepository, service_repository::ServiceRepository,
+        user_repository::UserRepository,
     },
 };
 use migration::{Migrator, MigratorTrait};
@@ -40,7 +48,7 @@ use tracing::{info, warn};
 
 use crate::{
     app_state::{AppState, UseCases},
-    constants::{DB_MAX_CONNECTIONS, DEFAULT_APP_URL, DEFAULT_BIND_ADDR},
+    constants::{DB_MAX_CONNECTIONS, DEFAULT_APP_URL, DEFAULT_BIND_ADDR, DEFAULT_UPLOAD_DIR},
     legacy::LegacyProxy,
     locale::Locale,
     middleware::{origin::origin_of, rate_limit::Limiters},
@@ -246,6 +254,39 @@ fn site_config() -> SiteConfig {
     }
 }
 
+/// Where uploads go and how big they may be.
+#[derive(Clone)]
+pub struct Uploads {
+    pub storage: Arc<dyn FileStorage>,
+    pub max_bytes: usize,
+}
+
+/// `GCS_BUCKET` (production) or else `UPLOAD_DIR`; `UPLOAD_MAX_BYTES`.
+fn uploads() -> Result<Uploads, StartupError> {
+    let storage: Arc<dyn FileStorage> = match optional_env("GCS_BUCKET") {
+        Some(bucket) => {
+            info!(%bucket, "uploads are stored in Google Cloud Storage");
+            Arc::new(ObjectFileStorage::gcs(&bucket)?)
+        }
+        None => {
+            let dir = optional_env("UPLOAD_DIR").unwrap_or_else(|| DEFAULT_UPLOAD_DIR.to_owned());
+            warn!(%dir, "GCS_BUCKET not set; uploads are stored on local disk");
+            Arc::new(ObjectFileStorage::local(std::path::Path::new(&dir))?)
+        }
+    };
+    let max_bytes =
+        match optional_env("UPLOAD_MAX_BYTES") {
+            None => DEFAULT_UPLOAD_MAX_BYTES,
+            Some(v) => v.parse().ok().filter(|&n: &usize| n > 0).ok_or_else(|| {
+                StartupError::InvalidEnv {
+                    name: "UPLOAD_MAX_BYTES",
+                    reason: format!("{v:?} is not a positive byte count"),
+                }
+            })?,
+        };
+    Ok(Uploads { storage, max_bytes })
+}
+
 /// The write pool and the read pool. They are the same pool unless
 /// `DATABASE_READ_URL` is set; keeping two handles now means a read replica
 /// can be added later without touching the wiring.
@@ -280,6 +321,7 @@ pub fn build_state(
     token_service: Arc<dyn TokenService>,
     email: Arc<dyn EmailService>,
     site: SiteConfig,
+    uploads: Uploads,
 ) -> Result<AppState, StartupError> {
     let db = dbs.primary;
     let business_repo = Arc::new(BusinessRepository::new(Arc::clone(&db)));
@@ -289,6 +331,7 @@ pub fn build_state(
     let location_repo = Arc::new(LocationRepository::new(Arc::clone(&db)));
     let review_repo = Arc::new(ReviewRepository::new(Arc::clone(&db)));
     let service_repo = Arc::new(ServiceRepository::new(Arc::clone(&db)));
+    let file_repo = Arc::new(FileRepository::new(Arc::clone(&db)));
     // Read-only, and checked on many requests: the natural first user of a replica.
     let permission_repo = Arc::new(PermissionRepository::new(Arc::clone(&dbs.read)));
     let role_repo = Arc::new(RoleRepository::new(Arc::clone(&db)));
@@ -300,11 +343,22 @@ pub fn build_state(
     let health_repo = Arc::new(HealthRepository::new(Arc::clone(&db)));
 
     let password_hasher: Arc<dyn PasswordHasher> = Arc::new(BcryptPasswordHasher);
-    // Subscribers run in this order for every event; the audit log is the
-    // only one today. Notifications and webhooks would be added here.
-    let events: Arc<dyn EventBus> = Arc::new(InProcessEventBus::new(vec![Arc::new(
-        AuditLogSubscriber::new(audit_log_repo),
-    )]));
+    // Subscribers run in this order for every event. Notifications and
+    // webhooks would be added here.
+    let events: Arc<dyn EventBus> = Arc::new(InProcessEventBus::new(vec![
+        Arc::new(AuditLogSubscriber::new(audit_log_repo)),
+        Arc::new(FileCleanupSubscriber::new(
+            product_repo.clone(),
+            file_repo.clone(),
+            uploads.storage.clone(),
+        )),
+    ]));
+    let images = Arc::new(RasterImageProcessor::new(ImageRules {
+        max_pixels: IMAGE_MAX_PIXELS,
+        main_max_side: IMAGE_MAIN_MAX_SIDE,
+        thumb_max_side: IMAGE_THUMB_MAX_SIDE,
+        jpeg_quality: IMAGE_JPEG_QUALITY,
+    }));
 
     let usecases = UseCases {
         explore: ExploreUseCase::new(
@@ -315,6 +369,14 @@ pub fn build_state(
             product_repo.clone(),
         ),
         health: HealthUseCase::new(health_repo),
+        media: MediaUseCase::new(MediaDeps {
+            products: product_repo.clone(),
+            files: file_repo,
+            storage: uploads.storage,
+            images,
+            events: events.clone(),
+            max_upload_bytes: uploads.max_bytes,
+        }),
         product: ProductUseCase::new(product_repo.clone()),
         admin: AdminUseCase::new(AdminDeps {
             business_repo: business_repo.clone(),
@@ -326,7 +388,7 @@ pub fn build_state(
             product_repo: product_repo.clone(),
             role_repo,
             service_repo,
-            events,
+            events: events.clone(),
             password_hasher: password_hasher.clone(),
         }),
         auth: AuthUseCase::new(
@@ -341,6 +403,7 @@ pub fn build_state(
         provider_dashboard: ProviderDashboardUseCase::new(
             business_repo.clone(),
             product_repo.clone(),
+            events,
         ),
         setup: SetupUseCase::new(
             catalogue_repo,
@@ -421,6 +484,7 @@ pub async fn start() -> Result<(), StartupError> {
         token_service,
         email_service(app_url.clone())?,
         site_config(),
+        uploads()?,
     )?;
 
     // Roles and permissions must exist before the first request, or the first

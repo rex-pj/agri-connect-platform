@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use uuid::Uuid;
 
 use crate::{
     error::Error,
@@ -51,4 +52,16 @@ pub trait ProductRepositoryTrait {
     async fn soft_delete(&self, id: i32, owner_user: i32) -> Result<bool, Error>;
 
     async fn count_active(&self) -> Result<i64, Error>;
+
+    /// Points the owner's product at `file_id`. `None` when `owner_user` does
+    /// not own a live product with that id; otherwise the image it had before.
+    async fn set_image(
+        &self,
+        id: i32,
+        owner_user: i32,
+        file_id: Uuid,
+    ) -> Result<Option<Option<Uuid>>, Error>;
+
+    /// The image of a product, deleted or not: cleanup runs after a delete.
+    async fn image_of(&self, id: i32) -> Result<Option<Uuid>, Error>;
 }

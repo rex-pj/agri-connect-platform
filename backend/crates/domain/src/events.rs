@@ -3,6 +3,8 @@
 //! use case never has to know who is listening. This is where plugins would
 //! attach.
 
+use uuid::Uuid;
+
 /// What kind of record an event is about. The wire names are stored in
 /// `audit_logs.entity_type`, so renaming one splits that history in two.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,6 +41,11 @@ pub enum Change {
     Deleted,
     RoleChanged {
         role: String,
+    },
+    /// A product got a new image. `previous` is no longer referenced by it and
+    /// can be removed from storage.
+    ImageReplaced {
+        previous: Option<Uuid>,
     },
 }
 

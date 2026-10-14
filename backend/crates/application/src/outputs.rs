@@ -1,5 +1,7 @@
 use chrono::{DateTime, Utc};
+use domain::models::product::{AdminProduct, ProductView, ProviderProduct};
 use serde::Serialize;
+use uuid::Uuid;
 
 // ── Location presets ──────────────────────────────────────────────────────────
 
@@ -55,6 +57,26 @@ pub struct ProductDto {
     pub vendor_phone: String,
     pub is_available: bool,
     pub created_on: DateTime<Utc>,
+    /// Served at `/files/{id}` and `/files/{id}/thumb`.
+    pub image_file_id: Option<Uuid>,
+}
+
+impl From<ProductView> for ProductDto {
+    fn from(p: ProductView) -> Self {
+        Self {
+            id: p.id,
+            name: p.name,
+            description: p.description,
+            price: p.price,
+            unit: p.unit,
+            category: p.category,
+            vendor_name: p.vendor_name,
+            vendor_phone: p.vendor_phone,
+            is_available: p.is_available,
+            created_on: p.created_on,
+            image_file_id: p.image_file_id,
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -162,6 +184,24 @@ pub struct ProviderProductDto {
     pub category_id: i32,
     pub is_active: bool,
     pub created_on: DateTime<Utc>,
+    pub image_file_id: Option<Uuid>,
+}
+
+impl From<ProviderProduct> for ProviderProductDto {
+    fn from(p: ProviderProduct) -> Self {
+        Self {
+            id: p.id,
+            name: p.name,
+            description: p.description,
+            price: p.price,
+            unit: p.unit,
+            category: p.category,
+            category_id: p.category_id,
+            is_active: p.is_active,
+            created_on: p.created_on,
+            image_file_id: p.image_file_id,
+        }
+    }
 }
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
@@ -336,6 +376,27 @@ pub struct AdminProductDto {
     pub is_active: bool,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
+    pub image_file_id: Option<Uuid>,
+}
+
+impl From<AdminProduct> for AdminProductDto {
+    fn from(p: AdminProduct) -> Self {
+        Self {
+            id: p.id,
+            name: p.name,
+            description: p.description,
+            price: p.price,
+            unit: p.unit,
+            category: p.category,
+            category_id: p.category_id,
+            business_id: p.business_id,
+            business_name: p.business_name,
+            is_active: p.is_active,
+            created_on: p.created_on,
+            updated_on: p.updated_on,
+            image_file_id: p.image_file_id,
+        }
+    }
 }
 
 // ── Admin services ────────────────────────────────────────────────────────────

@@ -15,6 +15,9 @@ backend/environments/.env.dev
 backend/environments/.env.prod
 backend/.env
 
+# Local uploads (UPLOAD_DIR default): user content, never committed
+backend/data/
+
 # IDE
 .vscode/settings.json
 .idea/

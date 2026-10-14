@@ -25,3 +25,18 @@ pub const DEFAULT_BIND_ADDR: &str = "0.0.0.0:3000";
 
 /// Used when APP_URL is unset: Rust is the front door on :3000 in development.
 pub const DEFAULT_APP_URL: &str = "http://localhost:3000";
+
+// ── Uploads ───────────────────────────────────────────────────────────────────
+/// Decoding is the expensive part of an upload; this budget is per client and
+/// separate from other writes, so image uploads cannot starve form saves.
+pub const UPLOAD_RATE_LIMIT_PER_MIN: NonZeroU32 = per_minute(20);
+/// Multipart boundaries and part headers on top of the file itself. Without
+/// it, a file of exactly UPLOAD_MAX_BYTES is cut off by the body limit.
+pub const MULTIPART_OVERHEAD_BYTES: usize = 64 * 1024;
+/// The multipart field the image arrives in.
+pub const IMAGE_FIELD: &str = "image";
+/// An id is never reused (a new image gets a new id), so a cached copy can
+/// never go stale.
+pub const FILE_CACHE_CONTROL: &str = "public, max-age=31536000, immutable";
+/// Used when GCS_BUCKET and UPLOAD_DIR are both unset.
+pub const DEFAULT_UPLOAD_DIR: &str = "./data/uploads";

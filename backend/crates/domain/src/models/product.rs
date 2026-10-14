@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use uuid::Uuid;
 
 pub struct AdminProduct {
     pub id: i32,
@@ -10,6 +11,7 @@ pub struct AdminProduct {
     pub category_id: i32,
     pub business_id: i32,
     pub business_name: String,
+    pub image_file_id: Option<Uuid>,
     pub is_active: bool,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
@@ -24,6 +26,7 @@ pub struct ProductView {
     pub category: String,
     pub vendor_name: String,
     pub vendor_phone: String,
+    pub image_file_id: Option<Uuid>,
     pub is_available: bool,
     pub created_on: DateTime<Utc>,
 }
@@ -35,6 +38,7 @@ pub struct ProviderProduct {
     pub price: Option<i64>,
     pub unit: Option<String>,
     pub category: String,
+    pub image_file_id: Option<Uuid>,
     pub category_id: i32,
     pub is_active: bool,
     pub created_on: DateTime<Utc>,

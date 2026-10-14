@@ -2,11 +2,12 @@ use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::sea_query::Expr;
 use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, JoinType, PaginatorTrait,
-    QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
+    ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, FromQueryResult, JoinType,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set, Statement,
 };
 use std::sync::Arc;
 use tracing::error;
+use uuid::Uuid;
 
 use domain::{
     models::product::{
@@ -49,6 +50,7 @@ struct ProductViewRow {
     vendor_phone: String,
     is_available: bool,
     created_on: DateTimeWithTimeZone,
+    image_file_id: Option<Uuid>,
 }
 
 #[derive(FromQueryResult)]
@@ -65,6 +67,7 @@ struct AdminProductRow {
     is_active: bool,
     created_on: DateTimeWithTimeZone,
     updated_on: DateTimeWithTimeZone,
+    image_file_id: Option<Uuid>,
 }
 
 #[derive(FromQueryResult)]
@@ -78,6 +81,7 @@ struct ProviderProductRow {
     category_id: i32,
     is_active: bool,
     created_on: DateTimeWithTimeZone,
+    image_file_id: Option<Uuid>,
 }
 
 fn base_product_view_query() -> sea_orm::Select<ProductEntity> {
@@ -93,6 +97,7 @@ fn base_product_view_query() -> sea_orm::Select<ProductEntity> {
         .column_as(business::Column::Phone, "vendor_phone")
         .column_as(product::Column::IsActive, "is_available")
         .column(product::Column::CreatedOn)
+        .column(product::Column::ImageFileId)
         .join(JoinType::InnerJoin, product::Relation::Business.def())
         .join(JoinType::InnerJoin, product::Relation::Category.def())
         .filter(business::Column::IsActive.eq(true))
@@ -112,6 +117,7 @@ fn base_provider_product_query() -> sea_orm::Select<ProductEntity> {
         .column(product::Column::CategoryId)
         .column(product::Column::IsActive)
         .column(product::Column::CreatedOn)
+        .column(product::Column::ImageFileId)
         .join(JoinType::InnerJoin, product::Relation::Category.def())
 }
 
@@ -130,6 +136,7 @@ fn base_admin_product_query() -> sea_orm::Select<ProductEntity> {
         .column(product::Column::IsActive)
         .column(product::Column::CreatedOn)
         .column(product::Column::UpdatedOn)
+        .column(product::Column::ImageFileId)
         .join(JoinType::InnerJoin, product::Relation::Business.def())
         .join(JoinType::InnerJoin, product::Relation::Category.def())
         .filter(product::Column::DeletedAt.is_null())
@@ -471,6 +478,49 @@ impl ProductRepositoryTrait for ProductRepository {
                 Error::internal("Failed to load statistics.")
             })
     }
+
+    async fn set_image(
+        &self,
+        id: i32,
+        owner_user: i32,
+        file_id: Uuid,
+    ) -> Result<Option<Option<Uuid>>, Error> {
+        // One statement: the ownership check, the old value and the update
+        // cannot be separated by a concurrent upload, which would orphan the
+        // image that upload replaced.
+        let row = self
+            .db
+            .query_one(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                "WITH target AS (
+                     SELECT p.id, p.image_file_id AS previous
+                     FROM products p JOIN businesses b ON b.id = p.business_id
+                     WHERE p.id = $1 AND p.deleted_at IS NULL
+                       AND b.owner_id = $2 AND b.deleted_at IS NULL
+                     FOR UPDATE OF p
+                 )
+                 UPDATE products SET image_file_id = $3, updated_on = now()
+                 FROM target WHERE products.id = target.id
+                 RETURNING target.previous",
+                [id.into(), owner_user.into(), file_id.into()],
+            ))
+            .await
+            .map_err(|e| Error::internal(format!("product set_image (id={id}): {e}")))?;
+        row.map(|r| r.try_get::<Option<Uuid>>("", "previous"))
+            .transpose()
+            .map_err(|e| Error::internal(format!("product set_image (id={id}): {e}")))
+    }
+
+    async fn image_of(&self, id: i32) -> Result<Option<Uuid>, Error> {
+        ProductEntity::find_by_id(id)
+            .select_only()
+            .column(product::Column::ImageFileId)
+            .into_tuple::<Option<Uuid>>()
+            .one(self.db.as_ref())
+            .await
+            .map(Option::flatten)
+            .map_err(|e| Error::internal(format!("product image_of (id={id}): {e}")))
+    }
 }
 
 fn map_admin_row(r: AdminProductRow) -> AdminProduct {
@@ -487,6 +537,7 @@ fn map_admin_row(r: AdminProductRow) -> AdminProduct {
         is_active: r.is_active,
         created_on: r.created_on.with_timezone(&Utc),
         updated_on: r.updated_on.with_timezone(&Utc),
+        image_file_id: r.image_file_id,
     }
 }
 
@@ -502,6 +553,7 @@ fn map_view_row(r: ProductViewRow) -> ProductView {
         vendor_phone: r.vendor_phone,
         is_available: r.is_available,
         created_on: r.created_on.with_timezone(&Utc),
+        image_file_id: r.image_file_id,
     }
 }
 
@@ -516,6 +568,7 @@ fn map_provider_row(r: ProviderProductRow) -> ProviderProduct {
         category_id: r.category_id,
         is_active: r.is_active,
         created_on: r.created_on.with_timezone(&Utc),
+        image_file_id: r.image_file_id,
     }
 }
 

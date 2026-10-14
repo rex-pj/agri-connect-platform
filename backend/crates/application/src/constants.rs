@@ -33,3 +33,15 @@ pub const LNG_MAX: f64 = 180.0;
 pub const RADIUS_MIN_M: f64 = 100.0;
 pub const RADIUS_MAX_M: f64 = 50_000.0;
 pub const RADIUS_DEFAULT_M: f64 = 5_000.0;
+
+// ── Uploads ───────────────────────────────────────────────────────────────────
+/// Used when UPLOAD_MAX_BYTES is unset. A phone photo is 2–4 MB.
+pub const DEFAULT_UPLOAD_MAX_BYTES: usize = 5 * 1024 * 1024;
+/// Checked from the header before decoding: a 50 KB PNG can claim 100 000 ×
+/// 100 000 pixels and would take 40 GB to decode.
+pub const IMAGE_MAX_PIXELS: u64 = 40_000_000;
+/// Longest side of the stored image; enough for a phone screen at 2x.
+pub const IMAGE_MAIN_MAX_SIDE: u32 = 1600;
+/// Longest side of the list/card thumbnail.
+pub const IMAGE_THUMB_MAX_SIDE: u32 = 400;
+pub const IMAGE_JPEG_QUALITY: u8 = 80;

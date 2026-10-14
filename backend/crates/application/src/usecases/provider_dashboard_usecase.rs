@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use domain::{
+    events::{Change, DomainEvent, Entity},
     models::product::{NewProduct, UpdateProduct},
     repositories::{
         business_repository_trait::BusinessRepositoryTrait,
@@ -17,6 +18,7 @@ use crate::{
     },
     inputs::{CreateProductInput, UpdateProductInput, UpdateProfileInput},
     outputs::{ProviderProductDto, ProviderProfileDto},
+    ports::EventBus,
     validation::{validate_coordinates, validate_phone, validate_price},
 };
 
@@ -26,16 +28,19 @@ use crate::{
 pub struct ProviderDashboardUseCase {
     business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
     product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
+    events: Arc<dyn EventBus>,
 }
 
 impl ProviderDashboardUseCase {
     pub fn new(
         business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
         product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
+        events: Arc<dyn EventBus>,
     ) -> Self {
         Self {
             business_repo,
             product_repo,
+            events,
         }
     }
 
@@ -65,20 +70,7 @@ impl ProviderDashboardUseCase {
     pub async fn list_products(&self, actor: &Actor) -> Result<Vec<ProviderProductDto>> {
         let products = self.product_repo.list_by_user(actor.user_id).await?;
 
-        Ok(products
-            .into_iter()
-            .map(|p| ProviderProductDto {
-                id: p.id,
-                name: p.name,
-                description: p.description,
-                price: p.price,
-                unit: p.unit,
-                category: p.category,
-                category_id: p.category_id,
-                is_active: p.is_active,
-                created_on: p.created_on,
-            })
-            .collect())
+        Ok(products.into_iter().map(ProviderProductDto::from).collect())
     }
 
     // ── Write (permission-gated) ───────────────────────────────────────────────
@@ -170,7 +162,7 @@ impl ProviderDashboardUseCase {
         self.product_repo
             .find_provider_product_by_id(new_id)
             .await?
-            .map(map_provider_product)
+            .map(ProviderProductDto::from)
             .ok_or_else(|| Error::internal("product created but could not be reloaded"))
     }
 
@@ -221,7 +213,7 @@ impl ProviderDashboardUseCase {
         self.product_repo
             .find_provider_product_by_id(input.product_id)
             .await?
-            .map(map_provider_product)
+            .map(ProviderProductDto::from)
             .ok_or_else(|| Error::internal("product updated but could not be reloaded"))
     }
 
@@ -239,22 +231,17 @@ impl ProviderDashboardUseCase {
             return Err(Error::new(ErrorCode::ProductNotFound));
         }
 
+        // Its image is removed by the file-cleanup subscriber.
+        self.events
+            .publish(DomainEvent {
+                actor_id: actor.user_id,
+                entity: Entity::Product,
+                entity_id: product_id,
+                change: Change::Deleted,
+                reason: None,
+            })
+            .await;
+
         Ok(())
-    }
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-fn map_provider_product(p: domain::models::product::ProviderProduct) -> ProviderProductDto {
-    ProviderProductDto {
-        id: p.id,
-        name: p.name,
-        description: p.description,
-        price: p.price,
-        unit: p.unit,
-        category: p.category,
-        category_id: p.category_id,
-        is_active: p.is_active,
-        created_on: p.created_on,
     }
 }

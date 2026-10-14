@@ -10,14 +10,13 @@ use tower_http::{cors::CorsLayer, set_header::SetResponseHeaderLayer};
 
 use crate::{
     app_state::AppState,
-    handlers::{
-        admin_handler::AdminHandler, explore_handler::ExploreHandler,
-        auth_handler::AuthHandler, health_handler::HealthHandler,
-        permission_handler::PermissionHandler, products_handler::ProductsHandler,
-        provider_dashboard_handler::ProviderDashboardHandler, role_handler::RoleHandler,
-        setup_handler::SetupHandler, stats_handler::StatsHandler,
-    },
     error_response::render_errors,
+    handlers::{
+        admin_handler::AdminHandler, auth_handler::AuthHandler, explore_handler::ExploreHandler,
+        health_handler::HealthHandler, permission_handler::PermissionHandler,
+        products_handler::ProductsHandler, provider_dashboard_handler::ProviderDashboardHandler,
+        role_handler::RoleHandler, setup_handler::SetupHandler, stats_handler::StatsHandler,
+    },
     middleware::rate_limit,
 };
 
@@ -82,10 +81,7 @@ impl AppRouting {
                 "/api/explore/categories",
                 get(ExploreHandler::get_categories),
             )
-            .route(
-                "/api/explore/locations",
-                get(ExploreHandler::get_locations),
-            )
+            .route("/api/explore/locations", get(ExploreHandler::get_locations))
             // GET /api/explore/products — replaces the old /products/browse verb path
             .route(
                 "/api/explore/products",
@@ -119,10 +115,7 @@ impl AppRouting {
                 patch(AuthHandler::reset_password),
             )
             // /setup replaces the old /initialize verb
-            .route(
-                "/api/admin/setup",
-                post(AuthHandler::create_first_admin),
-            )
+            .route("/api/admin/setup", post(AuthHandler::create_first_admin))
             .layer(middleware::from_fn(rate_limit::enforce))
             .layer(Extension(auth_limiter));
 
@@ -137,7 +130,10 @@ impl AppRouting {
         // ── ADMIN routes ─────────────────────────────────────────────────────
         let admin_routes = Router::new()
             .route("/api/setup/status", get(SetupHandler::get_status))
-            .route("/api/setup/seed", post(SetupHandler::seed).delete(SetupHandler::remove_seed))
+            .route(
+                "/api/setup/seed",
+                post(SetupHandler::seed).delete(SetupHandler::remove_seed),
+            )
             .route("/api/admin/stats", get(StatsHandler::get_stats))
             // Providers
             .route("/api/admin/providers", get(AdminHandler::list_providers))
@@ -204,24 +200,45 @@ impl AppRouting {
             .route("/api/admin/locations", get(AdminHandler::list_locations))
             .route("/api/admin/locations", post(AdminHandler::create_location))
             .route("/api/admin/locations/{id}", get(AdminHandler::get_location))
-            .route("/api/admin/locations/{id}", put(AdminHandler::update_location))
+            .route(
+                "/api/admin/locations/{id}",
+                put(AdminHandler::update_location),
+            )
             .route(
                 "/api/admin/locations/{id}/status",
                 patch(AdminHandler::toggle_location_active),
             )
-            .route("/api/admin/locations/{id}", delete(AdminHandler::delete_location))
+            .route(
+                "/api/admin/locations/{id}",
+                delete(AdminHandler::delete_location),
+            )
             // Products
             .route("/api/admin/products", get(AdminHandler::list_products))
             .route("/api/admin/products/{id}", get(AdminHandler::get_product))
-            .route("/api/admin/products/{id}/active", patch(AdminHandler::toggle_product_active))
-            .route("/api/admin/products/{id}", delete(AdminHandler::delete_product))
+            .route(
+                "/api/admin/products/{id}/active",
+                patch(AdminHandler::toggle_product_active),
+            )
+            .route(
+                "/api/admin/products/{id}",
+                delete(AdminHandler::delete_product),
+            )
             // Services
             .route("/api/admin/services", get(AdminHandler::list_services))
             .route("/api/admin/services", post(AdminHandler::create_service))
             .route("/api/admin/services/{id}", get(AdminHandler::get_service))
-            .route("/api/admin/services/{id}", put(AdminHandler::update_service))
-            .route("/api/admin/services/{id}/active", patch(AdminHandler::toggle_service_active))
-            .route("/api/admin/services/{id}", delete(AdminHandler::delete_service));
+            .route(
+                "/api/admin/services/{id}",
+                put(AdminHandler::update_service),
+            )
+            .route(
+                "/api/admin/services/{id}/active",
+                patch(AdminHandler::toggle_service_active),
+            )
+            .route(
+                "/api/admin/services/{id}",
+                delete(AdminHandler::delete_service),
+            );
 
         // ── PROVIDER routes ──────────────────────────────────────────────────
         let provider_routes = Router::new()
@@ -249,7 +266,6 @@ impl AppRouting {
                 "/api/provider/products/{id}",
                 delete(ProviderDashboardHandler::delete_product),
             );
-
 
         let mut router = Router::new()
             .merge(public_routes)

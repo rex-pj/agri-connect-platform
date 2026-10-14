@@ -19,8 +19,8 @@ use crate::{
     },
     inputs::{BrowseParams, ContactInput, GeoSearchParams},
     outputs::{
-            BrowseResponse, BusinessBrowseDto, BusinessDetailDto, BusinessSearchDto, CategoryDto,
-            ExploreData, InquiryCreatedDto, LocationDto, ProductDto, ServiceDto,
+        BrowseResponse, BusinessBrowseDto, BusinessDetailDto, BusinessSearchDto, CategoryDto,
+        ExploreData, InquiryCreatedDto, LocationDto, ProductDto, ServiceDto,
     },
     pagination::{paginate, total_pages},
     validation::{non_blank, validate_coordinates, validate_phone},
@@ -30,20 +30,20 @@ use crate::{
 
 #[derive(Clone)]
 pub struct ExploreUseCase {
-    business_repo:  Arc<dyn BusinessRepositoryTrait + Send + Sync>,
-    category_repo:  Arc<dyn CategoryRepositoryTrait + Send + Sync>,
-    inquiry_repo:   Arc<dyn InquiryRepositoryTrait + Send + Sync>,
-    location_repo:  Arc<dyn LocationRepositoryTrait + Send + Sync>,
-    product_repo:   Arc<dyn ProductRepositoryTrait + Send + Sync>,
+    business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
+    category_repo: Arc<dyn CategoryRepositoryTrait + Send + Sync>,
+    inquiry_repo: Arc<dyn InquiryRepositoryTrait + Send + Sync>,
+    location_repo: Arc<dyn LocationRepositoryTrait + Send + Sync>,
+    product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
 }
 
 impl ExploreUseCase {
     pub fn new(
-        business_repo:  Arc<dyn BusinessRepositoryTrait + Send + Sync>,
-        category_repo:  Arc<dyn CategoryRepositoryTrait + Send + Sync>,
-        inquiry_repo:   Arc<dyn InquiryRepositoryTrait + Send + Sync>,
-        location_repo:  Arc<dyn LocationRepositoryTrait + Send + Sync>,
-        product_repo:   Arc<dyn ProductRepositoryTrait + Send + Sync>,
+        business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
+        category_repo: Arc<dyn CategoryRepositoryTrait + Send + Sync>,
+        inquiry_repo: Arc<dyn InquiryRepositoryTrait + Send + Sync>,
+        location_repo: Arc<dyn LocationRepositoryTrait + Send + Sync>,
+        product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
     ) -> Self {
         Self {
             business_repo,
@@ -89,9 +89,15 @@ impl ExploreUseCase {
         let (page, offset) = paginate(params.page, PAGE_SIZE);
 
         let (providers, total) = tokio::try_join!(
+            self.business_repo.browse(
+                params.service_id,
+                params.name.clone(),
+                params.sort,
+                PAGE_SIZE,
+                offset
+            ),
             self.business_repo
-                .browse(params.service_id, params.name.clone(), params.sort, PAGE_SIZE, offset),
-            self.business_repo.count_browse(params.service_id, params.name),
+                .count_browse(params.service_id, params.name),
         )?;
 
         Ok(BrowseResponse {
@@ -138,20 +144,30 @@ impl ExploreUseCase {
         )?;
 
         Ok(ExploreData {
-            featured_providers: featured_businesses.into_iter().map(map_business_browse).collect(),
-            featured_products:  featured_product_views.into_iter().map(map_product_dto).collect(),
+            featured_providers: featured_businesses
+                .into_iter()
+                .map(map_business_browse)
+                .collect(),
+            featured_products: featured_product_views
+                .into_iter()
+                .map(map_product_dto)
+                .collect(),
         })
     }
 
     /// The single home of the inquiry rules; every contact form posts here.
     pub async fn contact_request(&self, input: ContactInput) -> Result<InquiryCreatedDto> {
-        let requester_name  = input.requester_name.trim().to_owned();
+        let requester_name = input.requester_name.trim().to_owned();
         let requester_phone = input.requester_phone.trim().to_owned();
-        let topic           = input.topic.trim().to_owned();
-        let note            = non_blank(input.note);
+        let topic = input.topic.trim().to_owned();
+        let note = non_blank(input.note);
 
         Validation::new()
-            .check(requester_name.is_empty(), "requester_name", ErrorCode::RequesterNameRequired)
+            .check(
+                requester_name.is_empty(),
+                "requester_name",
+                ErrorCode::RequesterNameRequired,
+            )
             .check_with(
                 requester_name.chars().count() > REQUESTER_NAME_MAX_LEN,
                 "requester_name",
@@ -167,7 +183,8 @@ impl ExploreUseCase {
                 ("topic_max", TOPIC_MAX_LEN),
             )
             .check_with(
-                note.as_deref().is_some_and(|n| n.chars().count() > NOTE_MAX_LEN),
+                note.as_deref()
+                    .is_some_and(|n| n.chars().count() > NOTE_MAX_LEN),
                 "note",
                 ErrorCode::NoteTooLong,
                 ("note_max", NOTE_MAX_LEN),
@@ -182,7 +199,7 @@ impl ExploreUseCase {
             .inquiry_repo
             .create(NewInquiry {
                 business_id: input.business_id,
-                service_id:  input.service_id,
+                service_id: input.service_id,
                 topic,
                 requester_name,
                 requester_phone,
@@ -193,10 +210,7 @@ impl ExploreUseCase {
         Ok(InquiryCreatedDto { id })
     }
 
-    pub async fn get_categories(
-        &self,
-        type_filter: Option<&str>,
-    ) -> Result<Vec<CategoryDto>> {
+    pub async fn get_categories(&self, type_filter: Option<&str>) -> Result<Vec<CategoryDto>> {
         let categories = self.category_repo.list(type_filter).await?;
 
         Ok(categories
@@ -219,10 +233,10 @@ impl ExploreUseCase {
         Ok(locations
             .into_iter()
             .map(|l| LocationDto {
-                id:    l.id,
+                id: l.id,
                 label: l.label,
-                lat:   l.lat,
-                lng:   l.lng,
+                lat: l.lat,
+                lng: l.lng,
             })
             .collect())
     }
@@ -232,18 +246,27 @@ impl ExploreUseCase {
 
 fn map_business_browse(b: BusinessBrowse) -> BusinessBrowseDto {
     BusinessBrowseDto {
-        id: b.id, name: b.name, phone: b.phone,
-        address: b.address, is_verified: b.is_verified,
-        services: b.services, created_on: b.created_on,
+        id: b.id,
+        name: b.name,
+        phone: b.phone,
+        address: b.address,
+        is_verified: b.is_verified,
+        services: b.services,
+        created_on: b.created_on,
     }
 }
 
 fn map_product_dto(p: ProductView) -> ProductDto {
     ProductDto {
-        id: p.id, name: p.name, description: p.description,
-        price: p.price, unit: p.unit,
-        category: p.category, vendor_name: p.vendor_name,
-        vendor_phone: p.vendor_phone, is_available: p.is_available,
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        price: p.price,
+        unit: p.unit,
+        category: p.category,
+        vendor_name: p.vendor_name,
+        vendor_phone: p.vendor_phone,
+        is_available: p.is_available,
         created_on: p.created_on,
     }
 }

@@ -4,17 +4,17 @@ use sea_orm::entity::prelude::*;
 #[sea_orm(table_name = "reviews")]
 pub struct Model {
     #[sea_orm(primary_key)]
-    pub id:                  i32,
-    pub business_id:         i32,
-    pub inquiry_id:          Option<i32>,
-    pub rating:              i16,
-    pub comment:             Option<String>,
-    pub reviewer_name:       String,
+    pub id: i32,
+    pub business_id: i32,
+    pub inquiry_id: Option<i32>,
+    pub rating: i16,
+    pub comment: Option<String>,
+    pub reviewer_name: String,
     pub reviewer_phone_hash: String,
-    pub is_visible:          bool,
-    pub created_on:          DateTimeWithTimeZone,
-    pub updated_on:          DateTimeWithTimeZone,
-    pub updated_by:          Option<i32>,
+    pub is_visible: bool,
+    pub created_on: DateTimeWithTimeZone,
+    pub updated_on: DateTimeWithTimeZone,
+    pub updated_by: Option<i32>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

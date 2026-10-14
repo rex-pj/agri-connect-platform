@@ -20,7 +20,7 @@ use crate::app_state::AppState;
 /// layout the SvelteKit app parses until its last page is migrated.
 #[derive(Debug, Serialize)]
 pub struct ErrorBody {
-    pub code:    &'static str,
+    pub code: &'static str,
     pub message: String,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub field_errors: BTreeMap<&'static str, Vec<String>>,
@@ -29,7 +29,7 @@ pub struct ErrorBody {
 pub fn error_body(state: &AppState, err: &Error) -> ErrorBody {
     let locale = &state.locale;
     ErrorBody {
-        code:    err.code().as_str(),
+        code: err.code().as_str(),
         message: locale.error_text(err.code(), err.params()),
         field_errors: err
             .fields()
@@ -65,7 +65,10 @@ pub async fn render_errors(State(state): State<AppState>, req: Request, next: Ne
 
     let mut rendered = (status, Json(error_body(&state, &err))).into_response();
     for (name, value) in headers.iter() {
-        rendered.headers_mut().entry(name).or_insert_with(|| value.clone());
+        rendered
+            .headers_mut()
+            .entry(name)
+            .or_insert_with(|| value.clone());
     }
     rendered
 }

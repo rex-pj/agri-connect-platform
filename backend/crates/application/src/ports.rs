@@ -15,9 +15,9 @@ pub trait EmailService: Send + Sync {
 /// What a verified session token says about its holder.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionClaims {
-    pub user_id:  i32,
+    pub user_id: i32,
     pub username: String,
-    pub role:     UserRole,
+    pub role: UserRole,
     /// Expiry as a Unix timestamp in seconds.
     pub expires_at: i64,
 }

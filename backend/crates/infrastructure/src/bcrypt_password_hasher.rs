@@ -29,7 +29,7 @@ impl PasswordHasher for BcryptPasswordHasher {
 
     async fn verify(&self, password: &str, hash: &str) -> Result<bool, Error> {
         let password = password.to_owned();
-        let hash     = hash.to_owned();
+        let hash = hash.to_owned();
         tokio::task::spawn_blocking(move || bcrypt::verify(&password, &hash))
             .await
             .map_err(|e| {

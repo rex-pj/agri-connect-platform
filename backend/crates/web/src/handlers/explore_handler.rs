@@ -38,7 +38,7 @@ impl ExploreHandler {
                 .search_providers(GeoSearchParams {
                     lat,
                     lng,
-                    radius:     q.radius.unwrap_or(RADIUS_DEFAULT_M),
+                    radius: q.radius.unwrap_or(RADIUS_DEFAULT_M),
                     service_id: q.service_id,
                 })
                 .await?;
@@ -49,9 +49,9 @@ impl ExploreHandler {
                 .explore
                 .browse_providers(BrowseParams {
                     service_id: q.service_id,
-                    name:       q.name,
-                    sort:       q.sort,
-                    page:       q.page.unwrap_or(1),
+                    name: q.name,
+                    sort: q.sort,
+                    page: q.page.unwrap_or(1),
                 })
                 .await?;
             Ok(Json(ProvidersResponse::Browse(result)))
@@ -63,11 +63,7 @@ impl ExploreHandler {
         State(state): State<AppState>,
         ApiPath(id): ApiPath<i32>,
     ) -> Result<impl IntoResponse, Error> {
-        let result = state
-            .usecases
-            .explore
-            .get_provider_detail(id)
-            .await?;
+        let result = state.usecases.explore.get_provider_detail(id).await?;
 
         Ok(Json(result))
     }
@@ -76,11 +72,7 @@ impl ExploreHandler {
     pub async fn get_explore_data(
         State(state): State<AppState>,
     ) -> Result<impl IntoResponse, Error> {
-        let result = state
-            .usecases
-            .explore
-            .get_explore_data()
-            .await?;
+        let result = state.usecases.explore.get_explore_data().await?;
 
         Ok(Json(result))
     }
@@ -100,14 +92,8 @@ impl ExploreHandler {
     }
 
     /// GET /api/explore/locations
-    pub async fn get_locations(
-        State(state): State<AppState>,
-    ) -> Result<impl IntoResponse, Error> {
-        let result = state
-            .usecases
-            .explore
-            .get_locations()
-            .await?;
+    pub async fn get_locations(State(state): State<AppState>) -> Result<impl IntoResponse, Error> {
+        let result = state.usecases.explore.get_locations().await?;
 
         Ok(Json(result))
     }
@@ -121,12 +107,12 @@ impl ExploreHandler {
             .usecases
             .explore
             .contact_request(ContactInput {
-                business_id:     req.business_id,
-                topic:           req.topic,
-                requester_name:  req.requester_name,
+                business_id: req.business_id,
+                topic: req.topic,
+                requester_name: req.requester_name,
                 requester_phone: req.requester_phone,
-                note:            req.note,
-                service_id:      req.service_id,
+                note: req.note,
+                service_id: req.service_id,
             })
             .await?;
 

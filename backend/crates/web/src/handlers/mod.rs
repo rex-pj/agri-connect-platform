@@ -1,6 +1,6 @@
 pub mod admin_handler;
-pub mod explore_handler;
 pub mod auth_handler;
+pub mod explore_handler;
 pub mod health_handler;
 pub mod permission_handler;
 pub mod products_handler;

@@ -1,13 +1,20 @@
 use async_trait::async_trait;
 
 use crate::{
-    models::product::{AdminProduct, NewProduct, ProductFilter, ProductView, ProviderProduct, UpdateProduct},
     error::Error,
+    models::product::{
+        AdminProduct, NewProduct, ProductFilter, ProductView, ProviderProduct, UpdateProduct,
+    },
 };
 
 #[async_trait]
 pub trait ProductRepositoryTrait {
-    async fn list_admin(&self, provider_id: Option<i32>, limit: i64, offset: i64) -> Result<Vec<AdminProduct>, Error>;
+    async fn list_admin(
+        &self,
+        provider_id: Option<i32>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<AdminProduct>, Error>;
 
     async fn count_admin(&self, provider_id: Option<i32>) -> Result<i64, Error>;
 

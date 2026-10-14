@@ -21,9 +21,9 @@ impl ProductsHandler {
             .browse_products(
                 ProductFilter {
                     category_id: q.category_id,
-                    name:        q.name,
-                    min_price:   q.min_price,
-                    max_price:   q.max_price,
+                    name: q.name,
+                    min_price: q.min_price,
+                    max_price: q.max_price,
                 },
                 q.sort,
                 q.page.unwrap_or(1),
@@ -38,11 +38,7 @@ impl ProductsHandler {
         State(state): State<AppState>,
         ApiPath(id): ApiPath<i32>,
     ) -> Result<impl IntoResponse, Error> {
-        let result = state
-            .usecases
-            .product
-            .get_product_by_id(id)
-            .await?;
+        let result = state.usecases.product.get_product_by_id(id).await?;
 
         Ok(Json(result))
     }

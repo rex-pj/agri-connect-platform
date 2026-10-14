@@ -2,11 +2,11 @@ use serde::{Deserialize, Serialize};
 
 /// Database read model — represents a row in the `roles` table.
 pub struct RoleModel {
-    pub id:          i32,
-    pub code:        String,
-    pub name:        String,
+    pub id: i32,
+    pub code: String,
+    pub name: String,
     pub description: Option<String>,
-    pub is_active:   bool,
+    pub is_active: bool,
 }
 
 // ── Domain value object ───────────────────────────────────────────────────────
@@ -28,7 +28,7 @@ impl UserRole {
     /// The DB role code string for this role. Matches constants `ROLE_ADMIN` / `ROLE_PROVIDER`.
     pub fn as_code(&self) -> &'static str {
         match self {
-            UserRole::Admin    => crate::constants::ROLE_ADMIN,
+            UserRole::Admin => crate::constants::ROLE_ADMIN,
             UserRole::Provider => crate::constants::ROLE_PROVIDER,
         }
     }
@@ -37,9 +37,9 @@ impl UserRole {
     /// unrecognised codes so callers can surface a domain-meaningful error.
     pub fn from_code(code: &str) -> Option<Self> {
         match code {
-            crate::constants::ROLE_ADMIN    => Some(UserRole::Admin),
+            crate::constants::ROLE_ADMIN => Some(UserRole::Admin),
             crate::constants::ROLE_PROVIDER => Some(UserRole::Provider),
-            _                               => None,
+            _ => None,
         }
     }
 }

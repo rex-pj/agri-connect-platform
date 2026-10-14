@@ -18,10 +18,10 @@ pub const MIN_SECRET_BYTES: usize = 32;
 /// until its last page is migrated, so the field names are a contract.
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
-    sub:      i32,
-    role:     UserRole,
+    sub: i32,
+    role: UserRole,
     username: String,
-    exp:      i64,
+    exp: i64,
 }
 
 pub struct JwtTokenService {
@@ -46,10 +46,10 @@ impl JwtTokenService {
 impl TokenService for JwtTokenService {
     fn mint(&self, user_id: i32, username: &str, role: &UserRole) -> Result<String> {
         let claims = Claims {
-            sub:      user_id,
-            role:     role.clone(),
+            sub: user_id,
+            role: role.clone(),
             username: username.to_owned(),
-            exp:      (Utc::now() + Duration::hours(JWT_EXPIRY_HOURS)).timestamp(),
+            exp: (Utc::now() + Duration::hours(JWT_EXPIRY_HOURS)).timestamp(),
         };
         encode(&Header::new(Algorithm::HS256), &claims, &self.encoding)
             .map_err(|e| Error::internal(format!("jwt encode: {e}")))
@@ -66,9 +66,9 @@ impl TokenService for JwtTokenService {
             .map_err(|e| Error::new(ErrorCode::InvalidToken).with_detail(e.to_string()))?;
 
         Ok(SessionClaims {
-            user_id:    data.claims.sub,
-            username:   data.claims.username,
-            role:       data.claims.role,
+            user_id: data.claims.sub,
+            username: data.claims.username,
+            role: data.claims.role,
             expires_at: data.claims.exp,
         })
     }
@@ -90,7 +90,10 @@ mod tests {
         let svc = JwtTokenService::new(SECRET)?;
         let token = svc.mint(7, "an", &UserRole::Provider)?;
         let claims = svc.verify(&token)?;
-        assert_eq!((claims.user_id, claims.username.as_str(), claims.role), (7, "an", UserRole::Provider));
+        assert_eq!(
+            (claims.user_id, claims.username.as_str(), claims.role),
+            (7, "an", UserRole::Provider)
+        );
         Ok(())
     }
 
@@ -98,17 +101,28 @@ mod tests {
     fn token_signed_with_another_key_is_invalid() -> Result<()> {
         let token = JwtTokenService::new(SECRET)?.mint(1, "x", &UserRole::Admin)?;
         let other = JwtTokenService::new("another-secret-that-is-also-32-bytes-long")?;
-        assert_eq!(other.verify(&token).err().map(|e| e.code()), Some(ErrorCode::InvalidToken));
+        assert_eq!(
+            other.verify(&token).err().map(|e| e.code()),
+            Some(ErrorCode::InvalidToken)
+        );
         Ok(())
     }
 
     #[test]
     fn expired_token_is_invalid() -> Result<()> {
         let svc = JwtTokenService::new(SECRET)?;
-        let claims = Claims { sub: 1, role: UserRole::Admin, username: "x".into(), exp: Utc::now().timestamp() - 1 };
+        let claims = Claims {
+            sub: 1,
+            role: UserRole::Admin,
+            username: "x".into(),
+            exp: Utc::now().timestamp() - 1,
+        };
         let token = encode(&Header::new(Algorithm::HS256), &claims, &svc.encoding)
             .map_err(|e| Error::internal(e.to_string()))?;
-        assert_eq!(svc.verify(&token).err().map(|e| e.code()), Some(ErrorCode::InvalidToken));
+        assert_eq!(
+            svc.verify(&token).err().map(|e| e.code()),
+            Some(ErrorCode::InvalidToken)
+        );
         Ok(())
     }
 }

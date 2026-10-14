@@ -4,19 +4,19 @@ use sea_orm::entity::prelude::*;
 #[sea_orm(table_name = "products")]
 pub struct Model {
     #[sea_orm(primary_key)]
-    pub id:          i32,
+    pub id: i32,
     pub business_id: i32,
     pub category_id: i32,
-    pub name:        String,
+    pub name: String,
     pub description: Option<String>,
-    pub price:       Option<i64>,
-    pub unit:        Option<String>,
-    pub is_active:   bool,
-    pub created_on:  DateTimeWithTimeZone,
-    pub updated_on:  DateTimeWithTimeZone,
-    pub created_by:  Option<i32>,
-    pub updated_by:  Option<i32>,
-    pub deleted_at:  Option<DateTimeWithTimeZone>,
+    pub price: Option<i64>,
+    pub unit: Option<String>,
+    pub is_active: bool,
+    pub created_on: DateTimeWithTimeZone,
+    pub updated_on: DateTimeWithTimeZone,
+    pub created_by: Option<i32>,
+    pub updated_by: Option<i32>,
+    pub deleted_at: Option<DateTimeWithTimeZone>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

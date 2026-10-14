@@ -61,10 +61,15 @@ impl ProductUseCase {
 
 fn map_product_dto(p: ProductView) -> ProductDto {
     ProductDto {
-        id: p.id, name: p.name, description: p.description,
-        price: p.price, unit: p.unit,
-        category: p.category, vendor_name: p.vendor_name,
-        vendor_phone: p.vendor_phone, is_available: p.is_available,
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        price: p.price,
+        unit: p.unit,
+        category: p.category,
+        vendor_name: p.vendor_name,
+        vendor_phone: p.vendor_phone,
+        is_available: p.is_available,
         created_on: p.created_on,
     }
 }

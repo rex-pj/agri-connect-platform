@@ -1,17 +1,16 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait,
-    FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait,
-    Set, sea_query::Expr,
+    sea_query::Expr, ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, JoinType,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
 };
 use std::sync::Arc;
 use tracing::error;
 
 use domain::{
-        models::inquiry::{InquiryAdmin, NewInquiry},
-        repositories::inquiry_repository_trait::InquiryRepositoryTrait,
-    };
+    models::inquiry::{InquiryAdmin, NewInquiry},
+    repositories::inquiry_repository_trait::InquiryRepositoryTrait,
+};
 
 use domain::{Error, ErrorCode};
 
@@ -35,15 +34,15 @@ impl InquiryRepository {
 
 #[derive(FromQueryResult)]
 struct InquiryAdminRow {
-    id:              i32,
-    business_id:     i32,
-    business_name:   String,
-    requester_name:  String,
+    id: i32,
+    business_id: i32,
+    business_name: String,
+    requester_name: String,
     requester_phone: String,
-    topic:           String,
-    status:          String,
-    created_on:      DateTimeWithTimeZone,
-    updated_on:      DateTimeWithTimeZone,
+    topic: String,
+    status: String,
+    created_on: DateTimeWithTimeZone,
+    updated_on: DateTimeWithTimeZone,
     updated_by_name: Option<String>,
 }
 
@@ -51,12 +50,12 @@ struct InquiryAdminRow {
 impl InquiryRepositoryTrait for InquiryRepository {
     async fn create(&self, inquiry: NewInquiry) -> Result<i32, Error> {
         let new_inquiry = inquiry::ActiveModel {
-            business_id:     Set(inquiry.business_id),
-            service_id:      Set(inquiry.service_id),
-            topic:           Set(inquiry.topic),
-            requester_name:  Set(inquiry.requester_name),
+            business_id: Set(inquiry.business_id),
+            service_id: Set(inquiry.service_id),
+            topic: Set(inquiry.topic),
+            requester_name: Set(inquiry.requester_name),
             requester_phone: Set(inquiry.requester_phone),
-            note:            Set(inquiry.note),
+            note: Set(inquiry.note),
             ..Default::default()
         };
 
@@ -94,7 +93,9 @@ impl InquiryRepositoryTrait for InquiryRepository {
             .column(inquiry::Column::CreatedOn)
             .column(inquiry::Column::UpdatedOn)
             .expr_as(
-                Expr::cust("(SELECT u.username FROM users u WHERE u.id = \"inquiries\".updated_by)"),
+                Expr::cust(
+                    "(SELECT u.username FROM users u WHERE u.id = \"inquiries\".updated_by)",
+                ),
                 "updated_by_name",
             )
             .join(JoinType::InnerJoin, inquiry::Relation::Business.def())
@@ -107,15 +108,15 @@ impl InquiryRepositoryTrait for InquiryRepository {
             .map(|rows| {
                 rows.into_iter()
                     .map(|r| InquiryAdmin {
-                        id:              r.id,
-                        business_id:     r.business_id,
-                        business_name:   r.business_name,
-                        requester_name:  r.requester_name,
+                        id: r.id,
+                        business_id: r.business_id,
+                        business_name: r.business_name,
+                        requester_name: r.requester_name,
                         requester_phone: r.requester_phone,
-                        topic:           r.topic,
-                        status:          r.status,
-                        created_on:      r.created_on.with_timezone(&Utc),
-                        updated_on:      r.updated_on.with_timezone(&Utc),
+                        topic: r.topic,
+                        status: r.status,
+                        created_on: r.created_on.with_timezone(&Utc),
+                        updated_on: r.updated_on.with_timezone(&Utc),
                         updated_by_name: r.updated_by_name,
                     })
                     .collect()
@@ -140,25 +141,29 @@ impl InquiryRepositoryTrait for InquiryRepository {
             .column(inquiry::Column::CreatedOn)
             .column(inquiry::Column::UpdatedOn)
             .expr_as(
-                Expr::cust("(SELECT u.username FROM users u WHERE u.id = \"inquiries\".updated_by)"),
+                Expr::cust(
+                    "(SELECT u.username FROM users u WHERE u.id = \"inquiries\".updated_by)",
+                ),
                 "updated_by_name",
             )
             .join(JoinType::InnerJoin, inquiry::Relation::Business.def())
             .into_model::<InquiryAdminRow>()
             .one(self.db.as_ref())
             .await
-            .map(|opt| opt.map(|r| InquiryAdmin {
-                id:              r.id,
-                business_id:     r.business_id,
-                business_name:   r.business_name,
-                requester_name:  r.requester_name,
-                requester_phone: r.requester_phone,
-                topic:           r.topic,
-                status:          r.status,
-                created_on:      r.created_on.with_timezone(&Utc),
-                updated_on:      r.updated_on.with_timezone(&Utc),
-                updated_by_name: r.updated_by_name,
-            }))
+            .map(|opt| {
+                opt.map(|r| InquiryAdmin {
+                    id: r.id,
+                    business_id: r.business_id,
+                    business_name: r.business_name,
+                    requester_name: r.requester_name,
+                    requester_phone: r.requester_phone,
+                    topic: r.topic,
+                    status: r.status,
+                    created_on: r.created_on.with_timezone(&Utc),
+                    updated_on: r.updated_on.with_timezone(&Utc),
+                    updated_by_name: r.updated_by_name,
+                })
+            })
             .map_err(|e| {
                 error!("inquiry find_by_id_admin error: {e}");
                 Error::internal("Failed to load inquiry.")
@@ -167,7 +172,7 @@ impl InquiryRepositoryTrait for InquiryRepository {
 
     async fn update_status(&self, id: i32, status: &str, admin_id: i32) -> Result<(), Error> {
         let result = Inquiry::update_many()
-            .col_expr(inquiry::Column::Status,    Expr::value(status.to_string()))
+            .col_expr(inquiry::Column::Status, Expr::value(status.to_string()))
             .col_expr(inquiry::Column::UpdatedOn, Expr::current_timestamp().into())
             .col_expr(inquiry::Column::UpdatedBy, Expr::value(Some(admin_id)))
             .filter(inquiry::Column::Id.eq(id))
@@ -184,4 +189,3 @@ impl InquiryRepositoryTrait for InquiryRepository {
         Ok(())
     }
 }
-

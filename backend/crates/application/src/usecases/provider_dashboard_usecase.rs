@@ -27,18 +27,22 @@ use crate::{
 
 #[derive(Clone)]
 pub struct ProviderDashboardUseCase {
-    business_repo:   Arc<dyn BusinessRepositoryTrait   + Send + Sync>,
-    product_repo:    Arc<dyn ProductRepositoryTrait    + Send + Sync>,
+    business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
+    product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
     permission_repo: Arc<dyn PermissionRepositoryTrait + Send + Sync>,
 }
 
 impl ProviderDashboardUseCase {
     pub fn new(
-        business_repo:   Arc<dyn BusinessRepositoryTrait   + Send + Sync>,
-        product_repo:    Arc<dyn ProductRepositoryTrait    + Send + Sync>,
+        business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
+        product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
         permission_repo: Arc<dyn PermissionRepositoryTrait + Send + Sync>,
     ) -> Self {
-        Self { business_repo, product_repo, permission_repo }
+        Self {
+            business_repo,
+            product_repo,
+            permission_repo,
+        }
     }
 
     async fn require_permission(
@@ -67,15 +71,15 @@ impl ProviderDashboardUseCase {
             .ok_or_else(|| Error::new(ErrorCode::AccountNotLinkedToBusiness))?;
 
         Ok(ProviderProfileDto {
-            id:          profile.id,
-            name:        profile.name,
-            phone:       profile.phone,
-            email:       profile.email,
+            id: profile.id,
+            name: profile.name,
+            phone: profile.phone,
+            email: profile.email,
             description: profile.description,
-            address:     profile.address,
+            address: profile.address,
             is_verified: profile.is_verified,
-            lat:         profile.lat,
-            lng:         profile.lng,
+            lat: profile.lat,
+            lng: profile.lng,
         })
     }
 
@@ -85,10 +89,15 @@ impl ProviderDashboardUseCase {
         Ok(products
             .into_iter()
             .map(|p| ProviderProductDto {
-                id: p.id, name: p.name, description: p.description,
-                price: p.price, unit: p.unit,
-                category: p.category, category_id: p.category_id,
-                is_active: p.is_active, created_on: p.created_on,
+                id: p.id,
+                name: p.name,
+                description: p.description,
+                price: p.price,
+                unit: p.unit,
+                category: p.category,
+                category_id: p.category_id,
+                is_active: p.is_active,
+                created_on: p.created_on,
             })
             .collect())
     }
@@ -98,10 +107,10 @@ impl ProviderDashboardUseCase {
     pub async fn update_profile(
         &self,
         caller_role: &UserRole,
-        caller_id:   i32,
-        input:       UpdateProfileInput,
+        caller_id: i32,
+        input: UpdateProfileInput,
     ) -> Result<ProviderProfileDto> {
-        self.require_permission(caller_role, caller_id,PERM_OWN_PROFILE_UPDATE)
+        self.require_permission(caller_role, caller_id, PERM_OWN_PROFILE_UPDATE)
             .await?;
 
         if input.name.trim().is_empty() {
@@ -129,7 +138,9 @@ impl ProviderDashboardUseCase {
 
         if let (Some(lat), Some(lng)) = (input.lat, input.lng) {
             let wkt = format!("SRID=4326;POINT({lng} {lat})");
-            self.business_repo.update_location(input.user_id, &wkt).await?;
+            self.business_repo
+                .update_location(input.user_id, &wkt)
+                .await?;
         }
 
         self.get_profile(input.user_id).await
@@ -138,10 +149,10 @@ impl ProviderDashboardUseCase {
     pub async fn create_product(
         &self,
         caller_role: &UserRole,
-        caller_id:   i32,
-        input:       CreateProductInput,
+        caller_id: i32,
+        input: CreateProductInput,
     ) -> Result<ProviderProductDto> {
-        self.require_permission(caller_role, caller_id,PERM_OWN_LISTING_CREATE)
+        self.require_permission(caller_role, caller_id, PERM_OWN_LISTING_CREATE)
             .await?;
 
         let name = input.name.trim().to_owned();
@@ -150,7 +161,10 @@ impl ProviderDashboardUseCase {
         }
         validate_price(input.price)?;
 
-        let cat_ok = self.product_repo.check_category_is_product(input.category_id).await?;
+        let cat_ok = self
+            .product_repo
+            .check_category_is_product(input.category_id)
+            .await?;
         if !cat_ok {
             return Err(Error::new(ErrorCode::InvalidProductCategory));
         }
@@ -167,10 +181,14 @@ impl ProviderDashboardUseCase {
                 business_id,
                 category_id: input.category_id,
                 name,
-                description: input.description.as_deref().map(str::trim).map(str::to_owned),
-                price:       input.price,
-                unit:        input.unit.as_deref().map(str::trim).map(str::to_owned),
-                created_by:  input.user_id,
+                description: input
+                    .description
+                    .as_deref()
+                    .map(str::trim)
+                    .map(str::to_owned),
+                price: input.price,
+                unit: input.unit.as_deref().map(str::trim).map(str::to_owned),
+                created_by: input.user_id,
             })
             .await?;
 
@@ -184,10 +202,10 @@ impl ProviderDashboardUseCase {
     pub async fn update_product(
         &self,
         caller_role: &UserRole,
-        caller_id:   i32,
-        input:       UpdateProductInput,
+        caller_id: i32,
+        input: UpdateProductInput,
     ) -> Result<ProviderProductDto> {
-        self.require_permission(caller_role, caller_id,PERM_OWN_LISTING_UPDATE)
+        self.require_permission(caller_role, caller_id, PERM_OWN_LISTING_UPDATE)
             .await?;
 
         let name = input.name.trim().to_owned();
@@ -196,7 +214,10 @@ impl ProviderDashboardUseCase {
         }
         validate_price(input.price)?;
 
-        let cat_ok = self.product_repo.check_category_is_product(input.category_id).await?;
+        let cat_ok = self
+            .product_repo
+            .check_category_is_product(input.category_id)
+            .await?;
         if !cat_ok {
             return Err(Error::new(ErrorCode::InvalidProductCategory));
         }
@@ -204,13 +225,17 @@ impl ProviderDashboardUseCase {
         let updated = self
             .product_repo
             .update(UpdateProduct {
-                id:          input.product_id,
-                owner_user:  input.user_id,
+                id: input.product_id,
+                owner_user: input.user_id,
                 category_id: input.category_id,
                 name,
-                description: input.description.as_deref().map(str::trim).map(str::to_owned),
-                price:       input.price,
-                unit:        input.unit.as_deref().map(str::trim).map(str::to_owned),
+                description: input
+                    .description
+                    .as_deref()
+                    .map(str::trim)
+                    .map(str::to_owned),
+                price: input.price,
+                unit: input.unit.as_deref().map(str::trim).map(str::to_owned),
             })
             .await?;
 
@@ -230,10 +255,10 @@ impl ProviderDashboardUseCase {
     pub async fn delete_product(
         &self,
         caller_role: &UserRole,
-        caller_id:   i32,
-        product_id:  i32,
+        caller_id: i32,
+        product_id: i32,
     ) -> Result<()> {
-        self.require_permission(caller_role, caller_id,PERM_OWN_LISTING_DELETE)
+        self.require_permission(caller_role, caller_id, PERM_OWN_LISTING_DELETE)
             .await?;
 
         let deleted = self.product_repo.soft_delete(product_id, caller_id).await?;
@@ -252,9 +277,14 @@ impl ProviderDashboardUseCase {
 
 fn map_provider_product(p: domain::models::product::ProviderProduct) -> ProviderProductDto {
     ProviderProductDto {
-        id: p.id, name: p.name, description: p.description,
-        price: p.price, unit: p.unit,
-        category: p.category, category_id: p.category_id,
-        is_active: p.is_active, created_on: p.created_on,
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        price: p.price,
+        unit: p.unit,
+        category: p.category,
+        category_id: p.category_id,
+        is_active: p.is_active,
+        created_on: p.created_on,
     }
 }

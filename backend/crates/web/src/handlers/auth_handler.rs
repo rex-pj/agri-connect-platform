@@ -68,11 +68,7 @@ impl AuthHandler {
         auth_user: AuthUser,
         State(state): State<AppState>,
     ) -> Result<impl IntoResponse, Error> {
-        let result = state
-            .usecases
-            .auth
-            .me(auth_user.id)
-            .await?;
+        let result = state.usecases.auth.me(auth_user.id).await?;
 
         Ok(Json(result))
     }
@@ -97,11 +93,7 @@ impl AuthHandler {
         State(state): State<AppState>,
         ApiJson(req): ApiJson<ForgotPasswordRequest>,
     ) -> Result<impl IntoResponse, Error> {
-        state
-            .usecases
-            .auth
-            .forgot_password(req.email)
-            .await?;
+        state.usecases.auth.forgot_password(req.email).await?;
 
         // Same answer whether or not the address exists.
         Ok(StatusCode::NO_CONTENT)

@@ -4,9 +4,8 @@ use std::sync::Arc;
 // external
 use async_trait::async_trait;
 use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult,
-    QueryFilter, QueryOrder, QuerySelect, Set,
-    sea_query::Expr,
+    sea_query::Expr, ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter,
+    QueryOrder, QuerySelect, Set,
 };
 use tracing::error;
 
@@ -15,13 +14,11 @@ use domain::{Error, ErrorCode};
 use crate::db_types::DateTimeWithTimeZone;
 
 use domain::{
-        models::category::{Category, CategoryAdmin, NewCategory, UpdateCategory},
-        repositories::category_repository_trait::CategoryRepositoryTrait,
+    models::category::{Category, CategoryAdmin, NewCategory, UpdateCategory},
+    repositories::category_repository_trait::CategoryRepositoryTrait,
 };
 
-use crate::{
-    entities::category::{self, Entity as CategoryEntity},
-};
+use crate::entities::category::{self, Entity as CategoryEntity};
 
 pub struct CategoryRepository {
     db: Arc<DatabaseConnection>,
@@ -35,48 +32,48 @@ impl CategoryRepository {
 
 #[derive(FromQueryResult)]
 struct CategoryAdminRow {
-    id:               i32,
-    name:             String,
-    slug:             String,
-    category_type:    String,
-    icon:             Option<String>,
-    color:            Option<String>,
-    description:      Option<String>,
-    display_order:    i16,
-    is_active:        bool,
-    created_on:       DateTimeWithTimeZone,
-    updated_on:       DateTimeWithTimeZone,
-    created_by_name:  Option<String>,
-    updated_by_name:  Option<String>,
+    id: i32,
+    name: String,
+    slug: String,
+    category_type: String,
+    icon: Option<String>,
+    color: Option<String>,
+    description: Option<String>,
+    display_order: i16,
+    is_active: bool,
+    created_on: DateTimeWithTimeZone,
+    updated_on: DateTimeWithTimeZone,
+    created_by_name: Option<String>,
+    updated_by_name: Option<String>,
 }
 
 fn to_category(r: category::Model) -> Category {
     Category {
-        id:            r.id,
-        name:          r.name,
-        slug:          r.slug,
-        icon:          r.icon,
-        color:         r.color,
-        description:   r.description,
+        id: r.id,
+        name: r.name,
+        slug: r.slug,
+        icon: r.icon,
+        color: r.color,
+        description: r.description,
         display_order: r.display_order,
     }
 }
 
 fn to_category_admin(r: CategoryAdminRow) -> CategoryAdmin {
     CategoryAdmin {
-        id:               r.id,
-        name:             r.name,
-        slug:             r.slug,
-        category_type:    r.category_type,
-        icon:             r.icon,
-        color:            r.color,
-        description:      r.description,
-        display_order:    r.display_order,
-        is_active:        r.is_active,
-        created_on:       r.created_on.with_timezone(&chrono::Utc),
-        updated_on:       r.updated_on.with_timezone(&chrono::Utc),
-        created_by_name:  r.created_by_name,
-        updated_by_name:  r.updated_by_name,
+        id: r.id,
+        name: r.name,
+        slug: r.slug,
+        category_type: r.category_type,
+        icon: r.icon,
+        color: r.color,
+        description: r.description,
+        display_order: r.display_order,
+        is_active: r.is_active,
+        created_on: r.created_on.with_timezone(&chrono::Utc),
+        updated_on: r.updated_on.with_timezone(&chrono::Utc),
+        created_by_name: r.created_by_name,
+        updated_by_name: r.updated_by_name,
     }
 }
 
@@ -84,8 +81,7 @@ fn to_category_admin(r: CategoryAdminRow) -> CategoryAdmin {
 impl CategoryRepositoryTrait for CategoryRepository {
     async fn list(&self, type_filter: Option<&str>) -> Result<Vec<Category>, Error> {
         let db = self.db.as_ref();
-        let mut query = CategoryEntity::find()
-            .filter(category::Column::IsActive.eq(true));
+        let mut query = CategoryEntity::find().filter(category::Column::IsActive.eq(true));
 
         if let Some(cat_type) = type_filter {
             query = query
@@ -122,11 +118,15 @@ impl CategoryRepositoryTrait for CategoryRepository {
             .column(category::Column::CreatedOn)
             .column(category::Column::UpdatedOn)
             .expr_as(
-                Expr::cust("(SELECT u.username FROM users u WHERE u.id = \"categories\".created_by)"),
+                Expr::cust(
+                    "(SELECT u.username FROM users u WHERE u.id = \"categories\".created_by)",
+                ),
                 "created_by_name",
             )
             .expr_as(
-                Expr::cust("(SELECT u.username FROM users u WHERE u.id = \"categories\".updated_by)"),
+                Expr::cust(
+                    "(SELECT u.username FROM users u WHERE u.id = \"categories\".updated_by)",
+                ),
                 "updated_by_name",
             )
             .order_by_asc(category::Column::Type)
@@ -156,11 +156,15 @@ impl CategoryRepositoryTrait for CategoryRepository {
             .column(category::Column::CreatedOn)
             .column(category::Column::UpdatedOn)
             .expr_as(
-                Expr::cust("(SELECT u.username FROM users u WHERE u.id = \"categories\".created_by)"),
+                Expr::cust(
+                    "(SELECT u.username FROM users u WHERE u.id = \"categories\".created_by)",
+                ),
                 "created_by_name",
             )
             .expr_as(
-                Expr::cust("(SELECT u.username FROM users u WHERE u.id = \"categories\".updated_by)"),
+                Expr::cust(
+                    "(SELECT u.username FROM users u WHERE u.id = \"categories\".updated_by)",
+                ),
                 "updated_by_name",
             )
             .into_model::<CategoryAdminRow>()
@@ -175,14 +179,14 @@ impl CategoryRepositoryTrait for CategoryRepository {
 
     async fn create(&self, category: NewCategory) -> Result<i32, Error> {
         let new_cat = category::ActiveModel {
-            name:          Set(category.name),
-            slug:          Set(category.slug),
-            r#type:        Set(category.category_type),
-            icon:          Set(category.icon),
-            color:         Set(category.color),
-            description:   Set(category.description),
+            name: Set(category.name),
+            slug: Set(category.slug),
+            r#type: Set(category.category_type),
+            icon: Set(category.icon),
+            color: Set(category.color),
+            description: Set(category.description),
             display_order: Set(category.display_order),
-            created_by:    Set(Some(category.created_by)),
+            created_by: Set(Some(category.created_by)),
             ..Default::default()
         };
 
@@ -198,13 +202,22 @@ impl CategoryRepositoryTrait for CategoryRepository {
 
     async fn update(&self, id: i32, category: UpdateCategory) -> Result<(), Error> {
         let result = CategoryEntity::update_many()
-            .col_expr(category::Column::Name,         Expr::value(category.name))
-            .col_expr(category::Column::Slug,         Expr::value(category.slug))
-            .col_expr(category::Column::Icon,         Expr::value(category.icon))
-            .col_expr(category::Column::Color,        Expr::value(category.color))
-            .col_expr(category::Column::Description,  Expr::value(category.description))
-            .col_expr(category::Column::DisplayOrder, Expr::value(category.display_order))
-            .col_expr(category::Column::UpdatedBy,    Expr::value(Some(category.updated_by)))
+            .col_expr(category::Column::Name, Expr::value(category.name))
+            .col_expr(category::Column::Slug, Expr::value(category.slug))
+            .col_expr(category::Column::Icon, Expr::value(category.icon))
+            .col_expr(category::Column::Color, Expr::value(category.color))
+            .col_expr(
+                category::Column::Description,
+                Expr::value(category.description),
+            )
+            .col_expr(
+                category::Column::DisplayOrder,
+                Expr::value(category.display_order),
+            )
+            .col_expr(
+                category::Column::UpdatedBy,
+                Expr::value(Some(category.updated_by)),
+            )
             .filter(category::Column::Id.eq(id))
             .exec(self.db.as_ref())
             .await
@@ -221,7 +234,7 @@ impl CategoryRepositoryTrait for CategoryRepository {
 
     async fn toggle_active(&self, id: i32, is_active: bool, admin_id: i32) -> Result<(), Error> {
         let result = CategoryEntity::update_many()
-            .col_expr(category::Column::IsActive,  Expr::value(is_active))
+            .col_expr(category::Column::IsActive, Expr::value(is_active))
             .col_expr(category::Column::UpdatedBy, Expr::value(Some(admin_id)))
             .filter(category::Column::Id.eq(id))
             .exec(self.db.as_ref())

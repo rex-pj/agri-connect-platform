@@ -60,9 +60,14 @@ pub async fn send(router: &Router, mut request: Request<Body>) -> Response<Body>
 }
 
 pub async fn json_body(response: Response<Body>) -> serde_json::Value {
-    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
     serde_json::from_slice(&bytes).unwrap_or_else(|e| {
-        panic!("body is not JSON ({e}): {}", String::from_utf8_lossy(&bytes))
+        panic!(
+            "body is not JSON ({e}): {}",
+            String::from_utf8_lossy(&bytes)
+        )
     })
 }
 
@@ -101,7 +106,9 @@ impl TestDb {
             None => (url.as_str(), String::new()),
         };
         let (server, _) = base.rsplit_once('/').unwrap();
-        let db = Database::connect(format!("{server}/{name}{query}")).await.unwrap();
+        let db = Database::connect(format!("{server}/{name}{query}"))
+            .await
+            .unwrap();
         Migrator::up(&db, None).await.unwrap();
 
         TestDb { db, admin, name }

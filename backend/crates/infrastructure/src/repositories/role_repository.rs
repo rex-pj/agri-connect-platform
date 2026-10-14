@@ -7,9 +7,7 @@ use domain::{models::role::RoleModel, repositories::role_repository_trait::RoleR
 
 use domain::Error;
 
-use crate::{
-    entities::role::{self, Entity as Role},
-};
+use crate::entities::role::{self, Entity as Role};
 
 pub struct RoleRepository {
     db: Arc<DatabaseConnection>,
@@ -76,5 +74,11 @@ impl RoleRepositoryTrait for RoleRepository {
 }
 
 fn to_model(r: role::Model) -> RoleModel {
-    RoleModel { id: r.id, code: r.code, name: r.name, description: r.description, is_active: r.is_active }
+    RoleModel {
+        id: r.id,
+        code: r.code,
+        name: r.name,
+        description: r.description,
+        is_active: r.is_active,
+    }
 }

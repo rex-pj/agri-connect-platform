@@ -10,7 +10,7 @@ const fn per_minute(n: u32) -> NonZeroU32 {
 }
 
 // ── Rate limiting (per client IP, in-process) ─────────────────────────────────
-pub const AUTH_RATE_LIMIT_PER_MIN:         NonZeroU32 = per_minute(10);
+pub const AUTH_RATE_LIMIT_PER_MIN: NonZeroU32 = per_minute(10);
 pub const PUBLIC_WRITE_RATE_LIMIT_PER_MIN: NonZeroU32 = per_minute(30);
 
 // ── Database ──────────────────────────────────────────────────────────────────

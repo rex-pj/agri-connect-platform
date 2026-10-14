@@ -12,10 +12,10 @@ pub trait AuditLogRepositoryTrait {
     /// log a warning but must not roll back the primary operation.
     async fn log(
         &self,
-        admin_id:    i32,
-        action:      &str,
+        admin_id: i32,
+        action: &str,
         entity_type: &str,
-        entity_id:   i32,
-        reason:      Option<String>,
+        entity_id: i32,
+        reason: Option<String>,
     ) -> Result<(), Error>;
 }

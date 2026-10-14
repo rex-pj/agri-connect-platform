@@ -17,19 +17,24 @@ use crate::outputs::SetupStatusDto;
 #[derive(Clone)]
 pub struct SetupUseCase {
     catalogue_repo: Arc<dyn CatalogueRepositoryTrait + Send + Sync>,
-    demo_repo:      Arc<dyn DemoDataRepositoryTrait  + Send + Sync>,
-    business_repo:  Arc<dyn BusinessRepositoryTrait  + Send + Sync>,
-    user_repo:      Arc<dyn UserRepositoryTrait      + Send + Sync>,
+    demo_repo: Arc<dyn DemoDataRepositoryTrait + Send + Sync>,
+    business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
+    user_repo: Arc<dyn UserRepositoryTrait + Send + Sync>,
 }
 
 impl SetupUseCase {
     pub fn new(
         catalogue_repo: Arc<dyn CatalogueRepositoryTrait + Send + Sync>,
-        demo_repo:      Arc<dyn DemoDataRepositoryTrait  + Send + Sync>,
-        business_repo:  Arc<dyn BusinessRepositoryTrait  + Send + Sync>,
-        user_repo:      Arc<dyn UserRepositoryTrait      + Send + Sync>,
+        demo_repo: Arc<dyn DemoDataRepositoryTrait + Send + Sync>,
+        business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
+        user_repo: Arc<dyn UserRepositoryTrait + Send + Sync>,
     ) -> Self {
-        Self { catalogue_repo, demo_repo, business_repo, user_repo }
+        Self {
+            catalogue_repo,
+            demo_repo,
+            business_repo,
+            user_repo,
+        }
     }
 
     /// Runs at every startup, before the server accepts requests. Without it a
@@ -74,7 +79,12 @@ impl SetupUseCase {
             return Err(Error::new(ErrorCode::DemoAlreadyLoaded));
         }
         let report = self.demo_repo.load().await?;
-        info!(businesses = report.businesses, services = report.services, products = report.products, "demo data loaded");
+        info!(
+            businesses = report.businesses,
+            services = report.services,
+            products = report.products,
+            "demo data loaded"
+        );
         Ok(report)
     }
 

@@ -4,9 +4,9 @@ use sea_orm::entity::prelude::*;
 #[sea_orm(table_name = "permissions")]
 pub struct Model {
     #[sea_orm(primary_key)]
-    pub id:         i32,
-    pub code:       String,
-    pub name:       String,
+    pub id: i32,
+    pub code: String,
+    pub name: String,
     pub created_on: DateTimeWithTimeZone,
     pub updated_on: DateTimeWithTimeZone,
     pub created_by: Option<i32>,

@@ -17,11 +17,15 @@ use crate::constants::{AUTH_RATE_LIMIT_PER_MIN, PUBLIC_WRITE_RATE_LIMIT_PER_MIN}
 pub type SharedLimiter = Arc<RateLimiter<IpAddr, DefaultKeyedStateStore<IpAddr>, DefaultClock>>;
 
 pub fn new_auth_limiter() -> SharedLimiter {
-    Arc::new(RateLimiter::keyed(Quota::per_minute(AUTH_RATE_LIMIT_PER_MIN)))
+    Arc::new(RateLimiter::keyed(Quota::per_minute(
+        AUTH_RATE_LIMIT_PER_MIN,
+    )))
 }
 
 pub fn new_public_write_limiter() -> SharedLimiter {
-    Arc::new(RateLimiter::keyed(Quota::per_minute(PUBLIC_WRITE_RATE_LIMIT_PER_MIN)))
+    Arc::new(RateLimiter::keyed(Quota::per_minute(
+        PUBLIC_WRITE_RATE_LIMIT_PER_MIN,
+    )))
 }
 
 /// Keys on the TCP peer address. Behind a reverse proxy every request shares

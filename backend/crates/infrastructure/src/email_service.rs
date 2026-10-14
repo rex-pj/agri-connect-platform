@@ -12,22 +12,25 @@ use lettre::{
 use tracing::{error, info, warn};
 
 fn reset_url(app_url: &str, token: &str) -> String {
-    format!("{}/reset-password?token={token}", app_url.trim_end_matches('/'))
+    format!(
+        "{}/reset-password?token={token}",
+        app_url.trim_end_matches('/')
+    )
 }
 
 pub struct SmtpConfig {
-    pub host:     String,
-    pub port:     u16,
+    pub host: String,
+    pub port: u16,
     /// Both or neither: an unauthenticated relay is allowed for local MTAs.
     pub credentials: Option<(String, String)>,
-    pub from:     String,
-    pub app_url:  String,
+    pub from: String,
+    pub app_url: String,
 }
 
 pub struct SmtpEmailService {
     transport: AsyncSmtpTransport<Tokio1Executor>,
-    from:      Mailbox,
-    app_url:   String,
+    from: Mailbox,
+    app_url: String,
 }
 
 impl SmtpEmailService {
@@ -42,7 +45,11 @@ impl SmtpEmailService {
         if let Some((user, pass)) = config.credentials {
             builder = builder.credentials(Credentials::new(user, pass));
         }
-        Ok(Self { transport: builder.build(), from, app_url: config.app_url })
+        Ok(Self {
+            transport: builder.build(),
+            from,
+            app_url: config.app_url,
+        })
     }
 
     async fn send(&self, to: &str, subject: &str, body: String) -> std::result::Result<(), String> {
@@ -54,7 +61,11 @@ impl SmtpEmailService {
             .header(ContentType::TEXT_PLAIN)
             .body(body)
             .map_err(|e| format!("build: {e}"))?;
-        self.transport.send(message).await.map(|_| ()).map_err(|e| format!("smtp: {e}"))
+        self.transport
+            .send(message)
+            .await
+            .map(|_| ())
+            .map_err(|e| format!("smtp: {e}"))
     }
 }
 
@@ -72,7 +83,10 @@ impl EmailService for SmtpEmailService {
              Nếu bạn không yêu cầu, hãy bỏ qua email này.\n\n\
              Agri-Connect"
         );
-        match self.send(to_email, "Đặt lại mật khẩu – Agri-Connect", body).await {
+        match self
+            .send(to_email, "Đặt lại mật khẩu – Agri-Connect", body)
+            .await
+        {
             Ok(()) => info!(to = to_email, "password-reset email sent"),
             Err(e) => error!(to = to_email, error = %e, "password-reset email failed"),
         }
@@ -105,7 +119,13 @@ mod tests {
 
     #[test]
     fn reset_url_does_not_double_the_slash() {
-        assert_eq!(reset_url("https://a.vn/", "t"), "https://a.vn/reset-password?token=t");
-        assert_eq!(reset_url("https://a.vn", "t"), "https://a.vn/reset-password?token=t");
+        assert_eq!(
+            reset_url("https://a.vn/", "t"),
+            "https://a.vn/reset-password?token=t"
+        );
+        assert_eq!(
+            reset_url("https://a.vn", "t"),
+            "https://a.vn/reset-password?token=t"
+        );
     }
 }

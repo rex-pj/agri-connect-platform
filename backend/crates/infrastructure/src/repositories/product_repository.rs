@@ -1,17 +1,19 @@
 use async_trait::async_trait;
 use chrono::Utc;
+use sea_orm::sea_query::{extension::postgres::PgExpr, Expr};
 use sea_orm::{
-    ColumnTrait, Condition, DatabaseConnection, EntityTrait, FromQueryResult,
-    JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
+    ColumnTrait, Condition, DatabaseConnection, EntityTrait, FromQueryResult, JoinType,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
 };
-use sea_orm::sea_query::{Expr, extension::postgres::PgExpr};
 use std::sync::Arc;
 use tracing::error;
 
 use domain::{
-        models::product::{AdminProduct, NewProduct, ProductFilter, ProductView, ProviderProduct, UpdateProduct},
-        repositories::product_repository_trait::ProductRepositoryTrait,
-    };
+    models::product::{
+        AdminProduct, NewProduct, ProductFilter, ProductView, ProviderProduct, UpdateProduct,
+    },
+    repositories::product_repository_trait::ProductRepositoryTrait,
+};
 
 use domain::Error;
 
@@ -36,45 +38,45 @@ impl ProductRepository {
 
 #[derive(FromQueryResult)]
 struct ProductViewRow {
-    id:           i32,
-    name:         String,
-    description:  Option<String>,
-    price:        Option<i64>,
-    unit:         Option<String>,
-    category:     String,
-    vendor_name:  String,
+    id: i32,
+    name: String,
+    description: Option<String>,
+    price: Option<i64>,
+    unit: Option<String>,
+    category: String,
+    vendor_name: String,
     vendor_phone: String,
     is_available: bool,
-    created_on:   DateTimeWithTimeZone,
+    created_on: DateTimeWithTimeZone,
 }
 
 #[derive(FromQueryResult)]
 struct AdminProductRow {
-    id:            i32,
-    name:          String,
-    description:   Option<String>,
-    price:         Option<i64>,
-    unit:          Option<String>,
-    category:      String,
-    category_id:   i32,
-    business_id:   i32,
+    id: i32,
+    name: String,
+    description: Option<String>,
+    price: Option<i64>,
+    unit: Option<String>,
+    category: String,
+    category_id: i32,
+    business_id: i32,
     business_name: String,
-    is_active:     bool,
-    created_on:    DateTimeWithTimeZone,
-    updated_on:    DateTimeWithTimeZone,
+    is_active: bool,
+    created_on: DateTimeWithTimeZone,
+    updated_on: DateTimeWithTimeZone,
 }
 
 #[derive(FromQueryResult)]
 struct ProviderProductRow {
-    id:          i32,
-    name:        String,
+    id: i32,
+    name: String,
     description: Option<String>,
-    price:       Option<i64>,
-    unit:        Option<String>,
-    category:    String,
+    price: Option<i64>,
+    unit: Option<String>,
+    category: String,
     category_id: i32,
-    is_active:   bool,
-    created_on:  DateTimeWithTimeZone,
+    is_active: bool,
+    created_on: DateTimeWithTimeZone,
 }
 
 fn base_product_view_query() -> sea_orm::Select<ProductEntity> {
@@ -192,7 +194,7 @@ impl ProductRepositoryTrait for ProductRepository {
 
     async fn admin_toggle_active(&self, id: i32, is_active: bool) -> Result<bool, Error> {
         ProductEntity::update_many()
-            .col_expr(product::Column::IsActive,  Expr::value(is_active))
+            .col_expr(product::Column::IsActive, Expr::value(is_active))
             .col_expr(product::Column::UpdatedOn, Expr::current_timestamp().into())
             .filter(product::Column::Id.eq(id))
             .filter(product::Column::DeletedAt.is_null())
@@ -219,7 +221,6 @@ impl ProductRepositoryTrait for ProductRepository {
             })
     }
 
-
     async fn browse(
         &self,
         filter: &ProductFilter,
@@ -235,9 +236,9 @@ impl ProductRepositoryTrait for ProductRepository {
         );
 
         let query = match sort.as_deref() {
-            Some("price_asc")  => query.order_by_asc(product::Column::Price),
+            Some("price_asc") => query.order_by_asc(product::Column::Price),
             Some("price_desc") => query.order_by_desc(product::Column::Price),
-            _                  => query.order_by_desc(product::Column::CreatedOn),
+            _ => query.order_by_desc(product::Column::CreatedOn),
         };
 
         query
@@ -256,13 +257,13 @@ impl ProductRepositoryTrait for ProductRepository {
     async fn count_browse(&self, filter: &ProductFilter) -> Result<i64, Error> {
         let query = apply_filter(
             ProductEntity::find()
-            .join(JoinType::InnerJoin, product::Relation::Business.def())
-            .join(JoinType::InnerJoin, product::Relation::Category.def())
-            .filter(product::Column::IsActive.eq(true))
-            .filter(product::Column::DeletedAt.is_null())
-            .filter(business::Column::IsActive.eq(true))
-            .filter(business::Column::DeletedAt.is_null())
-            .filter(category::Column::IsActive.eq(true)),
+                .join(JoinType::InnerJoin, product::Relation::Business.def())
+                .join(JoinType::InnerJoin, product::Relation::Category.def())
+                .filter(product::Column::IsActive.eq(true))
+                .filter(product::Column::DeletedAt.is_null())
+                .filter(business::Column::IsActive.eq(true))
+                .filter(business::Column::DeletedAt.is_null())
+                .filter(category::Column::IsActive.eq(true)),
             filter,
         );
 
@@ -339,13 +340,13 @@ impl ProductRepositoryTrait for ProductRepository {
 
     async fn create(&self, product: NewProduct) -> Result<i32, Error> {
         let new_product = product::ActiveModel {
-            business_id:  Set(product.business_id),
-            category_id:  Set(product.category_id),
-            name:         Set(product.name),
-            description:  Set(product.description),
-            price:        Set(product.price),
-            unit:         Set(product.unit),
-            created_by:   Set(Some(product.created_by)),
+            business_id: Set(product.business_id),
+            category_id: Set(product.category_id),
+            name: Set(product.name),
+            description: Set(product.description),
+            price: Set(product.price),
+            unit: Set(product.unit),
+            created_by: Set(Some(product.created_by)),
             ..Default::default()
         };
 
@@ -359,10 +360,7 @@ impl ProductRepositoryTrait for ProductRepository {
             })
     }
 
-    async fn find_provider_product_by_id(
-        &self,
-        id: i32,
-    ) -> Result<Option<ProviderProduct>, Error> {
+    async fn find_provider_product_by_id(&self, id: i32) -> Result<Option<ProviderProduct>, Error> {
         base_provider_product_query()
             .filter(product::Column::Id.eq(id))
             .into_model::<ProviderProductRow>()
@@ -400,12 +398,18 @@ impl ProductRepositoryTrait for ProductRepository {
         }
 
         ProductEntity::update_many()
-            .col_expr(product::Column::CategoryId, Expr::value(product.category_id))
-            .col_expr(product::Column::Name,        Expr::value(product.name))
-            .col_expr(product::Column::Description, Expr::value(product.description))
-            .col_expr(product::Column::Price,       Expr::value(product.price))
-            .col_expr(product::Column::Unit,        Expr::value(product.unit))
-            .col_expr(product::Column::UpdatedOn,   Expr::current_timestamp().into())
+            .col_expr(
+                product::Column::CategoryId,
+                Expr::value(product.category_id),
+            )
+            .col_expr(product::Column::Name, Expr::value(product.name))
+            .col_expr(
+                product::Column::Description,
+                Expr::value(product.description),
+            )
+            .col_expr(product::Column::Price, Expr::value(product.price))
+            .col_expr(product::Column::Unit, Expr::value(product.unit))
+            .col_expr(product::Column::UpdatedOn, Expr::current_timestamp().into())
             .filter(product::Column::Id.eq(product.id))
             .exec(db)
             .await
@@ -432,7 +436,9 @@ impl ProductRepositoryTrait for ProductRepository {
             .count(db)
             .await
             .map_err(|e| {
-                error!("product soft_delete ownership check error (id={id}, user={owner_user}): {e}");
+                error!(
+                    "product soft_delete ownership check error (id={id}, user={owner_user}): {e}"
+                );
                 Error::internal("Failed to delete product.")
             })?;
 
@@ -468,50 +474,49 @@ impl ProductRepositoryTrait for ProductRepository {
 
 fn map_admin_row(r: AdminProductRow) -> AdminProduct {
     AdminProduct {
-        id:            r.id,
-        name:          r.name,
-        description:   r.description,
-        price:         r.price,
-        unit:          r.unit,
-        category:      r.category,
-        category_id:   r.category_id,
-        business_id:   r.business_id,
+        id: r.id,
+        name: r.name,
+        description: r.description,
+        price: r.price,
+        unit: r.unit,
+        category: r.category,
+        category_id: r.category_id,
+        business_id: r.business_id,
         business_name: r.business_name,
-        is_active:     r.is_active,
-        created_on:    r.created_on.with_timezone(&Utc),
-        updated_on:    r.updated_on.with_timezone(&Utc),
+        is_active: r.is_active,
+        created_on: r.created_on.with_timezone(&Utc),
+        updated_on: r.updated_on.with_timezone(&Utc),
     }
 }
 
 fn map_view_row(r: ProductViewRow) -> ProductView {
     ProductView {
-        id:           r.id,
-        name:         r.name,
-        description:  r.description,
-        price:        r.price,
-        unit:         r.unit,
-        category:     r.category,
-        vendor_name:  r.vendor_name,
+        id: r.id,
+        name: r.name,
+        description: r.description,
+        price: r.price,
+        unit: r.unit,
+        category: r.category,
+        vendor_name: r.vendor_name,
         vendor_phone: r.vendor_phone,
         is_available: r.is_available,
-        created_on:   r.created_on.with_timezone(&Utc),
+        created_on: r.created_on.with_timezone(&Utc),
     }
 }
 
 fn map_provider_row(r: ProviderProductRow) -> ProviderProduct {
     ProviderProduct {
-        id:          r.id,
-        name:        r.name,
+        id: r.id,
+        name: r.name,
         description: r.description,
-        price:       r.price,
-        unit:        r.unit,
-        category:    r.category,
+        price: r.price,
+        unit: r.unit,
+        category: r.category,
         category_id: r.category_id,
-        is_active:   r.is_active,
-        created_on:  r.created_on.with_timezone(&Utc),
+        is_active: r.is_active,
+        created_on: r.created_on.with_timezone(&Utc),
     }
 }
-
 
 /// The public search criteria, shared by `browse` and `count_browse` so the
 /// page count can never disagree with the page contents.

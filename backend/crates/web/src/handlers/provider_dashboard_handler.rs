@@ -39,13 +39,13 @@ impl ProviderDashboardHandler {
                 &caller.role,
                 caller.id,
                 UpdateProfileInput {
-                    user_id:     caller.id,
-                    name:        req.name,
-                    phone:       req.phone,
+                    user_id: caller.id,
+                    name: req.name,
+                    phone: req.phone,
                     description: req.description,
-                    address:     req.address,
-                    lat:         req.lat,
-                    lng:         req.lng,
+                    address: req.address,
+                    lat: req.lat,
+                    lng: req.lng,
                 },
             )
             .await?;
@@ -80,12 +80,12 @@ impl ProviderDashboardHandler {
                 &caller.role,
                 caller.id,
                 CreateProductInput {
-                    user_id:     caller.id,
+                    user_id: caller.id,
                     category_id: req.category_id,
-                    name:        req.name,
+                    name: req.name,
                     description: req.description,
-                    price:       req.price,
-                    unit:        req.unit,
+                    price: req.price,
+                    unit: req.unit,
                 },
             )
             .await?;
@@ -107,13 +107,13 @@ impl ProviderDashboardHandler {
                 &caller.role,
                 caller.id,
                 UpdateProductInput {
-                    product_id:  id,
-                    user_id:     caller.id,
+                    product_id: id,
+                    user_id: caller.id,
                     category_id: req.category_id,
-                    name:        req.name,
+                    name: req.name,
                     description: req.description,
-                    price:       req.price,
-                    unit:        req.unit,
+                    price: req.price,
+                    unit: req.unit,
                 },
             )
             .await?;

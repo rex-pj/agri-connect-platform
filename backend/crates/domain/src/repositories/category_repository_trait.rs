@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 
 use crate::{
-    models::category::{Category, CategoryAdmin, NewCategory, UpdateCategory},
     error::Error,
+    models::category::{Category, CategoryAdmin, NewCategory, UpdateCategory},
 };
 
 #[async_trait]

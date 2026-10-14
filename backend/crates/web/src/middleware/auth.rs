@@ -11,7 +11,7 @@ use crate::app_state::AppState;
 
 #[derive(Debug, Clone)]
 pub struct AuthUser {
-    pub id:   i32,
+    pub id: i32,
     pub role: UserRole,
 }
 
@@ -26,10 +26,17 @@ fn bearer_token(parts: &Parts) -> Option<&str> {
 impl FromRequestParts<AppState> for AuthUser {
     type Rejection = Error;
 
-    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
-        let token = bearer_token(parts).ok_or_else(|| Error::new(ErrorCode::AuthenticationRequired))?;
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let token =
+            bearer_token(parts).ok_or_else(|| Error::new(ErrorCode::AuthenticationRequired))?;
         let claims = state.token_service.verify(token)?;
-        Ok(AuthUser { id: claims.user_id, role: claims.role })
+        Ok(AuthUser {
+            id: claims.user_id,
+            role: claims.role,
+        })
     }
 }
 
@@ -39,7 +46,10 @@ pub struct RequireAdmin(pub AuthUser);
 impl FromRequestParts<AppState> for RequireAdmin {
     type Rejection = Error;
 
-    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
         let user = AuthUser::from_request_parts(parts, state).await?;
         if user.role != UserRole::Admin {
             return Err(Error::new(ErrorCode::PermissionDenied));
@@ -54,7 +64,10 @@ pub struct RequireProviderOrAdmin(pub AuthUser);
 impl FromRequestParts<AppState> for RequireProviderOrAdmin {
     type Rejection = Error;
 
-    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
         let user = AuthUser::from_request_parts(parts, state).await?;
         if !matches!(user.role, UserRole::Admin | UserRole::Provider) {
             return Err(Error::new(ErrorCode::PermissionDenied));

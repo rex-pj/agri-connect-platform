@@ -5,32 +5,32 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
+    sea_query::{Expr, SimpleExpr},
     ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, JoinType, PaginatorTrait,
     QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
-    sea_query::{Expr, SimpleExpr},
 };
 use tracing::error;
 
 use domain::{
-        models::{
-            role::UserRole,
-            user::{
-                ExistingUser, NewResetToken, NewUser, ResetToken, UserAdmin, UserAdminDetail,
-                UserByEmail, UserCredentials, UserMe,
-            },
+    models::{
+        role::UserRole,
+        user::{
+            ExistingUser, NewResetToken, NewUser, ResetToken, UserAdmin, UserAdminDetail,
+            UserByEmail, UserCredentials, UserMe,
         },
-        repositories::user_repository_trait::UserRepositoryTrait,
+    },
+    repositories::user_repository_trait::UserRepositoryTrait,
 };
 
 use domain::{Error, ErrorCode};
 
 use crate::{
+    db_types::DateTimeWithTimeZone,
     entities::{
         password_reset_token::{self, Entity as PasswordResetToken},
         role::{self, Entity as Role},
         user::{self, Entity as UserEntity},
     },
-    db_types::DateTimeWithTimeZone,
 };
 
 pub struct UserRepository {
@@ -45,21 +45,21 @@ impl UserRepository {
 
 #[derive(FromQueryResult)]
 struct CredentialsRow {
-    id:            i32,
+    id: i32,
     password_hash: String,
-    role:          String,
+    role: String,
     /// Fetched explicitly so the application layer can enforce the
     /// "inactive accounts may not log in" invariant — not a silent SQL filter.
-    is_active:     bool,
-    locked_until:  Option<DateTimeWithTimeZone>,
+    is_active: bool,
+    locked_until: Option<DateTimeWithTimeZone>,
 }
 
 #[derive(FromQueryResult)]
 struct UserMeRow {
-    username:   String,
-    email:      String,
-    full_name:  Option<String>,
-    role_code:  String,
+    username: String,
+    email: String,
+    full_name: Option<String>,
+    role_code: String,
     created_on: DateTimeWithTimeZone,
 }
 
@@ -71,17 +71,17 @@ struct UserByUsernameRow {
 
 #[derive(FromQueryResult)]
 struct UserAdminRow {
-    id:               i32,
-    username:         String,
-    email:            String,
-    full_name:        Option<String>,
-    role_code:        String,
-    role_name:        String,
-    is_active:        bool,
-    created_on:       DateTimeWithTimeZone,
-    updated_on:       DateTimeWithTimeZone,
-    created_by_name:  Option<String>,
-    updated_by_name:  Option<String>,
+    id: i32,
+    username: String,
+    email: String,
+    full_name: Option<String>,
+    role_code: String,
+    role_name: String,
+    is_active: bool,
+    created_on: DateTimeWithTimeZone,
+    updated_on: DateTimeWithTimeZone,
+    created_by_name: Option<String>,
+    updated_by_name: Option<String>,
 }
 
 #[derive(FromQueryResult)]
@@ -120,11 +120,11 @@ impl UserRepositoryTrait for UserRepository {
             .await
             .map(|opt| {
                 opt.map(|r| UserCredentials {
-                    id:            r.id,
+                    id: r.id,
                     password_hash: r.password_hash,
-                    role:          r.role,
-                    is_active:     r.is_active,
-                    locked_until:  r.locked_until.map(|t| t.with_timezone(&Utc)),
+                    role: r.role,
+                    is_active: r.is_active,
+                    locked_until: r.locked_until.map(|t| t.with_timezone(&Utc)),
                 })
             })
             .map_err(|e| {
@@ -246,17 +246,17 @@ impl UserRepositoryTrait for UserRepository {
             .map(|rows| {
                 rows.into_iter()
                     .map(|r| UserAdmin {
-                        id:               r.id,
-                        username:         r.username,
-                        email:            r.email,
-                        full_name:        r.full_name,
-                        role_code:        r.role_code,
-                        role_name:        r.role_name,
-                        is_active:        r.is_active,
-                        created_on:       r.created_on.with_timezone(&Utc),
-                        updated_on:       r.updated_on.with_timezone(&Utc),
-                        created_by_name:  r.created_by_name,
-                        updated_by_name:  r.updated_by_name,
+                        id: r.id,
+                        username: r.username,
+                        email: r.email,
+                        full_name: r.full_name,
+                        role_code: r.role_code,
+                        role_name: r.role_name,
+                        is_active: r.is_active,
+                        created_on: r.created_on.with_timezone(&Utc),
+                        updated_on: r.updated_on.with_timezone(&Utc),
+                        created_by_name: r.created_by_name,
+                        updated_by_name: r.updated_by_name,
                     })
                     .collect()
             })
@@ -366,10 +366,10 @@ impl UserRepositoryTrait for UserRepository {
             .await
             .map(|opt| {
                 opt.map(|r| UserMe {
-                    username:   r.username,
-                    email:      r.email,
-                    full_name:  r.full_name,
-                    role:       r.role_code,
+                    username: r.username,
+                    email: r.email,
+                    full_name: r.full_name,
+                    role: r.role_code,
                     created_on: r.created_on.with_timezone(&Utc),
                 })
             })
@@ -395,11 +395,11 @@ impl UserRepositoryTrait for UserRepository {
             .await
             .map(|opt| {
                 opt.map(|r| UserCredentials {
-                    id:            r.id,
+                    id: r.id,
                     password_hash: r.password_hash,
-                    role:          r.role,
-                    is_active:     r.is_active,
-                    locked_until:  r.locked_until.map(|t| t.with_timezone(&Utc)),
+                    role: r.role,
+                    is_active: r.is_active,
+                    locked_until: r.locked_until.map(|t| t.with_timezone(&Utc)),
                 })
             })
             .map_err(|e| {

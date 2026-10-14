@@ -84,10 +84,15 @@ async fn internal_error_detail_never_reaches_the_client() {
         .route(
             "/boom",
             axum::routing::get(|| async {
-                Err::<(), _>(domain::Error::internal("relation \"users\" does not exist (SQL)"))
+                Err::<(), _>(domain::Error::internal(
+                    "relation \"users\" does not exist (SQL)",
+                ))
             }),
         )
-        .layer(axum::middleware::from_fn_with_state(state.clone(), web::error_response::render_errors))
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            web::error_response::render_errors,
+        ))
         .with_state(state);
 
     let res = send(&app, get("/boom")).await;

@@ -1,11 +1,11 @@
 use async_trait::async_trait;
 
 use crate::{
-    models::business::{
-        BusinessAdminDetail, BusinessAdminView, BusinessBrowse, BusinessDetail,
-        BusinessGeoResult, BusinessProfile,
-    },
     error::Error,
+    models::business::{
+        BusinessAdminDetail, BusinessAdminView, BusinessBrowse, BusinessDetail, BusinessGeoResult,
+        BusinessProfile,
+    },
 };
 
 #[async_trait]
@@ -26,7 +26,11 @@ pub trait BusinessRepositoryTrait {
         offset: i64,
     ) -> Result<Vec<BusinessBrowse>, Error>;
 
-    async fn count_browse(&self, service_id: Option<i32>, name: Option<String>) -> Result<i64, Error>;
+    async fn count_browse(
+        &self,
+        service_id: Option<i32>,
+        name: Option<String>,
+    ) -> Result<i64, Error>;
 
     async fn featured(&self, limit: i64) -> Result<Vec<BusinessBrowse>, Error>;
 
@@ -34,7 +38,11 @@ pub trait BusinessRepositoryTrait {
 
     async fn check_exists(&self, id: i32) -> Result<bool, Error>;
 
-    async fn list_for_admin(&self, limit: i64, offset: i64) -> Result<Vec<BusinessAdminView>, Error>;
+    async fn list_for_admin(
+        &self,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<BusinessAdminView>, Error>;
 
     async fn toggle_verify(&self, id: i32) -> Result<Option<(i32, String, bool)>, Error>;
 
@@ -67,8 +75,8 @@ pub trait BusinessRepositoryTrait {
     /// Returns the new business `id`.
     async fn create_for_registration(
         &self,
-        name:    &str,
-        phone:   &str,
+        name: &str,
+        phone: &str,
         user_id: i32,
     ) -> Result<i32, Error>;
 }

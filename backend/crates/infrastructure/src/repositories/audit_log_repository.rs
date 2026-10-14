@@ -7,9 +7,7 @@ use domain::repositories::audit_log_repository_trait::AuditLogRepositoryTrait;
 
 use domain::Error;
 
-use crate::{
-    entities::audit_log::{self, Entity as AuditLog},
-};
+use crate::entities::audit_log::{self, Entity as AuditLog};
 
 pub struct AuditLogRepository {
     db: Arc<DatabaseConnection>,
@@ -25,18 +23,18 @@ impl AuditLogRepository {
 impl AuditLogRepositoryTrait for AuditLogRepository {
     async fn log(
         &self,
-        admin_id:    i32,
-        action:      &str,
+        admin_id: i32,
+        action: &str,
         entity_type: &str,
-        entity_id:   i32,
-        reason:      Option<String>,
+        entity_id: i32,
+        reason: Option<String>,
     ) -> Result<(), Error> {
         let model = audit_log::ActiveModel {
-            admin_id:    Set(Some(admin_id)),
-            action:      Set(action.to_string()),
+            admin_id: Set(Some(admin_id)),
+            action: Set(action.to_string()),
             entity_type: Set(entity_type.to_string()),
-            entity_id:   Set(entity_id),
-            reason:      Set(reason),
+            entity_id: Set(entity_id),
+            reason: Set(reason),
             ..Default::default()
         };
 

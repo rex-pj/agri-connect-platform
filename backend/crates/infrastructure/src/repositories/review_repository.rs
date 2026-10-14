@@ -1,17 +1,15 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait,
-    FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait,
-    sea_query::Expr,
+    sea_query::Expr, ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, JoinType,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait,
 };
 use std::sync::Arc;
 use tracing::error;
 
 use domain::{
-        models::review::ReviewAdmin,
-        repositories::review_repository_trait::ReviewRepositoryTrait,
-    };
+    models::review::ReviewAdmin, repositories::review_repository_trait::ReviewRepositoryTrait,
+};
 
 use domain::{Error, ErrorCode};
 
@@ -35,15 +33,15 @@ impl ReviewRepository {
 
 #[derive(FromQueryResult)]
 struct ReviewAdminRow {
-    id:              i32,
-    business_id:     i32,
-    business_name:   String,
-    reviewer_name:   String,
-    rating:          i16,
-    comment:         Option<String>,
-    is_visible:      bool,
-    created_on:      DateTimeWithTimeZone,
-    updated_on:      DateTimeWithTimeZone,
+    id: i32,
+    business_id: i32,
+    business_name: String,
+    reviewer_name: String,
+    rating: i16,
+    comment: Option<String>,
+    is_visible: bool,
+    created_on: DateTimeWithTimeZone,
+    updated_on: DateTimeWithTimeZone,
     updated_by_name: Option<String>,
 }
 
@@ -86,15 +84,15 @@ impl ReviewRepositoryTrait for ReviewRepository {
             .map(|rows| {
                 rows.into_iter()
                     .map(|r| ReviewAdmin {
-                        id:              r.id,
-                        business_id:     r.business_id,
-                        business_name:   r.business_name,
-                        reviewer_name:   r.reviewer_name,
-                        rating:          r.rating,
-                        comment:         r.comment,
-                        is_visible:      r.is_visible,
-                        created_on:      r.created_on.with_timezone(&Utc),
-                        updated_on:      r.updated_on.with_timezone(&Utc),
+                        id: r.id,
+                        business_id: r.business_id,
+                        business_name: r.business_name,
+                        reviewer_name: r.reviewer_name,
+                        rating: r.rating,
+                        comment: r.comment,
+                        is_visible: r.is_visible,
+                        created_on: r.created_on.with_timezone(&Utc),
+                        updated_on: r.updated_on.with_timezone(&Utc),
                         updated_by_name: r.updated_by_name,
                     })
                     .collect()
@@ -126,18 +124,20 @@ impl ReviewRepositoryTrait for ReviewRepository {
             .into_model::<ReviewAdminRow>()
             .one(self.db.as_ref())
             .await
-            .map(|opt| opt.map(|r| ReviewAdmin {
-                id:              r.id,
-                business_id:     r.business_id,
-                business_name:   r.business_name,
-                reviewer_name:   r.reviewer_name,
-                rating:          r.rating,
-                comment:         r.comment,
-                is_visible:      r.is_visible,
-                created_on:      r.created_on.with_timezone(&Utc),
-                updated_on:      r.updated_on.with_timezone(&Utc),
-                updated_by_name: r.updated_by_name,
-            }))
+            .map(|opt| {
+                opt.map(|r| ReviewAdmin {
+                    id: r.id,
+                    business_id: r.business_id,
+                    business_name: r.business_name,
+                    reviewer_name: r.reviewer_name,
+                    rating: r.rating,
+                    comment: r.comment,
+                    is_visible: r.is_visible,
+                    created_on: r.created_on.with_timezone(&Utc),
+                    updated_on: r.updated_on.with_timezone(&Utc),
+                    updated_by_name: r.updated_by_name,
+                })
+            })
             .map_err(|e| {
                 error!("review find_by_id_admin error: {e}");
                 Error::internal("Failed to load review.")
@@ -163,4 +163,3 @@ impl ReviewRepositoryTrait for ReviewRepository {
         Ok(())
     }
 }
-

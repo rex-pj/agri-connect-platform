@@ -1,10 +1,10 @@
 pub mod audit_log;
-pub mod permission;
 pub mod business;
 pub mod category;
 pub mod inquiry;
 pub mod location;
 pub mod password_reset_token;
+pub mod permission;
 pub mod product;
 pub mod review;
 pub mod role;

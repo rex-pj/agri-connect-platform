@@ -33,7 +33,11 @@ impl AdminHandler {
         State(state): State<AppState>,
         ApiQuery(q): ApiQuery<AdminPageQuery>,
     ) -> Result<impl IntoResponse, Error> {
-        let result = state.usecases.admin.list_providers(q.page.unwrap_or(1)).await?;
+        let result = state
+            .usecases
+            .admin
+            .list_providers(q.page.unwrap_or(1))
+            .await?;
         Ok(Json(result))
     }
 
@@ -45,7 +49,11 @@ impl AdminHandler {
         body: Option<ApiJson<ToggleVerifyRequest>>,
     ) -> Result<impl IntoResponse, Error> {
         let reason = body.and_then(|b| b.0.reason);
-        let result = state.usecases.admin.toggle_verify(id, admin.id, reason).await?;
+        let result = state
+            .usecases
+            .admin
+            .toggle_verify(id, admin.id, reason)
+            .await?;
         Ok(Json(result))
     }
 
@@ -91,7 +99,11 @@ impl AdminHandler {
         ApiPath(id): ApiPath<i32>,
         ApiJson(req): ApiJson<UpdateUserRoleRequest>,
     ) -> Result<impl IntoResponse, Error> {
-        let result = state.usecases.admin.update_user_role(id, req.role_code).await?;
+        let result = state
+            .usecases
+            .admin
+            .update_user_role(id, req.role_code)
+            .await?;
         Ok(Json(result))
     }
 
@@ -102,7 +114,11 @@ impl AdminHandler {
         ApiPath(id): ApiPath<i32>,
         ApiJson(req): ApiJson<ToggleActiveRequest>,
     ) -> Result<impl IntoResponse, Error> {
-        let result = state.usecases.admin.toggle_user_active(id, req.is_active, admin.id, req.reason).await?;
+        let result = state
+            .usecases
+            .admin
+            .toggle_user_active(id, req.is_active, admin.id, req.reason)
+            .await?;
         Ok(Json(result))
     }
 
@@ -183,7 +199,11 @@ impl AdminHandler {
         ApiPath(id): ApiPath<i32>,
         ApiJson(req): ApiJson<ToggleActiveRequest>,
     ) -> Result<impl IntoResponse, Error> {
-        let result = state.usecases.admin.toggle_category_active(id, req.is_active, admin.id, req.reason).await?;
+        let result = state
+            .usecases
+            .admin
+            .toggle_category_active(id, req.is_active, admin.id, req.reason)
+            .await?;
         Ok(Json(result))
     }
 
@@ -193,7 +213,11 @@ impl AdminHandler {
         State(state): State<AppState>,
         ApiQuery(q): ApiQuery<AdminPageQuery>,
     ) -> Result<impl IntoResponse, Error> {
-        let result = state.usecases.admin.list_inquiries(q.page.unwrap_or(1)).await?;
+        let result = state
+            .usecases
+            .admin
+            .list_inquiries(q.page.unwrap_or(1))
+            .await?;
         Ok(Json(result))
     }
 
@@ -204,7 +228,11 @@ impl AdminHandler {
         ApiPath(id): ApiPath<i32>,
         ApiJson(req): ApiJson<UpdateInquiryStatusRequest>,
     ) -> Result<impl IntoResponse, Error> {
-        let result = state.usecases.admin.update_inquiry_status(id, req.status, admin.id).await?;
+        let result = state
+            .usecases
+            .admin
+            .update_inquiry_status(id, req.status, admin.id)
+            .await?;
         Ok(Json(result))
     }
 
@@ -214,7 +242,11 @@ impl AdminHandler {
         State(state): State<AppState>,
         ApiQuery(q): ApiQuery<AdminPageQuery>,
     ) -> Result<impl IntoResponse, Error> {
-        let result = state.usecases.admin.list_reviews(q.page.unwrap_or(1)).await?;
+        let result = state
+            .usecases
+            .admin
+            .list_reviews(q.page.unwrap_or(1))
+            .await?;
         Ok(Json(result))
     }
 
@@ -225,7 +257,11 @@ impl AdminHandler {
         ApiPath(id): ApiPath<i32>,
         ApiJson(req): ApiJson<ToggleVisibleRequest>,
     ) -> Result<impl IntoResponse, Error> {
-        let result = state.usecases.admin.toggle_review_visible(id, req.is_visible, admin.id, req.reason).await?;
+        let result = state
+            .usecases
+            .admin
+            .toggle_review_visible(id, req.is_visible, admin.id, req.reason)
+            .await?;
         Ok(Json(result))
     }
 
@@ -246,7 +282,9 @@ impl AdminHandler {
         State(state): State<AppState>,
         ApiJson(req): ApiJson<CreateLocationRequest>,
     ) -> Result<impl IntoResponse, Error> {
-        let result = state.usecases.admin
+        let result = state
+            .usecases
+            .admin
             .create_location(req.label, req.lat, req.lng, req.display_order)
             .await?;
         Ok((StatusCode::CREATED, Json(result)))
@@ -269,7 +307,9 @@ impl AdminHandler {
         ApiPath(id): ApiPath<i32>,
         ApiJson(req): ApiJson<UpdateLocationRequest>,
     ) -> Result<impl IntoResponse, Error> {
-        let result = state.usecases.admin
+        let result = state
+            .usecases
+            .admin
             .update_location(id, req.label, req.lat, req.lng, req.display_order)
             .await?;
         Ok(Json(result))
@@ -282,7 +322,11 @@ impl AdminHandler {
         ApiPath(id): ApiPath<i32>,
         ApiJson(req): ApiJson<ToggleActiveRequest>,
     ) -> Result<impl IntoResponse, Error> {
-        let result = state.usecases.admin.toggle_location_active(id, req.is_active, admin.id, req.reason).await?;
+        let result = state
+            .usecases
+            .admin
+            .toggle_location_active(id, req.is_active, admin.id, req.reason)
+            .await?;
         Ok(Json(result))
     }
 
@@ -294,7 +338,11 @@ impl AdminHandler {
         body: Option<ApiJson<DeleteWithReasonBody>>,
     ) -> Result<impl IntoResponse, Error> {
         let reason = body.and_then(|b| b.0.reason);
-        state.usecases.admin.delete_location(id, admin.id, reason).await?;
+        state
+            .usecases
+            .admin
+            .delete_location(id, admin.id, reason)
+            .await?;
         Ok(StatusCode::NO_CONTENT)
     }
 
@@ -306,7 +354,9 @@ impl AdminHandler {
         State(state): State<AppState>,
         ApiQuery(q): ApiQuery<AdminListQuery>,
     ) -> Result<impl IntoResponse, Error> {
-        let result = state.usecases.admin
+        let result = state
+            .usecases
+            .admin
             .list_products_admin(q.page.unwrap_or(1), q.provider_id)
             .await?;
         Ok(Json(result))
@@ -329,7 +379,9 @@ impl AdminHandler {
         ApiPath(id): ApiPath<i32>,
         ApiJson(req): ApiJson<ToggleActiveRequest>,
     ) -> Result<impl IntoResponse, Error> {
-        let result = state.usecases.admin
+        let result = state
+            .usecases
+            .admin
             .toggle_product_active(id, req.is_active, admin.id, req.reason)
             .await?;
         Ok(Json(result))
@@ -343,7 +395,11 @@ impl AdminHandler {
         body: Option<ApiJson<DeleteWithReasonBody>>,
     ) -> Result<impl IntoResponse, Error> {
         let reason = body.and_then(|b| b.0.reason);
-        state.usecases.admin.delete_product_admin(id, admin.id, reason).await?;
+        state
+            .usecases
+            .admin
+            .delete_product_admin(id, admin.id, reason)
+            .await?;
         Ok(StatusCode::NO_CONTENT)
     }
 
@@ -355,7 +411,9 @@ impl AdminHandler {
         State(state): State<AppState>,
         ApiQuery(q): ApiQuery<AdminListQuery>,
     ) -> Result<impl IntoResponse, Error> {
-        let result = state.usecases.admin
+        let result = state
+            .usecases
+            .admin
             .list_services_admin(q.page.unwrap_or(1), q.provider_id)
             .await?;
         Ok(Json(result))
@@ -377,10 +435,16 @@ impl AdminHandler {
         State(state): State<AppState>,
         ApiJson(req): ApiJson<AdminCreateServiceRequest>,
     ) -> Result<impl IntoResponse, Error> {
-        let result = state.usecases.admin
+        let result = state
+            .usecases
+            .admin
             .create_service_admin(
-                req.business_id, req.category_id, req.name,
-                req.description, req.price_note, admin.id,
+                req.business_id,
+                req.category_id,
+                req.name,
+                req.description,
+                req.price_note,
+                admin.id,
             )
             .await?;
         Ok((StatusCode::CREATED, Json(result)))
@@ -393,10 +457,16 @@ impl AdminHandler {
         ApiPath(id): ApiPath<i32>,
         ApiJson(req): ApiJson<AdminUpdateServiceRequest>,
     ) -> Result<impl IntoResponse, Error> {
-        let result = state.usecases.admin
+        let result = state
+            .usecases
+            .admin
             .update_service_admin(
-                id, req.category_id, req.name,
-                req.description, req.price_note, admin.id,
+                id,
+                req.category_id,
+                req.name,
+                req.description,
+                req.price_note,
+                admin.id,
             )
             .await?;
         Ok(Json(result))
@@ -409,7 +479,9 @@ impl AdminHandler {
         ApiPath(id): ApiPath<i32>,
         ApiJson(req): ApiJson<ToggleActiveRequest>,
     ) -> Result<impl IntoResponse, Error> {
-        let result = state.usecases.admin
+        let result = state
+            .usecases
+            .admin
             .toggle_service_active(id, req.is_active, admin.id, req.reason)
             .await?;
         Ok(Json(result))
@@ -423,7 +495,11 @@ impl AdminHandler {
         body: Option<ApiJson<DeleteWithReasonBody>>,
     ) -> Result<impl IntoResponse, Error> {
         let reason = body.and_then(|b| b.0.reason);
-        state.usecases.admin.delete_service_admin(id, admin.id, reason).await?;
+        state
+            .usecases
+            .admin
+            .delete_service_admin(id, admin.id, reason)
+            .await?;
         Ok(StatusCode::NO_CONTENT)
     }
 }

@@ -112,14 +112,14 @@ error_codes! {
 /// can both use `{min}` with different values (username 3, password 8).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldError {
-    pub field:  &'static str,
-    pub code:   ErrorCode,
+    pub field: &'static str,
+    pub code: ErrorCode,
     pub params: Vec<(&'static str, String)>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Error {
-    code:   ErrorCode,
+    code: ErrorCode,
     params: Vec<(&'static str, String)>,
     fields: Vec<FieldError>,
     /// Context for the server log. Never sent to a client: it may contain SQL
@@ -131,12 +131,20 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 impl Error {
     pub fn new(code: ErrorCode) -> Self {
-        Self { code, params: Vec::new(), fields: Vec::new(), detail: None }
+        Self {
+            code,
+            params: Vec::new(),
+            fields: Vec::new(),
+            detail: None,
+        }
     }
 
     /// An unexpected failure. `detail` is logged, never shown to users.
     pub fn internal(detail: impl Into<String>) -> Self {
-        Self { detail: Some(detail.into()), ..Self::new(ErrorCode::Internal) }
+        Self {
+            detail: Some(detail.into()),
+            ..Self::new(ErrorCode::Internal)
+        }
     }
 
     /// A value the locale text interpolates, e.g. `{min}` in "at least {min} characters".
@@ -205,7 +213,11 @@ impl Validation {
     /// failure per field is kept: the form shows one message per input.
     pub fn check(&mut self, failed: bool, field: &'static str, code: ErrorCode) -> &mut Self {
         if failed && !self.fields.iter().any(|f| f.field == field) {
-            self.fields.push(FieldError { field, code, params: Vec::new() });
+            self.fields.push(FieldError {
+                field,
+                code,
+                params: Vec::new(),
+            });
         }
         self
     }
@@ -219,7 +231,11 @@ impl Validation {
         param: (&'static str, usize),
     ) -> &mut Self {
         if failed && !self.fields.iter().any(|f| f.field == field) {
-            self.fields.push(FieldError { field, code, params: vec![(param.0, param.1.to_string())] });
+            self.fields.push(FieldError {
+                field,
+                code,
+                params: vec![(param.0, param.1.to_string())],
+            });
         }
         self
     }
@@ -229,7 +245,11 @@ impl Validation {
     pub fn rule(&mut self, field: &'static str, result: Result<()>) -> &mut Self {
         if let Err(e) = result {
             if !self.fields.iter().any(|f| f.field == field) {
-                self.fields.push(FieldError { field, code: e.code, params: e.params });
+                self.fields.push(FieldError {
+                    field,
+                    code: e.code,
+                    params: e.params,
+                });
             }
         }
         self
@@ -240,7 +260,7 @@ impl Validation {
             return Ok(());
         }
         Err(Error {
-            code:   ErrorCode::ValidationFailed,
+            code: ErrorCode::ValidationFailed,
             params: Vec::new(),
             fields: std::mem::take(&mut self.fields),
             detail: None,
@@ -266,14 +286,14 @@ mod http {
     impl ErrorKind {
         pub fn status(self) -> StatusCode {
             match self {
-                ErrorKind::BadRequest      => StatusCode::BAD_REQUEST,
-                ErrorKind::Unauthorized    => StatusCode::UNAUTHORIZED,
-                ErrorKind::Forbidden       => StatusCode::FORBIDDEN,
-                ErrorKind::NotFound        => StatusCode::NOT_FOUND,
-                ErrorKind::Conflict        => StatusCode::CONFLICT,
-                ErrorKind::Locked          => StatusCode::LOCKED,
+                ErrorKind::BadRequest => StatusCode::BAD_REQUEST,
+                ErrorKind::Unauthorized => StatusCode::UNAUTHORIZED,
+                ErrorKind::Forbidden => StatusCode::FORBIDDEN,
+                ErrorKind::NotFound => StatusCode::NOT_FOUND,
+                ErrorKind::Conflict => StatusCode::CONFLICT,
+                ErrorKind::Locked => StatusCode::LOCKED,
                 ErrorKind::TooManyRequests => StatusCode::TOO_MANY_REQUESTS,
-                ErrorKind::Internal        => StatusCode::INTERNAL_SERVER_ERROR,
+                ErrorKind::Internal => StatusCode::INTERNAL_SERVER_ERROR,
             }
         }
     }
@@ -313,7 +333,11 @@ mod tests {
     fn wire_codes_are_unique() {
         let mut seen = std::collections::HashSet::new();
         for code in ErrorCode::ALL {
-            assert!(seen.insert(code.as_str()), "duplicate wire code {}", code.as_str());
+            assert!(
+                seen.insert(code.as_str()),
+                "duplicate wire code {}",
+                code.as_str()
+            );
         }
     }
 
@@ -326,7 +350,14 @@ mod tests {
             .finish()
             .err();
         let fields = err.as_ref().map(Error::fields).unwrap_or_default();
-        assert_eq!(fields, [FieldError { field: "phone", code: ErrorCode::InvalidPhone, params: vec![] }]);
+        assert_eq!(
+            fields,
+            [FieldError {
+                field: "phone",
+                code: ErrorCode::InvalidPhone,
+                params: vec![]
+            }]
+        );
     }
 
     #[test]
@@ -334,16 +365,32 @@ mod tests {
         // Username and password both use `{min}`; merging them made the
         // password message say "at least 3".
         let err = Validation::new()
-            .rule("username", Err(Error::new(ErrorCode::UsernameTooShort).with_param("min", 3)))
-            .rule("password", Err(Error::new(ErrorCode::PasswordTooShort).with_param("min", 8)))
+            .rule(
+                "username",
+                Err(Error::new(ErrorCode::UsernameTooShort).with_param("min", 3)),
+            )
+            .rule(
+                "password",
+                Err(Error::new(ErrorCode::PasswordTooShort).with_param("min", 8)),
+            )
             .finish()
             .err();
-        let params: Vec<_> = err.iter().flat_map(|e| e.fields()).map(|f| f.params.clone()).collect();
-        assert_eq!(params, [vec![("min", "3".to_owned())], vec![("min", "8".to_owned())]]);
+        let params: Vec<_> = err
+            .iter()
+            .flat_map(|e| e.fields())
+            .map(|f| f.params.clone())
+            .collect();
+        assert_eq!(
+            params,
+            [vec![("min", "3".to_owned())], vec![("min", "8".to_owned())]]
+        );
     }
 
     #[test]
     fn validation_without_failures_is_ok() {
-        assert!(Validation::new().check(false, "x", ErrorCode::NameRequired).finish().is_ok());
+        assert!(Validation::new()
+            .check(false, "x", ErrorCode::NameRequired)
+            .finish()
+            .is_ok());
     }
 }

@@ -70,7 +70,11 @@ impl DemoDataRepositoryTrait for DemoDataRepository {
         let services = run(SERVICES_SQL, "services").await?;
         let products = run(PRODUCTS_SQL, "products").await?;
         txn.commit().await.map_err(|e| db_error("commit", e))?;
-        Ok(DemoReport { businesses, services, products })
+        Ok(DemoReport {
+            businesses,
+            services,
+            products,
+        })
     }
 
     async fn remove(&self) -> Result<u64> {

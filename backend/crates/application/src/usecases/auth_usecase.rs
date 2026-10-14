@@ -24,22 +24,28 @@ use crate::{
 
 #[derive(Clone)]
 pub struct AuthUseCase {
-    user_repo:       Arc<dyn UserRepositoryTrait     + Send + Sync>,
-    business_repo:   Arc<dyn BusinessRepositoryTrait + Send + Sync>,
-    email:           Arc<dyn EmailService>,
+    user_repo: Arc<dyn UserRepositoryTrait + Send + Sync>,
+    business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
+    email: Arc<dyn EmailService>,
     password_hasher: Arc<dyn PasswordHasher>,
-    token_svc:       Arc<dyn TokenService>,
+    token_svc: Arc<dyn TokenService>,
 }
 
 impl AuthUseCase {
     pub fn new(
-        user_repo:       Arc<dyn UserRepositoryTrait     + Send + Sync>,
-        business_repo:   Arc<dyn BusinessRepositoryTrait + Send + Sync>,
-        email:           Arc<dyn EmailService>,
+        user_repo: Arc<dyn UserRepositoryTrait + Send + Sync>,
+        business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
+        email: Arc<dyn EmailService>,
         password_hasher: Arc<dyn PasswordHasher>,
-        token_svc:       Arc<dyn TokenService>,
+        token_svc: Arc<dyn TokenService>,
     ) -> Self {
-        Self { user_repo, business_repo, email, password_hasher, token_svc }
+        Self {
+            user_repo,
+            business_repo,
+            email,
+            password_hasher,
+            token_svc,
+        }
     }
 
     // ── Login ─────────────────────────────────────────────────────────────────
@@ -63,7 +69,11 @@ impl AuthUseCase {
             }
         }
 
-        if !self.password_hasher.verify(&password, &credentials.password_hash).await? {
+        if !self
+            .password_hasher
+            .verify(&password, &credentials.password_hash)
+            .await?
+        {
             // A failure to record the attempt must not turn a wrong password
             // into a 500, nor reveal anything; the lockout simply lags one try.
             if let Err(e) = self
@@ -84,16 +94,20 @@ impl AuthUseCase {
             .ok_or_else(|| Error::new(ErrorCode::AccountHasNoRole))?;
 
         let token = self.token_svc.mint(credentials.id, &username, &role)?;
-        Ok(LoginResponse { token, username, role: credentials.role })
+        Ok(LoginResponse {
+            token,
+            username,
+            role: credentials.role,
+        })
     }
 
     // ── First-admin bootstrap ─────────────────────────────────────────────────
 
     pub async fn create_first_admin(
         &self,
-        username:  String,
-        email:     String,
-        password:  String,
+        username: String,
+        email: String,
+        password: String,
         full_name: Option<String>,
     ) -> Result<LoginResponse> {
         if self.user_repo.count_by_role(ROLE_ADMIN).await? > 0 {
@@ -110,38 +124,46 @@ impl AuthUseCase {
         let user_id = self
             .user_repo
             .create(NewUser {
-                username:      username.clone(),
-                email:         email.trim().to_lowercase(),
+                username: username.clone(),
+                email: email.trim().to_lowercase(),
                 password_hash,
-                role:          ROLE_ADMIN.into(),
-                full_name:     Some(full_name.unwrap_or_else(|| "Administrator".to_owned())),
+                role: ROLE_ADMIN.into(),
+                full_name: Some(full_name.unwrap_or_else(|| "Administrator".to_owned())),
             })
             .await?;
 
         let token = self.token_svc.mint(user_id, &username, &UserRole::Admin)?;
-        Ok(LoginResponse { token, username, role: ROLE_ADMIN.into() })
+        Ok(LoginResponse {
+            token,
+            username,
+            role: ROLE_ADMIN.into(),
+        })
     }
 
     // ── Provider self-registration ────────────────────────────────────────────
 
     pub async fn register(
         &self,
-        username:       String,
-        email:          String,
-        password:       String,
-        full_name:      Option<String>,
-        business_name:  String,
+        username: String,
+        email: String,
+        password: String,
+        full_name: Option<String>,
+        business_name: String,
         business_phone: String,
     ) -> Result<LoginResponse> {
-        let username       = username.trim().to_lowercase();
-        let email          = email.trim().to_lowercase();
-        let business_name  = business_name.trim().to_owned();
+        let username = username.trim().to_lowercase();
+        let email = email.trim().to_lowercase();
+        let business_name = business_name.trim().to_owned();
         let business_phone = business_phone.trim().to_owned();
 
         Validation::new()
             .rule("username", validate_username(&username))
             .rule("password", validate_password(&password))
-            .check(business_name.is_empty(), "business_name", ErrorCode::BusinessNameRequired)
+            .check(
+                business_name.is_empty(),
+                "business_name",
+                ErrorCode::BusinessNameRequired,
+            )
             .rule("business_phone", validate_phone(&business_phone))
             .finish()?;
 
@@ -168,8 +190,14 @@ impl AuthUseCase {
             .create_for_registration(&business_name, &business_phone, user_id)
             .await?;
 
-        let token = self.token_svc.mint(user_id, &username, &UserRole::Provider)?;
-        Ok(LoginResponse { token, username, role: ROLE_PROVIDER.into() })
+        let token = self
+            .token_svc
+            .mint(user_id, &username, &UserRole::Provider)?;
+        Ok(LoginResponse {
+            token,
+            username,
+            role: ROLE_PROVIDER.into(),
+        })
     }
 
     // ── Me ────────────────────────────────────────────────────────────────────
@@ -182,10 +210,10 @@ impl AuthUseCase {
             .ok_or_else(|| Error::new(ErrorCode::AccountNotFound))?;
 
         Ok(MeResponse {
-            username:   user.username,
-            email:      user.email,
-            full_name:  user.full_name,
-            role:       user.role,
+            username: user.username,
+            email: user.email,
+            full_name: user.full_name,
+            role: user.role,
             created_on: user.created_on.to_rfc3339(),
         })
     }
@@ -194,9 +222,9 @@ impl AuthUseCase {
 
     pub async fn change_password(
         &self,
-        user_id:          i32,
+        user_id: i32,
         current_password: String,
-        new_password:     String,
+        new_password: String,
     ) -> Result<()> {
         Validation::new()
             .rule("new_password", validate_password(&new_password))
@@ -212,7 +240,11 @@ impl AuthUseCase {
             return Err(Error::new(ErrorCode::AccountDeactivated));
         }
 
-        if !self.password_hasher.verify(&current_password, &credentials.password_hash).await? {
+        if !self
+            .password_hasher
+            .verify(&current_password, &credentials.password_hash)
+            .await?
+        {
             return Err(Error::new(ErrorCode::CurrentPasswordIncorrect));
         }
 
@@ -234,8 +266,8 @@ impl AuthUseCase {
         let token = generate_token();
         self.user_repo
             .create_reset_token(NewResetToken {
-                user_id:    user.id,
-                token:      token.clone(),
+                user_id: user.id,
+                token: token.clone(),
                 expires_at: Utc::now() + Duration::hours(PASSWORD_RESET_EXPIRY_HOURS),
             })
             .await?;
@@ -258,7 +290,9 @@ impl AuthUseCase {
             .ok_or_else(|| Error::new(ErrorCode::ResetTokenInvalid))?;
 
         let new_hash = self.password_hasher.hash(&new_password).await?;
-        self.user_repo.update_password(reset_token.user_id, &new_hash).await?;
+        self.user_repo
+            .update_password(reset_token.user_id, &new_hash)
+            .await?;
         self.user_repo.consume_reset_token(reset_token.id).await?;
         if let Err(e) = self.user_repo.reset_failed_login(reset_token.user_id).await {
             tracing::warn!(user_id = reset_token.user_id, error = %e, "could not reset failed-login counter");

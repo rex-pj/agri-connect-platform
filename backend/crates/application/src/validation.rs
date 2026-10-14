@@ -86,7 +86,9 @@ mod tests {
     fn password_over_bcrypt_limit_is_rejected() {
         assert!(validate_password(&"a".repeat(PASSWORD_MAX_BYTES)).is_ok());
         assert_eq!(
-            validate_password(&"a".repeat(PASSWORD_MAX_BYTES + 1)).err().map(|e| e.code()),
+            validate_password(&"a".repeat(PASSWORD_MAX_BYTES + 1))
+                .err()
+                .map(|e| e.code()),
             Some(ErrorCode::PasswordTooLong)
         );
     }

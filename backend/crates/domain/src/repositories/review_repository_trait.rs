@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use crate::{models::review::ReviewAdmin, error::Error,};
+use crate::{error::Error, models::review::ReviewAdmin};
 
 #[async_trait]
 pub trait ReviewRepositoryTrait {

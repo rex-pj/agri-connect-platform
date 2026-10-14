@@ -11,11 +11,7 @@ impl StatsHandler {
         RequireAdmin(_caller): RequireAdmin,
         State(state): State<AppState>,
     ) -> Result<impl IntoResponse, Error> {
-        let result = state
-            .usecases
-            .stats
-            .get_stats()
-            .await?;
+        let result = state.usecases.stats.get_stats().await?;
 
         Ok(Json(result))
     }

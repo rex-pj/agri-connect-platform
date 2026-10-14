@@ -1,11 +1,14 @@
 use async_trait::async_trait;
 
 use crate::{
+    error::Error,
     models::{
         role::UserRole,
-        user::{ExistingUser, NewResetToken, NewUser, ResetToken, UserAdmin, UserAdminDetail, UserByEmail, UserCredentials, UserMe},
+        user::{
+            ExistingUser, NewResetToken, NewUser, ResetToken, UserAdmin, UserAdminDetail,
+            UserByEmail, UserCredentials, UserMe,
+        },
     },
-    error::Error,
 };
 
 #[async_trait]
@@ -51,8 +54,8 @@ pub trait UserRepositoryTrait {
     /// set `locked_until = NOW() + lockout_minutes`.
     async fn record_failed_login(
         &self,
-        user_id:         i32,
-        max_attempts:    i32,
+        user_id: i32,
+        max_attempts: i32,
         lockout_minutes: i64,
     ) -> Result<(), Error>;
 

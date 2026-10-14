@@ -20,7 +20,12 @@ impl PermissionRepository {
         Self { db }
     }
 
-    async fn query_models(&self, sql: &str, value: i32, what: &str) -> Result<Vec<PermissionModel>, Error> {
+    async fn query_models(
+        &self,
+        sql: &str,
+        value: i32,
+        what: &str,
+    ) -> Result<Vec<PermissionModel>, Error> {
         let db = self.db.as_ref();
         PermissionRow::find_by_statement(Statement::from_sql_and_values(
             db.get_database_backend(),
@@ -36,14 +41,18 @@ impl PermissionRepository {
 
 #[derive(FromQueryResult)]
 struct PermissionRow {
-    id:   i32,
+    id: i32,
     code: String,
     name: String,
 }
 
 impl From<PermissionRow> for PermissionModel {
     fn from(r: PermissionRow) -> Self {
-        Self { id: r.id, code: r.code, name: r.name }
+        Self {
+            id: r.id,
+            code: r.code,
+            name: r.name,
+        }
     }
 }
 
@@ -65,7 +74,11 @@ impl PermissionRepositoryTrait for PermissionRepository {
             .await
             .map(|rows| {
                 rows.into_iter()
-                    .map(|r| PermissionModel { id: r.id, code: r.code, name: r.name })
+                    .map(|r| PermissionModel {
+                        id: r.id,
+                        code: r.code,
+                        name: r.name,
+                    })
                     .collect()
             })
             .map_err(|e| db_error("list_all", e))

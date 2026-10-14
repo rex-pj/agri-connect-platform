@@ -4,18 +4,18 @@ use sea_orm::entity::prelude::*;
 #[sea_orm(table_name = "inquiries")]
 pub struct Model {
     #[sea_orm(primary_key)]
-    pub id:              i32,
-    pub business_id:     i32,
-    pub service_id:      Option<i32>,
-    pub product_id:      Option<i32>,
-    pub topic:           String,
-    pub requester_name:  String,
+    pub id: i32,
+    pub business_id: i32,
+    pub service_id: Option<i32>,
+    pub product_id: Option<i32>,
+    pub topic: String,
+    pub requester_name: String,
     pub requester_phone: String,
-    pub note:            Option<String>,
-    pub status:          String,
-    pub created_on:      DateTimeWithTimeZone,
-    pub updated_on:      DateTimeWithTimeZone,
-    pub updated_by:      Option<i32>,
+    pub note: Option<String>,
+    pub status: String,
+    pub created_on: DateTimeWithTimeZone,
+    pub updated_on: DateTimeWithTimeZone,
+    pub updated_by: Option<i32>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

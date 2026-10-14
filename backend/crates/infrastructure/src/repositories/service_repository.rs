@@ -1,27 +1,27 @@
 use async_trait::async_trait;
 use chrono::Utc;
+use sea_orm::sea_query::Expr;
 use sea_orm::{
     ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, JoinType, PaginatorTrait,
     QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
 };
-use sea_orm::sea_query::Expr;
 use std::sync::Arc;
 use tracing::error;
 
 use domain::{
-        models::service::{AdminService, NewService, UpdateService},
-        repositories::service_repository_trait::ServiceRepositoryTrait,
+    models::service::{AdminService, NewService, UpdateService},
+    repositories::service_repository_trait::ServiceRepositoryTrait,
 };
 
 use domain::Error;
 
 use crate::{
+    db_types::DateTimeWithTimeZone,
     entities::{
         business,
         category::{self, Entity as Category},
         service::{self, Entity as ServiceEntity},
     },
-    db_types::DateTimeWithTimeZone,
 };
 
 pub struct ServiceRepository {
@@ -36,17 +36,17 @@ impl ServiceRepository {
 
 #[derive(FromQueryResult)]
 struct AdminServiceRow {
-    id:            i32,
-    name:          String,
-    description:   Option<String>,
-    price_note:    Option<String>,
-    category:      String,
-    category_id:   i32,
-    business_id:   i32,
+    id: i32,
+    name: String,
+    description: Option<String>,
+    price_note: Option<String>,
+    category: String,
+    category_id: i32,
+    business_id: i32,
     business_name: String,
-    is_active:     bool,
-    created_on:    DateTimeWithTimeZone,
-    updated_on:    DateTimeWithTimeZone,
+    is_active: bool,
+    created_on: DateTimeWithTimeZone,
+    updated_on: DateTimeWithTimeZone,
 }
 
 fn base_admin_service_query() -> sea_orm::Select<ServiceEntity> {
@@ -71,17 +71,17 @@ fn base_admin_service_query() -> sea_orm::Select<ServiceEntity> {
 
 fn map_admin_row(r: AdminServiceRow) -> AdminService {
     AdminService {
-        id:            r.id,
-        name:          r.name,
-        description:   r.description,
-        price_note:    r.price_note,
-        category:      r.category,
-        category_id:   r.category_id,
-        business_id:   r.business_id,
+        id: r.id,
+        name: r.name,
+        description: r.description,
+        price_note: r.price_note,
+        category: r.category,
+        category_id: r.category_id,
+        business_id: r.business_id,
         business_name: r.business_name,
-        is_active:     r.is_active,
-        created_on:    r.created_on.with_timezone(&Utc),
-        updated_on:    r.updated_on.with_timezone(&Utc),
+        is_active: r.is_active,
+        created_on: r.created_on.with_timezone(&Utc),
+        updated_on: r.updated_on.with_timezone(&Utc),
     }
 }
 
@@ -146,10 +146,10 @@ impl ServiceRepositoryTrait for ServiceRepository {
         let model = service::ActiveModel {
             business_id: Set(service.business_id),
             category_id: Set(service.category_id),
-            name:        Set(service.name),
+            name: Set(service.name),
             description: Set(service.description),
-            price_note:  Set(service.price_note),
-            created_by:  Set(Some(service.created_by)),
+            price_note: Set(service.price_note),
+            created_by: Set(Some(service.created_by)),
             ..Default::default()
         };
         ServiceEntity::insert(model)
@@ -164,12 +164,21 @@ impl ServiceRepositoryTrait for ServiceRepository {
 
     async fn update(&self, service: UpdateService) -> Result<bool, Error> {
         ServiceEntity::update_many()
-            .col_expr(service::Column::CategoryId,  Expr::value(service.category_id))
-            .col_expr(service::Column::Name,        Expr::value(service.name))
-            .col_expr(service::Column::Description, Expr::value(service.description))
-            .col_expr(service::Column::PriceNote,   Expr::value(service.price_note))
-            .col_expr(service::Column::UpdatedBy,   Expr::value(Some(service.updated_by)))
-            .col_expr(service::Column::UpdatedOn,   Expr::current_timestamp().into())
+            .col_expr(
+                service::Column::CategoryId,
+                Expr::value(service.category_id),
+            )
+            .col_expr(service::Column::Name, Expr::value(service.name))
+            .col_expr(
+                service::Column::Description,
+                Expr::value(service.description),
+            )
+            .col_expr(service::Column::PriceNote, Expr::value(service.price_note))
+            .col_expr(
+                service::Column::UpdatedBy,
+                Expr::value(Some(service.updated_by)),
+            )
+            .col_expr(service::Column::UpdatedOn, Expr::current_timestamp().into())
             .filter(service::Column::Id.eq(service.id))
             .filter(service::Column::DeletedAt.is_null())
             .exec(self.db.as_ref())
@@ -183,7 +192,7 @@ impl ServiceRepositoryTrait for ServiceRepository {
 
     async fn toggle_active(&self, id: i32, is_active: bool) -> Result<bool, Error> {
         ServiceEntity::update_many()
-            .col_expr(service::Column::IsActive,  Expr::value(is_active))
+            .col_expr(service::Column::IsActive, Expr::value(is_active))
             .col_expr(service::Column::UpdatedOn, Expr::current_timestamp().into())
             .filter(service::Column::Id.eq(id))
             .filter(service::Column::DeletedAt.is_null())

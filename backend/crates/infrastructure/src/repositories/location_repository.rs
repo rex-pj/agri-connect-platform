@@ -1,21 +1,17 @@
 use async_trait::async_trait;
 use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set,
-    sea_query::Expr,
+    sea_query::Expr, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set,
 };
 use std::sync::Arc;
 use tracing::error;
 
 use domain::{
-        models::location::Location,
-        repositories::location_repository_trait::LocationRepositoryTrait,
+    models::location::Location, repositories::location_repository_trait::LocationRepositoryTrait,
 };
 
 use domain::{Error, ErrorCode};
 
-use crate::{
-    entities::location::{self, ActiveModel, Entity as LocationEntity},
-};
+use crate::entities::location::{self, ActiveModel, Entity as LocationEntity};
 
 pub struct LocationRepository {
     db: Arc<DatabaseConnection>,
@@ -28,7 +24,14 @@ impl LocationRepository {
 }
 
 fn to_location(r: location::Model) -> Location {
-    Location { id: r.id, label: r.label, lat: r.lat, lng: r.lng, display_order: r.display_order, is_active: r.is_active }
+    Location {
+        id: r.id,
+        label: r.label,
+        lat: r.lat,
+        lng: r.lng,
+        display_order: r.display_order,
+        is_active: r.is_active,
+    }
 }
 
 #[async_trait]
@@ -69,11 +72,17 @@ impl LocationRepositoryTrait for LocationRepository {
             })
     }
 
-    async fn create(&self, label: String, lat: f64, lng: f64, display_order: i32) -> Result<i32, Error> {
+    async fn create(
+        &self,
+        label: String,
+        lat: f64,
+        lng: f64,
+        display_order: i32,
+    ) -> Result<i32, Error> {
         let model = ActiveModel {
-            label:         Set(label),
-            lat:           Set(lat),
-            lng:           Set(lng),
+            label: Set(label),
+            lat: Set(lat),
+            lng: Set(lng),
             display_order: Set(display_order),
             ..Default::default()
         };
@@ -87,11 +96,18 @@ impl LocationRepositoryTrait for LocationRepository {
             })
     }
 
-    async fn update(&self, id: i32, label: String, lat: f64, lng: f64, display_order: i32) -> Result<(), Error> {
+    async fn update(
+        &self,
+        id: i32,
+        label: String,
+        lat: f64,
+        lng: f64,
+        display_order: i32,
+    ) -> Result<(), Error> {
         let result = LocationEntity::update_many()
-            .col_expr(location::Column::Label,        Expr::value(label))
-            .col_expr(location::Column::Lat,          Expr::value(lat))
-            .col_expr(location::Column::Lng,          Expr::value(lng))
+            .col_expr(location::Column::Label, Expr::value(label))
+            .col_expr(location::Column::Lat, Expr::value(lat))
+            .col_expr(location::Column::Lng, Expr::value(lng))
             .col_expr(location::Column::DisplayOrder, Expr::value(display_order))
             .filter(location::Column::Id.eq(id))
             .exec(self.db.as_ref())

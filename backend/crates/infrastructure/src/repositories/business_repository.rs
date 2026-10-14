@@ -8,23 +8,24 @@ use sea_orm::{
     sea_query::{
         extension::postgres::PgExpr, Alias, Expr, Func, Order, Query, SimpleExpr, SubQueryStatement,
     },
-    ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection,
-    EntityTrait, FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
-    QueryTrait, RelationTrait, Set, Value,
+    ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, FromQueryResult,
+    JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait, RelationTrait, Set,
+    Value,
 };
 use tracing::error;
 
 use domain::{
-        models::business::{
-            BusinessAdminDetail, BusinessAdminView, BusinessBrowse, BusinessDetail,
-            BusinessGeoResult, BusinessProfile, ProductAdminItem, Service, ServiceAdminItem,
-        },
-        repositories::business_repository_trait::BusinessRepositoryTrait,
+    models::business::{
+        BusinessAdminDetail, BusinessAdminView, BusinessBrowse, BusinessDetail, BusinessGeoResult,
+        BusinessProfile, ProductAdminItem, Service, ServiceAdminItem,
+    },
+    repositories::business_repository_trait::BusinessRepositoryTrait,
 };
 
 use domain::Error;
 
 use crate::{
+    db_types::DateTimeWithTimeZone,
     entities::{
         business::{self, Entity as Business},
         category,
@@ -32,7 +33,6 @@ use crate::{
         service::{self, Entity as ServiceEntity},
         user,
     },
-    db_types::DateTimeWithTimeZone,
 };
 
 pub struct BusinessRepository {
@@ -874,7 +874,10 @@ impl BusinessRepositoryTrait for BusinessRepository {
 
     async fn update_location(&self, user_id: i32, point_wkt: &str) -> Result<(), Error> {
         let mut update = Business::update_many()
-            .col_expr(business::Column::UpdatedOn, Expr::current_timestamp().into())
+            .col_expr(
+                business::Column::UpdatedOn,
+                Expr::current_timestamp().into(),
+            )
             .filter(business::Column::OwnerId.eq(user_id))
             .filter(business::Column::DeletedAt.is_null());
 
@@ -883,10 +886,14 @@ impl BusinessRepositoryTrait for BusinessRepository {
             Expr::cust_with_values("ST_GeographyFromText(?)", [point_wkt.to_owned()]),
         );
 
-        update.exec(self.db.as_ref()).await.map(|_| ()).map_err(|e| {
-            error!("business update_location error (user_id={user_id}): {e}");
-            Error::internal("Failed to update GPS location.")
-        })
+        update
+            .exec(self.db.as_ref())
+            .await
+            .map(|_| ())
+            .map_err(|e| {
+                error!("business update_location error (user_id={user_id}): {e}");
+                Error::internal("Failed to update GPS location.")
+            })
     }
 
     // ── Entity API helpers ────────────────────────────────────────────────────

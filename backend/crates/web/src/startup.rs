@@ -7,9 +7,13 @@ use application::{
     catalogue::CATALOGUE,
     ports::{EmailService, PasswordHasher, TokenService},
     usecases::{
-        admin_usecase::{AdminDeps, AdminUseCase}, auth_usecase::AuthUseCase, explore_usecase::ExploreUseCase,
-        permission_usecase::PermissionUseCase, product_usecase::ProductUseCase,
-        provider_dashboard_usecase::ProviderDashboardUseCase, setup_usecase::SetupUseCase,
+        admin_usecase::{AdminDeps, AdminUseCase},
+        auth_usecase::AuthUseCase,
+        explore_usecase::ExploreUseCase,
+        permission_usecase::PermissionUseCase,
+        product_usecase::ProductUseCase,
+        provider_dashboard_usecase::ProviderDashboardUseCase,
+        setup_usecase::SetupUseCase,
         stats_usecase::StatsUseCase,
     },
 };
@@ -54,7 +58,10 @@ pub enum StartupError {
     #[error("logging: {0}")]
     Logging(String),
     #[error("cannot bind {addr}: {source}")]
-    Bind { addr: &'static str, source: std::io::Error },
+    Bind {
+        addr: &'static str,
+        source: std::io::Error,
+    },
     #[error("server: {0}")]
     Serve(std::io::Error),
 }
@@ -84,7 +91,9 @@ fn init_tracing() -> Result<(), StartupError> {
     // An empty RUST_LOG (common in copied .env files) parses as a valid filter
     // that hides even WARN, which would silence the fallback warnings below.
     let requested = optional_env("RUST_LOG");
-    let parsed = requested.as_deref().map(tracing_subscriber::EnvFilter::try_new);
+    let parsed = requested
+        .as_deref()
+        .map(tracing_subscriber::EnvFilter::try_new);
     let filter = match &parsed {
         Some(Ok(f)) => f.clone(),
         _ => tracing_subscriber::EnvFilter::new(DEFAULT_LOG_FILTER),
@@ -115,10 +124,12 @@ fn email_service() -> Result<Arc<dyn EmailService>, StartupError> {
 
     let port = match optional_env("SMTP_PORT") {
         None => 587,
-        Some(p) => p.parse().map_err(|e: std::num::ParseIntError| StartupError::InvalidEnv {
-            name: "SMTP_PORT",
-            reason: e.to_string(),
-        })?,
+        Some(p) => p
+            .parse()
+            .map_err(|e: std::num::ParseIntError| StartupError::InvalidEnv {
+                name: "SMTP_PORT",
+                reason: e.to_string(),
+            })?,
     };
     let credentials = match (optional_env("SMTP_USERNAME"), optional_env("SMTP_PASSWORD")) {
         (Some(user), Some(pass)) => Some((user, pass)),
@@ -133,7 +144,13 @@ fn email_service() -> Result<Arc<dyn EmailService>, StartupError> {
     let from = optional_env("FROM_EMAIL").unwrap_or_else(|| "no-reply@agri-connect.vn".to_owned());
 
     info!(%host, port, "sending email through SMTP");
-    Ok(Arc::new(SmtpEmailService::new(SmtpConfig { host, port, credentials, from, app_url })?))
+    Ok(Arc::new(SmtpEmailService::new(SmtpConfig {
+        host,
+        port,
+        credentials,
+        from,
+        app_url,
+    })?))
 }
 
 /// `CORS_ORIGINS` (comma-separated) and `HTTPS_ENABLED`. A malformed origin
@@ -152,7 +169,10 @@ fn router_config() -> Result<RouterConfig, StartupError> {
             })
         })
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(RouterConfig { cors_origins, https: optional_env("HTTPS_ENABLED").as_deref() == Some("true") })
+    Ok(RouterConfig {
+        cors_origins,
+        https: optional_env("HTTPS_ENABLED").as_deref() == Some("true"),
+    })
 }
 
 /// Wires every use case against `db`. Public so integration tests can build
@@ -162,19 +182,19 @@ pub fn build_state(
     token_service: Arc<dyn TokenService>,
     email: Arc<dyn EmailService>,
 ) -> Result<AppState, StartupError> {
-    let business_repo   = Arc::new(BusinessRepository::new(Arc::clone(&db)));
-    let product_repo    = Arc::new(ProductRepository::new(Arc::clone(&db)));
-    let category_repo   = Arc::new(CategoryRepository::new(Arc::clone(&db)));
-    let inquiry_repo    = Arc::new(InquiryRepository::new(Arc::clone(&db)));
-    let location_repo   = Arc::new(LocationRepository::new(Arc::clone(&db)));
-    let review_repo     = Arc::new(ReviewRepository::new(Arc::clone(&db)));
-    let service_repo    = Arc::new(ServiceRepository::new(Arc::clone(&db)));
+    let business_repo = Arc::new(BusinessRepository::new(Arc::clone(&db)));
+    let product_repo = Arc::new(ProductRepository::new(Arc::clone(&db)));
+    let category_repo = Arc::new(CategoryRepository::new(Arc::clone(&db)));
+    let inquiry_repo = Arc::new(InquiryRepository::new(Arc::clone(&db)));
+    let location_repo = Arc::new(LocationRepository::new(Arc::clone(&db)));
+    let review_repo = Arc::new(ReviewRepository::new(Arc::clone(&db)));
+    let service_repo = Arc::new(ServiceRepository::new(Arc::clone(&db)));
     let permission_repo = Arc::new(PermissionRepository::new(Arc::clone(&db)));
-    let role_repo       = Arc::new(RoleRepository::new(Arc::clone(&db)));
-    let user_repo       = Arc::new(UserRepository::new(Arc::clone(&db)));
-    let audit_log_repo  = Arc::new(AuditLogRepository::new(Arc::clone(&db)));
-    let catalogue_repo  = Arc::new(CatalogueRepository::new(Arc::clone(&db)));
-    let demo_repo       = Arc::new(DemoDataRepository::new(Arc::clone(&db)));
+    let role_repo = Arc::new(RoleRepository::new(Arc::clone(&db)));
+    let user_repo = Arc::new(UserRepository::new(Arc::clone(&db)));
+    let audit_log_repo = Arc::new(AuditLogRepository::new(Arc::clone(&db)));
+    let catalogue_repo = Arc::new(CatalogueRepository::new(Arc::clone(&db)));
+    let demo_repo = Arc::new(DemoDataRepository::new(Arc::clone(&db)));
 
     let password_hasher: Arc<dyn PasswordHasher> = Arc::new(BcryptPasswordHasher);
 
@@ -188,13 +208,13 @@ pub fn build_state(
         ),
         product: ProductUseCase::new(product_repo.clone()),
         admin: AdminUseCase::new(AdminDeps {
-            business_repo:   business_repo.clone(),
-            user_repo:       user_repo.clone(),
+            business_repo: business_repo.clone(),
+            user_repo: user_repo.clone(),
             category_repo,
             inquiry_repo,
             location_repo,
             review_repo,
-            product_repo:    product_repo.clone(),
+            product_repo: product_repo.clone(),
             role_repo,
             service_repo,
             audit_log_repo,
@@ -213,7 +233,12 @@ pub fn build_state(
             product_repo.clone(),
             permission_repo,
         ),
-        setup: SetupUseCase::new(catalogue_repo, demo_repo, business_repo.clone(), user_repo.clone()),
+        setup: SetupUseCase::new(
+            catalogue_repo,
+            demo_repo,
+            business_repo.clone(),
+            user_repo.clone(),
+        ),
         stats: StatsUseCase::new(business_repo, product_repo, user_repo),
     };
 
@@ -247,10 +272,16 @@ pub async fn start() -> Result<(), StartupError> {
     let router = AppRouting::build(state, router_config()?);
     let listener = tokio::net::TcpListener::bind(SERVER_BIND_ADDR)
         .await
-        .map_err(|source| StartupError::Bind { addr: SERVER_BIND_ADDR, source })?;
+        .map_err(|source| StartupError::Bind {
+            addr: SERVER_BIND_ADDR,
+            source,
+        })?;
 
     info!("Agri-Connect listening on http://{SERVER_BIND_ADDR}");
-    axum::serve(listener, router.into_make_service_with_connect_info::<SocketAddr>())
-        .await
-        .map_err(StartupError::Serve)
+    axum::serve(
+        listener,
+        router.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
+    .map_err(StartupError::Serve)
 }

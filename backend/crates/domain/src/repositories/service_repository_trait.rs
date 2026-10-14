@@ -1,13 +1,18 @@
 use async_trait::async_trait;
 
 use crate::{
-    models::service::{AdminService, NewService, UpdateService},
     error::Error,
+    models::service::{AdminService, NewService, UpdateService},
 };
 
 #[async_trait]
 pub trait ServiceRepositoryTrait {
-    async fn list_admin(&self, provider_id: Option<i32>, limit: i64, offset: i64) -> Result<Vec<AdminService>, Error>;
+    async fn list_admin(
+        &self,
+        provider_id: Option<i32>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<AdminService>, Error>;
 
     async fn count_admin(&self, provider_id: Option<i32>) -> Result<i64, Error>;
 

@@ -4,21 +4,21 @@ use sea_orm::entity::prelude::*;
 #[sea_orm(table_name = "users")]
 pub struct Model {
     #[sea_orm(primary_key)]
-    pub id:            i32,
-    pub username:      String,
-    pub email:         String,
+    pub id: i32,
+    pub username: String,
+    pub email: String,
     pub password_hash: String,
-    pub full_name:     Option<String>,
-    pub role_id:       i32,
-    pub is_active:              bool,
-    pub last_login_on:          Option<DateTimeWithTimeZone>,
-    pub failed_login_attempts:  i32,
-    pub locked_until:           Option<DateTimeWithTimeZone>,
-    pub created_on:             DateTimeWithTimeZone,
-    pub updated_on:    DateTimeWithTimeZone,
-    pub created_by:    Option<i32>,
-    pub updated_by:    Option<i32>,
-    pub deleted_at:    Option<DateTimeWithTimeZone>,
+    pub full_name: Option<String>,
+    pub role_id: i32,
+    pub is_active: bool,
+    pub last_login_on: Option<DateTimeWithTimeZone>,
+    pub failed_login_attempts: i32,
+    pub locked_until: Option<DateTimeWithTimeZone>,
+    pub created_on: DateTimeWithTimeZone,
+    pub updated_on: DateTimeWithTimeZone,
+    pub created_by: Option<i32>,
+    pub updated_by: Option<i32>,
+    pub deleted_at: Option<DateTimeWithTimeZone>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

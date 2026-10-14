@@ -4,11 +4,11 @@ use sea_orm::entity::prelude::*;
 #[sea_orm(table_name = "password_reset_tokens")]
 pub struct Model {
     #[sea_orm(primary_key)]
-    pub id:         i32,
-    pub user_id:    i32,
-    pub token:      String,
+    pub id: i32,
+    pub user_id: i32,
+    pub token: String,
     pub expires_at: DateTimeWithTimeZone,
-    pub used_at:    Option<DateTimeWithTimeZone>,
+    pub used_at: Option<DateTimeWithTimeZone>,
     pub created_at: DateTimeWithTimeZone,
 }
 

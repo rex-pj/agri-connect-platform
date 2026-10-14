@@ -48,18 +48,31 @@ fn db_error(step: &str, e: DbErr) -> Error {
 }
 
 async fn exec(txn: &DatabaseTransaction, step: &str, sql: &str, values: Vec<Value>) -> Result<u64> {
-    txn.execute(Statement::from_sql_and_values(txn.get_database_backend(), sql, values))
-        .await
-        .map(|r| r.rows_affected())
-        .map_err(|e| db_error(step, e))
+    txn.execute(Statement::from_sql_and_values(
+        txn.get_database_backend(),
+        sql,
+        values,
+    ))
+    .await
+    .map(|r| r.rows_affected())
+    .map_err(|e| db_error(step, e))
 }
 
-async fn count(txn: &DatabaseTransaction, step: &str, sql: &str, values: Vec<Value>) -> Result<i64> {
-    CountRow::find_by_statement(Statement::from_sql_and_values(txn.get_database_backend(), sql, values))
-        .one(txn)
-        .await
-        .map_err(|e| db_error(step, e))
-        .map(|row| row.map_or(0, |r| r.n))
+async fn count(
+    txn: &DatabaseTransaction,
+    step: &str,
+    sql: &str,
+    values: Vec<Value>,
+) -> Result<i64> {
+    CountRow::find_by_statement(Statement::from_sql_and_values(
+        txn.get_database_backend(),
+        sql,
+        values,
+    ))
+    .one(txn)
+    .await
+    .map_err(|e| db_error(step, e))
+    .map(|row| row.map_or(0, |r| r.n))
 }
 
 async fn grant(txn: &DatabaseTransaction, role: &str, key: &str) -> Result<u64> {
@@ -78,7 +91,13 @@ async fn grant(txn: &DatabaseTransaction, role: &str, key: &str) -> Result<u64> 
 impl CatalogueRepositoryTrait for CatalogueRepository {
     async fn apply(&self, catalogue: &Catalogue) -> Result<SeedReport> {
         let txn = self.db.begin().await.map_err(|e| db_error("begin", e))?;
-        exec(&txn, "lock", "SELECT pg_advisory_xact_lock($1)", vec![SEED_LOCK_ID.into()]).await?;
+        exec(
+            &txn,
+            "lock",
+            "SELECT pg_advisory_xact_lock($1)",
+            vec![SEED_LOCK_ID.into()],
+        )
+        .await?;
 
         let mut report = SeedReport::default();
 
@@ -153,7 +172,15 @@ impl CatalogueRepositoryTrait for CatalogueRepository {
 
         // Categories and presets are admin-editable: seed an empty table only,
         // or a renamed slug would come back as a duplicate at the next boot.
-        if count(&txn, "category count", "SELECT COUNT(*) AS n FROM categories", vec![]).await? == 0 {
+        if count(
+            &txn,
+            "category count",
+            "SELECT COUNT(*) AS n FROM categories",
+            vec![],
+        )
+        .await?
+            == 0
+        {
             for c in catalogue.categories {
                 report.categories_inserted += exec(
                     &txn,
@@ -169,7 +196,15 @@ impl CatalogueRepositoryTrait for CatalogueRepository {
             }
         }
 
-        if count(&txn, "location count", "SELECT COUNT(*) AS n FROM locations", vec![]).await? == 0 {
+        if count(
+            &txn,
+            "location count",
+            "SELECT COUNT(*) AS n FROM locations",
+            vec![],
+        )
+        .await?
+            == 0
+        {
             for l in catalogue.locations {
                 report.locations_inserted += exec(
                     &txn,

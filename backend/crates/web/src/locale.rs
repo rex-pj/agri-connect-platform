@@ -30,7 +30,9 @@ impl Locale {
 
     fn parse(src: &str) -> Result<Self, toml::de::Error> {
         let file: LocaleFile = toml::from_str(src)?;
-        Ok(Self { errors: file.errors })
+        Ok(Self {
+            errors: file.errors,
+        })
     }
 
     /// Text for `code` with `{name}` placeholders filled from `params`. Falls
@@ -58,7 +60,11 @@ mod tests {
     #[test]
     fn every_error_code_has_vietnamese_text() -> Result<(), toml::de::Error> {
         let vi = keys(VI)?;
-        let missing: Vec<_> = ErrorCode::ALL.iter().map(|c| c.as_str()).filter(|c| !vi.contains(*c)).collect();
+        let missing: Vec<_> = ErrorCode::ALL
+            .iter()
+            .map(|c| c.as_str())
+            .filter(|c| !vi.contains(*c))
+            .collect();
         assert!(missing.is_empty(), "vi.toml has no text for {missing:?}");
         Ok(())
     }
@@ -66,8 +72,14 @@ mod tests {
     #[test]
     fn locale_has_no_stale_keys() -> Result<(), toml::de::Error> {
         let codes: BTreeSet<&str> = ErrorCode::ALL.iter().map(|c| c.as_str()).collect();
-        let stale: Vec<_> = keys(VI)?.into_iter().filter(|k| !codes.contains(k.as_str())).collect();
-        assert!(stale.is_empty(), "vi.toml has keys for codes that no longer exist: {stale:?}");
+        let stale: Vec<_> = keys(VI)?
+            .into_iter()
+            .filter(|k| !codes.contains(k.as_str()))
+            .collect();
+        assert!(
+            stale.is_empty(),
+            "vi.toml has keys for codes that no longer exist: {stale:?}"
+        );
         Ok(())
     }
 

@@ -6,21 +6,21 @@ use sea_orm::entity::prelude::*;
 #[sea_orm(table_name = "businesses")]
 pub struct Model {
     #[sea_orm(primary_key)]
-    pub id:          i32,
-    pub name:        String,
-    pub phone:       String,
-    pub email:       Option<String>,
+    pub id: i32,
+    pub name: String,
+    pub phone: String,
+    pub email: Option<String>,
     pub description: Option<String>,
-    pub address:     Option<String>,
+    pub address: Option<String>,
     pub is_verified: bool,
-    pub is_active:   bool,
-    pub is_demo:     bool,
-    pub owner_id:    Option<i32>,
-    pub created_on:  DateTimeWithTimeZone,
-    pub updated_on:  DateTimeWithTimeZone,
-    pub created_by:  Option<i32>,
-    pub updated_by:  Option<i32>,
-    pub deleted_at:  Option<DateTimeWithTimeZone>,
+    pub is_active: bool,
+    pub is_demo: bool,
+    pub owner_id: Option<i32>,
+    pub created_on: DateTimeWithTimeZone,
+    pub updated_on: DateTimeWithTimeZone,
+    pub created_by: Option<i32>,
+    pub updated_by: Option<i32>,
+    pub deleted_at: Option<DateTimeWithTimeZone>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

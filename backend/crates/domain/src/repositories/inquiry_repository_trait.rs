@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 
 use crate::{
-    models::inquiry::{InquiryAdmin, NewInquiry},
     error::Error,
+    models::inquiry::{InquiryAdmin, NewInquiry},
 };
 
 #[async_trait]

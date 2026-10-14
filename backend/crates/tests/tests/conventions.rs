@@ -7,7 +7,10 @@ use std::{
 };
 
 fn crates_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf()
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .to_path_buf()
 }
 
 /// (path relative to `crates/`, contents) for every `.rs` file under `crate_name/src`.
@@ -29,7 +32,11 @@ fn sources(crate_name: &str) -> Vec<(String, String)> {
     files
         .into_iter()
         .map(|p| {
-            let rel = p.strip_prefix(&root).unwrap().to_string_lossy().replace('\\', "/");
+            let rel = p
+                .strip_prefix(&root)
+                .unwrap()
+                .to_string_lossy()
+                .replace('\\', "/");
             (rel, fs::read_to_string(&p).unwrap())
         })
         .collect()
@@ -65,12 +72,25 @@ fn assert_absent(crate_names: &[&str], needles: &[&str], allowed_files: &[&str],
 fn inner_layers_name_no_framework_or_driver() {
     assert_absent(
         &["domain", "application"],
-        &["sea_orm::", "jsonwebtoken::", "bcrypt::", "lettre::", "tower::", "tower_http::", "tera::"],
+        &[
+            "sea_orm::",
+            "jsonwebtoken::",
+            "bcrypt::",
+            "lettre::",
+            "tower::",
+            "tower_http::",
+            "tera::",
+        ],
         &[],
         "domain/application must reach infrastructure only through port and repository traits",
     );
     // axum is allowed in exactly one place: the feature-gated error impls.
-    assert_absent(&["domain", "application"], &["axum::"], &["domain/src/error.rs"], "axum outside domain's feature-gated error module");
+    assert_absent(
+        &["domain", "application"],
+        &["axum::"],
+        &["domain/src/error.rs"],
+        "axum outside domain's feature-gated error module",
+    );
 }
 
 #[test]
@@ -138,10 +158,16 @@ fn time_is_never_read_in_the_local_zone() {
 fn every_lint_free_crate_opts_into_workspace_lints() {
     for name in ["domain", "application", "infrastructure", "web"] {
         let manifest = fs::read_to_string(crates_dir().join(name).join("Cargo.toml")).unwrap();
-        assert!(manifest.contains("[lints]\nworkspace = true"), "{name}/Cargo.toml must opt into [workspace.lints]");
+        assert!(
+            manifest.contains("[lints]\nworkspace = true"),
+            "{name}/Cargo.toml must opt into [workspace.lints]"
+        );
     }
     let migration = fs::read_to_string(crates_dir().join("../migration/Cargo.toml")).unwrap();
-    assert!(migration.contains("[lints]\nworkspace = true"), "migration/Cargo.toml must opt into [workspace.lints]");
+    assert!(
+        migration.contains("[lints]\nworkspace = true"),
+        "migration/Cargo.toml must opt into [workspace.lints]"
+    );
 }
 
 #[test]
@@ -151,7 +177,8 @@ fn third_party_versions_live_in_the_workspace() {
         let manifest = fs::read_to_string(crates_dir().join(name).join("Cargo.toml")).unwrap();
         for line in manifest.lines() {
             let line = line.trim();
-            let is_dep_line = line.contains('=') && !line.starts_with('#') && !line.starts_with('[');
+            let is_dep_line =
+                line.contains('=') && !line.starts_with('#') && !line.starts_with('[');
             if is_dep_line && line.contains("version") && !line.contains("workspace") {
                 panic!("{name}/Cargo.toml pins a version outside [workspace.dependencies]: {line}");
             }

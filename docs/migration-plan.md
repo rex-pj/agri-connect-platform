@@ -899,3 +899,25 @@ Tests:
 - Smoke: the real server answered `/` over HTTP against the local dev database (read-only), with page CSP, category tiles and the empty state. That database has no demo data, so the populated case rests on the integration test.
 
 Deferred: the distance line on provider cards waits for the explore page (S11), which is the only page that knows a distance.
+
+### S6 — product detail (same branch)
+
+Done:
+- **`/products/{id}` and `/products/{id}/{slug}` are served by Rust** (`web/src/pages/product.rs`). The SvelteKit `products/[id]` routes are deleted.
+- **One canonical URL per product:** `/products/{id}/{slug of the name}`. Every other spelling answers **301** (not axum's 308) to it: no slug, a stale slug after a rename, or a padded id such as `07`.
+- **404 page** for a missing, deactivated or deleted product, and for an id that is not a number or overflows. A person typed the address, so "not found" fits better than "bad request".
+- **Page:** hero with a back link and the category badge, price card, description (line breaks kept), and seller with a call button. With a photo it is two columns on a wide screen and shows the full-size image (`file_url` without variant).
+- **SEO:** the title is `{name} — {site}`. The meta description is the description on one line, cut to 150 characters. A product without one gets "Mua … từ … trên …".
+- **New molecule** `page_hero`, for S7's provider page too. Its styles and the detail styles moved into `app.css`.
+- **Slug parity is now a test on both sides:**
+  - `slugify.ts` became `slugify.js` with JSDoc types, so Node 20 runs it without a build step;
+  - `slugify.fixtures.json` is read by `npm test` (new, added to CI) and by the Rust `web::slug` test;
+  - the fixture moves into the backend in S20.
+- **Test helpers:** `Env`, `register_provider`, `create_product`, `photo`/`multipart`/`upload_request`/`put_photo` now live in `crates/tests/src/lib.rs`. `authz`, `home` and `media` used to carry copies of them.
+
+Tests (database):
+- the three non-canonical spellings 301 to the canonical URL;
+- the page shows price, unit, description, the seller and a `tel:` link, with the page CSP;
+- a photo shows the full image;
+- the meta fallback without a description;
+- deactivated, missing, non-numeric and overflowing ids give a 404 page.

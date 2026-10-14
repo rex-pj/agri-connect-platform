@@ -2,110 +2,31 @@
 //! files row, the objects (in-memory storage) and cleanup by events.
 //! Database tests need TEST_DATABASE_URL and `--include-ignored`.
 
-use std::sync::Arc;
-
-use application::catalogue::CATALOGUE;
 use axum::{
     body::Body,
-    http::{header, Method, Request, StatusCode},
-    Router,
+    http::{header, Request, StatusCode},
 };
-use domain::repositories::catalogue_repository_trait::CatalogueRepositoryTrait;
-use image::{codecs::jpeg::JpegEncoder, Rgb, RgbImage};
-use infrastructure::catalogue_repository::CatalogueRepository;
 use integration_tests::{
-    json_body, memory_uploads, router, router_without_db, send, state_with_uploads, TestDb,
+    create_product, json_body, multipart, photo, put_photo, register_provider, router_without_db,
+    send, upload_request, Env,
 };
 use sea_orm::{ConnectionTrait, Statement};
-use web::app_state::AppState;
-
-const BOUNDARY: &str = "agri-test-boundary";
-
-fn photo(w: u32, h: u32) -> Vec<u8> {
-    let img = RgbImage::from_fn(w, h, |x, y| Rgb([(x % 256) as u8, (y % 256) as u8, 120]));
-    let mut out = Vec::new();
-    JpegEncoder::new_with_quality(&mut out, 90)
-        .encode_image(&img)
-        .unwrap();
-    out
-}
-
-fn multipart(field: &str, bytes: &[u8]) -> Vec<u8> {
-    let mut body = format!(
-        "--{BOUNDARY}\r\nContent-Disposition: form-data; name=\"{field}\"; filename=\"anh.jpg\"\r\n\
-         Content-Type: image/jpeg\r\n\r\n"
-    )
-    .into_bytes();
-    body.extend_from_slice(bytes);
-    body.extend_from_slice(format!("\r\n--{BOUNDARY}--\r\n").as_bytes());
-    body
-}
-
-fn upload(product_id: i32, token: Option<&str>, body: Vec<u8>) -> Request<Body> {
-    let mut req = Request::builder()
-        .method(Method::PUT)
-        .uri(format!("/api/provider/products/{product_id}/image"))
-        .header(
-            header::CONTENT_TYPE,
-            format!("multipart/form-data; boundary={BOUNDARY}"),
-        );
-    if let Some(token) = token {
-        req = req.header(header::AUTHORIZATION, format!("Bearer {token}"));
-    }
-    req.body(Body::from(body)).unwrap()
-}
+use web::routings::app_routing::RouterConfig;
 
 fn get(uri: &str) -> Request<Body> {
     Request::get(uri).body(Body::empty()).unwrap()
 }
 
-struct Env {
-    t: TestDb,
-    state: AppState,
-    router: Router,
+async fn env() -> Env {
+    Env::new().await
 }
 
 async fn env_with(max_bytes: Option<usize>) -> Env {
-    let t = TestDb::create().await;
-    CatalogueRepository::new(Arc::new(t.db.clone()))
-        .apply(&CATALOGUE)
-        .await
-        .unwrap();
-    let state = state_with_uploads(t.db.clone(), memory_uploads(max_bytes));
-    let router = router(state.clone());
-    Env { t, state, router }
-}
-
-async fn env() -> Env {
-    env_with(None).await
-}
-
-async fn provider(state: &AppState, username: &str, phone: &str) -> String {
-    state
-        .usecases
-        .auth
-        .register(
-            username.into(),
-            format!("{username}@example.vn"),
-            "matkhau123".into(),
-            None,
-            format!("Vườn {username}"),
-            phone.into(),
-        )
-        .await
-        .unwrap_or_else(|e| panic!("register: {e}"))
-        .token
+    Env::with(max_bytes, RouterConfig::default()).await
 }
 
 async fn product(e: &Env, token: &str) -> i32 {
-    let req = Request::post("/api/provider/products")
-        .header(header::AUTHORIZATION, format!("Bearer {token}"))
-        .header(header::CONTENT_TYPE, "application/json")
-        .body(Body::from(r#"{"category_id":4,"name":"Sầu riêng Ri6"}"#))
-        .unwrap();
-    let res = send(&e.router, req).await;
-    assert_eq!(res.status(), StatusCode::CREATED);
-    json_body(res).await["id"].as_i64().unwrap() as i32
+    create_product(e, token, r#"{"category_id":4,"name":"Sầu riêng Ri6"}"#).await
 }
 
 async fn file_rows(e: &Env) -> i64 {
@@ -121,20 +42,6 @@ async fn file_rows(e: &Env) -> i64 {
     row.try_get::<i64>("", "n").unwrap()
 }
 
-/// Uploads a photo and returns the new file id.
-async fn put_photo(e: &Env, product_id: i32, token: &str) -> String {
-    let res = send(
-        &e.router,
-        upload(product_id, Some(token), multipart("image", &photo(64, 48))),
-    )
-    .await;
-    assert_eq!(res.status(), StatusCode::OK);
-    json_body(res).await["image_file_id"]
-        .as_str()
-        .unwrap()
-        .to_owned()
-}
-
 async fn code(res: axum::http::Response<Body>) -> String {
     json_body(res).await["code"]
         .as_str()
@@ -146,7 +53,7 @@ async fn code(res: axum::http::Response<Body>) -> String {
 async fn an_anonymous_upload_is_refused_before_the_body_is_read() {
     let res = send(
         &router_without_db(),
-        upload(1, None, multipart("image", b"x")),
+        upload_request(1, None, multipart("image", b"x")),
     )
     .await;
     assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
@@ -156,7 +63,7 @@ async fn an_anonymous_upload_is_refused_before_the_body_is_read() {
 #[ignore = "needs TEST_DATABASE_URL"]
 async fn an_uploaded_image_is_served_from_our_origin_and_cached_forever() {
     let e = env().await;
-    let token = provider(&e.state, "nongdan", "0901234567").await;
+    let token = register_provider(&e.state, "nongdan", "0901234567").await;
     let id = product(&e, &token).await;
     let file = put_photo(&e, id, &token).await;
 
@@ -186,7 +93,7 @@ async fn an_uploaded_image_is_served_from_our_origin_and_cached_forever() {
 #[ignore = "needs TEST_DATABASE_URL"]
 async fn a_replaced_image_is_removed() {
     let e = env().await;
-    let token = provider(&e.state, "nongdan", "0901234567").await;
+    let token = register_provider(&e.state, "nongdan", "0901234567").await;
     let id = product(&e, &token).await;
     let first = put_photo(&e, id, &token).await;
     let second = put_photo(&e, id, &token).await;
@@ -206,7 +113,7 @@ async fn a_replaced_image_is_removed() {
 #[ignore = "needs TEST_DATABASE_URL"]
 async fn deleting_a_product_removes_its_image() {
     let e = env().await;
-    let token = provider(&e.state, "nongdan", "0901234567").await;
+    let token = register_provider(&e.state, "nongdan", "0901234567").await;
     let id = product(&e, &token).await;
     let file = put_photo(&e, id, &token).await;
 
@@ -226,13 +133,13 @@ async fn deleting_a_product_removes_its_image() {
 #[ignore = "needs TEST_DATABASE_URL"]
 async fn nobody_can_set_the_image_of_someone_elses_product() {
     let e = env().await;
-    let owner = provider(&e.state, "chuvuon", "0901234567").await;
-    let other = provider(&e.state, "hangxom", "0907654321").await;
+    let owner = register_provider(&e.state, "chuvuon", "0901234567").await;
+    let other = register_provider(&e.state, "hangxom", "0907654321").await;
     let id = product(&e, &owner).await;
 
     let res = send(
         &e.router,
-        upload(id, Some(&other), multipart("image", &photo(32, 32))),
+        upload_request(id, Some(&other), multipart("image", &photo(32, 32))),
     )
     .await;
     // Indistinguishable from a missing product, so ids cannot be probed.
@@ -250,7 +157,7 @@ async fn nobody_can_set_the_image_of_someone_elses_product() {
 #[ignore = "needs TEST_DATABASE_URL"]
 async fn bad_uploads_get_a_reason_and_store_nothing() {
     let e = env_with(Some(2048)).await;
-    let token = provider(&e.state, "nongdan", "0901234567").await;
+    let token = register_provider(&e.state, "nongdan", "0901234567").await;
     let id = product(&e, &token).await;
 
     let cases: [(Vec<u8>, StatusCode, &str); 5] = [
@@ -285,7 +192,7 @@ async fn bad_uploads_get_a_reason_and_store_nothing() {
         ),
     ];
     for (body, status, expected) in cases {
-        let res = send(&e.router, upload(id, Some(&token), body)).await;
+        let res = send(&e.router, upload_request(id, Some(&token), body)).await;
         assert_eq!(res.status(), status, "{expected}");
         let json = json_body(res).await;
         assert_eq!(json["code"], expected);

@@ -31,22 +31,21 @@ pub fn slugify(text: &str) -> String {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used)]
 mod tests {
     use super::slugify;
 
+    /// Shared with the SvelteKit test (`npm test`). Moves into this crate in S20,
+    /// when `client-app/` is deleted.
+    const FIXTURES: &str = include_str!("../../../../client-app/src/lib/slugify.fixtures.json");
+
     #[test]
     fn matches_the_sveltekit_slugs() {
-        // Each pair is what slugify.ts returns for the same input.
-        for (input, expected) in [
-            ("Gạo Thơm ST25 An Giang", "gao-thom-st25-an-giang"),
-            ("Đại lý Phân bón Đồng Tháp", "dai-ly-phan-bon-dong-thap"),
-            ("Sầu riêng Ri6 – loại 1", "sau-rieng-ri6-loai-1"),
-            ("  Dịch vụ   Múc bùn  ", "dich-vu-muc-bun"),
-            ("Phân NPK 20-20-15 (bao 50kg)", "phan-npk-20-20-15-bao-50kg"),
-            ("a -- b", "a-b"),
-            ("!!!", ""),
-        ] {
-            assert_eq!(slugify(input), expected, "{input}");
+        let fixtures: Vec<(String, String)> = serde_json::from_str(FIXTURES)
+            .expect("slugify.fixtures.json is a list of [input, slug]");
+        assert!(fixtures.len() >= 5, "fixtures went missing");
+        for (input, expected) in fixtures {
+            assert_eq!(slugify(&input), expected, "{input:?}");
         }
     }
 }

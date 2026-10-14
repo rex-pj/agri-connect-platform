@@ -46,3 +46,7 @@ pub const DEFAULT_UPLOAD_DIR: &str = "./data/uploads";
 pub const HOME_PRODUCT_COUNT: usize = 6;
 /// Featured providers under the near-me banner.
 pub const HOME_PROVIDER_COUNT: usize = 3;
+
+// ── Pages ─────────────────────────────────────────────────────────────────────
+/// Search engines show about this much of a meta description.
+pub const META_DESCRIPTION_MAX_CHARS: usize = 150;

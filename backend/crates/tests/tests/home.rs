@@ -1,35 +1,13 @@
 //! The home page and the app frame, rendered by Rust from real data.
 //! Run with TEST_DATABASE_URL and `--include-ignored`.
 
-use std::sync::Arc;
-
-use application::catalogue::CATALOGUE;
 use axum::{
     body::Body,
     http::{header, Request, StatusCode},
     Router,
 };
-use domain::repositories::catalogue_repository_trait::CatalogueRepositoryTrait;
-use infrastructure::catalogue_repository::CatalogueRepository;
-use integration_tests::{first_admin, router, router_without_db, send, state, TestDb};
+use integration_tests::{first_admin, register_provider, router_without_db, send, Env};
 use web::{app_state::AppState, slug::slugify, views::PAGE_CSP};
-
-struct Env {
-    t: TestDb,
-    state: AppState,
-    router: Router,
-}
-
-async fn env() -> Env {
-    let t = TestDb::create().await;
-    CatalogueRepository::new(Arc::new(t.db.clone()))
-        .apply(&CATALOGUE)
-        .await
-        .unwrap();
-    let state = state(t.db.clone());
-    let router = router(state.clone());
-    Env { t, state, router }
-}
 
 fn page(cookie: Option<&str>) -> Request<Body> {
     let mut req = Request::get("/").header(header::ACCEPT, "text/html");
@@ -55,26 +33,13 @@ async fn html(router: &Router, req: Request<Body>) -> String {
 }
 
 async fn provider_token(state: &AppState) -> String {
-    state
-        .usecases
-        .auth
-        .register(
-            "nongdan".into(),
-            "nongdan@example.vn".into(),
-            "matkhau123".into(),
-            None,
-            "Vườn Thử".into(),
-            "0901234567".into(),
-        )
-        .await
-        .unwrap_or_else(|e| panic!("register: {e}"))
-        .token
+    register_provider(state, "nongdan", "0901234567").await
 }
 
 #[tokio::test]
 #[ignore = "needs TEST_DATABASE_URL"]
 async fn the_home_page_lists_featured_products_and_providers_with_working_links() {
-    let e = env().await;
+    let e = Env::new().await;
     let admin = first_admin(&e.state).await;
     e.state.usecases.setup.load_demo(&admin).await.unwrap();
     let featured = e.state.usecases.explore.get_explore_data().await.unwrap();
@@ -103,7 +68,7 @@ async fn the_home_page_lists_featured_products_and_providers_with_working_links(
 #[tokio::test]
 #[ignore = "needs TEST_DATABASE_URL"]
 async fn an_empty_platform_shows_a_way_forward() {
-    let e = env().await;
+    let e = Env::new().await;
     let html = html(&e.router, page(None)).await;
     assert!(html.contains("Nền tảng đang khởi động"));
     assert!(html.contains("Tìm thợ gần tôi"));
@@ -113,7 +78,7 @@ async fn an_empty_platform_shows_a_way_forward() {
 #[tokio::test]
 #[ignore = "needs TEST_DATABASE_URL"]
 async fn the_frame_follows_the_session() {
-    let e = env().await;
+    let e = Env::new().await;
 
     let anonymous = html(&e.router, page(None)).await;
     assert!(anonymous.contains(r#"href="/login""#));
@@ -143,7 +108,7 @@ async fn the_frame_follows_the_session() {
 #[ignore = "needs TEST_DATABASE_URL"]
 async fn a_stale_session_cookie_shows_the_page_signed_out() {
     // An expired cookie must never lock anyone out of the home page.
-    let e = env().await;
+    let e = Env::new().await;
     let html = html(&e.router, page(Some("not.a.valid-token"))).await;
     assert!(html.contains(r#"href="/login""#));
     e.t.cleanup().await;

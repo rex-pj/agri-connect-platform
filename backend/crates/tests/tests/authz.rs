@@ -1,60 +1,30 @@
 //! Authorization end to end: real database, real router, real tokens.
 //! Run with TEST_DATABASE_URL and `--include-ignored` (see database.rs).
 
-use application::catalogue::CATALOGUE;
 use axum::{
     body::Body,
     http::{header, Method, Request, StatusCode},
-    Router,
 };
-use domain::repositories::catalogue_repository_trait::CatalogueRepositoryTrait;
-use infrastructure::catalogue_repository::CatalogueRepository;
-use integration_tests::{first_admin, json_body, router_with, send, state, TestDb};
+use integration_tests::{first_admin, json_body, register_provider, send, Env};
 use sea_orm::ConnectionTrait;
-use std::sync::Arc;
 use web::{app_state::AppState, routings::app_routing::RouterConfig};
 
 const ORIGIN: &str = "http://localhost:3000";
 
-struct Env {
-    t: TestDb,
-    state: AppState,
-    router: Router,
-}
-
 async fn env() -> Env {
-    let t = TestDb::create().await;
-    CatalogueRepository::new(Arc::new(t.db.clone()))
-        .apply(&CATALOGUE)
-        .await
-        .unwrap();
-    let state = state(t.db.clone());
-    let router = router_with(
-        state.clone(),
+    Env::with(
+        None,
         RouterConfig {
             allowed_origins: vec![ORIGIN.to_owned()],
             ..RouterConfig::default()
         },
-    );
-    Env { t, state, router }
+    )
+    .await
 }
 
 /// A token for a new provider, from the real registration flow.
 async fn provider_token(state: &AppState) -> String {
-    state
-        .usecases
-        .auth
-        .register(
-            "nongdan".into(),
-            "nongdan@example.vn".into(),
-            "matkhau123".into(),
-            None,
-            "Vườn Thử".into(),
-            "0901234567".into(),
-        )
-        .await
-        .unwrap_or_else(|e| panic!("register: {e}"))
-        .token
+    register_provider(state, "nongdan", "0901234567").await
 }
 
 async fn admin_token(state: &AppState) -> String {

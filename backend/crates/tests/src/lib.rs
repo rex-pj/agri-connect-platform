@@ -9,18 +9,20 @@ use std::{
 };
 
 use application::{
+    catalogue::CATALOGUE,
     constants::DEFAULT_UPLOAD_MAX_BYTES,
     ports::{EmailService, TokenService},
 };
 use axum::{
     body::Body,
     extract::ConnectInfo,
-    http::{Request, Response},
+    http::{header, Method, Request, Response, StatusCode},
     Router,
 };
+use domain::repositories::catalogue_repository_trait::CatalogueRepositoryTrait;
 use infrastructure::{
-    email_service::LogEmailService, file_storage::ObjectFileStorage,
-    jwt_token_service::JwtTokenService,
+    catalogue_repository::CatalogueRepository, email_service::LogEmailService,
+    file_storage::ObjectFileStorage, jwt_token_service::JwtTokenService,
 };
 use migration::{Migrator, MigratorTrait};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
@@ -174,4 +176,121 @@ pub async fn first_admin(state: &AppState) -> application::authz::Actor {
         .await
         .unwrap()
         .unwrap()
+}
+
+/// A migrated, catalogue-seeded database with the production state and a
+/// router over it. Call `cleanup` at the end of the test.
+pub struct Env {
+    pub t: TestDb,
+    pub state: AppState,
+    pub router: Router,
+}
+
+impl Env {
+    pub async fn new() -> Env {
+        Self::with(None, RouterConfig::default()).await
+    }
+
+    /// `max_upload_bytes`: None keeps the production cap.
+    pub async fn with(max_upload_bytes: Option<usize>, config: RouterConfig) -> Env {
+        let t = TestDb::create().await;
+        CatalogueRepository::new(Arc::new(t.db.clone()))
+            .apply(&CATALOGUE)
+            .await
+            .unwrap();
+        let state = state_with_uploads(t.db.clone(), memory_uploads(max_upload_bytes));
+        let router = router_with(state.clone(), config);
+        Env { t, state, router }
+    }
+
+    pub async fn cleanup(self) {
+        self.t.cleanup().await;
+    }
+}
+
+/// Registers a provider through the real flow (business "Vườn {username}")
+/// and returns their session token.
+pub async fn register_provider(state: &AppState, username: &str, phone: &str) -> String {
+    state
+        .usecases
+        .auth
+        .register(
+            username.into(),
+            format!("{username}@example.vn"),
+            "matkhau123".into(),
+            None,
+            format!("Vườn {username}"),
+            phone.into(),
+        )
+        .await
+        .unwrap_or_else(|e| panic!("register: {e}"))
+        .token
+}
+
+/// Creates a product through the provider API; `json` is the request body.
+pub async fn create_product(env: &Env, token: &str, json: &str) -> i32 {
+    let req = Request::post("/api/provider/products")
+        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(json.to_owned()))
+        .unwrap();
+    let res = send(&env.router, req).await;
+    assert_eq!(res.status(), StatusCode::CREATED);
+    json_body(res).await["id"].as_i64().unwrap() as i32
+}
+
+pub const MULTIPART_BOUNDARY: &str = "agri-test-boundary";
+
+/// A real JPEG with a gradient, so resizing has something to work on.
+pub fn photo(w: u32, h: u32) -> Vec<u8> {
+    let img = image::RgbImage::from_fn(w, h, |x, y| {
+        image::Rgb([(x % 256) as u8, (y % 256) as u8, 120])
+    });
+    let mut out = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 90)
+        .encode_image(&img)
+        .unwrap();
+    out
+}
+
+/// A multipart body with one file part named `field`.
+pub fn multipart(field: &str, bytes: &[u8]) -> Vec<u8> {
+    let b = MULTIPART_BOUNDARY;
+    let mut body = format!(
+        "--{b}\r\nContent-Disposition: form-data; name=\"{field}\"; filename=\"anh.jpg\"\r\n\
+         Content-Type: image/jpeg\r\n\r\n"
+    )
+    .into_bytes();
+    body.extend_from_slice(bytes);
+    body.extend_from_slice(format!("\r\n--{b}--\r\n").as_bytes());
+    body
+}
+
+/// PUT /api/provider/products/{id}/image with `body` (see `multipart`).
+pub fn upload_request(product_id: i32, token: Option<&str>, body: Vec<u8>) -> Request<Body> {
+    let mut req = Request::builder()
+        .method(Method::PUT)
+        .uri(format!("/api/provider/products/{product_id}/image"))
+        .header(
+            header::CONTENT_TYPE,
+            format!("multipart/form-data; boundary={MULTIPART_BOUNDARY}"),
+        );
+    if let Some(token) = token {
+        req = req.header(header::AUTHORIZATION, format!("Bearer {token}"));
+    }
+    req.body(Body::from(body)).unwrap()
+}
+
+/// Uploads a small photo for the product and returns the new file id.
+pub async fn put_photo(env: &Env, product_id: i32, token: &str) -> String {
+    let res = send(
+        &env.router,
+        upload_request(product_id, Some(token), multipart("image", &photo(64, 48))),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::OK);
+    json_body(res).await["image_file_id"]
+        .as_str()
+        .unwrap()
+        .to_owned()
 }

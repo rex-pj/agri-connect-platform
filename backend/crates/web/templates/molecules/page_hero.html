@@ -1,0 +1,10 @@
+{#- Green header of a detail page: a way back, the title and one label.
+    compact: the slimmer version used beside a photo. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro page_hero(title, back_href, back_label, badge_icon="", badge_text="", compact=false) -%}
+<header class="page-hero{% if compact %} page-hero--compact{% else %} page-hero--detail{% endif %}">
+  {% if back_href %}<a class="back-link" href="{{ back_href }}">{{ atoms::icon(name="fa-arrow-left") }} {{ back_label }}</a>{% endif %}
+  <h1 class="page-hero__title">{{ title }}</h1>
+  {% if badge_text %}<span class="page-hero__badge">{% if badge_icon %}{{ atoms::icon(name=badge_icon) }} {% endif %}{{ badge_text }}</span>{% endif %}
+</header>
+{%- endmacro page_hero %}

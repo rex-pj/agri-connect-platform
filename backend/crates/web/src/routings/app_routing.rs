@@ -109,6 +109,8 @@ impl AppRouting {
         // Contact form is rate-limited separately to prevent spam.
         let public_routes = Router::new()
             .route("/", get(pages::home::show))
+            .route("/products/{id}", get(pages::product::by_id))
+            .route("/products/{id}/{slug}", get(pages::product::show))
             .route("/health/live", get(HealthHandler::live))
             .route("/health/ready", get(HealthHandler::ready))
             // GET /api/explore/providers — geo-search when lat+lng present, browse otherwise

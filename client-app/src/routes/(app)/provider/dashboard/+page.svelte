@@ -563,23 +563,6 @@
                   placeholder="Xuất xứ, quy cách, đặc điểm nổi bật…"
                 ></textarea>
               </div>
-
-              <!-- Image URL -->
-              <div>
-                <label class="form-label fw-semibold" for="ap_img"
-                  >Ảnh sản phẩm (URL)</label
-                >
-                <input
-                  id="ap_img"
-                  name="image_url"
-                  type="url"
-                  class="form-control"
-                  placeholder="https://…  (để trống nếu không có ảnh)"
-                />
-                <div class="form-text">
-                  Dán link ảnh từ Unsplash, Google Drive hoặc trang web của bạn.
-                </div>
-              </div>
             </div>
 
             <div class="modal-footer border-0 pt-0">
@@ -750,21 +733,6 @@
                   class="form-control"
                   rows="3">{editingProduct.description ?? ""}</textarea
                 >
-              </div>
-
-              <!-- Image URL -->
-              <div>
-                <label class="form-label fw-semibold" for="ep_img"
-                  >Ảnh sản phẩm (URL)</label
-                >
-                <input
-                  id="ep_img"
-                  name="image_url"
-                  type="url"
-                  class="form-control"
-                  value={editingProduct.image_url ?? ""}
-                  placeholder="https://…"
-                />
               </div>
             </div>
 

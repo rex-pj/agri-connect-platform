@@ -71,7 +71,6 @@ export class ProviderService {
         description: string | null;
         price:       number | null;
         unit:        string | null;
-        image_url:   string | null;
     }): Promise<void> {
         const res = await this.fetch(`${API_BASE}/api/provider/products`, {
             method:  'POST',
@@ -87,7 +86,6 @@ export class ProviderService {
         description: string | null;
         price:       number | null;
         unit:        string | null;
-        image_url:   string | null;
     }): Promise<void> {
         const res = await this.fetch(`${API_BASE}/api/provider/products/${id}`, {
             method:  'PUT',

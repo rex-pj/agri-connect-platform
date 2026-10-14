@@ -503,22 +503,6 @@ export class AdminService {
         return res.json();
     }
 
-    async assignPermission(userId: number, permissionId: number): Promise<void> {
-        const res = await this.fetch(`${API_BASE}/api/admin/users/${userId}/permissions`, {
-            method:  'POST',
-            headers: { ...this.auth, 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ permission_id: permissionId }),
-        });
-        if (!res.ok) throw await parseServiceError(res, 'Failed to assign permission.');
-    }
-
-    async revokePermission(userId: number, permissionId: number): Promise<void> {
-        const res = await this.fetch(`${API_BASE}/api/admin/users/${userId}/permissions/${permissionId}`, {
-            method:  'DELETE',
-            headers: this.auth,
-        });
-        if (!res.ok) throw await parseServiceError(res, 'Failed to revoke permission.');
-    }
 
     // ── Admin Products ─────────────────────────────────────────────────
 

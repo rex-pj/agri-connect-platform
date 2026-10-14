@@ -79,41 +79,4 @@ export const actions: Actions = {
         }
     },
 
-    assign_permission: async ({ params, request, fetch, cookies }) => {
-        const userId       = Number(params.id);
-        const data         = await request.formData();
-        const permissionId = Number(data.get('permission_id'));
-        if (!permissionId) return fail(400, { error: 'Thiếu permission_id.', action: 'assign_permission' });
-
-        const svc = new AdminService(fetch, cookies.get('auth_token') ?? '');
-        try {
-            await svc.assignPermission(userId, permissionId);
-            return { success: true, action: 'assign_permission', permissionId, message: 'Đã cấp quyền.' };
-        } catch (err) {
-            if (err instanceof ServiceError) {
-                checkAuth(err.status);
-                return fail(err.status, { error: err.message, action: 'assign_permission' });
-            }
-            return fail(500, { error: 'Gán quyền thất bại.', action: 'assign_permission' });
-        }
-    },
-
-    revoke_permission: async ({ params, request, fetch, cookies }) => {
-        const userId       = Number(params.id);
-        const data         = await request.formData();
-        const permissionId = Number(data.get('permission_id'));
-        if (!permissionId) return fail(400, { error: 'Thiếu permission_id.', action: 'revoke_permission' });
-
-        const svc = new AdminService(fetch, cookies.get('auth_token') ?? '');
-        try {
-            await svc.revokePermission(userId, permissionId);
-            return { success: true, action: 'revoke_permission', permissionId, message: 'Đã thu hồi quyền.' };
-        } catch (err) {
-            if (err instanceof ServiceError) {
-                checkAuth(err.status);
-                return fail(err.status, { error: err.message, action: 'revoke_permission' });
-            }
-            return fail(500, { error: 'Thu hồi quyền thất bại.', action: 'revoke_permission' });
-        }
-    },
 };

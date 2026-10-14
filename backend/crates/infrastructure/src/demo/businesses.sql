@@ -1,0 +1,27 @@
+-- Demo businesses. Every row is is_demo = TRUE so "remove demo data" can never
+-- touch a real listing.
+INSERT INTO businesses (name, phone, description, address, location, is_verified, is_active, is_demo) VALUES
+                ('Dịch vụ Nguyễn Văn An', '0901234567',
+                 'Chuyên múc bùn và sửa máy nổ vùng Cái Lậy, kinh nghiệm 10 năm.',
+                 'Xã Mỹ Long, Cái Lậy, Tiền Giang',
+                 ST_GeographyFromText('SRID=4326;POINT(106.0123 10.3456)'), TRUE, TRUE, TRUE),
+                ('Dịch vụ Trần Thị Bình', '0912345678',
+                 'Phun thuốc bảo vệ thực vật bằng drone, phủ đều toàn ruộng.',
+                 'Xã Tân Phong, Cái Lậy, Tiền Giang',
+                 ST_GeographyFromText('SRID=4326;POINT(106.0200 10.3500)'), TRUE, TRUE, TRUE),
+                ('Cơ sở Lê Văn Cường', '0923456789',
+                 'Tổng hợp dịch vụ nông nghiệp: múc bùn, phun thuốc, sửa máy.',
+                 'Xã Long Trung, Cái Lậy, Tiền Giang',
+                 ST_GeographyFromText('SRID=4326;POINT(106.0300 10.3400)'), FALSE, TRUE, TRUE),
+                ('Cơ sở Năm Hùng', '0901111001',
+                 'Chuyên kinh doanh gạo ST25 và nông sản đặc sản Mekong.',
+                 '12 Lê Lợi, Cái Lậy, Tiền Giang',
+                 NULL, TRUE, TRUE, TRUE),
+                ('Vườn Tư Phát', '0901111002',
+                 'Vườn sầu riêng Ri6 chuẩn xuất khẩu, bán buôn và lẻ.',
+                 'Xã Tam Bình, Cai Lậy, Tiền Giang',
+                 NULL, TRUE, TRUE, TRUE),
+                ('Đại lý Phân bón Thành', '0904444001',
+                 'Đại lý cấp 1 phân bón Bình Điền, NPK, Urea và phân hữu cơ.',
+                 '88 Hùng Vương, Cái Lậy, Tiền Giang',
+                 NULL, FALSE, TRUE, TRUE)

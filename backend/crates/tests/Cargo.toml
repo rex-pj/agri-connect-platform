@@ -1,0 +1,20 @@
+[package]
+name = "integration-tests"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+# Test-only crate: deliberately does not opt into [workspace.lints], so tests
+# may unwrap and index freely. Production crates must never depend on it.
+
+[dependencies]
+domain.workspace         = true
+application.workspace    = true
+infrastructure.workspace = true
+migration.workspace      = true
+web = { path = "../web" }
+axum.workspace           = true
+sea-orm.workspace        = true
+serde_json.workspace     = true
+tokio.workspace          = true
+tower.workspace          = true

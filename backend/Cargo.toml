@@ -1,43 +1,118 @@
 [workspace]
-members = [".", "migration"]
-
-[package]
-name = "agri_connect"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-axum           = { version = "0.8", features = ["macros"] }
-tokio          = { version = "1",   features = ["full"] }
-tower          = { version = "0.5", features = ["full"] }
-tower-http     = { version = "0.6", features = ["cors", "trace", "set-header"] }
-hyper          = { version = "1.0" }
-serde          = { version = "1.0", features = ["derive"] }
-serde_json     = "1.0"
-validator      = { version = "0.19", features = ["derive"] }
-async-trait    = "0.1"
-chrono         = { version = "0.4", features = ["serde"] }
-config         = "0.15"
-dotenvy        = "0.15"
-tracing        = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-thiserror      = "1.0"
-jsonwebtoken   = "9"
-bcrypt         = "0.15"
-lettre         = { version = "0.11", features = ["tokio1-native-tls", "smtp-transport", "builder"] }
-rand           = "0.8"
-hex            = "0.4"
-governor       = "0.6"
-
-[dependencies.sea-orm]
-version  = "1"
-features = [
-    "sqlx-postgres",
-    "runtime-tokio-rustls",
-    "with-chrono",
-    "macros",
+resolver = "2"
+members = [
+    "crates/domain",
+    "crates/application",
+    "crates/infrastructure",
+    "crates/web",
+    "migration",
+    "crates/tests",
 ]
 
-[dependencies.migration]
-package = "agri-connect-migration"
-path    = "migration"
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+publish = false
+
+# Third-party versions live here only; member crates write `{ workspace = true }`.
+# Every crate is `default-features = false`; each kept feature says what breaks without it.
+[workspace.dependencies]
+domain         = { path = "crates/domain" }
+application    = { path = "crates/application" }
+infrastructure = { path = "crates/infrastructure" }
+migration      = { path = "migration", package = "agri-connect-migration" }
+
+async-trait = "0.1"
+hex         = "0.4"
+serde_json  = "1"
+dotenvy     = "0.15"
+
+axum = { version = "0.8", default-features = false, features = [
+    "http1", # axum::serve speaks HTTP/1.1 only through this
+    "tokio", # axum::serve and ConnectInfo (rate limiting keys on the peer address)
+    "json",  # Json extractor/response for the whole /api surface
+    "query", # Query extractor for list and search endpoints
+] }
+tower = { version = "0.5", default-features = false, features = [
+    "util", # ServiceExt::oneshot drives the router in tests without a socket
+] }
+tower-http = { version = "0.6", default-features = false, features = [
+    "cors",       # CorsLayer driven by CORS_ORIGINS
+    "set-header", # security headers (CSP, HSTS, nosniff, frame options)
+] }
+tokio = { version = "1", default-features = false, features = [
+    "rt-multi-thread", # the server runtime; also needed by spawn_blocking for bcrypt
+    "macros",          # #[tokio::main], #[tokio::test] and try_join! in use cases
+    "net",             # TcpListener for axum::serve
+] }
+serde = { version = "1", default-features = false, features = [
+    "std",    # String/Vec/HashMap impls
+    "derive", # #[derive(Serialize, Deserialize)] on DTOs and claims
+] }
+chrono = { version = "0.4", default-features = false, features = [
+    "std",
+    "clock", # Utc::now() for expiry and lockout checks
+    "serde", # DateTime<Utc> fields in JSON responses
+] }
+thiserror = { version = "2", default-features = false, features = [
+    "std", # std::error::Error impls for our error types
+] }
+tracing = { version = "0.1", default-features = false, features = [
+    "std",        # the log macros need std
+    "attributes", # keeps #[instrument] available; without it the attribute fails to compile
+] }
+tracing-subscriber = { version = "0.3", default-features = false, features = [
+    "std",
+    "fmt",        # human-readable dev logs
+    "ansi",       # coloured dev logs in a terminal
+    "env-filter", # RUST_LOG filtering
+    "json",       # LOG_FORMAT=json for production
+] }
+toml = { version = "0.8", default-features = false, features = [
+    "parse", # locale files are parsed at startup; without it toml::from_str does not exist
+] }
+
+jsonwebtoken = { version = "9", default-features = false } # HS256 only: PEM/ASN.1 support is not needed
+bcrypt = { version = "0.15", default-features = false, features = [
+    "std", # bcrypt::hash needs getrandom/std for salts
+] }
+rand = { version = "0.8", default-features = false, features = [
+    "std",
+    "getrandom", # OsRng for password-reset tokens
+] }
+governor = { version = "0.6", default-features = false, features = [
+    "std",     # keyed limiters need std collections
+    "dashmap", # DefaultKeyedStateStore is DashMap-backed; without it keyed() needs a custom store
+    "quanta",  # DefaultClock is the quanta clock; without it the type alias changes
+] }
+lettre = { version = "0.11", default-features = false, features = [
+    "builder",           # Message::builder for the reset email
+    "smtp-transport",    # AsyncSmtpTransport
+    "tokio1-rustls-tls", # STARTTLS over rustls; native-tls would drag OpenSSL into the distroless image
+] }
+
+sea-orm = { version = "1.1", default-features = false, features = [
+    "sqlx-postgres",        # the only database we run
+    "runtime-tokio-rustls", # async runtime + TLS for the pool, matching the server runtime
+    "macros",               # DeriveEntityModel / FromQueryResult on entities and query rows
+    "with-chrono",          # TIMESTAMPTZ <-> chrono types
+] }
+sea-orm-migration = { version = "1.1", default-features = false, features = [
+    "sqlx-postgres",
+    "runtime-tokio-rustls",
+    "cli", # `cargo run -p agri-connect-migration -- status|up|fresh` for local DB work
+] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+# Panics in production code take the whole server down. Each exception is
+# scoped to a single item with #[allow(...)] and carries its reason.
+[workspace.lints.clippy]
+unwrap_used      = "deny"
+expect_used      = "deny"
+panic            = "deny"
+unreachable      = "deny"
+todo             = "deny"
+unimplemented    = "deny"
+indexing_slicing = "deny"

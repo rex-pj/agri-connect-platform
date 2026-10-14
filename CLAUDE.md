@@ -12,31 +12,15 @@ Target region: Mekong Delta (priority: durian farms in Cai Lay, rice fields in A
 
 ```
 agri-connect-platform/
-├── backend/                    # Rust + Axum API server
-│   ├── migration/              # Sea-ORM migration crate
-│   │   └── src/
-│   │       ├── enums/          # Shared DB enum definitions
-│   │       └── m*.rs           # Versioned migration files
-│   └── src/
-│       ├── application/
-│       │   ├── usecases/       # Business logic layer (one file per domain)
-│       │   ├── inputs.rs       # DTO structs for use-case inputs
-│       │   └── shared.rs       # Cross-cutting validation helpers
-│       ├── domain/
-│       │   ├── models/         # Domain model structs
-│       │   └── repositories/   # Repository trait definitions
-│       ├── entities/           # Sea-ORM entity models (auto-generated)
-│       ├── handlers/           # Axum route handlers
-│       ├── infrastructure/
-│       │   ├── repositories/   # Concrete Sea-ORM implementations
-│       │   └── email_service.rs
-│       ├── middleware/         # Auth (JWT/role guards), rate limiting
-│       ├── routings/           # Axum router assembly
-│       ├── validators/         # Field-level validation rules
-│       ├── view_models/        # HTTP request/response DTOs + AppError
-│       ├── app_state.rs        # Shared state wired with all use cases
-│       ├── constants.rs        # Application-wide constants
-│       └── startup.rs          # DB init, dependency wiring, server startup
+├── backend/                    # Cargo workspace; layering enforced by crate boundaries
+│   ├── crates/
+│   │   ├── domain/             # Models, repository traits, the one Error type (no I/O)
+│   │   ├── application/        # Use cases, ports, inputs/outputs, validation, catalogue
+│   │   ├── infrastructure/     # Sea-ORM entities + repos, JWT, bcrypt, SMTP, seeders
+│   │   ├── web/                # Axum: handlers, middleware, routing, extractors, startup
+│   │   │   └── locales/vi.toml # User-facing text for every error code
+│   │   └── tests/              # Integration + convention tests (no workspace lints)
+│   └── migration/              # Sea-ORM migrations: DDL only, append-only
 └── client-app/                 # SvelteKit frontend (adapter-node)
     └── src/
         ├── routes/
@@ -140,7 +124,7 @@ All UI components live under `client-app/src/lib/components/` and are organized 
 | `categories`            | id, name, slug, type, icon, display_order, is_active                                                   | Types: `service`, `product`                    |
 | `businesses`            | id, name, phone, email, description, address, lat, lng, is_verified, is_active                         | Provider/business listing                      |
 | `services`              | id, business_id, category_id, name, description, price_note, is_active                                 | Services offered by a business                 |
-| `products`              | id, business_id, category_id, name, description, price, unit, image_url, is_active                     | Products sold by a business                    |
+| `products`              | id, business_id, category_id, name, description, price, unit, is_active                                | Products sold by a business                    |
 | `inquiries`             | id, business_id, service_id, topic, requester_name, requester_phone, note, status                      | Statuses: `new`, `contacted`, `closed`, `spam` |
 | `reviews`               | id, business_id, reviewer_name, rating (1–5), comment, is_visible                                      | Moderated by admin                             |
 | `password_reset_tokens` | id, user_id, token, expires_at, consumed_at                                                            | Single-use, 1-hour TTL                         |
@@ -161,30 +145,31 @@ GIST index on `businesses.location` makes radius queries O(log n).
 
 ## API Endpoints
 
-All routes are assembled in `backend/src/routings/app_routing.rs`.
+All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Every error body is `{ code, message, field_errors? }`; `code` is the stable machine identifier.
 
 ### Public (no auth)
 
-| Method | Path                                 | Description                                                |
-| ------ | ------------------------------------ | ---------------------------------------------------------- |
-| GET    | `/health`                            | Health check                                               |
-| GET    | `/api/agri-connect/providers`        | Geo-search providers (`lat`, `lng`, `radius?`, `service?`) |
-| GET    | `/api/agri-connect/providers/browse` | Browse providers (paginated)                               |
-| GET    | `/api/agri-connect/providers/{id}`   | Provider detail                                            |
-| GET    | `/api/agri-connect/explore`          | Home explore data                                          |
-| GET    | `/api/agri-connect/categories`       | Category listing                                           |
-| GET    | `/api/agri-connect/products/browse`  | Browse products (paginated)                                |
-| GET    | `/api/agri-connect/products/{id}`    | Product detail                                             |
-| POST   | `/api/agri-connect/contact`          | Submit contact/inquiry (rate-limited: 30/min)              |
+| Method | Path                          | Description                                                                        |
+| ------ | ----------------------------- | ---------------------------------------------------------------------------------- |
+| GET    | `/health`                     | Health check                                                                       |
+| GET    | `/api/explore/providers`      | Geo-search (`lat`, `lng`, `radius?`, `service_id?`) or browse (paginated, `page?`) |
+| GET    | `/api/explore/providers/{id}` | Provider detail                                                                    |
+| GET    | `/api/explore/featured`       | Home featured data (providers, products, categories)                               |
+| GET    | `/api/explore/categories`     | Category listing (filter by `type=service\|product`)                               |
+| GET    | `/api/explore/locations`      | Location presets listing                                                           |
+| GET    | `/api/explore/products`       | Browse products (paginated, filter by `category_id?`)                              |
+| GET    | `/api/explore/products/{id}`  | Product detail                                                                     |
+| POST   | `/api/explore/contact`        | Submit contact/inquiry (rate-limited: 30/min)                                      |
 
 ### Auth (rate-limited: 10 req/min)
 
-| Method | Path                                | Description                           |
-| ------ | ----------------------------------- | ------------------------------------- |
-| POST   | `/api/auth/login`                   | Login → JWT                           |
-| POST   | `/api/auth/register`                | Provider self-registration            |
-| POST   | `/api/auth/password-resets`         | Send password reset email             |
-| PATCH  | `/api/auth/password-resets/{token}` | Consume reset token, set new password |
+| Method | Path                                | Description                                        |
+| ------ | ----------------------------------- | -------------------------------------------------- |
+| POST   | `/api/auth/tokens`                  | Login → JWT                                        |
+| POST   | `/api/users`                        | Provider self-registration                         |
+| POST   | `/api/auth/password-resets`         | Send password reset email                          |
+| PATCH  | `/api/auth/password-resets/{token}` | Consume reset token, set new password              |
+| POST   | `/api/admin/setup`                  | Create first admin account (rate-limited, one-time) |
 
 ### User (RequireAuth)
 
@@ -195,28 +180,46 @@ All routes are assembled in `backend/src/routings/app_routing.rs`.
 
 ### Admin (RequireAdmin)
 
-| Method | Path                                     | Description                  |
-| ------ | ---------------------------------------- | ---------------------------- |
-| GET    | `/api/admin/stats`                       | Dashboard statistics         |
-| GET    | `/api/admin/users`                       | User list (paginated)        |
-| GET    | `/api/admin/users/{id}`                  | User detail                  |
-| PATCH  | `/api/admin/users/{id}/role`             | Update user role             |
-| PATCH  | `/api/admin/users/{id}/active`           | Toggle user active state     |
-| GET    | `/api/admin/roles`                       | Role listing                 |
-| GET    | `/api/admin/roles/{id}`                  | Role detail                  |
-| GET    | `/api/admin/categories`                  | Category listing             |
-| POST   | `/api/admin/categories`                  | Create category              |
-| GET    | `/api/admin/categories/{id}`             | Category detail              |
-| PUT    | `/api/admin/categories/{id}`             | Update category              |
-| PATCH  | `/api/admin/categories/{id}/active`      | Toggle category active state |
-| GET    | `/api/admin/providers`                   | Provider list (paginated)    |
-| GET    | `/api/admin/providers/{id}`              | Provider detail              |
-| PATCH  | `/api/admin/providers/{id}/verification` | Toggle verification badge    |
-| POST   | `/api/admin/providers/{id}/users`        | Assign user to provider      |
-| GET    | `/api/admin/inquiries`                   | Inquiry list (paginated)     |
-| PATCH  | `/api/admin/inquiries/{id}/status`       | Update inquiry status        |
-| GET    | `/api/admin/reviews`                     | Review list (paginated)      |
-| PATCH  | `/api/admin/reviews/{id}/visible`        | Toggle review visibility     |
+| Method | Path                                       | Description                       |
+| ------ | ------------------------------------------ | --------------------------------- |
+| GET    | `/api/admin/stats`                         | Dashboard statistics              |
+| GET    | `/api/admin/users`                         | User list (paginated)             |
+| GET    | `/api/admin/users/{id}`                    | User detail                       |
+| PATCH  | `/api/admin/users/{id}/role`               | Update user role                  |
+| PATCH  | `/api/admin/users/{id}/status`             | Toggle user active state          |
+| GET    | `/api/admin/users/{id}/permissions`        | Effective permissions (via role)  |
+| GET    | `/api/admin/roles`                         | Role listing                      |
+| GET    | `/api/admin/roles/{id}`                    | Role detail                       |
+| GET    | `/api/admin/permissions`                   | All available permissions         |
+| GET    | `/api/admin/categories`                    | Category listing                  |
+| POST   | `/api/admin/categories`                    | Create category                   |
+| GET    | `/api/admin/categories/{id}`               | Category detail                   |
+| PUT    | `/api/admin/categories/{id}`               | Update category                   |
+| PATCH  | `/api/admin/categories/{id}/status`        | Toggle category active state      |
+| GET    | `/api/admin/providers`                     | Provider list (paginated)         |
+| GET    | `/api/admin/providers/{id}`                | Provider detail                   |
+| PATCH  | `/api/admin/providers/{id}/verification`   | Toggle verification badge         |
+| POST   | `/api/admin/providers/{id}/users`          | Assign user to provider           |
+| GET    | `/api/admin/inquiries`                     | Inquiry list (paginated)          |
+| PATCH  | `/api/admin/inquiries/{id}/status`         | Update inquiry status             |
+| GET    | `/api/admin/reviews`                       | Review list (paginated)           |
+| PATCH  | `/api/admin/reviews/{id}/visibility`       | Toggle review visibility          |
+| GET    | `/api/admin/locations`                     | Location preset list              |
+| POST   | `/api/admin/locations`                     | Create location preset            |
+| GET    | `/api/admin/locations/{id}`                | Location preset detail            |
+| PUT    | `/api/admin/locations/{id}`                | Update location preset            |
+| PATCH  | `/api/admin/locations/{id}/status`         | Toggle location active state      |
+| DELETE | `/api/admin/locations/{id}`                | Delete location preset            |
+| GET    | `/api/admin/products`                      | Product list (paginated)          |
+| GET    | `/api/admin/products/{id}`                 | Product detail                    |
+| PATCH  | `/api/admin/products/{id}/active`          | Toggle product active state       |
+| DELETE | `/api/admin/products/{id}`                 | Delete product                    |
+| GET    | `/api/admin/services`                      | Service list (paginated)          |
+| POST   | `/api/admin/services`                      | Create service                    |
+| GET    | `/api/admin/services/{id}`                 | Service detail                    |
+| PUT    | `/api/admin/services/{id}`                 | Update service                    |
+| PATCH  | `/api/admin/services/{id}/active`          | Toggle service active state       |
+| DELETE | `/api/admin/services/{id}`                 | Delete service                    |
 
 ### Provider Dashboard (RequireProvider)
 
@@ -231,11 +234,11 @@ All routes are assembled in `backend/src/routings/app_routing.rs`.
 
 ### Setup (first-run / development only)
 
-| Method | Path                    | Description                               |
-| ------ | ----------------------- | ----------------------------------------- |
-| POST   | `/api/admin/initialize` | Create first admin account (rate-limited) |
-| GET    | `/api/setup/status`     | Check whether first admin exists          |
-| POST   | `/api/setup/data`       | Seed dev data                             |
+| Method | Path               | Description                      |
+| ------ | ------------------ | -------------------------------- |
+| GET    | `/api/setup/status` | Check whether first admin exists |
+| POST   | `/api/setup/seed`  | Load demo data (flagged is_demo) |
+| DELETE | `/api/setup/seed`  | Remove all demo data             |
 
 ---
 
@@ -244,7 +247,9 @@ All routes are assembled in `backend/src/routings/app_routing.rs`.
 - **JWT expiry:** 1 hour
 - **Password reset token TTL:** 1 hour (single-use)
 - **Account lockout:** 5 failed login attempts → 15-minute lockout
-- **Password minimum:** 8 characters
+- **Password:** at least 8 characters, at most 72 bytes (bcrypt ignores the rest)
+- **JWT secret:** at least 32 bytes; startup refuses a shorter one
+- **Permissions:** granted to roles only (`role_permissions`); default grants applied once, so revocations stick
 - **Username minimum:** 3 characters
 - **Rate limiting:** auth endpoints 10 req/min; public write endpoints 30 req/min
 - **Security headers:** `X-Content-Type-Options`, `X-Frame-Options`, `Content-Security-Policy`, `Strict-Transport-Security` (HTTPS only)
@@ -409,13 +414,46 @@ The file works in both client and server contexts via the `$lib` alias. Never ad
 ### Backend (Rust)
 
 - Layered architecture is strict: handlers call use cases; use cases call repository traits; infrastructure implements traits. Never skip a layer.
-- Sea-ORM entities are in `entities/`; never define raw SQL structs that duplicate an entity.
-- Business rules and validation belong in use cases or the `validators/` module, not in handlers.
-- Use `AppError` / `HandlerError` from `view_models/` for all error responses — never construct raw HTTP responses with ad-hoc status codes.
-- Vietnamese error messages are acceptable in API responses (farmers-facing); keep internal logs in English.
+- Sea-ORM entities are in `infrastructure/src/entities/`; never define raw SQL structs that duplicate an entity.
+- Business rules and validation belong in use cases (`application/src/validation.rs` for shared rules), not in handlers or request structs.
+- Every failure is a `domain::Error` with an `ErrorCode`. Never put user-facing text in Rust: add the code to `domain/src/error.rs` and its Vietnamese text to `web/locales/vi.toml` (a test fails if either is missing). Never build an error response with an ad-hoc status code.
+- Handlers extract with `ApiJson` / `ApiPath` / `ApiQuery` from `web::extract`, never axum's own, so malformed input gets a coded error.
+- Environment variables are read only in `web/src/startup.rs`; everything else receives configuration as arguments.
+- Migrations are DDL only and append-only: never edit or delete one that has run anywhere. Reference data (roles, permissions, categories, locations) lives in `application/src/catalogue.rs` and is seeded idempotently at startup; demo data only through `/api/setup/seed`.
+- Keep internal logs in English.
 - All location data uses **SRID 4326** (WGS84). Never mix geometry and geography types in the same query.
 - Phone number pattern for Vietnamese mobile: `0\d{9}` (10 digits starting with 0).
 - Radius validation bounds: 100 m minimum, 50 000 m maximum.
+
+### Backend — DDD / Layer Integrity Rules
+
+These rules were codified after a full architectural review. Violations are compile-time detectable — enforce them on every PR.
+
+**Layer dependency direction** (dependencies may only point inward):
+```
+middleware / handlers  →  application (use cases, ports)  →  domain  ←  infrastructure
+```
+
+**Domain types**
+- `UserRole` lives in `domain/models/role.rs`. No other layer redefines role semantics. Handlers and use cases both import `UserRole` from the domain — never from middleware.
+- A domain model struct that is used as input to a use case must carry every field that the use case needs to enforce a business rule. Never rely on a silent SQL `WHERE` filter to enforce a domain invariant that belongs in the use case (e.g. `is_active` on `UserCredentials`).
+
+**Application layer (`application/`)**
+- Use cases depend only on domain models, repository traits, and the port traits in `application/ports.rs`. Never import from `middleware::`, `handlers::`, or concrete infrastructure types (e.g. `jsonwebtoken`, `bcrypt`).
+- Infrastructure concerns that a use case needs (password hashing, token minting) must be abstracted behind a port trait in `application/ports.rs` and injected via `Arc<dyn PortTrait>` in the constructor — same pattern as repository traits.
+- Shared validation rules live in `application/src/validation.rs` and return coded errors; forms collect them with `domain::Validation` so every bad field is reported at once. Never scatter the same rule as a private function in multiple use case files.
+- Before any `user_repo.update_role()` call, check the code against an active row in `roles`, so arbitrary strings never reach the role column.
+
+**Middleware layer (`middleware/`)**
+- Middleware types (`AuthUser`, `RequireAdmin`, `RequireProviderOrAdmin`) are HTTP-adapter concerns. They may import from `domain/` but nothing in `application/` or `domain/` may import back from `middleware/`.
+- Name auth guards to match their actual policy: `RequireAdmin` (admin only), `RequireProviderOrAdmin` (admin or provider). Never use a guard named after one role when it actually admits multiple roles.
+
+**Infrastructure layer (`infrastructure/`)**
+- Concrete library types (`jsonwebtoken`, `bcrypt`, Sea-ORM) are confined to `infrastructure/`. Implement the port traits from `application/ports.rs` here.
+- `JwtTokenService` (in `infrastructure/jwt_token_service.rs`) is the only file that calls `jsonwebtoken::encode`. `BcryptPasswordHasher` (in `infrastructure/bcrypt_password_hasher.rs`) is the only file that calls `bcrypt::hash` / `bcrypt::verify`.
+
+**Errors (`domain/src/error.rs`, `web/src/error_response.rs`)**
+- `IntoResponse for Error` (behind domain's `axum` feature) only sets the status and parks the error; `render_errors` writes the localised body. Every router must sit under that layer.
 
 ### Frontend (SvelteKit)
 
@@ -452,8 +490,14 @@ Public-facing content pages must include a `<svelte:head>` block with `<title>` 
 
 ```powershell
 cd backend
-# Requires DATABASE_URL in .env pointing to a PostgreSQL instance with PostGIS
-cargo run
+# Copy .env.example to .env; needs DATABASE_URL (PostgreSQL + PostGIS) and a 32-byte JWT_SECRET
+cargo run --bin agri-connect
+
+# Before every push: both must pass across the whole workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+# Database tests (each creates and drops its own database):
+# TEST_DATABASE_URL=postgres://... cargo test --workspace -- --include-ignored
 ```
 
 ### Frontend

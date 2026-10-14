@@ -18,36 +18,14 @@
   let submittingRole = $state(false);
   let loadingActivate = $state(false);
   let confirmDeactivate = $state(false);
-  let togglingPermId = $state<number | null>(null);
-
-  // Track granted permission IDs reactively so toggle is instant
-  let grantedIds = $state(new Set<number>(untrack(() => data.userPermIds)));
+  const grantedIds = $derived(new Set<number>(data.userPermIds));
 
   $effect(() => {
     const f = form as any;
 
-    // Clear permission spinner as soon as the server responds (success OR error).
-    // Must check BEFORE the early-return so errors also clear it.
-    if (f?.action?.includes('permission')) {
-      togglingPermId = null;
-    }
-
     if (!f?.success) return;
     showRoleModal = false;
     confirmDeactivate = false;
-
-    // Use untrack when reading grantedIds to avoid making it a dependency
-    // of this effect (which would cause an infinite re-run loop).
-    if (f.action === 'assign_permission' && f.permissionId) {
-      grantedIds = untrack(() => new Set([...grantedIds, f.permissionId]));
-    }
-    if (f.action === 'revoke_permission' && f.permissionId) {
-      grantedIds = untrack(() => {
-        const next = new Set(grantedIds);
-        next.delete(f.permissionId);
-        return next;
-      });
-    }
   });
 
   function openRoleModal() {
@@ -85,12 +63,12 @@
 </nav>
 
 <!-- ── Alert strip ─────────────────────────────────────────────────────────── -->
-{#if (form as any)?.success && (form as any)?.message && !(form as any)?.action?.includes('permission')}
+{#if (form as any)?.success && (form as any)?.message}
   <div class="alert alert-success d-flex align-items-center gap-2 mx-4 mb-0">
     <i class="fa-solid fa-circle-check flex-shrink-0"></i>{(form as any).message}
   </div>
 {/if}
-{#if (form as any) && !(form as any)?.success && (form as any)?.error && !(form as any)?.action?.includes('permission')}
+{#if (form as any) && !(form as any)?.success && (form as any)?.error}
   <div class="alert alert-danger d-flex align-items-center gap-2 mx-4 mb-0">
     <i class="fa-solid fa-triangle-exclamation flex-shrink-0"></i>{(form as any).error}
   </div>
@@ -301,61 +279,29 @@
   />
 {/if}
 
-<!-- ── Permissions panel ────────────────────────────────────────────────── -->
+<!-- Permissions panel: read-only, grants belong to the role -->
 {#if data.allPerms.length > 0}
   <div class="admin-card mx-4 mt-3 p-4">
     <Heading level={3} class="perm-panel-title">
       <i class="fa-solid fa-key me-2 text-success"></i>Quyền hạn
     </Heading>
     <p class="text-muted small mb-3">
-      Bật / tắt từng quyền hạn cho tài khoản này.
+      Quyền được cấp theo vai trò. Đổi vai trò để thay đổi quyền của tài khoản này.
     </p>
-
-    {#if (form as any)?.success && (form as any)?.action?.includes('permission') && (form as any)?.message}
-      <div class="alert alert-success py-2 small mb-3">
-        <i class="fa-solid fa-circle-check me-1"></i>{(form as any).message}
-      </div>
-    {/if}
-    {#if (form as any) && !(form as any)?.success && (form as any)?.action?.includes('permission')}
-      <div class="alert alert-danger py-2 small mb-3">
-        <i class="fa-solid fa-triangle-exclamation me-1"></i>{(form as any).error}
-      </div>
-    {/if}
 
     <div class="perm-grid">
       {#each data.allPerms as p}
         {@const granted = grantedIds.has(p.id)}
-        {@const toggling = togglingPermId === p.id}
-        <div class="perm-row {granted ? 'perm-row--on' : ''} {toggling ? 'perm-row--loading' : ''}">
+        <div class="perm-row {granted ? 'perm-row--on' : ''}">
           <div class="perm-row__info">
             <span class="perm-row__code">{p.code}</span>
             <span class="perm-row__name">{p.name}</span>
           </div>
-          <form
-            method="POST"
-            action={granted ? '?/revoke_permission' : '?/assign_permission'}
-            use:enhance={() => {
-              togglingPermId = p.id;
-              return async ({ update }) => {
-                await update({ invalidateAll: false });
-              };
-            }}
-          >
-            <input type="hidden" name="permission_id" value={p.id} />
-            <button
-              type="submit"
-              class="perm-toggle {granted ? 'perm-toggle--on' : 'perm-toggle--off'}"
-              title={granted ? 'Thu hồi quyền' : 'Cấp quyền'}
-              aria-label={granted ? 'Thu hồi quyền' : 'Cấp quyền'}
-              disabled={toggling}
-            >
-              {#if toggling}
-                <span class="perm-spinner" role="status" aria-hidden="true"></span>
-              {:else}
-                <i class="fa-solid {granted ? 'fa-toggle-on' : 'fa-toggle-off'}"></i>
-              {/if}
-            </button>
-          </form>
+          <i
+            class="fa-solid {granted ? 'fa-circle-check text-success' : 'fa-circle-minus text-muted'}"
+            title={granted ? 'Có quyền' : 'Không có quyền'}
+            aria-label={granted ? 'Có quyền' : 'Không có quyền'}
+          ></i>
         </div>
       {/each}
     </div>

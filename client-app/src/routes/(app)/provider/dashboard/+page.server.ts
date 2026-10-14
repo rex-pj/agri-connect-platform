@@ -83,7 +83,6 @@ export const actions: Actions = {
         const priceRaw    = (data.get('price')       as string ?? '').trim();
         const unit        = (data.get('unit')        as string ?? '').trim() || null;
         const description = (data.get('description') as string ?? '').trim() || null;
-        const image_url   = (data.get('image_url')   as string ?? '').trim() || null;
 
         if (!name)        return fail(400, { action: 'add_product', error: 'Tên sản phẩm không được để trống.' });
         if (!category_id) return fail(400, { action: 'add_product', error: 'Vui lòng chọn danh mục.' });
@@ -95,7 +94,7 @@ export const actions: Actions = {
 
         const svc = new ProviderService(fetch, cookies.get('auth_token') ?? '');
         try {
-            await svc.createProduct({ category_id, name, description, price, unit, image_url });
+            await svc.createProduct({ category_id, name, description, price, unit });
             return { action: 'add_product', success: true };
         } catch (err) {
             if (err instanceof ServiceError) {
@@ -115,7 +114,6 @@ export const actions: Actions = {
         const priceRaw    = (data.get('price')       as string ?? '').trim();
         const unit        = (data.get('unit')        as string ?? '').trim() || null;
         const description = (data.get('description') as string ?? '').trim() || null;
-        const image_url   = (data.get('image_url')   as string ?? '').trim() || null;
 
         if (!id || isNaN(id))  return fail(400, { action: 'edit_product', error: 'ID sản phẩm không hợp lệ.' });
         if (!name)             return fail(400, { action: 'edit_product', error: 'Tên sản phẩm không được để trống.' });
@@ -128,7 +126,7 @@ export const actions: Actions = {
 
         const svc = new ProviderService(fetch, cookies.get('auth_token') ?? '');
         try {
-            await svc.updateProduct(id, { category_id, name, description, price, unit, image_url });
+            await svc.updateProduct(id, { category_id, name, description, price, unit });
             return { action: 'edit_product', success: true };
         } catch (err) {
             if (err instanceof ServiceError) {

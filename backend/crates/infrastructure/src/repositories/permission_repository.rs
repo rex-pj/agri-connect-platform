@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use domain::{
-    models::permission::PermissionModel,
-    repositories::permission_repository_trait::PermissionRepositoryTrait, Error,
+    models::{permission::PermissionModel, user::ActorRecord},
+    repositories::permission_repository_trait::PermissionRepositoryTrait,
+    Error,
 };
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QueryOrder, Statement,
@@ -54,6 +55,14 @@ impl From<PermissionRow> for PermissionModel {
             name: r.name,
         }
     }
+}
+
+#[derive(FromQueryResult)]
+struct ActorRow {
+    id: i32,
+    username: String,
+    role_code: String,
+    is_active: bool,
 }
 
 #[derive(FromQueryResult)]
@@ -131,5 +140,37 @@ impl PermissionRepositoryTrait for PermissionRepository {
         .map_err(|e| db_error("has_permission", e))?;
 
         Ok(row.is_some_and(|r| r.granted))
+    }
+
+    async fn find_actor(&self, user_id: i32) -> Result<Option<ActorRecord>, Error> {
+        let db = self.db.as_ref();
+        let Some(user) = ActorRow::find_by_statement(Statement::from_sql_and_values(
+            db.get_database_backend(),
+            "SELECT u.id, u.username, r.code AS role_code,
+                    (u.is_active AND u.deleted_at IS NULL) AS is_active
+             FROM users u JOIN roles r ON r.id = u.role_id
+             WHERE u.id = $1",
+            [user_id.into()],
+        ))
+        .one(db)
+        .await
+        .map_err(|e| db_error("find_actor", e))?
+        else {
+            return Ok(None);
+        };
+
+        let permissions = self
+            .list_for_user(user_id)
+            .await?
+            .into_iter()
+            .map(|p| p.code)
+            .collect();
+        Ok(Some(ActorRecord {
+            user_id: user.id,
+            username: user.username,
+            role_code: user.role_code,
+            is_active: user.is_active,
+            permissions,
+        }))
     }
 }

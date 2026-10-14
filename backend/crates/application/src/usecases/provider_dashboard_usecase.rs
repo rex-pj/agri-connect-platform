@@ -1,19 +1,16 @@
 use std::sync::Arc;
 
 use domain::{
-    models::{
-        product::{NewProduct, UpdateProduct},
-        role::UserRole,
-    },
+    models::product::{NewProduct, UpdateProduct},
     repositories::{
         business_repository_trait::BusinessRepositoryTrait,
-        permission_repository_trait::PermissionRepositoryTrait,
         product_repository_trait::ProductRepositoryTrait,
     },
     Error, ErrorCode, Result,
 };
 
 use crate::{
+    authz::Actor,
     catalogue::{
         PERM_OWN_LISTING_CREATE, PERM_OWN_LISTING_DELETE, PERM_OWN_LISTING_UPDATE,
         PERM_OWN_PROFILE_UPDATE,
@@ -29,44 +26,26 @@ use crate::{
 pub struct ProviderDashboardUseCase {
     business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
     product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
-    permission_repo: Arc<dyn PermissionRepositoryTrait + Send + Sync>,
 }
 
 impl ProviderDashboardUseCase {
     pub fn new(
         business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
         product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
-        permission_repo: Arc<dyn PermissionRepositoryTrait + Send + Sync>,
     ) -> Self {
         Self {
             business_repo,
             product_repo,
-            permission_repo,
         }
     }
 
-    async fn require_permission(
-        &self,
-        caller_role: &UserRole,
-        user_id: i32,
-        code: &str,
-    ) -> Result<()> {
-        if *caller_role == UserRole::Admin {
-            return Ok(());
-        }
-        if self.permission_repo.has_permission(user_id, code).await? {
-            Ok(())
-        } else {
-            Err(Error::new(ErrorCode::PermissionDenied).with_param("permission", code))
-        }
-    }
+    // Reading your own business needs a session but no permission: a provider
+    // whose write permissions were revoked can still see what is listed.
 
-    // ── Read (no permission required — viewing is always allowed) ─────────────
-
-    pub async fn get_profile(&self, user_id: i32) -> Result<ProviderProfileDto> {
+    pub async fn get_profile(&self, actor: &Actor) -> Result<ProviderProfileDto> {
         let profile = self
             .business_repo
-            .get_profile_by_user(user_id)
+            .get_profile_by_user(actor.user_id)
             .await?
             .ok_or_else(|| Error::new(ErrorCode::AccountNotLinkedToBusiness))?;
 
@@ -83,8 +62,8 @@ impl ProviderDashboardUseCase {
         })
     }
 
-    pub async fn list_products(&self, user_id: i32) -> Result<Vec<ProviderProductDto>> {
-        let products = self.product_repo.list_by_user(user_id).await?;
+    pub async fn list_products(&self, actor: &Actor) -> Result<Vec<ProviderProductDto>> {
+        let products = self.product_repo.list_by_user(actor.user_id).await?;
 
         Ok(products
             .into_iter()
@@ -106,12 +85,10 @@ impl ProviderDashboardUseCase {
 
     pub async fn update_profile(
         &self,
-        caller_role: &UserRole,
-        caller_id: i32,
+        actor: &Actor,
         input: UpdateProfileInput,
     ) -> Result<ProviderProfileDto> {
-        self.require_permission(caller_role, caller_id, PERM_OWN_PROFILE_UPDATE)
-            .await?;
+        actor.require(PERM_OWN_PROFILE_UPDATE)?;
 
         if input.name.trim().is_empty() {
             return Err(Error::new(ErrorCode::BusinessNameRequired));
@@ -124,7 +101,7 @@ impl ProviderDashboardUseCase {
         let updated = self
             .business_repo
             .update_profile_text(
-                input.user_id,
+                actor.user_id,
                 input.name.trim(),
                 input.phone.trim(),
                 input.description.as_deref().map(str::trim),
@@ -139,21 +116,19 @@ impl ProviderDashboardUseCase {
         if let (Some(lat), Some(lng)) = (input.lat, input.lng) {
             let wkt = format!("SRID=4326;POINT({lng} {lat})");
             self.business_repo
-                .update_location(input.user_id, &wkt)
+                .update_location(actor.user_id, &wkt)
                 .await?;
         }
 
-        self.get_profile(input.user_id).await
+        self.get_profile(actor).await
     }
 
     pub async fn create_product(
         &self,
-        caller_role: &UserRole,
-        caller_id: i32,
+        actor: &Actor,
         input: CreateProductInput,
     ) -> Result<ProviderProductDto> {
-        self.require_permission(caller_role, caller_id, PERM_OWN_LISTING_CREATE)
-            .await?;
+        actor.require(PERM_OWN_LISTING_CREATE)?;
 
         let name = input.name.trim().to_owned();
         if name.is_empty() {
@@ -171,7 +146,7 @@ impl ProviderDashboardUseCase {
 
         let business_id = self
             .business_repo
-            .get_business_id_by_user(input.user_id)
+            .get_business_id_by_user(actor.user_id)
             .await?
             .ok_or_else(|| Error::new(ErrorCode::AccountNotLinkedToBusiness))?;
 
@@ -188,7 +163,7 @@ impl ProviderDashboardUseCase {
                     .map(str::to_owned),
                 price: input.price,
                 unit: input.unit.as_deref().map(str::trim).map(str::to_owned),
-                created_by: input.user_id,
+                created_by: actor.user_id,
             })
             .await?;
 
@@ -201,12 +176,10 @@ impl ProviderDashboardUseCase {
 
     pub async fn update_product(
         &self,
-        caller_role: &UserRole,
-        caller_id: i32,
+        actor: &Actor,
         input: UpdateProductInput,
     ) -> Result<ProviderProductDto> {
-        self.require_permission(caller_role, caller_id, PERM_OWN_LISTING_UPDATE)
-            .await?;
+        actor.require(PERM_OWN_LISTING_UPDATE)?;
 
         let name = input.name.trim().to_owned();
         if name.is_empty() {
@@ -226,7 +199,7 @@ impl ProviderDashboardUseCase {
             .product_repo
             .update(UpdateProduct {
                 id: input.product_id,
-                owner_user: input.user_id,
+                owner_user: actor.user_id,
                 category_id: input.category_id,
                 name,
                 description: input
@@ -252,16 +225,13 @@ impl ProviderDashboardUseCase {
             .ok_or_else(|| Error::internal("product updated but could not be reloaded"))
     }
 
-    pub async fn delete_product(
-        &self,
-        caller_role: &UserRole,
-        caller_id: i32,
-        product_id: i32,
-    ) -> Result<()> {
-        self.require_permission(caller_role, caller_id, PERM_OWN_LISTING_DELETE)
-            .await?;
+    pub async fn delete_product(&self, actor: &Actor, product_id: i32) -> Result<()> {
+        actor.require(PERM_OWN_LISTING_DELETE)?;
 
-        let deleted = self.product_repo.soft_delete(product_id, caller_id).await?;
+        let deleted = self
+            .product_repo
+            .soft_delete(product_id, actor.user_id)
+            .await?;
 
         if !deleted {
             // Someone else's product looks the same as a missing one, so ids

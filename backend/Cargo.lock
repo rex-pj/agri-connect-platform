@@ -1262,6 +1262,7 @@ dependencies = [
  "bcrypt",
  "chrono",
  "domain",
+ "governor",
  "jsonwebtoken",
  "lettre",
  "sea-orm",

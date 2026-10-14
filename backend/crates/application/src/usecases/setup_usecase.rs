@@ -12,7 +12,11 @@ use domain::{
 };
 use tracing::{info, warn};
 
-use crate::outputs::SetupStatusDto;
+use crate::{
+    authz::Actor,
+    catalogue::{PERM_ADMIN_DASHBOARD_VIEW, PERM_SYSTEM_DEMO_MANAGE},
+    outputs::SetupStatusDto,
+};
 
 #[derive(Clone)]
 pub struct SetupUseCase {
@@ -58,7 +62,12 @@ impl SetupUseCase {
         Ok(report)
     }
 
-    pub async fn get_status(&self) -> Result<SetupStatusDto> {
+    pub async fn get_status(&self, actor: &Actor) -> Result<SetupStatusDto> {
+        actor.require(PERM_ADMIN_DASHBOARD_VIEW)?;
+        self.load_status().await
+    }
+
+    async fn load_status(&self) -> Result<SetupStatusDto> {
         let (business_count, user_count, demo_business_count) = tokio::try_join!(
             self.business_repo.count_all(),
             self.user_repo.count_all(),
@@ -74,7 +83,8 @@ impl SetupUseCase {
         })
     }
 
-    pub async fn load_demo(&self) -> Result<DemoReport> {
+    pub async fn load_demo(&self, actor: &Actor) -> Result<DemoReport> {
+        actor.require(PERM_SYSTEM_DEMO_MANAGE)?;
         if self.demo_repo.count().await? > 0 {
             return Err(Error::new(ErrorCode::DemoAlreadyLoaded));
         }
@@ -88,7 +98,8 @@ impl SetupUseCase {
         Ok(report)
     }
 
-    pub async fn remove_demo(&self) -> Result<u64> {
+    pub async fn remove_demo(&self, actor: &Actor) -> Result<u64> {
+        actor.require(PERM_SYSTEM_DEMO_MANAGE)?;
         let removed = self.demo_repo.remove().await?;
         info!(businesses = removed, "demo data removed");
         Ok(removed)

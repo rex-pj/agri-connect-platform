@@ -1,43 +1,84 @@
-use std::{net::IpAddr, sync::Arc};
+//! Request budgets per client address, attached per router area (see
+//! `app_routing`). The counting itself is behind the `RateLimiter` port.
 
+use std::sync::Arc;
+
+use application::ports::RateLimiter;
 use axum::{
     extract::Request,
+    http::Method,
     middleware::Next,
     response::{IntoResponse, Response},
-    Extension,
 };
 use domain::{Error, ErrorCode};
-use governor::{clock::DefaultClock, state::keyed::DefaultKeyedStateStore, Quota, RateLimiter};
+use infrastructure::rate_limiter::InProcessRateLimiter;
 
 use crate::{
-    constants::{AUTH_RATE_LIMIT_PER_MIN, PUBLIC_WRITE_RATE_LIMIT_PER_MIN},
+    constants::{
+        AUTH_RATE_LIMIT_PER_MIN, MEMBER_WRITE_RATE_LIMIT_PER_MIN, PUBLIC_WRITE_RATE_LIMIT_PER_MIN,
+    },
     middleware::client_ip::ClientIp,
 };
 
-pub type SharedLimiter = Arc<RateLimiter<IpAddr, DefaultKeyedStateStore<IpAddr>, DefaultClock>>;
-
-pub fn new_auth_limiter() -> SharedLimiter {
-    Arc::new(RateLimiter::keyed(Quota::per_minute(
-        AUTH_RATE_LIMIT_PER_MIN,
-    )))
+/// One budget per router area, so a burst of admin edits never eats into the
+/// login budget and vice versa.
+#[derive(Clone)]
+pub struct Limiters {
+    /// Login, registration, password reset, first-admin setup.
+    pub auth: Arc<dyn RateLimiter>,
+    /// Anonymous writes: the contact form.
+    pub public_write: Arc<dyn RateLimiter>,
+    /// Signed-in writes: admin and provider dashboard changes.
+    pub member_write: Arc<dyn RateLimiter>,
 }
 
-pub fn new_public_write_limiter() -> SharedLimiter {
-    Arc::new(RateLimiter::keyed(Quota::per_minute(
-        PUBLIC_WRITE_RATE_LIMIT_PER_MIN,
-    )))
+impl Limiters {
+    pub fn in_process() -> Self {
+        Self {
+            auth: Arc::new(InProcessRateLimiter::per_minute(AUTH_RATE_LIMIT_PER_MIN)),
+            public_write: Arc::new(InProcessRateLimiter::per_minute(
+                PUBLIC_WRITE_RATE_LIMIT_PER_MIN,
+            )),
+            member_write: Arc::new(InProcessRateLimiter::per_minute(
+                MEMBER_WRITE_RATE_LIMIT_PER_MIN,
+            )),
+        }
+    }
+
+    pub fn forget_idle(&self) {
+        self.auth.forget_idle();
+        self.public_write.forget_idle();
+        self.member_write.forget_idle();
+    }
 }
 
-/// Keys on the client address resolved by `client_ip::resolve`, so users behind
-/// the same reverse proxy do not share one bucket.
+#[derive(Clone, Copy)]
+pub enum Scope {
+    AllRequests,
+    /// Reads are free: browsing an admin list must never be throttled.
+    WritesOnly,
+}
+
+/// Keys on the client resolved by `client_ip::resolve`; without it (a router
+/// built without that layer) the request is refused rather than counted
+/// against a shared fallback key.
 pub async fn enforce(
-    Extension(ClientIp(ip)): Extension<ClientIp>,
-    Extension(limiter): Extension<SharedLimiter>,
+    limiter: Arc<dyn RateLimiter>,
+    scope: Scope,
     req: Request,
     next: Next,
 ) -> Response {
-    if limiter.check_key(&ip).is_err() {
-        return Error::new(ErrorCode::TooManyRequests).into_response();
+    let counted = match scope {
+        Scope::AllRequests => true,
+        Scope::WritesOnly => !matches!(*req.method(), Method::GET | Method::HEAD | Method::OPTIONS),
+    };
+    if counted {
+        let Some(ClientIp(ip)) = req.extensions().get::<ClientIp>().copied() else {
+            return Error::internal("rate limiter ran without client_ip::resolve").into_response();
+        };
+        if !limiter.allow(ip) {
+            return Error::new(ErrorCode::TooManyRequests).into_response();
+        }
     }
     next.run(req).await
 }

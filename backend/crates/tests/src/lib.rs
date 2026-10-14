@@ -132,3 +132,27 @@ impl TestDb {
             .unwrap();
     }
 }
+
+/// Creates the first admin on `state`'s database and returns their session
+/// actor, with exactly the permissions the catalogue grants the admin role.
+pub async fn first_admin(state: &AppState) -> application::authz::Actor {
+    let login = state
+        .usecases
+        .auth
+        .create_first_admin(
+            "quantri".into(),
+            "quantri@example.vn".into(),
+            "matkhau123".into(),
+            None,
+        )
+        .await
+        .unwrap_or_else(|e| panic!("create_first_admin: {e}"));
+    let claims = token_service().verify(&login.token).unwrap();
+    state
+        .usecases
+        .auth
+        .actor(claims.user_id)
+        .await
+        .unwrap()
+        .unwrap()
+}

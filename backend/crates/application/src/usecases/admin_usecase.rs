@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
-use tracing::warn;
-
 use domain::{
     constants::{CATEGORY_TYPES, INQUIRY_STATUSES, ROLE_PROVIDER},
+    events::{Change, DomainEvent, Entity},
     models::{
         category::{CategoryAdmin, NewCategory, UpdateCategory},
         location::Location,
@@ -12,7 +11,6 @@ use domain::{
         user::NewUser,
     },
     repositories::{
-        audit_log_repository_trait::AuditLogRepositoryTrait,
         business_repository_trait::BusinessRepositoryTrait,
         category_repository_trait::CategoryRepositoryTrait,
         inquiry_repository_trait::InquiryRepositoryTrait,
@@ -26,6 +24,13 @@ use domain::{
 };
 
 use crate::{
+    authz::Actor,
+    catalogue::{
+        PERM_CATEGORY_MANAGE, PERM_INQUIRY_MANAGE, PERM_INQUIRY_READ, PERM_LISTING_MODERATE,
+        PERM_LOCATION_MANAGE, PERM_PROVIDER_ACCOUNT_ASSIGN, PERM_PROVIDER_READ,
+        PERM_PROVIDER_VERIFY, PERM_REVIEW_MODERATE, PERM_ROLE_READ, PERM_SERVICE_MANAGE,
+        PERM_USER_READ, PERM_USER_ROLE_UPDATE, PERM_USER_STATUS_UPDATE,
+    },
     constants::ADMIN_PAGE_SIZE,
     inputs::CategoryInput,
     outputs::{
@@ -35,7 +40,7 @@ use crate::{
         RoleDto, VerifyToggleDto,
     },
     pagination::{paginate, total_pages},
-    ports::PasswordHasher,
+    ports::{EventBus, PasswordHasher},
     validation::{non_blank, validate_coordinates, validate_password, validate_username},
 };
 
@@ -52,7 +57,7 @@ pub struct AdminUseCase {
     product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
     role_repo: Arc<dyn RoleRepositoryTrait + Send + Sync>,
     service_repo: Arc<dyn ServiceRepositoryTrait + Send + Sync>,
-    audit_log_repo: Arc<dyn AuditLogRepositoryTrait + Send + Sync>,
+    events: Arc<dyn EventBus>,
     /// Password hashing injected via port — infrastructure stays out of use cases.
     password_hasher: Arc<dyn PasswordHasher>,
 }
@@ -69,7 +74,7 @@ pub struct AdminDeps {
     pub product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
     pub role_repo: Arc<dyn RoleRepositoryTrait + Send + Sync>,
     pub service_repo: Arc<dyn ServiceRepositoryTrait + Send + Sync>,
-    pub audit_log_repo: Arc<dyn AuditLogRepositoryTrait + Send + Sync>,
+    pub events: Arc<dyn EventBus>,
     pub password_hasher: Arc<dyn PasswordHasher>,
 }
 
@@ -85,35 +90,40 @@ impl AdminUseCase {
             product_repo: d.product_repo,
             role_repo: d.role_repo,
             service_repo: d.service_repo,
-            audit_log_repo: d.audit_log_repo,
+            events: d.events,
             password_hasher: d.password_hasher,
         }
     }
 
-    /// Write an audit log entry. Failures are non-fatal — logs a warning,
-    /// never rolls back the primary operation.
-    async fn audit(
+    /// Announces a change that is already stored. Subscribers (the audit log)
+    /// cannot fail it.
+    async fn publish(
         &self,
-        admin_id: i32,
-        action: &str,
-        entity_type: &str,
+        actor: &Actor,
+        entity: Entity,
         entity_id: i32,
+        change: Change,
         reason: Option<String>,
     ) {
-        if let Err(e) = self
-            .audit_log_repo
-            .log(admin_id, action, entity_type, entity_id, reason)
-            .await
-        {
-            warn!(
-                "audit log write failed (action={action}, entity={entity_type}/{entity_id}): {e:?}"
-            );
-        }
+        self.events
+            .publish(DomainEvent {
+                actor_id: actor.user_id,
+                entity,
+                entity_id,
+                change,
+                reason,
+            })
+            .await;
     }
 
     // ── Providers ─────────────────────────────────────────────────────────────
 
-    pub async fn get_provider_detail(&self, id: i32) -> Result<AdminProviderDetailDto> {
+    pub async fn get_provider_detail(
+        &self,
+        actor: &Actor,
+        id: i32,
+    ) -> Result<AdminProviderDetailDto> {
+        actor.require(PERM_PROVIDER_READ)?;
         let b = self
             .business_repo
             .find_admin_detail(id)
@@ -157,7 +167,12 @@ impl AdminUseCase {
         })
     }
 
-    pub async fn list_providers(&self, page: i64) -> Result<AdminPagedResponse<AdminProviderDto>> {
+    pub async fn list_providers(
+        &self,
+        actor: &Actor,
+        page: i64,
+    ) -> Result<AdminPagedResponse<AdminProviderDto>> {
+        actor.require(PERM_PROVIDER_READ)?;
         let (page, offset) = paginate(page, ADMIN_PAGE_SIZE);
         let total = self.business_repo.count_all().await?;
         let items = self
@@ -193,10 +208,11 @@ impl AdminUseCase {
 
     pub async fn toggle_verify(
         &self,
+        actor: &Actor,
         id: i32,
-        admin_id: i32,
         reason: Option<String>,
     ) -> Result<VerifyToggleDto> {
+        actor.require(PERM_PROVIDER_VERIFY)?;
         let result = self
             .business_repo
             .toggle_verify(id)
@@ -204,12 +220,16 @@ impl AdminUseCase {
             .ok_or_else(|| Error::new(ErrorCode::ProviderNotFound))?;
 
         let (id, name, is_verified) = result;
-        let action = if is_verified {
-            "verify_provider"
-        } else {
-            "unverify_provider"
-        };
-        self.audit(admin_id, action, "provider", id, reason).await;
+        self.publish(
+            actor,
+            Entity::Provider,
+            id,
+            Change::Visibility {
+                visible: is_verified,
+            },
+            reason,
+        )
+        .await;
         Ok(VerifyToggleDto {
             id,
             name,
@@ -219,11 +239,13 @@ impl AdminUseCase {
 
     pub async fn assign_provider_user(
         &self,
+        actor: &Actor,
         business_id: i32,
         username: String,
         email: String,
         password: String,
     ) -> Result<AssignUserDto> {
+        actor.require(PERM_PROVIDER_ACCOUNT_ASSIGN)?;
         let username = username.trim().to_lowercase();
         Validation::new()
             .rule("username", validate_username(&username))
@@ -269,7 +291,12 @@ impl AdminUseCase {
 
     // ── Users ─────────────────────────────────────────────────────────────────
 
-    pub async fn get_user_detail(&self, id: i32) -> Result<AdminUserDetailDto> {
+    pub async fn get_user_detail(&self, actor: &Actor, id: i32) -> Result<AdminUserDetailDto> {
+        actor.require(PERM_USER_READ)?;
+        self.load_user_detail(id).await
+    }
+
+    async fn load_user_detail(&self, id: i32) -> Result<AdminUserDetailDto> {
         let u = self
             .user_repo
             .find_by_id_for_admin(id)
@@ -288,7 +315,12 @@ impl AdminUseCase {
         })
     }
 
-    pub async fn list_users(&self, page: i64) -> Result<AdminPagedResponse<AdminUserDto>> {
+    pub async fn list_users(
+        &self,
+        actor: &Actor,
+        page: i64,
+    ) -> Result<AdminPagedResponse<AdminUserDto>> {
+        actor.require(PERM_USER_READ)?;
         let (page, offset) = paginate(page, ADMIN_PAGE_SIZE);
         let total = self.user_repo.count_all().await?;
         let items = self
@@ -322,9 +354,12 @@ impl AdminUseCase {
 
     pub async fn update_user_role(
         &self,
+        actor: &Actor,
         user_id: i32,
         role_code: String,
     ) -> Result<AdminUserDetailDto> {
+        actor.require(PERM_USER_ROLE_UPDATE)?;
+        refuse_self(actor, user_id)?;
         // Both checks matter: the roles table says the role is active, the enum
         // says the code knows how to authorize it. Arbitrary strings must never
         // reach the role column.
@@ -334,29 +369,48 @@ impl AdminUseCase {
         }
         let role = UserRole::from_code(code).ok_or_else(|| Error::new(ErrorCode::InvalidRole))?;
         self.user_repo.update_role(user_id, &role).await?;
-        self.get_user_detail(user_id).await
+        self.publish(
+            actor,
+            Entity::User,
+            user_id,
+            Change::RoleChanged {
+                role: code.to_owned(),
+            },
+            None,
+        )
+        .await;
+        self.load_user_detail(user_id).await
     }
 
     pub async fn toggle_user_active(
         &self,
+        actor: &Actor,
         user_id: i32,
         is_active: bool,
-        admin_id: i32,
         reason: Option<String>,
     ) -> Result<AdminUserDetailDto> {
+        actor.require(PERM_USER_STATUS_UPDATE)?;
+        refuse_self(actor, user_id)?;
         self.user_repo.toggle_active(user_id, is_active).await?;
-        let action = if is_active {
-            "activate_user"
-        } else {
-            "deactivate_user"
-        };
-        self.audit(admin_id, action, "user", user_id, reason).await;
-        self.get_user_detail(user_id).await
+        self.publish(
+            actor,
+            Entity::User,
+            user_id,
+            Change::Visibility { visible: is_active },
+            reason,
+        )
+        .await;
+        self.load_user_detail(user_id).await
     }
 
     // ── Categories ────────────────────────────────────────────────────────────
 
-    pub async fn get_category_detail(&self, id: i32) -> Result<AdminCategoryDto> {
+    pub async fn get_category_detail(&self, actor: &Actor, id: i32) -> Result<AdminCategoryDto> {
+        actor.require(PERM_CATEGORY_MANAGE)?;
+        self.load_category_detail(id).await
+    }
+
+    async fn load_category_detail(&self, id: i32) -> Result<AdminCategoryDto> {
         self.category_repo
             .find_by_id_admin(id)
             .await?
@@ -364,17 +418,19 @@ impl AdminUseCase {
             .ok_or_else(|| Error::new(ErrorCode::CategoryNotFound))
     }
 
-    pub async fn list_categories(&self) -> Result<Vec<AdminCategoryDto>> {
+    pub async fn list_categories(&self, actor: &Actor) -> Result<Vec<AdminCategoryDto>> {
+        actor.require(PERM_CATEGORY_MANAGE)?;
         let cats = self.category_repo.list_admin().await?;
         Ok(cats.into_iter().map(to_category_dto).collect())
     }
 
     pub async fn create_category(
         &self,
+        actor: &Actor,
         category_type: String,
         input: CategoryInput,
-        admin_id: i32,
     ) -> Result<AdminCategoryDto> {
+        actor.require(PERM_CATEGORY_MANAGE)?;
         let input = validate_category(input)?;
         if !CATEGORY_TYPES.contains(&category_type.as_str()) {
             return Err(Error::new(ErrorCode::InvalidCategoryType));
@@ -389,18 +445,19 @@ impl AdminUseCase {
                 color: input.color,
                 description: input.description,
                 display_order: input.display_order,
-                created_by: admin_id,
+                created_by: actor.user_id,
             })
             .await?;
-        self.get_category_detail(id).await
+        self.load_category_detail(id).await
     }
 
     pub async fn update_category(
         &self,
+        actor: &Actor,
         id: i32,
         input: CategoryInput,
-        admin_id: i32,
     ) -> Result<AdminCategoryDto> {
+        actor.require(PERM_CATEGORY_MANAGE)?;
         let input = validate_category(input)?;
         self.category_repo
             .update(
@@ -412,35 +469,43 @@ impl AdminUseCase {
                     color: input.color,
                     description: input.description,
                     display_order: input.display_order,
-                    updated_by: admin_id,
+                    updated_by: actor.user_id,
                 },
             )
             .await?;
-        self.get_category_detail(id).await
+        self.load_category_detail(id).await
     }
 
     pub async fn toggle_category_active(
         &self,
+        actor: &Actor,
         id: i32,
         is_active: bool,
-        admin_id: i32,
         reason: Option<String>,
     ) -> Result<AdminCategoryDto> {
+        actor.require(PERM_CATEGORY_MANAGE)?;
         self.category_repo
-            .toggle_active(id, is_active, admin_id)
+            .toggle_active(id, is_active, actor.user_id)
             .await?;
-        let action = if is_active {
-            "show_category"
-        } else {
-            "hide_category"
-        };
-        self.audit(admin_id, action, "category", id, reason).await;
-        self.get_category_detail(id).await
+        self.publish(
+            actor,
+            Entity::Category,
+            id,
+            Change::Visibility { visible: is_active },
+            reason,
+        )
+        .await;
+        self.load_category_detail(id).await
     }
 
     // ── Inquiries ─────────────────────────────────────────────────────────────
 
-    pub async fn list_inquiries(&self, page: i64) -> Result<AdminPagedResponse<AdminInquiryDto>> {
+    pub async fn list_inquiries(
+        &self,
+        actor: &Actor,
+        page: i64,
+    ) -> Result<AdminPagedResponse<AdminInquiryDto>> {
+        actor.require(PERM_INQUIRY_READ)?;
         let (page, offset) = paginate(page, ADMIN_PAGE_SIZE);
         let total = self.inquiry_repo.count_admin().await?;
         let items = self
@@ -473,15 +538,16 @@ impl AdminUseCase {
 
     pub async fn update_inquiry_status(
         &self,
+        actor: &Actor,
         id: i32,
         status: String,
-        admin_id: i32,
     ) -> Result<AdminInquiryDto> {
+        actor.require(PERM_INQUIRY_MANAGE)?;
         if !INQUIRY_STATUSES.contains(&status.as_str()) {
             return Err(Error::new(ErrorCode::InvalidInquiryStatus));
         }
         self.inquiry_repo
-            .update_status(id, &status, admin_id)
+            .update_status(id, &status, actor.user_id)
             .await?;
         let inquiry = self
             .inquiry_repo
@@ -504,7 +570,12 @@ impl AdminUseCase {
 
     // ── Reviews ───────────────────────────────────────────────────────────────
 
-    pub async fn list_reviews(&self, page: i64) -> Result<AdminPagedResponse<AdminReviewDto>> {
+    pub async fn list_reviews(
+        &self,
+        actor: &Actor,
+        page: i64,
+    ) -> Result<AdminPagedResponse<AdminReviewDto>> {
+        actor.require(PERM_REVIEW_MODERATE)?;
         let (page, offset) = paginate(page, ADMIN_PAGE_SIZE);
         let total = self.review_repo.count_admin().await?;
         let items = self.review_repo.list_admin(ADMIN_PAGE_SIZE, offset).await?;
@@ -534,20 +605,25 @@ impl AdminUseCase {
 
     pub async fn toggle_review_visible(
         &self,
+        actor: &Actor,
         id: i32,
         is_visible: bool,
-        admin_id: i32,
         reason: Option<String>,
     ) -> Result<AdminReviewDto> {
+        actor.require(PERM_REVIEW_MODERATE)?;
         self.review_repo
-            .toggle_visible(id, is_visible, admin_id)
+            .toggle_visible(id, is_visible, actor.user_id)
             .await?;
-        let action = if is_visible {
-            "show_review"
-        } else {
-            "hide_review"
-        };
-        self.audit(admin_id, action, "review", id, reason).await;
+        self.publish(
+            actor,
+            Entity::Review,
+            id,
+            Change::Visibility {
+                visible: is_visible,
+            },
+            reason,
+        )
+        .await;
         let review = self
             .review_repo
             .find_by_id_admin(id)
@@ -569,14 +645,20 @@ impl AdminUseCase {
 
     // ── Locations ─────────────────────────────────────────────────────────────
 
-    pub async fn list_locations_admin(&self) -> Result<Vec<AdminLocationDto>> {
+    pub async fn list_locations_admin(&self, actor: &Actor) -> Result<Vec<AdminLocationDto>> {
+        actor.require(PERM_LOCATION_MANAGE)?;
         self.location_repo
             .list_all()
             .await
             .map(|locs| locs.into_iter().map(to_location_dto).collect())
     }
 
-    pub async fn get_location_admin(&self, id: i32) -> Result<AdminLocationDto> {
+    pub async fn get_location_admin(&self, actor: &Actor, id: i32) -> Result<AdminLocationDto> {
+        actor.require(PERM_LOCATION_MANAGE)?;
+        self.load_location_admin(id).await
+    }
+
+    async fn load_location_admin(&self, id: i32) -> Result<AdminLocationDto> {
         self.location_repo
             .find_by_id(id)
             .await?
@@ -586,11 +668,13 @@ impl AdminUseCase {
 
     pub async fn create_location(
         &self,
+        actor: &Actor,
         label: String,
         lat: f64,
         lng: f64,
         display_order: i32,
     ) -> Result<AdminLocationDto> {
+        actor.require(PERM_LOCATION_MANAGE)?;
         let label = label.trim().to_string();
         if label.is_empty() {
             return Err(Error::new(ErrorCode::LabelRequired));
@@ -600,17 +684,19 @@ impl AdminUseCase {
             .location_repo
             .create(label, lat, lng, display_order)
             .await?;
-        self.get_location_admin(id).await
+        self.load_location_admin(id).await
     }
 
     pub async fn update_location(
         &self,
+        actor: &Actor,
         id: i32,
         label: String,
         lat: f64,
         lng: f64,
         display_order: i32,
     ) -> Result<AdminLocationDto> {
+        actor.require(PERM_LOCATION_MANAGE)?;
         let label = label.trim().to_string();
         if label.is_empty() {
             return Err(Error::new(ErrorCode::LabelRequired));
@@ -619,44 +705,51 @@ impl AdminUseCase {
         self.location_repo
             .update(id, label, lat, lng, display_order)
             .await?;
-        self.get_location_admin(id).await
+        self.load_location_admin(id).await
     }
 
     pub async fn toggle_location_active(
         &self,
+        actor: &Actor,
         id: i32,
         is_active: bool,
-        admin_id: i32,
         reason: Option<String>,
     ) -> Result<AdminLocationDto> {
+        actor.require(PERM_LOCATION_MANAGE)?;
         self.location_repo.toggle_active(id, is_active).await?;
-        let action = if is_active {
-            "show_location"
-        } else {
-            "hide_location"
-        };
-        self.audit(admin_id, action, "location", id, reason).await;
-        self.get_location_admin(id).await
+        self.publish(
+            actor,
+            Entity::Location,
+            id,
+            Change::Visibility { visible: is_active },
+            reason,
+        )
+        .await;
+        self.load_location_admin(id).await
     }
 
     pub async fn delete_location(
         &self,
+        actor: &Actor,
         id: i32,
-        admin_id: i32,
         reason: Option<String>,
     ) -> Result<()> {
-        self.audit(admin_id, "delete_location", "location", id, reason)
+        actor.require(PERM_LOCATION_MANAGE)?;
+        self.location_repo.delete(id).await?;
+        self.publish(actor, Entity::Location, id, Change::Deleted, reason)
             .await;
-        self.location_repo.delete(id).await
+        Ok(())
     }
 
     // ── Admin Products ────────────────────────────────────────────────────────
 
     pub async fn list_products_admin(
         &self,
+        actor: &Actor,
         page: i64,
         provider_id: Option<i32>,
     ) -> Result<AdminPagedResponse<AdminProductDto>> {
+        actor.require(PERM_LISTING_MODERATE)?;
         let (page, offset) = paginate(page, ADMIN_PAGE_SIZE);
         let total = self.product_repo.count_admin(provider_id).await?;
         let items = self
@@ -688,7 +781,12 @@ impl AdminUseCase {
         })
     }
 
-    pub async fn get_product_admin(&self, id: i32) -> Result<AdminProductDto> {
+    pub async fn get_product_admin(&self, actor: &Actor, id: i32) -> Result<AdminProductDto> {
+        actor.require(PERM_LISTING_MODERATE)?;
+        self.load_product_admin(id).await
+    }
+
+    async fn load_product_admin(&self, id: i32) -> Result<AdminProductDto> {
         let p = self
             .product_repo
             .find_by_id_admin(id)
@@ -712,35 +810,39 @@ impl AdminUseCase {
 
     pub async fn toggle_product_active(
         &self,
+        actor: &Actor,
         id: i32,
         is_active: bool,
-        admin_id: i32,
         reason: Option<String>,
     ) -> Result<AdminProductDto> {
+        actor.require(PERM_LISTING_MODERATE)?;
         let updated = self.product_repo.admin_toggle_active(id, is_active).await?;
         if !updated {
             return Err(Error::new(ErrorCode::ProductNotFound));
         }
-        let action = if is_active {
-            "show_product"
-        } else {
-            "hide_product"
-        };
-        self.audit(admin_id, action, "product", id, reason).await;
-        self.get_product_admin(id).await
+        self.publish(
+            actor,
+            Entity::Product,
+            id,
+            Change::Visibility { visible: is_active },
+            reason,
+        )
+        .await;
+        self.load_product_admin(id).await
     }
 
     pub async fn delete_product_admin(
         &self,
+        actor: &Actor,
         id: i32,
-        admin_id: i32,
         reason: Option<String>,
     ) -> Result<()> {
+        actor.require(PERM_LISTING_MODERATE)?;
         let deleted = self.product_repo.admin_delete(id).await?;
         if !deleted {
             return Err(Error::new(ErrorCode::ProductNotFound));
         }
-        self.audit(admin_id, "delete_product", "product", id, reason)
+        self.publish(actor, Entity::Product, id, Change::Deleted, reason)
             .await;
         Ok(())
     }
@@ -749,9 +851,11 @@ impl AdminUseCase {
 
     pub async fn list_services_admin(
         &self,
+        actor: &Actor,
         page: i64,
         provider_id: Option<i32>,
     ) -> Result<AdminPagedResponse<AdminServiceDto>> {
+        actor.require(PERM_SERVICE_MANAGE)?;
         let (page, offset) = paginate(page, ADMIN_PAGE_SIZE);
         let total = self.service_repo.count_admin(provider_id).await?;
         let items = self
@@ -767,7 +871,12 @@ impl AdminUseCase {
         })
     }
 
-    pub async fn get_service_admin(&self, id: i32) -> Result<AdminServiceDto> {
+    pub async fn get_service_admin(&self, actor: &Actor, id: i32) -> Result<AdminServiceDto> {
+        actor.require(PERM_SERVICE_MANAGE)?;
+        self.load_service_admin(id).await
+    }
+
+    async fn load_service_admin(&self, id: i32) -> Result<AdminServiceDto> {
         self.service_repo
             .find_by_id_admin(id)
             .await?
@@ -777,13 +886,14 @@ impl AdminUseCase {
 
     pub async fn create_service_admin(
         &self,
+        actor: &Actor,
         business_id: i32,
         category_id: i32,
         name: String,
         description: Option<String>,
         price_note: Option<String>,
-        admin_user_id: i32,
     ) -> Result<AdminServiceDto> {
+        actor.require(PERM_SERVICE_MANAGE)?;
         let name = name.trim().to_string();
         if name.is_empty() {
             return Err(Error::new(ErrorCode::NameRequired));
@@ -810,21 +920,22 @@ impl AdminUseCase {
                 name,
                 description,
                 price_note,
-                created_by: admin_user_id,
+                created_by: actor.user_id,
             })
             .await?;
-        self.get_service_admin(id).await
+        self.load_service_admin(id).await
     }
 
     pub async fn update_service_admin(
         &self,
+        actor: &Actor,
         id: i32,
         category_id: i32,
         name: String,
         description: Option<String>,
         price_note: Option<String>,
-        admin_user_id: i32,
     ) -> Result<AdminServiceDto> {
+        actor.require(PERM_SERVICE_MANAGE)?;
         let name = name.trim().to_string();
         if name.is_empty() {
             return Err(Error::new(ErrorCode::NameRequired));
@@ -844,60 +955,66 @@ impl AdminUseCase {
                 name,
                 description,
                 price_note,
-                updated_by: admin_user_id,
+                updated_by: actor.user_id,
             })
             .await?;
         if !updated {
             return Err(Error::new(ErrorCode::ServiceNotFound));
         }
-        self.get_service_admin(id).await
+        self.load_service_admin(id).await
     }
 
     pub async fn toggle_service_active(
         &self,
+        actor: &Actor,
         id: i32,
         is_active: bool,
-        admin_id: i32,
         reason: Option<String>,
     ) -> Result<AdminServiceDto> {
+        actor.require(PERM_SERVICE_MANAGE)?;
         let updated = self.service_repo.toggle_active(id, is_active).await?;
         if !updated {
             return Err(Error::new(ErrorCode::ServiceNotFound));
         }
-        let action = if is_active {
-            "show_service"
-        } else {
-            "hide_service"
-        };
-        self.audit(admin_id, action, "service", id, reason).await;
-        self.get_service_admin(id).await
+        self.publish(
+            actor,
+            Entity::Service,
+            id,
+            Change::Visibility { visible: is_active },
+            reason,
+        )
+        .await;
+        self.load_service_admin(id).await
     }
 
     pub async fn delete_service_admin(
         &self,
+        actor: &Actor,
         id: i32,
-        admin_id: i32,
         reason: Option<String>,
     ) -> Result<()> {
+        actor.require(PERM_SERVICE_MANAGE)?;
         let deleted = self.service_repo.delete(id).await?;
         if !deleted {
             return Err(Error::new(ErrorCode::ServiceNotFound));
         }
-        self.audit(admin_id, "delete_service", "service", id, reason)
+        self.publish(actor, Entity::Service, id, Change::Deleted, reason)
             .await;
         Ok(())
     }
 
     // ── Roles (read-only) ─────────────────────────────────────────────────────
 
-    pub async fn list_roles(&self) -> Result<Vec<RoleDto>> {
+    pub async fn list_roles(&self, actor: &Actor) -> Result<Vec<RoleDto>> {
+        actor.require(PERM_ROLE_READ)?;
         self.role_repo
             .list()
             .await
             .map(|roles| roles.into_iter().map(to_role_dto).collect())
     }
 
-    pub async fn get_role_by_id(&self, id: i32) -> Result<RoleDto> {
+    pub async fn get_role_by_id(&self, actor: &Actor, id: i32) -> Result<RoleDto> {
+        actor.require(PERM_ROLE_READ)?;
         self.role_repo
             .find_by_id(id)
             .await?
@@ -979,4 +1096,13 @@ fn validate_category(input: CategoryInput) -> Result<CategoryInput> {
         description: non_blank(input.description),
         display_order: input.display_order,
     })
+}
+
+/// An admin who demotes or deactivates themselves can lock the last admin out
+/// of the panel, with nobody left to undo it.
+fn refuse_self(actor: &Actor, target_user_id: i32) -> Result<()> {
+    if actor.user_id == target_user_id {
+        return Err(Error::new(ErrorCode::CannotChangeOwnAccount));
+    }
+    Ok(())
 }

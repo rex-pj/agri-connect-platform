@@ -8,7 +8,11 @@ use domain::{
     Error, ErrorCode, Result,
 };
 
-use crate::outputs::{PermissionDto, UserPermissionsDto};
+use crate::{
+    authz::Actor,
+    catalogue::{PERM_ROLE_READ, PERM_USER_READ},
+    outputs::{PermissionDto, UserPermissionsDto},
+};
 
 /// Read-only views of the permission model. Grants belong to roles; editing
 /// them arrives with the role permission grid.
@@ -29,13 +33,15 @@ impl PermissionUseCase {
         }
     }
 
-    pub async fn list_all(&self) -> Result<Vec<PermissionDto>> {
+    pub async fn list_all(&self, actor: &Actor) -> Result<Vec<PermissionDto>> {
+        actor.require(PERM_ROLE_READ)?;
         let perms = self.permission_repo.list_all().await?;
         Ok(perms.into_iter().map(PermissionDto::from_model).collect())
     }
 
     /// The user's effective permissions, i.e. those of their role.
-    pub async fn list_by_user(&self, user_id: i32) -> Result<UserPermissionsDto> {
+    pub async fn list_by_user(&self, actor: &Actor, user_id: i32) -> Result<UserPermissionsDto> {
+        actor.require(PERM_USER_READ)?;
         if self
             .user_repo
             .find_by_id_for_admin(user_id)

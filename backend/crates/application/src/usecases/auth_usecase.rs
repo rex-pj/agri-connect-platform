@@ -9,6 +9,7 @@ use domain::{
     },
     repositories::{
         business_repository_trait::BusinessRepositoryTrait,
+        permission_repository_trait::PermissionRepositoryTrait,
         user_repository_trait::UserRepositoryTrait,
     },
     Error, ErrorCode, Result, Validation,
@@ -16,6 +17,7 @@ use domain::{
 use rand::{rngs::OsRng, Rng};
 
 use crate::{
+    authz::Actor,
     constants::{LOGIN_FAIL_MAX_ATTEMPTS, LOGIN_LOCK_MINUTES, PASSWORD_RESET_EXPIRY_HOURS},
     outputs::{LoginResponse, MeResponse},
     ports::{EmailService, PasswordHasher, TokenService},
@@ -26,6 +28,7 @@ use crate::{
 pub struct AuthUseCase {
     user_repo: Arc<dyn UserRepositoryTrait + Send + Sync>,
     business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
+    permission_repo: Arc<dyn PermissionRepositoryTrait + Send + Sync>,
     email: Arc<dyn EmailService>,
     password_hasher: Arc<dyn PasswordHasher>,
     token_svc: Arc<dyn TokenService>,
@@ -35,6 +38,7 @@ impl AuthUseCase {
     pub fn new(
         user_repo: Arc<dyn UserRepositoryTrait + Send + Sync>,
         business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
+        permission_repo: Arc<dyn PermissionRepositoryTrait + Send + Sync>,
         email: Arc<dyn EmailService>,
         password_hasher: Arc<dyn PasswordHasher>,
         token_svc: Arc<dyn TokenService>,
@@ -42,6 +46,7 @@ impl AuthUseCase {
         Self {
             user_repo,
             business_repo,
+            permission_repo,
             email,
             password_hasher,
             token_svc,
@@ -49,6 +54,16 @@ impl AuthUseCase {
     }
 
     // ── Login ─────────────────────────────────────────────────────────────────
+
+    /// The `Actor` behind a verified session token: `None` when the account no
+    /// longer exists or was deactivated after the token was issued.
+    pub async fn actor(&self, user_id: i32) -> Result<Option<Actor>> {
+        Ok(self
+            .permission_repo
+            .find_actor(user_id)
+            .await?
+            .and_then(Actor::from_record))
+    }
 
     pub async fn login(&self, username: String, password: String) -> Result<LoginResponse> {
         let username = username.trim().to_lowercase();

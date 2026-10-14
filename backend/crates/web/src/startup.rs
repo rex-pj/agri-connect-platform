@@ -5,7 +5,8 @@ use std::{net::SocketAddr, sync::Arc};
 
 use application::{
     catalogue::CATALOGUE,
-    ports::{EmailService, PasswordHasher, TokenService},
+    events::{AuditLogSubscriber, InProcessEventBus},
+    ports::{EmailService, EventBus, PasswordHasher, TokenService},
     usecases::{
         admin_usecase::{AdminDeps, AdminUseCase},
         auth_usecase::AuthUseCase,
@@ -39,9 +40,10 @@ use tracing::{info, warn};
 
 use crate::{
     app_state::{AppState, UseCases},
-    constants::{DB_MAX_CONNECTIONS, DEFAULT_BIND_ADDR},
+    constants::{DB_MAX_CONNECTIONS, DEFAULT_APP_URL, DEFAULT_BIND_ADDR},
     legacy::LegacyProxy,
     locale::Locale,
+    middleware::{origin::origin_of, rate_limit::Limiters},
     routings::app_routing::{AppRouting, RouterConfig},
     views::{SiteConfig, Views},
 };
@@ -114,12 +116,18 @@ fn init_tracing() -> Result<(), StartupError> {
     Ok(())
 }
 
-fn email_service() -> Result<Arc<dyn EmailService>, StartupError> {
-    let app_url = optional_env("APP_URL").unwrap_or_else(|| {
-        warn!("APP_URL not set; password-reset links will point at http://localhost:5173");
-        "http://localhost:5173".to_owned()
-    });
+/// The public origin. Reset links point at it and it is the origin our own forms
+/// post from, so it must be what the browser shows in the address bar.
+fn app_url() -> String {
+    optional_env("APP_URL").unwrap_or_else(|| {
+        warn!(
+            "APP_URL not set; assuming http://localhost:3000 for reset links and the Origin check"
+        );
+        DEFAULT_APP_URL.to_owned()
+    })
+}
 
+fn email_service(app_url: String) -> Result<Arc<dyn EmailService>, StartupError> {
     let Some(host) = optional_env("SMTP_HOST") else {
         warn!("SMTP_HOST not set; password-reset emails will be written to the log, not sent");
         return Ok(Arc::new(LogEmailService::new(app_url)));
@@ -159,12 +167,16 @@ fn email_service() -> Result<Arc<dyn EmailService>, StartupError> {
 /// `CORS_ORIGINS` (comma-separated) and `HTTPS_ENABLED`. A malformed origin
 /// fails startup: silently dropping it would block that site's browsers with
 /// no hint why.
-fn router_config() -> Result<RouterConfig, StartupError> {
-    let cors_origins = optional_env("CORS_ORIGINS")
+fn router_config(app_url: &str, limiters: Limiters) -> Result<RouterConfig, StartupError> {
+    let cors_list: Vec<String> = optional_env("CORS_ORIGINS")
         .unwrap_or_default()
         .split(',')
         .map(str::trim)
         .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+        .collect();
+    let cors_origins = cors_list
+        .iter()
         .map(|s| {
             s.parse().map_err(|_| StartupError::InvalidEnv {
                 name: "CORS_ORIGINS",
@@ -196,6 +208,15 @@ fn router_config() -> Result<RouterConfig, StartupError> {
         }
     };
 
+    let mut allowed_origins = Vec::new();
+    for url in std::iter::once(app_url).chain(cors_list.iter().map(String::as_str)) {
+        let origin = origin_of(url).ok_or_else(|| StartupError::InvalidEnv {
+            name: "APP_URL/CORS_ORIGINS",
+            reason: format!("{url:?} is not scheme://host[:port]"),
+        })?;
+        allowed_origins.push(origin);
+    }
+
     let trusted_proxy_hops = match optional_env("TRUSTED_PROXY_HOPS") {
         None => 0,
         Some(v) => v
@@ -211,6 +232,8 @@ fn router_config() -> Result<RouterConfig, StartupError> {
         https,
         legacy,
         trusted_proxy_hops,
+        allowed_origins,
+        limiters,
     })
 }
 
@@ -277,6 +300,11 @@ pub fn build_state(
     let health_repo = Arc::new(HealthRepository::new(Arc::clone(&db)));
 
     let password_hasher: Arc<dyn PasswordHasher> = Arc::new(BcryptPasswordHasher);
+    // Subscribers run in this order for every event; the audit log is the
+    // only one today. Notifications and webhooks would be added here.
+    let events: Arc<dyn EventBus> = Arc::new(InProcessEventBus::new(vec![Arc::new(
+        AuditLogSubscriber::new(audit_log_repo),
+    )]));
 
     let usecases = UseCases {
         explore: ExploreUseCase::new(
@@ -298,12 +326,13 @@ pub fn build_state(
             product_repo: product_repo.clone(),
             role_repo,
             service_repo,
-            audit_log_repo,
+            events,
             password_hasher: password_hasher.clone(),
         }),
         auth: AuthUseCase::new(
             user_repo.clone(),
             business_repo.clone(),
+            permission_repo.clone(),
             email,
             password_hasher,
             token_service.clone(),
@@ -312,7 +341,6 @@ pub fn build_state(
         provider_dashboard: ProviderDashboardUseCase::new(
             business_repo.clone(),
             product_repo.clone(),
-            permission_repo,
         ),
         setup: SetupUseCase::new(
             catalogue_repo,
@@ -387,13 +415,30 @@ pub async fn start() -> Result<(), StartupError> {
 
     let token_service: Arc<dyn TokenService> =
         Arc::new(JwtTokenService::new(&required_env("JWT_SECRET")?)?);
-    let state = build_state(dbs, token_service, email_service()?, site_config())?;
+    let app_url = app_url();
+    let state = build_state(
+        dbs,
+        token_service,
+        email_service(app_url.clone())?,
+        site_config(),
+    )?;
 
     // Roles and permissions must exist before the first request, or the first
     // registration fails on a missing role.
     state.usecases.setup.seed_catalogue(&CATALOGUE).await?;
 
-    let router = AppRouting::build(state, router_config()?);
+    let limiters = Limiters::in_process();
+    let pruned = limiters.clone();
+    tokio::spawn(async move {
+        // Bounded memory: one entry per client seen in the last few minutes.
+        let mut tick = tokio::time::interval(std::time::Duration::from_secs(300));
+        loop {
+            tick.tick().await;
+            pruned.forget_idle();
+        }
+    });
+
+    let router = AppRouting::build(state, router_config(&app_url, limiters)?);
     let addr = optional_env("BIND_ADDR").unwrap_or_else(|| DEFAULT_BIND_ADDR.to_owned());
     let listener = tokio::net::TcpListener::bind(&addr)
         .await

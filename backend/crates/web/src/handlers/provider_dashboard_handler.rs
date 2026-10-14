@@ -1,3 +1,4 @@
+use application::authz::require_actor;
 use application::inputs::{CreateProductInput, UpdateProductInput, UpdateProfileInput};
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use domain::Error;
@@ -5,7 +6,7 @@ use domain::Error;
 use crate::{
     app_state::AppState,
     extract::{ApiJson, ApiPath},
-    middleware::auth::RequireProviderOrAdmin,
+    middleware::auth::MaybeActor,
     requests::{CreateProductRequest, UpdateProductRequest, UpdateProfileRequest},
 };
 
@@ -14,13 +15,14 @@ pub struct ProviderDashboardHandler;
 impl ProviderDashboardHandler {
     /// GET /api/provider/profile
     pub async fn get_profile(
-        RequireProviderOrAdmin(caller): RequireProviderOrAdmin,
+        MaybeActor(actor): MaybeActor,
         State(state): State<AppState>,
     ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
         let result = state
             .usecases
             .provider_dashboard
-            .get_profile(caller.id)
+            .get_profile(&actor)
             .await?;
 
         Ok(Json(result))
@@ -28,18 +30,17 @@ impl ProviderDashboardHandler {
 
     /// PUT /api/provider/profile
     pub async fn update_profile(
-        RequireProviderOrAdmin(caller): RequireProviderOrAdmin,
+        MaybeActor(actor): MaybeActor,
         State(state): State<AppState>,
         ApiJson(req): ApiJson<UpdateProfileRequest>,
     ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
         let result = state
             .usecases
             .provider_dashboard
             .update_profile(
-                &caller.role,
-                caller.id,
+                &actor,
                 UpdateProfileInput {
-                    user_id: caller.id,
                     name: req.name,
                     phone: req.phone,
                     description: req.description,
@@ -55,13 +56,14 @@ impl ProviderDashboardHandler {
 
     /// GET /api/provider/products
     pub async fn list_products(
-        RequireProviderOrAdmin(caller): RequireProviderOrAdmin,
+        MaybeActor(actor): MaybeActor,
         State(state): State<AppState>,
     ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
         let result = state
             .usecases
             .provider_dashboard
-            .list_products(caller.id)
+            .list_products(&actor)
             .await?;
 
         Ok(Json(result))
@@ -69,18 +71,17 @@ impl ProviderDashboardHandler {
 
     /// POST /api/provider/products
     pub async fn create_product(
-        RequireProviderOrAdmin(caller): RequireProviderOrAdmin,
+        MaybeActor(actor): MaybeActor,
         State(state): State<AppState>,
         ApiJson(req): ApiJson<CreateProductRequest>,
     ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
         let result = state
             .usecases
             .provider_dashboard
             .create_product(
-                &caller.role,
-                caller.id,
+                &actor,
                 CreateProductInput {
-                    user_id: caller.id,
                     category_id: req.category_id,
                     name: req.name,
                     description: req.description,
@@ -95,20 +96,19 @@ impl ProviderDashboardHandler {
 
     /// PUT /api/provider/products/{id}
     pub async fn update_product(
-        RequireProviderOrAdmin(caller): RequireProviderOrAdmin,
+        MaybeActor(actor): MaybeActor,
         State(state): State<AppState>,
         ApiPath(id): ApiPath<i32>,
         ApiJson(req): ApiJson<UpdateProductRequest>,
     ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
         let result = state
             .usecases
             .provider_dashboard
             .update_product(
-                &caller.role,
-                caller.id,
+                &actor,
                 UpdateProductInput {
                     product_id: id,
-                    user_id: caller.id,
                     category_id: req.category_id,
                     name: req.name,
                     description: req.description,
@@ -123,14 +123,15 @@ impl ProviderDashboardHandler {
 
     /// DELETE /api/provider/products/{id}
     pub async fn delete_product(
-        RequireProviderOrAdmin(caller): RequireProviderOrAdmin,
+        MaybeActor(actor): MaybeActor,
         State(state): State<AppState>,
         ApiPath(id): ApiPath<i32>,
     ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
         state
             .usecases
             .provider_dashboard
-            .delete_product(&caller.role, caller.id, id)
+            .delete_product(&actor, id)
             .await?;
 
         Ok(StatusCode::NO_CONTENT)

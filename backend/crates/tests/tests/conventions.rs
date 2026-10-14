@@ -304,3 +304,52 @@ fn only_views_rs_talks_to_tera() {
         "render through views::render_page so every page gets the shared context and headers",
     );
 }
+
+// ── Authorization ────────────────────────────────────────────────────────────
+
+#[test]
+fn access_is_never_decided_by_comparing_roles() {
+    // Roles only pick default grants; a check like `role == Admin` would let a
+    // revoked permission keep working.
+    assert_absent(
+        &["application", "web"],
+        &[
+            "== UserRole::",
+            "!= UserRole::",
+            "matches!(user.role",
+            "role_code == \"admin\"",
+            "RequireAdmin",
+            "RequireProviderOrAdmin",
+        ],
+        &[],
+        "decide access with actor.require(PERM_...) inside the use case",
+    );
+}
+
+#[test]
+fn every_use_case_taking_an_actor_checks_a_permission_first() {
+    // Reading your own data needs a session but no permission key.
+    const SESSION_ONLY: &[&str] = &["get_profile", "list_products"];
+    let sig = regex::Regex::new(r"pub async fn (\w+)\(\s*&self,\s*actor: &Actor").unwrap();
+    let mut missing = Vec::new();
+    for (file, src) in sources("application") {
+        if !file.contains("/usecases/") {
+            continue;
+        }
+        for m in sig.captures_iter(&src) {
+            let name = m.get(1).unwrap().as_str();
+            let after = &src[m.get(0).unwrap().end()..];
+            // The body starts at the first `{` after the (possibly wrapped) signature.
+            let body = after.split_once('{').map(|(_, b)| b).unwrap_or_default();
+            let body_start: String = body.lines().take(3).collect::<Vec<_>>().join("\n");
+            if !body_start.contains("actor.require(") && !SESSION_ONLY.contains(&name) {
+                missing.push(format!("{file}: {name}"));
+            }
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "use cases that take an Actor but never require a permission:\n{}",
+        missing.join("\n")
+    );
+}

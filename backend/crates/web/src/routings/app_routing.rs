@@ -1,9 +1,12 @@
+use std::sync::Arc;
+
+use application::ports::RateLimiter;
 use axum::{
     http::{header, HeaderValue},
     middleware,
     response::IntoResponse,
     routing::{delete, get, patch, post, put},
-    Extension, Router,
+    Router,
 };
 use domain::{Error, ErrorCode};
 use tower_http::{
@@ -23,12 +26,15 @@ use crate::{
         role_handler::RoleHandler, setup_handler::SetupHandler, stats_handler::StatsHandler,
     },
     legacy::{is_rust_only, LegacyProxy},
-    middleware::{client_ip, rate_limit},
+    middleware::{
+        client_ip, origin,
+        rate_limit::{self, Limiters, Scope},
+    },
     views,
 };
 
 /// Settings read from the environment by `startup.rs`.
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct RouterConfig {
     /// Browser origins allowed to call the API cross-origin. Empty blocks all.
     pub cors_origins: Vec<HeaderValue>,
@@ -41,6 +47,23 @@ pub struct RouterConfig {
     /// 0: use the TCP peer. Too low behind Caddy: every user shares one rate
     /// limit. Too high: clients can forge their address.
     pub trusted_proxy_hops: usize,
+    /// Origins whose non-GET requests are accepted (APP_URL + CORS_ORIGINS).
+    /// Missing ours: every form on the site is refused as cross-site.
+    pub allowed_origins: Vec<String>,
+    pub limiters: Limiters,
+}
+
+impl Default for RouterConfig {
+    fn default() -> Self {
+        Self {
+            cors_origins: Vec::new(),
+            https: false,
+            legacy: None,
+            trusted_proxy_hops: 0,
+            allowed_origins: Vec::new(),
+            limiters: Limiters::in_process(),
+        }
+    }
 }
 
 pub struct AppRouting;
@@ -50,9 +73,12 @@ impl AppRouting {
         let error_renderer = middleware::from_fn_with_state(state.clone(), render_errors);
         let legacy = config.legacy.clone();
         let hops = config.trusted_proxy_hops;
-        // ── Rate limiters (per-IP, in-memory) ────────────────────────────────
-        let auth_limiter = rate_limit::new_auth_limiter();
-        let public_write_limiter = rate_limit::new_public_write_limiter();
+        // Rate limits: one budget per router area, keyed on the client address.
+        let limiter = |l: &Arc<dyn RateLimiter>, scope: Scope| {
+            let l = l.clone();
+            middleware::from_fn(move |req, next| rate_limit::enforce(l.clone(), scope, req, next))
+        };
+        let allowed_origins = Arc::new(config.allowed_origins.clone());
 
         let cors = if config.cors_origins.is_empty() {
             // No origins configured — block all cross-origin requests.
@@ -113,8 +139,7 @@ impl AppRouting {
                 "/api/explore/contact",
                 post(ExploreHandler::contact_request),
             )
-            .layer(middleware::from_fn(rate_limit::enforce))
-            .layer(Extension(public_write_limiter));
+            .layer(limiter(&config.limiters.public_write, Scope::AllRequests));
 
         // ── AUTH routes (no token required, rate-limited) ────────────────────
         let auth_routes = Router::new()
@@ -132,8 +157,7 @@ impl AppRouting {
             )
             // /setup replaces the old /initialize verb
             .route("/api/admin/setup", post(AuthHandler::create_first_admin))
-            .layer(middleware::from_fn(rate_limit::enforce))
-            .layer(Extension(auth_limiter));
+            .layer(limiter(&config.limiters.auth, Scope::AllRequests));
 
         // ── USER routes (authenticated, no rate limit) ───────────────────────
         let user_routes = Router::new()
@@ -287,9 +311,9 @@ impl AppRouting {
             .merge(public_routes)
             .merge(contact_routes)
             .merge(auth_routes)
-            .merge(user_routes)
-            .merge(admin_routes)
-            .merge(provider_routes)
+            .merge(user_routes.layer(limiter(&config.limiters.member_write, Scope::WritesOnly)))
+            .merge(admin_routes.layer(limiter(&config.limiters.member_write, Scope::WritesOnly)))
+            .merge(provider_routes.layer(limiter(&config.limiters.member_write, Scope::WritesOnly)))
             .route("/static/{*path}", get(views::static_file))
             .fallback(move |req: axum::extract::Request| fallback(legacy.clone(), req))
             .layer(cors)
@@ -326,6 +350,10 @@ impl AppRouting {
             // Errors from every layer above (rate limiter, extractors, fallback)
             // get a rendered body; it sits inside the request span so its log
             // lines carry the request id.
+            // Inside the renderer so a refused cross-site request gets a coded body.
+            .layer(middleware::from_fn(move |req, next| {
+                origin::enforce(allowed_origins.clone(), req, next)
+            }))
             .layer(error_renderer)
             .layer(
                 TraceLayer::new_for_http()

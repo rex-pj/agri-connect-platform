@@ -802,3 +802,22 @@ Deviations from §5/§8:
 Not verified here: no Docker on this machine, so the image builds, the compose stack and both workflows run for the first time on GitHub. Everything else ran locally: 88 Rust tests, svelte-check, npm build, shellcheck, YAML parsing, and the restore rehearsal.
 
 Still needed from you before the first deploy: the domain, the GCP project, and the one-time setup in `deploy/README.md` (steps 1–8).
+
+### S2 — sessions, permission checks, CSRF, events (same branch)
+
+Done:
+- **Sessions:** `MaybeActor` reads the session from `Authorization: Bearer` or the `auth_token` cookie. The cookie is the one SvelteKit sets, so Rust pages and islands share the login. Middleware never decides access.
+- **Fresh permissions:** they are loaded from the database on every request (read pool). A revoked permission, or a deactivated account, takes effect on the very next request rather than when the token expires.
+- **Permission checks:** every state-changing use case and every admin read starts with `actor.require(PERM_…)?`. `RequireAdmin` / `RequireProviderOrAdmin` and the admin role bypass are gone. Convention tests reject role comparisons and fail when a use case taking an `Actor` checks nothing.
+- **Self-protection:** an admin cannot change their own role or deactivate themselves (`cannot_change_own_account`).
+- **CSRF:** non-GET requests with a foreign `Origin` are refused (`cross_origin_request`); allowed origins are `APP_URL` plus `CORS_ORIGINS`; a request without `Origin` passes. `APP_URL` now defaults to `http://localhost:3000`, the Rust front door.
+- **Rate limits:** a `RateLimiter` port with an in-process adapter. Three budgets: auth 10/min, public writes 30/min, signed-in writes 120/min (writes only). Idle entries are pruned every 5 minutes.
+- **Events:** domain events go through an in-process bus; the audit log is a subscriber, and action names match the old history. Role changes are audited now; they were not before.
+- **Verified end to end:**
+  - Through SvelteKit: login form → cookie → admin dashboard.
+  - The API on the cookie alone.
+  - A cross-site form POST refused with 403.
+
+Moved to S12 (the Rust login page), because nothing issues cookies from Rust before then:
+- refresh tokens (table, rotation, reuse detection);
+- the `SameSite=Lax` cookie and its test.

@@ -10,4 +10,5 @@ pub mod demo_data_repository;
 pub mod email_service;
 pub mod entities;
 pub mod jwt_token_service;
+pub mod rate_limiter;
 pub mod repositories;

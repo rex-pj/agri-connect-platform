@@ -171,14 +171,14 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 | PATCH  | `/api/auth/password-resets/{token}` | Consume reset token, set new password              |
 | POST   | `/api/admin/setup`                  | Create first admin account (rate-limited, one-time) |
 
-### User (RequireAuth)
+### User (session required)
 
 | Method | Path                     | Description          |
 | ------ | ------------------------ | -------------------- |
 | GET    | `/api/users/me`          | Current user profile |
 | PATCH  | `/api/users/me/password` | Change password      |
 
-### Admin (RequireAdmin)
+### Admin (each route checks its own permission key, e.g. `user.read`, `provider.verify`)
 
 | Method | Path                                       | Description                       |
 | ------ | ------------------------------------------ | --------------------------------- |
@@ -221,7 +221,7 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 | PATCH  | `/api/admin/services/{id}/active`          | Toggle service active state       |
 | DELETE | `/api/admin/services/{id}`                 | Delete service                    |
 
-### Provider Dashboard (RequireProvider)
+### Provider Dashboard (`own.*` permissions; reads need only a session)
 
 | Method | Path                          | Description                 |
 | ------ | ----------------------------- | --------------------------- |
@@ -251,7 +251,7 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 - **JWT secret:** at least 32 bytes; startup refuses a shorter one
 - **Permissions:** granted to roles only (`role_permissions`); default grants applied once, so revocations stick
 - **Username minimum:** 3 characters
-- **Rate limiting:** auth endpoints 10 req/min; public write endpoints 30 req/min
+- **Rate limiting:** per client address (behind `TRUSTED_PROXY_HOPS` proxies): auth 10/min, public writes 30/min, signed-in writes 120/min
 - **Security headers:** `X-Content-Type-Options`, `X-Frame-Options`, `Content-Security-Policy`, `Strict-Transport-Security` (HTTPS only)
 - **CORS:** configured via environment variable
 
@@ -445,8 +445,11 @@ middleware / handlers  →  application (use cases, ports)  →  domain  ←  in
 - Before any `user_repo.update_role()` call, check the code against an active row in `roles`, so arbitrary strings never reach the role column.
 
 **Middleware layer (`middleware/`)**
-- Middleware types (`AuthUser`, `RequireAdmin`, `RequireProviderOrAdmin`) are HTTP-adapter concerns. They may import from `domain/` but nothing in `application/` or `domain/` may import back from `middleware/`.
-- Name auth guards to match their actual policy: `RequireAdmin` (admin only), `RequireProviderOrAdmin` (admin or provider). Never use a guard named after one role when it actually admits multiple roles.
+- Middleware only finds out who is calling (`MaybeActor`, from the bearer token or the `auth_token` cookie); it never decides access. Handlers that need a session call `require_actor`, then pass `&actor` to the use case.
+- Every state-changing use case, and every admin read, starts with `actor.require(PERM_...)?`. Permission keys live in `application/src/catalogue.rs`. Never compare role names: a convention test rejects it, and another fails when a use case taking an `Actor` checks nothing.
+- Permissions are loaded from the database on every request, so a revocation or a deactivated account takes effect on the next request, not when the token expires.
+- Non-GET requests with a foreign `Origin` are refused (`cross_origin_request`); `APP_URL` and `CORS_ORIGINS` are the allowed origins.
+- Domain events (`domain/src/events.rs`) are published after a change is stored; the audit log is a subscriber. New side effects (notifications, webhooks) subscribe; use cases do not call them.
 
 **Infrastructure layer (`infrastructure/`)**
 - Concrete library types (`jsonwebtoken`, `bcrypt`, Sea-ORM) are confined to `infrastructure/`. Implement the port traits from `application/ports.rs` here.

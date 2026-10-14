@@ -38,3 +38,20 @@ pub trait PasswordHasher: Send + Sync {
     async fn hash(&self, password: &str) -> Result<String>;
     async fn verify(&self, password: &str, hash: &str) -> Result<bool>;
 }
+
+/// Publishes domain events to every subscriber (audit log today). Never fails
+/// the caller: the change is already stored when an event is published.
+#[async_trait]
+pub trait EventBus: Send + Sync {
+    async fn publish(&self, event: domain::events::DomainEvent);
+}
+
+/// Fixed-window request budgets, per key (the client address).
+pub trait RateLimiter: Send + Sync {
+    /// `true` when this request is within the budget and has been counted.
+    fn allow(&self, key: std::net::IpAddr) -> bool;
+
+    /// Drops entries for clients whose window has fully refilled. Without it the
+    /// table keeps one entry per address ever seen, forever.
+    fn forget_idle(&self);
+}

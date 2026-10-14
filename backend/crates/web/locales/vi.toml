@@ -21,6 +21,8 @@ account_locked                 = "Tài khoản tạm khoá do đăng nhập sai 
 account_deactivated            = "Tài khoản đã bị vô hiệu hoá. Vui lòng liên hệ hỗ trợ."
 account_has_no_role            = "Tài khoản chưa được cấp quyền truy cập."
 permission_denied              = "Bạn không có quyền thực hiện thao tác này."
+cross_origin_request           = "Yêu cầu bị từ chối vì không gửi từ trang của Agri-Connect."
+cannot_change_own_account      = "Bạn không thể tự đổi vai trò hoặc khoá tài khoản của chính mình."
 admin_already_exists           = "Đã có tài khoản quản trị. Vui lòng đăng nhập."
 reset_token_invalid            = "Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn."
 

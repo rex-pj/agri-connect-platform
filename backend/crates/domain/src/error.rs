@@ -66,6 +66,8 @@ error_codes! {
     AccountDeactivated        => (Forbidden,       "account_deactivated"),
     AccountHasNoRole          => (Forbidden,       "account_has_no_role"),
     PermissionDenied          => (Forbidden,       "permission_denied"),
+    CrossOriginRequest        => (Forbidden,       "cross_origin_request"),
+    CannotChangeOwnAccount    => (Forbidden,       "cannot_change_own_account"),
     AdminAlreadyExists        => (Forbidden,       "admin_already_exists"),
     ResetTokenInvalid         => (BadRequest,      "reset_token_invalid"),
 

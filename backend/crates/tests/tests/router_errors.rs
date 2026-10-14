@@ -5,8 +5,7 @@ use axum::{
     body::Body,
     http::{header, Request, StatusCode},
 };
-use domain::models::role::UserRole;
-use integration_tests::{json_body, router_without_db, send, token_service};
+use integration_tests::{json_body, router_without_db, send};
 
 fn get(uri: &str) -> Request<Body> {
     Request::get(uri).body(Body::empty()).unwrap()
@@ -55,18 +54,6 @@ async fn forged_token_is_invalid_token() {
     let res = send(&router_without_db(), req).await;
     assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
     assert_eq!(json_body(res).await["code"], "invalid_token");
-}
-
-#[tokio::test]
-async fn provider_token_on_admin_route_is_permission_denied() {
-    let token = token_service().mint(42, "an", &UserRole::Provider).unwrap();
-    let req = Request::get("/api/admin/stats")
-        .header(header::AUTHORIZATION, format!("Bearer {token}"))
-        .body(Body::empty())
-        .unwrap();
-    let res = send(&router_without_db(), req).await;
-    assert_eq!(res.status(), StatusCode::FORBIDDEN);
-    assert_eq!(json_body(res).await["code"], "permission_denied");
 }
 
 #[tokio::test]

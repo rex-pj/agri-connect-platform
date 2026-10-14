@@ -9,7 +9,7 @@ use domain::{
     Result,
 };
 
-use crate::outputs::AdminStatsDto;
+use crate::{authz::Actor, catalogue::PERM_ADMIN_DASHBOARD_VIEW, outputs::AdminStatsDto};
 
 #[derive(Clone)]
 pub struct StatsUseCase {
@@ -31,7 +31,8 @@ impl StatsUseCase {
         }
     }
 
-    pub async fn get_stats(&self) -> Result<AdminStatsDto> {
+    pub async fn get_stats(&self, actor: &Actor) -> Result<AdminStatsDto> {
+        actor.require(PERM_ADMIN_DASHBOARD_VIEW)?;
         let (total_businesses, verified_businesses, active_products, total_users) = tokio::try_join!(
             self.business_repo.count_all(),
             self.business_repo.count_verified(),

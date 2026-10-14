@@ -1,10 +1,11 @@
+use application::authz::require_actor;
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use domain::Error;
 
 use crate::{
     app_state::AppState,
     extract::{ApiJson, ApiPath},
-    middleware::auth::AuthUser,
+    middleware::auth::MaybeActor,
     requests::{
         ChangePasswordRequest, CreateAdminRequest, ForgotPasswordRequest, LoginRequest,
         RegisterRequest, ResetPasswordRequest,
@@ -65,24 +66,26 @@ impl AuthHandler {
 
     /// GET /api/users/me  — return the authenticated user's own profile
     pub async fn me(
-        auth_user: AuthUser,
+        MaybeActor(actor): MaybeActor,
         State(state): State<AppState>,
     ) -> Result<impl IntoResponse, Error> {
-        let result = state.usecases.auth.me(auth_user.id).await?;
+        let actor = require_actor(actor)?;
+        let result = state.usecases.auth.me(actor.user_id).await?;
 
         Ok(Json(result))
     }
 
     /// PATCH /api/users/me/password  — change password (authenticated)
     pub async fn change_password(
-        auth_user: AuthUser,
+        MaybeActor(actor): MaybeActor,
         State(state): State<AppState>,
         ApiJson(req): ApiJson<ChangePasswordRequest>,
     ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
         state
             .usecases
             .auth
-            .change_password(auth_user.id, req.current_password, req.new_password)
+            .change_password(actor.user_id, req.current_password, req.new_password)
             .await?;
 
         Ok(StatusCode::NO_CONTENT)

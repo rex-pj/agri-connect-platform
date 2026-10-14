@@ -30,7 +30,6 @@ pub struct ContactInput {
 // ── Provider dashboard ────────────────────────────────────────────────────────
 
 pub struct UpdateProfileInput {
-    pub user_id: i32,
     pub name: String,
     pub phone: String,
     pub description: Option<String>,
@@ -40,7 +39,6 @@ pub struct UpdateProfileInput {
 }
 
 pub struct CreateProductInput {
-    pub user_id: i32,
     pub category_id: i32,
     pub name: String,
     pub description: Option<String>,
@@ -50,7 +48,6 @@ pub struct CreateProductInput {
 
 pub struct UpdateProductInput {
     pub product_id: i32,
-    pub user_id: i32,
     pub category_id: i32,
     pub name: String,
     pub description: Option<String>,

@@ -189,7 +189,8 @@ async fn demo_data_loads_once_and_removal_spares_real_listings() {
     .unwrap();
 
     let state = integration_tests::state(t.db.clone());
-    let report = state.usecases.setup.load_demo().await.unwrap();
+    let admin = integration_tests::first_admin(&state).await;
+    let report = state.usecases.setup.load_demo(&admin).await.unwrap();
     assert_eq!(
         (report.businesses, report.services, report.products),
         (6, 6, 10)
@@ -199,10 +200,10 @@ async fn demo_data_loads_once_and_removal_spares_real_listings() {
         6
     );
 
-    let again = state.usecases.setup.load_demo().await.unwrap_err();
+    let again = state.usecases.setup.load_demo(&admin).await.unwrap_err();
     assert_eq!(again.code(), ErrorCode::DemoAlreadyLoaded);
 
-    assert_eq!(state.usecases.setup.remove_demo().await.unwrap(), 6);
+    assert_eq!(state.usecases.setup.remove_demo(&admin).await.unwrap(), 6);
     assert_eq!(
         count(&t.db, "SELECT COUNT(*) AS n FROM businesses").await,
         1

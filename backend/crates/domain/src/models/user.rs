@@ -75,3 +75,14 @@ pub struct NewResetToken {
     pub token: String,
     pub expires_at: DateTime<Utc>,
 }
+
+/// Who a session belongs to and what they may do, loaded fresh on every
+/// request so a revoked permission or a deactivated account takes effect at
+/// once instead of when the session token expires.
+pub struct ActorRecord {
+    pub user_id: i32,
+    pub username: String,
+    pub role_code: String,
+    pub is_active: bool,
+    pub permissions: Vec<String>,
+}

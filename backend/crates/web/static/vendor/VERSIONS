@@ -1,0 +1,17 @@
+# Third-party files committed under static/. Update by replacing the files and
+# this record in the same reviewed commit; never hot-link a CDN (CSP is
+# script-src 'self', and rural connections pay for every extra origin).
+
+bootstrap        5.3.8   MIT       CSS only (no bootstrap.bundle.js; Alpine owns behaviour)
+                                   source: npm bootstrap@5.3.8 dist/css/bootstrap.min.css
+fontawesome      6.5.1   CSS MIT, fonts OFL-1.1   solid style only
+                                   source: cdnjs font-awesome/6.5.1 css/{fontawesome,solid}.min.css, webfonts/fa-solid-900.woff2
+alpinejs-csp     3.14.9  MIT       the CSP build: no eval, so no 'unsafe-eval' in the page CSP
+                                   source: npm @alpinejs/csp@3.14.9 dist/cdn.min.js
+be-vietnam-pro   Google Fonts css2 (2026-10)  OFL-1.1   static/fonts/be-vietnam-pro, latin + vietnamese, 400-800
+                                   source: fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800
+820bc9503874024057da244dc30c21301548329eb9a00e7937e91c4d3908b273 *static/vendor/alpinejs-csp-3.14.9/cdn.min.js
+d85327d99c7a3ee1f9b5d0500d1370acea3ad2db39c163c2f51f232baedbdede *static/vendor/bootstrap-5.3.8/bootstrap.min.css
+8eb5b44ce5971a501e5a17954c464b80aba0c4604675b5603a7f456459af88a1 *static/vendor/fontawesome-6.5.1/css/fontawesome.min.css
+b8afa4243dd1bf735f512708da5335b0ed314d9e58a0a1cf1b781250cf5fb004 *static/vendor/fontawesome-6.5.1/css/solid.min.css
+9fc85f3a4544ab0d570c7f8f9bbb88db8d92c359b2707580ea8b07c75673eae2 *static/vendor/fontawesome-6.5.1/webfonts/fa-solid-900.woff2

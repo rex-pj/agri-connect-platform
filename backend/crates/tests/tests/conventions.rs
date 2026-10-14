@@ -185,3 +185,122 @@ fn third_party_versions_live_in_the_workspace() {
         }
     }
 }
+
+// ── Templates ────────────────────────────────────────────────────────────────
+
+fn templates() -> Vec<(String, String)> {
+    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+        for entry in fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                walk(&path, out);
+            } else {
+                out.push(path);
+            }
+        }
+    }
+    let root = crates_dir().join("web").join("templates");
+    let mut files = Vec::new();
+    walk(&root, &mut files);
+    assert!(!files.is_empty(), "no templates found");
+    files
+        .into_iter()
+        .map(|p| {
+            let rel = p
+                .strip_prefix(&root)
+                .unwrap()
+                .to_string_lossy()
+                .replace('\\', "/");
+            (rel, fs::read_to_string(&p).unwrap())
+        })
+        .collect()
+}
+
+fn template_violations(pattern: &str, why: &str) {
+    let re = regex::Regex::new(pattern).unwrap();
+    let found: Vec<String> = templates()
+        .iter()
+        .flat_map(|(file, src)| {
+            src.lines()
+                .enumerate()
+                .filter(|(_, l)| re.is_match(l))
+                .map(move |(i, l)| format!("{file}:{}: {}", i + 1, l.trim()))
+        })
+        .collect();
+    assert!(found.is_empty(), "{why}\n{}", found.join("\n"));
+}
+
+#[test]
+fn templates_are_html_so_tera_escapes_them() {
+    // Tera autoescapes by file extension; a .txt or .j2 template would render
+    // user text unescaped.
+    for (file, _) in templates() {
+        assert!(
+            file.ends_with(".html"),
+            "{file}: templates must end in .html"
+        );
+    }
+}
+
+#[test]
+fn templates_use_tera_comments() {
+    template_violations("<!--", "HTML comments ship to the browser; use {# #}");
+}
+
+#[test]
+fn templates_never_mark_output_safe() {
+    template_violations(
+        r"\|\s*safe\b",
+        "`| safe` disables escaping; render HTML through a macro instead",
+    );
+}
+
+#[test]
+fn templates_have_no_inline_styles() {
+    template_violations(
+        r#"\sstyle\s*="#,
+        "the page CSP is style-src 'self'; inline style attributes are blocked",
+    );
+}
+
+#[test]
+fn template_attributes_are_quoted() {
+    // The escaper leaves `/`, `=` and spaces alone, which is only safe inside
+    // a quoted attribute value.
+    template_violations(
+        r"=\s*\{\{",
+        "quote every attribute: href=\"{{ x }}\", never href={{ x }}",
+    );
+}
+
+#[test]
+fn alpine_attributes_name_registered_members_only() {
+    // The CSP build cannot evaluate expressions; `@click="open = !open"` would
+    // fail silently in the browser.
+    let attr = regex::Regex::new(r#"\s(x-[a-z:.-]+|@[a-z.:-]+|:[a-z-]+)="([^"]*)""#).unwrap();
+    let ident = regex::Regex::new(r"^[A-Za-z_$][A-Za-z0-9_.$]*$").unwrap();
+    let mut found = Vec::new();
+    for (file, src) in templates() {
+        for cap in attr.captures_iter(&src) {
+            let (name, value) = (&cap[1], &cap[2]);
+            if !ident.is_match(value) {
+                found.push(format!("{file}: {name}=\"{value}\""));
+            }
+        }
+    }
+    assert!(
+        found.is_empty(),
+        "Alpine attributes must be plain identifiers:\n{}",
+        found.join("\n")
+    );
+}
+
+#[test]
+fn only_views_rs_talks_to_tera() {
+    assert_absent(
+        &["web"],
+        &["tera::", ".render("],
+        &["web/src/views.rs"],
+        "render through views::render_page so every page gets the shared context and headers",
+    );
+}

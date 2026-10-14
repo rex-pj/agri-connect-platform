@@ -1,0 +1,169 @@
+/* Agri-Connect styles, loaded after Bootstrap.
+ *
+ * Tokens and Bootstrap overrides come from the SvelteKit app.html. Component
+ * styles move here from the Svelte <style> blocks in the slice that migrates
+ * each page, so nothing ships before a page uses it.
+ *
+ * Templates may not use style="" (the page CSP is style-src 'self'); every
+ * visual rule lives in this file.
+ */
+
+/* ── Tokens ──────────────────────────────────────────────────────────────── */
+:root {
+  --p900: #022c22;
+  --p800: #064e3b;
+  --p700: #065f46;
+  --p600: #047857;
+  --p500: #059669;
+  --p100: #d1fae5;
+  --p50: #ecfdf5;
+
+  --a600: #d97706;
+  --a500: #f59e0b;
+  --a50: #fffbeb;
+
+  --bg: #f5f8f6;
+  --surface: #ffffff;
+  --border: #c8d8ce;
+  --text: #0c1a12;
+  --text2: #2d4a38;
+  --muted: #5e7a68;
+
+  --shadow-card: 0 1px 3px rgba(6, 78, 59, 0.06), 0 4px 14px rgba(6, 78, 59, 0.09);
+  --shadow-btn: 0 2px 8px rgba(6, 78, 59, 0.22);
+
+  --header-h: 58px;
+  --nav-h: 64px;
+
+  /* Large base size: farmers read on small, low-end phones outdoors. */
+  font-size: 17px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Be Vietnam Pro", "Segoe UI", Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Alpine hides x-cloak elements until it has initialised them. */
+[x-cloak] {
+  display: none !important;
+}
+
+/* ── Bootstrap overrides ─────────────────────────────────────────────────── */
+/* Tap targets of at least 44px (48 here) for thumbs on small screens. */
+.btn {
+  min-height: 48px;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 12px;
+  transition: transform 0.1s ease, opacity 0.15s ease;
+}
+.btn:active {
+  transform: scale(0.97);
+}
+.btn-lg {
+  min-height: 52px;
+}
+.form-control,
+.form-select {
+  min-height: 52px;
+  font-size: 1rem;
+  border-radius: 12px;
+  border-color: var(--border);
+}
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--p600);
+  box-shadow: 0 0 0 3px rgba(4, 120, 87, 0.15);
+}
+.card {
+  border-radius: 16px !important;
+  border: none !important;
+  box-shadow: var(--shadow-card) !important;
+}
+.bg-success {
+  background-color: var(--p700) !important;
+}
+.text-success {
+  color: var(--p600) !important;
+}
+.btn-success {
+  background: var(--p700) !important;
+  border-color: var(--p700) !important;
+}
+.btn-success:hover {
+  background: var(--p600) !important;
+}
+.btn-warning {
+  background: var(--a500) !important;
+  border-color: var(--a500) !important;
+  color: var(--text) !important;
+}
+
+/* ── Error page (organisms/error_card) ───────────────────────────────────── */
+.error-page {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  padding: 24px;
+}
+.error-card {
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 48px 36px;
+  max-width: 380px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 8px 40px rgba(6, 78, 59, 0.12);
+}
+.error-card__icon {
+  font-size: 3rem;
+  color: var(--p700);
+  margin-bottom: 16px;
+  opacity: 0.8;
+}
+.error-card__code {
+  font-size: 4rem;
+  font-weight: 800;
+  color: var(--p900);
+  margin: 0 0 8px;
+  line-height: 1;
+}
+.error-card__message {
+  font-size: 1rem;
+  color: #4b5563;
+  margin: 0 0 24px;
+  line-height: 1.5;
+}
+.error-card__ref {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 16px 0 0;
+}
+.btn-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 28px;
+  background: var(--p700);
+  color: #fff;
+  text-decoration: none;
+  border-radius: 100px;
+  font-weight: 600;
+  min-height: 48px;
+}
+.btn-pill:hover,
+.btn-pill:focus {
+  background: var(--p800);
+  color: #fff;
+}

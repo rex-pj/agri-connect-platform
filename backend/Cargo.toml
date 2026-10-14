@@ -75,6 +75,18 @@ toml = { version = "0.8", default-features = false, features = [
     "parse", # locale files are parsed at startup; without it toml::from_str does not exist
 ] }
 
+tera = { version = "1.20", default-features = false } # builtins pull chrono-tz, rand and slug; our filters are registered in web::views
+rust-embed = { version = "8", default-features = false } # templates + static compiled into the binary; read from disk in debug builds
+hyper-util = { version = "0.1", default-features = false, features = [
+    "client-legacy", # pooled HTTP client for the transitional SvelteKit proxy
+    "http1",         # SvelteKit (adapter-node and vite) speaks HTTP/1.1
+    "tokio",         # TokioExecutor + connector for that client
+] }
+
+regex = { version = "1", default-features = false, features = [
+    "std", # test-only: template convention scans; ASCII patterns need nothing more
+] }
+
 jsonwebtoken = { version = "9", default-features = false } # HS256 only: PEM/ASN.1 support is not needed
 bcrypt = { version = "0.15", default-features = false, features = [
     "std", # bcrypt::hash needs getrandom/std for salts

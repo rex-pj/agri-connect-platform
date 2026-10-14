@@ -41,12 +41,17 @@ pub fn state(db: DatabaseConnection) -> AppState {
         web::startup::Databases::single(db),
         token_service(),
         email_service(),
+        web::views::SiteConfig::default(),
     )
     .unwrap()
 }
 
 pub fn router(state: AppState) -> Router {
     AppRouting::build(state, RouterConfig::default())
+}
+
+pub fn router_with(state: AppState, config: RouterConfig) -> Router {
+    AppRouting::build(state, config)
 }
 
 /// A router whose database is disconnected: good for every path that must

@@ -22,17 +22,21 @@ use crate::{
         products_handler::ProductsHandler, provider_dashboard_handler::ProviderDashboardHandler,
         role_handler::RoleHandler, setup_handler::SetupHandler, stats_handler::StatsHandler,
     },
+    legacy::{is_rust_only, LegacyProxy},
     middleware::rate_limit,
+    views,
 };
 
 /// Settings read from the environment by `startup.rs`.
-#[derive(Debug, Default, Clone)]
+#[derive(Default, Clone)]
 pub struct RouterConfig {
     /// Browser origins allowed to call the API cross-origin. Empty blocks all.
     pub cors_origins: Vec<HeaderValue>,
     /// Send HSTS. Only meaningful when TLS terminates in front of us; sent over
     /// plain HTTP it would lock browsers out of a site that has no TLS.
     pub https: bool,
+    /// Where pages Rust does not serve yet are forwarded. `None`: they 404.
+    pub legacy: Option<LegacyProxy>,
 }
 
 pub struct AppRouting;
@@ -40,6 +44,7 @@ pub struct AppRouting;
 impl AppRouting {
     pub fn build(state: AppState, config: RouterConfig) -> Router {
         let error_renderer = middleware::from_fn_with_state(state.clone(), render_errors);
+        let legacy = config.legacy.clone();
         // ── Rate limiters (per-IP, in-memory) ────────────────────────────────
         let auth_limiter = rate_limit::new_auth_limiter();
         let public_write_limiter = rate_limit::new_public_write_limiter();
@@ -280,7 +285,8 @@ impl AppRouting {
             .merge(user_routes)
             .merge(admin_routes)
             .merge(provider_routes)
-            .fallback(|| async { Error::new(ErrorCode::RouteNotFound).into_response() })
+            .route("/static/{*path}", get(views::static_file))
+            .fallback(move |req: axum::extract::Request| fallback(legacy.clone(), req))
             .layer(cors)
             .layer(SetResponseHeaderLayer::if_not_present(
                 header::X_CONTENT_TYPE_OPTIONS,
@@ -343,4 +349,19 @@ fn request_span(req: &axum::http::Request<axum::body::Body>) -> tracing::Span {
         method = %req.method(),
         path = req.uri().path(),
     )
+}
+
+/// Anything no route matched: Rust-owned paths get a coded 404; pages go to
+/// SvelteKit while it still serves them, otherwise 404 too.
+async fn fallback(
+    legacy: Option<LegacyProxy>,
+    req: axum::extract::Request,
+) -> axum::response::Response {
+    match legacy {
+        Some(proxy) if !is_rust_only(req.uri().path()) => match proxy.forward(req).await {
+            Ok(response) => response,
+            Err(e) => e.into_response(),
+        },
+        _ => Error::new(ErrorCode::RouteNotFound).into_response(),
+    }
 }

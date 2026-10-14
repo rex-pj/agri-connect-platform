@@ -10,7 +10,7 @@ use application::{
     },
 };
 
-use crate::locale::Locale;
+use crate::{locale::Locale, views::Views};
 
 pub struct UseCases {
     pub explore: ExploreUseCase,
@@ -32,4 +32,5 @@ pub struct AppState {
     /// infrastructure is exposed here.
     pub token_service: Arc<dyn TokenService>,
     pub locale: Arc<Locale>,
+    pub views: Arc<Views>,
 }

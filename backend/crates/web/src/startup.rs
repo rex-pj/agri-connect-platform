@@ -40,8 +40,10 @@ use tracing::{info, warn};
 use crate::{
     app_state::{AppState, UseCases},
     constants::{DB_MAX_CONNECTIONS, DEFAULT_BIND_ADDR},
+    legacy::LegacyProxy,
     locale::Locale,
     routings::app_routing::{AppRouting, RouterConfig},
+    views::{SiteConfig, Views},
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -170,10 +172,44 @@ fn router_config() -> Result<RouterConfig, StartupError> {
             })
         })
         .collect::<Result<Vec<_>, _>>()?;
+    let https = optional_env("HTTPS_ENABLED").as_deref() == Some("true");
+
+    let legacy = match optional_env("LEGACY_FRONTEND_URL") {
+        Some(url) => {
+            let uri: axum::http::Uri =
+                url.parse()
+                    .map_err(|e: axum::http::uri::InvalidUri| StartupError::InvalidEnv {
+                        name: "LEGACY_FRONTEND_URL",
+                        reason: e.to_string(),
+                    })?;
+            info!(%uri, "pages not yet served by Rust are proxied to SvelteKit");
+            Some(
+                LegacyProxy::new(&uri, https).map_err(|reason| StartupError::InvalidEnv {
+                    name: "LEGACY_FRONTEND_URL",
+                    reason,
+                })?,
+            )
+        }
+        None => {
+            warn!("LEGACY_FRONTEND_URL not set; pages Rust does not serve yet answer 404");
+            None
+        }
+    };
+
     Ok(RouterConfig {
         cors_origins,
-        https: optional_env("HTTPS_ENABLED").as_deref() == Some("true"),
+        https,
+        legacy,
     })
+}
+
+/// `SITE_NAME` / `SITE_DESCRIPTION`, shown in every page's title and meta tags.
+fn site_config() -> SiteConfig {
+    let defaults = SiteConfig::default();
+    SiteConfig {
+        name: optional_env("SITE_NAME").unwrap_or(defaults.name),
+        description: optional_env("SITE_DESCRIPTION").unwrap_or(defaults.description),
+    }
 }
 
 /// The write pool and the read pool. They are the same pool unless
@@ -209,6 +245,7 @@ pub fn build_state(
     dbs: Databases,
     token_service: Arc<dyn TokenService>,
     email: Arc<dyn EmailService>,
+    site: SiteConfig,
 ) -> Result<AppState, StartupError> {
     let db = dbs.primary;
     let business_repo = Arc::new(BusinessRepository::new(Arc::clone(&db)));
@@ -279,6 +316,7 @@ pub fn build_state(
         usecases: Arc::new(usecases),
         token_service,
         locale: Arc::new(Locale::vi()?),
+        views: Arc::new(Views::new(site)?),
     })
 }
 
@@ -338,7 +376,7 @@ pub async fn start() -> Result<(), StartupError> {
 
     let token_service: Arc<dyn TokenService> =
         Arc::new(JwtTokenService::new(&required_env("JWT_SECRET")?)?);
-    let state = build_state(dbs, token_service, email_service()?)?;
+    let state = build_state(dbs, token_service, email_service()?, site_config())?;
 
     // Roles and permissions must exist before the first request, or the first
     // registration fails on a missing role.

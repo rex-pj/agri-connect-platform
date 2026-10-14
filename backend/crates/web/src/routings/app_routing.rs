@@ -6,7 +6,12 @@ use axum::{
     Extension, Router,
 };
 use domain::{Error, ErrorCode};
-use tower_http::{cors::CorsLayer, set_header::SetResponseHeaderLayer};
+use tower_http::{
+    cors::CorsLayer,
+    request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
+    set_header::SetResponseHeaderLayer,
+    trace::{DefaultOnResponse, TraceLayer},
+};
 
 use crate::{
     app_state::AppState,
@@ -62,7 +67,8 @@ impl AppRouting {
         // ── GUEST (public) routes ────────────────────────────────────────────
         // Contact form is rate-limited separately to prevent spam.
         let public_routes = Router::new()
-            .route("/health", get(HealthHandler::health))
+            .route("/health/live", get(HealthHandler::live))
+            .route("/health/ready", get(HealthHandler::ready))
             // GET /api/explore/providers — geo-search when lat+lng present, browse otherwise
             .route(
                 "/api/explore/providers",
@@ -304,8 +310,37 @@ impl AppRouting {
             ));
         }
 
-        // Outermost, so errors from every layer above (rate limiter, extractors,
-        // fallback) get a rendered body.
-        router.layer(error_renderer).with_state(state)
+        let request_id = header::HeaderName::from_static(REQUEST_ID_HEADER);
+        router
+            // Errors from every layer above (rate limiter, extractors, fallback)
+            // get a rendered body; it sits inside the request span so its log
+            // lines carry the request id.
+            .layer(error_renderer)
+            .layer(
+                TraceLayer::new_for_http()
+                    .make_span_with(request_span)
+                    .on_response(DefaultOnResponse::new().level(tracing::Level::INFO)),
+            )
+            .layer(PropagateRequestIdLayer::new(request_id.clone()))
+            .layer(SetRequestIdLayer::new(request_id, MakeRequestUuid))
+            .with_state(state)
     }
+}
+
+/// Echoed on every response, so a user's bug report can be matched to the log
+/// lines of that exact request. A client-supplied value is kept as-is.
+pub const REQUEST_ID_HEADER: &str = "x-request-id";
+
+fn request_span(req: &axum::http::Request<axum::body::Body>) -> tracing::Span {
+    let request_id = req
+        .headers()
+        .get(REQUEST_ID_HEADER)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default();
+    tracing::info_span!(
+        "request",
+        request_id,
+        method = %req.method(),
+        path = req.uri().path(),
+    )
 }

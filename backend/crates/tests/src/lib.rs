@@ -37,7 +37,12 @@ pub fn email_service() -> Arc<dyn EmailService> {
 
 /// State over `db`, wired exactly as production wires it.
 pub fn state(db: DatabaseConnection) -> AppState {
-    build_state(Arc::new(db), token_service(), email_service()).unwrap()
+    build_state(
+        web::startup::Databases::single(db),
+        token_service(),
+        email_service(),
+    )
+    .unwrap()
 }
 
 pub fn router(state: AppState) -> Router {

@@ -10,6 +10,7 @@ use application::{
         admin_usecase::{AdminDeps, AdminUseCase},
         auth_usecase::AuthUseCase,
         explore_usecase::ExploreUseCase,
+        health_usecase::HealthUseCase,
         permission_usecase::PermissionUseCase,
         product_usecase::ProductUseCase,
         provider_dashboard_usecase::ProviderDashboardUseCase,
@@ -25,11 +26,11 @@ use infrastructure::{
     jwt_token_service::JwtTokenService,
     repositories::{
         audit_log_repository::AuditLogRepository, business_repository::BusinessRepository,
-        category_repository::CategoryRepository, inquiry_repository::InquiryRepository,
-        location_repository::LocationRepository, permission_repository::PermissionRepository,
-        product_repository::ProductRepository, review_repository::ReviewRepository,
-        role_repository::RoleRepository, service_repository::ServiceRepository,
-        user_repository::UserRepository,
+        category_repository::CategoryRepository, health_repository::HealthRepository,
+        inquiry_repository::InquiryRepository, location_repository::LocationRepository,
+        permission_repository::PermissionRepository, product_repository::ProductRepository,
+        review_repository::ReviewRepository, role_repository::RoleRepository,
+        service_repository::ServiceRepository, user_repository::UserRepository,
     },
 };
 use migration::{Migrator, MigratorTrait};
@@ -38,7 +39,7 @@ use tracing::{info, warn};
 
 use crate::{
     app_state::{AppState, UseCases},
-    constants::{DB_MAX_CONNECTIONS, SERVER_BIND_ADDR},
+    constants::{DB_MAX_CONNECTIONS, DEFAULT_BIND_ADDR},
     locale::Locale,
     routings::app_routing::{AppRouting, RouterConfig},
 };
@@ -59,7 +60,7 @@ pub enum StartupError {
     Logging(String),
     #[error("cannot bind {addr}: {source}")]
     Bind {
-        addr: &'static str,
+        addr: String,
         source: std::io::Error,
     },
     #[error("server: {0}")]
@@ -175,13 +176,41 @@ fn router_config() -> Result<RouterConfig, StartupError> {
     })
 }
 
-/// Wires every use case against `db`. Public so integration tests can build
-/// the exact production graph on a test database.
+/// The write pool and the read pool. They are the same pool unless
+/// `DATABASE_READ_URL` is set; keeping two handles now means a read replica
+/// can be added later without touching the wiring.
+#[derive(Clone)]
+pub struct Databases {
+    pub primary: Arc<DatabaseConnection>,
+    /// Only for repositories that never write. A replica lags the primary, so
+    /// anything that reads its own write must stay on `primary`.
+    pub read: Arc<DatabaseConnection>,
+}
+
+impl Databases {
+    pub fn single(db: DatabaseConnection) -> Self {
+        let db = Arc::new(db);
+        Self {
+            primary: db.clone(),
+            read: db,
+        }
+    }
+}
+
+async fn connect(url: String) -> Result<DatabaseConnection, StartupError> {
+    let mut options = ConnectOptions::new(url);
+    options.max_connections(DB_MAX_CONNECTIONS);
+    Ok(Database::connect(options).await?)
+}
+
+/// Wires every use case. Public so integration tests can build the exact
+/// production graph on a test database.
 pub fn build_state(
-    db: Arc<DatabaseConnection>,
+    dbs: Databases,
     token_service: Arc<dyn TokenService>,
     email: Arc<dyn EmailService>,
 ) -> Result<AppState, StartupError> {
+    let db = dbs.primary;
     let business_repo = Arc::new(BusinessRepository::new(Arc::clone(&db)));
     let product_repo = Arc::new(ProductRepository::new(Arc::clone(&db)));
     let category_repo = Arc::new(CategoryRepository::new(Arc::clone(&db)));
@@ -189,12 +218,15 @@ pub fn build_state(
     let location_repo = Arc::new(LocationRepository::new(Arc::clone(&db)));
     let review_repo = Arc::new(ReviewRepository::new(Arc::clone(&db)));
     let service_repo = Arc::new(ServiceRepository::new(Arc::clone(&db)));
-    let permission_repo = Arc::new(PermissionRepository::new(Arc::clone(&db)));
+    // Read-only, and checked on many requests: the natural first user of a replica.
+    let permission_repo = Arc::new(PermissionRepository::new(Arc::clone(&dbs.read)));
     let role_repo = Arc::new(RoleRepository::new(Arc::clone(&db)));
     let user_repo = Arc::new(UserRepository::new(Arc::clone(&db)));
     let audit_log_repo = Arc::new(AuditLogRepository::new(Arc::clone(&db)));
     let catalogue_repo = Arc::new(CatalogueRepository::new(Arc::clone(&db)));
     let demo_repo = Arc::new(DemoDataRepository::new(Arc::clone(&db)));
+    // Readiness is about the primary: without it nothing can be written.
+    let health_repo = Arc::new(HealthRepository::new(Arc::clone(&db)));
 
     let password_hasher: Arc<dyn PasswordHasher> = Arc::new(BcryptPasswordHasher);
 
@@ -206,6 +238,7 @@ pub fn build_state(
             location_repo.clone(),
             product_repo.clone(),
         ),
+        health: HealthUseCase::new(health_repo),
         product: ProductUseCase::new(product_repo.clone()),
         admin: AdminUseCase::new(AdminDeps {
             business_repo: business_repo.clone(),
@@ -249,39 +282,85 @@ pub fn build_state(
     })
 }
 
+/// Resolves on SIGTERM (what `docker stop` sends) or Ctrl-C. In-flight
+/// requests then finish before the process exits; without this a deploy cuts
+/// off whatever the server was doing.
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        if let Err(e) = tokio::signal::ctrl_c().await {
+            warn!(error = %e, "cannot listen for Ctrl-C");
+            std::future::pending::<()>().await;
+        }
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut sig) => {
+                sig.recv().await;
+            }
+            Err(e) => {
+                warn!(error = %e, "cannot listen for SIGTERM");
+                std::future::pending::<()>().await;
+            }
+        }
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        () = ctrl_c => {},
+        () = terminate => {},
+    }
+    info!("shutdown signal received; draining in-flight requests");
+}
+
 pub async fn start() -> Result<(), StartupError> {
     load_env_files();
     init_tracing()?;
 
-    let mut options = ConnectOptions::new(required_env("DATABASE_URL")?);
-    options.max_connections(DB_MAX_CONNECTIONS);
-    let db = Database::connect(options).await?;
+    let primary = connect(required_env("DATABASE_URL")?).await?;
 
     // A failure here stops startup: serving on a schema that does not match
     // the code corrupts data instead of failing loudly.
-    Migrator::up(&db, None).await?;
+    Migrator::up(&primary, None).await?;
+
+    let dbs = match optional_env("DATABASE_READ_URL") {
+        Some(url) => {
+            info!("reads that tolerate lag use DATABASE_READ_URL");
+            Databases {
+                primary: Arc::new(primary),
+                read: Arc::new(connect(url).await?),
+            }
+        }
+        None => Databases::single(primary),
+    };
 
     let token_service: Arc<dyn TokenService> =
         Arc::new(JwtTokenService::new(&required_env("JWT_SECRET")?)?);
-    let state = build_state(Arc::new(db), token_service, email_service()?)?;
+    let state = build_state(dbs, token_service, email_service()?)?;
 
     // Roles and permissions must exist before the first request, or the first
     // registration fails on a missing role.
     state.usecases.setup.seed_catalogue(&CATALOGUE).await?;
 
     let router = AppRouting::build(state, router_config()?);
-    let listener = tokio::net::TcpListener::bind(SERVER_BIND_ADDR)
+    let addr = optional_env("BIND_ADDR").unwrap_or_else(|| DEFAULT_BIND_ADDR.to_owned());
+    let listener = tokio::net::TcpListener::bind(&addr)
         .await
         .map_err(|source| StartupError::Bind {
-            addr: SERVER_BIND_ADDR,
+            addr: addr.clone(),
             source,
         })?;
 
-    info!("Agri-Connect listening on http://{SERVER_BIND_ADDR}");
+    info!("Agri-Connect listening on http://{addr}");
     axum::serve(
         listener,
         router.into_make_service_with_connect_info::<SocketAddr>(),
     )
+    .with_graceful_shutdown(shutdown_signal())
     .await
-    .map_err(StartupError::Serve)
+    .map_err(StartupError::Serve)?;
+    info!("shut down cleanly");
+    Ok(())
 }

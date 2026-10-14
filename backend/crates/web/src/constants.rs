@@ -17,4 +17,5 @@ pub const PUBLIC_WRITE_RATE_LIMIT_PER_MIN: NonZeroU32 = per_minute(30);
 pub const DB_MAX_CONNECTIONS: u32 = 20;
 
 // ── Server ────────────────────────────────────────────────────────────────────
-pub const SERVER_BIND_ADDR: &str = "0.0.0.0:3000";
+/// Used when BIND_ADDR is unset. 0.0.0.0 so the container port mapping works.
+pub const DEFAULT_BIND_ADDR: &str = "0.0.0.0:3000";

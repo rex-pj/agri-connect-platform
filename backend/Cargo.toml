@@ -39,11 +39,14 @@ tower = { version = "0.5", default-features = false, features = [
 tower-http = { version = "0.6", default-features = false, features = [
     "cors",       # CorsLayer driven by CORS_ORIGINS
     "set-header", # security headers (CSP, HSTS, nosniff, frame options)
+    "request-id", # x-request-id on every request and response, tied to log lines
+    "trace",      # one span per request carrying that id, so JSON logs can be grouped
 ] }
 tokio = { version = "1", default-features = false, features = [
     "rt-multi-thread", # the server runtime; also needed by spawn_blocking for bcrypt
     "macros",          # #[tokio::main], #[tokio::test] and try_join! in use cases
     "net",             # TcpListener for axum::serve
+    "signal",          # SIGTERM/Ctrl-C for graceful shutdown
 ] }
 serde = { version = "1", default-features = false, features = [
     "std",    # String/Vec/HashMap impls

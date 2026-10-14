@@ -1,6 +1,7 @@
 pub mod audit_log_repository;
 pub mod business_repository;
 pub mod category_repository;
+pub mod health_repository;
 pub mod inquiry_repository;
 pub mod location_repository;
 pub mod permission_repository;

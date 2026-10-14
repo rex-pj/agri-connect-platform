@@ -10,6 +10,7 @@ invalid_request_body           = "Dữ liệu gửi lên không hợp lệ."
 invalid_path_param             = "Đường dẫn không hợp lệ."
 invalid_query                  = "Tham số tìm kiếm không hợp lệ."
 too_many_requests              = "Bạn thao tác quá nhanh. Vui lòng thử lại sau ít phút."
+database_unavailable           = "Hệ thống tạm thời gián đoạn. Vui lòng thử lại sau."
 
 authentication_required        = "Vui lòng đăng nhập."
 invalid_token                  = "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."

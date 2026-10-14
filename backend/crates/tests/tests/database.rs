@@ -40,6 +40,19 @@ const PROVIDER_HAS_DELETE: &str = "SELECT COUNT(*) AS n FROM role_permissions rp
 
 #[tokio::test]
 #[ignore = "needs TEST_DATABASE_URL"]
+async fn ready_is_200_with_a_database() {
+    let t = TestDb::create().await;
+    let router = integration_tests::router(integration_tests::state(t.db.clone()));
+    let req = axum::http::Request::get("/health/ready")
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let res = integration_tests::send(&router, req).await;
+    assert_eq!(res.status(), axum::http::StatusCode::OK);
+    t.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
 async fn fresh_database_gets_the_catalogue_once() {
     let t = TestDb::create().await;
     let repo = CatalogueRepository::new(Arc::new(t.db.clone()));

@@ -4,9 +4,9 @@ use application::{
     ports::TokenService,
     usecases::{
         admin_usecase::AdminUseCase, auth_usecase::AuthUseCase, explore_usecase::ExploreUseCase,
-        permission_usecase::PermissionUseCase, product_usecase::ProductUseCase,
-        provider_dashboard_usecase::ProviderDashboardUseCase, setup_usecase::SetupUseCase,
-        stats_usecase::StatsUseCase,
+        health_usecase::HealthUseCase, permission_usecase::PermissionUseCase,
+        product_usecase::ProductUseCase, provider_dashboard_usecase::ProviderDashboardUseCase,
+        setup_usecase::SetupUseCase, stats_usecase::StatsUseCase,
     },
 };
 
@@ -14,6 +14,7 @@ use crate::locale::Locale;
 
 pub struct UseCases {
     pub explore: ExploreUseCase,
+    pub health: HealthUseCase,
     pub product: ProductUseCase,
     pub admin: AdminUseCase,
     pub auth: AuthUseCase,

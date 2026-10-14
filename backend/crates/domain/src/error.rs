@@ -19,6 +19,8 @@ pub enum ErrorKind {
     Locked,
     TooManyRequests,
     Internal,
+    /// A dependency (the database) is down; retrying later may succeed.
+    Unavailable,
 }
 
 macro_rules! error_codes {
@@ -52,6 +54,7 @@ error_codes! {
     InvalidPathParam          => (BadRequest,      "invalid_path_param"),
     InvalidQuery              => (BadRequest,      "invalid_query"),
     TooManyRequests           => (TooManyRequests, "too_many_requests"),
+    DatabaseUnavailable       => (Unavailable,     "database_unavailable"),
 
     // ── Authentication / access ──────────────────────────────────────────────
     AuthenticationRequired    => (Unauthorized,    "authentication_required"),
@@ -294,6 +297,7 @@ mod http {
                 ErrorKind::Locked => StatusCode::LOCKED,
                 ErrorKind::TooManyRequests => StatusCode::TOO_MANY_REQUESTS,
                 ErrorKind::Internal => StatusCode::INTERNAL_SERVER_ERROR,
+                ErrorKind::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
             }
         }
     }

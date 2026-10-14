@@ -8,13 +8,18 @@
 pub use sea_orm_migration::prelude::*;
 
 mod m20261013_000001_baseline;
+mod m20261014_000002_search;
+pub mod search;
 
 pub struct Migrator;
 
 #[async_trait::async_trait]
 impl MigratorTrait for Migrator {
     fn migrations() -> Vec<Box<dyn MigrationTrait>> {
-        vec![Box::new(m20261013_000001_baseline::Migration)]
+        vec![
+            Box::new(m20261013_000001_baseline::Migration),
+            Box::new(m20261014_000002_search::Migration),
+        ]
     }
 }
 

@@ -1,9 +1,9 @@
 use async_trait::async_trait;
 use chrono::Utc;
-use sea_orm::sea_query::{extension::postgres::PgExpr, Expr};
+use sea_orm::sea_query::Expr;
 use sea_orm::{
-    ColumnTrait, Condition, DatabaseConnection, EntityTrait, FromQueryResult, JoinType,
-    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
+    ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, JoinType, PaginatorTrait,
+    QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
 };
 use std::sync::Arc;
 use tracing::error;
@@ -17,6 +17,7 @@ use domain::{
 
 use domain::Error;
 
+use crate::search::{text_contains, PRODUCT_SEARCH_COLUMNS};
 use crate::{
     db_types::DateTimeWithTimeZone,
     entities::{
@@ -524,13 +525,8 @@ fn apply_filter<Q: QueryFilter>(mut query: Q, filter: &ProductFilter) -> Q {
     if let Some(id) = filter.category_id {
         query = query.filter(product::Column::CategoryId.eq(id));
     }
-    if let Some(q) = &filter.name {
-        let pattern = format!("%{q}%");
-        query = query.filter(
-            Condition::any()
-                .add(Expr::col((product::Entity, product::Column::Name)).ilike(pattern.clone()))
-                .add(Expr::col((product::Entity, product::Column::Description)).ilike(pattern)),
-        );
+    if let Some(q) = filter.name.as_deref().filter(|q| !q.trim().is_empty()) {
+        query = query.filter(text_contains(PRODUCT_SEARCH_COLUMNS, q));
     }
     if let Some(min) = filter.min_price {
         query = query.filter(product::Column::Price.gte(min));

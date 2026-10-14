@@ -5,12 +5,9 @@ use std::{collections::HashMap, sync::Arc};
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    sea_query::{
-        extension::postgres::PgExpr, Alias, Expr, Func, Order, Query, SimpleExpr, SubQueryStatement,
-    },
-    ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, FromQueryResult,
-    JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait, RelationTrait, Set,
-    Value,
+    sea_query::{Alias, Expr, Func, Order, Query, SimpleExpr, SubQueryStatement},
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, JoinType,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait, RelationTrait, Set, Value,
 };
 use tracing::error;
 
@@ -24,6 +21,7 @@ use domain::{
 
 use domain::Error;
 
+use crate::search::{text_contains, BUSINESS_SEARCH_COLUMNS};
 use crate::{
     db_types::DateTimeWithTimeZone,
     entities::{
@@ -269,13 +267,8 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .filter(business::Column::DeletedAt.is_null())
             .filter(Expr::exists(svc_subq.into_query()));
 
-        if let Some(ref q) = name {
-            let pattern = format!("%{}%", q);
-            query = query.filter(
-                Condition::any()
-                    .add(Expr::col(business::Column::Name).ilike(pattern.clone()))
-                    .add(Expr::col(business::Column::Description).ilike(pattern)),
-            );
+        if let Some(q) = name.as_deref().filter(|q| !q.trim().is_empty()) {
+            query = query.filter(text_contains(BUSINESS_SEARCH_COLUMNS, q));
         }
 
         let query = match sort.as_deref() {
@@ -292,10 +285,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .into_model::<BusinessBrowseRow>()
             .all(db)
             .await
-            .map_err(|e| {
-                error!("business browse error: {e}");
-                Error::internal("Failed to load services.")
-            })?;
+            .map_err(|e| Error::internal(format!("business browse: {e}")))?;
 
         if businesses.is_empty() {
             return Ok(vec![]);
@@ -345,23 +335,15 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .filter(business::Column::DeletedAt.is_null())
             .filter(Expr::exists(svc_subq.into_query()));
 
-        if let Some(ref q) = name {
-            let pattern = format!("%{}%", q);
-            query = query.filter(
-                Condition::any()
-                    .add(Expr::col(business::Column::Name).ilike(pattern.clone()))
-                    .add(Expr::col(business::Column::Description).ilike(pattern)),
-            );
+        if let Some(q) = name.as_deref().filter(|q| !q.trim().is_empty()) {
+            query = query.filter(text_contains(BUSINESS_SEARCH_COLUMNS, q));
         }
 
         query
             .count(self.db.as_ref())
             .await
             .map(|c| c as i64)
-            .map_err(|e| {
-                error!("business count_browse error: {e}");
-                Error::internal("Failed to load services.")
-            })
+            .map_err(|e| Error::internal(format!("business count_browse: {e}")))
     }
 
     async fn featured(&self, limit: i64) -> Result<Vec<BusinessBrowse>, Error> {
@@ -459,10 +441,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .into_model::<ServiceDetailRow>()
             .all(db)
             .await
-            .map_err(|e| {
-                error!("business find_detail services error: {e}");
-                Error::internal("Failed to load services.")
-            })?;
+            .map_err(|e| Error::internal(format!("business find_detail services: {e}")))?;
 
         Ok(Some(BusinessDetail {
             id: b.id,
@@ -685,10 +664,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .into_model::<ServiceAdminRow>()
             .all(db)
             .await
-            .map_err(|e| {
-                error!("business find_admin_detail services error: {e}");
-                Error::internal("Failed to load services.")
-            })?;
+            .map_err(|e| Error::internal(format!("business find_admin_detail services: {e}")))?;
 
         let prod_rows = ProductEntity::find()
             .select_only()
@@ -982,10 +958,7 @@ async fn load_service_names(
         .into_model::<SvcNameRow>()
         .all(db)
         .await
-        .map_err(|e| {
-            error!("load_service_names error: {e}");
-            Error::internal("Failed to load services.")
-        })?;
+        .map_err(|e| Error::internal(format!("load_service_names: {e}")))?;
 
     let mut map: HashMap<i32, Vec<String>> = HashMap::new();
     for r in rows {

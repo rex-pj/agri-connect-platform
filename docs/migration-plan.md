@@ -586,7 +586,7 @@ CREATE INDEX ix_businesses_name_fold ON businesses USING gin (lower(f_unaccent(n
 -- same for businesses.description, products.name, products.description
 ```
 
-**One source for the expression.** `migration::search::fold(col) -> String` returns `lower(f_unaccent(<col>))`. The migration uses it to build the index; the repositories use it (through `Expr::cust`) to build `fold(col) LIKE '%' || lower(f_unaccent($1)) || '%'`. The same function produces both sides, so they can't drift apart. User input has `%`, `_` and `\` escaped before it reaches `LIKE`.
+**One source for the expression.** `migration::search::fold(col) -> String` returns `lower(f_unaccent(<col>))`. The migration uses it to build the index; the repositories use it (through `Expr::cust_with_values`) to build `fold(col) LIKE fold($1)`. The same function produces both sides, so they can't drift apart. The bound pattern is `%<query>%`, with `%`, `_` and `\` in the query escaped first.
 
 **Tests** (real Postgres in CI):
 - `EXPLAIN` with `enable_seqscan = off` asserts a `Bitmap Index Scan` on each `ix_*_fold` index.
@@ -821,3 +821,20 @@ Done:
 Moved to S12 (the Rust login page), because nothing issues cookies from Rust before then:
 - refresh tokens (table, rotation, reuse detection);
 - the `SameSite=Lax` cookie and its test.
+
+### S3 — accent-insensitive search (same branch)
+
+Done:
+- **Migration** `m20261014_000002_search`: the `unaccent` and `pg_trgm` extensions, the `f_unaccent` IMMUTABLE wrapper, and GIN trigram indexes on `lower(f_unaccent(..))` for business and product name and description.
+- **One expression:** `migration::search::fold` builds the indexes; `infrastructure::search::text_contains` builds the query from the same function. Each listing names its searched columns in one place, and a unit test fails if a searched column has no index.
+- **Applies to:** provider browse/count (`name=`) and product browse/count (`name=`). Description matches count too.
+- **Literal wildcards:** a typed `%` or `_` matches itself, not everything.
+
+Tests (database):
+- `phan bon`, `dong thap` (the `đ` case), `DICH VU`, a description match, and two product cases.
+- The accented query still works.
+- `50%` and a bare `%` match only the row that contains `%`.
+- `EXPLAIN` with `enable_seqscan = off` shows each `ix_*_fold` index in use.
+
+Found on the way:
+- sea-query 0.32 binds only `$1`-style placeholders in a custom Postgres expression; a `?` stays in the SQL unbound and Postgres reports a syntax error. So the `%` wildcards are part of the bound value, not SQL literals.

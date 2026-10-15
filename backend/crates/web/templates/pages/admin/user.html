@@ -1,0 +1,83 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "molecules/admin_header.html" as header %}
+{#- One account: details, role, status and effective permissions.
+    `page.body` is web::pages::admin::users::UserPage. Deactivating is a
+    confirmation section that Alpine `dialog` turns into a sheet; without JS
+    it is reached by the anchor and submitted in place. -#}
+{% block title %}{{ page.body.user.username }} — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+{% set u = b.user %}
+{{ header::admin_header(title=u.username, icon="fa-user", sub=u.email, back_href=url_for(name="admin_users"), back_label="Người dùng") }}
+<div class="admin-body" x-data="dialog" data-open="{% if b.confirm_open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+  {% if b.flash == "user_role_changed" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã đổi vai trò. Quyền mới có hiệu lực ngay.") }}{% endif %}
+  {% if b.flash == "user_activated" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã bật lại tài khoản.") }}{% endif %}
+  {% if b.flash == "user_deactivated" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã tắt tài khoản. Người dùng đã bị đăng xuất.") }}{% endif %}
+  {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
+
+  <section class="admin-card p-3">
+    <dl class="acct-rows">
+      {% if u.full_name %}<div class="acct-row"><dt>Họ và tên</dt><dd>{{ u.full_name }}</dd></div>{% endif %}
+      <div class="acct-row"><dt>Vai trò</dt><dd>{% if b.role_href %}<a href="{{ b.role_href }}">{{ u.role_name }}</a>{% else %}{{ u.role_name }}{% endif %}</dd></div>
+      <div class="acct-row"><dt>Trạng thái</dt><dd>{% if u.is_active %}<span class="badge text-bg-success">Hoạt động</span>{% else %}<span class="badge text-bg-secondary">Đã tắt</span>{% endif %}</dd></div>
+      <div class="acct-row"><dt>Tạo lúc</dt><dd><time datetime="{{ u.created_on | utc_iso }}">{{ u.created_on | vn_datetime }}</time></dd></div>
+    </dl>
+  </section>
+
+  {% if b.roles %}
+  <section class="admin-card p-3">
+    <h2 class="detail-card__title">Đổi vai trò</h2>
+    <form class="d-flex flex-wrap gap-2" method="post" action="{{ b.role_action }}">
+      <label class="visually-hidden" for="user-role">Vai trò</label>
+      <select class="form-select flex-grow-1 w-auto" id="user-role" name="role_code">
+        {% for r in b.roles %}<option value="{{ r.code }}"{% if r.code == u.role_code %} selected{% endif %}>{{ r.name }}</option>{% endfor %}
+      </select>
+      <button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-shield-halved") }} Lưu vai trò</button>
+    </form>
+  </section>
+  {% endif %}
+
+  {% if b.can_change_status %}
+  <section class="admin-card p-3">
+    <h2 class="detail-card__title">Trạng thái tài khoản</h2>
+    {% if u.is_active %}
+    <p class="small text-muted">Tắt tài khoản sẽ đăng xuất người dùng ngay và chặn đăng nhập.</p>
+    <a class="btn btn-outline-warning" href="#tat-tai-khoan" x-on:click.prevent="show">{{ atoms::icon(name="fa-user-slash") }} Tắt tài khoản</a>
+    {% else %}
+    <form method="post" action="{{ b.status_action }}">
+      <input type="hidden" name="is_active" value="true">
+      <button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-user-check") }} Bật lại tài khoản</button>
+    </form>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  <section class="admin-card p-3">
+    <h2 class="detail-card__title">Quyền hiện có ({{ b.permissions | length }})</h2>
+    <p class="small text-muted">Quyền đến từ vai trò; sửa ở trang vai trò.</p>
+    <ul class="perm-chips">
+      {% for p in b.permissions %}<li><span class="ac-tag" title="{{ p.code }}">{{ p.name }}</span></li>{% endfor %}
+    </ul>
+  </section>
+
+  {% if b.can_change_status and u.is_active %}
+  <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
+  <section class="contact-sheet" id="tat-tai-khoan" aria-labelledby="confirm-title" :class="sheetClass">
+    <div class="contact-sheet__header">
+      <h2 class="contact-sheet__title" id="confirm-title">{{ atoms::icon(name="fa-user-slash") }} Tắt tài khoản {{ u.username }}?</h2>
+      <button type="button" class="contact-sheet__close" aria-label="Đóng" x-show="modal" x-cloak x-on:click="hide">{{ atoms::icon(name="fa-xmark") }}</button>
+    </div>
+    <form class="contact-sheet__form" method="post" action="{{ b.status_action }}">
+      <input type="hidden" name="is_active" value="false">
+      <div class="form-field">
+        <label class="form-label fw-semibold" for="deactivate-reason">Lý do (ghi vào nhật ký)</label>
+        <textarea class="form-control" id="deactivate-reason" name="reason" rows="2" maxlength="500" x-ref="first"></textarea>
+      </div>
+      <button type="submit" class="btn btn-warning btn-lg w-100">{{ atoms::icon(name="fa-user-slash") }} Xác nhận tắt</button>
+    </form>
+  </section>
+  {% endif %}
+</div>
+{% endblock content %}

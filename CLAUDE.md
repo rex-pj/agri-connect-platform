@@ -301,8 +301,8 @@ All routes are defined as SvelteKit file-system pages under `client-app/src/rout
 | -------------------------- | ----------------------------------------------- |
 | `/admin`                   | 303 → `/admin/dashboard` (**Rust**; anonymous → `/login`) |
 | `/admin/dashboard`         | Stats + demo-data warning (**Rust**, `web/src/pages/admin/`; frame `layouts/admin.html`, menu filtered by permission) |
-| `/admin/users`             | User list                                       |
-| `/admin/users/[id]`        | User detail, role & active management           |
+| `/admin/users`             | User list, paged (**Rust**, `web/src/pages/admin/users.rs`) |
+| `/admin/users/[id]`        | Role change, deactivate (confirm + reason) / reactivate, effective permissions (**Rust**) |
 | `/admin/roles`             | Roles with grant counts (**Rust**)              |
 | `/admin/roles/[id]`        | Editable permission grid, `POST …/permissions` (`role.permission.manage`; cannot revoke it from your own role; audited) (**Rust**) |
 | `/admin/permissions`       | Permissions × roles, read-only (**Rust**)       |

@@ -2124,3 +2124,13 @@ a.chip {
 .perm-matrix th[scope="row"] {
   min-width: 220px;
 }
+
+/* ── Admin users (pages/admin/user) ──────────────────────────────────────── */
+.perm-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

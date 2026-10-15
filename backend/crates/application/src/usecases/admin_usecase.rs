@@ -984,6 +984,20 @@ impl AdminUseCase {
             .map(|roles| roles.into_iter().map(RoleDto::from).collect())
     }
 
+    /// The roles a user can be moved to: for whoever may change user roles,
+    /// even without permission to browse the role pages.
+    pub async fn assignable_roles(&self, actor: &Actor) -> Result<Vec<RoleDto>> {
+        actor.require(PERM_USER_ROLE_UPDATE)?;
+        Ok(self
+            .role_repo
+            .list()
+            .await?
+            .into_iter()
+            .filter(|r| r.is_active)
+            .map(RoleDto::from)
+            .collect())
+    }
+
     pub async fn get_role_by_id(&self, actor: &Actor, id: i32) -> Result<RoleDto> {
         actor.require(PERM_ROLE_READ)?;
         self.role_repo

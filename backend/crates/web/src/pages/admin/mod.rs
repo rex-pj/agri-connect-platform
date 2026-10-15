@@ -4,6 +4,7 @@
 
 pub mod dashboard;
 pub mod roles;
+pub mod users;
 
 use application::{
     authz::Actor,

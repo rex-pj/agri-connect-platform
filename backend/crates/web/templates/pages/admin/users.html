@@ -1,0 +1,35 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "molecules/admin_header.html" as header %}
+{% import "molecules/pagination_nav.html" as paging %}
+{#- `page.body` is web::pages::admin::users::UsersPage. Changes happen on each
+    user's page. -#}
+{% block title %}Người dùng — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+{{ header::admin_header(title="Người dùng", icon="fa-users", sub=b.total ~ " tài khoản") }}
+<div class="admin-body">
+  <div class="admin-card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="admin-table-head">
+          <tr><th>Người dùng</th><th>Vai trò</th><th class="text-center">Trạng thái</th><th>Tạo lúc</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for r in b.rows %}
+          {% set u = r.user %}
+          <tr{% if not u.is_active %} class="table-warning"{% endif %}>
+            <td><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ u.username }}</a>{% if u.full_name %}<span class="d-block small text-muted">{{ u.full_name }}</span>{% endif %}<span class="d-block small text-muted">{{ u.email }}</span></td>
+            <td><span class="badge text-bg-light border">{{ u.role_name }}</span></td>
+            <td class="text-center">{% if u.is_active %}<span class="badge text-bg-success">Hoạt động</span>{% else %}<span class="badge text-bg-secondary">Đã tắt</span>{% endif %}</td>
+            <td class="small text-muted"><time datetime="{{ u.created_on | utc_iso }}">{{ u.created_on | vn_datetime }}</time>{% if u.created_by_name %}<span class="d-block">{{ u.created_by_name }}</span>{% endif %}</td>
+            <td class="text-end"><a class="btn btn-sm btn-outline-success" href="{{ r.href }}" aria-label="Chi tiết {{ u.username }}">{{ atoms::icon(name="fa-chevron-right") }}</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% if b.pagination %}{{ paging::pagination_nav(p=b.pagination) }}{% endif %}
+</div>
+{% endblock content %}

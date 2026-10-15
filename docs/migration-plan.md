@@ -1142,3 +1142,24 @@ Tests:
   - **a grant on the grid lets the provider's existing session into the dashboard on the next request**, its menu shows only that entry, the audit row reads `change_role_permissions +admin.dashboard.view: thử nghiệm`, and revoking closes it again;
   - self-lockout → 403 with the message; an unknown key → 400; a provider posting the grid → 403; nothing changed in each case;
   - the matrix shows every key and links each role.
+
+### S15 — admin users (same branch)
+
+Done:
+- **`/admin/users`** (paged list, links to each account) and **`/admin/users/{id}`** are served by Rust in the admin frame. The SvelteKit `admin/users` routes are deleted.
+- **Role change:** a select of the active roles posts to `POST /admin/users/{id}/role`. The choices come from a new `AdminUseCase::assignable_roles`, which needs `user.role.update` only, so changing roles does not require `role.read` as well. The role links to its grid when the visitor may read roles.
+- **Status:**
+  - deactivating goes through a confirmation with an optional reason, `POST /admin/users/{id}/status`. With JS it is the Alpine `dialog` sheet; without JS it is an anchored section of the page;
+  - reactivating is one button;
+  - a refused change re-opens the confirmation with the message.
+- **Rules** stay in the use cases: invalid role codes, and an admin cannot change their own role or status (`cannot_change_own_account`). Effects are immediate because permissions and account status are read per request.
+- **Effective permissions** (read-only) list what the role grants; editing them happens on the role page.
+- Flashes for role changed, activated and deactivated.
+
+Tests (database):
+- the list and detail for an admin; a provider gets 403;
+- an invalid role → 400; a role change opens the admin dashboard to the user's **existing session**;
+- deactivation signs the user out on their next request; the audit row reads `deactivate_user: <reason>`; reactivation lets them sign in again;
+- an admin's own deactivation and demotion → 403, the confirmation re-opened, nothing changed.
+
+Note: while this slice was being tested, the local database stopped answering twice (the Windows service stopped while another process held port 5432). Database tests then fail with `PoolTimedOut` after 30 s each, which can look like a hang when the output is filtered.

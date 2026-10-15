@@ -242,6 +242,16 @@ impl AppRouting {
                 post(pages::admin::roles::save),
             )
             .route("/admin/permissions", get(pages::admin::roles::matrix))
+            .route("/admin/users", get(pages::admin::users::list))
+            .route("/admin/users/{id}", get(pages::admin::users::show))
+            .route(
+                "/admin/users/{id}/role",
+                post(pages::admin::users::change_role),
+            )
+            .route(
+                "/admin/users/{id}/status",
+                post(pages::admin::users::change_status),
+            )
             .route("/account/password", post(pages::account::change_password));
 
         // ── USER routes (authenticated, no rate limit) ───────────────────────

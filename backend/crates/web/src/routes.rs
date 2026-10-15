@@ -39,6 +39,8 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("admin_dashboard", "/admin/dashboard"),
     ("admin_users", "/admin/users"),
     ("admin_user", "/admin/users/{id}"),
+    ("admin_user_role", "/admin/users/{id}/role"),
+    ("admin_user_status", "/admin/users/{id}/status"),
     ("admin_roles", "/admin/roles"),
     ("admin_role", "/admin/roles/{id}"),
     ("admin_role_permissions", "/admin/roles/{id}/permissions"),

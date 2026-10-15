@@ -284,6 +284,7 @@ All routes are defined as SvelteKit file-system pages under `client-app/src/rout
 | `/products/category/[id]/[slug]` | Products in a category (**Rust**; slug is the category slug, others 301) |
 | `/services`                      | Provider directory: GET filter form, page links (**Rust**, `web/src/pages/services.rs`) |
 | `/services/category/[id]/[slug]` | Providers of one service (**Rust**; category slug canonical) |
+| `/search`                        | Providers + products for `q`; link tabs (`tab=`) work without JS (**Rust**, `web/src/pages/search.rs`) |
 | `/agri-connect`                  | Provider map geo-discovery                     |
 | `/providers/[id]`                | 301 → `/providers/[id]/[slug]` (**Rust**)      |
 | `/providers/[id]/[slug]`         | Provider detail + contact form (**Rust**, `web/src/pages/provider.rs`) |

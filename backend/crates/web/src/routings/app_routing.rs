@@ -116,6 +116,7 @@ impl AppRouting {
             )
             .route("/products/{id}", get(pages::product::by_id))
             .route("/products/{id}/{slug}", get(pages::product::show))
+            .route("/search", get(pages::search::show))
             .route("/services", get(pages::services::list))
             .route(
                 "/services/category/{id}/{slug}",

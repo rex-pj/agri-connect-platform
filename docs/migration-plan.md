@@ -987,3 +987,17 @@ Tests (database):
 - hand-edited queries still list everything; the empty state's reset link keeps the search;
 - category canonical and 301; product-category and unknown ids → 404.
 - The product listing tests run unchanged against the shared organism.
+
+### S10 — search page (same branch)
+
+Done:
+- **`/search` is served by Rust** (`web/src/pages/search.rs`); the SvelteKit route is deleted. One query searches providers and products together (accent-insensitive, S3). Each kind shows six results, plus "Xem thêm" to `/services?q=` or `/products?q=` when there are more. The page is `noindex`, and the top bar's search box stays empty there, as before.
+- **Tabs without JS:** the tabs are links (`?q=…&tab=services`). The server renders every section and marks the ones outside the chosen tab `hidden`. An unknown tab means "all".
+- **Alpine `tabs`:** a click switches the panels in place (`:hidden`) and puts the tab's link in the address bar, so a reload or a shared link keeps the tab. The current tab is marked by `aria-current`, set by the server and then by Alpine, not by a class. Alpine's `:class` keeps static classes, so a server-rendered `active` class could never be removed.
+- **New molecule** `search_bar`.
+
+Tests (database):
+- both counts, tab links carrying the query, `noindex`, all sections visible on "all", no "see more" under six;
+- `tab=services` hides the products section in the HTML itself;
+- 8 providers and 9 products preview six each with links to the full lists;
+- no query asks for one; nothing found shows both empty states with links to the lists; the top-bar box is not pre-filled.

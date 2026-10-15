@@ -118,6 +118,29 @@ document.addEventListener("alpine:init", () => {
     },
   }));
 
+  // Tabs that are links (?tab=…): without JS each one reloads the page with
+  // that tab. With JS a click switches the panels in place and puts the link
+  // in the address bar, so a reload or a shared URL keeps the tab. Tabs carry
+  // data-tab, panels data-panel; the "all" tab shows every panel.
+  Alpine.data("tabs", () => ({
+    tab: "all",
+
+    init() {
+      this.tab = this.$el.dataset.tab || "all";
+    },
+    select(event) {
+      const link = event.currentTarget;
+      this.tab = link.dataset.tab;
+      history.replaceState(null, "", link.href);
+    },
+    get current() {
+      return this.$el.dataset.tab === this.tab ? "page" : false;
+    },
+    get panelHidden() {
+      return !(this.tab === "all" || this.tab === this.$el.dataset.panel);
+    },
+  }));
+
   // Share the current page: the phone's share sheet, else copy the link.
   Alpine.data("shareButton", () => ({
     status: "",

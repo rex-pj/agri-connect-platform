@@ -50,3 +50,7 @@ pub const HOME_PROVIDER_COUNT: usize = 3;
 // ── Pages ─────────────────────────────────────────────────────────────────────
 /// Search engines show about this much of a meta description.
 pub const META_DESCRIPTION_MAX_CHARS: usize = 150;
+
+// ── Search page ───────────────────────────────────────────────────────────────
+/// Results of each kind shown on /search; "Xem thêm" leads to the full list.
+pub const SEARCH_PREVIEW_COUNT: usize = 6;

@@ -1458,3 +1458,48 @@ body:has(.app-nav__search-row.open) .app-main {
   padding: 0 4px;
   color: var(--muted);
 }
+
+/* ── Search page (pages/search) ──────────────────────────────────────────── */
+.search-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 12px 8px 0;
+  overflow-x: auto;
+}
+@media (min-width: 768px) {
+  .search-tabs {
+    padding: 16px 16px 0;
+  }
+}
+/* The current tab is marked by aria-current (set by the server, then by
+   Alpine), not a class: one source of truth, also read by screen readers. */
+.search-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  background: var(--surface);
+  color: var(--text2);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.search-tab[aria-current="page"] {
+  border-color: var(--p700);
+  background: var(--p700);
+  color: #fff;
+}
+.search-tab__badge {
+  min-width: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  background: var(--p100);
+  color: var(--p800);
+  font-size: 0.75rem;
+  font-weight: 800;
+  line-height: 22px;
+  text-align: center;
+}

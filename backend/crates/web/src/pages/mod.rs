@@ -7,6 +7,7 @@ pub mod listing;
 pub mod product;
 pub mod products;
 pub mod provider;
+pub mod search;
 pub mod services;
 
 use axum::{

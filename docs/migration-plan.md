@@ -969,3 +969,21 @@ Tests:
   - the empty state's reset link keeps the search;
   - 28 products page as 20 + 8, with filter-keeping links;
   - category canonical, 301 with `page` kept, and 404 for service, unknown and non-numeric ids.
+
+### S9 — service listings (same branch)
+
+Done:
+- **`/services` and `/services/category/{id}/{slug}` are served by Rust** (`web/src/pages/services.rs`). The SvelteKit `services` route directory is gone.
+- **The provider directory** works like the product list: one GET form (text, service, sort), lenient parsing and pagination links. Each card shows the provider's district and services, with call and detail buttons. The near-me banner sits above the results. A provider with no active service is never listed (unchanged rule).
+- **`ProviderSort`** (`verified_first` default, `newest`, `name_asc`) is now a domain enum, like `ProductSort`, end to end through the JSON API.
+- **One filter organism:** `list_filters` replaces `product_filters`. It is driven by `listing::FilterForm`, which carries the category parameter name, the sort chips with labels, and an optional price range. Category pages share `find_category`, `redirect_to_canonical` and `category_sub`.
+- **SEO:** `/services` now has a title and a meta description; the SvelteKit page had neither.
+
+Changed from the plan, and why:
+- **No contact dialog on the list pages.** The SvelteKit list pages wired a `ContactSheet` to `ProviderCard`'s `onContact`, but the card never rendered a button for it, so no visitor could ever open it. Contact stays on the provider page (S7), one tap from every card through "Chi tiết", where the form also works without JS.
+
+Tests (database):
+- default order is verified first then newest; `name_asc`; accent-insensitive search; service filter with the chip kept; no price filter; a business without services hidden; district and banner shown;
+- hand-edited queries still list everything; the empty state's reset link keeps the search;
+- category canonical and 301; product-category and unknown ids → 404.
+- The product listing tests run unchanged against the shared organism.

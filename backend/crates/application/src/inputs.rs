@@ -1,6 +1,8 @@
 // Input parameter types passed from handlers into use cases.
 // These are internal application-layer types — not HTTP request structs.
 
+use domain::models::business::ProviderSort;
+
 // ── Agri-connect ──────────────────────────────────────────────────────────────
 
 pub struct GeoSearchParams {
@@ -13,8 +15,7 @@ pub struct GeoSearchParams {
 pub struct BrowseParams {
     pub service_id: Option<i32>,
     pub name: Option<String>,
-    /// "verified_first" (default) | "newest" | "name_asc"
-    pub sort: Option<String>,
+    pub sort: ProviderSort,
     pub page: i64,
 }
 

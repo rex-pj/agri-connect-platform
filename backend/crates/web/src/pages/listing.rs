@@ -2,7 +2,11 @@
 //! pagination links. Lists are plain GET forms and links, so every state
 //! (filters, page) is a URL that can be shared, bookmarked or reloaded.
 
+use application::outputs::CategoryDto;
+use domain::{Error, ErrorCode};
 use serde::Serialize;
+
+use crate::pages::moved_permanently;
 
 /// Pages shown either side of the current one before an ellipsis.
 const PAGE_WINDOW: i64 = 2;
@@ -49,6 +53,94 @@ fn encode(value: &str) -> String {
         }
     }
     out
+}
+
+/// A category chip in a filter form.
+#[derive(Debug, Serialize)]
+pub struct CategoryChip {
+    pub id: i32,
+    pub name: String,
+    pub icon: String,
+}
+
+pub fn chips(categories: &[CategoryDto]) -> Vec<CategoryChip> {
+    categories
+        .iter()
+        .map(|c| CategoryChip {
+            id: c.id,
+            name: c.name.clone(),
+            icon: c.icon.clone().unwrap_or_else(|| "fa-tag".to_owned()),
+        })
+        .collect()
+}
+
+#[derive(Debug, Serialize)]
+pub struct SortChip {
+    pub value: &'static str,
+    pub label: &'static str,
+}
+
+/// The price inputs, as typed (only lists that have prices).
+#[derive(Debug, Serialize)]
+pub struct PriceRange {
+    pub min: String,
+    pub max: String,
+}
+
+/// The search-and-filter form of a list page, as the visitor left it. One
+/// shape for every list, so one organism (`list_filters`) renders them all.
+#[derive(Debug, Serialize)]
+pub struct FilterForm {
+    pub action: String,
+    pub placeholder: &'static str,
+    pub q: String,
+    /// Query name of the category radio group (`category_id`, `service_id`).
+    pub category_param: &'static str,
+    pub category_label: &'static str,
+    pub category_id: Option<i32>,
+    pub categories: Vec<CategoryChip>,
+    pub price: Option<PriceRange>,
+    pub sort: &'static str,
+    pub sorts: Vec<SortChip>,
+    /// How many filters besides the search text are set (badge on the toggle).
+    pub active: usize,
+    /// The list with the filters cleared but the search text kept.
+    pub reset_href: String,
+}
+
+/// The category `id` among `categories` (already narrowed to one type), or
+/// a 404: a service id on a product page does not exist there.
+pub fn find_category(categories: &[CategoryDto], id: i32) -> Result<CategoryDto, Error> {
+    categories
+        .iter()
+        .find(|c| c.id == id)
+        .cloned()
+        .ok_or_else(|| Error::new(ErrorCode::CategoryNotFound))
+}
+
+/// 301 to the canonical category URL when `path` is another spelling of it,
+/// keeping the page number.
+pub fn redirect_to_canonical(
+    path: &str,
+    canonical: &str,
+    page: i64,
+) -> Option<Result<axum::response::Response, Error>> {
+    if path == canonical {
+        return None;
+    }
+    let page = page.to_string();
+    let keep: &[(&str, &str)] = if page != "1" { &[("page", &page)] } else { &[] };
+    Some(moved_permanently(&with_query(canonical, keep)))
+}
+
+/// The hero line of a category page: its description and how many results.
+pub fn category_sub(category: &CategoryDto, total: i64, noun: &str) -> String {
+    let count = (total > 0).then(|| format!("{total} {noun}"));
+    [category.description.clone(), count]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join(" · ")
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]

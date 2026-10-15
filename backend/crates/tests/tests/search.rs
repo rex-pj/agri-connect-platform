@@ -5,7 +5,10 @@ use std::sync::Arc;
 
 use application::{catalogue::CATALOGUE, inputs::BrowseParams};
 use domain::{
-    models::product::{ProductFilter, ProductSort},
+    models::{
+        business::ProviderSort,
+        product::{ProductFilter, ProductSort},
+    },
     repositories::catalogue_repository_trait::CatalogueRepositoryTrait,
 };
 use infrastructure::{catalogue_repository::CatalogueRepository, search::contains_sql};
@@ -60,7 +63,7 @@ async fn providers(t: &TestDb, query: &str) -> Vec<String> {
         .browse_providers(BrowseParams {
             service_id: None,
             name: Some(query.into()),
-            sort: None,
+            sort: ProviderSort::default(),
             page: 1,
         })
         .await

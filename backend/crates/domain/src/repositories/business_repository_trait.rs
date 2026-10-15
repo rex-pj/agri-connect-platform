@@ -4,7 +4,7 @@ use crate::{
     error::Error,
     models::business::{
         BusinessAdminDetail, BusinessAdminView, BusinessBrowse, BusinessDetail, BusinessGeoResult,
-        BusinessProfile,
+        BusinessProfile, ProviderSort,
     },
 };
 
@@ -21,7 +21,7 @@ pub trait BusinessRepositoryTrait {
         &self,
         service_id: Option<i32>,
         name: Option<String>,
-        sort: Option<String>,
+        sort: ProviderSort,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<BusinessBrowse>, Error>;

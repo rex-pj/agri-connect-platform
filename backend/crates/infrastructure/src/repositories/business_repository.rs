@@ -14,7 +14,7 @@ use tracing::error;
 use domain::{
     models::business::{
         BusinessAdminDetail, BusinessAdminView, BusinessBrowse, BusinessDetail, BusinessGeoResult,
-        BusinessProfile, ProductAdminItem, Service, ServiceAdminItem,
+        BusinessProfile, ProductAdminItem, ProviderSort, Service, ServiceAdminItem,
     },
     repositories::business_repository_trait::BusinessRepositoryTrait,
 };
@@ -235,7 +235,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
         &self,
         service_id: Option<i32>,
         name: Option<String>,
-        sort: Option<String>,
+        sort: ProviderSort,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<BusinessBrowse>, Error> {
@@ -272,10 +272,10 @@ impl BusinessRepositoryTrait for BusinessRepository {
             query = query.filter(text_contains(BUSINESS_SEARCH_COLUMNS, q));
         }
 
-        let query = match sort.as_deref() {
-            Some("newest") => query.order_by_desc(business::Column::CreatedOn),
-            Some("name_asc") => query.order_by_asc(business::Column::Name),
-            _ => query
+        let query = match sort {
+            ProviderSort::Newest => query.order_by_desc(business::Column::CreatedOn),
+            ProviderSort::NameAsc => query.order_by_asc(business::Column::Name),
+            ProviderSort::VerifiedFirst => query
                 .order_by_desc(business::Column::IsVerified)
                 .order_by_desc(business::Column::CreatedOn),
         };

@@ -99,3 +99,50 @@ pub struct BusinessAdminDetail {
     pub services: Vec<ServiceAdminItem>,
     pub products: Vec<ProductAdminItem>,
 }
+
+/// Order of a provider listing. The wire names are query-string values that
+/// shared links carry, so renaming one breaks those links.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ProviderSort {
+    /// Verified providers first, then the newest.
+    #[default]
+    VerifiedFirst,
+    Newest,
+    NameAsc,
+}
+
+impl ProviderSort {
+    pub const ALL: [ProviderSort; 3] = [Self::VerifiedFirst, Self::Newest, Self::NameAsc];
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::VerifiedFirst => "verified_first",
+            Self::Newest => "newest",
+            Self::NameAsc => "name_asc",
+        }
+    }
+
+    /// Unknown or missing means the default order, never an error.
+    pub fn parse(value: Option<&str>) -> Self {
+        Self::ALL
+            .into_iter()
+            .find(|s| Some(s.as_str()) == value)
+            .unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ProviderSort;
+
+    #[test]
+    fn sort_names_round_trip_and_unknown_means_default() {
+        for sort in ProviderSort::ALL {
+            assert_eq!(ProviderSort::parse(Some(sort.as_str())), sort);
+        }
+        assert_eq!(
+            ProviderSort::parse(Some("rating")),
+            ProviderSort::VerifiedFirst
+        );
+    }
+}

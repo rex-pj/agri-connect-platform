@@ -15,8 +15,11 @@ use crate::{
     app_state::AppState,
     extract::{ApiPath, ApiQuery},
     pages::{
-        listing::{parse_opt, parse_price, with_query, Pagination},
-        moved_permanently, parse_id,
+        listing::{
+            category_sub, chips, find_category, parse_opt, parse_price, redirect_to_canonical,
+            with_query, FilterForm, Pagination, PriceRange, SortChip,
+        },
+        parse_id,
     },
     routes,
     shell::Shell,
@@ -37,28 +40,6 @@ pub struct ListQuery {
     pub page: String,
 }
 
-/// The filter form as the visitor left it.
-#[derive(Debug, Serialize)]
-pub struct FilterForm {
-    pub q: String,
-    pub category_id: Option<i32>,
-    pub min_price: String,
-    pub max_price: String,
-    pub sort: &'static str,
-    pub sorts: Vec<&'static str>,
-    /// How many filters besides the search text are set (badge on the toggle).
-    pub active: usize,
-    /// The list with the filters cleared but the search text kept.
-    pub reset_href: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct CategoryChip {
-    pub id: i32,
-    pub name: String,
-    pub icon: String,
-}
-
 #[derive(Serialize)]
 pub struct ProductsPage {
     pub title: String,
@@ -70,7 +51,6 @@ pub struct ProductsPage {
     pub category: Option<CategoryDto>,
     /// Set on /products only; the category page has no filter panel.
     pub filters: Option<FilterForm>,
-    pub categories: Vec<CategoryChip>,
     pub result: ProductBrowseResponse,
     pub pagination: Option<Pagination>,
     /// Any filter or search is set: the empty state offers to clear them.
@@ -81,15 +61,12 @@ fn url(name: &str, params: &[(&str, &str)]) -> Result<String, Error> {
     routes::url(name, params).map_err(|e| Error::internal(format!("products links: {e}")))
 }
 
-fn chips(categories: &[CategoryDto]) -> Vec<CategoryChip> {
-    categories
-        .iter()
-        .map(|c| CategoryChip {
-            id: c.id,
-            name: c.name.clone(),
-            icon: c.icon.clone().unwrap_or_else(|| "fa-tag".to_owned()),
-        })
-        .collect()
+fn sort_label(sort: ProductSort) -> &'static str {
+    match sort {
+        ProductSort::Newest => "Mới nhất",
+        ProductSort::PriceAsc => "Giá tăng dần",
+        ProductSort::PriceDesc => "Giá giảm dần",
+    }
 }
 
 /// GET /products
@@ -127,7 +104,7 @@ pub async fn list(
         .await?;
 
     let path = url("products", &[])?;
-    let category_param = category_id.map(|id| id.to_string()).unwrap_or_default();
+    let category_text = category_id.map(|id| id.to_string()).unwrap_or_default();
     let min_text = min_price.map(|p| p.to_string()).unwrap_or_default();
     let max_text = max_price.map(|p| p.to_string()).unwrap_or_default();
     let sort_param = if sort == ProductSort::default() {
@@ -137,7 +114,7 @@ pub async fn list(
     };
     let kept = [
         ("q", search.as_str()),
-        ("category_id", category_param.as_str()),
+        ("category_id", category_text.as_str()),
         ("min_price", min_text.as_str()),
         ("max_price", max_text.as_str()),
         ("sort", sort_param),
@@ -164,15 +141,27 @@ pub async fn list(
         filtered: !search.is_empty() || active > 0,
         filters: Some(FilterForm {
             reset_href: with_query(&path, &[("q", search.as_str())]),
+            action: path,
+            placeholder: "Tìm sản phẩm...",
             q: search,
+            category_param: "category_id",
+            category_label: "Danh mục",
             category_id,
-            min_price: min_text,
-            max_price: max_text,
+            categories: chips(&categories),
+            price: Some(PriceRange {
+                min: min_text,
+                max: max_text,
+            }),
             sort: sort.as_str(),
-            sorts: ProductSort::ALL.iter().map(|s| s.as_str()).collect(),
+            sorts: ProductSort::ALL
+                .into_iter()
+                .map(|s| SortChip {
+                    value: s.as_str(),
+                    label: sort_label(s),
+                })
+                .collect(),
             active,
         }),
-        categories: chips(&categories),
         result,
     };
     render_page(&state, &shell, "pages/products.html", &page)
@@ -191,24 +180,14 @@ pub async fn category(
         .explore
         .get_categories(Some(PRODUCT_CATEGORY_TYPE))
         .await?;
-    let category = categories
-        .iter()
-        .find(|c| c.id == id)
-        .cloned()
-        .ok_or_else(|| Error::new(ErrorCode::CategoryNotFound))?;
+    let category = find_category(&categories, id)?;
     let canonical = url(
         "product_category",
         &[("id", &id.to_string()), ("slug", &category.slug)],
     )?;
     let page_number: i64 = parse_opt(&q.page).unwrap_or(1);
-    if shell.path != canonical {
-        let page_text = page_number.to_string();
-        let keep: &[(&str, &str)] = if page_number > 1 {
-            &[("page", &page_text)]
-        } else {
-            &[]
-        };
-        return moved_permanently(&with_query(&canonical, keep));
+    if let Some(redirect) = redirect_to_canonical(&shell.path, &canonical, page_number) {
+        return redirect;
     }
 
     let result = state
@@ -224,22 +203,15 @@ pub async fn category(
         )
         .await?;
 
-    let sub = match (&category.description, result.total) {
-        (Some(d), n) if n > 0 => format!("{d} · {n} sản phẩm"),
-        (Some(d), _) => d.clone(),
-        (None, n) if n > 0 => format!("{n} sản phẩm"),
-        (None, _) => String::new(),
-    };
     let page = ProductsPage {
         title: category.name.clone(),
         icon: category.icon.clone().unwrap_or_else(|| "fa-tag".to_owned()),
-        sub,
+        sub: category_sub(&category, result.total, "sản phẩm"),
         back_href: url("products", &[])?,
         back_label: "Sản phẩm",
         pagination: Pagination::new(&canonical, &[], result.page, result.total_pages),
         filtered: false,
         filters: None,
-        categories: chips(&categories),
         category: Some(category),
         result,
     };

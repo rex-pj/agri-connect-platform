@@ -6,7 +6,7 @@ use axum::{
     body::Body,
     http::{header, Request, Response, StatusCode},
 };
-use integration_tests::{register_provider, send, Env};
+use integration_tests::{categories_of, register_provider, send, Env};
 use sea_orm::{ConnectionTrait, Statement};
 
 fn page(uri: &str) -> Request<Body> {
@@ -29,31 +29,10 @@ async fn text(res: Response<Body>) -> String {
     String::from_utf8(bytes.to_vec()).unwrap()
 }
 
-/// (id, slug) of the first two product categories in display order.
-async fn categories(e: &Env) -> [(i32, String); 2] {
-    let rows = e
-        .t
-        .db
-        .query_all(Statement::from_string(
-            e.t.db.get_database_backend(),
-            "SELECT id, slug FROM categories WHERE type = 'product' ORDER BY display_order LIMIT 2",
-        ))
-        .await
-        .unwrap();
-    let pick = |i: usize| {
-        let r = &rows[i];
-        (
-            r.try_get::<i32>("", "id").unwrap(),
-            r.try_get::<String>("", "slug").unwrap(),
-        )
-    };
-    [pick(0), pick(1)]
-}
-
 /// Three products in the first category, one in the second.
 async fn seeded(e: &Env) -> [(i32, String); 2] {
     register_provider(&e.state, "nongdan", "0901234567").await;
-    let cats = categories(e).await;
+    let cats = categories_of(e, "product").await;
     let (a, b) = (cats[0].0, cats[1].0);
     e.t.db
         .execute_unprepared(&format!(
@@ -68,7 +47,7 @@ async fn seeded(e: &Env) -> [(i32, String); 2] {
         ))
         .await
         .unwrap();
-    cats
+    [cats[0].clone(), cats[1].clone()]
 }
 
 /// The product names in page order.

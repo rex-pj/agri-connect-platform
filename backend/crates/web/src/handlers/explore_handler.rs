@@ -4,7 +4,7 @@ use application::{
     outputs::{BrowseResponse, BusinessSearchDto},
 };
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
-use domain::Error;
+use domain::{models::business::ProviderSort, Error};
 use serde::Serialize;
 
 use crate::{
@@ -50,7 +50,7 @@ impl ExploreHandler {
                 .browse_providers(BrowseParams {
                     service_id: q.service_id,
                     name: q.name,
-                    sort: q.sort,
+                    sort: ProviderSort::parse(q.sort.as_deref()),
                     page: q.page.unwrap_or(1),
                 })
                 .await?;

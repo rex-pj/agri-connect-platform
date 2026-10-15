@@ -299,3 +299,25 @@ pub async fn put_photo(env: &Env, product_id: i32, token: &str) -> String {
         .unwrap()
         .to_owned()
 }
+
+/// (id, slug) of the catalogue's categories of `kind` ("product", "service"),
+/// in display order.
+pub async fn categories_of(env: &Env, kind: &str) -> Vec<(i32, String)> {
+    env.t
+        .db
+        .query_all(sea_orm::Statement::from_sql_and_values(
+            env.t.db.get_database_backend(),
+            "SELECT id, slug FROM categories WHERE type = $1 ORDER BY display_order",
+            [kind.into()],
+        ))
+        .await
+        .unwrap()
+        .iter()
+        .map(|r| {
+            (
+                r.try_get::<i32>("", "id").unwrap(),
+                r.try_get::<String>("", "slug").unwrap(),
+            )
+        })
+        .collect()
+}

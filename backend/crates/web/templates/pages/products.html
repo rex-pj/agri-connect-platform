@@ -3,7 +3,7 @@
 {% import "molecules/empty_state.html" as empty %}
 {% import "molecules/pagination_nav.html" as paging %}
 {% import "organisms/product_card.html" as cards %}
-{% import "organisms/product_filters.html" as filters %}
+{% import "organisms/list_filters.html" as filters %}
 {#- All products (with the filter form) or one category's. `page` is
     web::pages::products::ProductsPage. -#}
 {% block title %}{% if page.category %}{{ page.category.name }}{% else %}Sản phẩm nông nghiệp{% endif %} — {{ site.name }}{% endblock title %}
@@ -12,7 +12,7 @@
 {{ hero::page_hero(title=page.title, back_href=page.back_href, back_label=page.back_label, variant="", icon=page.icon, sub=page.sub) }}
 
 {% if page.filters %}
-<div class="list-tools">{{ filters::product_filters(f=page.filters, categories=page.categories, action=url_for(name="products")) }}</div>
+<div class="list-tools">{{ filters::list_filters(f=page.filters) }}</div>
 {% endif %}
 
 <section class="list-results">

@@ -180,6 +180,13 @@ impl Views {
                 .ok_or_else(|| tera::Error::msg("slugify: expects a string"))
         });
 
+        tera.register_filter("number", |value: &Value, _: &HashMap<String, Value>| {
+            let n = value
+                .as_i64()
+                .ok_or_else(|| tera::Error::msg("number: expects an integer"))?;
+            Ok(Value::String(format_number(n)))
+        });
+
         tera.register_filter("vnd", |value: &Value, _: &HashMap<String, Value>| {
             let amount = value
                 .as_i64()
@@ -268,7 +275,12 @@ fn parse_instant(value: &Value) -> tera::Result<DateTime<Utc>> {
 
 /// `28000` → `28.000 ₫`, the way Vietnamese shops write prices.
 pub fn format_vnd(amount: i64) -> String {
-    let digits = amount.unsigned_abs().to_string();
+    format!("{} ₫", format_number(amount))
+}
+
+/// `1234567` → `1.234.567`: Vietnamese groups thousands with dots.
+pub fn format_number(n: i64) -> String {
+    let digits = n.unsigned_abs().to_string();
     let mut grouped = String::new();
     for (i, ch) in digits.chars().enumerate() {
         if i > 0 && (digits.len() - i).is_multiple_of(3) {
@@ -276,8 +288,8 @@ pub fn format_vnd(amount: i64) -> String {
         }
         grouped.push(ch);
     }
-    let sign = if amount < 0 { "-" } else { "" };
-    format!("{sign}{grouped} ₫")
+    let sign = if n < 0 { "-" } else { "" };
+    format!("{sign}{grouped}")
 }
 
 pub fn format_vn_datetime(instant: DateTime<Utc>) -> String {
@@ -399,6 +411,8 @@ mod tests {
         assert_eq!(format_vnd(28000), "28.000 ₫");
         assert_eq!(format_vnd(1_234_567), "1.234.567 ₫");
         assert_eq!(format_vnd(-5000), "-5.000 ₫");
+        assert_eq!(format_number(1_234), "1.234");
+        assert_eq!(format_number(999), "999");
     }
 
     #[test]

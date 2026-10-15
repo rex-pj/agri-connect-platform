@@ -299,12 +299,13 @@ All routes are defined as SvelteKit file-system pages under `client-app/src/rout
 
 | Route                      | Description                                     |
 | -------------------------- | ----------------------------------------------- |
-| `/admin`                   | Redirects to `/admin/dashboard`                 |
-| `/admin/dashboard`         | Stats overview                                  |
+| `/admin`                   | 303 → `/admin/dashboard` (**Rust**; anonymous → `/login`) |
+| `/admin/dashboard`         | Stats + demo-data warning (**Rust**, `web/src/pages/admin/`; frame `layouts/admin.html`, menu filtered by permission) |
 | `/admin/users`             | User list                                       |
 | `/admin/users/[id]`        | User detail, role & active management           |
-| `/admin/roles`             | Role listing (read-only)                        |
-| `/admin/roles/[id]`        | Role detail                                     |
+| `/admin/roles`             | Roles with grant counts (**Rust**)              |
+| `/admin/roles/[id]`        | Editable permission grid, `POST …/permissions` (`role.permission.manage`; cannot revoke it from your own role; audited) (**Rust**) |
+| `/admin/permissions`       | Permissions × roles, read-only (**Rust**)       |
 | `/admin/categories`        | Category list + CRUD                            |
 | `/admin/categories/[id]`   | Category detail & edit                          |
 | `/admin/agri-connect`      | Provider list & verification                    |

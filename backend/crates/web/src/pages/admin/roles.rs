@@ -1,0 +1,301 @@
+//! /admin/roles, /admin/roles/{id} (with the editable permission grid) and
+//! /admin/permissions (permissions × roles).
+//!
+//! The grid posts one checkbox per permission, named `perm.<key>`: an
+//! urlencoded form cannot repeat a field name into a list here, and named
+//! boxes keep the form working without JS.
+
+use std::collections::HashMap;
+
+use application::{
+    catalogue::PERM_ROLE_PERMISSION_MANAGE,
+    outputs::{GrantDto, PermissionMatrixDto, RoleDto, RoleGrantsDto},
+};
+use axum::{extract::State, http::StatusCode, response::Response};
+use domain::{Error, ErrorCode};
+use serde::Serialize;
+
+use crate::{
+    app_state::AppState,
+    cookies::{Flash, TakeFlash},
+    extract::{ApiForm, ApiPath},
+    middleware::auth::Viewer,
+    pages::{
+        admin::{render_admin, url},
+        forms::{is_form_error, FormErrors},
+        parse_id, see_other,
+    },
+};
+
+/// The checkbox name prefix of the grid.
+const FIELD_PREFIX: &str = "perm.";
+
+/// The group heading of a permission, from the first part of its key.
+fn group_label(key: &str) -> &'static str {
+    match key.split('.').next().unwrap_or_default() {
+        "admin" | "system" => "Hệ thống",
+        "user" | "role" => "Người dùng và vai trò",
+        "provider" => "Nhà cung cấp",
+        "listing" | "service" => "Sản phẩm và dịch vụ",
+        "category" | "location" => "Danh mục và khu vực",
+        "inquiry" | "review" => "Yêu cầu và đánh giá",
+        "own" => "Nhà cung cấp: hồ sơ của mình",
+        _ => "Khác",
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct GrantGroup {
+    pub label: &'static str,
+    pub permissions: Vec<GrantDto>,
+}
+
+/// Consecutive permissions with the same heading, in catalogue order.
+fn grouped(permissions: Vec<GrantDto>) -> Vec<GrantGroup> {
+    let mut groups: Vec<GrantGroup> = Vec::new();
+    for p in permissions {
+        let label = group_label(&p.code);
+        match groups.iter_mut().find(|g| g.label == label) {
+            Some(g) => g.permissions.push(p),
+            None => groups.push(GrantGroup {
+                label,
+                permissions: vec![p],
+            }),
+        }
+    }
+    groups
+}
+
+/// The keys ticked in a submitted grid.
+fn ticked(form: &HashMap<String, String>) -> Vec<String> {
+    form.keys()
+        .filter_map(|k| k.strip_prefix(FIELD_PREFIX))
+        .map(str::to_owned)
+        .collect()
+}
+
+#[derive(Serialize)]
+pub struct RolesPage {
+    pub roles: Vec<RoleRow>,
+}
+
+#[derive(Serialize)]
+pub struct RoleRow {
+    pub role: RoleDto,
+    pub granted: usize,
+    pub href: String,
+}
+
+/// GET /admin/roles
+pub async fn list(
+    Viewer(viewer): Viewer,
+    State(state): State<AppState>,
+) -> Result<Response, Error> {
+    let Some(actor) = viewer else {
+        return see_other(&url("login", &[])?);
+    };
+    let matrix = state.usecases.permission.matrix(&actor).await?;
+    let mut roles = Vec::with_capacity(matrix.roles.len());
+    for (i, role) in matrix.roles.into_iter().enumerate() {
+        let granted = matrix
+            .rows
+            .iter()
+            .filter(|r| r.granted.get(i).copied().unwrap_or(false))
+            .count();
+        let href = url("admin_role", &[("id", &role.id.to_string())])?;
+        roles.push(RoleRow {
+            role,
+            granted,
+            href,
+        });
+    }
+    render_admin(
+        &state,
+        &actor,
+        &url("admin_roles", &[])?,
+        StatusCode::OK,
+        "pages/admin/roles.html",
+        &RolesPage { roles },
+    )
+}
+
+#[derive(Serialize)]
+pub struct RolePage {
+    pub role: RoleDto,
+    pub groups: Vec<GrantGroup>,
+    pub field_prefix: &'static str,
+    /// The visitor may change the grid; otherwise it is shown read-only.
+    pub editable: bool,
+    pub action: String,
+    pub errors: FormErrors,
+    pub saved: bool,
+}
+
+async fn role_page(
+    state: &AppState,
+    actor: &application::authz::Actor,
+    role_id: i32,
+    errors: FormErrors,
+    saved: bool,
+    status: StatusCode,
+) -> Result<Response, Error> {
+    let RoleGrantsDto { role, permissions } = state
+        .usecases
+        .permission
+        .role_grants(actor, role_id)
+        .await?;
+    let id = role_id.to_string();
+    let page = RolePage {
+        groups: grouped(permissions),
+        field_prefix: FIELD_PREFIX,
+        editable: actor.can(PERM_ROLE_PERMISSION_MANAGE),
+        action: url("admin_role_permissions", &[("id", &id)])?,
+        role,
+        errors,
+        saved,
+    };
+    render_admin(
+        state,
+        actor,
+        &url("admin_role", &[("id", &id)])?,
+        status,
+        "pages/admin/role.html",
+        &page,
+    )
+}
+
+/// GET /admin/roles/{id}
+pub async fn show(
+    Viewer(viewer): Viewer,
+    flash: TakeFlash,
+    State(state): State<AppState>,
+    ApiPath(raw_id): ApiPath<String>,
+) -> Result<Response, Error> {
+    let Some(actor) = viewer else {
+        return see_other(&url("login", &[])?);
+    };
+    let id = parse_id(&raw_id, ErrorCode::RoleNotFound)?;
+    let saved = flash.0 == Some(Flash::RoleSaved);
+    let mut response = role_page(
+        &state,
+        &actor,
+        id,
+        FormErrors::default(),
+        saved,
+        StatusCode::OK,
+    )
+    .await?;
+    flash.clear_on(&mut response);
+    Ok(response)
+}
+
+/// POST /admin/roles/{id}/permissions
+pub async fn save(
+    Viewer(viewer): Viewer,
+    State(state): State<AppState>,
+    ApiPath(raw_id): ApiPath<String>,
+    ApiForm(form): ApiForm<HashMap<String, String>>,
+) -> Result<Response, Error> {
+    let Some(actor) = viewer else {
+        return see_other(&url("login", &[])?);
+    };
+    let id = parse_id(&raw_id, ErrorCode::RoleNotFound)?;
+    let reason = form
+        .get("reason")
+        .map(|r| r.trim().to_owned())
+        .filter(|r| !r.is_empty());
+    match state
+        .usecases
+        .permission
+        .set_role_grants(&actor, id, ticked(&form), reason)
+        .await
+    {
+        Ok(()) => {
+            let mut response = see_other(&url("admin_role", &[("id", &id.to_string())])?)?;
+            Flash::RoleSaved.set_on(&mut response);
+            Ok(response)
+        }
+        // Missing the manage permission is the error page; a refused change
+        // (own access, unknown key) is shown on the grid.
+        Err(err) if is_form_error(&err) && err.code() != ErrorCode::PermissionDenied => {
+            let errors = FormErrors::from_error(&state, &err);
+            role_page(&state, &actor, id, errors, false, err.kind().status()).await
+        }
+        Err(err) => Err(err),
+    }
+}
+
+#[derive(Serialize)]
+pub struct PermissionsPage {
+    pub matrix: PermissionMatrixDto,
+    pub role_hrefs: Vec<String>,
+}
+
+/// GET /admin/permissions
+pub async fn matrix(
+    Viewer(viewer): Viewer,
+    State(state): State<AppState>,
+) -> Result<Response, Error> {
+    let Some(actor) = viewer else {
+        return see_other(&url("login", &[])?);
+    };
+    let matrix = state.usecases.permission.matrix(&actor).await?;
+    let role_hrefs = matrix
+        .roles
+        .iter()
+        .map(|r| url("admin_role", &[("id", &r.id.to_string())]))
+        .collect::<Result<_, _>>()?;
+    render_admin(
+        &state,
+        &actor,
+        &url("admin_permissions", &[])?,
+        StatusCode::OK,
+        "pages/admin/permissions.html",
+        &PermissionsPage { matrix, role_hrefs },
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn grant(code: &str) -> GrantDto {
+        GrantDto {
+            code: code.into(),
+            name: code.into(),
+            granted: false,
+        }
+    }
+
+    #[test]
+    fn permissions_are_grouped_by_key_prefix_in_order() {
+        let groups = grouped(vec![
+            grant("admin.dashboard.view"),
+            grant("user.read"),
+            grant("role.read"),
+            grant("own.listing.create"),
+        ]);
+        let shape: Vec<(&str, usize)> = groups
+            .iter()
+            .map(|g| (g.label, g.permissions.len()))
+            .collect();
+        assert_eq!(
+            shape,
+            [
+                ("Hệ thống", 1),
+                ("Người dùng và vai trò", 2),
+                ("Nhà cung cấp: hồ sơ của mình", 1)
+            ]
+        );
+    }
+
+    #[test]
+    fn only_prefixed_boxes_count_as_ticked() {
+        let form: HashMap<String, String> = [
+            ("perm.user.read".to_owned(), "on".to_owned()),
+            ("reason".to_owned(), "x".to_owned()),
+        ]
+        .into();
+        assert_eq!(ticked(&form), ["user.read"]);
+    }
+}

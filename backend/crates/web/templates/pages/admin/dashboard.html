@@ -1,0 +1,31 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "molecules/admin_header.html" as header %}
+{#- `page.body` is web::pages::admin::dashboard::DashboardPage. -#}
+{% block title %}Dashboard — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+{{ header::admin_header(title="Dashboard", icon="fa-gauge", sub="Tổng quan hoạt động nền tảng") }}
+<div class="admin-body">
+  {% if b.demo_count %}
+  <div class="alert alert-warning d-flex flex-wrap align-items-center gap-2" role="status">
+    {{ atoms::icon(name="fa-triangle-exclamation") }}
+    <span class="flex-grow-1">Đang có <strong>{{ b.demo_count }}</strong> nhà cung cấp mẫu hiển thị lẫn với dữ liệu thật.</span>
+    <a class="btn btn-sm btn-warning" href="{{ url_for(name="setup_seed") }}">Quản lý dữ liệu mẫu</a>
+  </div>
+  {% endif %}
+  <div class="row g-3 g-md-4">
+    {% for s in b.stats %}
+    <div class="col-6 col-lg-3">
+      <div class="stat-card">
+        <span class="stat-card__icon stat-card__icon--{{ s.tone }}">{{ atoms::icon(name=s.icon) }}</span>
+        <div>
+          <p class="stat-card__label">{{ s.label }}</p>
+          <p class="stat-card__value">{{ s.value | number }}</p>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock content %}

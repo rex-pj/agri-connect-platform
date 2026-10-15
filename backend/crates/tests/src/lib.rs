@@ -398,3 +398,39 @@ pub fn cookies_from(res: &Response<Body>) -> String {
         .collect::<Vec<_>>()
         .join("; ")
 }
+
+/// The first admin ("quantri" / "matkhau123") created through the setup
+/// page; returns that browser's session cookies.
+pub async fn install_admin(env: &Env) -> String {
+    let res = send(
+        &env.router,
+        post_form(
+            "/setup",
+            &[
+                ("email", "admin@example.vn"),
+                ("username", "quantri"),
+                ("password", "matkhau123"),
+                ("password2", "matkhau123"),
+            ],
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER, "setup");
+    cookies_from(&res)
+}
+
+/// Signs in through the login page; returns the session cookies.
+pub async fn sign_in(env: &Env, username: &str, password: &str) -> String {
+    let res = send(
+        &env.router,
+        post_form(
+            "/login",
+            &[("username", username), ("password", password)],
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER, "login as {username}");
+    cookies_from(&res)
+}

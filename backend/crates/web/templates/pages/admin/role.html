@@ -1,0 +1,38 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "molecules/admin_header.html" as header %}
+{#- One role and its permission grid. `page.body` is
+    web::pages::admin::roles::RolePage. Each box is named `perm.<key>`; the
+    form works without JS. Read-only for visitors who may not manage grants. -#}
+{% block title %}{{ page.body.role.name }} — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+{{ header::admin_header(title=b.role.name, icon="fa-shield-halved", sub=b.role.description | default(value=""), back_href=url_for(name="admin_roles"), back_label="Vai trò") }}
+<div class="admin-body">
+  {% if b.saved %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã lưu quyền. Có hiệu lực ngay ở lần tải trang tiếp theo của mỗi người dùng.") }}{% endif %}
+  {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
+  <form method="post" action="{{ b.action }}">
+    {% for g in b.groups %}
+    <fieldset class="admin-card grant-group"{% if not b.editable %} disabled{% endif %}>
+      <legend class="grant-group__label">{{ g.label }}</legend>
+      {% for p in g.permissions %}
+      <div class="form-check grant-row">
+        <input class="form-check-input" type="checkbox" id="perm-{{ p.code }}" name="{{ b.field_prefix }}{{ p.code }}"{% if p.granted %} checked{% endif %}>
+        <label class="form-check-label" for="perm-{{ p.code }}">{{ p.name }} <code class="grant-row__code">{{ p.code }}</code></label>
+      </div>
+      {% endfor %}
+    </fieldset>
+    {% endfor %}
+    {% if b.editable %}
+    <div class="admin-card grant-save">
+      <label class="form-label fw-semibold" for="grant-reason">Lý do (ghi vào nhật ký)</label>
+      <input class="form-control mb-3" id="grant-reason" name="reason" maxlength="500" placeholder="Ví dụ: cho nhà cung cấp tự quản lý dịch vụ">
+      <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-floppy-disk") }} Lưu quyền</button>
+    </div>
+    {% else %}
+    <p class="small text-muted">{{ atoms::icon(name="fa-lock", class="me-1") }}Bạn chỉ có quyền xem.</p>
+    {% endif %}
+  </form>
+</div>
+{% endblock content %}

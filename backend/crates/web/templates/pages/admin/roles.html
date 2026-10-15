@@ -1,0 +1,29 @@
+{% extends "layouts/admin.html" %}
+{% import "molecules/admin_header.html" as header %}
+{#- `page.body` is web::pages::admin::roles::RolesPage. -#}
+{% block title %}Vai trò — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{{ header::admin_header(title="Vai trò", icon="fa-shield-halved", sub="Mỗi vai trò có một bộ quyền. Mở vai trò để xem hoặc sửa quyền.") }}
+<div class="admin-body">
+  <div class="admin-card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="admin-table-head">
+          <tr><th>Tên</th><th>Mã</th><th class="text-center">Số quyền</th><th class="text-center">Trạng thái</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for r in page.body.roles %}
+          <tr>
+            <td class="fw-semibold">{{ r.role.name }}<span class="d-block small text-muted">{{ r.role.description | default(value="") }}</span></td>
+            <td><code>{{ r.role.code }}</code></td>
+            <td class="text-center">{{ r.granted }}</td>
+            <td class="text-center">{% if r.role.is_active %}<span class="badge text-bg-success">Hoạt động</span>{% else %}<span class="badge text-bg-secondary">Tắt</span>{% endif %}</td>
+            <td class="text-end"><a class="btn btn-sm btn-outline-success" href="{{ r.href }}">Quyền</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock content %}

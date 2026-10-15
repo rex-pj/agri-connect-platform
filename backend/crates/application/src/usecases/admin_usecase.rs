@@ -6,7 +6,7 @@ use domain::{
     models::{
         category::{CategoryAdmin, NewCategory, UpdateCategory},
         location::Location,
-        role::{RoleModel, UserRole},
+        role::UserRole,
         service::{AdminService, NewService, UpdateService},
         user::NewUser,
     },
@@ -981,7 +981,7 @@ impl AdminUseCase {
         self.role_repo
             .list()
             .await
-            .map(|roles| roles.into_iter().map(to_role_dto).collect())
+            .map(|roles| roles.into_iter().map(RoleDto::from).collect())
     }
 
     pub async fn get_role_by_id(&self, actor: &Actor, id: i32) -> Result<RoleDto> {
@@ -989,7 +989,7 @@ impl AdminUseCase {
         self.role_repo
             .find_by_id(id)
             .await?
-            .map(to_role_dto)
+            .map(RoleDto::from)
             .ok_or_else(|| Error::new(ErrorCode::RoleNotFound))
     }
 }
@@ -1004,16 +1004,6 @@ fn to_location_dto(l: Location) -> AdminLocationDto {
         lng: l.lng,
         display_order: l.display_order,
         is_active: l.is_active,
-    }
-}
-
-fn to_role_dto(r: RoleModel) -> RoleDto {
-    RoleDto {
-        id: r.id,
-        code: r.code,
-        name: r.name,
-        description: r.description,
-        is_active: r.is_active,
     }
 }
 

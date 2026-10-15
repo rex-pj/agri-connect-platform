@@ -13,6 +13,7 @@ use crate::{
     extract::ApiForm,
     middleware::auth::Viewer,
     pages::{
+        admin::render_admin,
         auth::signed_in,
         forms::{confirm_password, is_form_error, FormErrors},
         see_other,
@@ -153,8 +154,14 @@ async fn seed_page(
         errors,
         flash,
     };
-    let shell = Shell::new(&url("setup_seed")?, None, Some(actor));
-    render_page_status(state, &shell, status, "pages/setup_seed.html", &page)
+    render_admin(
+        state,
+        actor,
+        &url("setup_seed")?,
+        status,
+        "pages/setup_seed.html",
+        &page,
+    )
 }
 
 pub async fn seed(

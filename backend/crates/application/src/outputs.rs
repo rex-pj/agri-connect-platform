@@ -452,6 +452,46 @@ pub struct RoleDto {
     pub is_active: bool,
 }
 
+impl From<domain::models::role::RoleModel> for RoleDto {
+    fn from(r: domain::models::role::RoleModel) -> Self {
+        Self {
+            id: r.id,
+            code: r.code,
+            name: r.name,
+            description: r.description,
+            is_active: r.is_active,
+        }
+    }
+}
+
+/// One permission, and whether the role in question grants it.
+#[derive(Debug, Serialize)]
+pub struct GrantDto {
+    pub code: String,
+    pub name: String,
+    pub granted: bool,
+}
+
+#[derive(Serialize)]
+pub struct RoleGrantsDto {
+    pub role: RoleDto,
+    pub permissions: Vec<GrantDto>,
+}
+
+#[derive(Serialize)]
+pub struct PermissionMatrixRowDto {
+    pub code: String,
+    pub name: String,
+    /// One entry per role, in the order of `PermissionMatrixDto::roles`.
+    pub granted: Vec<bool>,
+}
+
+#[derive(Serialize)]
+pub struct PermissionMatrixDto {
+    pub roles: Vec<RoleDto>,
+    pub rows: Vec<PermissionMatrixRowDto>,
+}
+
 // ── Permissions ───────────────────────────────────────────────────────────────
 
 #[derive(Serialize)]

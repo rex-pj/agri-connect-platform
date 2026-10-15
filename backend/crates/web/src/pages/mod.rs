@@ -2,6 +2,7 @@
 //! it builds a view model from use cases and hands it to `render_page`.
 
 pub mod account;
+pub mod admin;
 pub mod auth;
 pub mod cards;
 pub mod explore;

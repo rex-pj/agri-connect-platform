@@ -1119,3 +1119,26 @@ Tests (database):
 - anonymous → `/login`; the profile, role, area link, logout form and `#security` anchor;
 - wrong current password → 401; mismatch → 400;
 - success → 303 to `#security` with new cookies and the flash; another device's refresh token is revoked; the new password logs in.
+
+### S14 — admin frame, dashboard, roles and the permission grid (same branch)
+
+Done:
+- **One admin layout** (`layouts/admin.html`): top bar (site, user, home, logout) and a menu built by `pages::admin::AdminNav`. The menu shows **only the entries the visitor's permissions open**, and hides empty groups. On a phone it folds behind a header button (Alpine `collapse`); without JS it sits above the content. Every Rust admin page renders through `render_admin`. The remaining SvelteKit admin pages keep their `AdminShell` until S15–S18.
+- **`/admin`** → `/admin/dashboard` (anonymous → `/login`). **The dashboard** shows four counts (`number` filter: `1.234`) and the §8.4 warning while demo listings are live, with a link to `/setup/seed`; it appears only for those who may remove them. The SvelteKit "sắp ra mắt" placeholder cards are not carried over.
+- **`/admin/roles`** lists roles with their grant counts. **`/admin/roles/{id}`** is the **editable permission grid**, grouped by key prefix:
+  - one checkbox per permission, named `perm.<key>` (an urlencoded form cannot post a repeated name into a list), plus an optional reason;
+  - `POST /admin/roles/{id}/permissions` → `PermissionUseCase::set_role_grants`. It needs `role.permission.manage`, rejects unknown keys (`unknown_permission`), and **refuses to take `role.permission.manage` from the caller's own role** (`cannot_revoke_own_access`), because nobody could give it back;
+  - read-only (disabled fieldsets) for visitors who may read roles but not manage them.
+- **Grants apply on the next request** of every user of the role, since permissions are loaded per request (S2). Each save publishes `Change::PermissionsChanged { added, removed }`; the audit log records `change_role_permissions` with `+key, -key: reason`.
+- **`/admin/permissions`**: permissions × roles, read-only, with role headers linking to their grids.
+- **Writes:** `RoleGrantsRepositoryTrait::replace` on the primary pool, in one transaction (DELETE … RETURNING, INSERT … ON CONFLICT DO NOTHING RETURNING). `PermissionUseCase` reads grants from the primary too, because the page reads its own writes right after a save. The session's permission lookup stays on the read pool.
+- **`/setup/seed`** moved into the admin layout and menu ("Dữ liệu mẫu").
+- **Cleanup:** `RoleDto` is built through `From<RoleModel>` instead of two private mappers; `format_vnd` reuses the new `format_number`.
+
+Tests:
+- Unit: the menu filters by permission, hides empty groups and keeps a sub-page active; grouping by prefix; only `perm.*` fields count; number grouping.
+- Database:
+  - redirects for `/admin`; the admin menu; a provider gets 403 on the dashboard; the demo banner;
+  - **a grant on the grid lets the provider's existing session into the dashboard on the next request**, its menu shows only that entry, the audit row reads `change_role_permissions +admin.dashboard.view: thử nghiệm`, and revoking closes it again;
+  - self-lockout → 403 with the message; an unknown key → 400; a provider posting the grid → 403; nothing changed in each case;
+  - the matrix shows every key and links each role.

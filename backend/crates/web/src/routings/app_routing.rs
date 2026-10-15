@@ -233,6 +233,15 @@ impl AppRouting {
                 get(pages::setup::seed).post(pages::setup::seed_action),
             )
             .route("/account", get(pages::account::show))
+            .route("/admin", get(pages::admin::dashboard::index))
+            .route("/admin/dashboard", get(pages::admin::dashboard::show))
+            .route("/admin/roles", get(pages::admin::roles::list))
+            .route("/admin/roles/{id}", get(pages::admin::roles::show))
+            .route(
+                "/admin/roles/{id}/permissions",
+                post(pages::admin::roles::save),
+            )
+            .route("/admin/permissions", get(pages::admin::roles::matrix))
             .route("/account/password", post(pages::account::change_password));
 
         // ── USER routes (authenticated, no rate limit) ───────────────────────

@@ -17,7 +17,7 @@ use application::{
         explore_usecase::ExploreUseCase,
         health_usecase::HealthUseCase,
         media_usecase::{MediaDeps, MediaUseCase},
-        permission_usecase::PermissionUseCase,
+        permission_usecase::{PermissionDeps, PermissionUseCase},
         product_usecase::ProductUseCase,
         provider_dashboard_usecase::ProviderDashboardUseCase,
         setup_usecase::SetupUseCase,
@@ -404,7 +404,7 @@ pub fn build_state(
             location_repo,
             review_repo,
             product_repo: product_repo.clone(),
-            role_repo,
+            role_repo: role_repo.clone(),
             service_repo,
             events: events.clone(),
             password_hasher: password_hasher.clone(),
@@ -419,7 +419,15 @@ pub fn build_state(
             token_svc: token_service.clone(),
             refresh_days,
         }),
-        permission: PermissionUseCase::new(permission_repo.clone(), user_repo.clone()),
+        permission: PermissionUseCase::new(PermissionDeps {
+            // The primary, not the read pool: the role page reads its own
+            // grant changes right after saving them.
+            permission_repo: Arc::new(PermissionRepository::new(Arc::clone(&db))),
+            user_repo: user_repo.clone(),
+            role_repo: role_repo.clone(),
+            grants_repo: role_repo.clone(),
+            events: events.clone(),
+        }),
         provider_dashboard: ProviderDashboardUseCase::new(
             business_repo.clone(),
             product_repo.clone(),

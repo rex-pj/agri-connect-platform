@@ -1,0 +1,35 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "molecules/admin_header.html" as header %}
+{#- Every permission against every role. `page.body` is
+    web::pages::admin::roles::PermissionsPage. Read-only; a role's column
+    header links to its grid. -#}
+{% block title %}Quyền hạn — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set m = page.body.matrix %}
+{{ header::admin_header(title="Quyền hạn", icon="fa-key", sub="Quyền được gán cho vai trò, không gán cho từng người. Mở một vai trò để sửa.") }}
+<div class="admin-body">
+  <div class="admin-card">
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0 perm-matrix">
+        <thead class="admin-table-head">
+          <tr>
+            <th scope="col">Quyền</th>
+            {% for r in m.roles %}<th scope="col" class="text-center"><a href="{{ page.body.role_hrefs[loop.index0] }}">{{ r.name }}</a></th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in m.rows %}
+          <tr>
+            <th scope="row" class="fw-normal">{{ row.name }}<code class="d-block small">{{ row.code }}</code></th>
+            {% for g in row.granted %}
+            <td class="text-center">{% if g %}<span class="text-success" title="Có">{{ atoms::icon(name="fa-check") }}</span><span class="visually-hidden">Có</span>{% else %}<span class="text-muted" aria-hidden="true">—</span><span class="visually-hidden">Không</span>{% endif %}</td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock content %}

@@ -16,6 +16,7 @@ pub enum Entity {
     Location,
     Product,
     Service,
+    Role,
 }
 
 impl Entity {
@@ -28,6 +29,7 @@ impl Entity {
             Entity::Location => "location",
             Entity::Product => "product",
             Entity::Service => "service",
+            Entity::Role => "role",
         }
     }
 }
@@ -46,6 +48,11 @@ pub enum Change {
     /// can be removed from storage.
     ImageReplaced {
         previous: Option<Uuid>,
+    },
+    /// A role now grants `added` and no longer grants `removed` (permission keys).
+    PermissionsChanged {
+        added: Vec<String>,
+        removed: Vec<String>,
     },
 }
 

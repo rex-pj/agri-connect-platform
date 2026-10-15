@@ -1,15 +1,15 @@
-{% extends "layouts/app.html" %}
+{% extends "layouts/admin.html" %}
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/alert.html" as alerts %}
-{% import "molecules/page_hero.html" as hero %}
-{#- Demo data: how much is loaded, load it, remove it. `page` is
-    web::pages::setup::SeedPage. Removing needs a ticked confirmation, so it
-    is safe without JS too. Real listings are never touched. -#}
+{% import "molecules/admin_header.html" as header %}
+{#- Demo data: how much is loaded, load it, remove it. `page.body` is
+    web::pages::setup::SeedPage. Removing needs a ticked confirmation, so
+    it is safe without JS too. Real listings are never touched. -#}
 {% block title %}Dữ liệu mẫu — {{ site.name }}{% endblock title %}
-{% block meta %}<meta name="robots" content="noindex">{% endblock meta %}
-{% block main %}
-{{ hero::page_hero(title="Dữ liệu mẫu", back_href=url_for(name="admin_dashboard"), back_label="Quản trị", variant="", icon="fa-database", sub="Nhà cung cấp, dịch vụ và sản phẩm mẫu để thử nghiệm") }}
-<div class="detail-body seed-page">
+{% block content %}
+{% set page = page.body %}
+{{ header::admin_header(title="Dữ liệu mẫu", icon="fa-database", sub="Nhà cung cấp, dịch vụ và sản phẩm mẫu để thử nghiệm") }}
+<div class="admin-body seed-page">
   {% if page.flash == "demo_loaded" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã nạp dữ liệu mẫu.") }}{% endif %}
   {% if page.flash == "demo_removed" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã xoá toàn bộ dữ liệu mẫu.") }}{% endif %}
   {% if page.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=page.errors.message) }}{% endif %}
@@ -44,4 +44,4 @@
   </section>
   {% endif %}
 </div>
-{% endblock main %}
+{% endblock content %}

@@ -70,6 +70,7 @@ error_codes! {
     PermissionDenied          => (Forbidden,       "permission_denied"),
     CrossOriginRequest        => (Forbidden,       "cross_origin_request"),
     CannotChangeOwnAccount    => (Forbidden,       "cannot_change_own_account"),
+    CannotRevokeOwnAccess     => (Forbidden,       "cannot_revoke_own_access"),
     AdminAlreadyExists        => (Forbidden,       "admin_already_exists"),
     ResetTokenInvalid         => (BadRequest,      "reset_token_invalid"),
 
@@ -93,6 +94,7 @@ error_codes! {
     NoteTooLong               => (BadRequest,      "note_too_long"),
     InvalidPrice              => (BadRequest,      "invalid_price"),
     InvalidRole               => (BadRequest,      "invalid_role"),
+    UnknownPermission         => (BadRequest,      "unknown_permission"),
     InvalidCategoryType       => (BadRequest,      "invalid_category_type"),
     InvalidInquiryStatus      => (BadRequest,      "invalid_inquiry_status"),
     InvalidProductCategory    => (BadRequest,      "invalid_product_category"),

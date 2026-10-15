@@ -75,6 +75,7 @@ pub fn audit_action(event: &DomainEvent) -> String {
         (Change::Deleted, _) => format!("delete_{entity}"),
         (Change::RoleChanged { .. }, _) => format!("change_{entity}_role"),
         (Change::ImageReplaced { .. }, _) => format!("replace_{entity}_image"),
+        (Change::PermissionsChanged { .. }, _) => format!("change_{entity}_permissions"),
     }
 }
 
@@ -88,6 +89,19 @@ impl EventSubscriber for AuditLogSubscriber {
         let reason = match (&event.change, &event.reason) {
             (Change::RoleChanged { role }, Some(r)) => Some(format!("{role}: {r}")),
             (Change::RoleChanged { role }, None) => Some(role.clone()),
+            // The audit row says what changed: "+key, -key: reason".
+            (Change::PermissionsChanged { added, removed }, r) => {
+                let diff = added
+                    .iter()
+                    .map(|k| format!("+{k}"))
+                    .chain(removed.iter().map(|k| format!("-{k}")))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                Some(match r {
+                    Some(r) => format!("{diff}: {r}"),
+                    None => diff,
+                })
+            }
             (_, r) => r.clone(),
         };
         self.repo

@@ -160,6 +160,7 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 | GET    | `/api/explore/products`       | Browse products (paginated, filter by `category_id?`)                              |
 | GET    | `/api/explore/products/{id}`  | Product detail                                                                     |
 | POST   | `/api/explore/contact`        | Submit contact/inquiry (rate-limited: 30/min)                                      |
+| POST   | `/contact`                   | Same inquiry as a page form (urlencoded); 303 + one-time flash, or the page re-shown with field errors |
 | GET    | `/files/{id}`, `/files/{id}/thumb` | Uploaded image (JPEG, cached forever; ids are never reused)             |
 
 ### Auth (rate-limited: 10 req/min)
@@ -284,8 +285,8 @@ All routes are defined as SvelteKit file-system pages under `client-app/src/rout
 | `/services`                      | Service listing / search                       |
 | `/services/category/[id]/[slug]` | Services filtered by category                  |
 | `/agri-connect`                  | Provider map geo-discovery                     |
-| `/providers/[id]`                | Redirect → `/providers/[id]/[slug]`            |
-| `/providers/[id]/[slug]`         | Provider detail                                |
+| `/providers/[id]`                | 301 → `/providers/[id]/[slug]` (**Rust**)      |
+| `/providers/[id]/[slug]`         | Provider detail + contact form (**Rust**, `web/src/pages/provider.rs`) |
 | `/account`                       | User profile (RequireAuth)                     |
 | `/provider/dashboard`            | Provider product management (RequireProvider)  |
 
@@ -466,6 +467,7 @@ middleware / handlers  →  application (use cases, ports)  →  domain  ←  in
 - A page is a handler in `web/src/pages/` that takes `Shell` (the frame: top bar, account menu, bottom tabs, built from the session) and renders through `views::render_page`. A stale session cookie renders the page signed out; it never fails it.
 - Templates follow the same atomic levels as the Svelte components (`templates/atoms|molecules|organisms`, pages extend `layouts/app.html`). Links come from `url_for`, product and provider slugs from the `slugify` filter (identical to `slugify.js`; both are tested against `client-app/src/lib/slugify.fixtures.json`, run `npm test` in `client-app`), images from `file_url`.
 - Interactive bits are Alpine components registered in `static/js/app.js`; markup must work without them (links and plain forms first).
+- Page forms post urlencoded (`ApiForm`) and follow Post/Redirect/Get: success is a 303 with a `cookies::Flash`; a broken rule re-renders the page with the error's status, the typed values and one message per field (from `error_body`). The rules stay in the use case the JSON API uses.
 - When a route moves to Rust, delete its SvelteKit `+page*` files in the same change.
 
 ### Frontend (SvelteKit)

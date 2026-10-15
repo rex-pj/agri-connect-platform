@@ -1006,3 +1006,217 @@ body:has(.app-nav__search-row.open) .app-main {
   color: var(--muted);
   font-size: 0.9rem;
 }
+
+/* ── Provider detail (pages/provider) ────────────────────────────────────── */
+.provider-hero__row {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.provider-hero__title {
+  flex: 1;
+  margin-bottom: 0;
+}
+.provider-hero__actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.provider-hero__verified {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1px solid rgba(167, 243, 208, 0.3);
+  background: rgba(52, 211, 153, 0.25);
+  color: var(--p200);
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.provider-hero__address {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.9rem;
+}
+.hero-icon-btn {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+.hero-icon-btn:hover,
+.hero-icon-btn:focus-visible {
+  background: rgba(255, 255, 255, 0.25);
+}
+.share {
+  position: relative;
+  display: inline-flex;
+}
+.share__status:not(:empty) {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 5;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--p900);
+  color: #fff;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.provider-phone {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  color: var(--p700);
+  font-size: 1.15rem;
+}
+.provider-cta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.service-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.service-list__item {
+  display: flex;
+  gap: 12px;
+}
+.service-list__icon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: var(--p50);
+  color: var(--p700);
+  font-size: 1.1rem;
+}
+.service-list__info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.service-list__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+.service-list__cat {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.service-list__desc {
+  margin: 0;
+  color: var(--text2);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.service-list__price {
+  color: #b45309;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* ── Contact sheet (organisms/contact_sheet) ─────────────────────────────── */
+/* Without JS: a card at the end of the page, reached by the anchor link. */
+.contact-sheet {
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.07);
+  scroll-margin-top: calc(var(--app-nav-h) + 12px);
+}
+/* With JS (Alpine `dialog`): a bottom sheet over the page. */
+.contact-sheet.is-modal {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1060;
+  max-height: 90dvh;
+  overflow-y: auto;
+  margin: 0 auto;
+  max-width: 560px;
+  border-radius: 20px 20px 0 0;
+  padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  transform: translateY(105%);
+  visibility: hidden;
+  transition: transform 0.25s ease, visibility 0s linear 0.25s;
+}
+.contact-sheet.is-modal.is-open {
+  transform: translateY(0);
+  visibility: visible;
+  transition: transform 0.25s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .contact-sheet.is-modal,
+  .contact-sheet.is-modal.is-open {
+    transition: none;
+  }
+}
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1055;
+  background: rgba(2, 44, 34, 0.45);
+}
+.contact-sheet__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.contact-sheet__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--p800);
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+.contact-sheet__close {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--p50);
+  color: var(--p800);
+}
+.contact-sheet__sub {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.contact-sheet__form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}

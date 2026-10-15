@@ -54,6 +54,8 @@ pub struct Service {
     pub description: Option<String>,
     pub price_note: Option<String>,
     pub category: String,
+    /// Font Awesome class of the category.
+    pub category_icon: Option<String>,
 }
 
 pub struct BusinessDetail {

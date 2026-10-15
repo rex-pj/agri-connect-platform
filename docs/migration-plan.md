@@ -921,3 +921,28 @@ Tests (database):
 - a photo shows the full image;
 - the meta fallback without a description;
 - deactivated, missing, non-numeric and overflowing ids give a 404 page.
+
+### S7 — provider detail and the contact form (same branch)
+
+Done:
+- **`/providers/{id}` and `/providers/{id}/{slug}` are served by Rust** (`web/src/pages/provider.rs`). They follow the same canonical-URL rules as products: 301 for any other spelling, a 404 page for missing or non-numeric ids. The SvelteKit `providers/[id]` routes are deleted.
+- **Page:** hero with address, verified badge and share button; phone with call and "Gửi yêu cầu" buttons; description; services with their category icon (`category_icon` now comes with services too, replacing `getServiceDisplay`).
+- **`POST /contact`:** a plain urlencoded form (`ApiForm`, new) under the public-write rate limit and the Origin check. It follows Post/Redirect/Get:
+  - success → 303 to the provider page plus a one-time flash cookie (`cookies::Flash`). A cookie, not `?sent=1`, so a shared or reloaded URL does not say "sent" again;
+  - a broken rule → the page re-rendered with the error's own status (400), the typed values and one localised message per field;
+  - a missing provider → 404.
+- **L14 closed:** the only rules are `ExploreUseCase::contact_request`, shared with the JSON endpoint. The SvelteKit form labelled the name "optional" while its server required it; the Rust form marks it required, as the rule is.
+- **No-JS first:** the form is a section of the page (`#lien-he`) and "Gửi yêu cầu" is an anchor to it. The Alpine `dialog` component turns it into a bottom sheet, opens it by itself when the server re-shows errors, and focuses the phone field. `shareButton` uses the phone's share sheet or copies the link, and is hidden without JS.
+- **New templates:**
+  - atom `alert`;
+  - molecules `form_field` (input/select/textarea with linked error text), `share_button`;
+  - organism `contact_sheet`.
+- **`web::cookies`** now holds the request-cookie reader that auth used privately, plus the flash.
+- **Convention:** handlers may not use axum's `Form` either. The Alpine check caught a template-supplied `x-ref` value; the field macro now takes a `first` flag instead.
+
+Tests (database):
+- canonical 301s; the page shows services, price note, `tel:`, the form posting to `/contact` with the business id, and the anchor fallback;
+- a valid post → 303 and the flash cookie, one inquiry stored; the next page shows the thanks once and clears the cookie;
+- an invalid post → 400 page with messages linked to their fields, typed values kept, a `<script>` name echoed escaped, the sheet set to open, nothing stored;
+- a missing provider → 404; a cross-site post → 403 and nothing stored;
+- missing provider pages → 404.

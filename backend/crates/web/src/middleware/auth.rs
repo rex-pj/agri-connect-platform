@@ -9,7 +9,7 @@ use axum::{
 };
 use domain::Error;
 
-use crate::app_state::AppState;
+use crate::{app_state::AppState, cookies::request_cookie};
 
 /// The session cookie. Set today by the SvelteKit app (httpOnly), read here so
 /// Rust pages and islands share the same login during the migration.
@@ -23,20 +23,7 @@ fn session_token(parts: &Parts) -> Option<&str> {
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.strip_prefix("Bearer "));
-    bearer.or_else(|| cookie(parts, SESSION_COOKIE))
-}
-
-fn cookie<'a>(parts: &'a Parts, name: &str) -> Option<&'a str> {
-    parts
-        .headers
-        .get_all(header::COOKIE)
-        .iter()
-        .filter_map(|v| v.to_str().ok())
-        .flat_map(|v| v.split(';'))
-        .filter_map(|pair| pair.trim().split_once('='))
-        .find(|(k, _)| *k == name)
-        .map(|(_, v)| v)
-        .filter(|v| !v.is_empty())
+    bearer.or_else(|| request_cookie(&parts.headers, SESSION_COOKIE))
 }
 
 /// `None` for an anonymous caller, and for a valid token whose account was

@@ -13,10 +13,8 @@ use crate::{
     app_state::AppState,
     constants::META_DESCRIPTION_MAX_CHARS,
     extract::ApiPath,
-    pages::{moved_permanently, summary},
-    routes,
+    pages::{canonical_url, moved_permanently, parse_id, summary},
     shell::Shell,
-    slug::slugify,
     views::render_page,
 };
 
@@ -28,19 +26,13 @@ pub struct ProductPage {
     pub meta_description: Option<String>,
 }
 
-/// A path id that is not a number is a missing product, not a bad request:
-/// a person typed or pasted it.
 async fn load(state: &AppState, raw_id: &str) -> Result<ProductDto, Error> {
-    let id = raw_id
-        .parse::<i32>()
-        .map_err(|_| Error::new(ErrorCode::ProductNotFound))?;
+    let id = parse_id(raw_id, ErrorCode::ProductNotFound)?;
     state.usecases.product.get_product_by_id(id).await
 }
 
 fn canonical(product: &ProductDto) -> Result<String, Error> {
-    let id = product.id.to_string();
-    routes::url("product", &[("id", &id), ("slug", &slugify(&product.name))])
-        .map_err(|e| Error::internal(format!("product url: {e}")))
+    canonical_url("product", product.id, &product.name)
 }
 
 /// GET /products/{id}

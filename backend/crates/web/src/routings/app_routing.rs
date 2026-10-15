@@ -111,6 +111,8 @@ impl AppRouting {
             .route("/", get(pages::home::show))
             .route("/products/{id}", get(pages::product::by_id))
             .route("/products/{id}/{slug}", get(pages::product::show))
+            .route("/providers/{id}", get(pages::provider::by_id))
+            .route("/providers/{id}/{slug}", get(pages::provider::show))
             .route("/health/live", get(HealthHandler::live))
             .route("/health/ready", get(HealthHandler::ready))
             // GET /api/explore/providers — geo-search when lat+lng present, browse otherwise
@@ -150,6 +152,8 @@ impl AppRouting {
                 "/api/explore/contact",
                 post(ExploreHandler::contact_request),
             )
+            // The page form: same rules and budget as the JSON endpoint.
+            .route("/contact", post(pages::provider::submit_contact))
             .layer(limiter(&config.limiters.public_write, Scope::AllRequests));
 
         // ── UPLOAD routes (own budget; body capped at UPLOAD_MAX_BYTES) ───────

@@ -32,6 +32,7 @@ axum = { version = "0.8", default-features = false, features = [
     "tokio", # axum::serve and ConnectInfo (rate limiting keys on the peer address)
     "json",  # Json extractor/response for the whole /api surface
     "query", # Query extractor for list and search endpoints
+    "form",  # application/x-www-form-urlencoded: the no-JS page forms (contact, later login)
     "multipart", # product image uploads (multipart/form-data, works without JS)
 ] }
 tower = { version = "0.5", default-features = false, features = [

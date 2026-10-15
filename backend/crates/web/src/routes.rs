@@ -35,6 +35,7 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("service_category", "/services/category/{id}/{slug}"),
     ("provider", "/providers/{id}/{slug}"),
     ("provider_by_id", "/providers/{id}"),
+    ("contact", "/contact"),
     ("admin_dashboard", "/admin/dashboard"),
     ("admin_users", "/admin/users"),
     ("admin_user", "/admin/users/{id}"),

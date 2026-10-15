@@ -1,0 +1,63 @@
+{% extends "layouts/app.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "molecules/share_button.html" as share %}
+{% import "organisms/contact_sheet.html" as sheet %}
+{#- Provider detail. `page` is web::pages::provider::ProviderPage. The call
+    button is the main action; the contact form is the fallback for when
+    nobody answers. -#}
+{% block title %}{{ page.provider.name }} — {{ site.name }}{% endblock title %}
+{% block meta %}<meta name="description" content="{% if page.meta_description %}{{ page.meta_description }}{% else %}Liên hệ {{ page.provider.name }} để biết thêm về dịch vụ nông nghiệp tại {{ page.area }}.{% endif %}">{% endblock meta %}
+{% block main %}
+{% set p = page.provider %}
+<header class="page-hero page-hero--detail">
+  <a class="back-link" href="{{ url_for(name="services") }}">{{ atoms::icon(name="fa-arrow-left") }} Dịch vụ</a>
+  <div class="provider-hero__row">
+    <h1 class="page-hero__title provider-hero__title">{{ p.name }}</h1>
+    <div class="provider-hero__actions">
+      {% if p.is_verified %}<span class="provider-hero__verified">{{ atoms::icon(name="fa-circle-check") }} Xác minh</span>{% endif %}
+      {{ share::share_button(title=p.name, text=page.share_text) }}
+    </div>
+  </div>
+  {% if p.address %}<p class="provider-hero__address">{{ atoms::icon(name="fa-location-dot") }} {{ p.address }}</p>{% endif %}
+</header>
+
+<div class="detail-body provider-detail" x-data="dialog" data-open="{% if page.contact.open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+  {% if page.sent %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã gửi yêu cầu! Nhà cung cấp sẽ liên hệ lại sớm.") }}{% endif %}
+
+  <section class="detail-card">
+    <p class="provider-phone">{{ atoms::icon(name="fa-phone") }} <strong>{{ p.phone }}</strong></p>
+    <div class="provider-cta">
+      <a class="btn btn-success btn-lg" href="tel:{{ p.phone }}">{{ atoms::icon(name="fa-phone") }} Gọi ngay</a>
+      <a class="btn btn-outline-success btn-lg" href="#lien-he" x-on:click.prevent="show">{{ atoms::icon(name="fa-comment-dots") }} Gửi yêu cầu</a>
+    </div>
+  </section>
+
+  {% if p.description %}
+  <section class="detail-card">
+    <h2 class="detail-card__title">Giới thiệu</h2>
+    <p class="detail-card__text">{{ p.description }}</p>
+  </section>
+  {% endif %}
+
+  {% if p.services %}
+  <section class="detail-card">
+    <h2 class="detail-card__title">Dịch vụ cung cấp</h2>
+    <ul class="service-list">
+      {% for s in p.services %}
+      <li class="service-list__item">
+        <span class="service-list__icon">{{ atoms::icon(name=s.category_icon | default(value="fa-tag")) }}</span>
+        <div class="service-list__info">
+          <div class="service-list__head"><strong>{{ s.name }}</strong> <span class="service-list__cat">{{ s.category }}</span></div>
+          {% if s.description %}<p class="service-list__desc">{{ s.description }}</p>{% endif %}
+          {% if s.price_note %}<span class="service-list__price">{{ atoms::icon(name="fa-tag") }} {{ s.price_note }}</span>{% endif %}
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {{ sheet::contact_sheet(provider=p, contact=page.contact, limits=page.limits) }}
+</div>
+{% endblock main %}

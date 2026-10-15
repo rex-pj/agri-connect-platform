@@ -294,7 +294,7 @@ mod http {
     use axum::{
         extract::{
             multipart::MultipartRejection,
-            rejection::{JsonRejection, PathRejection, QueryRejection},
+            rejection::{FormRejection, JsonRejection, PathRejection, QueryRejection},
         },
         http::StatusCode,
         response::{IntoResponse, Response},
@@ -342,6 +342,12 @@ mod http {
     impl From<QueryRejection> for Error {
         fn from(rejection: QueryRejection) -> Self {
             Error::new(ErrorCode::InvalidQuery).with_detail(rejection.body_text())
+        }
+    }
+
+    impl From<FormRejection> for Error {
+        fn from(rejection: FormRejection) -> Self {
+            Error::new(ErrorCode::InvalidRequestBody).with_detail(rejection.body_text())
         }
     }
 

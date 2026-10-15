@@ -4,19 +4,45 @@
 pub mod cards;
 pub mod home;
 pub mod product;
+pub mod provider;
 
 use axum::{
     http::{header, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
 };
-use domain::Error;
+use domain::{Error, ErrorCode};
+
+use crate::{routes, slug::slugify};
+
+/// A path id that is not a number is a missing record, not a bad request: a
+/// person typed or pasted it.
+pub fn parse_id(raw: &str, missing: ErrorCode) -> Result<i32, Error> {
+    raw.parse::<i32>().map_err(|_| Error::new(missing))
+}
+
+/// `/{things}/{id}/{slug of name}` for `route` ("product", "provider").
+pub fn canonical_url(route: &str, id: i32, name: &str) -> Result<String, Error> {
+    let id = id.to_string();
+    routes::url(route, &[("id", &id), ("slug", &slugify(name))])
+        .map_err(|e| Error::internal(format!("{route} url: {e}")))
+}
 
 /// 301 to `location`. Not axum's `Redirect::permanent`, which is a 308: old
 /// crawlers and some link previews only treat 301 as "this page moved".
 pub fn moved_permanently(location: &str) -> Result<Response, Error> {
+    redirect(StatusCode::MOVED_PERMANENTLY, location)
+}
+
+/// 303 after a form post: the browser follows with a GET, so reloading the
+/// result page never re-submits the form.
+pub fn see_other(location: &str) -> Result<Response, Error> {
+    redirect(StatusCode::SEE_OTHER, location)
+}
+
+fn redirect(status: StatusCode, location: &str) -> Result<Response, Error> {
     let value = HeaderValue::from_str(location)
         .map_err(|_| Error::internal(format!("redirect target {location:?} is not a header")))?;
-    Ok((StatusCode::MOVED_PERMANENTLY, [(header::LOCATION, value)]).into_response())
+    Ok((status, [(header::LOCATION, value)]).into_response())
 }
 
 /// `text` on one line, cut to at most `max` characters with an ellipsis. For

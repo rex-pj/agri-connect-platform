@@ -127,9 +127,10 @@ fn handlers_use_the_coded_extractors() {
             ": Query<",
             "Option<Json<",
             ": Multipart",
+            ": Form<",
         ],
         &[],
-        "use ApiJson/ApiPath/ApiQuery/ApiMultipart from web::extract",
+        "use ApiJson/ApiPath/ApiQuery/ApiMultipart/ApiForm from web::extract",
     );
 }
 

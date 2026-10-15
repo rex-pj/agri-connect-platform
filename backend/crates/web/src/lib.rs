@@ -3,6 +3,7 @@
 
 pub mod app_state;
 pub mod constants;
+pub mod cookies;
 pub mod error_response;
 pub mod extract;
 pub mod handlers;

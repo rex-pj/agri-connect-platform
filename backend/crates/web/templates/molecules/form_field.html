@@ -1,0 +1,31 @@
+{#- Labelled form controls with their error message. `error` is the localised
+    text for this field, empty when it is fine; it is linked to the control so
+    screen readers read it with the field. `first`: the field a `dialog`
+    focuses when it opens. -#}
+
+{% macro input(id, name, label, value="", type="text", error="", required=false, placeholder="", pattern="", inputmode="", autocomplete="", maxlength=0, first=false) -%}
+<div class="form-field">
+  <label class="form-label fw-semibold" for="{{ id }}">{{ label }}{% if required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
+  <input class="form-control{% if error %} is-invalid{% endif %}" id="{{ id }}" name="{{ name }}" type="{{ type }}" value="{{ value }}"{% if required %} required{% endif %}{% if placeholder %} placeholder="{{ placeholder }}"{% endif %}{% if pattern %} pattern="{{ pattern }}"{% endif %}{% if inputmode %} inputmode="{{ inputmode }}"{% endif %}{% if autocomplete %} autocomplete="{{ autocomplete }}"{% endif %}{% if maxlength %} maxlength="{{ maxlength }}"{% endif %}{% if first %} x-ref="first"{% endif %}{% if error %} aria-invalid="true" aria-describedby="{{ id }}-error"{% endif %}>
+  {% if error %}<div class="invalid-feedback" id="{{ id }}-error">{{ error }}</div>{% endif %}
+</div>
+{%- endmacro input %}
+
+{% macro select(id, name, label, options, value="", error="", required=false, placeholder="") -%}
+<div class="form-field">
+  <label class="form-label fw-semibold" for="{{ id }}">{{ label }}{% if required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
+  <select class="form-select{% if error %} is-invalid{% endif %}" id="{{ id }}" name="{{ name }}"{% if required %} required{% endif %}{% if error %} aria-invalid="true" aria-describedby="{{ id }}-error"{% endif %}>
+    {% if placeholder %}<option value="">{{ placeholder }}</option>{% endif %}
+    {% for option in options %}<option value="{{ option }}"{% if option == value %} selected{% endif %}>{{ option }}</option>{% endfor %}
+  </select>
+  {% if error %}<div class="invalid-feedback" id="{{ id }}-error">{{ error }}</div>{% endif %}
+</div>
+{%- endmacro select %}
+
+{% macro textarea(id, name, label, value="", error="", placeholder="", maxlength=0, rows=3) -%}
+<div class="form-field">
+  <label class="form-label fw-semibold" for="{{ id }}">{{ label }}</label>
+  <textarea class="form-control{% if error %} is-invalid{% endif %}" id="{{ id }}" name="{{ name }}" rows="{{ rows }}"{% if placeholder %} placeholder="{{ placeholder }}"{% endif %}{% if maxlength %} maxlength="{{ maxlength }}"{% endif %}{% if error %} aria-invalid="true" aria-describedby="{{ id }}-error"{% endif %}>{{ value }}</textarea>
+  {% if error %}<div class="invalid-feedback" id="{{ id }}-error">{{ error }}</div>{% endif %}
+</div>
+{%- endmacro textarea %}

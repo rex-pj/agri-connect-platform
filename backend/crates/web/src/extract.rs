@@ -95,3 +95,21 @@ where
             .map_err(Error::from)
     }
 }
+
+/// `application/x-www-form-urlencoded`, for page forms that work without JS.
+pub struct ApiForm<T>(pub T);
+
+impl<T, S> FromRequest<S> for ApiForm<T>
+where
+    T: DeserializeOwned,
+    S: Send + Sync,
+{
+    type Rejection = Error;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        <axum::Form<T> as FromRequest<S>>::from_request(req, state)
+            .await
+            .map(|axum::Form(v)| Self(v))
+            .map_err(Error::from)
+    }
+}

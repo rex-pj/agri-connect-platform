@@ -91,6 +91,7 @@ struct ServiceDetailRow {
     description: Option<String>,
     price_note: Option<String>,
     category: String,
+    category_icon: Option<String>,
 }
 
 #[derive(FromQueryResult)]
@@ -431,6 +432,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .column(service::Column::Description)
             .column(service::Column::PriceNote)
             .column_as(category::Column::Name, "category")
+            .column_as(category::Column::Icon, "category_icon")
             .join(JoinType::InnerJoin, service::Relation::Category.def())
             .filter(service::Column::BusinessId.eq(b.id))
             .filter(service::Column::IsActive.eq(true))
@@ -458,6 +460,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
                     description: r.description,
                     price_note: r.price_note,
                     category: r.category,
+                    category_icon: r.category_icon,
                 })
                 .collect(),
         }))

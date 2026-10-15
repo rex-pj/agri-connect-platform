@@ -71,4 +71,53 @@ document.addEventListener("alpine:init", () => {
       return this.open ? "rotated" : "";
     },
   }));
+
+  // Turns an in-page section into a bottom sheet. Without JS the section is
+  // part of the page and its trigger is an anchor link to it. The server sets
+  // data-open="true" when it re-shows a form with errors.
+  Alpine.data("dialog", () => ({
+    modal: false,
+    isOpen: false,
+
+    init() {
+      this.modal = true;
+      this.isOpen = this.$el.dataset.open === "true";
+      if (this.isOpen) this.focusFirst();
+    },
+    show() {
+      this.isOpen = true;
+      this.focusFirst();
+    },
+    hide() {
+      this.isOpen = false;
+    },
+    focusFirst() {
+      this.$nextTick(() => this.$refs.first?.focus());
+    },
+    get sheetClass() {
+      return this.isOpen ? "is-modal is-open" : "is-modal";
+    },
+  }));
+
+  // Share the current page: the phone's share sheet, else copy the link.
+  Alpine.data("shareButton", () => ({
+    status: "",
+
+    async share() {
+      const { title, text, copied } = this.$el.closest("[data-title]").dataset;
+      const url = window.location.href;
+      if (navigator.share) {
+        // Cancelling the share sheet rejects; that is not an error.
+        await navigator.share({ title, text, url }).catch(() => {});
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(url);
+        this.status = copied;
+        setTimeout(() => (this.status = ""), 3000);
+      } catch {
+        // No clipboard (insecure origin, old browser): nothing to offer.
+      }
+    },
+  }));
 });

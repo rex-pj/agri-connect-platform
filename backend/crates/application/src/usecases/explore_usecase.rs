@@ -132,6 +132,7 @@ impl ExploreUseCase {
                     description: s.description,
                     price_note: s.price_note,
                     category: s.category,
+                    category_icon: s.category_icon,
                 })
                 .collect(),
         })

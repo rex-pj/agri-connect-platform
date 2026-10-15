@@ -130,6 +130,7 @@ pub struct ServiceDto {
     pub description: Option<String>,
     pub price_note: Option<String>,
     pub category: String,
+    pub category_icon: Option<String>,
 }
 
 #[derive(Serialize)]

@@ -1,0 +1,233 @@
+//! Provider detail and its contact form, through the real router: canonical
+//! URLs, Post/Redirect/Get with a one-time flash, and errors re-shown in place.
+//! Database tests need TEST_DATABASE_URL and `--include-ignored`.
+
+use axum::{
+    body::Body,
+    http::{header, Request, Response, StatusCode},
+};
+use integration_tests::{register_provider, send, Env};
+use sea_orm::{ConnectionTrait, Statement};
+use web::routings::app_routing::RouterConfig;
+
+const ORIGIN: &str = "http://localhost:3000";
+
+fn get(uri: &str, cookie: Option<&str>) -> Request<Body> {
+    let mut req = Request::get(uri).header(header::ACCEPT, "text/html");
+    if let Some(c) = cookie {
+        req = req.header(header::COOKIE, c);
+    }
+    req.body(Body::empty()).unwrap()
+}
+
+fn post_contact(form: &str, origin: &str) -> Request<Body> {
+    Request::post("/contact")
+        .header(header::ACCEPT, "text/html")
+        .header(header::ORIGIN, origin)
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body(Body::from(form.to_owned()))
+        .unwrap()
+}
+
+async fn text(res: Response<Body>) -> String {
+    let bytes = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    String::from_utf8(bytes.to_vec()).unwrap()
+}
+
+/// Percent-encodes a form value (UTF-8 bytes, `+` for spaces).
+fn enc(value: &str) -> String {
+    value
+        .bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' => (b as char).to_string(),
+            b' ' => "+".to_owned(),
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
+async fn env() -> Env {
+    Env::with(
+        None,
+        RouterConfig {
+            allowed_origins: vec![ORIGIN.to_owned()],
+            ..RouterConfig::default()
+        },
+    )
+    .await
+}
+
+/// A provider "Vườn nongdan" with one service; returns (business id, canonical URL).
+async fn provider(e: &Env) -> (i32, String) {
+    register_provider(&e.state, "nongdan", "0901234567").await;
+    let row =
+        e.t.db
+            .query_one(Statement::from_string(
+                e.t.db.get_database_backend(),
+                "UPDATE businesses SET address = 'Ấp 3, Cai Lậy, Tiền Giang',
+                 description = 'Múc bùn, nạo vét kênh mương.'
+             WHERE name = 'Vườn nongdan' RETURNING id",
+            ))
+            .await
+            .unwrap()
+            .unwrap();
+    let id: i32 = row.try_get("", "id").unwrap();
+    e.t.db
+        .execute_unprepared(&format!(
+            "INSERT INTO services (business_id, category_id, name, price_note)
+             SELECT {id}, id, 'Múc bùn ao', '300.000 ₫/giờ' FROM categories
+             WHERE type = 'service' ORDER BY display_order LIMIT 1"
+        ))
+        .await
+        .unwrap();
+    (id, format!("/providers/{id}/vuon-nongdan"))
+}
+
+async fn inquiries(e: &Env) -> i64 {
+    let row =
+        e.t.db
+            .query_one(Statement::from_string(
+                e.t.db.get_database_backend(),
+                "SELECT count(*) AS n FROM inquiries",
+            ))
+            .await
+            .unwrap()
+            .unwrap();
+    row.try_get("", "n").unwrap()
+}
+
+fn valid_form(id: i32) -> String {
+    format!(
+        "business_id={id}&requester_phone=0912345678&topic={}&requester_name={}&note={}",
+        enc("Múc bùn ao"),
+        enc("Nguyễn Văn A"),
+        enc("Ao 500 m2")
+    )
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn the_provider_page_has_its_services_a_call_button_and_the_form() {
+    let e = env().await;
+    let (id, canonical) = provider(&e).await;
+
+    for uri in [
+        format!("/providers/{id}"),
+        format!("/providers/{id}/sai-ten"),
+    ] {
+        let res = send(&e.router, get(&uri, None)).await;
+        assert_eq!(res.status(), StatusCode::MOVED_PERMANENTLY, "{uri}");
+        assert_eq!(res.headers()[header::LOCATION], canonical.as_str());
+    }
+
+    let res = send(&e.router, get(&canonical, None)).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let html = text(res).await;
+    assert!(html.contains("<title>Vườn nongdan — Agri-Connect</title>"));
+    assert!(html.contains(r#"content="Múc bùn, nạo vét kênh mương.""#));
+    assert!(html.contains("Ấp 3, Cai Lậy, Tiền Giang"));
+    assert!(html.contains("Múc bùn ao") && html.contains("300.000 ₫/giờ"));
+    assert!(html.contains(r#"href="tel:0901234567""#));
+    // The form works without JS: a plain POST to /contact, reached by anchor.
+    assert!(html.contains(r#"action="/contact""#));
+    assert!(html.contains(&format!(r#"name="business_id" value="{id}""#)));
+    assert!(html.contains(r##"href="#lien-he""##) && html.contains(r#"id="lien-he""#));
+    assert!(html.contains(r#"<option value="Múc bùn ao">"#));
+    assert!(!html.contains("Đã gửi yêu cầu"));
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_sent_form_redirects_and_thanks_the_visitor_once() {
+    let e = env().await;
+    let (id, canonical) = provider(&e).await;
+
+    let res = send(&e.router, post_contact(&valid_form(id), ORIGIN)).await;
+    // 303: reloading the thank-you page must not post the form again.
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res.headers()[header::LOCATION], canonical.as_str());
+    let flash = res.headers()[header::SET_COOKIE]
+        .to_str()
+        .unwrap()
+        .to_owned();
+    assert!(flash.starts_with("flash=contact_sent;"), "{flash}");
+    assert_eq!(inquiries(&e).await, 1);
+
+    let res = send(&e.router, get(&canonical, Some("flash=contact_sent"))).await;
+    let clears = res.headers()[header::SET_COOKIE]
+        .to_str()
+        .unwrap()
+        .to_owned();
+    assert!(
+        clears.contains("Max-Age=0"),
+        "the flash is used up: {clears}"
+    );
+    assert!(text(res).await.contains("Đã gửi yêu cầu!"));
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_rejected_form_comes_back_with_messages_and_what_was_typed() {
+    let e = env().await;
+    let (id, _) = provider(&e).await;
+    let form = format!(
+        "business_id={id}&requester_phone=123&topic=&requester_name={}&note=",
+        enc("<script>alert(1)</script>")
+    );
+
+    let res = send(&e.router, post_contact(&form, ORIGIN)).await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    let html = text(res).await;
+    assert!(html.contains("Vui lòng kiểm tra lại thông tin."));
+    assert!(
+        html.contains("Vui lòng chọn dịch vụ cần liên hệ."),
+        "topic message"
+    );
+    assert!(
+        html.contains(r#"id="cs_phone-error""#),
+        "phone message linked to its field"
+    );
+    assert!(html.contains(r#"value="123""#), "typed phone kept");
+    // Echoed back escaped, never as markup.
+    assert!(html.contains("&lt;script&gt;alert(1)&lt;/script&gt;"));
+    assert!(!html.contains("<script>alert(1)"));
+    // The sheet opens by itself with JS.
+    assert!(html.contains(r#"data-open="true""#));
+    assert_eq!(inquiries(&e).await, 0);
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn contact_for_a_missing_provider_or_from_another_site_is_refused() {
+    let e = env().await;
+    let (id, _) = provider(&e).await;
+
+    let res = send(&e.router, post_contact(&valid_form(999_999), ORIGIN)).await;
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+    assert!(text(res).await.contains("Không tìm thấy nhà cung cấp."));
+
+    let res = send(
+        &e.router,
+        post_contact(&valid_form(id), "https://evil.example"),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    assert_eq!(inquiries(&e).await, 0);
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_missing_provider_page_is_a_404() {
+    let e = env().await;
+    for uri in ["/providers/999999/x", "/providers/khong-so"] {
+        let res = send(&e.router, get(uri, None)).await;
+        assert_eq!(res.status(), StatusCode::NOT_FOUND, "{uri}");
+    }
+    e.cleanup().await;
+}

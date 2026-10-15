@@ -4,7 +4,8 @@ use uuid::Uuid;
 use crate::{
     error::Error,
     models::product::{
-        AdminProduct, NewProduct, ProductFilter, ProductView, ProviderProduct, UpdateProduct,
+        AdminProduct, NewProduct, ProductFilter, ProductSort, ProductView, ProviderProduct,
+        UpdateProduct,
     },
 };
 
@@ -28,7 +29,7 @@ pub trait ProductRepositoryTrait {
     async fn browse(
         &self,
         filter: &ProductFilter,
-        sort: Option<String>,
+        sort: ProductSort,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<ProductView>, Error>;

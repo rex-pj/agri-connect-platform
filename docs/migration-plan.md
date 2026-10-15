@@ -946,3 +946,26 @@ Tests (database):
 - an invalid post → 400 page with messages linked to their fields, typed values kept, a `<script>` name echoed escaped, the sheet set to open, nothing stored;
 - a missing provider → 404; a cross-site post → 403 and nothing stored;
 - missing provider pages → 404.
+
+### S8 — product listings (same branch)
+
+Done:
+- **`/products` and `/products/category/{id}/{slug}` are served by Rust** (`web/src/pages/products.rs`). The SvelteKit `products` route directory is gone.
+- **One GET form** carries the search text, category, price range and sort, so every state is a URL. Category and sort chips are radio buttons styled with `:has(:checked)`. The filter panel is open without JS; the Alpine `collapse` component folds it behind the sliders button, which shows a count of active filters. "Xóa bộ lọc" is a link that keeps the search text.
+- **Lenient queries:** a malformed number, a negative price, an unknown category id or an unknown sort is ignored, not a 400 page. A hand-edited link still shows products.
+- **`ProductSort`** is now a domain enum (`newest`, `price_asc`, `price_desc`), used by the repository, the use case, the JSON API and the page. The repository no longer matches loose strings.
+- **Pagination** (`pages/listing.rs`, ready for S9): real links that keep the filters. Page 1 has no `page` parameter. The window is first and last, ±2 around the current page, with ellipses, ported from `PaginationNav.svelte`.
+- **Category pages** use the category's own slug as canonical (a stale one → 301, keeping `?page=`). A service category id or an unknown id → 404. The hero shows the category's catalogue description and the count.
+- **`page_hero`** gained a list variant, title icon, watermark and subtitle. New: molecule `pagination_nav`, organism `product_filters`.
+- **Tests:**
+  - test databases are dropped `WITH (FORCE)`: a pooled connection still closing made the drop fail now and then;
+  - the proxy tests now use `/provider/dashboard` as the not-yet-migrated page.
+
+Tests:
+- Unit: query encoding matches a browser form submit, lenient parsing, the page-number window, pagination links keep filters and drop page 1, `ProductSort` round-trips.
+- Database:
+  - text (accent-insensitive), category, price range and both sorts through the page; the form echoes its state and the active-filter badge;
+  - hand-edited queries still list everything;
+  - the empty state's reset link keeps the search;
+  - 28 products page as 20 + 8, with filter-keeping links;
+  - category canonical, 301 with `page` kept, and 404 for service, unknown and non-numeric ids.

@@ -278,10 +278,10 @@ All routes are defined as SvelteKit file-system pages under `client-app/src/rout
 | Route                            | Description                                    |
 | -------------------------------- | ---------------------------------------------- |
 | `/`                              | Home: featured products, providers, categories (**served by Rust**, `web/src/pages/home.rs`) |
-| `/products`                      | Product listing                                |
+| `/products`                      | Product listing: GET filter form, page links (**Rust**, `web/src/pages/products.rs`) |
 | `/products/[id]`                 | 301 → `/products/[id]/[slug]` (**Rust**)       |
 | `/products/[id]/[slug]`          | Product detail (**Rust**, `web/src/pages/product.rs`; any other spelling 301s here) |
-| `/products/category/[id]/[slug]` | Products filtered by category                  |
+| `/products/category/[id]/[slug]` | Products in a category (**Rust**; slug is the category slug, others 301) |
 | `/services`                      | Service listing / search                       |
 | `/services/category/[id]/[slug]` | Services filtered by category                  |
 | `/agri-connect`                  | Provider map geo-discovery                     |

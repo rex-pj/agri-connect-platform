@@ -109,6 +109,11 @@ impl AppRouting {
         // Contact form is rate-limited separately to prevent spam.
         let public_routes = Router::new()
             .route("/", get(pages::home::show))
+            .route("/products", get(pages::products::list))
+            .route(
+                "/products/category/{id}/{slug}",
+                get(pages::products::category),
+            )
             .route("/products/{id}", get(pages::product::by_id))
             .route("/products/{id}/{slug}", get(pages::product::show))
             .route("/providers/{id}", get(pages::provider::by_id))

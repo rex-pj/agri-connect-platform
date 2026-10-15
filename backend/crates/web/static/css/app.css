@@ -1220,3 +1220,241 @@ body:has(.app-nav__search-row.open) .app-main {
   flex-direction: column;
   gap: 14px;
 }
+
+/* ── Page hero additions (list pages) ────────────────────────────────────── */
+.page-hero__watermark {
+  position: absolute;
+  right: -12px;
+  bottom: -16px;
+  color: rgba(255, 255, 255, 0.06);
+  font-size: 7rem;
+  line-height: 1;
+  pointer-events: none;
+}
+.page-hero__title-icon {
+  padding: 6px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 1.15rem;
+  opacity: 0.85;
+}
+.page-hero__sub {
+  margin: 8px 0 0;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+/* ── List pages: search + filters (organisms/product_filters) ────────────── */
+.list-tools {
+  padding: 12px 8px 0;
+}
+@media (min-width: 768px) {
+  .list-tools {
+    padding: 16px 16px 0;
+  }
+}
+.list-search__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.list-search__input {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  background: var(--surface);
+}
+.list-search__input:focus-within {
+  border-color: var(--p600);
+  box-shadow: 0 0 0 3px rgba(4, 120, 87, 0.15);
+}
+.list-search__input input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  font-size: 1rem;
+  outline: none;
+}
+.list-search__icon {
+  color: var(--muted);
+}
+.list-search__toggle,
+.list-search__submit {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 1rem;
+}
+.list-search__toggle {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--p700);
+}
+.list-search__toggle.active {
+  border-color: var(--p600);
+  background: var(--p50);
+}
+.list-search__submit {
+  border: none;
+  background: var(--p700);
+  color: #fff;
+}
+.list-search__badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--a500);
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 20px;
+}
+/* Open by default (no JS); Alpine `collapse` adds is-collapsible. */
+.filter-panel {
+  display: grid;
+  grid-template-rows: 1fr;
+  margin-top: 10px;
+}
+.filter-panel.is-collapsible {
+  grid-template-rows: 0fr;
+  margin-top: 0;
+  transition: grid-template-rows 0.22s ease, margin-top 0.22s ease;
+}
+.filter-panel.is-collapsible.open {
+  grid-template-rows: 1fr;
+  margin-top: 10px;
+}
+.filter-panel__inner {
+  min-height: 0;
+  overflow: hidden;
+}
+.filter-panel__inner > * {
+  margin-left: 2px;
+  margin-right: 2px;
+}
+.filter-section {
+  margin: 0 0 14px;
+  padding: 0;
+  border: none;
+}
+.filter-label {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  background: var(--surface);
+  color: var(--text2);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.chip:has(input:checked) {
+  border-color: var(--p700);
+  background: var(--p700);
+  color: #fff;
+}
+.chip:has(input:focus-visible) {
+  outline: 3px solid var(--p400);
+  outline-offset: 2px;
+}
+.price-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.price-row__sep {
+  color: var(--muted);
+}
+.filter-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding-bottom: 4px;
+}
+.list-results {
+  padding: 12px 8px;
+}
+@media (min-width: 768px) {
+  .list-results {
+    padding: 16px;
+  }
+}
+
+/* ── Molecule: pagination (molecules/pagination_nav) ─────────────────────── */
+.pagination-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 20px;
+}
+.page-btn {
+  min-width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text2);
+  font-weight: 700;
+  text-decoration: none;
+}
+.page-btn:hover {
+  border-color: var(--p400);
+  background: var(--p50);
+  color: var(--p700);
+}
+.page-btn.page-btn--active {
+  border-color: var(--p700);
+  background: var(--p700);
+  color: #fff;
+}
+.page-btn--disabled,
+.page-btn--disabled:hover {
+  opacity: 0.4;
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text2);
+}
+.page-ellipsis {
+  padding: 0 4px;
+  color: var(--muted);
+}

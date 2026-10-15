@@ -1,0 +1,55 @@
+{#- Search and filters for the product list: one GET form, so the result is a
+    URL. Chips are radio buttons. Without JS the panel is simply open; Alpine
+    `collapse` folds it behind the sliders button. `f` is a FilterForm,
+    `categories` CategoryChips. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro product_filters(f, categories, action) -%}
+<form class="list-search" method="get" action="{{ action }}" role="search" x-data="collapse">
+  <div class="list-search__row">
+    <label class="list-search__input">
+      {{ atoms::icon(name="fa-magnifying-glass", class="list-search__icon") }}
+      <span class="visually-hidden">Tìm sản phẩm</span>
+      <input type="search" name="q" value="{{ f.q }}" placeholder="Tìm sản phẩm..." enterkeyhint="search">
+    </label>
+    <button type="button" class="list-search__toggle" aria-label="Bộ lọc" aria-controls="product-filters" x-cloak x-on:click="toggle" :class="buttonClass" :aria-expanded="expanded">
+      {{ atoms::icon(name="fa-sliders") }}
+      {% if f.active %}<span class="list-search__badge">{{ f.active }}</span>{% endif %}
+    </button>
+    <button type="submit" class="list-search__submit" aria-label="Tìm kiếm">{{ atoms::icon(name="fa-arrow-right") }}</button>
+  </div>
+
+  <div class="filter-panel" id="product-filters" :class="panelClass">
+    <div class="filter-panel__inner">
+      <fieldset class="filter-section">
+        <legend class="filter-label">Danh mục</legend>
+        <div class="chip-row">
+          <label class="chip"><input class="visually-hidden" type="radio" name="category_id" value=""{% if not f.category_id %} checked{% endif %}> Tất cả</label>
+          {% for c in categories %}
+          <label class="chip"><input class="visually-hidden" type="radio" name="category_id" value="{{ c.id }}"{% if f.category_id == c.id %} checked{% endif %}> {{ atoms::icon(name=c.icon) }} {{ c.name }}</label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      <fieldset class="filter-section">
+        <legend class="filter-label">Khoảng giá (đồng)</legend>
+        <div class="price-row">
+          <input class="form-control" type="number" name="min_price" min="0" inputmode="numeric" placeholder="Từ" aria-label="Giá tối thiểu" value="{{ f.min_price }}">
+          <span class="price-row__sep" aria-hidden="true">—</span>
+          <input class="form-control" type="number" name="max_price" min="0" inputmode="numeric" placeholder="Đến" aria-label="Giá tối đa" value="{{ f.max_price }}">
+        </div>
+      </fieldset>
+      <fieldset class="filter-section">
+        <legend class="filter-label">Sắp xếp</legend>
+        <div class="chip-row">
+          {% for s in f.sorts %}
+          <label class="chip"><input class="visually-hidden" type="radio" name="sort" value="{{ s }}"{% if f.sort == s %} checked{% endif %}> {% if s == "price_asc" %}Giá tăng dần{% elif s == "price_desc" %}Giá giảm dần{% else %}Mới nhất{% endif %}</label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      <div class="filter-actions">
+        <a class="btn btn-outline-secondary" href="{{ f.reset_href }}">Xóa bộ lọc</a>
+        <button type="submit" class="btn btn-success">Áp dụng</button>
+      </div>
+    </div>
+  </div>
+</form>
+{%- endmacro product_filters %}

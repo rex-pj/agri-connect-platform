@@ -1,5 +1,8 @@
 use axum::{extract::State, response::IntoResponse, Json};
-use domain::{models::product::ProductFilter, Error};
+use domain::{
+    models::product::{ProductFilter, ProductSort},
+    Error,
+};
 
 use crate::{
     app_state::AppState,
@@ -25,7 +28,7 @@ impl ProductsHandler {
                     min_price: q.min_price,
                     max_price: q.max_price,
                 },
-                q.sort,
+                ProductSort::parse(q.sort.as_deref()),
                 q.page.unwrap_or(1),
             )
             .await?;

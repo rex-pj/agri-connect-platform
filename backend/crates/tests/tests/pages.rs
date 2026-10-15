@@ -159,7 +159,7 @@ fn proxied_router(base: &str) -> Router {
 #[tokio::test]
 async fn unmigrated_pages_are_proxied_with_the_browser_host() {
     let router = proxied_router(&fake_sveltekit().await);
-    let req = Request::get("/products?page=2")
+    let req = Request::get("/provider/dashboard?tab=2")
         .header(header::HOST, "agri.example.vn")
         .body(Body::empty())
         .unwrap();
@@ -171,7 +171,7 @@ async fn unmigrated_pages_are_proxied_with_the_browser_host() {
         "hop-by-hop header leaked"
     );
     let body = text(res).await;
-    assert!(body.contains("path=/products?page=2"), "{body}");
+    assert!(body.contains("path=/provider/dashboard?tab=2"), "{body}");
     assert!(body.contains("host=agri.example.vn"), "{body}");
     assert!(body.contains("proto=http"), "{body}");
     assert!(body.contains("fwd=127.0.0.1"), "{body}");
@@ -193,7 +193,7 @@ async fn api_paths_are_never_proxied() {
 async fn a_down_sveltekit_gives_a_503_page_not_a_hang() {
     // Port 9 (discard) on loopback refuses connections on every CI runner.
     let router = proxied_router("http://127.0.0.1:9");
-    let res = send(&router, page("/products")).await;
+    let res = send(&router, page("/provider/dashboard")).await;
     assert_eq!(res.status(), StatusCode::SERVICE_UNAVAILABLE);
     assert!(text(res)
         .await

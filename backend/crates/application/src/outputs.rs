@@ -150,7 +150,7 @@ pub struct ExploreData {
     pub featured_products: Vec<ProductDto>,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct CategoryDto {
     pub id: i32,
     pub name: String,

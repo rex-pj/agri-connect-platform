@@ -74,3 +74,48 @@ pub struct ProductFilter {
     pub min_price: Option<i64>,
     pub max_price: Option<i64>,
 }
+
+/// Order of a product listing. The wire names are query-string values that
+/// shared links carry, so renaming one breaks those links.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ProductSort {
+    #[default]
+    Newest,
+    PriceAsc,
+    PriceDesc,
+}
+
+impl ProductSort {
+    pub const ALL: [ProductSort; 3] = [Self::Newest, Self::PriceAsc, Self::PriceDesc];
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Newest => "newest",
+            Self::PriceAsc => "price_asc",
+            Self::PriceDesc => "price_desc",
+        }
+    }
+
+    /// Unknown or missing means newest: an old or hand-edited link should
+    /// still show products, not an error.
+    pub fn parse(value: Option<&str>) -> Self {
+        Self::ALL
+            .into_iter()
+            .find(|s| Some(s.as_str()) == value)
+            .unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ProductSort;
+
+    #[test]
+    fn sort_names_round_trip_and_unknown_means_newest() {
+        for sort in ProductSort::ALL {
+            assert_eq!(ProductSort::parse(Some(sort.as_str())), sort);
+        }
+        assert_eq!(ProductSort::parse(Some("cheapest")), ProductSort::Newest);
+        assert_eq!(ProductSort::parse(None), ProductSort::Newest);
+    }
+}

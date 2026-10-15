@@ -124,7 +124,7 @@ impl TestDb {
 
         let admin = Database::connect(&url).await.unwrap();
         admin
-            .execute_unprepared(&format!("DROP DATABASE IF EXISTS {name}"))
+            .execute_unprepared(&format!("DROP DATABASE IF EXISTS {name} WITH (FORCE)"))
             .await
             .unwrap();
         admin
@@ -145,10 +145,15 @@ impl TestDb {
         TestDb { db, admin, name }
     }
 
+    /// FORCE: a pooled connection can still be closing when the drop runs;
+    /// without it the drop fails now and then with "being accessed by other users".
     pub async fn cleanup(self) {
         self.db.close().await.unwrap();
         self.admin
-            .execute_unprepared(&format!("DROP DATABASE IF EXISTS {}", self.name))
+            .execute_unprepared(&format!(
+                "DROP DATABASE IF EXISTS {} WITH (FORCE)",
+                self.name
+            ))
             .await
             .unwrap();
     }

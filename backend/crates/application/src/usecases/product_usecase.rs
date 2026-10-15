@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use domain::{
-    models::product::ProductFilter, repositories::product_repository_trait::ProductRepositoryTrait,
+    models::product::{ProductFilter, ProductSort},
+    repositories::product_repository_trait::ProductRepositoryTrait,
     Error, ErrorCode, Result,
 };
 
@@ -26,7 +27,7 @@ impl ProductUseCase {
     pub async fn browse_products(
         &self,
         filter: ProductFilter,
-        sort: Option<String>,
+        sort: ProductSort,
         page: i64,
     ) -> Result<ProductBrowseResponse> {
         let (page, offset) = paginate(page, PAGE_SIZE);

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use application::{catalogue::CATALOGUE, inputs::BrowseParams};
 use domain::{
-    models::product::ProductFilter,
+    models::product::{ProductFilter, ProductSort},
     repositories::catalogue_repository_trait::CatalogueRepositoryTrait,
 };
 use infrastructure::{catalogue_repository::CatalogueRepository, search::contains_sql};
@@ -80,7 +80,7 @@ async fn products(t: &TestDb, query: &str) -> Vec<String> {
                 name: Some(query.into()),
                 ..Default::default()
             },
-            None,
+            ProductSort::Newest,
             1,
         )
         .await

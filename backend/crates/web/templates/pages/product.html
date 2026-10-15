@@ -18,7 +18,7 @@
   {% endif %}
   <div class="product-detail__panel">
     {% if p.image_file_id %}
-    {{ hero::page_hero(title=p.name, back_href="", back_label="", badge_icon=icon, badge_text=p.category, compact=true) }}
+    {{ hero::page_hero(title=p.name, back_href="", back_label="", badge_icon=icon, badge_text=p.category, variant="compact") }}
     {% else %}
     {{ hero::page_hero(title=p.name, back_href=url_for(name="products"), back_label="Sản phẩm", badge_icon=icon, badge_text=p.category) }}
     {% endif %}

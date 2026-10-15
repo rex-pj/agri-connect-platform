@@ -99,6 +99,25 @@ document.addEventListener("alpine:init", () => {
     },
   }));
 
+  // Folds a panel behind a toggle button. Without JS the panel stays open and
+  // the button (x-cloak) stays hidden.
+  Alpine.data("collapse", () => ({
+    open: false,
+
+    toggle() {
+      this.open = !this.open;
+    },
+    get expanded() {
+      return this.open ? "true" : "false";
+    },
+    get buttonClass() {
+      return this.open ? "active" : "";
+    },
+    get panelClass() {
+      return this.open ? "is-collapsible open" : "is-collapsible";
+    },
+  }));
+
   // Share the current page: the phone's share sheet, else copy the link.
   Alpine.data("shareButton", () => ({
     status: "",

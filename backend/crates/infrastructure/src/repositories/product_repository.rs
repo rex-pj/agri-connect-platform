@@ -11,7 +11,8 @@ use uuid::Uuid;
 
 use domain::{
     models::product::{
-        AdminProduct, NewProduct, ProductFilter, ProductView, ProviderProduct, UpdateProduct,
+        AdminProduct, NewProduct, ProductFilter, ProductSort, ProductView, ProviderProduct,
+        UpdateProduct,
     },
     repositories::product_repository_trait::ProductRepositoryTrait,
 };
@@ -234,7 +235,7 @@ impl ProductRepositoryTrait for ProductRepository {
     async fn browse(
         &self,
         filter: &ProductFilter,
-        sort: Option<String>,
+        sort: ProductSort,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<ProductView>, Error> {
@@ -245,10 +246,10 @@ impl ProductRepositoryTrait for ProductRepository {
             filter,
         );
 
-        let query = match sort.as_deref() {
-            Some("price_asc") => query.order_by_asc(product::Column::Price),
-            Some("price_desc") => query.order_by_desc(product::Column::Price),
-            _ => query.order_by_desc(product::Column::CreatedOn),
+        let query = match sort {
+            ProductSort::PriceAsc => query.order_by_asc(product::Column::Price),
+            ProductSort::PriceDesc => query.order_by_desc(product::Column::Price),
+            ProductSort::Newest => query.order_by_desc(product::Column::CreatedOn),
         };
 
         query

@@ -45,6 +45,25 @@ jobs:
       # --include-ignored runs the database tests against the service above.
       - run: cargo test --workspace -- --include-ignored
 
+  islands:
+    name: Islands bundle is up to date
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: backend/islands
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.19"
+          cache: npm
+          cache-dependency-path: backend/islands/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      # The bundle is committed so the Rust image needs no Node. A source
+      # change without a rebuild ships stale behaviour; this fails instead.
+      - run: git diff --exit-code -- ../crates/web/static/js/islands.js
+
   legacy:
     name: SvelteKit (check, build) — removed in S20
     runs-on: ubuntu-24.04

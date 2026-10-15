@@ -151,6 +151,8 @@ struct ProductAdminRow {
 #[async_trait]
 impl BusinessRepositoryTrait for BusinessRepository {
     // ── Geo search: PostGIS expressions embedded via Expr::cust_with_values ─────
+    // Placeholders are `$1`, `$2`: sea-query leaves a `?` in custom SQL unbound
+    // for Postgres, and the query fails (convention test in tests/conventions.rs).
 
     async fn search_geo(
         &self,
@@ -176,11 +178,11 @@ impl BusinessRepositoryTrait for BusinessRepository {
         }
 
         let distance_expr = Expr::cust_with_values(
-            r#"ST_Distance("businesses".location, ST_GeographyFromText(?))"#,
+            r#"ST_Distance("businesses".location, ST_GeographyFromText($1))"#,
             [Value::from(point_wkt.to_owned())],
         );
         let within_filter = Expr::cust_with_values(
-            r#"ST_DWithin("businesses".location, ST_GeographyFromText(?), ?)"#,
+            r#"ST_DWithin("businesses".location, ST_GeographyFromText($1), $2)"#,
             [Value::from(point_wkt.to_owned()), Value::from(radius)],
         );
 
@@ -862,7 +864,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
 
         QueryTrait::query(&mut update).value(
             Alias::new("location"),
-            Expr::cust_with_values("ST_GeographyFromText(?)", [point_wkt.to_owned()]),
+            Expr::cust_with_values("ST_GeographyFromText($1)", [point_wkt.to_owned()]),
         );
 
         update

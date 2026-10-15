@@ -3,3 +3,4 @@ target
 environments
 .claude
 data
+islands/node_modules

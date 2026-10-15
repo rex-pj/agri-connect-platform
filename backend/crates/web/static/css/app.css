@@ -1503,3 +1503,154 @@ body:has(.app-nav__search-row.open) .app-main {
   line-height: 22px;
   text-align: center;
 }
+
+/* ── Near-me page (pages/explore) ────────────────────────────────────────── */
+/* Unknown element until islands.js defines it; then it holds a button. */
+ac-geolocate {
+  display: block;
+}
+.loc-hero {
+  padding: 32px 16px 28px;
+  border-radius: 0 0 24px 24px;
+  background: linear-gradient(160deg, var(--p900) 0%, var(--p800) 55%, var(--p600) 100%);
+  color: #fff;
+  text-align: center;
+}
+.loc-hero__inner {
+  max-width: 420px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.loc-ripple {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.loc-ripple .geo-cta__ripple {
+  left: 50%;
+}
+.loc-ripple__pin {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--a500);
+  font-size: 2rem;
+}
+.loc-hero__title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+.loc-hero__sub {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.95rem;
+}
+.loc-hero__btn {
+  width: 100%;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+.geo-error {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(254, 226, 226, 0.95);
+  color: #991b1b;
+  font-size: 0.85rem;
+  text-align: left;
+}
+.loc-hero__privacy {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 0.8rem;
+}
+.loc-manual {
+  width: 100%;
+  margin-top: 8px;
+  text-align: left;
+}
+.loc-manual__label {
+  display: block;
+  margin-bottom: 6px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.loc-manual__row {
+  display: flex;
+  gap: 8px;
+}
+.loc-manual__row .btn {
+  min-width: 52px;
+}
+.explore-hero__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.explore-hero__row .page-hero__title {
+  margin: 0;
+}
+.explore-hero__pin {
+  color: var(--a500);
+}
+.explore-hero__check {
+  color: var(--p300);
+}
+.explore-hero__refresh {
+  min-height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  white-space: nowrap;
+}
+.explore-hero__refresh:hover {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+.explore-hero__row .geo-error {
+  position: absolute;
+  right: 16px;
+  max-width: 260px;
+}
+.radius-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 12px 0;
+}
+.radius-links__label {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+a.chip {
+  text-decoration: none;
+}
+.chip[aria-current="true"] {
+  border-color: var(--p700);
+  background: var(--p700);
+  color: #fff;
+}
+.cat-section-label {
+  margin: 0 0 8px 4px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}

@@ -154,6 +154,27 @@ fn handlers_build_no_ad_hoc_error_responses() {
 }
 
 #[test]
+fn custom_sql_uses_numbered_placeholders() {
+    // sea-query binds `$1`, `$2` in a custom Postgres expression but leaves a
+    // `?` in the SQL unbound: the query then fails with a syntax error at
+    // runtime. Geo search and saving a location were broken this way.
+    let call = regex::Regex::new(r#"cust_with_values\(\s*r?#*"([^"]*)""#).unwrap();
+    let mut found = Vec::new();
+    for (file, src) in sources("infrastructure") {
+        for cap in call.captures_iter(&src) {
+            if cap[1].contains('?') {
+                found.push(format!("{file}: {}", &cap[1]));
+            }
+        }
+    }
+    assert!(
+        found.is_empty(),
+        "use $1, $2 … in cust_with_values:\n{}",
+        found.join("\n")
+    );
+}
+
+#[test]
 fn time_is_never_read_in_the_local_zone() {
     assert_absent(
         &["domain", "application", "infrastructure", "web"],

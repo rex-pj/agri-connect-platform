@@ -1,0 +1,260 @@
+//! GET /explore — providers near the visitor.
+//!
+//! The position comes from the `ac-geolocate` island (`lat`, `lng`) or, with
+//! or without JS, from a location preset chosen in a GET form
+//! (`location_id`). Service and radius filters are links that keep the
+//! position. Coordinates are in the query string but never in the logs: the
+//! request span records the path only.
+
+use application::outputs::{CategoryDto, LocationDto, ProductDto};
+use application::{
+    constants::{LAT_MAX, LAT_MIN, LNG_MAX, LNG_MIN},
+    inputs::GeoSearchParams,
+};
+use axum::{extract::State, response::Response};
+use domain::Error;
+use serde::{Deserialize, Serialize};
+
+use crate::{
+    app_state::AppState,
+    constants::{
+        EXPLORE_DEFAULT_RADIUS_M, EXPLORE_RADII_M, HOME_PRODUCT_COUNT, HOME_PROVIDER_COUNT,
+    },
+    extract::ApiQuery,
+    pages::{
+        cards::{tile, CategoryTile, ProviderCard},
+        listing::{parse_opt, with_query},
+    },
+    routes,
+    shell::Shell,
+    views::render_page,
+};
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct ExploreQuery {
+    pub lat: String,
+    pub lng: String,
+    pub location_id: String,
+    pub radius: String,
+    pub service_id: String,
+}
+
+/// Where the search is centred.
+#[derive(Debug, Clone)]
+enum Position {
+    /// From the device; kept as the visitor's own (rounded) text.
+    Device {
+        lat: f64,
+        lng: f64,
+        lat_text: String,
+        lng_text: String,
+    },
+    Preset(LocationDto),
+}
+
+impl Position {
+    fn coordinates(&self) -> (f64, f64) {
+        match self {
+            Position::Device { lat, lng, .. } => (*lat, *lng),
+            Position::Preset(l) => (l.lat, l.lng),
+        }
+    }
+
+    /// The query parameters that reproduce this position.
+    fn params(&self) -> Vec<(&'static str, String)> {
+        match self {
+            Position::Device {
+                lat_text, lng_text, ..
+            } => {
+                vec![("lat", lat_text.clone()), ("lng", lng_text.clone())]
+            }
+            Position::Preset(l) => vec![("location_id", l.id.to_string())],
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct RadiusLink {
+    pub label: String,
+    pub href: String,
+    pub active: bool,
+}
+
+#[derive(Serialize)]
+pub struct ExplorePage {
+    /// A position is known: results instead of the onboarding.
+    pub located: bool,
+    /// The preset's name, when the position is a preset.
+    pub place: Option<String>,
+    /// Where the island goes once it has the device position.
+    pub geolocate_href: String,
+    pub locations: Vec<LocationDto>,
+    pub location_id: Option<i32>,
+    pub radius_km: i64,
+    pub radius_links: Vec<RadiusLink>,
+    /// The next larger radius, offered when nothing is found.
+    pub wider: Option<RadiusLink>,
+    pub service_tiles: Vec<CategoryTile>,
+    pub service_id: Option<i32>,
+    pub providers: Vec<ProviderCard>,
+    pub featured_providers: Vec<ProviderCard>,
+    pub product_tiles: Vec<CategoryTile>,
+    pub featured_products: Vec<ProductDto>,
+}
+
+fn url(name: &str, params: &[(&str, &str)]) -> Result<String, Error> {
+    routes::url(name, params).map_err(|e| Error::internal(format!("explore links: {e}")))
+}
+
+fn icon(c: &CategoryDto) -> &str {
+    c.icon.as_deref().unwrap_or("fa-tag")
+}
+
+/// Device coordinates, if both parse and are on the globe. Anything else is
+/// "no position yet", not an error: the link may be hand-edited or old.
+fn device_position(q: &ExploreQuery) -> Option<Position> {
+    let lat: f64 = parse_opt(&q.lat)?;
+    let lng: f64 = parse_opt(&q.lng)?;
+    // The use case's own bounds, so a position we accept is one it accepts.
+    let on_globe = (LAT_MIN..=LAT_MAX).contains(&lat) && (LNG_MIN..=LNG_MAX).contains(&lng);
+    on_globe.then(|| Position::Device {
+        lat,
+        lng,
+        lat_text: q.lat.trim().to_owned(),
+        lng_text: q.lng.trim().to_owned(),
+    })
+}
+
+pub async fn show(
+    shell: Shell,
+    State(state): State<AppState>,
+    ApiQuery(q): ApiQuery<ExploreQuery>,
+) -> Result<Response, Error> {
+    let explore = &state.usecases.explore;
+    let (featured, service_categories, product_categories, locations) = tokio::try_join!(
+        explore.get_explore_data(),
+        explore.get_categories(Some("service")),
+        explore.get_categories(Some("product")),
+        explore.get_locations(),
+    )?;
+
+    let position = device_position(&q).or_else(|| {
+        let id: i32 = parse_opt(&q.location_id)?;
+        locations
+            .iter()
+            .find(|l| l.id == id)
+            .cloned()
+            .map(Position::Preset)
+    });
+    let radius = parse_opt::<i64>(&q.radius)
+        .filter(|r| EXPLORE_RADII_M.contains(r))
+        .unwrap_or(EXPLORE_DEFAULT_RADIUS_M);
+    let service_id =
+        parse_opt::<i32>(&q.service_id).filter(|id| service_categories.iter().any(|c| c.id == *id));
+
+    let path = url("explore", &[])?;
+    // A link to this page with the position kept and the given filters.
+    let link = |radius: i64, service: Option<i32>| {
+        let mut params: Vec<(&str, String)> =
+            position.as_ref().map(Position::params).unwrap_or_default();
+        if radius != EXPLORE_DEFAULT_RADIUS_M {
+            params.push(("radius", radius.to_string()));
+        }
+        if let Some(id) = service {
+            params.push(("service_id", id.to_string()));
+        }
+        let borrowed: Vec<(&str, &str)> = params.iter().map(|(k, v)| (*k, v.as_str())).collect();
+        with_query(&path, &borrowed)
+    };
+
+    let providers = match &position {
+        None => Vec::new(),
+        Some(p) => {
+            let (lat, lng) = p.coordinates();
+            explore
+                .search_providers(GeoSearchParams {
+                    lat,
+                    lng,
+                    radius: radius as f64,
+                    service_id,
+                })
+                .await?
+                .into_iter()
+                .map(ProviderCard::from)
+                .collect()
+        }
+    };
+
+    let mut service_tiles = Vec::with_capacity(service_categories.len());
+    for c in &service_categories {
+        let active = service_id == Some(c.id);
+        let href = if position.is_some() {
+            // Tapping the chosen service again clears the filter.
+            link(radius, if active { None } else { Some(c.id) })
+        } else {
+            url(
+                "service_category",
+                &[("id", &c.id.to_string()), ("slug", &c.slug)],
+            )?
+        };
+        let mut t = tile(&c.name, icon(c), href);
+        t.active = active;
+        service_tiles.push(t);
+    }
+    let mut product_tiles = Vec::with_capacity(product_categories.len());
+    for c in &product_categories {
+        let href = url(
+            "product_category",
+            &[("id", &c.id.to_string()), ("slug", &c.slug)],
+        )?;
+        product_tiles.push(tile(&c.name, icon(c), href));
+    }
+
+    let page = ExplorePage {
+        located: position.is_some(),
+        place: match &position {
+            Some(Position::Preset(l)) => Some(l.label.clone()),
+            _ => None,
+        },
+        geolocate_href: link(radius, service_id),
+        location_id: match &position {
+            Some(Position::Preset(l)) => Some(l.id),
+            _ => None,
+        },
+        locations,
+        radius_km: radius / 1000,
+        wider: EXPLORE_RADII_M
+            .iter()
+            .find(|&&r| r > radius)
+            .map(|&r| RadiusLink {
+                label: format!("{} km", r / 1000),
+                href: link(r, service_id),
+                active: false,
+            }),
+        radius_links: EXPLORE_RADII_M
+            .iter()
+            .map(|&r| RadiusLink {
+                label: format!("{} km", r / 1000),
+                href: link(r, service_id),
+                active: r == radius,
+            })
+            .collect(),
+        service_tiles,
+        service_id,
+        providers,
+        featured_providers: featured
+            .featured_providers
+            .into_iter()
+            .take(HOME_PROVIDER_COUNT)
+            .map(ProviderCard::from)
+            .collect(),
+        product_tiles,
+        featured_products: featured
+            .featured_products
+            .into_iter()
+            .take(HOME_PRODUCT_COUNT)
+            .collect(),
+    };
+    render_page(&state, &shell, "pages/explore.html", &page)
+}

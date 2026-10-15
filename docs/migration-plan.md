@@ -1001,3 +1001,31 @@ Tests (database):
 - `tab=services` hides the products section in the HTML itself;
 - 8 providers and 9 products preview six each with links to the full lists;
 - no query asks for one; nothing found shows both empty states with links to the lists; the top-bar box is not pre-filled.
+
+### S11 — near-me page and the island toolchain (same branch)
+
+Done:
+- **`/explore` is served by Rust** (`web/src/pages/explore.rs`); the SvelteKit route is deleted.
+- **Position from two sources:**
+  - **No JS:** a GET form with the catalogue's location presets (`location_id`).
+  - **JS:** the `ac-geolocate` island asks for the device position and goes to `/explore?lat=…&lng=…`, keeping the radius and service.
+  - Bad coordinates, an unknown preset or nothing at all show the onboarding, not an error. The coordinate bounds are the use case's own constants.
+- **Filters are links:** radius (5/10/25/50 km, default 10) and the service tiles. Each keeps the position; the active tile clears the filter. Results show the distance on each card ("995 m", "8.0 km (~16 phút xe máy)"), the S5 card field deferred until now. An empty result offers the next larger radius.
+- **Privacy:** coordinates travel in the query string, as before, but are never logged. The request span records the path only.
+- **Island toolchain** (`backend/islands/`):
+  - Svelte 5 custom elements with Vite, pinned to the versions client-app uses;
+  - built as one minified IIFE, `static/js/islands.js` (15 KB gzip), committed so the Rust image needs no Node. A rebuild is byte-identical;
+  - islands use light DOM and carry no `<style>`, so `style-src 'self'` holds; the bundle contains no `eval`/`new Function`;
+  - all user-facing text is passed as attributes from the template;
+  - only pages that use an island load the script (`{% block scripts %}` in `base.html`);
+  - new CI job `islands`: `npm ci && npm run build`, then `git diff --exit-code` on the bundle.
+
+Bug found and fixed:
+- **Geo search and saving a location were broken.** `search_geo` (distance and radius) and `update_location` built their PostGIS SQL with `?` placeholders in `Expr::cust_with_values`. sea-query 0.32 leaves those unbound for Postgres (the S3 finding). The near-me search and a provider saving GPS coordinates both answered 500: confirmed by running the new tests against the old code. They now use `$1`/`$2`. A new convention test fails on any `?` inside `cust_with_values` in infrastructure; it fails on the old code and passes on the fix.
+
+Tests (database):
+- onboarding: island tag, versioned island script, preset form, service tiles linking to service pages;
+- a preset search: nearest first, radius 5/10/25 km give 1/2/3 results, distance texts, preset name, links that keep `location_id`;
+- device coordinates: island `href` keeps radius and service; the active tile clears the filter;
+- malformed, off-globe and unknown positions → onboarding; nothing near → "Tìm trong 25 km";
+- a provider saves coordinates through the API and the geo API then finds them within 1 km.

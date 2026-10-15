@@ -8,7 +8,7 @@ use serde::Serialize;
 use crate::{
     app_state::AppState,
     constants::{HOME_PRODUCT_COUNT, HOME_PROVIDER_COUNT},
-    pages::cards::ProviderCard,
+    pages::cards::{tile, CategoryTile, ProviderCard},
     routes,
     shell::Shell,
     views::render_page,
@@ -17,28 +17,11 @@ use crate::{
 /// The product category type in `categories.type`.
 const PRODUCT_CATEGORY_TYPE: &str = "product";
 
-#[derive(Debug, Serialize)]
-pub struct CategoryTile {
-    pub name: String,
-    pub icon: String,
-    pub href: String,
-    pub active: bool,
-}
-
 #[derive(Serialize)]
 pub struct HomePage {
     pub categories: Vec<CategoryTile>,
     pub products: Vec<ProductDto>,
     pub providers: Vec<ProviderCard>,
-}
-
-fn tile(name: &str, icon: &str, href: String) -> CategoryTile {
-    CategoryTile {
-        name: name.to_owned(),
-        icon: icon.to_owned(),
-        href,
-        active: false,
-    }
 }
 
 pub async fn show(shell: Shell, State(state): State<AppState>) -> Result<Response, Error> {

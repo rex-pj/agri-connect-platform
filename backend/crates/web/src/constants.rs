@@ -54,3 +54,10 @@ pub const META_DESCRIPTION_MAX_CHARS: usize = 150;
 // ── Search page ───────────────────────────────────────────────────────────────
 /// Results of each kind shown on /search; "Xem thêm" leads to the full list.
 pub const SEARCH_PREVIEW_COUNT: usize = 6;
+
+// ── Near-me page ──────────────────────────────────────────────────────────────
+/// The radius choices on /explore, in metres. Each is inside the use case's
+/// 100 m – 50 km bounds.
+pub const EXPLORE_RADII_M: [i64; 4] = [5_000, 10_000, 25_000, 50_000];
+/// A farm visit by motorbike; the onboarding promises "trong 10 km".
+pub const EXPLORE_DEFAULT_RADIUS_M: i64 = 10_000;

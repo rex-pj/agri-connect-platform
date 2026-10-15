@@ -11,3 +11,6 @@ backend/crates/web/static/fonts/** -text
 *.woff2 binary
 *.png   binary
 *.ico   binary
+
+# Built from backend/islands by `npm run build`; reviewed as source there.
+backend/crates/web/static/js/islands.js linguist-generated=true -diff

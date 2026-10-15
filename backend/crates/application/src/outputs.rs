@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 // ── Location presets ──────────────────────────────────────────────────────────
 
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct LocationDto {
     pub id: i32,
     pub label: String,

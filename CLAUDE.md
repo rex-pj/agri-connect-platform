@@ -285,7 +285,7 @@ All routes are defined as SvelteKit file-system pages under `client-app/src/rout
 | `/services`                      | Provider directory: GET filter form, page links (**Rust**, `web/src/pages/services.rs`) |
 | `/services/category/[id]/[slug]` | Providers of one service (**Rust**; category slug canonical) |
 | `/search`                        | Providers + products for `q`; link tabs (`tab=`) work without JS (**Rust**, `web/src/pages/search.rs`) |
-| `/agri-connect`                  | Provider map geo-discovery                     |
+| `/explore`                       | Providers near a GPS position (`ac-geolocate` island) or a location preset (GET form); radius/service links (**Rust**, `web/src/pages/explore.rs`) |
 | `/providers/[id]`                | 301 → `/providers/[id]/[slug]` (**Rust**)      |
 | `/providers/[id]/[slug]`         | Provider detail + contact form (**Rust**, `web/src/pages/provider.rs`) |
 | `/account`                       | User profile (RequireAuth)                     |
@@ -468,6 +468,8 @@ middleware / handlers  →  application (use cases, ports)  →  domain  ←  in
 - A page is a handler in `web/src/pages/` that takes `Shell` (the frame: top bar, account menu, bottom tabs, built from the session) and renders through `views::render_page`. A stale session cookie renders the page signed out; it never fails it.
 - Templates follow the same atomic levels as the Svelte components (`templates/atoms|molecules|organisms`, pages extend `layouts/app.html`). Links come from `url_for`, product and provider slugs from the `slugify` filter (identical to `slugify.js`; both are tested against `client-app/src/lib/slugify.fixtures.json`, run `npm test` in `client-app`), images from `file_url`.
 - Interactive bits are Alpine components registered in `static/js/app.js`; markup must work without them (links and plain forms first).
+- What Alpine cannot do (today only geolocation) is an island: a Svelte custom element in `backend/islands/src` (light DOM, no `<style>`, all text passed as attributes), built with `npm run build` into `static/js/islands.js`, which is committed. CI rebuilds it and fails on a diff. Pages that use one load it in `{% block scripts %}`.
+- Custom SQL in `Expr::cust_with_values` uses `$1`, `$2`: a `?` is left unbound and the query fails at runtime (convention test).
 - Page forms post urlencoded (`ApiForm`) and follow Post/Redirect/Get: success is a 303 with a `cookies::Flash`; a broken rule re-renders the page with the error's status, the typed values and one message per field (from `error_body`). The rules stay in the use case the JSON API uses.
 - When a route moves to Rust, delete its SvelteKit `+page*` files in the same change.
 
@@ -491,7 +493,7 @@ Public-facing content pages must include a `<svelte:head>` block with `<title>` 
 | `/products`, `/products/[id]/[slug]`                         | Yes          | Product name & description in meta                          |
 | `/products/category/[id]/[slug]`                             | Yes          | Category name in title                                      |
 | `/services/category/[id]/[slug]`                             | Yes          | Category name in title                                      |
-| `/agri-connect`                                              | Yes          | Geo-discovery map page                                      |
+| `/explore`                                                   | Yes          | Near-me page                                                |
 | `/providers/[id]/[slug]`                                     | Yes          | Provider name & description in meta                         |
 | `/agri-connect/providers/[id]/[slug]`                        | Yes          | Provider name & description in meta                         |
 | `/account`, `/provider/dashboard`                            | No           | Authenticated; add `<meta name="robots" content="noindex">` |

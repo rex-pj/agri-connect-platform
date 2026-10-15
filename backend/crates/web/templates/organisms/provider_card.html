@@ -10,10 +10,11 @@
       <h3 class="card-title fs-6 fw-bold mb-0 flex-grow-1">{{ p.name }}</h3>
       {% if p.is_verified %}{{ badge::badge(text="Xác minh", icon="fa-circle-check", class="flex-shrink-0") }}{% endif %}
     </div>
-    {% if p.district %}
+    {% if p.distance or p.district %}
     <p class="text-muted small mb-0 d-flex align-items-center gap-1 provider-card__loc">
       {{ atoms::icon(name="fa-location-dot") }}
-      <span class="text-truncate">{{ p.district }}</span>
+      {% if p.distance %}<span>Cách bạn <strong>{{ p.distance }}</strong></span>{% if p.district %} <span class="provider-card__sep" aria-hidden="true">—</span>{% endif %}{% endif %}
+      {% if p.district %}<span class="text-truncate">{{ p.district }}</span>{% endif %}
     </p>
     {% endif %}
     {% if p.services %}

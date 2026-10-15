@@ -1,0 +1,86 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "molecules/admin_header.html" as header %}
+{% import "molecules/form_field.html" as field %}
+{% import "organisms/confirm_sheet.html" as confirm %}
+{#- One provider: details, verification badge, managing account, and what it
+    offers. `page.body` is web::pages::admin::providers::ProviderPage.
+    Withdrawing the badge goes through a confirmation with a reason; granting
+    it is one button. -#}
+{% block title %}{{ page.body.provider.name }} — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+{% set p = b.provider %}
+{{ header::admin_header(title=p.name, icon="fa-store", sub=p.phone, back_href=url_for(name="admin_explore"), back_label="Nhà cung cấp") }}
+<div class="admin-body" x-data="dialog" data-open="{% if b.confirm_open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+  {% if b.flash == "provider_verified" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã cấp huy hiệu xác minh.") }}{% endif %}
+  {% if b.flash == "provider_unverified" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã bỏ huy hiệu xác minh.") }}{% endif %}
+  {% if b.flash == "provider_account_assigned" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã gán tài khoản. Chủ cơ sở có thể đăng nhập để quản lý.") }}{% endif %}
+  {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
+
+  <section class="admin-card p-3">
+    <dl class="acct-rows">
+      <div class="acct-row"><dt>Điện thoại</dt><dd><a href="tel:{{ p.phone }}">{{ p.phone }}</a></dd></div>
+      {% if p.email %}<div class="acct-row"><dt>Email</dt><dd>{{ p.email }}</dd></div>{% endif %}
+      {% if p.address %}<div class="acct-row"><dt>Địa chỉ</dt><dd>{{ p.address }}</dd></div>{% endif %}
+      <div class="acct-row"><dt>Trạng thái</dt><dd>{% if p.is_active %}<span class="badge text-bg-success">Hoạt động</span>{% else %}<span class="badge text-bg-secondary">Đã tắt</span>{% endif %}</dd></div>
+      <div class="acct-row"><dt>Tạo lúc</dt><dd><time datetime="{{ p.created_on | utc_iso }}">{{ p.created_on | vn_datetime }}</time></dd></div>
+    </dl>
+    {% if p.description %}<p class="small mt-2 mb-0">{{ p.description }}</p>{% endif %}
+    <a class="btn btn-sm btn-outline-secondary mt-2" href="{{ b.public_href }}">{{ atoms::icon(name="fa-arrow-up-right-from-square") }} Xem trang công khai</a>
+  </section>
+
+  <section class="admin-card p-3">
+    <h2 class="detail-card__title">Huy hiệu xác minh</h2>
+    <p class="small text-muted">{% if p.is_verified %}{{ atoms::icon(name="fa-circle-check", class="text-success") }} Nhà cung cấp đã được xác minh.{% else %}Chưa xác minh. Chỉ cấp khi đã kiểm tra thông tin thật.{% endif %}</p>
+    {% if b.can_verify %}
+    {% if p.is_verified %}
+    <a class="btn btn-outline-warning" href="#bo-xac-minh" x-on:click.prevent="show">{{ atoms::icon(name="fa-circle-xmark") }} Bỏ xác minh</a>
+    {% else %}
+    <form method="post" action="{{ b.verification_action }}">
+      <input type="hidden" name="is_verified" value="true">
+      <button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-circle-check") }} Xác minh</button>
+    </form>
+    {% endif %}
+    {% endif %}
+  </section>
+
+  <section class="admin-card p-3" id="tai-khoan" aria-labelledby="tai-khoan-title">
+    <h2 class="detail-card__title" id="tai-khoan-title">Tài khoản quản lý</h2>
+    <p class="small text-muted mb-2">{% if p.linked_username %}Đang gán: <strong>{{ p.linked_username }}</strong>. Gán tài khoản khác sẽ thay thế.{% else %}Chưa có tài khoản. Chủ cơ sở cần tài khoản để tự cập nhật sản phẩm.{% endif %}</p>
+    {% if b.can_assign %}
+    {% set e = b.errors.fields %}
+    <form method="post" action="{{ b.account_action }}" novalidate>
+      {{ field::input(id="acc-username", name="username", label="Tên đăng nhập", value=b.form.username, error=e.username | default(value=""), required=true, autocomplete="off", minlength=limits.username_min_len) }}
+      <p class="small text-muted">Nếu tài khoản nhà cung cấp này đã có, chỉ cần tên đăng nhập. Tạo mới thì nhập thêm email và mật khẩu:</p>
+      {{ field::input(id="acc-email", name="email", label="Email", type="email", value=b.form.email, error=e.email | default(value=""), autocomplete="off", inputmode="email") }}
+      {{ field::input(id="acc-password", name="password", label="Mật khẩu", type="password", error=e.password | default(value=""), autocomplete="new-password", minlength=limits.password_min_chars) }}
+      <button type="submit" class="btn btn-success btn-lg">{{ atoms::icon(name="fa-user-plus") }} Gán tài khoản</button>
+    </form>
+    {% endif %}
+  </section>
+
+  <section class="admin-card p-3">
+    <h2 class="detail-card__title">Dịch vụ ({{ p.services | length }})</h2>
+    {% if p.services %}
+    <ul class="list-unstyled mb-0">
+      {% for s in p.services %}<li class="py-1 border-bottom"><span class="fw-semibold">{{ s.name }}</span> <span class="ac-tag">{{ s.category }}</span>{% if s.price_note %} <span class="small text-muted">· {{ s.price_note }}</span>{% endif %}{% if not s.is_active %} <span class="badge text-bg-secondary">Đã ẩn</span>{% endif %}</li>{% endfor %}
+    </ul>
+    {% else %}<p class="small text-muted mb-0">Chưa có dịch vụ.</p>{% endif %}
+  </section>
+
+  <section class="admin-card p-3">
+    <h2 class="detail-card__title">Sản phẩm ({{ p.products | length }})</h2>
+    {% if p.products %}
+    <ul class="list-unstyled mb-0">
+      {% for x in p.products %}<li class="py-1 border-bottom"><span class="fw-semibold">{{ x.name }}</span> <span class="ac-tag">{{ x.category }}</span>{% if x.price %} <span class="small text-muted">· {{ x.price | vnd }}{% if x.unit %}/{{ x.unit }}{% endif %}</span>{% endif %}{% if not x.is_active %} <span class="badge text-bg-secondary">Đã ẩn</span>{% endif %}</li>{% endfor %}
+    </ul>
+    {% else %}<p class="small text-muted mb-0">Chưa có sản phẩm.</p>{% endif %}
+  </section>
+
+  {% if b.can_verify and p.is_verified %}
+  {{ confirm::confirm_sheet(id="bo-xac-minh", title="Bỏ xác minh " ~ p.name ~ "?", icon="fa-circle-xmark", action=b.verification_action, button="Xác nhận bỏ xác minh", hidden_name="is_verified", hidden_value="false") }}
+  {% endif %}
+</div>
+{% endblock content %}

@@ -5,6 +5,7 @@
 pub mod categories;
 pub mod dashboard;
 pub mod locations;
+pub mod providers;
 pub mod roles;
 pub mod users;
 

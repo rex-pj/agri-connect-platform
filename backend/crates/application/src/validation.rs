@@ -4,7 +4,8 @@
 use domain::{Error, ErrorCode, Result};
 
 use crate::constants::{
-    LAT_MAX, LAT_MIN, LNG_MAX, LNG_MIN, PASSWORD_MAX_BYTES, PASSWORD_MIN_CHARS, USERNAME_MIN_LEN,
+    EMAIL_MAX, LAT_MAX, LAT_MIN, LNG_MAX, LNG_MIN, PASSWORD_MAX_BYTES, PASSWORD_MIN_CHARS,
+    USERNAME_MIN_LEN,
 };
 
 /// 10-digit Vietnamese mobile number starting with 0. Mirrors the
@@ -26,6 +27,28 @@ pub fn validate_username(username: &str) -> Result<()> {
         return Err(Error::new(ErrorCode::UsernameTooShort).with_param("min", USERNAME_MIN_LEN));
     }
     Ok(())
+}
+
+/// An address mail can be sent to: `local@domain.tld`, no spaces, one `@`,
+/// a dotted domain without empty labels. Callers pass it trimmed and
+/// lowercased. Deliverability is not checked: the reset email is the test.
+pub fn validate_email(email: &str) -> Result<()> {
+    let valid = email.chars().count() <= EMAIL_MAX
+        && !email.chars().any(char::is_whitespace)
+        && match email.split_once('@') {
+            Some((local, domain)) => {
+                !local.is_empty()
+                    && !domain.contains('@')
+                    && domain.contains('.')
+                    && domain.split('.').all(|label| !label.is_empty())
+            }
+            None => false,
+        };
+    if valid {
+        Ok(())
+    } else {
+        Err(Error::new(ErrorCode::InvalidEmail))
+    }
 }
 
 pub fn validate_password(password: &str) -> Result<()> {
@@ -89,6 +112,27 @@ pub fn non_blank(value: Option<String>) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn emails_need_a_local_part_and_a_dotted_domain() {
+        for ok in ["nongdan@gmail.com", "a.b+c@htx.cailay.vn"] {
+            assert!(validate_email(ok).is_ok(), "{ok}");
+        }
+        for bad in [
+            "",
+            "nongdan",
+            "@gmail.com",
+            "nongdan@gmail",
+            "nong dan@gmail.com",
+            "a@b@c.vn",
+            "a@.vn",
+            "a@gmail..com",
+        ] {
+            assert!(validate_email(bad).is_err(), "{bad:?}");
+        }
+        let long = format!("{}@x.vn", "a".repeat(EMAIL_MAX));
+        assert!(validate_email(&long).is_err());
+    }
 
     #[test]
     fn slugs_are_lowercase_ascii_words() {

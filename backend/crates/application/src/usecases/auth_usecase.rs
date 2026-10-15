@@ -27,7 +27,7 @@ use crate::{
     },
     outputs::{LoginResponse, MeResponse},
     ports::{EmailService, PasswordHasher, TokenService},
-    validation::{validate_password, validate_phone, validate_username},
+    validation::{validate_email, validate_password, validate_phone, validate_username},
 };
 
 #[derive(Clone)]
@@ -246,8 +246,10 @@ impl AuthUseCase {
         }
 
         let username = username.trim().to_lowercase();
+        let email = email.trim().to_lowercase();
         Validation::new()
             .rule("username", validate_username(&username))
+            .rule("email", validate_email(&email))
             .rule("password", validate_password(&password))
             .finish()?;
 
@@ -256,7 +258,7 @@ impl AuthUseCase {
             .user_repo
             .create(NewUser {
                 username: username.clone(),
-                email: email.trim().to_lowercase(),
+                email,
                 password_hash,
                 role: ROLE_ADMIN.into(),
                 full_name: Some(full_name.unwrap_or_else(|| "Administrator".to_owned())),
@@ -290,6 +292,7 @@ impl AuthUseCase {
 
         Validation::new()
             .rule("username", validate_username(&username))
+            .rule("email", validate_email(&email))
             .rule("password", validate_password(&password))
             .check(
                 business_name.is_empty(),

@@ -78,7 +78,8 @@ pub struct DeleteWithReasonBody {
 
 /// Optional JSON body for verification toggle (PATCH with no other payload).
 #[derive(Deserialize, Default)]
-pub struct ToggleVerifyRequest {
+pub struct SetVerificationRequest {
+    pub is_verified: bool,
     pub reason: Option<String>,
 }
 

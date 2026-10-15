@@ -50,10 +50,13 @@ pub enum Flash {
     LocationHidden,
     LocationShown,
     LocationDeleted,
+    ProviderVerified,
+    ProviderUnverified,
+    ProviderAccountAssigned,
 }
 
 impl Flash {
-    const ALL: [Flash; 18] = [
+    const ALL: [Flash; 21] = [
         Flash::ContactSent,
         Flash::PasswordReset,
         Flash::DemoLoaded,
@@ -72,6 +75,9 @@ impl Flash {
         Flash::LocationHidden,
         Flash::LocationShown,
         Flash::LocationDeleted,
+        Flash::ProviderVerified,
+        Flash::ProviderUnverified,
+        Flash::ProviderAccountAssigned,
     ];
 
     const fn as_str(self) -> &'static str {
@@ -94,6 +100,9 @@ impl Flash {
             Flash::LocationHidden => "location_hidden",
             Flash::LocationShown => "location_shown",
             Flash::LocationDeleted => "location_deleted",
+            Flash::ProviderVerified => "provider_verified",
+            Flash::ProviderUnverified => "provider_unverified",
+            Flash::ProviderAccountAssigned => "provider_account_assigned",
         }
     }
 

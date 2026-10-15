@@ -729,7 +729,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
 
     // ── Toggle verify ─────────────────────────────────────────────────────────
 
-    async fn toggle_verify(&self, id: i32) -> Result<Option<(i32, String, bool)>, Error> {
+    async fn set_verified(&self, id: i32, verified: bool) -> Result<Option<(String, bool)>, Error> {
         let db = self.db.as_ref();
 
         let b = Business::find()
@@ -738,24 +738,26 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .one(db)
             .await
             .map_err(|e| {
-                error!("business toggle_verify find error (id={id}): {e}");
+                error!("business set_verified find error (id={id}): {e}");
                 Error::internal("Failed to update verification status.")
             })?;
 
         let Some(b) = b else { return Ok(None) };
 
         let name = b.name.clone();
-        let new_verified = !b.is_verified;
+        if b.is_verified == verified {
+            return Ok(Some((name, false)));
+        }
         let mut active: business::ActiveModel = b.into();
-        active.is_verified = Set(new_verified);
+        active.is_verified = Set(verified);
         active.updated_on = Set(Utc::now().fixed_offset());
 
         active.update(db).await.map_err(|e| {
-            error!("business toggle_verify update error (id={id}): {e}");
+            error!("business set_verified update error (id={id}): {e}");
             Error::internal("Failed to update verification status.")
         })?;
 
-        Ok(Some((id, name, new_verified)))
+        Ok(Some((name, true)))
     }
 
     // ── Assign user ───────────────────────────────────────────────────────────

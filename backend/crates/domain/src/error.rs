@@ -76,6 +76,7 @@ error_codes! {
 
     // ── Field rules ──────────────────────────────────────────────────────────
     UsernameTooShort          => (BadRequest,      "username_too_short"),
+    InvalidEmail              => (BadRequest,      "invalid_email"),
     PasswordTooShort          => (BadRequest,      "password_too_short"),
     PasswordTooLong           => (BadRequest,      "password_too_long"),
     PasswordMismatch          => (BadRequest,      "password_mismatch"),
@@ -114,6 +115,7 @@ error_codes! {
     UsernameTaken             => (Conflict,        "username_taken"),
     UsernameTakenByOtherRole  => (Conflict,        "username_taken_by_other_role"),
     EmailTaken                => (Conflict,        "email_taken"),
+    ProviderAccountInUse      => (Conflict,        "provider_account_in_use"),
     SlugTaken                 => (Conflict,        "slug_taken"),
     LocationLabelTaken        => (Conflict,        "location_label_taken"),
     DemoAlreadyLoaded         => (Conflict,        "demo_already_loaded"),

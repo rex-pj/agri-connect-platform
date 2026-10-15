@@ -54,6 +54,10 @@ pub enum Change {
         added: Vec<String>,
         removed: Vec<String>,
     },
+    /// A business is now managed by the provider account `username`.
+    AccountAssigned {
+        username: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

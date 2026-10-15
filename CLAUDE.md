@@ -200,8 +200,8 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 | PATCH  | `/api/admin/categories/{id}/status`        | Toggle category active state      |
 | GET    | `/api/admin/providers`                     | Provider list (paginated)         |
 | GET    | `/api/admin/providers/{id}`                | Provider detail                   |
-| PATCH  | `/api/admin/providers/{id}/verification`   | Toggle verification badge         |
-| POST   | `/api/admin/providers/{id}/users`          | Assign user to provider           |
+| PATCH  | `/api/admin/providers/{id}/verification`   | Set verification badge (`is_verified`, `reason?`) |
+| POST   | `/api/admin/providers/{id}/users`          | Link a provider account (or create one); one business per account |
 | GET    | `/api/admin/inquiries`                     | Inquiry list (paginated)          |
 | PATCH  | `/api/admin/inquiries/{id}/status`         | Update inquiry status             |
 | GET    | `/api/admin/reviews`                       | Review list (paginated)           |
@@ -310,8 +310,8 @@ All routes are defined as SvelteKit file-system pages under `client-app/src/rout
 | `/admin/categories/[id]`   | Edit; hide (confirm + reason) / show (**Rust**) |
 | `/admin/locations`         | Location presets + create form (**Rust**, `web/src/pages/admin/locations.rs`) |
 | `/admin/locations/[id]`    | Edit, hide / show, delete (confirm + reason) → list (**Rust**) |
-| `/admin/agri-connect`      | Provider list & verification                    |
-| `/admin/agri-connect/[id]` | Provider detail                                 |
+| `/admin/explore`           | Provider list, paged (**Rust**, `web/src/pages/admin/providers.rs`) |
+| `/admin/explore/[id]`      | Details, verify / unverify (confirm + reason), assign the managing account (**Rust**) |
 | `/admin/inquiries`         | Inquiry status management                       |
 | `/admin/reviews`           | Review visibility management                    |
 | `/admin/logout`            | POST (**Rust**): same as `/logout`, lands on `/login` |

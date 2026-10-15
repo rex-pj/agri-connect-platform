@@ -40,13 +40,13 @@ use crate::{
         AdminCategoryDto, AdminInquiryDto, AdminLocationDto, AdminPagedResponse, AdminProductDto,
         AdminProductItemDto, AdminProviderDetailDto, AdminProviderDto, AdminReviewDto,
         AdminServiceDto, AdminServiceItemDto, AdminUserDetailDto, AdminUserDto, AssignUserDto,
-        RoleDto, VerifyToggleDto,
+        RoleDto, VerificationDto,
     },
     pagination::{paginate, total_pages},
     ports::{EventBus, PasswordHasher},
     validation::{
-        max_chars, non_blank, validate_coordinates, validate_password, validate_slug,
-        validate_username,
+        max_chars, non_blank, validate_coordinates, validate_email, validate_password,
+        validate_slug, validate_username,
     },
 };
 
@@ -212,37 +212,45 @@ impl AdminUseCase {
         })
     }
 
-    pub async fn toggle_verify(
+    /// Grants or withdraws the "verified" badge. Setting the state it already
+    /// has changes nothing and is not audited, so a form sent twice is harmless.
+    pub async fn set_verification(
         &self,
         actor: &Actor,
         id: i32,
+        is_verified: bool,
         reason: Option<String>,
-    ) -> Result<VerifyToggleDto> {
+    ) -> Result<VerificationDto> {
         actor.require(PERM_PROVIDER_VERIFY)?;
-        let result = self
+        let (name, changed) = self
             .business_repo
-            .toggle_verify(id)
+            .set_verified(id, is_verified)
             .await?
             .ok_or_else(|| Error::new(ErrorCode::ProviderNotFound))?;
-
-        let (id, name, is_verified) = result;
-        self.publish(
-            actor,
-            Entity::Provider,
-            id,
-            Change::Visibility {
-                visible: is_verified,
-            },
-            reason,
-        )
-        .await;
-        Ok(VerifyToggleDto {
+        if changed {
+            self.publish(
+                actor,
+                Entity::Provider,
+                id,
+                Change::Visibility {
+                    visible: is_verified,
+                },
+                reason,
+            )
+            .await;
+        }
+        Ok(VerificationDto {
             id,
             name,
             is_verified,
         })
     }
 
+    /// Gives a business an account to manage it from the provider dashboard.
+    /// An existing provider account is linked as-is (its email and password
+    /// are left alone); otherwise a provider account is created with the
+    /// given email and password. Linking replaces the business's previous
+    /// account, if any.
     pub async fn assign_provider_user(
         &self,
         actor: &Actor,
@@ -252,33 +260,51 @@ impl AdminUseCase {
         password: String,
     ) -> Result<AssignUserDto> {
         actor.require(PERM_PROVIDER_ACCOUNT_ASSIGN)?;
-        let username = username.trim().to_lowercase();
-        Validation::new()
-            .rule("username", validate_username(&username))
-            .rule("password", validate_password(&password))
-            .finish()?;
-
-        let biz_exists = self
+        if !self
             .business_repo
             .check_exists_for_admin(business_id)
-            .await?;
-        if !biz_exists {
+            .await?
+        {
             return Err(Error::new(ErrorCode::ProviderNotFound));
         }
+        let username = username.trim().to_lowercase();
+        let email = email.trim().to_lowercase();
+        let existing = self.user_repo.find_by_username(&username).await?;
+        let mut rules = Validation::new();
+        rules.rule("username", validate_username(&username));
+        if existing.is_none() {
+            rules
+                .rule("email", validate_email(&email))
+                .rule("password", validate_password(&password));
+        }
+        rules.finish()?;
 
-        // An existing provider account is linked as-is; its password is left
-        // alone. Any other role is refused so an admin cannot be demoted here.
-        let user_id = match self.user_repo.find_by_username(&username).await? {
+        let user_id = match existing {
+            // Any other role is refused so an admin cannot be demoted here.
             Some(u) if u.role != ROLE_PROVIDER => {
-                return Err(Error::new(ErrorCode::UsernameTakenByOtherRole));
+                return Err(Error::field(
+                    "username",
+                    ErrorCode::UsernameTakenByOtherRole,
+                ));
             }
-            Some(u) => u.id,
+            Some(u) => {
+                // One account manages one business: the dashboard shows the
+                // business its account owns.
+                let owned = self.business_repo.get_profile_by_user(u.id).await?;
+                if owned.is_some_and(|b| b.id != business_id) {
+                    return Err(Error::field("username", ErrorCode::ProviderAccountInUse));
+                }
+                u.id
+            }
             None => {
+                if self.user_repo.email_exists(&email).await? {
+                    return Err(Error::field("email", ErrorCode::EmailTaken));
+                }
                 let password_hash = self.password_hasher.hash(&password).await?;
                 self.user_repo
                     .create(NewUser {
                         username: username.clone(),
-                        email: email.trim().to_lowercase(),
+                        email,
                         password_hash,
                         role: ROLE_PROVIDER.into(),
                         full_name: None,
@@ -288,6 +314,16 @@ impl AdminUseCase {
         };
 
         self.business_repo.assign_user(business_id, user_id).await?;
+        self.publish(
+            actor,
+            Entity::Provider,
+            business_id,
+            Change::AccountAssigned {
+                username: username.clone(),
+            },
+            None,
+        )
+        .await;
 
         Ok(AssignUserDto {
             business_id,

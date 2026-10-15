@@ -7,7 +7,7 @@ use chrono::Utc;
 use sea_orm::{
     sea_query::{Expr, SimpleExpr},
     ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, JoinType, PaginatorTrait,
-    QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
+    QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set, SqlErr,
 };
 use tracing::error;
 
@@ -24,6 +24,7 @@ use domain::{
 
 use domain::{Error, ErrorCode};
 
+use crate::repositories::unique_or_internal;
 use crate::{
     db_types::DateTimeWithTimeZone,
     entities::{
@@ -175,8 +176,17 @@ impl UserRepositoryTrait for UserRepository {
             .await
             .map(|r| r.last_insert_id)
             .map_err(|e| {
-                error!("user create error: {e}");
-                Error::internal("Failed to create account.")
+                // Both columns are UNIQUE; the constraint name says which one a
+                // concurrent sign-up took first.
+                let email_taken = match e.sql_err() {
+                    Some(SqlErr::UniqueConstraintViolation(m)) => m.contains("email"),
+                    _ => false,
+                };
+                if email_taken {
+                    Error::field("email", ErrorCode::EmailTaken)
+                } else {
+                    unique_or_internal(e, "username", ErrorCode::UsernameTaken, "user create")
+                }
             })
     }
 

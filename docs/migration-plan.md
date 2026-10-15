@@ -1192,3 +1192,26 @@ Tests (database):
 - a provider gets 403 on both lists and on create; anonymous visitors are sent to `/login`.
 
 Unit tests cover the number and reason helpers.
+
+### S17 — admin providers (same branch)
+
+Done:
+- **`/admin/explore`** (paged list: phone, counts, linked account, badge) and **`/admin/explore/{id}`** are served by Rust in the admin frame. The SvelteKit `admin/explore` routes are deleted.
+- **Verification** is now an explicit state, not a toggle:
+  - `AdminUseCase::set_verification(id, is_verified, reason)`, backed by the repository's `set_verified`;
+  - setting the state a provider already has changes nothing and is not audited, so a form sent twice is harmless;
+  - the JSON API takes `{ is_verified, reason? }` (breaking; its only caller was the deleted SvelteKit page);
+  - granting the badge is one button; withdrawing it goes through `confirm_sheet` with a reason (`unverify_provider: <reason>` in the audit log).
+- **Account assignment** (`POST /admin/explore/{id}/account`): one form. The username starts as the business phone. An existing provider account is linked as-is, so only its username is needed; a new account needs an email and a password. Fixes in the use case:
+  - the email is validated, and an email already in use is a field error. Before, the old form sent no email, so the second account it created hit `users.email UNIQUE` and returned a 500;
+  - one account manages one business (`provider_account_in_use`), because the provider dashboard shows the business its account owns;
+  - admin and other non-provider accounts are refused on the username field;
+  - linking is audited (`Change::AccountAssigned` → `assign_provider_account: <username>`).
+- **`validation::validate_email`:** a local part, one `@`, a dotted domain without empty labels, no spaces, at most 255 characters. It is used by setup, registration and assignment, which closes the S12b follow-up.
+- **`UserRepository::create`** maps a UNIQUE violation, from a concurrent sign-up, to a field error on `email` or `username`.
+
+Tests (database):
+- a verification sent twice is audited once; withdrawing it is confirmed and audited with its reason; the JSON API sets the state explicitly;
+- a new account with a bad email and a short password gets both messages (the typed email is kept, the password is not echoed); an email already in use goes under the email field; after assignment the owner can sign in, and the audit log names the account;
+- an account that already manages a business is refused, and so is an admin username; a provider gets 403;
+- the register page reports a malformed email together with the other errors.

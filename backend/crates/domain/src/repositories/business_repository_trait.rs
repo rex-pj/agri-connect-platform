@@ -44,7 +44,9 @@ pub trait BusinessRepositoryTrait {
         offset: i64,
     ) -> Result<Vec<BusinessAdminView>, Error>;
 
-    async fn toggle_verify(&self, id: i32) -> Result<Option<(i32, String, bool)>, Error>;
+    /// Sets the badge; `Some((name, changed))`, or `None` when there is no
+    /// such business.
+    async fn set_verified(&self, id: i32, verified: bool) -> Result<Option<(String, bool)>, Error>;
 
     async fn check_exists_for_admin(&self, id: i32) -> Result<bool, Error>;
 

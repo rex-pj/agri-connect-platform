@@ -280,6 +280,16 @@ impl AppRouting {
                 "/admin/locations/{id}/delete",
                 post(pages::admin::locations::delete),
             )
+            .route("/admin/explore", get(pages::admin::providers::list))
+            .route("/admin/explore/{id}", get(pages::admin::providers::show))
+            .route(
+                "/admin/explore/{id}/verification",
+                post(pages::admin::providers::set_verification),
+            )
+            .route(
+                "/admin/explore/{id}/account",
+                post(pages::admin::providers::assign_account),
+            )
             .route("/account/password", post(pages::account::change_password));
 
         // ── USER routes (authenticated, no rate limit) ───────────────────────
@@ -306,7 +316,7 @@ impl AppRouting {
             )
             .route(
                 "/api/admin/providers/{id}/verification",
-                patch(AdminHandler::toggle_verify),
+                patch(AdminHandler::set_verification),
             )
             .route(
                 "/api/admin/providers/{id}/users",

@@ -177,12 +177,17 @@ async fn registration_signs_the_provider_in_or_says_what_to_fix() {
     ];
     let mut bad = good.to_vec();
     bad[1] = ("business_phone", "12345");
+    bad[3] = ("email", "uthien@gmail");
     let res = send(&e.router, post_form("/register", &bad, None)).await;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     let page = body_text(res).await;
     assert!(
         page.contains(r#"id="r_biz_phone-error""#),
         "phone message under the phone field"
+    );
+    assert!(
+        page.contains("Email không hợp lệ"),
+        "email checked in the same round trip"
     );
     assert!(
         page.contains(r#"value="Vườn Út Hiền""#),

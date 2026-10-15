@@ -76,6 +76,7 @@ pub fn audit_action(event: &DomainEvent) -> String {
         (Change::RoleChanged { .. }, _) => format!("change_{entity}_role"),
         (Change::ImageReplaced { .. }, _) => format!("replace_{entity}_image"),
         (Change::PermissionsChanged { .. }, _) => format!("change_{entity}_permissions"),
+        (Change::AccountAssigned { .. }, _) => format!("assign_{entity}_account"),
     }
 }
 
@@ -89,6 +90,7 @@ impl EventSubscriber for AuditLogSubscriber {
         let reason = match (&event.change, &event.reason) {
             (Change::RoleChanged { role }, Some(r)) => Some(format!("{role}: {r}")),
             (Change::RoleChanged { role }, None) => Some(role.clone()),
+            (Change::AccountAssigned { username }, _) => Some(username.clone()),
             // The audit row says what changed: "+key, -key: reason".
             (Change::PermissionsChanged { added, removed }, r) => {
                 let diff = added

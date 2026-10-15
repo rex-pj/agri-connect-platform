@@ -10,7 +10,7 @@ use crate::{
     requests::{
         AdminCreateServiceRequest, AdminListQuery, AdminPageQuery, AdminUpdateServiceRequest,
         AssignUserRequest, CreateCategoryRequest, CreateLocationRequest, DeleteWithReasonBody,
-        ToggleActiveRequest, ToggleVerifyRequest, ToggleVisibleRequest, UpdateCategoryRequest,
+        SetVerificationRequest, ToggleActiveRequest, ToggleVisibleRequest, UpdateCategoryRequest,
         UpdateInquiryStatusRequest, UpdateLocationRequest, UpdateUserRoleRequest,
     },
 };
@@ -45,18 +45,17 @@ impl AdminHandler {
     }
 
     /// PATCH /api/admin/providers/{id}/verification
-    pub async fn toggle_verify(
+    pub async fn set_verification(
         MaybeActor(actor): MaybeActor,
         State(state): State<AppState>,
         ApiPath(id): ApiPath<i32>,
-        body: Option<ApiJson<ToggleVerifyRequest>>,
+        ApiJson(req): ApiJson<SetVerificationRequest>,
     ) -> Result<impl IntoResponse, Error> {
         let actor = require_actor(actor)?;
-        let reason = body.and_then(|b| b.0.reason);
         let result = state
             .usecases
             .admin
-            .toggle_verify(&actor, id, reason)
+            .set_verification(&actor, id, req.is_verified, req.reason)
             .await?;
         Ok(Json(result))
     }

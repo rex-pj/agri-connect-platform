@@ -49,6 +49,11 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("admin_category_status", "/admin/categories/{id}/status"),
     ("admin_explore", "/admin/explore"),
     ("admin_provider", "/admin/explore/{id}"),
+    (
+        "admin_provider_verification",
+        "/admin/explore/{id}/verification",
+    ),
+    ("admin_provider_account", "/admin/explore/{id}/account"),
     ("admin_inquiries", "/admin/inquiries"),
     ("admin_reviews", "/admin/reviews"),
     ("admin_locations", "/admin/locations"),

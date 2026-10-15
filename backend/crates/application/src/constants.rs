@@ -15,6 +15,8 @@ pub const LOGIN_LOCK_MINUTES: i64 = 15;
 
 // ── Validation ─────────────────────────────────────────────────────────────────
 pub const USERNAME_MIN_LEN: usize = 3;
+/// `users.email` is VARCHAR(255).
+pub const EMAIL_MAX: usize = 255;
 /// Counted in characters, so a Vietnamese password is not penalised for its
 /// multi-byte letters.
 pub const PASSWORD_MIN_CHARS: usize = 8;

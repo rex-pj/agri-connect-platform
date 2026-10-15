@@ -2,6 +2,7 @@
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/alert.html" as alerts %}
 {% import "molecules/admin_header.html" as header %}
+{% import "organisms/confirm_sheet.html" as confirm %}
 {#- One account: details, role, status and effective permissions.
     `page.body` is web::pages::admin::users::UserPage. Deactivating is a
     confirmation section that Alpine `dialog` turns into a sheet; without JS
@@ -63,21 +64,7 @@
   </section>
 
   {% if b.can_change_status and u.is_active %}
-  <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
-  <section class="contact-sheet" id="tat-tai-khoan" aria-labelledby="confirm-title" :class="sheetClass">
-    <div class="contact-sheet__header">
-      <h2 class="contact-sheet__title" id="confirm-title">{{ atoms::icon(name="fa-user-slash") }} Tắt tài khoản {{ u.username }}?</h2>
-      <button type="button" class="contact-sheet__close" aria-label="Đóng" x-show="modal" x-cloak x-on:click="hide">{{ atoms::icon(name="fa-xmark") }}</button>
-    </div>
-    <form class="contact-sheet__form" method="post" action="{{ b.status_action }}">
-      <input type="hidden" name="is_active" value="false">
-      <div class="form-field">
-        <label class="form-label fw-semibold" for="deactivate-reason">Lý do (ghi vào nhật ký)</label>
-        <textarea class="form-control" id="deactivate-reason" name="reason" rows="2" maxlength="500" x-ref="first"></textarea>
-      </div>
-      <button type="submit" class="btn btn-warning btn-lg w-100">{{ atoms::icon(name="fa-user-slash") }} Xác nhận tắt</button>
-    </form>
-  </section>
+  {{ confirm::confirm_sheet(id="tat-tai-khoan", title="Tắt tài khoản " ~ u.username ~ "?", icon="fa-user-slash", action=b.status_action, button="Xác nhận tắt", hidden_name="is_active", hidden_value="false") }}
   {% endif %}
 </div>
 {% endblock content %}

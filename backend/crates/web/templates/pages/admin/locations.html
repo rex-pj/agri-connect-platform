@@ -1,0 +1,51 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "molecules/admin_header.html" as header %}
+{% import "organisms/location_fields.html" as fields %}
+{#- `page.body` is web::pages::admin::locations::LocationsPage: every
+    location preset (hidden ones too) and the create form, which comes back
+    here with its messages when a rule is broken. -#}
+{% block title %}Khu vực — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+{% set n = b.rows | length %}
+{{ header::admin_header(title="Khu vực", icon="fa-map-location-dot", sub=n ~ " khu vực gợi ý ở trang Gần tôi") }}
+<div class="admin-body">
+  {% if b.flash == "location_deleted" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã xoá khu vực.") }}{% endif %}
+  {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
+  <p class="mb-0"><a class="btn btn-success" href="#them-khu-vuc">{{ atoms::icon(name="fa-plus") }} Thêm khu vực</a></p>
+
+  <div class="admin-card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="admin-table-head">
+          <tr><th>Khu vực</th><th>Toạ độ</th><th class="text-center">Thứ tự</th><th class="text-center">Trạng thái</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for r in b.rows %}
+          {% set l = r.location %}
+          <tr{% if not l.is_active %} class="table-warning"{% endif %}>
+            <td><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ l.label }}</a></td>
+            <td class="small text-muted font-monospace">{{ l.lat }}, {{ l.lng }}</td>
+            <td class="text-center">{{ l.display_order }}</td>
+            <td class="text-center">{% if l.is_active %}<span class="badge text-bg-success">Hiển thị</span>{% else %}<span class="badge text-bg-secondary">Đã ẩn</span>{% endif %}</td>
+            <td class="text-end"><a class="btn btn-sm btn-outline-success" href="{{ r.href }}" aria-label="Sửa {{ l.label }}">{{ atoms::icon(name="fa-pen") }}</a></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-center text-muted py-4">Chưa có khu vực nào.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <section class="admin-card p-3" id="them-khu-vuc" aria-labelledby="them-khu-vuc-title">
+    <h2 class="detail-card__title" id="them-khu-vuc-title">{{ atoms::icon(name="fa-plus") }} Thêm khu vực</h2>
+    <form method="post" action="{{ b.create_action }}" novalidate>
+      {{ fields::location_fields(form=b.form, errors=b.errors, label_max=b.label_max, prefix="new") }}
+      <button type="submit" class="btn btn-success btn-lg">{{ atoms::icon(name="fa-plus") }} Thêm</button>
+    </form>
+  </section>
+</div>
+{% endblock content %}

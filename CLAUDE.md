@@ -306,8 +306,10 @@ All routes are defined as SvelteKit file-system pages under `client-app/src/rout
 | `/admin/roles`             | Roles with grant counts (**Rust**)              |
 | `/admin/roles/[id]`        | Editable permission grid, `POST …/permissions` (`role.permission.manage`; cannot revoke it from your own role; audited) (**Rust**) |
 | `/admin/permissions`       | Permissions × roles, read-only (**Rust**)       |
-| `/admin/categories`        | Category list + CRUD                            |
-| `/admin/categories/[id]`   | Category detail & edit                          |
+| `/admin/categories`        | Category list + create form (**Rust**, `web/src/pages/admin/categories.rs`) |
+| `/admin/categories/[id]`   | Edit; hide (confirm + reason) / show (**Rust**) |
+| `/admin/locations`         | Location presets + create form (**Rust**, `web/src/pages/admin/locations.rs`) |
+| `/admin/locations/[id]`    | Edit, hide / show, delete (confirm + reason) → list (**Rust**) |
 | `/admin/agri-connect`      | Provider list & verification                    |
 | `/admin/agri-connect/[id]` | Provider detail                                 |
 | `/admin/inquiries`         | Inquiry status management                       |
@@ -463,6 +465,7 @@ middleware / handlers  →  application (use cases, ports)  →  domain  ←  in
 **Infrastructure layer (`infrastructure/`)**
 - Concrete library types (`jsonwebtoken`, `bcrypt`, Sea-ORM) are confined to `infrastructure/`. Implement the port traits from `application/ports.rs` here.
 - Uploads never reach storage as sent: `MediaUseCase` passes them through the `ImageProcessor` port (type sniffed from bytes, pixel cap checked before decoding, re-encoded as JPEG, EXIF dropped). Storage is the `FileStorage` port (`GCS_BUCKET`, else `UPLOAD_DIR`). Templates link images only with `file_url(id=…, variant="thumb")`. Old images are deleted by the file-cleanup event subscriber, never inline.
+- A write that can hit a UNIQUE constraint maps the failure with `repositories::unique_or_internal` to a field error (e.g. `slug_taken`), never a 500.
 - `JwtTokenService` (in `infrastructure/jwt_token_service.rs`) is the only file that calls `jsonwebtoken::encode`. `BcryptPasswordHasher` (in `infrastructure/bcrypt_password_hasher.rs`) is the only file that calls `bcrypt::hash` / `bcrypt::verify`.
 
 **Errors (`domain/src/error.rs`, `web/src/error_response.rs`)**
@@ -475,6 +478,7 @@ middleware / handlers  →  application (use cases, ports)  →  domain  ←  in
 - Interactive bits are Alpine components registered in `static/js/app.js`; markup must work without them (links and plain forms first).
 - What Alpine cannot do (today only geolocation) is an island: a Svelte custom element in `backend/islands/src` (light DOM, no `<style>`, all text passed as attributes), built with `npm run build` into `static/js/islands.js`, which is committed. CI rebuilds it and fails on a diff. Pages that use one load it in `{% block scripts %}`.
 - Custom SQL in `Expr::cust_with_values` uses `$1`, `$2`: a `?` is left unbound and the query fails at runtime (convention test).
+- An action that needs a second look (deactivate, hide, delete) uses `organisms/confirm_sheet.html` inside an `x-data="dialog"` element; without JS it is an anchored form on the page.
 - Page forms post urlencoded (`ApiForm`) and follow Post/Redirect/Get: success is a 303 with a `cookies::Flash`; a broken rule re-renders the page with the error's status, the typed values and one message per field (from `error_body`). The rules stay in the use case the JSON API uses.
 - When a route moves to Rust, delete its SvelteKit `+page*` files in the same change.
 

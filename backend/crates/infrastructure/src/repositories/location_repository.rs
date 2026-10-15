@@ -12,6 +12,7 @@ use domain::{
 use domain::{Error, ErrorCode};
 
 use crate::entities::location::{self, ActiveModel, Entity as LocationEntity};
+use crate::repositories::unique_or_internal;
 
 pub struct LocationRepository {
     db: Arc<DatabaseConnection>,
@@ -91,8 +92,7 @@ impl LocationRepositoryTrait for LocationRepository {
             .await
             .map(|r| r.last_insert_id)
             .map_err(|e| {
-                error!("location create error: {e}");
-                Error::internal("Failed to create location.")
+                unique_or_internal(e, "label", ErrorCode::LocationLabelTaken, "location create")
             })
     }
 
@@ -113,8 +113,7 @@ impl LocationRepositoryTrait for LocationRepository {
             .exec(self.db.as_ref())
             .await
             .map_err(|e| {
-                error!("location update error: {e}");
-                Error::internal("Failed to update location.")
+                unique_or_internal(e, "label", ErrorCode::LocationLabelTaken, "location update")
             })?;
 
         if result.rows_affected == 0 {

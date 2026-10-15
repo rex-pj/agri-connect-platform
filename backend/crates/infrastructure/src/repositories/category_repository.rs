@@ -19,6 +19,7 @@ use domain::{
 };
 
 use crate::entities::category::{self, Entity as CategoryEntity};
+use crate::repositories::unique_or_internal;
 
 pub struct CategoryRepository {
     db: Arc<DatabaseConnection>,
@@ -194,10 +195,7 @@ impl CategoryRepositoryTrait for CategoryRepository {
             .exec(self.db.as_ref())
             .await
             .map(|r| r.last_insert_id)
-            .map_err(|e| {
-                error!("category create error: {e}");
-                Error::internal("Failed to create category.")
-            })
+            .map_err(|e| unique_or_internal(e, "slug", ErrorCode::SlugTaken, "category create"))
     }
 
     async fn update(&self, id: i32, category: UpdateCategory) -> Result<(), Error> {
@@ -221,10 +219,7 @@ impl CategoryRepositoryTrait for CategoryRepository {
             .filter(category::Column::Id.eq(id))
             .exec(self.db.as_ref())
             .await
-            .map_err(|e| {
-                error!("category update error: {e}");
-                Error::internal("Failed to update category.")
-            })?;
+            .map_err(|e| unique_or_internal(e, "slug", ErrorCode::SlugTaken, "category update"))?;
 
         if result.rows_affected == 0 {
             return Err(Error::new(ErrorCode::CategoryNotFound));

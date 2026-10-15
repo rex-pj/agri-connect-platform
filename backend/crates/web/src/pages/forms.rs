@@ -60,9 +60,52 @@ pub fn confirm_password(
         .finish()
 }
 
+/// An optional "why" box for the audit log: blank means no reason.
+pub fn reason(raw: &str) -> Option<String> {
+    Some(raw.trim().to_owned()).filter(|r| !r.is_empty())
+}
+
+/// A whole-number box: blank is the type's default (0), anything else must
+/// parse, or it is a field error on `field`.
+pub fn whole_number<T: std::str::FromStr + Default>(
+    raw: &str,
+    field: &'static str,
+) -> Result<T, Error> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Ok(T::default());
+    }
+    raw.parse()
+        .map_err(|_| Error::field(field, ErrorCode::InvalidNumber))
+}
+
+/// A latitude or longitude box. Text that is not a number becomes NaN, which
+/// the use case's coordinate rule rejects with its own field error, so the
+/// form still gets every other message in the same round trip. A comma is
+/// accepted as the decimal mark, as Vietnamese keyboards type it.
+pub fn coordinate(raw: &str) -> f64 {
+    raw.trim().replace(',', ".").parse().unwrap_or(f64::NAN)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn number_boxes_parse_leniently_but_never_guess() {
+        assert_eq!(whole_number::<i16>("  ", "display_order").ok(), Some(0));
+        assert_eq!(whole_number::<i16>(" 7 ", "display_order").ok(), Some(7));
+        let err = whole_number::<i16>("99999", "display_order").err();
+        assert_eq!(
+            err.as_ref()
+                .and_then(|e| e.fields().first().map(|f| (f.field, f.code))),
+            Some(("display_order", ErrorCode::InvalidNumber))
+        );
+        assert_eq!(coordinate("10,36"), 10.36);
+        assert!(coordinate("mười").is_nan());
+        assert_eq!(reason("  "), None);
+        assert_eq!(reason(" giả "), Some("giả".to_owned()));
+    }
 
     #[test]
     fn a_mismatch_is_a_field_error_on_the_confirmation() {

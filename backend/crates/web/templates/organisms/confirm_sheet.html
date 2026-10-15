@@ -1,0 +1,24 @@
+{#- A confirmation for an action that needs a second look (deactivate,
+    hide, delete), with an optional reason for the audit log. Place it inside
+    an element with `x-data="dialog"`: with JS it is a sheet opened by a
+    trigger with `x-on:click.prevent="show"`; without JS the trigger is an
+    anchor to `#{{ id }}` and the form is submitted in place. `hidden_name` /
+    `hidden_value`: one extra field the action needs (e.g. is_active=false). -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro confirm_sheet(id, title, icon, action, button, hidden_name="", hidden_value="", button_class="btn-warning", reason_label="Lý do (ghi vào nhật ký)") -%}
+<div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
+<section class="contact-sheet" id="{{ id }}" aria-labelledby="{{ id }}-title" :class="sheetClass">
+  <div class="contact-sheet__header">
+    <h2 class="contact-sheet__title" id="{{ id }}-title">{{ atoms::icon(name=icon) }} {{ title }}</h2>
+    <button type="button" class="contact-sheet__close" aria-label="Đóng" x-show="modal" x-cloak x-on:click="hide">{{ atoms::icon(name="fa-xmark") }}</button>
+  </div>
+  <form class="contact-sheet__form" method="post" action="{{ action }}">
+    {% if hidden_name %}<input type="hidden" name="{{ hidden_name }}" value="{{ hidden_value }}">{% endif %}
+    <div class="form-field">
+      <label class="form-label fw-semibold" for="{{ id }}-reason">{{ reason_label }}</label>
+      <textarea class="form-control" id="{{ id }}-reason" name="reason" rows="2" maxlength="500" x-ref="first"></textarea>
+    </div>
+    <button type="submit" class="btn {{ button_class }} btn-lg w-100">{{ atoms::icon(name=icon) }} {{ button }}</button>
+  </form>
+</section>
+{%- endmacro confirm_sheet %}

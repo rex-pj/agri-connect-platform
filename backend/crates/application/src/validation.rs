@@ -55,6 +55,33 @@ pub fn validate_price(price: Option<i64>) -> Result<()> {
 }
 
 /// Trims and maps blank input to `None`, so optional text fields never store "".
+/// A URL slug: lowercase ASCII letters and digits in hyphen-separated words.
+/// Anything else would make a category URL that needs escaping or breaks.
+pub fn validate_slug(slug: &str) -> Result<()> {
+    let ok = !slug.is_empty()
+        && slug.split('-').all(|word| {
+            !word.is_empty()
+                && word
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+        });
+    if ok {
+        Ok(())
+    } else {
+        Err(Error::new(ErrorCode::InvalidSlug))
+    }
+}
+
+/// At most `max` characters (not bytes): the database column's size, so an
+/// overlong value is a field message instead of a failed INSERT.
+pub fn max_chars(value: &str, max: usize) -> Result<()> {
+    if value.chars().count() <= max {
+        Ok(())
+    } else {
+        Err(Error::new(ErrorCode::FieldTooLong).with_param("max", max))
+    }
+}
+
 pub fn non_blank(value: Option<String>) -> Option<String> {
     value.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty())
 }
@@ -62,6 +89,29 @@ pub fn non_blank(value: Option<String>) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn slugs_are_lowercase_ascii_words() {
+        assert!(validate_slug("phan-bon").is_ok());
+        assert!(validate_slug("npk20").is_ok());
+        for bad in [
+            "",
+            "Phan-bon",
+            "phân-bón",
+            "phan bon",
+            "-phan",
+            "phan--bon",
+            "phan/bon",
+        ] {
+            assert!(validate_slug(bad).is_err(), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn lengths_count_characters() {
+        assert!(max_chars("Phân bón", 8).is_ok());
+        assert!(max_chars("Phân bón!", 8).is_err());
+    }
 
     #[test]
     fn phone_rule_matches_check_constraint() {

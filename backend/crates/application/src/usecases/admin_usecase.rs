@@ -31,7 +31,10 @@ use crate::{
         PERM_PROVIDER_VERIFY, PERM_REVIEW_MODERATE, PERM_ROLE_READ, PERM_SERVICE_MANAGE,
         PERM_USER_READ, PERM_USER_ROLE_UPDATE, PERM_USER_STATUS_UPDATE,
     },
-    constants::ADMIN_PAGE_SIZE,
+    constants::{
+        ADMIN_PAGE_SIZE, CATEGORY_COLOR_MAX, CATEGORY_DESCRIPTION_MAX, CATEGORY_ICON_MAX,
+        CATEGORY_NAME_MAX, CATEGORY_SLUG_MAX, LOCATION_LABEL_MAX,
+    },
     inputs::CategoryInput,
     outputs::{
         AdminCategoryDto, AdminInquiryDto, AdminLocationDto, AdminPagedResponse, AdminProductDto,
@@ -41,7 +44,10 @@ use crate::{
     },
     pagination::{paginate, total_pages},
     ports::{EventBus, PasswordHasher},
-    validation::{non_blank, validate_coordinates, validate_password, validate_username},
+    validation::{
+        max_chars, non_blank, validate_coordinates, validate_password, validate_slug,
+        validate_username,
+    },
 };
 
 // ── Use case ──────────────────────────────────────────────────────────────────
@@ -431,10 +437,7 @@ impl AdminUseCase {
         input: CategoryInput,
     ) -> Result<AdminCategoryDto> {
         actor.require(PERM_CATEGORY_MANAGE)?;
-        let input = validate_category(input)?;
-        if !CATEGORY_TYPES.contains(&category_type.as_str()) {
-            return Err(Error::new(ErrorCode::InvalidCategoryType));
-        }
+        let input = validate_category(input, Some(&category_type))?;
         let id = self
             .category_repo
             .create(NewCategory {
@@ -458,7 +461,7 @@ impl AdminUseCase {
         input: CategoryInput,
     ) -> Result<AdminCategoryDto> {
         actor.require(PERM_CATEGORY_MANAGE)?;
-        let input = validate_category(input)?;
+        let input = validate_category(input, None)?;
         self.category_repo
             .update(
                 id,
@@ -675,11 +678,7 @@ impl AdminUseCase {
         display_order: i32,
     ) -> Result<AdminLocationDto> {
         actor.require(PERM_LOCATION_MANAGE)?;
-        let label = label.trim().to_string();
-        if label.is_empty() {
-            return Err(Error::new(ErrorCode::LabelRequired));
-        }
-        validate_coordinates(lat, lng)?;
+        let label = validate_location(&label, lat, lng)?;
         let id = self
             .location_repo
             .create(label, lat, lng, display_order)
@@ -697,11 +696,7 @@ impl AdminUseCase {
         display_order: i32,
     ) -> Result<AdminLocationDto> {
         actor.require(PERM_LOCATION_MANAGE)?;
-        let label = label.trim().to_string();
-        if label.is_empty() {
-            return Err(Error::new(ErrorCode::LabelRequired));
-        }
-        validate_coordinates(lat, lng)?;
+        let label = validate_location(&label, lat, lng)?;
         self.location_repo
             .update(id, label, lat, lng, display_order)
             .await?;
@@ -1056,19 +1051,46 @@ fn to_category_dto(c: CategoryAdmin) -> AdminCategoryDto {
 }
 
 /// Trims every field and rejects a blank name or slug, reporting both at once.
-fn validate_category(input: CategoryInput) -> Result<CategoryInput> {
+/// The trimmed label of a valid location preset; every bad field reported.
+fn validate_location(label: &str, lat: f64, lng: f64) -> Result<String> {
+    let label = label.trim().to_owned();
+    Validation::new()
+        .check(label.is_empty(), "label", ErrorCode::LabelRequired)
+        .rule("label", max_chars(&label, LOCATION_LABEL_MAX))
+        .rule("lat", validate_coordinates(lat, lng))
+        .finish()?;
+    Ok(label)
+}
+
+/// `category_type` is checked on create only: a category never changes type.
+fn validate_category(input: CategoryInput, category_type: Option<&str>) -> Result<CategoryInput> {
     let name = input.name.trim().to_owned();
     let slug = input.slug.trim().to_owned();
+    let icon = non_blank(input.icon);
+    let color = non_blank(input.color);
+    let description = non_blank(input.description);
+    let opt = |v: &Option<String>, max| v.as_deref().map_or(Ok(()), |v| max_chars(v, max));
     Validation::new()
         .check(name.is_empty(), "name", ErrorCode::NameRequired)
+        .rule("name", max_chars(&name, CATEGORY_NAME_MAX))
         .check(slug.is_empty(), "slug", ErrorCode::SlugRequired)
+        .rule("slug", validate_slug(&slug))
+        .rule("slug", max_chars(&slug, CATEGORY_SLUG_MAX))
+        .rule("icon", opt(&icon, CATEGORY_ICON_MAX))
+        .rule("color", opt(&color, CATEGORY_COLOR_MAX))
+        .rule("description", opt(&description, CATEGORY_DESCRIPTION_MAX))
+        .check(
+            category_type.is_some_and(|t| !CATEGORY_TYPES.contains(&t)),
+            "category_type",
+            ErrorCode::InvalidCategoryType,
+        )
         .finish()?;
     Ok(CategoryInput {
         name,
         slug,
-        icon: non_blank(input.icon),
-        color: non_blank(input.color),
-        description: non_blank(input.description),
+        icon,
+        color,
+        description,
         display_order: input.display_order,
     })
 }

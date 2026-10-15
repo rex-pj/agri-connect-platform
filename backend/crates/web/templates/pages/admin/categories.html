@@ -1,0 +1,51 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "molecules/admin_header.html" as header %}
+{% import "organisms/category_fields.html" as fields %}
+{#- `page.body` is web::pages::admin::categories::CategoriesPage: every
+    category (hidden ones too) and the create form, which comes back here
+    with its messages when a rule is broken. -#}
+{% block title %}Danh mục — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+{% set n = b.rows | length %}
+{{ header::admin_header(title="Danh mục", icon="fa-tags", sub=n ~ " danh mục dịch vụ và sản phẩm") }}
+<div class="admin-body">
+  {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
+  <p class="mb-0"><a class="btn btn-success" href="#them-danh-muc">{{ atoms::icon(name="fa-plus") }} Thêm danh mục</a></p>
+
+  <div class="admin-card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="admin-table-head">
+          <tr><th>Danh mục</th><th>Loại</th><th class="text-center">Thứ tự</th><th class="text-center">Trạng thái</th><th>Cập nhật</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for r in b.rows %}
+          {% set c = r.category %}
+          <tr{% if not c.is_active %} class="table-warning"{% endif %}>
+            <td>{% if c.icon %}{{ atoms::icon(name=c.icon, class="text-success me-2") }}{% endif %}<a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ c.name }}</a><code class="d-block small text-muted">{{ c.slug }}</code></td>
+            <td>{% if c.category_type == "service" %}<span class="badge text-bg-info">Dịch vụ</span>{% else %}<span class="badge text-bg-warning">Sản phẩm</span>{% endif %}</td>
+            <td class="text-center">{{ c.display_order }}</td>
+            <td class="text-center">{% if c.is_active %}<span class="badge text-bg-success">Hiển thị</span>{% else %}<span class="badge text-bg-secondary">Đã ẩn</span>{% endif %}</td>
+            <td class="small text-muted"><time datetime="{{ c.updated_on | utc_iso }}">{{ c.updated_on | vn_datetime }}</time>{% if c.updated_by_name %}<span class="d-block">{{ c.updated_by_name }}</span>{% endif %}</td>
+            <td class="text-end"><a class="btn btn-sm btn-outline-success" href="{{ r.href }}" aria-label="Sửa {{ c.name }}">{{ atoms::icon(name="fa-pen") }}</a></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="text-center text-muted py-4">Chưa có danh mục nào.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <section class="admin-card p-3" id="them-danh-muc" aria-labelledby="them-danh-muc-title">
+    <h2 class="detail-card__title" id="them-danh-muc-title">{{ atoms::icon(name="fa-plus") }} Thêm danh mục</h2>
+    <form method="post" action="{{ b.create_action }}" novalidate>
+      {{ fields::category_fields(form=b.form, errors=b.errors, limits=b.limits, prefix="new", with_type=true) }}
+      <button type="submit" class="btn btn-success btn-lg">{{ atoms::icon(name="fa-plus") }} Thêm</button>
+    </form>
+  </section>
+</div>
+{% endblock content %}

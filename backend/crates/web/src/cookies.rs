@@ -41,10 +41,19 @@ pub enum Flash {
     UserRoleChanged,
     UserActivated,
     UserDeactivated,
+    CategoryCreated,
+    CategorySaved,
+    CategoryHidden,
+    CategoryShown,
+    LocationCreated,
+    LocationSaved,
+    LocationHidden,
+    LocationShown,
+    LocationDeleted,
 }
 
 impl Flash {
-    const ALL: [Flash; 9] = [
+    const ALL: [Flash; 18] = [
         Flash::ContactSent,
         Flash::PasswordReset,
         Flash::DemoLoaded,
@@ -54,6 +63,15 @@ impl Flash {
         Flash::UserRoleChanged,
         Flash::UserActivated,
         Flash::UserDeactivated,
+        Flash::CategoryCreated,
+        Flash::CategorySaved,
+        Flash::CategoryHidden,
+        Flash::CategoryShown,
+        Flash::LocationCreated,
+        Flash::LocationSaved,
+        Flash::LocationHidden,
+        Flash::LocationShown,
+        Flash::LocationDeleted,
     ];
 
     const fn as_str(self) -> &'static str {
@@ -67,6 +85,15 @@ impl Flash {
             Flash::UserRoleChanged => "user_role_changed",
             Flash::UserActivated => "user_activated",
             Flash::UserDeactivated => "user_deactivated",
+            Flash::CategoryCreated => "category_created",
+            Flash::CategorySaved => "category_saved",
+            Flash::CategoryHidden => "category_hidden",
+            Flash::CategoryShown => "category_shown",
+            Flash::LocationCreated => "location_created",
+            Flash::LocationSaved => "location_saved",
+            Flash::LocationHidden => "location_hidden",
+            Flash::LocationShown => "location_shown",
+            Flash::LocationDeleted => "location_deleted",
         }
     }
 

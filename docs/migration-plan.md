@@ -1163,3 +1163,32 @@ Tests (database):
 - an admin's own deactivation and demotion → 403, the confirmation re-opened, nothing changed.
 
 Note: while this slice was being tested, the local database stopped answering twice (the Windows service stopped while another process held port 5432). Database tests then fail with `PoolTimedOut` after 30 s each, which can look like a hang when the output is filtered.
+
+### S16 — admin catalogue: categories and locations (same branch)
+
+Done:
+- **`/admin/categories`**, **`/admin/categories/{id}`**, **`/admin/locations`** and **`/admin/locations/{id}`** are served by Rust in the admin frame. The SvelteKit `admin/categories` and `admin/locations` routes are deleted.
+- **Lists with a create form** below the table, reached by an anchor link. `POST /admin/categories` and `POST /admin/locations` → 303 to the new item, with a flash. A broken rule re-shows the list with the values as typed.
+- **Edit forms** on each detail page post to the page's own URL. A category's type is chosen on create only.
+- **Visibility and deletion:**
+  - hiding a category goes through a confirmation with a reason (`POST …/status`), because it takes the category's listings off the public pages; showing it again is one button;
+  - hiding or showing a location is one button;
+  - deleting a location goes through a confirmation with a reason (`POST /admin/locations/{id}/delete`) → 303 to the list.
+- **Rules**, all in the use case and reported per field:
+  - name, slug and label are required; the slug must be lowercase ASCII words separated by single hyphens (`invalid_slug`);
+  - every box has a maximum length (`field_too_long`, limits in `application::constants`, which the templates also use for `maxlength`);
+  - the category type is now a field error rather than a whole-request error;
+  - coordinates are checked by `validate_location`, which create and update now share.
+- **UNIQUE constraints:** a write that loses to a concurrent one (same slug, same label) is mapped by `infrastructure::repositories::unique_or_internal` to a field error (`slug_taken`, `location_label_taken`) instead of a 500. There is a new `Error::field` constructor for this case.
+- **Page form helpers:**
+  - in `pages::forms`: `whole_number` (blank → 0, otherwise `invalid_number`), `coordinate` (accepts a comma; text that is not a number becomes NaN, so the coordinate rule reports it with the other messages) and `reason`;
+  - in `pages::admin`: `is_refusal` and the `Outcome<F>` struct, used by the user pages as well.
+- **`organisms/confirm_sheet.html`:** the confirmation sheet, now shared by user deactivation, category hiding and location deletion. `organisms/category_fields.html` and `location_fields.html` hold the boxes shared by the create and edit forms.
+
+Tests (database):
+- every broken category rule is reported at once, with the typed values kept; a bad display order is reported; a taken slug is reported under the slug box;
+- create → flash → edit → hide: the audit row reads `hide_category: <reason>` and the category leaves `/api/explore/categories`;
+- a location with a blank label and bad coordinates gets both messages; a comma is accepted as the decimal mark; a duplicate label is refused; hiding removes it from `/api/explore/locations`; deleting it is audited, and its page then returns 404;
+- a provider gets 403 on both lists and on create; anonymous visitors are sent to `/login`.
+
+Unit tests cover the number and reason helpers.

@@ -1,0 +1,25 @@
+{#- The boxes of a category, shared by the create and edit forms. `form` is
+    web::pages::admin::categories::CategoryForm (the values as typed),
+    `errors` its FormErrors, `limits` the use case's lengths. The type is
+    chosen on create only (`with_type`): a category never changes type. -#}
+{% import "molecules/form_field.html" as field %}
+{% macro category_fields(form, errors, limits, prefix, with_type=false) -%}
+{% if with_type %}
+<div class="form-field">
+  <label class="form-label fw-semibold" for="{{ prefix }}-type">Loại <span class="text-danger" aria-hidden="true">*</span></label>
+  <select class="form-select{% if errors.fields.category_type %} is-invalid{% endif %}" id="{{ prefix }}-type" name="category_type" required{% if errors.fields.category_type %} aria-invalid="true" aria-describedby="{{ prefix }}-type-error"{% endif %}>
+    <option value="service"{% if form.category_type == "service" %} selected{% endif %}>Dịch vụ</option>
+    <option value="product"{% if form.category_type == "product" %} selected{% endif %}>Sản phẩm</option>
+  </select>
+  {% if errors.fields.category_type %}<div class="invalid-feedback" id="{{ prefix }}-type-error">{{ errors.fields.category_type }}</div>{% endif %}
+</div>
+{% endif %}
+{{ field::input(id=prefix ~ "-name", name="name", label="Tên", value=form.name, error=errors.fields.name | default(value=""), required=true, maxlength=limits.name) }}
+{{ field::input(id=prefix ~ "-slug", name="slug", label="Đường dẫn (slug)", value=form.slug, error=errors.fields.slug | default(value=""), required=true, maxlength=limits.slug, placeholder="nao-vet-bun", pattern="[a-z0-9]+(-[a-z0-9]+)*", autocomplete="off") }}
+<div class="row g-2">
+  <div class="col-sm-6">{{ field::input(id=prefix ~ "-icon", name="icon", label="Biểu tượng", value=form.icon, error=errors.fields.icon | default(value=""), maxlength=limits.icon, placeholder="fa-solid fa-tractor", autocomplete="off") }}</div>
+  <div class="col-sm-3">{{ field::input(id=prefix ~ "-color", name="color", label="Màu", value=form.color, error=errors.fields.color | default(value=""), maxlength=limits.color, placeholder="#2e7d32", autocomplete="off") }}</div>
+  <div class="col-sm-3">{{ field::input(id=prefix ~ "-order", name="display_order", label="Thứ tự", value=form.display_order, type="number", inputmode="numeric", error=errors.fields.display_order | default(value="")) }}</div>
+</div>
+{{ field::textarea(id=prefix ~ "-description", name="description", label="Mô tả", value=form.description, error=errors.fields.description | default(value=""), maxlength=limits.description, rows=2) }}
+{%- endmacro category_fields %}

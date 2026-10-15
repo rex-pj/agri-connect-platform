@@ -2,7 +2,9 @@
 //! Its menu shows only what the visitor's permissions open; the pages still
 //! check access themselves through the use cases.
 
+pub mod categories;
 pub mod dashboard;
+pub mod locations;
 pub mod roles;
 pub mod users;
 
@@ -15,10 +17,17 @@ use application::{
     },
 };
 use axum::{http::StatusCode, response::Response};
-use domain::Error;
+use domain::{Error, ErrorCode};
 use serde::Serialize;
 
-use crate::{app_state::AppState, routes, shell::Shell, views::render_page_status};
+use crate::{
+    app_state::AppState,
+    cookies::Flash,
+    pages::forms::{is_form_error, FormErrors},
+    routes,
+    shell::Shell,
+    views::render_page_status,
+};
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct NavItem {
@@ -173,6 +182,49 @@ pub fn render_admin<T: Serialize>(
 
 pub fn url(name: &str, params: &[(&str, &str)]) -> Result<String, Error> {
     routes::url(name, params).map_err(|e| Error::internal(format!("admin links: {e}")))
+}
+
+/// A refusal the admin can act on from the page (a broken rule, a conflict):
+/// the page is re-shown with it. A missing permission is not one: it gets
+/// the 403 page.
+pub fn is_refusal(err: &Error) -> bool {
+    is_form_error(err) && err.code() != ErrorCode::PermissionDenied
+}
+
+/// How an edit page comes back: fresh (with a flash), or after a refused
+/// change (with the values as typed and the messages).
+pub struct Outcome<F> {
+    /// The values as typed; `None` shows the stored ones.
+    pub form: Option<F>,
+    pub errors: FormErrors,
+    /// The confirmation dialog re-opens after a refused confirmation.
+    pub confirm_open: bool,
+    pub flash: Option<Flash>,
+    pub status: StatusCode,
+}
+
+impl<F> Default for Outcome<F> {
+    fn default() -> Self {
+        Self {
+            form: None,
+            errors: FormErrors::default(),
+            confirm_open: false,
+            flash: None,
+            status: StatusCode::OK,
+        }
+    }
+}
+
+impl<F> Outcome<F> {
+    pub fn refused(state: &AppState, err: &Error, form: Option<F>, confirm_open: bool) -> Self {
+        Self {
+            form,
+            errors: FormErrors::from_error(state, err),
+            confirm_open,
+            flash: None,
+            status: err.kind().status(),
+        }
+    }
 }
 
 #[cfg(test)]

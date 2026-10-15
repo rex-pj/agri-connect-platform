@@ -20,8 +20,8 @@ use crate::{
     extract::{ApiForm, ApiPath, ApiQuery},
     middleware::auth::Viewer,
     pages::{
-        admin::{render_admin, url},
-        forms::{is_form_error, FormErrors},
+        admin::{is_refusal, render_admin, url},
+        forms::{reason, FormErrors},
         listing::{parse_opt, Pagination},
         parse_id, see_other,
     },
@@ -201,7 +201,7 @@ async fn after(
             flash.set_on(&mut response);
             Ok(response)
         }
-        Err(err) if is_form_error(&err) && err.code() != ErrorCode::PermissionDenied => {
+        Err(err) if is_refusal(&err) => {
             let errors = FormErrors::from_error(state, &err);
             user_page(
                 state,
@@ -263,7 +263,7 @@ pub async fn change_status(
     };
     let id = parse_id(&raw_id, ErrorCode::UserNotFound)?;
     let activate = form.is_active == "true";
-    let reason = Some(form.reason.trim().to_owned()).filter(|r| !r.is_empty());
+    let reason = reason(&form.reason);
     let result = state
         .usecases
         .admin

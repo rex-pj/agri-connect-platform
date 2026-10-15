@@ -1,0 +1,54 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "molecules/admin_header.html" as header %}
+{% import "organisms/category_fields.html" as fields %}
+{% import "organisms/confirm_sheet.html" as confirm %}
+{#- One category: its edit form and visibility. `page.body` is
+    web::pages::admin::categories::CategoryPage. Hiding goes through a
+    confirmation with a reason (it takes the category's listings off the
+    public pages); showing again is one button. -#}
+{% block title %}{{ page.body.category.name }} — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+{% set c = b.category %}
+{% set kind = "Danh mục sản phẩm" %}{% if c.category_type == "service" %}{% set kind = "Danh mục dịch vụ" %}{% endif %}
+{% set icon = "fa-tags" %}{% if c.icon %}{% set icon = c.icon %}{% endif %}
+{{ header::admin_header(title=c.name, icon=icon, sub=kind, back_href=url_for(name="admin_categories"), back_label="Danh mục") }}
+<div class="admin-body" x-data="dialog" data-open="{% if b.confirm_open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+  {% if b.flash == "category_created" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã thêm danh mục.") }}{% endif %}
+  {% if b.flash == "category_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã lưu thay đổi.") }}{% endif %}
+  {% if b.flash == "category_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã ẩn danh mục khỏi trang công khai.") }}{% endif %}
+  {% if b.flash == "category_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Danh mục đã hiển thị lại.") }}{% endif %}
+  {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
+
+  <section class="admin-card p-3" aria-labelledby="edit-title">
+    <h2 class="detail-card__title" id="edit-title">Thông tin</h2>
+    <form method="post" action="{{ b.update_action }}" novalidate>
+      {{ fields::category_fields(form=b.form, errors=b.errors, limits=b.limits, prefix="edit") }}
+      <button type="submit" class="btn btn-success btn-lg">{{ atoms::icon(name="fa-floppy-disk") }} Lưu</button>
+    </form>
+  </section>
+
+  <section class="admin-card p-3">
+    <h2 class="detail-card__title">Hiển thị</h2>
+    <dl class="acct-rows">
+      <div class="acct-row"><dt>Trạng thái</dt><dd>{% if c.is_active %}<span class="badge text-bg-success">Hiển thị</span>{% else %}<span class="badge text-bg-secondary">Đã ẩn</span>{% endif %}</dd></div>
+      <div class="acct-row"><dt>Tạo</dt><dd><time datetime="{{ c.created_on | utc_iso }}">{{ c.created_on | vn_datetime }}</time>{% if c.created_by_name %} · {{ c.created_by_name }}{% endif %}</dd></div>
+      <div class="acct-row"><dt>Cập nhật</dt><dd><time datetime="{{ c.updated_on | utc_iso }}">{{ c.updated_on | vn_datetime }}</time>{% if c.updated_by_name %} · {{ c.updated_by_name }}{% endif %}</dd></div>
+    </dl>
+    {% if c.is_active %}
+    <a class="btn btn-outline-warning mt-2" href="#an-danh-muc" x-on:click.prevent="show">{{ atoms::icon(name="fa-eye-slash") }} Ẩn danh mục</a>
+    {% else %}
+    <form class="mt-2" method="post" action="{{ b.status_action }}">
+      <input type="hidden" name="is_active" value="true">
+      <button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-eye") }} Hiển thị lại</button>
+    </form>
+    {% endif %}
+  </section>
+
+  {% if c.is_active %}
+  {{ confirm::confirm_sheet(id="an-danh-muc", title="Ẩn danh mục " ~ c.name ~ "?", icon="fa-eye-slash", action=b.status_action, button="Xác nhận ẩn", hidden_name="is_active", hidden_value="false") }}
+  {% endif %}
+</div>
+{% endblock content %}

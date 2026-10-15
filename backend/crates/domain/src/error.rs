@@ -82,9 +82,12 @@ error_codes! {
     ConfirmationRequired      => (BadRequest,      "confirmation_required"),
     InvalidPhone              => (BadRequest,      "invalid_phone"),
     InvalidCoordinates        => (BadRequest,      "invalid_coordinates"),
+    InvalidNumber             => (BadRequest,      "invalid_number"),
     RadiusOutOfRange          => (BadRequest,      "radius_out_of_range"),
     NameRequired              => (BadRequest,      "name_required"),
     SlugRequired              => (BadRequest,      "slug_required"),
+    InvalidSlug               => (BadRequest,      "invalid_slug"),
+    FieldTooLong              => (BadRequest,      "field_too_long"),
     LabelRequired             => (BadRequest,      "label_required"),
     BusinessNameRequired      => (BadRequest,      "business_name_required"),
     RequesterNameRequired     => (BadRequest,      "requester_name_required"),
@@ -111,6 +114,8 @@ error_codes! {
     UsernameTaken             => (Conflict,        "username_taken"),
     UsernameTakenByOtherRole  => (Conflict,        "username_taken_by_other_role"),
     EmailTaken                => (Conflict,        "email_taken"),
+    SlugTaken                 => (Conflict,        "slug_taken"),
+    LocationLabelTaken        => (Conflict,        "location_label_taken"),
     DemoAlreadyLoaded         => (Conflict,        "demo_already_loaded"),
 
     // ── Not found ────────────────────────────────────────────────────────────
@@ -168,6 +173,21 @@ impl Error {
     }
 
     /// A value the locale text interpolates, e.g. `{min}` in "at least {min} characters".
+    /// A validation failure on one field, for rules only storage can check
+    /// (a UNIQUE constraint lost to a concurrent write).
+    pub fn field(field: &'static str, code: ErrorCode) -> Self {
+        Self {
+            code: ErrorCode::ValidationFailed,
+            params: Vec::new(),
+            fields: vec![FieldError {
+                field,
+                code,
+                params: Vec::new(),
+            }],
+            detail: None,
+        }
+    }
+
     pub fn with_param(mut self, name: &'static str, value: impl ToString) -> Self {
         self.params.push((name, value.to_string()));
         self

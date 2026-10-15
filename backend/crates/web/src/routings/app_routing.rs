@@ -252,6 +252,34 @@ impl AppRouting {
                 "/admin/users/{id}/status",
                 post(pages::admin::users::change_status),
             )
+            .route(
+                "/admin/categories",
+                get(pages::admin::categories::list).post(pages::admin::categories::create),
+            )
+            .route(
+                "/admin/categories/{id}",
+                get(pages::admin::categories::show).post(pages::admin::categories::update),
+            )
+            .route(
+                "/admin/categories/{id}/status",
+                post(pages::admin::categories::change_status),
+            )
+            .route(
+                "/admin/locations",
+                get(pages::admin::locations::list).post(pages::admin::locations::create),
+            )
+            .route(
+                "/admin/locations/{id}",
+                get(pages::admin::locations::show).post(pages::admin::locations::update),
+            )
+            .route(
+                "/admin/locations/{id}/status",
+                post(pages::admin::locations::change_status),
+            )
+            .route(
+                "/admin/locations/{id}/delete",
+                post(pages::admin::locations::delete),
+            )
             .route("/account/password", post(pages::account::change_password));
 
         // ── USER routes (authenticated, no rate limit) ───────────────────────

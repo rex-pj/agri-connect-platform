@@ -53,3 +53,11 @@ pub const REFRESH_TOKEN_DEFAULT_DAYS: i64 = 30;
 /// A spent token presented again this soon is two tabs refreshing at once,
 /// not theft: refuse it without revoking the family, or both tabs log out.
 pub const REFRESH_REUSE_GRACE_SECS: i64 = 30;
+
+// ── Catalogue fields (the VARCHAR sizes in the baseline schema) ────────────────
+pub const CATEGORY_NAME_MAX: usize = 100;
+pub const CATEGORY_SLUG_MAX: usize = 100;
+pub const CATEGORY_ICON_MAX: usize = 100;
+pub const CATEGORY_COLOR_MAX: usize = 20;
+pub const CATEGORY_DESCRIPTION_MAX: usize = 300;
+pub const LOCATION_LABEL_MAX: usize = 150;

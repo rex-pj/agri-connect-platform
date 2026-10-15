@@ -292,7 +292,7 @@ All routes are defined as SvelteKit file-system pages under `client-app/src/rout
 | `/explore`                       | Providers near a GPS position (`ac-geolocate` island) or a location preset (GET form); radius/service links (**Rust**, `web/src/pages/explore.rs`) |
 | `/providers/[id]`                | 301 → `/providers/[id]/[slug]` (**Rust**)      |
 | `/providers/[id]/[slug]`         | Provider detail + contact form (**Rust**, `web/src/pages/provider.rs`) |
-| `/account`                       | User profile (RequireAuth)                     |
+| `/account`                       | Profile, password change (signs out other devices), logout (**Rust**, `web/src/pages/account.rs`) |
 | `/provider/dashboard`            | Provider product management (RequireProvider)  |
 
 ### Admin `(admin)/admin/`

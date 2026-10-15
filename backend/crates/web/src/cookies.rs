@@ -36,14 +36,16 @@ pub enum Flash {
     PasswordReset,
     DemoLoaded,
     DemoRemoved,
+    PasswordChanged,
 }
 
 impl Flash {
-    const ALL: [Flash; 4] = [
+    const ALL: [Flash; 5] = [
         Flash::ContactSent,
         Flash::PasswordReset,
         Flash::DemoLoaded,
         Flash::DemoRemoved,
+        Flash::PasswordChanged,
     ];
 
     const fn as_str(self) -> &'static str {
@@ -52,6 +54,7 @@ impl Flash {
             Flash::PasswordReset => "password_reset",
             Flash::DemoLoaded => "demo_loaded",
             Flash::DemoRemoved => "demo_removed",
+            Flash::PasswordChanged => "password_changed",
         }
     }
 

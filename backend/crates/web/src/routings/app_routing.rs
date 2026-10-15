@@ -227,10 +227,13 @@ impl AppRouting {
             .layer(limiter(&config.limiters.auth, Scope::WritesOnly));
 
         // The demo data page: an admin action, on the signed-in budget.
-        let member_pages = Router::new().route(
-            "/setup/seed",
-            get(pages::setup::seed).post(pages::setup::seed_action),
-        );
+        let member_pages = Router::new()
+            .route(
+                "/setup/seed",
+                get(pages::setup::seed).post(pages::setup::seed_action),
+            )
+            .route("/account", get(pages::account::show))
+            .route("/account/password", post(pages::account::change_password));
 
         // ── USER routes (authenticated, no rate limit) ───────────────────────
         let user_routes = Router::new()

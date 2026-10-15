@@ -1791,3 +1791,71 @@ a.chip {
   margin: 0;
   font-size: 1rem;
 }
+
+/* ── Account (pages/account) ─────────────────────────────────────────────── */
+.acct-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 24px 16px;
+  border-radius: 0 0 20px 20px;
+  background: linear-gradient(160deg, var(--p900) 0%, var(--p800) 55%, var(--p600) 100%);
+  color: #fff;
+}
+.acct-avatar {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  font-size: 2rem;
+}
+.acct-name {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+.acct-sub {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.85rem;
+}
+.acct-role {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 6px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.15);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.acct-rows {
+  margin: 0;
+}
+.acct-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #e7ede9;
+}
+.acct-row:last-child {
+  border-bottom: none;
+}
+.acct-row dt {
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+.acct-row dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--text);
+  font-size: 0.92rem;
+  text-align: right;
+  word-break: break-word;
+}

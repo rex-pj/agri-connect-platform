@@ -1,0 +1,55 @@
+{% extends "layouts/app.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "molecules/form_field.html" as field %}
+{#- The signed-in visitor's account. `page` is web::pages::account::AccountPage.
+    The role names are for display only; nothing here decides access. -#}
+{% block title %}Tài khoản — {{ site.name }}{% endblock title %}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
+{% block main %}
+{% set me = page.me %}
+{% if me.role == "admin" %}{% set role_label = "Quản trị viên" %}{% set role_icon = "fa-shield-halved" %}{% elif me.role == "provider" %}{% set role_label = "Nhà cung cấp" %}{% set role_icon = "fa-store" %}{% else %}{% set role_label = me.role %}{% set role_icon = "fa-user" %}{% endif %}
+<header class="acct-header">
+  <span class="acct-avatar">{{ atoms::icon(name="fa-circle-user") }}</span>
+  <div>
+    <h1 class="acct-name">{{ me.full_name | default(value=me.username) }}</h1>
+    {% if me.full_name %}<p class="acct-sub">@{{ me.username }}</p>{% endif %}
+    <span class="acct-role">{{ atoms::icon(name=role_icon, class="me-1") }}{{ role_label }}</span>
+  </div>
+</header>
+
+<div class="detail-body">
+  <section class="detail-card">
+    <h2 class="detail-card__title">{{ atoms::icon(name="fa-id-card", class="me-1") }} Thông tin tài khoản</h2>
+    <dl class="acct-rows">
+      {% if me.full_name %}<div class="acct-row"><dt>Họ và tên</dt><dd>{{ me.full_name }}</dd></div>{% endif %}
+      <div class="acct-row"><dt>Tên đăng nhập</dt><dd>{{ me.username }}</dd></div>
+      <div class="acct-row"><dt>Email</dt><dd>{{ me.email }}</dd></div>
+      <div class="acct-row"><dt>Vai trò</dt><dd>{{ role_label }}</dd></div>
+      <div class="acct-row"><dt>Ngày tham gia</dt><dd><time datetime="{{ me.created_on | utc_iso }}">{{ me.created_on | vn_datetime }}</time></dd></div>
+    </dl>
+    {% if page.area %}<a class="btn btn-outline-success w-100 mt-2" href="{{ page.area.href }}">{{ atoms::icon(name=page.area.icon) }} {{ page.area.label }}</a>{% endif %}
+  </section>
+
+  <section class="detail-card" id="security">
+    <h2 class="detail-card__title">{{ atoms::icon(name="fa-lock", class="me-1") }} Bảo mật</h2>
+    {% if page.password_changed %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã đổi mật khẩu. Các thiết bị khác đã được đăng xuất.") }}{% endif %}
+    <form class="auth-form mt-2" method="post" action="{{ url_for(name="account_password") }}">
+      {% if page.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=page.errors.message) }}{% endif %}
+      {{ field::input(id="cp_cur", name="current_password", label="Mật khẩu hiện tại", type="password", error=page.errors.fields.current_password | default(value=""), required=true, autocomplete="current-password") }}
+      {{ field::input(id="cp_new", name="new_password", label="Mật khẩu mới", type="password", error=page.errors.fields.new_password | default(value=""), required=true, autocomplete="new-password", minlength=limits.password_min_chars) }}
+      {{ field::input(id="cp_new2", name="password2", label="Nhập lại mật khẩu mới", type="password", error=page.errors.fields.password2 | default(value=""), required=true, autocomplete="new-password") }}
+      <p class="small text-muted mb-0">Đổi mật khẩu sẽ đăng xuất mọi thiết bị khác.</p>
+      <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-key") }} Đổi mật khẩu</button>
+    </form>
+  </section>
+
+  <section class="detail-card">
+    <h2 class="detail-card__title">{{ atoms::icon(name="fa-right-from-bracket", class="me-1") }} Đăng xuất</h2>
+    <p class="small text-muted">Kết thúc phiên đăng nhập trên thiết bị này.</p>
+    <form method="post" action="{{ url_for(name="logout") }}">
+      <button type="submit" class="btn btn-outline-danger btn-lg w-100">{{ atoms::icon(name="fa-right-from-bracket") }} Đăng xuất</button>
+    </form>
+  </section>
+</div>
+{% endblock main %}

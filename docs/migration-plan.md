@@ -1103,3 +1103,19 @@ Tests (database):
 - the reset flow: the same answer for unknown emails, the invalid-link state, success → `/login` with a one-time thanks, a token works once;
 - the demo page: anonymous → `/login`, provider → 403, removal needs the tick, only demo rows are removed;
 - a cross-site login post → 403 and no cookies.
+
+### S13 — account page (same branch)
+
+Done:
+- **`/account` is served by Rust** (`web/src/pages/account.rs`) in the app frame, `noindex`. An anonymous visitor goes to `/login`. The SvelteKit `account` route is deleted.
+- **Page:** name, username, email, role (display only), join date (`vn_datetime`), and a link to the visitor's area (admin or provider dashboard), the same rule as the tabs.
+- **Password change:** `POST /account/password`, Post/Redirect/Get. A wrong current password (401) or a mismatched confirmation (400) is re-shown in place.
+  - **It now signs out every other device:** `AuthUseCase::change_password` revokes all refresh tokens of the account, including through the JSON API. The browser that made the change gets a fresh session, so it stays signed in.
+  - After the change, a one-time flash confirms it on `#security`.
+- **Logout** posts to `/logout` (S12a).
+- Dropped the SvelteKit "session expires at" row. With refresh tokens the 1-hour access expiry is renewed silently and no longer tells the user anything.
+
+Tests (database):
+- anonymous → `/login`; the profile, role, area link, logout form and `#security` anchor;
+- wrong current password → 401; mismatch → 400;
+- success → 303 to `#security` with new cookies and the flash; another device's refresh token is revoked; the new password logs in.

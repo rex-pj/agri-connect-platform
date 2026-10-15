@@ -382,7 +382,11 @@ impl AuthUseCase {
         }
 
         let new_hash = self.password_hasher.hash(&new_password).await?;
-        self.user_repo.update_password(user_id, &new_hash).await
+        self.user_repo.update_password(user_id, &new_hash).await?;
+        // A changed password is often a suspicion: every signed-in device is
+        // signed out. The browser that made the change gets a new session
+        // from its caller (web::pages::account).
+        self.refresh_repo.revoke_user(user_id).await
     }
 
     // ── Forgot password ───────────────────────────────────────────────────────

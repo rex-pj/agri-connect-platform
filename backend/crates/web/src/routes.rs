@@ -22,6 +22,7 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("setup_seed", "/setup/seed"),
     ("account", "/account"),
     ("account_security", "/account#security"),
+    ("account_password", "/account/password"),
     ("explore", "/explore"),
     ("products", "/products"),
     ("services", "/services"),

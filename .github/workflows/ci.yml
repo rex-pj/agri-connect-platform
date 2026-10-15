@@ -64,28 +64,8 @@ jobs:
       # change without a rebuild ships stale behaviour; this fails instead.
       - run: git diff --exit-code -- ../crates/web/static/js/islands.js
 
-  legacy:
-    name: SvelteKit (check, build) — removed in S20
-    runs-on: ubuntu-24.04
-    defaults:
-      run:
-        working-directory: client-app
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20.19"
-          cache: npm
-          cache-dependency-path: client-app/package-lock.json
-      - run: npm ci
-      - run: npm run check
-      - run: npm test
-      - run: npm run build
-        env:
-          PRIVATE_API_URL: http://web:8080
-
   images:
-    name: Container images build
+    name: Container image build
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -96,12 +76,6 @@ jobs:
           push: false
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
-      - uses: docker/build-push-action@v6
-        with:
-          context: client-app
-          push: false
-          cache-from: type=gha,scope=legacy
-          cache-to: type=gha,mode=max,scope=legacy
 
   deploy-scripts:
     name: Deploy scripts (shellcheck, compose config)
@@ -116,6 +90,5 @@ jobs:
         env:
           DOMAIN: example.vn
           WEB_IMAGE: web:ci
-          LEGACY_IMAGE: legacy:ci
           POSTGRES_PASSWORD: ci
           APP_DB_PASSWORD: ci

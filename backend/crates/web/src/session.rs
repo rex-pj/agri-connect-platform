@@ -7,8 +7,8 @@
 //!
 //! `renew` runs before the handlers: when the access token is missing or no
 //! longer valid but a refresh token is present, it rotates the pair and
-//! rewrites this request's `Cookie` header, so the handler (or SvelteKit
-//! behind the proxy) sees a live session without a second round trip.
+//! rewrites this request's `Cookie` header, so the handler sees a live
+//! session without a second round trip.
 
 use application::{constants::JWT_EXPIRY_HOURS, usecases::auth_usecase::SessionTokens};
 use axum::{

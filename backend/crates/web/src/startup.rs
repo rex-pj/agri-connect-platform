@@ -49,7 +49,6 @@ use tracing::{info, warn};
 use crate::{
     app_state::{AppState, UseCases},
     constants::{DB_MAX_CONNECTIONS, DEFAULT_APP_URL, DEFAULT_BIND_ADDR, DEFAULT_UPLOAD_DIR},
-    legacy::LegacyProxy,
     locale::Locale,
     middleware::{origin::origin_of, rate_limit::Limiters},
     routings::app_routing::{AppRouting, RouterConfig},
@@ -194,28 +193,6 @@ fn router_config(app_url: &str, limiters: Limiters) -> Result<RouterConfig, Star
         .collect::<Result<Vec<_>, _>>()?;
     let https = optional_env("HTTPS_ENABLED").as_deref() == Some("true");
 
-    let legacy = match optional_env("LEGACY_FRONTEND_URL") {
-        Some(url) => {
-            let uri: axum::http::Uri =
-                url.parse()
-                    .map_err(|e: axum::http::uri::InvalidUri| StartupError::InvalidEnv {
-                        name: "LEGACY_FRONTEND_URL",
-                        reason: e.to_string(),
-                    })?;
-            info!(%uri, "pages not yet served by Rust are proxied to SvelteKit");
-            Some(
-                LegacyProxy::new(&uri, https).map_err(|reason| StartupError::InvalidEnv {
-                    name: "LEGACY_FRONTEND_URL",
-                    reason,
-                })?,
-            )
-        }
-        None => {
-            warn!("LEGACY_FRONTEND_URL not set; pages Rust does not serve yet answer 404");
-            None
-        }
-    };
-
     let mut allowed_origins = Vec::new();
     for url in std::iter::once(app_url).chain(cors_list.iter().map(String::as_str)) {
         let origin = origin_of(url).ok_or_else(|| StartupError::InvalidEnv {
@@ -238,7 +215,6 @@ fn router_config(app_url: &str, limiters: Limiters) -> Result<RouterConfig, Star
     Ok(RouterConfig {
         cors_origins,
         https,
-        legacy,
         trusted_proxy_hops,
         allowed_origins,
         limiters,

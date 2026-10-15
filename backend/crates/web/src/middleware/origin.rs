@@ -2,8 +2,8 @@
 //! refused. Together with SameSite cookies this replaces CSRF tokens.
 //!
 //! A request with no `Origin` header is allowed through: browsers always send
-//! one on cross-site POSTs, while server-to-server callers (the SvelteKit
-//! server calling the API) send none and authenticate with a bearer token.
+//! one on cross-site POSTs, while server-to-server callers (scripts calling
+//! the JSON API) send none and authenticate with a bearer token.
 
 use axum::{
     extract::Request,

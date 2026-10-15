@@ -2,14 +2,13 @@
 # Runs on the VM, invoked by .github/workflows/deploy.yml over IAP SSH:
 #
 #   DOMAIN=... GCP_PROJECT_ID=... REGISTRY_HOST=... UPLOAD_BUCKET=... \
-#   bash remote-deploy.sh <web-image> <legacy-image>
+#   bash remote-deploy.sh <web-image>
 #
 # Renders env files from Secret Manager, starts the new images, waits for
 # /health/ready, and puts the previous images back if they never get ready.
 set -euo pipefail
 
 WEB_IMAGE="$1"
-LEGACY_IMAGE="$2"
 : "${DOMAIN:?DOMAIN is required}"
 : "${GCP_PROJECT_ID:?GCP_PROJECT_ID is required}"
 : "${REGISTRY_HOST:?REGISTRY_HOST is required (e.g. asia-southeast1-docker.pkg.dev)}"
@@ -67,7 +66,6 @@ compose_env() {
 DOMAIN=$DOMAIN
 GCS_BUCKET=$UPLOAD_BUCKET
 WEB_IMAGE=$1
-LEGACY_IMAGE=$2
 POSTGRES_PASSWORD=$(secret agri-postgres-password)
 APP_DB_PASSWORD=$(secret agri-app-db-password)
 ENV
@@ -77,7 +75,7 @@ previous=""
 if sudo test -f "$ETC_DIR/compose.env"; then
   previous="$(sudo cat "$ETC_DIR/compose.env")"
 fi
-compose_env "$WEB_IMAGE" "$LEGACY_IMAGE" > "$tmp"
+compose_env "$WEB_IMAGE" > "$tmp"
 sudo install -m 600 "$tmp" "$ETC_DIR/compose.env"
 rm -f "$tmp"
 
@@ -100,6 +98,8 @@ wait_ready() {
 gcloud auth configure-docker "$REGISTRY_HOST" --quiet >/dev/null
 sudo gcloud auth configure-docker "$REGISTRY_HOST" --quiet >/dev/null
 compose pull --quiet
+# --remove-orphans also stops services a release dropped (the SvelteKit
+# `legacy` container, removed in S20).
 compose up -d --remove-orphans
 
 if wait_ready; then

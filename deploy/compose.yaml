@@ -36,7 +36,6 @@ services:
       HTTPS_ENABLED: "true"
       # Caddy is the one proxy in front; it appends the client address.
       TRUSTED_PROXY_HOPS: "1"
-      LEGACY_FRONTEND_URL: http://legacy:3001
       LOG_FORMAT: json
       RUST_LOG: info,sea_orm=warn,sqlx=warn
     depends_on:
@@ -44,14 +43,6 @@ services:
         condition: service_healthy
     # Long enough for in-flight requests to drain after SIGTERM.
     stop_grace_period: 30s
-
-  legacy:
-    image: ${LEGACY_IMAGE}
-    restart: unless-stopped
-    environment:
-      PORT: "3001"
-      # adapter-node compares form Origins against this; it must be the public URL.
-      ORIGIN: https://${DOMAIN}
 
   db:
     image: postgis/postgis:16-3.5

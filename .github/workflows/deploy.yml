@@ -41,9 +41,7 @@ jobs:
         run: |
           gcloud auth configure-docker "$REGISTRY_HOST" --quiet
           docker build -t "$REGISTRY/web:$SHA" backend
-          docker build -t "$REGISTRY/legacy:$SHA" client-app
           docker push "$REGISTRY/web:$SHA"
-          docker push "$REGISTRY/legacy:$SHA"
 
       - name: Roll out on the VM
         env:
@@ -57,5 +55,5 @@ jobs:
             deploy "$VM:/tmp/agri-deploy-$SHA"
           gcloud compute ssh "$VM" --tunnel-through-iap --zone "$ZONE" --project "$PROJECT" --command \
             "DOMAIN='$DOMAIN' GCP_PROJECT_ID='$PROJECT' REGISTRY_HOST='$REGISTRY_HOST' UPLOAD_BUCKET='$UPLOAD_BUCKET' \
-             bash /tmp/agri-deploy-$SHA/remote-deploy.sh '$REGISTRY/web:$SHA' '$REGISTRY/legacy:$SHA' \
+             bash /tmp/agri-deploy-$SHA/remote-deploy.sh '$REGISTRY/web:$SHA' \
              && rm -rf /tmp/agri-deploy-$SHA"

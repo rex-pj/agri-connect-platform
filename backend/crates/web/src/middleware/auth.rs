@@ -11,12 +11,11 @@ use domain::{Error, ErrorCode};
 
 use crate::{app_state::AppState, cookies::request_cookie};
 
-/// The session cookie. Set today by the SvelteKit app (httpOnly), read here so
-/// Rust pages and islands share the same login during the migration.
+/// The session cookie (httpOnly, set by `session` at sign-in and renewal).
 pub const SESSION_COOKIE: &str = "auth_token";
 
-/// The token from `Authorization: Bearer` (the SvelteKit server calling the
-/// API) or else from the session cookie (a browser on a Rust page).
+/// The token from `Authorization: Bearer` (a script or app calling the JSON
+/// API) or else from the session cookie (a browser).
 fn session_token(parts: &Parts) -> Option<&str> {
     let bearer = parts
         .headers

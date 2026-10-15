@@ -2,10 +2,10 @@
 target/
 *.pdb
 
-# SvelteKit
+# Node (backend/islands only)
 node_modules/
-.svelte-kit/
-build/
+
+# Local environment files
 .env
 .env.local
 .env.*.local

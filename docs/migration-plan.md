@@ -1267,3 +1267,28 @@ Tests (database):
 - another provider's product returns 404 on GET and POST, and its photo is never decoded (no file row); an admin without a business gets the empty state; an anonymous visitor goes to `/login`.
 
 The proxy tests now use a made-up path, since no real page is proxied any more.
+
+### S20 — teardown (same branch) — migration complete
+
+Done:
+- **`client-app/` is deleted.** The slugify fixtures moved to `backend/crates/web/src/slugify.fixtures.json`: they now pin the slugs that published URLs already use. An untracked local `client-app/.env` (two API URLs, no secrets) was left on the developer machine.
+- **The proxy is gone:** `web::legacy`, `RouterConfig::legacy`, `LEGACY_FRONTEND_URL` and the `legacy_frontend_unavailable` code. A route Rust does not have is a coded 404. The "never a page" path check moved to `error_response::is_machine_path`, which still keeps API, asset, probe and file errors as JSON. `hyper-util` stays: its client is the container health probe (`agri-connect healthcheck`).
+- **Deployment:**
+  - the `legacy` compose service, its image build and push in `deploy.yml`, its CI job and image build, and the second argument of `remote-deploy.sh` are removed;
+  - the first rollout's `--remove-orphans` stops the old container.
+  - Node remains only for `backend/islands` (CI job "Islands bundle is up to date").
+- **The JWT `role` claim is dropped:**
+  - `TokenService::mint(user_id, username)`, and `SessionClaims` has no role;
+  - permissions were already read from the database on every request, so the claim was a stale copy;
+  - tokens minted before this still verify, because unknown claims are ignored (tested);
+  - sign-in still refuses an account whose role is unknown (`account_has_no_role`).
+- **Docs:**
+  - `CLAUDE.md` describes the Rust-only stack: repository layout, Tera atomic levels, the page route map, URL names (`routes.rs` / `url_for`) instead of `ROUTES` in `routes.ts`, the page guidelines (including the multipart and photo-first rule), SEO through template blocks, and how to run it;
+  - the `/agri-connect` entries are gone (D5: never deployed, so no redirects);
+  - the hosting line now says Compute Engine;
+  - `deploy/README.md` and the Caddyfile no longer mention SvelteKit;
+  - comments that described SvelteKit behaviour (the cookie, bearer callers, the proxy) are corrected.
+
+Verification: `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings` and `cargo test --workspace -- --include-ignored` (236 tests, database included) are clean, and the islands bundle rebuilds without a diff.
+
+Before the first S20 deploy: remove `LEGACY_FRONTEND_URL` from any local `.env` (it is now ignored), and the `legacy` image can be deleted from Artifact Registry.

@@ -132,10 +132,12 @@ impl AuthUseCase {
             tracing::warn!(user_id = credentials.id, error = %e, "could not reset failed-login counter");
         }
 
-        let role = UserRole::from_code(&credentials.role)
-            .ok_or_else(|| Error::new(ErrorCode::AccountHasNoRole))?;
+        // An account whose role is unknown has no permissions to act with.
+        if UserRole::from_code(&credentials.role).is_none() {
+            return Err(Error::new(ErrorCode::AccountHasNoRole));
+        }
 
-        let token = self.token_svc.mint(credentials.id, &username, &role)?;
+        let token = self.token_svc.mint(credentials.id, &username)?;
         Ok(LoginResponse {
             user_id: credentials.id,
             token,
@@ -203,10 +205,10 @@ impl AuthUseCase {
         let Some(actor) = self.actor(user_id).await? else {
             return Ok(None);
         };
-        let Some(role) = UserRole::from_code(&actor.role_code) else {
+        if UserRole::from_code(&actor.role_code).is_none() {
             return Ok(None);
-        };
-        let access = self.token_svc.mint(user_id, &actor.username, &role)?;
+        }
+        let access = self.token_svc.mint(user_id, &actor.username)?;
         let refresh = generate_token();
         let refresh_expires_at = Utc::now() + Duration::days(self.refresh_days);
         self.refresh_repo
@@ -265,7 +267,7 @@ impl AuthUseCase {
             })
             .await?;
 
-        let token = self.token_svc.mint(user_id, &username, &UserRole::Admin)?;
+        let token = self.token_svc.mint(user_id, &username)?;
         Ok(LoginResponse {
             user_id,
             token,
@@ -325,9 +327,7 @@ impl AuthUseCase {
             .create_for_registration(&business_name, &business_phone, user_id)
             .await?;
 
-        let token = self
-            .token_svc
-            .mint(user_id, &username, &UserRole::Provider)?;
+        let token = self.token_svc.mint(user_id, &username)?;
         Ok(LoginResponse {
             user_id,
             token,

@@ -28,7 +28,6 @@ use crate::{
         provider_dashboard_handler::ProviderDashboardHandler, role_handler::RoleHandler,
         setup_handler::SetupHandler, stats_handler::StatsHandler,
     },
-    legacy::{is_rust_only, LegacyProxy},
     middleware::{
         client_ip, origin,
         rate_limit::{self, Limiters, Scope},
@@ -46,8 +45,6 @@ pub struct RouterConfig {
     /// Send HSTS. Only meaningful when TLS terminates in front of us; sent over
     /// plain HTTP it would lock browsers out of a site that has no TLS.
     pub https: bool,
-    /// Where pages Rust does not serve yet are forwarded. `None`: they 404.
-    pub legacy: Option<LegacyProxy>,
     /// Reverse proxies in front of us whose X-Forwarded-For entry is trusted.
     /// 0: use the TCP peer. Too low behind Caddy: every user shares one rate
     /// limit. Too high: clients can forge their address.
@@ -63,7 +60,6 @@ impl Default for RouterConfig {
         Self {
             cors_origins: Vec::new(),
             https: false,
-            legacy: None,
             trusted_proxy_hops: 0,
             allowed_origins: Vec::new(),
             limiters: Limiters::in_process(),
@@ -76,7 +72,6 @@ pub struct AppRouting;
 impl AppRouting {
     pub fn build(state: AppState, config: RouterConfig) -> Router {
         let error_renderer = middleware::from_fn_with_state(state.clone(), render_errors);
-        let legacy = config.legacy.clone();
         let hops = config.trusted_proxy_hops;
         // Rate limits: one budget per router area, keyed on the client address.
         let limiter = |l: &Arc<dyn RateLimiter>, scope: Scope| {
@@ -506,7 +501,7 @@ impl AppRouting {
             .merge(admin_routes.layer(limiter(&config.limiters.member_write, Scope::WritesOnly)))
             .merge(provider_routes.layer(limiter(&config.limiters.member_write, Scope::WritesOnly)))
             .route("/static/{*path}", get(views::static_file))
-            .fallback(move |req: axum::extract::Request| fallback(legacy.clone(), req))
+            .fallback(fallback)
             .layer(cors)
             .layer(SetResponseHeaderLayer::if_not_present(
                 header::X_CONTENT_TYPE_OPTIONS,
@@ -541,8 +536,7 @@ impl AppRouting {
             // Errors from every layer above (rate limiter, extractors, fallback)
             // get a rendered body; it sits inside the request span so its log
             // lines carry the request id.
-            // Renews an expired session before any handler (or the SvelteKit
-            // proxy) reads the cookie. Inside the Origin check: a refused
+            // Renews an expired session before any handler reads the cookie. Inside the Origin check: a refused
             // cross-site request never rotates a token.
             .layer(middleware::from_fn_with_state(
                 state.clone(),
@@ -588,17 +582,8 @@ fn request_span(req: &axum::http::Request<axum::body::Body>) -> tracing::Span {
     )
 }
 
-/// Anything no route matched: Rust-owned paths get a coded 404; pages go to
-/// SvelteKit while it still serves them, otherwise 404 too.
-async fn fallback(
-    legacy: Option<LegacyProxy>,
-    req: axum::extract::Request,
-) -> axum::response::Response {
-    match legacy {
-        Some(proxy) if !is_rust_only(req.uri().path()) => match proxy.forward(req).await {
-            Ok(response) => response,
-            Err(e) => e.into_response(),
-        },
-        _ => Error::new(ErrorCode::RouteNotFound).into_response(),
-    }
+/// Anything no route matched: a coded 404 (a page for a browser, JSON for
+/// the API).
+async fn fallback() -> axum::response::Response {
+    Error::new(ErrorCode::RouteNotFound).into_response()
 }

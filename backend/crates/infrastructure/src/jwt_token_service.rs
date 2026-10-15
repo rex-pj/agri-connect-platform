@@ -6,7 +6,7 @@ use application::{
     ports::{SessionClaims, TokenService},
 };
 use chrono::{Duration, Utc};
-use domain::{models::role::UserRole, Error, ErrorCode, Result};
+use domain::{Error, ErrorCode, Result};
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 
@@ -14,12 +14,11 @@ use serde::{Deserialize, Serialize};
 /// is brute-forceable offline from a single captured token.
 pub const MIN_SECRET_BYTES: usize = 32;
 
-/// Wire format of the token payload. The SvelteKit app decodes `role` from it
-/// until its last page is migrated, so the field names are a contract.
+/// Wire format of the token payload. Tokens minted before the `role` claim
+/// was dropped still verify: unknown claims are ignored.
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
     sub: i32,
-    role: UserRole,
     username: String,
     exp: i64,
 }
@@ -44,10 +43,9 @@ impl JwtTokenService {
 }
 
 impl TokenService for JwtTokenService {
-    fn mint(&self, user_id: i32, username: &str, role: &UserRole) -> Result<String> {
+    fn mint(&self, user_id: i32, username: &str) -> Result<String> {
         let claims = Claims {
             sub: user_id,
-            role: role.clone(),
             username: username.to_owned(),
             exp: (Utc::now() + Duration::hours(JWT_EXPIRY_HOURS)).timestamp(),
         };
@@ -68,7 +66,6 @@ impl TokenService for JwtTokenService {
         Ok(SessionClaims {
             user_id: data.claims.sub,
             username: data.claims.username,
-            role: data.claims.role,
             expires_at: data.claims.exp,
         })
     }
@@ -88,18 +85,15 @@ mod tests {
     #[test]
     fn minted_token_round_trips() -> Result<()> {
         let svc = JwtTokenService::new(SECRET)?;
-        let token = svc.mint(7, "an", &UserRole::Provider)?;
+        let token = svc.mint(7, "an")?;
         let claims = svc.verify(&token)?;
-        assert_eq!(
-            (claims.user_id, claims.username.as_str(), claims.role),
-            (7, "an", UserRole::Provider)
-        );
+        assert_eq!((claims.user_id, claims.username.as_str()), (7, "an"));
         Ok(())
     }
 
     #[test]
     fn token_signed_with_another_key_is_invalid() -> Result<()> {
-        let token = JwtTokenService::new(SECRET)?.mint(1, "x", &UserRole::Admin)?;
+        let token = JwtTokenService::new(SECRET)?.mint(1, "x")?;
         let other = JwtTokenService::new("another-secret-that-is-also-32-bytes-long")?;
         assert_eq!(
             other.verify(&token).err().map(|e| e.code()),
@@ -109,11 +103,32 @@ mod tests {
     }
 
     #[test]
+    fn a_token_minted_with_a_role_claim_still_verifies() -> Result<()> {
+        #[derive(Serialize)]
+        struct Old<'a> {
+            sub: i32,
+            role: &'a str,
+            username: &'a str,
+            exp: i64,
+        }
+        let svc = JwtTokenService::new(SECRET)?;
+        let old = Old {
+            sub: 3,
+            role: "admin",
+            username: "quantri",
+            exp: Utc::now().timestamp() + 60,
+        };
+        let token = encode(&Header::new(Algorithm::HS256), &old, &svc.encoding)
+            .map_err(|e| Error::internal(e.to_string()))?;
+        assert_eq!(svc.verify(&token)?.user_id, 3);
+        Ok(())
+    }
+
+    #[test]
     fn expired_token_is_invalid() -> Result<()> {
         let svc = JwtTokenService::new(SECRET)?;
         let claims = Claims {
             sub: 1,
-            role: UserRole::Admin,
             username: "x".into(),
             exp: Utc::now().timestamp() - 1,
         };

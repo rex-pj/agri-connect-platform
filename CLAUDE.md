@@ -16,23 +16,17 @@ agri-connect-platform/
 │   ├── crates/
 │   │   ├── domain/             # Models, repository traits, the one Error type (no I/O)
 │   │   ├── application/        # Use cases, ports, inputs/outputs, validation, catalogue
-│   │   ├── infrastructure/     # Sea-ORM entities + repos, JWT, bcrypt, SMTP, seeders
-│   │   ├── web/                # Axum: handlers, middleware, routing, extractors, startup
+│   │   ├── infrastructure/     # Sea-ORM entities + repos, JWT, bcrypt, SMTP, storage, seeders
+│   │   ├── web/                # Axum: pages, handlers, middleware, routing, extractors, startup
+│   │   │   ├── src/pages/      # Server-rendered pages (one module per page or area)
+│   │   │   ├── templates/      # Tera: atoms/ molecules/ organisms/ pages/ layouts/
+│   │   │   ├── static/         # CSS, fonts, Bootstrap, Alpine, the committed islands.js
 │   │   │   └── locales/vi.toml # User-facing text for every error code
 │   │   └── tests/              # Integration + convention tests (no workspace lints)
+│   ├── islands/                # Svelte custom elements → static/js/islands.js (Node only here)
 │   └── migration/              # Sea-ORM migrations: DDL only, append-only
-└── client-app/                 # SvelteKit frontend (adapter-node)
-    └── src/
-        ├── routes/
-        │   ├── (app)/          # Public + authenticated app routes
-        │   └── (admin)/        # Admin panel routes
-        └── lib/
-            ├── components/     # Atomic design component library
-            ├── server/
-            │   └── api.ts      # Server-side API client
-            ├── categoryIcons.ts
-            ├── routes.ts       # Centralised URL/route constants (ROUTES)
-            └── slugify.ts
+├── deploy/                     # compose, Caddy, VM deploy script, backups (see deploy/README.md)
+└── docs/migration-plan.md      # How the SvelteKit app was replaced, slice by slice (done)
 ```
 
 ---
@@ -55,17 +49,19 @@ agri-connect-platform/
 - **IDs:** UUID v4
 - **Config:** config + dotenvy
 
-### Frontend
+### Frontend (server-rendered by the Rust server)
 
-- **Framework:** SvelteKit 2 with Svelte 5, adapter-node
-- **UI Framework:** Bootstrap 5.3
+- **Templates:** Tera, rendered by `web::views`; every page works without JavaScript
+- **UI Framework:** Bootstrap 5.3 (vendored under `static/vendor`)
+- **Interactivity:** Alpine.js (CSP build), components registered in `static/js/app.js`
+- **Islands:** Svelte 5 custom elements for what Alpine cannot do (today: geolocation)
 - **Icons:** FontAwesome 6 (fa-solid classes)
 - **Design methodology:** Atomic Design (atoms → molecules → organisms → pages)
-- **Target:** PWA with offline support for weak signal areas; optimized for low-end Android
+- **Target:** optimized for low-end Android on weak signal; pages work without JS
 
 ### Infrastructure
 
-- **Cloud:** Azure (Container Apps or Functions)
+- **Cloud:** Google Compute Engine (one VM, docker compose), Artifact Registry, Cloud Storage for uploads; deployed by GitHub Actions
 - **Integration:** Zalo OA & Mini App API (planned)
 
 ---
@@ -79,7 +75,7 @@ The backend follows a strict layered architecture. Dependencies flow inward only
 ```
 HTTP Request
     ↓
-handlers/          — parse & validate HTTP input, call use case, return HTTP response
+pages/ handlers/       — parse & validate HTTP input, call use case, render or return JSON
     ↓
 application/usecases/  — orchestrate domain logic, call repository traits
     ↓
@@ -88,28 +84,29 @@ domain/repositories/   — trait definitions (interfaces)
 infrastructure/repositories/  — Sea-ORM implementations injected at startup
 ```
 
-- **Handlers** hold no business logic — only HTTP marshalling.
+- **Pages and handlers** hold no business logic — only HTTP marshalling. Pages render HTML; handlers serve the JSON API. Both call the same use cases.
 - **Use cases** hold all business logic — they never touch Sea-ORM or HTTP types directly.
 - **Repository traits** define what persistence operations exist; the infrastructure layer implements them.
 - **`AppState`** wires every use case at startup and is injected into every handler via Axum's `State` extractor.
 
 ### Frontend Architecture — Atomic Design
 
-All UI components live under `client-app/src/lib/components/` and are organized by atomic level:
+Templates live under `backend/crates/web/templates/` and are organized by atomic level (Tera macros):
 
-| Level     | Folder       | Examples                                                                                               |
-| --------- | ------------ | ------------------------------------------------------------------------------------------------------ |
-| Atoms     | `atoms/`     | `Button`, `Badge`, `Tag`, `Spinner`, `Heading`, `Text`, `AlertBanner`                                  |
-| Molecules | `molecules/` | `FormField`, `PageHero`, `SectionHeader`, `CategoryItem`, `PaginationNav`, `FilterChips`, `EmptyState` |
-| Organisms | `organisms/` | `ProviderCard`, `ProductCard`, `CategoryGrid`, `ContactSheet`, `BottomNav`, `AdminShell`               |
+| Level     | Folder       | Examples                                                                                     |
+| --------- | ------------ | -------------------------------------------------------------------------------------------- |
+| Atoms     | `atoms/`     | `icon`, `alert`, `inquiry_status`                                                            |
+| Molecules | `molecules/` | `form_field`, `page_hero`, `section_header`, `pagination_nav`, `empty_state`, `admin_header` |
+| Organisms | `organisms/` | `product_card`, `provider_card`, `category_grid`, `contact_sheet`, `confirm_sheet`, `*_fields` |
+| Layouts   | `layouts/`   | `app.html` (public + provider), `admin.html` (admin panel)                                   |
 
 **Rules:**
 
-- Atoms have no dependencies on other components.
+- Atoms have no dependencies on other templates.
 - Molecules may compose atoms only.
 - Organisms may compose atoms and molecules.
-- Page-level composition happens in route files (`+page.svelte`), not in organisms.
-- Never add a new component at a lower level when an existing higher-level component already covers the need.
+- Page-level composition happens in `templates/pages/`, not in organisms.
+- Never add a new template at a lower level when an existing higher-level one already covers the need.
 
 ---
 
@@ -261,107 +258,78 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 
 ---
 
-## Frontend Route Map
+## Page Route Map
 
-All routes are defined as SvelteKit file-system pages under `client-app/src/routes/`.
+Every page is a handler in `backend/crates/web/src/pages/`, routed in `web/src/routings/app_routing.rs`. Public and provider pages use `layouts/app.html`; admin pages use `layouts/admin.html`.
 
-### Auth (no layout group)
+### Auth
 
 | Route              | Description                             |
 | ------------------ | --------------------------------------- |
-| `/login`           | Login (**Rust**, `web/src/pages/auth.rs`); signed in → own area by permission; no admin yet → `/setup` |
-| `/register`        | Provider self-registration (**Rust**)   |
-| `/forgot-password` | Request password reset email (**Rust**) |
-| `/reset-password`  | Consume reset token, set new password (**Rust**) |
-| `/setup`           | First admin + optional demo data (**Rust**, `web/src/pages/setup.rs`); closed once an admin exists |
-| `/setup/seed`      | Demo data page: load / remove (`system.demo.manage`) (**Rust**) |
-| `/logout`          | POST: ends the session family, clears both cookies (**Rust**, `web/src/session.rs`) |
+| `/login`           | Login (`web/src/pages/auth.rs`); signed in → own area by permission; no admin yet → `/setup` |
+| `/register`        | Provider self-registration   |
+| `/forgot-password` | Request password reset email |
+| `/reset-password`  | Consume reset token, set new password |
+| `/setup`           | First admin + optional demo data (`web/src/pages/setup.rs`); closed once an admin exists |
+| `/setup/seed`      | Demo data page: load / remove (`system.demo.manage`) |
+| `/logout`          | POST: ends the session family, clears both cookies (`web/src/session.rs`) |
 
-### App `(app)/`
+### App
 
 | Route                            | Description                                    |
 | -------------------------------- | ---------------------------------------------- |
-| `/`                              | Home: featured products, providers, categories (**served by Rust**, `web/src/pages/home.rs`) |
-| `/products`                      | Product listing: GET filter form, page links (**Rust**, `web/src/pages/products.rs`) |
-| `/products/[id]`                 | 301 → `/products/[id]/[slug]` (**Rust**)       |
-| `/products/[id]/[slug]`          | Product detail (**Rust**, `web/src/pages/product.rs`; any other spelling 301s here) |
-| `/products/category/[id]/[slug]` | Products in a category (**Rust**; slug is the category slug, others 301) |
-| `/services`                      | Provider directory: GET filter form, page links (**Rust**, `web/src/pages/services.rs`) |
-| `/services/category/[id]/[slug]` | Providers of one service (**Rust**; category slug canonical) |
-| `/search`                        | Providers + products for `q`; link tabs (`tab=`) work without JS (**Rust**, `web/src/pages/search.rs`) |
-| `/explore`                       | Providers near a GPS position (`ac-geolocate` island) or a location preset (GET form); radius/service links (**Rust**, `web/src/pages/explore.rs`) |
-| `/providers/[id]`                | 301 → `/providers/[id]/[slug]` (**Rust**)      |
-| `/providers/[id]/[slug]`         | Provider detail + contact form (**Rust**, `web/src/pages/provider.rs`) |
-| `/account`                       | Profile, password change (signs out other devices), logout (**Rust**, `web/src/pages/account.rs`) |
-| `/provider/dashboard`            | Products (photo thumbs) + business profile with GPS fill (`ac-geolocate` fill mode) (**Rust**, `web/src/pages/dashboard.rs`) |
-| `/provider/products/new`, `/provider/products/[id]/edit` | Multipart product form with photo (checked before anything is saved), delete (confirm) (**Rust**) |
+| `/`                              | Home: featured products, providers, categories (`web/src/pages/home.rs`) |
+| `/products`                      | Product listing: GET filter form, page links (`web/src/pages/products.rs`) |
+| `/products/[id]`                 | 301 → `/products/[id]/[slug]`       |
+| `/products/[id]/[slug]`          | Product detail (`web/src/pages/product.rs`; any other spelling 301s here) |
+| `/products/category/[id]/[slug]` | Products in a category (slug is the category slug, others 301) |
+| `/services`                      | Provider directory: GET filter form, page links (`web/src/pages/services.rs`) |
+| `/services/category/[id]/[slug]` | Providers of one service (category slug canonical) |
+| `/search`                        | Providers + products for `q`; link tabs (`tab=`) work without JS (`web/src/pages/search.rs`) |
+| `/explore`                       | Providers near a GPS position (`ac-geolocate` island) or a location preset (GET form); radius/service links (`web/src/pages/explore.rs`) |
+| `/providers/[id]`                | 301 → `/providers/[id]/[slug]`      |
+| `/providers/[id]/[slug]`         | Provider detail + contact form (`web/src/pages/provider.rs`) |
+| `/account`                       | Profile, password change (signs out other devices), logout (`web/src/pages/account.rs`) |
+| `/provider/dashboard`            | Products (photo thumbs) + business profile with GPS fill (`ac-geolocate` fill mode) (`web/src/pages/dashboard.rs`) |
+| `/provider/products/new`, `/provider/products/[id]/edit` | Multipart product form with photo (checked before anything is saved), delete (confirm) |
 
-### Admin `(admin)/admin/`
+### Admin
 
 | Route                      | Description                                     |
 | -------------------------- | ----------------------------------------------- |
-| `/admin`                   | 303 → `/admin/dashboard` (**Rust**; anonymous → `/login`) |
-| `/admin/dashboard`         | Stats + demo-data warning (**Rust**, `web/src/pages/admin/`; frame `layouts/admin.html`, menu filtered by permission) |
-| `/admin/users`             | User list, paged (**Rust**, `web/src/pages/admin/users.rs`) |
-| `/admin/users/[id]`        | Role change, deactivate (confirm + reason) / reactivate, effective permissions (**Rust**) |
-| `/admin/roles`             | Roles with grant counts (**Rust**)              |
-| `/admin/roles/[id]`        | Editable permission grid, `POST …/permissions` (`role.permission.manage`; cannot revoke it from your own role; audited) (**Rust**) |
-| `/admin/permissions`       | Permissions × roles, read-only (**Rust**)       |
-| `/admin/categories`        | Category list + create form (**Rust**, `web/src/pages/admin/categories.rs`) |
-| `/admin/categories/[id]`   | Edit; hide (confirm + reason) / show (**Rust**) |
-| `/admin/locations`         | Location presets + create form (**Rust**, `web/src/pages/admin/locations.rs`) |
-| `/admin/locations/[id]`    | Edit, hide / show, delete (confirm + reason) → list (**Rust**) |
-| `/admin/explore`           | Provider list, paged (**Rust**, `web/src/pages/admin/providers.rs`) |
-| `/admin/explore/[id]`      | Details, verify / unverify (confirm + reason), assign the managing account (**Rust**) |
-| `/admin/products`          | Products (filter `provider_id`): hide (confirm + reason) / show, delete (confirm + reason) (**Rust**, `web/src/pages/admin/products.rs`) |
-| `/admin/services`          | Services (filter `provider_id`; create form only for one provider) (**Rust**) |
-| `/admin/services/[id]`     | Edit, hide / show, delete (confirm + reason) (**Rust**) |
-| `/admin/inquiries`         | Status per row (select + button; `autoSubmit` with JS) (**Rust**) |
-| `/admin/reviews`           | Hide (confirm + reason) / show (**Rust**) |
-| `/admin/logout`            | POST (**Rust**): same as `/logout`, lands on `/login` |
+| `/admin`                   | 303 → `/admin/dashboard` (anonymous → `/login`) |
+| `/admin/dashboard`         | Stats + demo-data warning (`web/src/pages/admin/`; frame `layouts/admin.html`, menu filtered by permission) |
+| `/admin/users`             | User list, paged (`web/src/pages/admin/users.rs`) |
+| `/admin/users/[id]`        | Role change, deactivate (confirm + reason) / reactivate, effective permissions |
+| `/admin/roles`             | Roles with grant counts              |
+| `/admin/roles/[id]`        | Editable permission grid, `POST …/permissions` (`role.permission.manage`; cannot revoke it from your own role; audited) |
+| `/admin/permissions`       | Permissions × roles, read-only       |
+| `/admin/categories`        | Category list + create form (`web/src/pages/admin/categories.rs`) |
+| `/admin/categories/[id]`   | Edit; hide (confirm + reason) / show |
+| `/admin/locations`         | Location presets + create form (`web/src/pages/admin/locations.rs`) |
+| `/admin/locations/[id]`    | Edit, hide / show, delete (confirm + reason) → list |
+| `/admin/explore`           | Provider list, paged (`web/src/pages/admin/providers.rs`) |
+| `/admin/explore/[id]`      | Details, verify / unverify (confirm + reason), assign the managing account |
+| `/admin/products`          | Products (filter `provider_id`): hide (confirm + reason) / show, delete (confirm + reason) (`web/src/pages/admin/products.rs`) |
+| `/admin/services`          | Services (filter `provider_id`; create form only for one provider) |
+| `/admin/services/[id]`     | Edit, hide / show, delete (confirm + reason) |
+| `/admin/inquiries`         | Status per row (select + button; `autoSubmit` with JS) |
+| `/admin/reviews`           | Hide (confirm + reason) / show |
+| `/admin/logout`            | POST: same as `/logout`, lands on `/login` |
 
 ---
 
-## Frontend URL Constants
+## URL Names
 
-All hardcoded URL strings are banned. Every `href`, `goto()`, and `redirect()` call must use the centralised constants in **`client-app/src/lib/routes.ts`**.
+Hardcoded URL paths are banned in templates and pages. Every route has a name in **`backend/crates/web/src/routes.rs`** (`ROUTES`); templates link with `url_for(name="…", …)` and Rust code with `routes::url(name, params)`, which percent-encodes every parameter so a value cannot escape its segment. An unknown name or a missing parameter is an error when the page renders, never a broken link.
 
-```ts
-import { ROUTES } from '$lib/routes';
-
-// Static routes
-ROUTES.HOME              // '/'
-ROUTES.LOGIN             // '/login'
-ROUTES.LOGIN_RESET       // '/login?reset=1'
-ROUTES.REGISTER          // '/register'
-ROUTES.FORGOT_PASSWORD   // '/forgot-password'
-ROUTES.RESET_PASSWORD    // '/reset-password'
-ROUTES.ACCOUNT           // '/account'
-ROUTES.ACCOUNT_SECURITY  // '/account#security'
-ROUTES.AGRI_CONNECT      // '/agri-connect'
-ROUTES.PRODUCTS          // '/products'
-ROUTES.SERVICES          // '/services'
-ROUTES.PROVIDER_DASHBOARD// '/provider/dashboard'
-
-// Builder functions
-ROUTES.PRODUCT(id, slug)          // '/products/:id/:slug'
-ROUTES.PRODUCT_BY_ID(id)          // '/products/:id'
-ROUTES.PRODUCT_CATEGORY(id, slug) // '/products/category/:id/:slug'
-ROUTES.SERVICE_CATEGORY(id, slug) // '/services/category/:id/:slug'
-ROUTES.PROVIDER(id, slug)         // '/providers/:id/:slug'
-ROUTES.PROVIDER_BY_ID(id)         // '/providers/:id'
-
-// Admin static
-ROUTES.ADMIN.DASHBOARD    ROUTES.ADMIN.USERS    ROUTES.ADMIN.ROLES
-ROUTES.ADMIN.CATEGORIES   ROUTES.ADMIN.AGRI_CONNECT
-ROUTES.ADMIN.INQUIRIES    ROUTES.ADMIN.REVIEWS   ROUTES.ADMIN.LOGOUT
-
-// Admin builders
-ROUTES.ADMIN.USER(id)      ROUTES.ADMIN.ROLE(id)
-ROUTES.ADMIN.CATEGORY(id)  ROUTES.ADMIN.PROVIDER(id)
+```
+url_for(name="product", id=p.id, slug=p.name | slugify)   → /products/{id}/{slug}
+url_for(name="admin_user", id=u.id)                        → /admin/users/{id}
+routes::url("provider_product_edit", &[("id", "7")])       → /provider/products/7/edit
 ```
 
-The file works in both client and server contexts via the `$lib` alias. Never add a new navigation target without first adding it to `routes.ts`.
+Canonical product, provider and category URLs end in a slug from the `slugify` filter (`web/src/slug.rs`, pinned by `slugify.fixtures.json`); any other spelling 301s to the canonical one. Never add a link target without adding its name to `routes.rs` first.
 
 ---
 
@@ -475,30 +443,22 @@ middleware / handlers  →  application (use cases, ports)  →  domain  ←  in
 **Errors (`domain/src/error.rs`, `web/src/error_response.rs`)**
 - `IntoResponse for Error` (behind domain's `axum` feature) only sets the status and parks the error; `render_errors` writes the localised body. Every router must sit under that layer.
 
-### Rust pages (replacing SvelteKit route by route)
+### Pages
 
-- A page is a handler in `web/src/pages/` that takes `Shell` (the frame: top bar, account menu, bottom tabs, built from the session) and renders through `views::render_page`. A stale session cookie renders the page signed out; it never fails it.
-- Templates follow the same atomic levels as the Svelte components (`templates/atoms|molecules|organisms`, pages extend `layouts/app.html`). Links come from `url_for`, product and provider slugs from the `slugify` filter (identical to `slugify.js`; both are tested against `client-app/src/lib/slugify.fixtures.json`, run `npm test` in `client-app`), images from `file_url`.
-- Interactive bits are Alpine components registered in `static/js/app.js`; markup must work without them (links and plain forms first).
-- What Alpine cannot do (today only geolocation) is an island: a Svelte custom element in `backend/islands/src` (light DOM, no `<style>`, all text passed as attributes), built with `npm run build` into `static/js/islands.js`, which is committed. CI rebuilds it and fails on a diff. Pages that use one load it in `{% block scripts %}`.
+- A page is a handler in `web/src/pages/` that takes `Shell` (the frame: top bar, account menu, bottom tabs, built from the session) and renders through `views::render_page`. Admin pages render through `pages::admin::render_admin` (the admin frame, menu filtered by permission). A stale session cookie renders the page signed out; it never fails it.
+- Templates follow the atomic levels above. Links come from `url_for`, product and provider slugs from the `slugify` filter, images from `file_url(id=…, variant="thumb")`, field limits (`maxlength`, `minlength`) from the global `limits`, never typed numbers.
+- **Bootstrap first:** Bootstrap 5 components and utilities before custom CSS; custom styles go in `static/css/app.css` only for what Bootstrap cannot do. No `style=""` attributes and no `<style>` elements: the page CSP is `style-src 'self'`.
+- Interactive bits are Alpine components (CSP build) registered in `static/js/app.js`; attribute values name a component property, never an expression (convention test). Markup must work without them: links and plain forms first.
+- What Alpine cannot do (today only geolocation) is an island: a Svelte custom element in `backend/islands/src` (light DOM, no `<style>`, all text passed as attributes), built with `npm run build` into `static/js/islands.js`, which is committed. CI rebuilds it and fails on a diff. Pages that use one load it in `{% block scripts %}`. Node is needed only for this.
+- **Large tap targets** (min 44 px) and **minimal text**: the primary users are farmers on low-end Android phones with poor connectivity.
 - Custom SQL in `Expr::cust_with_values` uses `$1`, `$2`: a `?` is left unbound and the query fails at runtime (convention test).
+- Page forms post urlencoded (`ApiForm`) and follow Post/Redirect/Get: success is a 303 with a `cookies::Flash`; a broken rule re-renders the page with the error's status, the typed values and one message per field (from `error_body`). The rules stay in the use case the JSON API uses. A form with a file box posts `multipart/form-data`, read with `ApiMultipart::into_form`; a photo is checked with `MediaUseCase::prepare_image` before anything else is saved, and ownership is checked before the body is read.
 - An action that needs a second look (deactivate, hide, delete) uses `organisms/confirm_sheet.html` inside an `x-data="dialog"` element; without JS it is an anchored form on the page. On a list, the row's link reloads the list with `?hide={id}` (or `?delete=`) and the server renders that confirmation open. Row forms send the list position back as `page` / `provider_id` (`pages::admin::ListPosition`), rebuilt from numbers, never a posted URL.
-- Page forms post urlencoded (`ApiForm`) and follow Post/Redirect/Get: success is a 303 with a `cookies::Flash`; a broken rule re-renders the page with the error's status, the typed values and one message per field (from `error_body`). The rules stay in the use case the JSON API uses.
-- When a route moves to Rust, delete its SvelteKit `+page*` files in the same change.
-
-### Frontend (SvelteKit)
-
-- **Bootstrap first:** use Bootstrap 5 components, utilities, and layout system before writing any custom CSS. Only add custom styles for things Bootstrap cannot provide.
-- **Atomic Design is mandatory:** place every new component at the correct atomic level (atoms, molecules, organisms). Do not add components directly to route files or skip levels.
-- **All navigation must use `ROUTES`:** import from `$lib/routes` for every `href`, `goto()`, and `redirect()`. Never write a bare string URL path anywhere in the frontend codebase. Add new routes to `routes.ts` first.
-- UI components must use **large tap targets** (min 44 px) and **minimal text** — primary users are farmers on low-end Android phones with poor connectivity.
-- In Svelte templates, use `pattern={"0\\d{9}"}` for phone regex — raw curly braces in attribute strings are parsed as Svelte expressions.
-- Server-side API calls go through `lib/server/api.ts`; never call the backend directly from `+page.svelte` client-side code without going through the server layer.
-- Auth token is stored in an httpOnly cookie `auth_token`; never expose it to client-side JavaScript.
+- The session lives in httpOnly cookies (`auth_token`, `refresh_token`); no script ever reads a token.
 
 ### SEO
 
-Public-facing content pages must include a `<svelte:head>` block with `<title>` and `<meta name="description">`. Dynamic pages (provider detail, product detail, category listing) must derive these values from the loaded data — never use generic fallback strings.
+Public content pages fill `{% block title %}` and `{% block meta %}` (a `<meta name="description">`) from the loaded data; never a generic fallback.
 
 | Route group                                                  | SEO required | Notes                                                       |
 | ------------------------------------------------------------ | ------------ | ----------------------------------------------------------- |
@@ -508,44 +468,33 @@ Public-facing content pages must include a `<svelte:head>` block with `<title>` 
 | `/services/category/[id]/[slug]`                             | Yes          | Category name in title                                      |
 | `/explore`                                                   | Yes          | Near-me page                                                |
 | `/providers/[id]/[slug]`                                     | Yes          | Provider name & description in meta                         |
-| `/agri-connect/providers/[id]/[slug]`                        | Yes          | Provider name & description in meta                         |
-| `/account`, `/provider/dashboard`                            | No           | Authenticated; add `<meta name="robots" content="noindex">` |
-| `/login`, `/register`, `/forgot-password`, `/reset-password` | No           | Auth flows; add `<meta name="robots" content="noindex">`    |
-| `/admin/**`                                                  | No           | Admin panel; add `<meta name="robots" content="noindex">`   |
+| `/account`, `/provider/**`                                   | No           | Authenticated; `<meta name="robots" content="noindex">`     |
+| `/login`, `/register`, `/forgot-password`, `/reset-password` | No           | Auth flows; `noindex`                                       |
+| `/admin/**`                                                  | No           | Admin panel; `noindex`                                      |
 
 ---
 
 ## Running Locally
 
-### Backend
-
 ```powershell
 cd backend
 # Copy .env.example to .env; needs DATABASE_URL (PostgreSQL + PostGIS) and a 32-byte JWT_SECRET
 cargo run --bin agri-connect
+# Browse http://localhost:3000: the Rust server serves every page and the API.
 
 # Before every push: both must pass across the whole workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 # Database tests (each creates and drops its own database):
 # TEST_DATABASE_URL=postgres://... cargo test --workspace -- --include-ignored
+
+# Only after changing backend/islands/src: rebuild and commit the bundle
+cd islands; npm ci; npm run build
 ```
 
-### Rust in front of SvelteKit (how production runs)
-
-Set `LEGACY_FRONTEND_URL=http://localhost:5173` in `backend/.env`, start both, and browse `http://localhost:3000`: Rust serves its own pages and proxies the rest to SvelteKit, which calls the API back on :3000.
+> **Windows note:** If `npm` fails with a script execution policy error, run:
+> `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`
 
 ### Deployment
 
-GitHub Actions (`.github/workflows/ci.yml`, `deploy.yml`) builds and deploys to one Compute Engine VM; one-time setup, backups and the restore procedure are in `deploy/README.md`.
-
-### Frontend
-
-```powershell
-cd client-app
-npm install
-npm run dev
-```
-
-> **Windows note:** If `npm run dev` fails with a script execution policy error, run:
-> `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`
+GitHub Actions (`.github/workflows/ci.yml`, `deploy.yml`) builds one image and deploys it to one Compute Engine VM; one-time setup, backups and the restore procedure are in `deploy/README.md`.

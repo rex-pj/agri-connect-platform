@@ -1,5 +1,4 @@
-//! Every navigable URL, by name. The Rust counterpart of the SvelteKit
-//! `lib/routes.ts`: templates reach it through the `url_for` Tera function and
+//! Every navigable URL, by name: templates reach it through the `url_for` Tera function and
 //! handlers through `url`, so no page builds a path by concatenation.
 //!
 //! A pattern change here changes the link everywhere at once; keeping a URL

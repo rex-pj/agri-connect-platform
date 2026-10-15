@@ -15,10 +15,7 @@ use axum::{
 use domain::{Error, ErrorKind};
 use serde::Serialize;
 
-use crate::{
-    app_state::AppState, legacy::is_rust_only, routings::app_routing::REQUEST_ID_HEADER,
-    shell::Shell, views,
-};
+use crate::{app_state::AppState, routings::app_routing::REQUEST_ID_HEADER, shell::Shell, views};
 
 #[derive(Serialize)]
 struct ErrorPage {
@@ -27,10 +24,19 @@ struct ErrorPage {
     request_id: String,
 }
 
+/// Paths that are never pages: the API, assets, probes and uploaded files.
+/// Their errors stay JSON (or a bare status) whatever the client accepts.
+pub fn is_machine_path(path: &str) -> bool {
+    path.starts_with("/api/")
+        || path.starts_with("/static/")
+        || path.starts_with("/health/")
+        || path.starts_with("/files/")
+}
+
 /// A browser navigation (not an API call, not an asset) gets an HTML page;
-/// a fetch from an island or the SvelteKit server keeps getting JSON.
+/// a fetch from an island or a script keeps getting JSON.
 fn wants_html(req: &Request) -> bool {
-    !is_rust_only(req.uri().path())
+    !is_machine_path(req.uri().path())
         && req
             .headers()
             .get(header::ACCEPT)
@@ -38,8 +44,7 @@ fn wants_html(req: &Request) -> bool {
             .is_some_and(|accept| accept.contains("text/html"))
 }
 
-/// Wire shape of every error. `field_errors` keeps the `field -> [message]`
-/// layout the SvelteKit app parses until its last page is migrated.
+/// Wire shape of every error: `field -> [message]` for the boxes at fault.
 #[derive(Debug, Serialize)]
 pub struct ErrorBody {
     pub code: &'static str,
@@ -118,4 +123,21 @@ pub async fn render_errors(State(state): State<AppState>, req: Request, next: Ne
             .or_insert_with(|| value.clone());
     }
     rendered
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_machine_path;
+
+    #[test]
+    fn api_assets_probes_and_files_are_not_pages() {
+        assert!(is_machine_path("/api/explore/products"));
+        assert!(is_machine_path("/static/css/app.css"));
+        assert!(is_machine_path("/health/ready"));
+        assert!(is_machine_path(
+            "/files/00000000-0000-0000-0000-000000000000/thumb"
+        ));
+        assert!(!is_machine_path("/products/1/gao"));
+        assert!(!is_machine_path("/"));
+    }
 }

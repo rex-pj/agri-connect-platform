@@ -7,7 +7,6 @@ pub mod cookies;
 pub mod error_response;
 pub mod extract;
 pub mod handlers;
-pub mod legacy;
 pub mod locale;
 pub mod middleware;
 pub mod pages;

@@ -1,15 +1,12 @@
-//! Server-rendered pages through the real router: the error page, its assets,
-//! and the transitional SvelteKit proxy.
+//! Server-rendered pages through the real router: the error page and its
+//! assets.
 
 use axum::{
     body::Body,
-    http::{header, HeaderMap, Request, StatusCode},
-    routing::get,
-    Router,
+    http::{header, Request, StatusCode},
 };
-use integration_tests::{router_with, router_without_db, send, state};
-use sea_orm::DatabaseConnection;
-use web::{legacy::LegacyProxy, routings::app_routing::RouterConfig, views::PAGE_CSP};
+use integration_tests::{router_without_db, send};
+use web::views::PAGE_CSP;
 
 fn page(uri: &str) -> Request<Body> {
     Request::get(uri)
@@ -117,85 +114,4 @@ async fn provenance_files_are_not_served() {
         .await;
         assert_eq!(res.status(), StatusCode::NOT_FOUND, "{url}");
     }
-}
-
-/// A stand-in for the SvelteKit server that reports what it received.
-async fn fake_sveltekit() -> String {
-    let app = Router::new().fallback(get(|headers: HeaderMap, uri: axum::http::Uri| async move {
-        let h = |name: &str| {
-            headers
-                .get(name)
-                .map(|v| v.to_str().unwrap().to_owned())
-                .unwrap_or_default()
-        };
-        (
-            [("connection", "close"), ("x-from", "sveltekit")],
-            format!(
-                "path={} host={} proto={} fwd={}",
-                uri,
-                h("host"),
-                h("x-forwarded-proto"),
-                h("x-forwarded-for")
-            ),
-        )
-    }));
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    format!("http://{addr}")
-}
-
-fn proxied_router(base: &str) -> Router {
-    let proxy = LegacyProxy::new(&base.parse().unwrap(), false).unwrap();
-    router_with(
-        state(DatabaseConnection::default()),
-        RouterConfig {
-            legacy: Some(proxy),
-            ..RouterConfig::default()
-        },
-    )
-}
-
-#[tokio::test]
-async fn unmigrated_pages_are_proxied_with_the_browser_host() {
-    let router = proxied_router(&fake_sveltekit().await);
-    let req = Request::get("/legacy-page?tab=2")
-        .header(header::HOST, "agri.example.vn")
-        .body(Body::empty())
-        .unwrap();
-    let res = send(&router, req).await;
-    assert_eq!(res.status(), StatusCode::OK);
-    assert_eq!(res.headers()["x-from"], "sveltekit");
-    assert!(
-        !res.headers().contains_key("connection"),
-        "hop-by-hop header leaked"
-    );
-    let body = text(res).await;
-    assert!(body.contains("path=/legacy-page?tab=2"), "{body}");
-    assert!(body.contains("host=agri.example.vn"), "{body}");
-    assert!(body.contains("proto=http"), "{body}");
-    assert!(body.contains("fwd=127.0.0.1"), "{body}");
-}
-
-#[tokio::test]
-async fn api_paths_are_never_proxied() {
-    let router = proxied_router(&fake_sveltekit().await);
-    let res = send(
-        &router,
-        Request::get("/api/nope").body(Body::empty()).unwrap(),
-    )
-    .await;
-    assert_eq!(res.status(), StatusCode::NOT_FOUND);
-    assert_eq!(res.headers()[header::CONTENT_TYPE], "application/json");
-}
-
-#[tokio::test]
-async fn a_down_sveltekit_gives_a_503_page_not_a_hang() {
-    // Port 9 (discard) on loopback refuses connections on every CI runner.
-    let router = proxied_router("http://127.0.0.1:9");
-    let res = send(&router, page("/legacy-page")).await;
-    assert_eq!(res.status(), StatusCode::SERVICE_UNAVAILABLE);
-    assert!(text(res)
-        .await
-        .contains("Trang này tạm thời không truy cập được."));
 }

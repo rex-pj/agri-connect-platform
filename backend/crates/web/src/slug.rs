@@ -1,5 +1,5 @@
-//! URL slugs, identical to the SvelteKit `lib/slugify.ts` so links built on
-//! either side reach the same canonical URL while both run.
+//! URL slugs. They are part of every canonical product, provider and
+//! category URL, so changing the output moves pages: the fixtures pin it.
 
 use unicode_normalization::UnicodeNormalization;
 
@@ -35,12 +35,11 @@ pub fn slugify(text: &str) -> String {
 mod tests {
     use super::slugify;
 
-    /// Shared with the SvelteKit test (`npm test`). Moves into this crate in S20,
-    /// when `client-app/` is deleted.
-    const FIXTURES: &str = include_str!("../../../../client-app/src/lib/slugify.fixtures.json");
+    /// The slugs URLs already use (the SvelteKit app produced the same ones).
+    const FIXTURES: &str = include_str!("slugify.fixtures.json");
 
     #[test]
-    fn matches_the_sveltekit_slugs() {
+    fn slugs_stay_what_published_urls_use() {
         let fixtures: Vec<(String, String)> = serde_json::from_str(FIXTURES)
             .expect("slugify.fixtures.json is a list of [input, slug]");
         assert!(fixtures.len() >= 5, "fixtures went missing");

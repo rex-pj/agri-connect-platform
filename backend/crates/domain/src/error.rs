@@ -57,7 +57,6 @@ error_codes! {
     InvalidQuery              => (BadRequest,      "invalid_query"),
     TooManyRequests           => (TooManyRequests, "too_many_requests"),
     DatabaseUnavailable       => (Unavailable,     "database_unavailable"),
-    LegacyFrontendUnavailable => (Unavailable,     "legacy_frontend_unavailable"),
 
     // ── Authentication / access ──────────────────────────────────────────────
     AuthenticationRequired    => (Unauthorized,    "authentication_required"),

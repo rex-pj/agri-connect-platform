@@ -81,8 +81,8 @@ toml = { version = "0.8", default-features = false, features = [
 tera = { version = "1.20", default-features = false } # builtins pull chrono-tz, rand and slug; our filters are registered in web::views
 rust-embed = { version = "8", default-features = false } # templates + static compiled into the binary; read from disk in debug builds
 hyper-util = { version = "0.1", default-features = false, features = [
-    "client-legacy", # pooled HTTP client for the transitional SvelteKit proxy
-    "http1",         # SvelteKit (adapter-node and vite) speaks HTTP/1.1
+    "client-legacy", # the HTTP client of `agri-connect probe` (the container health check)
+    "http1",         # the probe calls our own server over HTTP/1.1
     "tokio",         # TokioExecutor + connector for that client
 ] }
 
@@ -103,7 +103,7 @@ object_store = { version = "0.12", default-features = false, features = [
 ] }
 
 unicode-normalization = { version = "0.1", default-features = false, features = [
-    "std", # NFD for slugs: "Gạo Thơm" -> "gao-thom", the same as the SvelteKit slugify.ts
+    "std", # NFD for slugs: "Gạo Thơm" -> "gao-thom" (pinned by web/src/slugify.fixtures.json)
 ] }
 
 regex = { version = "1", default-features = false, features = [

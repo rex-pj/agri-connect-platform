@@ -1,6 +1,6 @@
 # Deploying Agri-Connect to Google Compute Engine
 
-One VM runs everything with docker compose: Caddy (TLS) → the Rust server → SvelteKit (until S20) and PostgreSQL + PostGIS. GitHub Actions builds the images, pushes them to Artifact Registry and rolls them out over IAP SSH. No service-account key file exists anywhere: GitHub authenticates with Workload Identity Federation, and the VM uses its attached service account.
+One VM runs everything with docker compose: Caddy (TLS) → the Rust server, which serves every page and the API, and PostgreSQL + PostGIS. GitHub Actions builds the images, pushes them to Artifact Registry and rolls them out over IAP SSH. No service-account key file exists anywhere: GitHub authenticates with Workload Identity Federation, and the VM uses its attached service account.
 
 Everything below is done once. Afterwards a merge to `master` deploys by itself once CI passes.
 
@@ -200,7 +200,7 @@ server started on it without re-seeding anything.
 # 1. Pick a dump.
 gcloud storage ls gs://BACKUP_BUCKET/postgres/
 # 2. Stop the app so nothing writes during the restore.
-sudo docker compose --env-file /etc/agri-connect/compose.env stop web legacy
+sudo docker compose --env-file /etc/agri-connect/compose.env stop web
 # 3. Recreate the database exactly as db-init does: extensions belong to the
 #    postgres superuser, everything else to agri_app.
 C="sudo docker compose --env-file /etc/agri-connect/compose.env exec -T db"
@@ -214,7 +214,7 @@ $C psql -U postgres -d agri_connect -v ON_ERROR_STOP=1 -c "ALTER SCHEMA public O
 gcloud storage cat gs://BACKUP_BUCKET/postgres/agri_connect-YYYYMMDDTHHMMSSZ.dump \
   | $C pg_restore -U agri_app -d agri_connect --no-owner --no-comments --exit-on-error
 # 5. Start the app; startup migrations and catalogue seeding are idempotent.
-sudo docker compose --env-file /etc/agri-connect/compose.env start web legacy
+sudo docker compose --env-file /etc/agri-connect/compose.env start web
 ```
 
 Images are not in the dump. A restored database points at images that existed when the dump was taken; any deleted since are noncurrent versions in the uploads bucket (kept 30 days) and can be restored with `gcloud storage cp` from their generation.

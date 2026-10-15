@@ -107,7 +107,7 @@ impl Shell {
                 ProfileMenu {
                     signed_in: true,
                     items,
-                    logout: Some(url("account_logout")),
+                    logout: Some(url("logout")),
                 }
             }
         });

@@ -7,7 +7,7 @@ use axum::{
     middleware,
     response::IntoResponse,
     routing::{delete, get, patch, post, put},
-    Router,
+    Extension, Router,
 };
 use domain::{Error, ErrorCode};
 use tower_http::{
@@ -35,7 +35,7 @@ use crate::{
     },
     pages,
     routes::{FILE_PATH, FILE_THUMB_PATH},
-    views,
+    session, views,
 };
 
 /// Settings read from the environment by `startup.rs`.
@@ -166,6 +166,9 @@ impl AppRouting {
             )
             // The page form: same rules and budget as the JSON endpoint.
             .route("/contact", post(pages::provider::submit_contact))
+            // Logging out is a write; under the same budget as the contact form.
+            .route("/logout", post(session::logout))
+            .route("/admin/logout", post(session::admin_logout))
             .layer(limiter(&config.limiters.public_write, Scope::AllRequests));
 
         // ── UPLOAD routes (own budget; body capped at UPLOAD_MAX_BYTES) ───────
@@ -390,6 +393,16 @@ impl AppRouting {
             // Errors from every layer above (rate limiter, extractors, fallback)
             // get a rendered body; it sits inside the request span so its log
             // lines carry the request id.
+            // Renews an expired session before any handler (or the SvelteKit
+            // proxy) reads the cookie. Inside the Origin check: a refused
+            // cross-site request never rotates a token.
+            .layer(middleware::from_fn_with_state(
+                state.clone(),
+                session::renew,
+            ))
+            .layer(Extension(session::CookiePolicy {
+                secure: config.https,
+            }))
             // Inside the renderer so a refused cross-site request gets a coded body.
             .layer(middleware::from_fn(move |req, next| {
                 origin::enforce(allowed_origins.clone(), req, next)

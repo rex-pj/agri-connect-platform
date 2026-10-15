@@ -1029,3 +1029,37 @@ Tests (database):
 - device coordinates: island `href` keeps radius and service; the active tile clears the filter;
 - malformed, off-globe and unknown positions → onboarding; nothing near → "Tìm trong 25 km";
 - a provider saves coordinates through the API and the geo API then finds them within 1 km.
+
+### S12a — browser sessions: refresh tokens, Lax cookies, logout (same branch)
+
+S12 ships in two commits. This one is the session machinery; the auth and setup pages follow in S12b.
+
+Done:
+- **Migration** `m20261015_000004_refresh_tokens`: `id`, `family_id`, `user_id` (cascade), `token_hash` (unique), `expires_at`, `used_at`, `revoked_at`, indexed by family, user and expiry.
+- **`AuthUseCase` sessions** (Q9):
+  - `start_session` opens a new family;
+  - `refresh_session` rotates. The claim is one conditional UPDATE, so of two concurrent rotations exactly one wins. Reuse of a spent token within `REFRESH_REUSE_GRACE_SECS` (30 s) is refused without revoking, because it is two tabs. Later reuse revokes the family. A deactivated or role-less account cannot renew;
+  - `end_session` (logout) revokes the family; `purge_expired_sessions` runs hourly;
+  - a password reset now ends every session of the account.
+  - Only SHA-256 hashes are stored; the raw token lives in the cookie. The constructor became `AuthDeps`, like `AdminDeps`. `LoginResponse` carries `user_id`, not serialised, so the JSON API is unchanged.
+- **`web::session`:**
+  - `CookiePolicy` (from `HTTPS_ENABLED`) writes both cookies: httpOnly, `SameSite=Lax`, `Secure` behind TLS, `Max-Age` 1 h and 30 days;
+  - **`renew` middleware**, inside the Origin check: when the access cookie is missing or invalid but a refresh cookie exists, it rotates the pair. It then rewrites this request's `Cookie` header, so Rust handlers and SvelteKit behind the proxy see the new session at once, and sets both cookies on the response;
+  - a dead refresh token clears both cookies;
+  - assets, files, health probes and bearer-token API calls never trigger it.
+- **`POST /logout`** (→ `/`) and **`POST /admin/logout`** (→ `/login`) in Rust, under the public-write budget. The menu's logout and the SvelteKit account page, layout and admin shell now post there via `ROUTES.LOGOUT` / `ROUTES.ADMIN.LOGOUT`. SvelteKit's own logout action and `admin/logout` route are deleted: they cleared only `auth_token`, and the refresh cookie would have signed the user straight back in.
+- **`REFRESH_TOKEN_DAYS`** (default 30) in `startup.rs` and `.env.example`.
+
+Why Lax and not Strict: with Strict, a link opened from Zalo or Messenger arrives without cookies, so farmers would look signed out. Lax still withholds the cookies from cross-site POSTs, and every non-GET passes the Origin check too.
+
+Tests:
+- Unit: the rewritten Cookie header keeps other cookies; cookie attributes (Lax, HttpOnly, Secure only with TLS, Max-Age); assets never renew.
+- Database:
+  - rotation;
+  - reuse within the grace period keeps the family, later reuse revokes it, including the legitimate token;
+  - only 64-hex hashes are stored;
+  - the middleware renews for the same request (200 from `/api/users/me` with only a refresh cookie) and rotates both cookies; a bad refresh → 401 and cleared cookies;
+  - a valid access cookie or a bearer header never rotates;
+  - both logout routes → 303, cleared cookies, dead family;
+  - a password reset and a deactivation end sessions;
+  - expired tokens are refused and purged.

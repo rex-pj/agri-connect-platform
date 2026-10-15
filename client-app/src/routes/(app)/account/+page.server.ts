@@ -60,9 +60,4 @@ export const actions: Actions = {
             return fail(500, { action: 'change_password', error: 'Đổi mật khẩu thất bại.' });
         }
     },
-
-    logout: async ({ cookies }) => {
-        cookies.delete('auth_token', { path: '/' });
-        throw redirect(302, ROUTES.HOME);
-    },
 };

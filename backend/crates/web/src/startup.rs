@@ -7,13 +7,13 @@ use application::{
     catalogue::CATALOGUE,
     constants::{
         DEFAULT_UPLOAD_MAX_BYTES, IMAGE_JPEG_QUALITY, IMAGE_MAIN_MAX_SIDE, IMAGE_MAX_PIXELS,
-        IMAGE_THUMB_MAX_SIDE,
+        IMAGE_THUMB_MAX_SIDE, REFRESH_TOKEN_DEFAULT_DAYS,
     },
     events::{AuditLogSubscriber, FileCleanupSubscriber, InProcessEventBus},
     ports::{EmailService, EventBus, FileStorage, PasswordHasher, TokenService},
     usecases::{
         admin_usecase::{AdminDeps, AdminUseCase},
-        auth_usecase::AuthUseCase,
+        auth_usecase::{AuthDeps, AuthUseCase},
         explore_usecase::ExploreUseCase,
         health_usecase::HealthUseCase,
         media_usecase::{MediaDeps, MediaUseCase},
@@ -37,9 +37,9 @@ use infrastructure::{
         category_repository::CategoryRepository, file_repository::FileRepository,
         health_repository::HealthRepository, inquiry_repository::InquiryRepository,
         location_repository::LocationRepository, permission_repository::PermissionRepository,
-        product_repository::ProductRepository, review_repository::ReviewRepository,
-        role_repository::RoleRepository, service_repository::ServiceRepository,
-        user_repository::UserRepository,
+        product_repository::ProductRepository, refresh_token_repository::RefreshTokenRepository,
+        review_repository::ReviewRepository, role_repository::RoleRepository,
+        service_repository::ServiceRepository, user_repository::UserRepository,
     },
 };
 use migration::{Migrator, MigratorTrait};
@@ -287,6 +287,22 @@ fn uploads() -> Result<Uploads, StartupError> {
     Ok(Uploads { storage, max_bytes })
 }
 
+/// `REFRESH_TOKEN_DAYS`, how long an unused browser session lasts.
+fn refresh_days() -> Result<i64, StartupError> {
+    match optional_env("REFRESH_TOKEN_DAYS") {
+        None => Ok(REFRESH_TOKEN_DEFAULT_DAYS),
+        Some(v) => {
+            v.parse()
+                .ok()
+                .filter(|&d: &i64| d > 0)
+                .ok_or_else(|| StartupError::InvalidEnv {
+                    name: "REFRESH_TOKEN_DAYS",
+                    reason: format!("{v:?} is not a positive number of days"),
+                })
+        }
+    }
+}
+
 /// The write pool and the read pool. They are the same pool unless
 /// `DATABASE_READ_URL` is set; keeping two handles now means a read replica
 /// can be added later without touching the wiring.
@@ -322,6 +338,8 @@ pub fn build_state(
     email: Arc<dyn EmailService>,
     site: SiteConfig,
     uploads: Uploads,
+    // REFRESH_TOKEN_DAYS.
+    refresh_days: i64,
 ) -> Result<AppState, StartupError> {
     let db = dbs.primary;
     let business_repo = Arc::new(BusinessRepository::new(Arc::clone(&db)));
@@ -391,14 +409,16 @@ pub fn build_state(
             events: events.clone(),
             password_hasher: password_hasher.clone(),
         }),
-        auth: AuthUseCase::new(
-            user_repo.clone(),
-            business_repo.clone(),
-            permission_repo.clone(),
+        auth: AuthUseCase::new(AuthDeps {
+            user_repo: user_repo.clone(),
+            business_repo: business_repo.clone(),
+            permission_repo: permission_repo.clone(),
+            refresh_repo: Arc::new(RefreshTokenRepository::new(Arc::clone(&db))),
             email,
             password_hasher,
-            token_service.clone(),
-        ),
+            token_svc: token_service.clone(),
+            refresh_days,
+        }),
         permission: PermissionUseCase::new(permission_repo.clone(), user_repo.clone()),
         provider_dashboard: ProviderDashboardUseCase::new(
             business_repo.clone(),
@@ -485,11 +505,26 @@ pub async fn start() -> Result<(), StartupError> {
         email_service(app_url.clone())?,
         site_config(),
         uploads()?,
+        refresh_days()?,
     )?;
 
     // Roles and permissions must exist before the first request, or the first
     // registration fails on a missing role.
     state.usecases.setup.seed_catalogue(&CATALOGUE).await?;
+
+    let sessions = state.usecases.clone();
+    tokio::spawn(async move {
+        // Expired refresh tokens are dead weight; nothing reads them again.
+        let mut tick = tokio::time::interval(std::time::Duration::from_secs(3600));
+        loop {
+            tick.tick().await;
+            match sessions.auth.purge_expired_sessions().await {
+                Ok(0) => {}
+                Ok(n) => info!(deleted = n, "purged expired refresh tokens"),
+                Err(e) => warn!(error = %e, "could not purge expired refresh tokens"),
+            }
+        }
+    });
 
     let limiters = Limiters::in_process();
     let pruned = limiters.clone();

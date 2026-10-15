@@ -9,4 +9,5 @@ pub mod product;
 pub mod review;
 pub mod role;
 pub mod service;
+pub mod session;
 pub mod user;

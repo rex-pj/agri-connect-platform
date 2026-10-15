@@ -27,6 +27,9 @@ pub struct AdminLocationDto {
 
 #[derive(Serialize)]
 pub struct LoginResponse {
+    /// For starting a browser session; not part of the JSON API.
+    #[serde(skip_serializing)]
+    pub user_id: i32,
     pub token: String,
     pub username: String,
     pub role: String,

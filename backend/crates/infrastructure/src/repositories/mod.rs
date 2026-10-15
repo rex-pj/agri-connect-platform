@@ -7,6 +7,7 @@ pub mod inquiry_repository;
 pub mod location_repository;
 pub mod permission_repository;
 pub mod product_repository;
+pub mod refresh_token_repository;
 pub mod review_repository;
 pub mod role_repository;
 pub mod service_repository;

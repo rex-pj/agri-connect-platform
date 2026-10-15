@@ -7,6 +7,7 @@ pub mod location;
 pub mod password_reset_token;
 pub mod permission;
 pub mod product;
+pub mod refresh_token;
 pub mod review;
 pub mod role;
 pub mod service;

@@ -10,7 +10,7 @@ use std::{
 
 use application::{
     catalogue::CATALOGUE,
-    constants::DEFAULT_UPLOAD_MAX_BYTES,
+    constants::{DEFAULT_UPLOAD_MAX_BYTES, REFRESH_TOKEN_DEFAULT_DAYS},
     ports::{EmailService, TokenService},
 };
 use axum::{
@@ -63,6 +63,7 @@ pub fn state_with_uploads(db: DatabaseConnection, uploads: Uploads) -> AppState 
         email_service(),
         web::views::SiteConfig::default(),
         uploads,
+        REFRESH_TOKEN_DEFAULT_DAYS,
     )
     .unwrap()
 }

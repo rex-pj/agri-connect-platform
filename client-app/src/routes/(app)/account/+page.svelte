@@ -258,14 +258,8 @@
       >
       <form
         method="POST"
-        action="?/logout"
-        use:enhance={() => {
-          submittingLogout = true;
-          return async ({ update }) => {
-            submittingLogout = false;
-            await update();
-          };
-        }}
+        action={ROUTES.LOGOUT}
+        onsubmit={() => (submittingLogout = true)}
       >
         <fieldset class="form-fieldset" disabled={submittingLogout}>
           <SubmitButton

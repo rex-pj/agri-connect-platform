@@ -6,6 +6,8 @@ export const ROUTES = {
     REGISTER:        '/register',
     FORGOT_PASSWORD: '/forgot-password',
     RESET_PASSWORD:  '/reset-password',
+    // Handled by Rust: ends the session and clears both session cookies.
+    LOGOUT:          '/logout',
 
     // ── First-run setup wizard ────────────────────────────────────────────────
     SETUP:           '/setup',

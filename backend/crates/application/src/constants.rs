@@ -45,3 +45,11 @@ pub const IMAGE_MAIN_MAX_SIDE: u32 = 1600;
 /// Longest side of the list/card thumbnail.
 pub const IMAGE_THUMB_MAX_SIDE: u32 = 400;
 pub const IMAGE_JPEG_QUALITY: u8 = 80;
+
+// ── Sessions ──────────────────────────────────────────────────────────────────
+/// Used when REFRESH_TOKEN_DAYS is unset: a farmer opening the app weekly
+/// stays signed in; one who stops for a month signs in again.
+pub const REFRESH_TOKEN_DEFAULT_DAYS: i64 = 30;
+/// A spent token presented again this soon is two tabs refreshing at once,
+/// not theft: refuse it without revoking the family, or both tabs log out.
+pub const REFRESH_REUSE_GRACE_SECS: i64 = 30;

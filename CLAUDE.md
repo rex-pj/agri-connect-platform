@@ -248,6 +248,7 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 ## Security Model
 
 - **JWT expiry:** 1 hour
+- **Browser sessions:** httpOnly `auth_token` (the JWT) + `refresh_token` cookies, `SameSite=Lax`, `Secure` behind TLS. Refresh tokens last `REFRESH_TOKEN_DAYS` (30), are stored as SHA-256 hashes, rotate on every use; a spent one reused after 30 s revokes its whole family. `session::renew` renews an expired access token before any handler runs. `POST /logout` (and `/admin/logout`) ends the family; a password reset ends every session of the account.
 - **Password reset token TTL:** 1 hour (single-use)
 - **Account lockout:** 5 failed login attempts → 15-minute lockout
 - **Password:** at least 8 characters, at most 72 bytes (bcrypt ignores the rest)

@@ -15,8 +15,7 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("home", "/"),
     ("login", "/login"),
     ("login_reset", "/login?reset=1"),
-    // SvelteKit's logout action until the Rust login pages land (S12).
-    ("account_logout", "/account?/logout"),
+    ("logout", "/logout"),
     ("register", "/register"),
     ("forgot_password", "/forgot-password"),
     ("reset_password", "/reset-password"),

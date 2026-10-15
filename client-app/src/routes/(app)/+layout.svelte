@@ -121,7 +121,7 @@
                 Hồ sơ
               </Button>
               <div class="app-nav__dropdown-divider"></div>
-              <form method="POST" action="/account?/logout" use:enhance>
+              <form method="POST" action={ROUTES.LOGOUT}>
                 <Button
                   type="submit"
                   class="app-nav__dropdown-item app-nav__dropdown-item--danger"

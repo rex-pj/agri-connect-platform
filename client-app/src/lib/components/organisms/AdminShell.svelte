@@ -129,7 +129,7 @@
         <i class="fa-solid fa-house me-1"></i>
         <span class="d-none d-sm-inline">Trang chủ</span>
       </Button>
-      <form method="POST" action="/admin/logout" class="d-flex">
+      <form method="POST" action={ROUTES.ADMIN.LOGOUT} class="d-flex">
         <Button
           type="submit"
           class="btn btn-sm btn-outline-danger d-inline-flex align-items-center"

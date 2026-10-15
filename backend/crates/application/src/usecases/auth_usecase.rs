@@ -1,24 +1,30 @@
 use std::sync::Arc;
 
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use domain::{
     constants::{ROLE_ADMIN, ROLE_PROVIDER},
     models::{
         role::UserRole,
+        session::NewRefreshToken,
         user::{NewResetToken, NewUser},
     },
     repositories::{
         business_repository_trait::BusinessRepositoryTrait,
         permission_repository_trait::PermissionRepositoryTrait,
+        refresh_token_repository_trait::RefreshTokenRepositoryTrait,
         user_repository_trait::UserRepositoryTrait,
     },
     Error, ErrorCode, Result, Validation,
 };
 use rand::{rngs::OsRng, Rng};
+use uuid::Uuid;
 
 use crate::{
     authz::Actor,
-    constants::{LOGIN_FAIL_MAX_ATTEMPTS, LOGIN_LOCK_MINUTES, PASSWORD_RESET_EXPIRY_HOURS},
+    constants::{
+        LOGIN_FAIL_MAX_ATTEMPTS, LOGIN_LOCK_MINUTES, PASSWORD_RESET_EXPIRY_HOURS,
+        REFRESH_REUSE_GRACE_SECS,
+    },
     outputs::{LoginResponse, MeResponse},
     ports::{EmailService, PasswordHasher, TokenService},
     validation::{validate_password, validate_phone, validate_username},
@@ -29,27 +35,48 @@ pub struct AuthUseCase {
     user_repo: Arc<dyn UserRepositoryTrait + Send + Sync>,
     business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
     permission_repo: Arc<dyn PermissionRepositoryTrait + Send + Sync>,
+    refresh_repo: Arc<dyn RefreshTokenRepositoryTrait + Send + Sync>,
     email: Arc<dyn EmailService>,
     password_hasher: Arc<dyn PasswordHasher>,
     token_svc: Arc<dyn TokenService>,
+    refresh_days: i64,
+}
+
+/// Everything `AuthUseCase` depends on, named so wiring cannot swap two of
+/// compatible types by position.
+pub struct AuthDeps {
+    pub user_repo: Arc<dyn UserRepositoryTrait + Send + Sync>,
+    pub business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
+    pub permission_repo: Arc<dyn PermissionRepositoryTrait + Send + Sync>,
+    pub refresh_repo: Arc<dyn RefreshTokenRepositoryTrait + Send + Sync>,
+    pub email: Arc<dyn EmailService>,
+    pub password_hasher: Arc<dyn PasswordHasher>,
+    pub token_svc: Arc<dyn TokenService>,
+    /// REFRESH_TOKEN_DAYS: how long a browser session survives without use.
+    pub refresh_days: i64,
+}
+
+/// A browser session: a short access token and the refresh token that
+/// renews it. `refresh` is the raw value for the cookie; only its hash is
+/// stored.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionTokens {
+    pub access: String,
+    pub refresh: String,
+    pub refresh_expires_at: DateTime<Utc>,
 }
 
 impl AuthUseCase {
-    pub fn new(
-        user_repo: Arc<dyn UserRepositoryTrait + Send + Sync>,
-        business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
-        permission_repo: Arc<dyn PermissionRepositoryTrait + Send + Sync>,
-        email: Arc<dyn EmailService>,
-        password_hasher: Arc<dyn PasswordHasher>,
-        token_svc: Arc<dyn TokenService>,
-    ) -> Self {
+    pub fn new(d: AuthDeps) -> Self {
         Self {
-            user_repo,
-            business_repo,
-            permission_repo,
-            email,
-            password_hasher,
-            token_svc,
+            user_repo: d.user_repo,
+            business_repo: d.business_repo,
+            permission_repo: d.permission_repo,
+            refresh_repo: d.refresh_repo,
+            email: d.email,
+            password_hasher: d.password_hasher,
+            token_svc: d.token_svc,
+            refresh_days: d.refresh_days,
         }
     }
 
@@ -110,10 +137,92 @@ impl AuthUseCase {
 
         let token = self.token_svc.mint(credentials.id, &username, &role)?;
         Ok(LoginResponse {
+            user_id: credentials.id,
             token,
             username,
             role: credentials.role,
         })
+    }
+
+    // ── Browser sessions (refresh tokens) ─────────────────────────────────────
+
+    /// A new session (a new token family) for a user who just proved who they
+    /// are: login, registration, first-admin setup.
+    pub async fn start_session(&self, user_id: i32) -> Result<SessionTokens> {
+        self.issue(user_id, Uuid::new_v4()).await?.ok_or_else(|| {
+            Error::internal(format!("user {user_id} vanished while starting a session"))
+        })
+    }
+
+    /// Exchanges a refresh token for a fresh pair. `None` means "no session":
+    /// unknown, expired, revoked, or already spent. A spent token shown again
+    /// after the grace period means a copy exists elsewhere, so the whole
+    /// family is revoked and both holders must log in again.
+    pub async fn refresh_session(&self, raw: &str) -> Result<Option<SessionTokens>> {
+        let Some(token) = self.refresh_repo.find_by_hash(&hash_token(raw)).await? else {
+            return Ok(None);
+        };
+        let now = Utc::now();
+        if token.revoked_at.is_some() || token.expires_at <= now {
+            return Ok(None);
+        }
+        if let Some(used_at) = token.used_at {
+            if now - used_at > Duration::seconds(REFRESH_REUSE_GRACE_SECS) {
+                tracing::warn!(user_id = token.user_id, family = %token.family_id, "refresh token reused; revoking its family");
+                self.refresh_repo.revoke_family(token.family_id).await?;
+            }
+            return Ok(None);
+        }
+        if !self.refresh_repo.claim(token.id).await? {
+            // A concurrent request rotated it a moment ago.
+            return Ok(None);
+        }
+        let issued = self.issue(token.user_id, token.family_id).await?;
+        if issued.is_none() {
+            self.refresh_repo.revoke_family(token.family_id).await?;
+        }
+        Ok(issued)
+    }
+
+    /// Logout: the session's whole family stops working at once.
+    pub async fn end_session(&self, raw: &str) -> Result<()> {
+        if let Some(token) = self.refresh_repo.find_by_hash(&hash_token(raw)).await? {
+            self.refresh_repo.revoke_family(token.family_id).await?;
+        }
+        Ok(())
+    }
+
+    /// Deletes refresh tokens that expired; run periodically.
+    pub async fn purge_expired_sessions(&self) -> Result<u64> {
+        self.refresh_repo.delete_expired(Utc::now()).await
+    }
+
+    /// Both tokens for `user_id` in `family_id`. `None` when the account is
+    /// gone, deactivated or has no role: no session for it.
+    async fn issue(&self, user_id: i32, family_id: Uuid) -> Result<Option<SessionTokens>> {
+        let Some(actor) = self.actor(user_id).await? else {
+            return Ok(None);
+        };
+        let Some(role) = UserRole::from_code(&actor.role_code) else {
+            return Ok(None);
+        };
+        let access = self.token_svc.mint(user_id, &actor.username, &role)?;
+        let refresh = generate_token();
+        let refresh_expires_at = Utc::now() + Duration::days(self.refresh_days);
+        self.refresh_repo
+            .insert(&NewRefreshToken {
+                id: Uuid::new_v4(),
+                family_id,
+                user_id,
+                token_hash: hash_token(&refresh),
+                expires_at: refresh_expires_at,
+            })
+            .await?;
+        Ok(Some(SessionTokens {
+            access,
+            refresh,
+            refresh_expires_at,
+        }))
     }
 
     // ── First-admin bootstrap ─────────────────────────────────────────────────
@@ -149,6 +258,7 @@ impl AuthUseCase {
 
         let token = self.token_svc.mint(user_id, &username, &UserRole::Admin)?;
         Ok(LoginResponse {
+            user_id,
             token,
             username,
             role: ROLE_ADMIN.into(),
@@ -209,6 +319,7 @@ impl AuthUseCase {
             .token_svc
             .mint(user_id, &username, &UserRole::Provider)?;
         Ok(LoginResponse {
+            user_id,
             token,
             username,
             role: ROLE_PROVIDER.into(),
@@ -309,11 +420,21 @@ impl AuthUseCase {
             .update_password(reset_token.user_id, &new_hash)
             .await?;
         self.user_repo.consume_reset_token(reset_token.id).await?;
+        // Whoever asked for the reset may be locking someone else out: every
+        // existing session of the account ends here.
+        self.refresh_repo.revoke_user(reset_token.user_id).await?;
         if let Err(e) = self.user_repo.reset_failed_login(reset_token.user_id).await {
             tracing::warn!(user_id = reset_token.user_id, error = %e, "could not reset failed-login counter");
         }
         Ok(())
     }
+}
+
+/// Refresh tokens are stored as this hash only; the raw value lives in the
+/// browser's cookie.
+fn hash_token(raw: &str) -> String {
+    use sha2::{Digest, Sha256};
+    hex::encode(Sha256::digest(raw.as_bytes()))
 }
 
 fn generate_token() -> String {

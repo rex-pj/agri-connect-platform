@@ -14,6 +14,7 @@ pub mod pages;
 pub mod requests;
 pub mod routes;
 pub mod routings;
+pub mod session;
 pub mod shell;
 pub mod slug;
 pub mod startup;

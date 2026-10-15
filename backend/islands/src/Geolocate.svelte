@@ -3,7 +3,9 @@
                 denied="…" failed="…" unsupported="…" button-class="…">
 
   Asks the browser for the position and goes to `href` with lat and lng
-  added. All text comes from the template (Vietnamese lives there, not here).
+  added. With `lat-target` and `lng-target` (ids of two inputs) it fills
+  those boxes instead and stays on the page, showing `done`: the provider
+  profile form uses this to set its location. All text comes from the template (Vietnamese lives there, not here).
   Without JS the tag renders nothing, so pages always offer a form next to it
   (a location preset) that works on its own.
 
@@ -22,6 +24,9 @@
       failed: { type: "String" },
       unsupported: { type: "String" },
       buttonClass: { type: "String", attribute: "button-class" },
+      latTarget: { type: "String", attribute: "lat-target" },
+      lngTarget: { type: "String", attribute: "lng-target" },
+      done: { type: "String" },
     },
   }}
 />
@@ -40,10 +45,22 @@
     failed = "",
     unsupported = "",
     buttonClass = "btn btn-success",
+    latTarget = "",
+    lngTarget = "",
+    done = "",
   } = $props();
 
   let busy = $state(false);
   let error = $state("");
+  let filled = $state(false);
+
+  /** Puts `value` into the input with id `id`, as if typed. */
+  function fill(id, value) {
+    const input = document.getElementById(id);
+    if (!input) return;
+    input.value = value;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
 
   function locate() {
     if (!navigator.geolocation) {
@@ -52,8 +69,16 @@
     }
     busy = true;
     error = "";
+    filled = false;
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
+        if (latTarget && lngTarget) {
+          fill(latTarget, coords.latitude.toFixed(DECIMALS));
+          fill(lngTarget, coords.longitude.toFixed(DECIMALS));
+          busy = false;
+          filled = true;
+          return;
+        }
         const target = new URL(href, window.location.href);
         target.searchParams.set("lat", coords.latitude.toFixed(DECIMALS));
         target.searchParams.set("lng", coords.longitude.toFixed(DECIMALS));
@@ -83,5 +108,11 @@
   <p class="geo-error" role="alert">
     <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
     {error}
+  </p>
+{/if}
+{#if filled && done}
+  <p class="small text-success mt-1 mb-0" role="status">
+    <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+    {done}
   </p>
 {/if}

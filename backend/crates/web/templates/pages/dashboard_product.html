@@ -1,0 +1,60 @@
+{% extends "layouts/app.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "molecules/form_field.html" as field %}
+{% import "organisms/confirm_sheet.html" as confirm %}
+{#- Add or edit one of the provider's products, photo included
+    (`multipart/form-data`, works without JS). `page` is
+    web::pages::dashboard::ProductPage; `page.product` is set when editing.
+    Alpine `imagePreview` shows the chosen photo before it is sent. -#}
+{% block title %}{% if page.product %}Sửa {{ page.product.name }}{% else %}Thêm sản phẩm{% endif %} — {{ site.name }}{% endblock title %}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
+{% block main %}
+{% set x = page.product %}
+{% set e = page.errors.fields %}
+{% set f = page.form %}
+<header class="acct-header">
+  <a class="acct-avatar text-decoration-none" href="{{ page.dashboard_href }}" aria-label="Về trang quản lý">{{ atoms::icon(name="fa-arrow-left") }}</a>
+  <div><h1 class="acct-name">{% if x %}Sửa sản phẩm{% else %}Thêm sản phẩm{% endif %}</h1>{% if x %}<p class="acct-sub">{{ x.name }}</p>{% endif %}</div>
+</header>
+
+<div class="detail-body">
+  <section class="detail-card">
+    <form class="auth-form" method="post" action="{{ page.action }}" enctype="multipart/form-data" novalidate>
+      {% if page.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=page.errors.message) }}{% endif %}
+      <div class="form-field" x-data="imagePreview">
+        <label class="form-label fw-semibold" for="pr-image">Ảnh sản phẩm</label>
+        <div class="dash-photo mb-2">
+          {% if x and x.image_file_id %}<img class="dash-photo__img" src="{{ file_url(id=x.image_file_id, variant="thumb") }}" alt="Ảnh hiện tại" x-show="unchanged">{% endif %}
+          <img class="dash-photo__img" alt="Ảnh vừa chọn" x-show="chosen" x-cloak :src="src">
+        </div>
+        <input class="form-control{% if e.image %} is-invalid{% endif %}" id="pr-image" name="image" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" x-on:change="pick"{% if e.image %} aria-invalid="true" aria-describedby="pr-image-error"{% endif %}>
+        <div class="form-text">Ảnh thật, tối đa {{ page.max_upload_mb }} MB.{% if x and x.image_file_id %} Chọn ảnh mới để thay ảnh cũ.{% endif %}</div>
+        {% if e.image %}<div class="invalid-feedback" id="pr-image-error">{{ e.image }}</div>{% endif %}
+      </div>
+      <div class="form-field">
+        <label class="form-label fw-semibold" for="pr-category">Loại <span class="text-danger" aria-hidden="true">*</span></label>
+        <select class="form-select{% if e.category_id %} is-invalid{% endif %}" id="pr-category" name="category_id" required{% if e.category_id %} aria-invalid="true" aria-describedby="pr-category-error"{% endif %}>
+          <option value="">Chọn loại</option>
+          {% for c in page.categories %}<option value="{{ c.id }}"{% if c.id == f.category_id | int(default=0) %} selected{% endif %}>{{ c.name }}</option>{% endfor %}
+        </select>
+        {% if e.category_id %}<div class="invalid-feedback" id="pr-category-error">{{ e.category_id }}</div>{% endif %}
+      </div>
+      {{ field::input(id="pr-name", name="name", label="Tên sản phẩm", value=f.name, error=e.name | default(value=""), required=true, maxlength=limits.product_name_max, placeholder="Sầu riêng Ri6") }}
+      <div class="row g-2">
+        <div class="col-7">{{ field::input(id="pr-price", name="price", label="Giá (đồng)", value=f.price, error=e.price | default(value=""), inputmode="numeric", placeholder="85.000") }}</div>
+        <div class="col-5">{{ field::input(id="pr-unit", name="unit", label="Đơn vị", value=f.unit, error=e.unit | default(value=""), maxlength=limits.product_unit_max, placeholder="kg") }}</div>
+      </div>
+      {{ field::textarea(id="pr-description", name="description", label="Mô tả", value=f.description, error=e.description | default(value=""), maxlength=limits.product_description_max, rows=3) }}
+      <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-floppy-disk") }} {% if x %}Lưu{% else %}Thêm sản phẩm{% endif %}</button>
+    </form>
+  </section>
+
+  {% if page.delete_action %}
+  <section class="detail-card" x-data="dialog" x-on:keydown.escape.window="hide">
+    <a class="btn btn-outline-danger w-100" href="#xoa-san-pham" x-on:click.prevent="show">{{ atoms::icon(name="fa-trash") }} Xoá sản phẩm</a>
+    {{ confirm::confirm_sheet(id="xoa-san-pham", title="Xoá " ~ x.name ~ "?", icon="fa-trash", action=page.delete_action, button="Xác nhận xoá", button_class="btn-danger", with_reason=false) }}
+  </section>
+  {% endif %}
+</div>
+{% endblock main %}

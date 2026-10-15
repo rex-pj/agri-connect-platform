@@ -2134,3 +2134,27 @@ a.chip {
   padding: 0;
   list-style: none;
 }
+
+/* ── Provider dashboard ─────────────────────────────────────────────────── */
+/* A product without a photo: a placeholder the size of a thumbnail. */
+.dash-thumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--bs-border-radius);
+  background: var(--bs-tertiary-bg);
+  color: var(--bs-secondary-color);
+}
+
+/* The current or chosen photo above the file box. */
+
+.dash-photo__img {
+  display: block;
+  width: 100%;
+  max-width: 240px;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--bs-border-radius);
+}

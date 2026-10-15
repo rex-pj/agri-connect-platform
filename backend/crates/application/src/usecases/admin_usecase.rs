@@ -46,8 +46,8 @@ use crate::{
     pagination::{paginate, total_pages},
     ports::{EventBus, PasswordHasher},
     validation::{
-        max_chars, non_blank, validate_coordinates, validate_email, validate_password,
-        validate_slug, validate_username,
+        max_chars, max_chars_opt, non_blank, validate_coordinates, validate_email,
+        validate_password, validate_slug, validate_username,
     },
 };
 
@@ -971,7 +971,6 @@ impl AdminUseCase {
         let name = name.trim().to_owned();
         let description = non_blank(description);
         let price_note = non_blank(price_note);
-        let opt = |v: &Option<String>, max| v.as_deref().map_or(Ok(()), |v| max_chars(v, max));
         let category_ok = self
             .service_repo
             .check_category_is_service(category_id)
@@ -984,8 +983,14 @@ impl AdminUseCase {
                 "category_id",
                 ErrorCode::InvalidServiceCategory,
             )
-            .rule("description", opt(&description, SERVICE_DESCRIPTION_MAX))
-            .rule("price_note", opt(&price_note, SERVICE_PRICE_NOTE_MAX))
+            .rule(
+                "description",
+                max_chars_opt(&description, SERVICE_DESCRIPTION_MAX),
+            )
+            .rule(
+                "price_note",
+                max_chars_opt(&price_note, SERVICE_PRICE_NOTE_MAX),
+            )
             .finish()?;
         Ok(ServiceFields {
             name,
@@ -1133,16 +1138,18 @@ fn validate_category(input: CategoryInput, category_type: Option<&str>) -> Resul
     let icon = non_blank(input.icon);
     let color = non_blank(input.color);
     let description = non_blank(input.description);
-    let opt = |v: &Option<String>, max| v.as_deref().map_or(Ok(()), |v| max_chars(v, max));
     Validation::new()
         .check(name.is_empty(), "name", ErrorCode::NameRequired)
         .rule("name", max_chars(&name, CATEGORY_NAME_MAX))
         .check(slug.is_empty(), "slug", ErrorCode::SlugRequired)
         .rule("slug", validate_slug(&slug))
         .rule("slug", max_chars(&slug, CATEGORY_SLUG_MAX))
-        .rule("icon", opt(&icon, CATEGORY_ICON_MAX))
-        .rule("color", opt(&color, CATEGORY_COLOR_MAX))
-        .rule("description", opt(&description, CATEGORY_DESCRIPTION_MAX))
+        .rule("icon", max_chars_opt(&icon, CATEGORY_ICON_MAX))
+        .rule("color", max_chars_opt(&color, CATEGORY_COLOR_MAX))
+        .rule(
+            "description",
+            max_chars_opt(&description, CATEGORY_DESCRIPTION_MAX),
+        )
         .check(
             category_type.is_some_and(|t| !CATEGORY_TYPES.contains(&t)),
             "category_type",

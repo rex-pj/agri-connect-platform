@@ -360,7 +360,7 @@ fn access_is_never_decided_by_comparing_roles() {
 #[test]
 fn every_use_case_taking_an_actor_checks_a_permission_first() {
     // Reading your own data needs a session but no permission key.
-    const SESSION_ONLY: &[&str] = &["get_profile", "list_products"];
+    const SESSION_ONLY: &[&str] = &["get_profile", "list_products", "get_product"];
     let sig = regex::Regex::new(r"pub async fn (\w+)\(\s*&self,\s*actor: &Actor").unwrap();
     let mut missing = Vec::new();
     for (file, src) in sources("application") {

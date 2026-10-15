@@ -3,11 +3,12 @@
 //! Using axum's own `Json`/`Path`/`Query` in a handler would leak axum's
 //! plain-text rejections; the convention test in `tests` scans for that.
 
+use application::usecases::media_usecase::file_too_large;
 use axum::{
     extract::{FromRequest, FromRequestParts, OptionalFromRequest, Request},
     http::request::Parts,
 };
-use domain::Error;
+use domain::{Error, ErrorCode};
 use serde::de::DeserializeOwned;
 
 pub struct ApiJson<T>(pub T);
@@ -93,6 +94,69 @@ where
             .await
             .map(Self)
             .map_err(Error::from)
+    }
+}
+
+impl ApiMultipart {
+    /// The bytes of the part named `name`; other parts are skipped. Over
+    /// `max` bytes is `file_too_large`, so the user learns the cap.
+    pub async fn into_field(self, name: &str, max: usize) -> Result<Vec<u8>, Error> {
+        let mut form = self.0;
+        while let Some(field) = form
+            .next_field()
+            .await
+            .map_err(|e| multipart_error(e, max))?
+        {
+            if field.name() == Some(name) {
+                return field
+                    .bytes()
+                    .await
+                    .map(|b| b.to_vec())
+                    .map_err(|e| multipart_error(e, max));
+            }
+        }
+        Err(Error::new(ErrorCode::ImageRequired))
+    }
+
+    /// A page form with a file box: the text boxes as `T` (string fields with
+    /// `#[serde(default)]`, like an `ApiForm` struct), and the file in
+    /// `file_field`, `None` when no file was chosen (a browser then sends an
+    /// empty part).
+    pub async fn into_form<T: DeserializeOwned>(
+        self,
+        file_field: &str,
+        max: usize,
+    ) -> Result<(T, Option<Vec<u8>>), Error> {
+        let mut form = self.0;
+        let mut text = serde_json::Map::new();
+        let mut file = None;
+        while let Some(field) = form
+            .next_field()
+            .await
+            .map_err(|e| multipart_error(e, max))?
+        {
+            let Some(name) = field.name().map(str::to_owned) else {
+                continue;
+            };
+            if name == file_field {
+                let bytes = field.bytes().await.map_err(|e| multipart_error(e, max))?;
+                file = (!bytes.is_empty()).then(|| bytes.to_vec());
+            } else {
+                let value = field.text().await.map_err(|e| multipart_error(e, max))?;
+                text.insert(name, serde_json::Value::String(value));
+            }
+        }
+        let fields = serde_json::from_value(serde_json::Value::Object(text))
+            .map_err(|e| Error::new(ErrorCode::InvalidRequestBody).with_detail(e.to_string()))?;
+        Ok((fields, file))
+    }
+}
+
+fn multipart_error(e: axum::extract::multipart::MultipartError, max: usize) -> Error {
+    if e.status() == axum::http::StatusCode::PAYLOAD_TOO_LARGE {
+        file_too_large(max)
+    } else {
+        Error::new(ErrorCode::InvalidRequestBody).with_detail(e.body_text())
     }
 }
 

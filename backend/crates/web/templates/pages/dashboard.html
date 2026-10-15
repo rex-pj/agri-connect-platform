@@ -1,0 +1,97 @@
+{% extends "layouts/app.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "molecules/form_field.html" as field %}
+{% import "molecules/empty_state.html" as empty %}
+{#- The provider's own area: products first (what they come to change), then
+    the business profile. `page` is web::pages::dashboard::DashboardPage. The
+    location boxes can be typed or filled by the `ac-geolocate` island. -#}
+{% block title %}Quản lý cửa hàng — {{ site.name }}{% endblock title %}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
+{% block scripts %}<script defer src="{{ asset_url(path='js/islands.js') }}"></script>{% endblock scripts %}
+{% block main %}
+{% set p = page.profile %}
+<header class="acct-header">
+  <span class="acct-avatar">{{ atoms::icon(name="fa-store") }}</span>
+  <div>
+    <h1 class="acct-name">{% if p %}{{ p.name }}{% else %}Quản lý cửa hàng{% endif %}</h1>
+    {% if p and p.is_verified %}<span class="acct-role">{{ atoms::icon(name="fa-circle-check", class="me-1") }}Đã xác minh</span>{% endif %}
+  </div>
+</header>
+
+<div class="detail-body">
+  {% if page.flash == "product_created" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã thêm sản phẩm.") }}{% endif %}
+  {% if page.flash == "product_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã lưu sản phẩm.") }}{% endif %}
+  {% if page.flash == "product_deleted" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã xoá sản phẩm.") }}{% endif %}
+  {% if page.flash == "profile_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã lưu thông tin cửa hàng.") }}{% endif %}
+
+  {% if not p %}
+  <section class="detail-card">
+    {{ empty::empty_state(icon="fa-store-slash", title="Tài khoản chưa gắn với cửa hàng nào", hint="Liên hệ quản trị viên để được gán cửa hàng.") }}
+  </section>
+  {% else %}
+  <section class="detail-card" aria-labelledby="products-title">
+    <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+      <h2 class="detail-card__title mb-0" id="products-title">{{ atoms::icon(name="fa-box-open", class="me-1") }} Sản phẩm ({{ page.rows | length }})</h2>
+      {% if page.can_create %}<a class="btn btn-success" href="{{ page.new_href }}">{{ atoms::icon(name="fa-plus") }} Thêm</a>{% endif %}
+    </div>
+    {% if page.rows %}
+    <ul class="list-unstyled mb-0">
+      {% for r in page.rows %}
+      {% set x = r.product %}
+      <li class="d-flex align-items-center gap-3 py-2 border-bottom">
+        {% if x.image_file_id %}<img class="rounded object-fit-cover flex-shrink-0" width="56" height="56" src="{{ file_url(id=x.image_file_id, variant="thumb") }}" alt="" loading="lazy" decoding="async">{% else %}<span class="dash-thumb flex-shrink-0">{{ atoms::icon(name="fa-image") }}</span>{% endif %}
+        <div class="flex-grow-1 min-w-0">
+          <a class="fw-bold text-decoration-none d-block text-truncate" href="{{ r.public_href }}">{{ x.name }}</a>
+          <span class="small text-muted">{% if x.price %}{{ x.price | vnd }}{% if x.unit %}/{{ x.unit }}{% endif %}{% else %}Liên hệ{% endif %} · {{ x.category }}</span>
+          {% if not x.is_active %}<span class="badge text-bg-secondary ms-1">Đang ẩn</span>{% endif %}
+        </div>
+        <a class="btn btn-outline-success" href="{{ r.edit_href }}" aria-label="Sửa {{ x.name }}">{{ atoms::icon(name="fa-pen") }}</a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    {{ empty::empty_state(icon="fa-box-open", title="Chưa có sản phẩm", hint="Thêm sản phẩm để bà con tìm thấy bạn.") }}
+    {% endif %}
+  </section>
+
+  <section class="detail-card" id="cua-hang" aria-labelledby="profile-title">
+    <h2 class="detail-card__title" id="profile-title">{{ atoms::icon(name="fa-id-card", class="me-1") }} Thông tin cửa hàng</h2>
+    {% if page.public_href %}<p class="small"><a href="{{ page.public_href }}">{{ atoms::icon(name="fa-arrow-up-right-from-square", class="me-1") }}Xem trang bà con thấy</a></p>{% endif %}
+    {% if page.can_edit_profile %}
+    {% set e = page.errors.fields %}
+    {% set f = page.form %}
+    <form class="auth-form" method="post" action="{{ page.profile_action }}" novalidate>
+      {% if page.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=page.errors.message) }}{% endif %}
+      {{ field::input(id="pf-name", name="name", label="Tên cửa hàng", value=f.name, error=e.name | default(value=""), required=true, maxlength=limits.business_name_max) }}
+      {{ field::input(id="pf-phone", name="phone", label="Số điện thoại", type="tel", value=f.phone, error=e.phone | default(value=""), required=true, inputmode="tel", pattern="0[0-9]{9}", autocomplete="tel") }}
+      {{ field::input(id="pf-address", name="address", label="Địa chỉ", value=f.address, error=e.address | default(value=""), maxlength=limits.business_address_max, autocomplete="street-address") }}
+      {{ field::textarea(id="pf-description", name="description", label="Giới thiệu", value=f.description, error=e.description | default(value=""), maxlength=limits.business_description_max, rows=3) }}
+      <fieldset class="form-field">
+        <legend class="form-label fw-semibold fs-6">Vị trí trên bản đồ</legend>
+        <p class="small text-muted mb-2">Để bà con gần bạn tìm thấy. Bấm nút khi đang ở cửa hàng, hoặc nhập toạ độ.</p>
+        <ac-geolocate lat-target="pf-lat" lng-target="pf-lng" label="Lấy vị trí hiện tại" busy-label="Đang định vị…" done="Đã điền vị trí. Bấm Lưu để cập nhật." denied="Bạn đã chặn quyền định vị. Hãy nhập toạ độ." failed="Không lấy được vị trí. Hãy thử lại." unsupported="Trình duyệt không hỗ trợ định vị. Hãy nhập toạ độ." button-class="btn btn-outline-success mb-2"></ac-geolocate>
+        <div class="row g-2">
+          <div class="col-6">
+            <label class="form-label small" for="pf-lat">Vĩ độ</label>
+            <input class="form-control{% if e.lat %} is-invalid{% endif %}" id="pf-lat" name="lat" value="{{ f.lat }}" inputmode="decimal" placeholder="10.4048"{% if e.lat %} aria-invalid="true" aria-describedby="pf-coord-error"{% endif %}>
+          </div>
+          <div class="col-6">
+            <label class="form-label small" for="pf-lng">Kinh độ</label>
+            <input class="form-control{% if e.lat %} is-invalid{% endif %}" id="pf-lng" name="lng" value="{{ f.lng }}" inputmode="decimal" placeholder="106.1180"{% if e.lat %} aria-invalid="true" aria-describedby="pf-coord-error"{% endif %}>
+          </div>
+        </div>
+        {% if e.lat %}<div class="invalid-feedback d-block" id="pf-coord-error">{{ e.lat }}</div>{% endif %}
+      </fieldset>
+      <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-floppy-disk") }} Lưu thông tin</button>
+    </form>
+    {% else %}
+    <dl class="acct-rows">
+      <div class="acct-row"><dt>Điện thoại</dt><dd>{{ p.phone }}</dd></div>
+      {% if p.address %}<div class="acct-row"><dt>Địa chỉ</dt><dd>{{ p.address }}</dd></div>{% endif %}
+    </dl>
+    {% endif %}
+  </section>
+  {% endif %}
+</div>
+{% endblock main %}

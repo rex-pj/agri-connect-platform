@@ -293,7 +293,8 @@ All routes are defined as SvelteKit file-system pages under `client-app/src/rout
 | `/providers/[id]`                | 301 → `/providers/[id]/[slug]` (**Rust**)      |
 | `/providers/[id]/[slug]`         | Provider detail + contact form (**Rust**, `web/src/pages/provider.rs`) |
 | `/account`                       | Profile, password change (signs out other devices), logout (**Rust**, `web/src/pages/account.rs`) |
-| `/provider/dashboard`            | Provider product management (RequireProvider)  |
+| `/provider/dashboard`            | Products (photo thumbs) + business profile with GPS fill (`ac-geolocate` fill mode) (**Rust**, `web/src/pages/dashboard.rs`) |
+| `/provider/products/new`, `/provider/products/[id]/edit` | Multipart product form with photo (checked before anything is saved), delete (confirm) (**Rust**) |
 
 ### Admin `(admin)/admin/`
 

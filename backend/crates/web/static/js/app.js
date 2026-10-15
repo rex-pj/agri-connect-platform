@@ -99,6 +99,24 @@ document.addEventListener("alpine:init", () => {
     },
   }));
 
+  // Shows the photo chosen in a file box before the form is sent (a blob:
+  // URL, allowed by the page CSP). Without JS the box works the same, just
+  // without the preview.
+  Alpine.data("imagePreview", () => ({
+    src: "",
+    chosen: false,
+
+    get unchanged() {
+      return !this.chosen;
+    },
+    pick() {
+      if (this.src) URL.revokeObjectURL(this.src);
+      const file = this.$el.files?.[0];
+      this.chosen = Boolean(file);
+      this.src = file ? URL.createObjectURL(file) : "";
+    },
+  }));
+
   // A select that saves its form as soon as it changes. Without JS the
   // form's own submit button does the same.
   Alpine.data("autoSubmit", () => ({

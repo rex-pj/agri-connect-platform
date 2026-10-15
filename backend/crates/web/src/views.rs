@@ -5,7 +5,11 @@
 
 use std::collections::HashMap;
 
-use application::constants::{PASSWORD_MIN_CHARS, PASSWORD_RESET_EXPIRY_HOURS, USERNAME_MIN_LEN};
+use application::constants::{
+    BUSINESS_ADDRESS_MAX, BUSINESS_DESCRIPTION_MAX, BUSINESS_NAME_MAX, PASSWORD_MIN_CHARS,
+    PASSWORD_RESET_EXPIRY_HOURS, PRODUCT_DESCRIPTION_MAX, PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX,
+    USERNAME_MIN_LEN,
+};
 use axum::{
     http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
@@ -68,12 +72,24 @@ struct FieldLimits {
     password_min_chars: usize,
     username_min_len: usize,
     reset_link_hours: i64,
+    business_name_max: usize,
+    business_address_max: usize,
+    business_description_max: usize,
+    product_name_max: usize,
+    product_unit_max: usize,
+    product_description_max: usize,
 }
 
 const FIELD_LIMITS: FieldLimits = FieldLimits {
     password_min_chars: PASSWORD_MIN_CHARS,
     username_min_len: USERNAME_MIN_LEN,
     reset_link_hours: PASSWORD_RESET_EXPIRY_HOURS,
+    business_name_max: BUSINESS_NAME_MAX,
+    business_address_max: BUSINESS_ADDRESS_MAX,
+    business_description_max: BUSINESS_DESCRIPTION_MAX,
+    product_name_max: PRODUCT_NAME_MAX,
+    product_unit_max: PRODUCT_UNIT_MAX,
+    product_description_max: PRODUCT_DESCRIPTION_MAX,
 };
 
 /// What every template sees: `site`, `lang`, the frame (`shell`: nav, tabs,

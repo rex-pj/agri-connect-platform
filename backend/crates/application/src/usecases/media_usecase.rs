@@ -19,7 +19,7 @@ use crate::{
     authz::Actor,
     catalogue::PERM_OWN_LISTING_UPDATE,
     outputs::ProviderProductDto,
-    ports::{EventBus, FileStorage, ImageProcessor},
+    ports::{EventBus, FileStorage, ImageProcessor, ProcessedImage},
 };
 
 /// A stored object and the type to serve it with.
@@ -89,12 +89,6 @@ impl MediaUseCase {
         upload: Vec<u8>,
     ) -> Result<ProviderProductDto> {
         actor.require(PERM_OWN_LISTING_UPDATE)?;
-        if upload.is_empty() {
-            return Err(Error::new(ErrorCode::ImageRequired));
-        }
-        if upload.len() > self.max_upload_bytes {
-            return Err(file_too_large(self.max_upload_bytes));
-        }
         // Ownership before the CPU work, so nobody can make us decode images
         // for products that are not theirs.
         let owned = self
@@ -107,7 +101,34 @@ impl MediaUseCase {
             return Err(Error::new(ErrorCode::ProductNotFound));
         }
 
-        let image = self.images.process(upload).await?;
+        let image = self.prepare_image(upload).await?;
+        self.attach_product_image(actor, product_id, image).await
+    }
+
+    /// Checks and re-encodes an upload without storing anything: type sniffed
+    /// from the bytes, size and pixel caps, EXIF dropped. A form calls it
+    /// before saving anything else, so a bad photo refuses the whole form
+    /// instead of leaving a product half-saved. Callers check who is asking
+    /// (and, for an existing product, that it is theirs) first.
+    pub async fn prepare_image(&self, upload: Vec<u8>) -> Result<ProcessedImage> {
+        if upload.is_empty() {
+            return Err(Error::new(ErrorCode::ImageRequired));
+        }
+        if upload.len() > self.max_upload_bytes {
+            return Err(file_too_large(self.max_upload_bytes));
+        }
+        self.images.process(upload).await
+    }
+
+    /// Stores a prepared image and makes it the image of one of the actor's
+    /// own products.
+    pub async fn attach_product_image(
+        &self,
+        actor: &Actor,
+        product_id: i32,
+        image: ProcessedImage,
+    ) -> Result<ProviderProductDto> {
+        actor.require(PERM_OWN_LISTING_UPDATE)?;
         let id = self.store(actor, image).await?;
 
         let previous = match self.products.set_image(product_id, actor.user_id, id).await {
@@ -141,7 +162,7 @@ impl MediaUseCase {
 
     /// Stores both objects, then the row. A failure after an object was
     /// written deletes what was written, so nothing is left without a row.
-    async fn store(&self, actor: &Actor, image: crate::ports::ProcessedImage) -> Result<Uuid> {
+    async fn store(&self, actor: &Actor, image: ProcessedImage) -> Result<Uuid> {
         let id = Uuid::new_v4();
         let (storage_key, thumb_key) = object_keys(id);
         let row = NewFile {

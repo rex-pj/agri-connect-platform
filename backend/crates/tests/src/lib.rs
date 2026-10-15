@@ -434,3 +434,45 @@ pub async fn sign_in(env: &Env, username: &str, password: &str) -> String {
     assert_eq!(res.status(), StatusCode::SEE_OTHER, "login as {username}");
     cookies_from(&res)
 }
+
+/// A page form sent as `multipart/form-data` from our own origin: text
+/// `fields`, and `image` as the file part (an empty part when `None`, as a
+/// browser sends for a file box left empty).
+pub fn post_multipart_form(
+    path: &str,
+    fields: &[(&str, &str)],
+    image: Option<&[u8]>,
+    cookie: &str,
+) -> Request<Body> {
+    let b = MULTIPART_BOUNDARY;
+    let mut body = Vec::new();
+    for (name, value) in fields {
+        body.extend_from_slice(
+            format!("--{b}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n")
+                .as_bytes(),
+        );
+    }
+    let (filename, bytes) = match image {
+        Some(bytes) => ("anh.jpg", bytes),
+        None => ("", &[][..]),
+    };
+    body.extend_from_slice(
+        format!(
+            "--{b}\r\nContent-Disposition: form-data; name=\"image\"; filename=\"{filename}\"\r\n\
+             Content-Type: application/octet-stream\r\n\r\n"
+        )
+        .as_bytes(),
+    );
+    body.extend_from_slice(bytes);
+    body.extend_from_slice(format!("\r\n--{b}--\r\n").as_bytes());
+    Request::post(path)
+        .header(header::ACCEPT, "text/html")
+        .header(header::ORIGIN, TEST_ORIGIN)
+        .header(header::COOKIE, cookie)
+        .header(
+            header::CONTENT_TYPE,
+            format!("multipart/form-data; boundary={b}"),
+        )
+        .body(Body::from(body))
+        .unwrap()
+}

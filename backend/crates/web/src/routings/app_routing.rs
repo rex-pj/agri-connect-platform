@@ -178,6 +178,15 @@ impl AppRouting {
                 "/api/provider/products/{id}/image",
                 put(MediaHandler::put_product_image),
             )
+            // The provider's product forms carry the photo.
+            .route(
+                "/provider/products/new",
+                post(pages::dashboard::create_product),
+            )
+            .route(
+                "/provider/products/{id}/edit",
+                post(pages::dashboard::update_product),
+            )
             .layer(DefaultBodyLimit::max(
                 state.usecases.media.max_upload_bytes() + MULTIPART_OVERHEAD_BYTES,
             ))
@@ -324,6 +333,17 @@ impl AppRouting {
             .route(
                 "/admin/reviews/{id}/visibility",
                 post(pages::admin::reviews::change_visibility),
+            )
+            .route("/provider/dashboard", get(pages::dashboard::show))
+            .route("/provider/profile", post(pages::dashboard::update_profile))
+            .route("/provider/products/new", get(pages::dashboard::new_product))
+            .route(
+                "/provider/products/{id}/edit",
+                get(pages::dashboard::edit_product),
+            )
+            .route(
+                "/provider/products/{id}/delete",
+                post(pages::dashboard::delete_product),
             )
             .route("/account/password", post(pages::account::change_password));
 

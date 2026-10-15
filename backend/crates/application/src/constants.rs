@@ -67,3 +67,9 @@ pub const SERVICE_NAME_MAX: usize = 300;
 pub const SERVICE_PRICE_NOTE_MAX: usize = 300;
 /// `services.description` is TEXT; this keeps a listing readable on a phone.
 pub const SERVICE_DESCRIPTION_MAX: usize = 2000;
+pub const PRODUCT_NAME_MAX: usize = 300;
+pub const PRODUCT_UNIT_MAX: usize = 50;
+pub const PRODUCT_DESCRIPTION_MAX: usize = 2000;
+pub const BUSINESS_NAME_MAX: usize = 200;
+pub const BUSINESS_ADDRESS_MAX: usize = 500;
+pub const BUSINESS_DESCRIPTION_MAX: usize = 2000;

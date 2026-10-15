@@ -32,6 +32,17 @@ impl FormErrors {
             message: Some(body.message),
         }
     }
+
+    /// `err` shown under `field` rather than above the form: for a refusal
+    /// that is about one box but is not a rule of the form (a photo that is
+    /// too big or not an image).
+    pub fn on_field(state: &AppState, err: &Error, field: &'static str) -> Self {
+        let body = error_body(state, err);
+        Self {
+            fields: BTreeMap::from([(field, body.message)]),
+            message: None,
+        }
+    }
 }
 
 /// A form error the visitor can fix by editing the form (a 4xx that is not
@@ -79,6 +90,28 @@ pub fn whole_number<T: std::str::FromStr + Default>(
         .map_err(|_| Error::field(field, ErrorCode::InvalidNumber))
 }
 
+/// A price box in đồng: blank is no price. Dots, commas and spaces are
+/// thousands separators ("500.000"), since đồng have no decimals; anything
+/// else that is not a whole number is a field error on `field`.
+pub fn vnd_amount(raw: &str, field: &'static str) -> Result<Option<i64>, Error> {
+    let digits: String = raw
+        .chars()
+        .filter(|c| !matches!(c, '.' | ',' | ' '))
+        .collect();
+    if digits.is_empty() {
+        return Ok(None);
+    }
+    digits
+        .parse()
+        .map(Some)
+        .map_err(|_| Error::field(field, ErrorCode::InvalidNumber))
+}
+
+/// An optional coordinate box: blank is none, anything else as `coordinate`.
+pub fn optional_coordinate(raw: &str) -> Option<f64> {
+    (!raw.trim().is_empty()).then(|| coordinate(raw))
+}
+
 /// A latitude or longitude box. Text that is not a number becomes NaN, which
 /// the use case's coordinate rule rejects with its own field error, so the
 /// form still gets every other message in the same round trip. A comma is
@@ -103,6 +136,11 @@ mod tests {
         );
         assert_eq!(coordinate("10,36"), 10.36);
         assert!(coordinate("mười").is_nan());
+        assert_eq!(vnd_amount("500.000", "price").ok(), Some(Some(500_000)));
+        assert_eq!(vnd_amount(" ", "price").ok(), Some(None));
+        assert!(vnd_amount("năm trăm", "price").is_err());
+        assert_eq!(optional_coordinate(""), None);
+        assert!(optional_coordinate("x").is_some_and(f64::is_nan));
         assert_eq!(reason("  "), None);
         assert_eq!(reason(" giả "), Some("giả".to_owned()));
     }

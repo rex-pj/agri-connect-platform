@@ -1239,3 +1239,31 @@ Tests (database):
 - a provider gets 403 on all four lists.
 
 Unit test: `ListPosition` keeps only numbers.
+
+### S19 — provider dashboard (same branch)
+
+Done:
+- **`/provider/dashboard`**, **`/provider/products/new`** and **`/provider/products/{id}/edit`** are served by Rust in the app layout (`noindex`). The SvelteKit `(app)/provider` routes are deleted, so **no SvelteKit page is left**; S20 removes the app and the proxy.
+- **Dashboard:** the products come first, with photo thumbnails, price, a "hidden" badge and an edit button. Below them is the business profile form (`POST /provider/profile`). An account that manages no business gets an empty state instead of an error.
+- **Location:** the `ac-geolocate` island gained a fill mode. With `lat-target` and `lng-target` it fills the two boxes and shows `done` instead of navigating. The boxes can also be typed (a comma is accepted). The bundle was rebuilt and committed.
+- **Product forms:** `multipart/form-data`, which works without JS; Alpine `imagePreview` shows the chosen photo (a `blob:` URL, already allowed by the CSP).
+  - **The photo is checked before anything is saved.** `MediaUseCase` is split into `prepare_image` (size, type sniffing, decode, re-encode) and `attach_product_image`, and `store_product_image`, used by the JSON API, is now ownership + prepare + attach. A bad photo re-shows the form with the message under the photo box, and no product is created. Before, a create followed by an upload would have left a half-saved product, and re-submitting it would have made a duplicate.
+  - On edit, ownership is checked before the body is read, so nobody can make the server decode photos for another provider's product.
+  - Prices accept `85.000`: dots, commas and spaces are thousands separators (`forms::vnd_amount`). A blank price is "Liên hệ".
+  - Deleting goes through `confirm_sheet`, which gained `with_reason=false` (provider deletions take no reason).
+- **Rules, in the use cases and reported per field:**
+  - products have one `validate_product`, shared by create and update: name required and a length limit, an active product category on `category_id`, the price, and the unit and description lengths;
+  - the profile collects its rules too: name, phone, the address and description lengths, and **one coordinate without the other is refused** (before, it was silently ignored).
+  - The new `ProviderDashboardUseCase::get_product` reads one of the actor's own products; another provider's product looks missing.
+- **Shared pieces:**
+  - `ApiMultipart::into_form` (text boxes as a struct, the file part as `Option`, an empty file part → `None`) and `into_field`, both used by the image API as well;
+  - `FormErrors::on_field`, `forms::optional_coordinate`, `validation::max_chars_opt` (now used by the category and service rules too);
+  - the page `limits` gained the business and product lengths.
+
+Tests (database):
+- profile: every rule at once, including one coordinate without the other; the location is saved and shown;
+- product: every box rule at once with the typed values kept; created with a photo and a price written with separators; edited without a new photo, so the old one stays; deleted, after which its edit page returns 404;
+- a photo that is not an image: the message is under the photo box, and there is no product row and no file row;
+- another provider's product returns 404 on GET and POST, and its photo is never decoded (no file row); an admin without a business gets the empty state; an anonymous visitor goes to `/login`.
+
+The proxy tests now use a made-up path, since no real page is proxied any more.

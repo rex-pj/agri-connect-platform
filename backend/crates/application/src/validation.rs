@@ -105,6 +105,11 @@ pub fn max_chars(value: &str, max: usize) -> Result<()> {
     }
 }
 
+/// `max_chars` for an optional box: nothing typed is never too long.
+pub fn max_chars_opt(value: &Option<String>, max: usize) -> Result<()> {
+    value.as_deref().map_or(Ok(()), |v| max_chars(v, max))
+}
+
 pub fn non_blank(value: Option<String>) -> Option<String> {
     value.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty())
 }

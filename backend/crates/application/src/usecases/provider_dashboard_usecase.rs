@@ -7,7 +7,7 @@ use domain::{
         business_repository_trait::BusinessRepositoryTrait,
         product_repository_trait::ProductRepositoryTrait,
     },
-    Error, ErrorCode, Result,
+    Error, ErrorCode, Result, Validation,
 };
 
 use crate::{
@@ -16,10 +16,16 @@ use crate::{
         PERM_OWN_LISTING_CREATE, PERM_OWN_LISTING_DELETE, PERM_OWN_LISTING_UPDATE,
         PERM_OWN_PROFILE_UPDATE,
     },
+    constants::{
+        BUSINESS_ADDRESS_MAX, BUSINESS_DESCRIPTION_MAX, BUSINESS_NAME_MAX, PRODUCT_DESCRIPTION_MAX,
+        PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX,
+    },
     inputs::{CreateProductInput, UpdateProductInput, UpdateProfileInput},
     outputs::{ProviderProductDto, ProviderProfileDto},
     ports::EventBus,
-    validation::{validate_coordinates, validate_phone, validate_price},
+    validation::{
+        max_chars, max_chars_opt, non_blank, validate_coordinates, validate_phone, validate_price,
+    },
 };
 
 // ── Use case ──────────────────────────────────────────────────────────────────
@@ -73,6 +79,18 @@ impl ProviderDashboardUseCase {
         Ok(products.into_iter().map(ProviderProductDto::from).collect())
     }
 
+    /// One of the actor's own products. Someone else's looks the same as a
+    /// missing one, so ids cannot be probed for ownership.
+    pub async fn get_product(&self, actor: &Actor, product_id: i32) -> Result<ProviderProductDto> {
+        self.product_repo
+            .list_by_user(actor.user_id)
+            .await?
+            .into_iter()
+            .find(|p| p.id == product_id)
+            .map(ProviderProductDto::from)
+            .ok_or_else(|| Error::new(ErrorCode::ProductNotFound))
+    }
+
     // ── Write (permission-gated) ───────────────────────────────────────────────
 
     pub async fn update_profile(
@@ -82,22 +100,39 @@ impl ProviderDashboardUseCase {
     ) -> Result<ProviderProfileDto> {
         actor.require(PERM_OWN_PROFILE_UPDATE)?;
 
-        if input.name.trim().is_empty() {
-            return Err(Error::new(ErrorCode::BusinessNameRequired));
-        }
-        validate_phone(&input.phone)?;
-        if let (Some(lat), Some(lng)) = (input.lat, input.lng) {
-            validate_coordinates(lat, lng)?;
-        }
+        let name = input.name.trim().to_owned();
+        let phone = input.phone.trim().to_owned();
+        let description = non_blank(input.description);
+        let address = non_blank(input.address);
+        // Both or neither: one coordinate alone is not a place.
+        let position = match (input.lat, input.lng) {
+            (Some(lat), Some(lng)) => Some((lat, lng)),
+            (None, None) => None,
+            _ => Some((f64::NAN, f64::NAN)),
+        };
+        Validation::new()
+            .check(name.is_empty(), "name", ErrorCode::BusinessNameRequired)
+            .rule("name", max_chars(&name, BUSINESS_NAME_MAX))
+            .rule("phone", validate_phone(&phone))
+            .rule("address", max_chars_opt(&address, BUSINESS_ADDRESS_MAX))
+            .rule(
+                "description",
+                max_chars_opt(&description, BUSINESS_DESCRIPTION_MAX),
+            )
+            .rule(
+                "lat",
+                position.map_or(Ok(()), |(lat, lng)| validate_coordinates(lat, lng)),
+            )
+            .finish()?;
 
         let updated = self
             .business_repo
             .update_profile_text(
                 actor.user_id,
-                input.name.trim(),
-                input.phone.trim(),
-                input.description.as_deref().map(str::trim),
-                input.address.as_deref().map(str::trim),
+                &name,
+                &phone,
+                description.as_deref(),
+                address.as_deref(),
             )
             .await?;
 
@@ -105,7 +140,7 @@ impl ProviderDashboardUseCase {
             return Err(Error::new(ErrorCode::ProviderNotFound));
         }
 
-        if let (Some(lat), Some(lng)) = (input.lat, input.lng) {
+        if let Some((lat, lng)) = position {
             let wkt = format!("SRID=4326;POINT({lng} {lat})");
             self.business_repo
                 .update_location(actor.user_id, &wkt)
@@ -121,20 +156,15 @@ impl ProviderDashboardUseCase {
         input: CreateProductInput,
     ) -> Result<ProviderProductDto> {
         actor.require(PERM_OWN_LISTING_CREATE)?;
-
-        let name = input.name.trim().to_owned();
-        if name.is_empty() {
-            return Err(Error::new(ErrorCode::NameRequired));
-        }
-        validate_price(input.price)?;
-
-        let cat_ok = self
-            .product_repo
-            .check_category_is_product(input.category_id)
+        let fields = self
+            .validate_product(
+                input.category_id,
+                input.name,
+                input.description,
+                input.price,
+                input.unit,
+            )
             .await?;
-        if !cat_ok {
-            return Err(Error::new(ErrorCode::InvalidProductCategory));
-        }
 
         let business_id = self
             .business_repo
@@ -147,14 +177,10 @@ impl ProviderDashboardUseCase {
             .create(NewProduct {
                 business_id,
                 category_id: input.category_id,
-                name,
-                description: input
-                    .description
-                    .as_deref()
-                    .map(str::trim)
-                    .map(str::to_owned),
+                name: fields.name,
+                description: fields.description,
                 price: input.price,
-                unit: input.unit.as_deref().map(str::trim).map(str::to_owned),
+                unit: fields.unit,
                 created_by: actor.user_id,
             })
             .await?;
@@ -172,20 +198,15 @@ impl ProviderDashboardUseCase {
         input: UpdateProductInput,
     ) -> Result<ProviderProductDto> {
         actor.require(PERM_OWN_LISTING_UPDATE)?;
-
-        let name = input.name.trim().to_owned();
-        if name.is_empty() {
-            return Err(Error::new(ErrorCode::NameRequired));
-        }
-        validate_price(input.price)?;
-
-        let cat_ok = self
-            .product_repo
-            .check_category_is_product(input.category_id)
+        let fields = self
+            .validate_product(
+                input.category_id,
+                input.name,
+                input.description,
+                input.price,
+                input.unit,
+            )
             .await?;
-        if !cat_ok {
-            return Err(Error::new(ErrorCode::InvalidProductCategory));
-        }
 
         let updated = self
             .product_repo
@@ -193,14 +214,10 @@ impl ProviderDashboardUseCase {
                 id: input.product_id,
                 owner_user: actor.user_id,
                 category_id: input.category_id,
-                name,
-                description: input
-                    .description
-                    .as_deref()
-                    .map(str::trim)
-                    .map(str::to_owned),
+                name: fields.name,
+                description: fields.description,
                 price: input.price,
-                unit: input.unit.as_deref().map(str::trim).map(str::to_owned),
+                unit: fields.unit,
             })
             .await?;
 
@@ -215,6 +232,45 @@ impl ProviderDashboardUseCase {
             .await?
             .map(ProviderProductDto::from)
             .ok_or_else(|| Error::internal("product updated but could not be reloaded"))
+    }
+
+    /// Every rule of a product's boxes, reported together; the category must
+    /// be an active product category.
+    async fn validate_product(
+        &self,
+        category_id: i32,
+        name: String,
+        description: Option<String>,
+        price: Option<i64>,
+        unit: Option<String>,
+    ) -> Result<ProductFields> {
+        let name = name.trim().to_owned();
+        let description = non_blank(description);
+        let unit = non_blank(unit);
+        let category_ok = self
+            .product_repo
+            .check_category_is_product(category_id)
+            .await?;
+        Validation::new()
+            .check(name.is_empty(), "name", ErrorCode::NameRequired)
+            .rule("name", max_chars(&name, PRODUCT_NAME_MAX))
+            .check(
+                !category_ok,
+                "category_id",
+                ErrorCode::InvalidProductCategory,
+            )
+            .rule("price", validate_price(price))
+            .rule("unit", max_chars_opt(&unit, PRODUCT_UNIT_MAX))
+            .rule(
+                "description",
+                max_chars_opt(&description, PRODUCT_DESCRIPTION_MAX),
+            )
+            .finish()?;
+        Ok(ProductFields {
+            name,
+            description,
+            unit,
+        })
     }
 
     pub async fn delete_product(&self, actor: &Actor, product_id: i32) -> Result<()> {
@@ -244,4 +300,11 @@ impl ProviderDashboardUseCase {
 
         Ok(())
     }
+}
+
+/// A product's boxes once its rules pass: trimmed, blanks as `None`.
+struct ProductFields {
+    name: String,
+    description: Option<String>,
+    unit: Option<String>,
 }

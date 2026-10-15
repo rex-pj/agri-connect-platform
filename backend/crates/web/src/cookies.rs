@@ -64,10 +64,13 @@ pub enum Flash {
     InquiryStatusSaved,
     ReviewHidden,
     ReviewShown,
+    ProfileSaved,
+    ProductCreated,
+    ProductSaved,
 }
 
 impl Flash {
-    const ALL: [Flash; 32] = [
+    const ALL: [Flash; 35] = [
         Flash::ContactSent,
         Flash::PasswordReset,
         Flash::DemoLoaded,
@@ -100,6 +103,9 @@ impl Flash {
         Flash::InquiryStatusSaved,
         Flash::ReviewHidden,
         Flash::ReviewShown,
+        Flash::ProfileSaved,
+        Flash::ProductCreated,
+        Flash::ProductSaved,
     ];
 
     const fn as_str(self) -> &'static str {
@@ -136,6 +142,9 @@ impl Flash {
             Flash::InquiryStatusSaved => "inquiry_status_saved",
             Flash::ReviewHidden => "review_hidden",
             Flash::ReviewShown => "review_shown",
+            Flash::ProfileSaved => "profile_saved",
+            Flash::ProductCreated => "product_created",
+            Flash::ProductSaved => "product_saved",
         }
     }
 

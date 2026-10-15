@@ -1,11 +1,11 @@
-use application::{authz::require_actor, usecases::media_usecase::file_too_large};
+use application::authz::require_actor;
 use axum::{
     extract::State,
     http::{header, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     Json,
 };
-use domain::{models::file::FileVariant, Error, ErrorCode};
+use domain::{models::file::FileVariant, Error};
 use uuid::Uuid;
 
 use crate::{
@@ -44,7 +44,7 @@ impl MediaHandler {
         // Before reading the body: an anonymous caller never gets to upload.
         let actor = require_actor(actor)?;
         let max = state.usecases.media.max_upload_bytes();
-        let image = read_field(form, IMAGE_FIELD, max).await?;
+        let image = form.into_field(IMAGE_FIELD, max).await?;
         let product = state
             .usecases
             .media
@@ -70,23 +70,4 @@ async fn serve(state: &AppState, id: Uuid, variant: FileVariant) -> Result<Respo
         file.bytes,
     )
         .into_response())
-}
-
-/// The bytes of the part named `name`; other parts are skipped. Over the body
-/// limit is `file_too_large`, so the user learns the cap.
-async fn read_field(form: ApiMultipart, name: &str, max: usize) -> Result<Vec<u8>, Error> {
-    let malformed = |e: axum::extract::multipart::MultipartError| {
-        if e.status() == StatusCode::PAYLOAD_TOO_LARGE {
-            file_too_large(max)
-        } else {
-            Error::new(ErrorCode::InvalidRequestBody).with_detail(e.body_text())
-        }
-    };
-    let ApiMultipart(mut form) = form;
-    while let Some(field) = form.next_field().await.map_err(malformed)? {
-        if field.name() == Some(name) {
-            return field.bytes().await.map(|b| b.to_vec()).map_err(malformed);
-        }
-    }
-    Err(Error::new(ErrorCode::ImageRequired))
 }

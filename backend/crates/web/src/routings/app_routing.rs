@@ -290,6 +290,41 @@ impl AppRouting {
                 "/admin/explore/{id}/account",
                 post(pages::admin::providers::assign_account),
             )
+            .route("/admin/products", get(pages::admin::products::list))
+            .route(
+                "/admin/products/{id}/status",
+                post(pages::admin::products::change_status),
+            )
+            .route(
+                "/admin/products/{id}/delete",
+                post(pages::admin::products::delete),
+            )
+            .route(
+                "/admin/services",
+                get(pages::admin::services::list).post(pages::admin::services::create),
+            )
+            .route(
+                "/admin/services/{id}",
+                get(pages::admin::services::show).post(pages::admin::services::update),
+            )
+            .route(
+                "/admin/services/{id}/status",
+                post(pages::admin::services::change_status),
+            )
+            .route(
+                "/admin/services/{id}/delete",
+                post(pages::admin::services::delete),
+            )
+            .route("/admin/inquiries", get(pages::admin::inquiries::list))
+            .route(
+                "/admin/inquiries/{id}/status",
+                post(pages::admin::inquiries::change_status),
+            )
+            .route("/admin/reviews", get(pages::admin::reviews::list))
+            .route(
+                "/admin/reviews/{id}/visibility",
+                post(pages::admin::reviews::change_visibility),
+            )
             .route("/account/password", post(pages::account::change_password));
 
         // ── USER routes (authenticated, no rate limit) ───────────────────────

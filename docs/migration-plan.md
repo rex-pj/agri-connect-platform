@@ -1215,3 +1215,27 @@ Tests (database):
 - a new account with a bad email and a short password gets both messages (the typed email is kept, the password is not echoed); an email already in use goes under the email field; after assignment the owner can sign in, and the audit log names the account;
 - an account that already manages a business is refused, and so is an admin username; a provider gets 403;
 - the register page reports a malformed email together with the other errors.
+
+### S18 — admin moderation: products, services, inquiries, reviews (same branch)
+
+Done:
+- **`/admin/products`**, **`/admin/services`** (+ **`/admin/services/{id}`**), **`/admin/inquiries`** and **`/admin/reviews`** are served by Rust. No admin page is left in SvelteKit, so the whole `(admin)` route group is deleted. Its shared components (`AdminShell`, …) and the `admin.service.ts` methods go in S20.
+- **Confirmations on list pages without detail pages:** the "hide" or "delete" link reloads the list with `?hide={id}` or `?delete={id}`, and the server renders that row's `confirm_sheet` open. With JS it is the dialog; without JS it is an anchored form. Showing an item again is one button.
+- **Back to the same list page:** row forms send `page` and `provider_id` as hidden fields (`confirm_sheet` gained a `keep` map for this). `pages::admin::ListPosition` rebuilds the redirect from those fields only when they are numbers, so a posted value can never redirect off the list.
+- **Products:** hide/show and delete, both audited with the reason; an optional provider filter, linked from the provider page ("Kiểm duyệt sản phẩm").
+- **Services:**
+  - the list can be narrowed to one provider (linked from the provider page as "Quản lý dịch vụ"), and only then does it offer a create form, since a service belongs to a provider;
+  - each service has its own page: edit, hide (confirmation) / show, delete (confirmation) → back to the provider's services;
+  - the rules are now one `validate_service`, shared by create and update: name required, maximum lengths (`SERVICE_*_MAX`), an active service category reported on the `category_id` field, all in one round trip;
+  - the category choices are the active service categories.
+- **Inquiries:** each row is a status form with a select and a save button; the new Alpine `autoSubmit` component submits it on change. Visitors with `inquiry.read` but not `inquiry.manage` see the status only.
+- **Reviews:** hide (confirmation with a reason) / show.
+- **`domain::constants::CATEGORY_TYPE_SERVICE` / `_PRODUCT`** now name the two types; `CATEGORY_TYPES` and the service-category check use them.
+
+Tests (database):
+- a product: the confirmation opens from the list link and keeps the list position; hiding is audited with its reason and lands on the same filtered list; a non-numeric position is dropped (the redirect goes to the plain list); after deletion the list is empty;
+- services: no create form without a provider; a blank name and an unparsable category are both reported, with the typed values kept; create → edit → delete returns to the provider's services, after which the service page returns 404;
+- an inquiry's status is changed from the list, and an unknown status → 400; a review is hidden from the list's confirmation;
+- a provider gets 403 on all four lists.
+
+Unit test: `ListPosition` keeps only numbers.

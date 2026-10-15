@@ -1,0 +1,5 @@
+{#- The Vietnamese name of an inquiry status code
+    (domain::constants::INQUIRY_STATUSES). -#}
+{% macro label(status) -%}
+{% if status == "new" %}Mới{% elif status == "contacted" %}Đã liên hệ{% elif status == "closed" %}Đã xong{% elif status == "spam" %}Rác{% else %}{{ status }}{% endif %}
+{%- endmacro label %}

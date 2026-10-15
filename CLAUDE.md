@@ -312,8 +312,11 @@ All routes are defined as SvelteKit file-system pages under `client-app/src/rout
 | `/admin/locations/[id]`    | Edit, hide / show, delete (confirm + reason) → list (**Rust**) |
 | `/admin/explore`           | Provider list, paged (**Rust**, `web/src/pages/admin/providers.rs`) |
 | `/admin/explore/[id]`      | Details, verify / unverify (confirm + reason), assign the managing account (**Rust**) |
-| `/admin/inquiries`         | Inquiry status management                       |
-| `/admin/reviews`           | Review visibility management                    |
+| `/admin/products`          | Products (filter `provider_id`): hide (confirm + reason) / show, delete (confirm + reason) (**Rust**, `web/src/pages/admin/products.rs`) |
+| `/admin/services`          | Services (filter `provider_id`; create form only for one provider) (**Rust**) |
+| `/admin/services/[id]`     | Edit, hide / show, delete (confirm + reason) (**Rust**) |
+| `/admin/inquiries`         | Status per row (select + button; `autoSubmit` with JS) (**Rust**) |
+| `/admin/reviews`           | Hide (confirm + reason) / show (**Rust**) |
 | `/admin/logout`            | POST (**Rust**): same as `/logout`, lands on `/login` |
 
 ---
@@ -478,7 +481,7 @@ middleware / handlers  →  application (use cases, ports)  →  domain  ←  in
 - Interactive bits are Alpine components registered in `static/js/app.js`; markup must work without them (links and plain forms first).
 - What Alpine cannot do (today only geolocation) is an island: a Svelte custom element in `backend/islands/src` (light DOM, no `<style>`, all text passed as attributes), built with `npm run build` into `static/js/islands.js`, which is committed. CI rebuilds it and fails on a diff. Pages that use one load it in `{% block scripts %}`.
 - Custom SQL in `Expr::cust_with_values` uses `$1`, `$2`: a `?` is left unbound and the query fails at runtime (convention test).
-- An action that needs a second look (deactivate, hide, delete) uses `organisms/confirm_sheet.html` inside an `x-data="dialog"` element; without JS it is an anchored form on the page.
+- An action that needs a second look (deactivate, hide, delete) uses `organisms/confirm_sheet.html` inside an `x-data="dialog"` element; without JS it is an anchored form on the page. On a list, the row's link reloads the list with `?hide={id}` (or `?delete=`) and the server renders that confirmation open. Row forms send the list position back as `page` / `provider_id` (`pages::admin::ListPosition`), rebuilt from numbers, never a posted URL.
 - Page forms post urlencoded (`ApiForm`) and follow Post/Redirect/Get: success is a 303 with a `cookies::Flash`; a broken rule re-renders the page with the error's status, the typed values and one message per field (from `error_body`). The rules stay in the use case the JSON API uses.
 - When a route moves to Rust, delete its SvelteKit `+page*` files in the same change.
 

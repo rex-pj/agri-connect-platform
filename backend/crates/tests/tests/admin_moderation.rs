@@ -1,0 +1,298 @@
+//! /admin/products, /admin/services, /admin/inquiries and /admin/reviews:
+//! moderation through page forms that land back on the same list page.
+//! Database tests need TEST_DATABASE_URL and `--include-ignored`.
+
+use axum::http::{header, StatusCode};
+use integration_tests::{
+    body_text, categories_of, create_product, env_with_origin, get_page, install_admin, post_form,
+    register_provider, send, sign_in, Env,
+};
+use sea_orm::{ConnectionTrait, Statement};
+
+async fn one_i32(e: &Env, sql: &str) -> i32 {
+    e.t.db
+        .query_one(Statement::from_string(
+            e.t.db.get_database_backend(),
+            sql.to_owned(),
+        ))
+        .await
+        .unwrap()
+        .unwrap()
+        .try_get_by_index(0)
+        .unwrap()
+}
+
+async fn one_text(e: &Env, sql: &str) -> String {
+    e.t.db
+        .query_one(Statement::from_string(
+            e.t.db.get_database_backend(),
+            sql.to_owned(),
+        ))
+        .await
+        .unwrap()
+        .unwrap()
+        .try_get_by_index(0)
+        .unwrap()
+}
+
+async fn page(e: &Env, path: &str, cookie: &str) -> String {
+    body_text(send(&e.router, get_page(path, Some(cookie))).await).await
+}
+
+/// An admin, and the provider "nongdan" with its business id.
+async fn setup(e: &Env) -> (String, String, i32) {
+    let admin = install_admin(e).await;
+    let token = register_provider(&e.state, "nongdan", "0901234567").await;
+    let business = one_i32(e, "SELECT id FROM businesses WHERE name = 'Vườn nongdan'").await;
+    (admin, token, business)
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_product_is_hidden_and_deleted_behind_confirmations_on_its_list_page() {
+    let e = env_with_origin().await;
+    let (admin, token, business) = setup(&e).await;
+    let (category, _) = categories_of(&e, "product").await[0].clone();
+    let id = create_product(
+        &e,
+        &token,
+        &format!(r#"{{"category_id":{category},"name":"Sầu riêng Ri6"}}"#),
+    )
+    .await;
+    let list = format!("/admin/products?provider_id={business}");
+
+    let html = page(&e, &list, &admin).await;
+    assert!(html.contains("Vườn nongdan · 1 sản phẩm"));
+    assert!(!html.contains(r#"id="xac-nhan""#), "no confirmation yet");
+    let html = page(&e, &format!("{list}&hide={id}"), &admin).await;
+    assert!(html.contains(r#"data-open="true""#));
+    assert!(html.contains("Ẩn sản phẩm Sầu riêng Ri6?"));
+    assert!(
+        html.contains(&format!(r#"name="provider_id" value="{business}""#)),
+        "the confirmation keeps the list position"
+    );
+
+    let res = send(
+        &e.router,
+        post_form(
+            &format!("/admin/products/{id}/status"),
+            &[
+                ("is_active", "false"),
+                ("reason", "ảnh không thật"),
+                ("provider_id", &business.to_string()),
+            ],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res.headers()[header::LOCATION], list.as_str());
+    assert_eq!(
+        one_text(
+            &e,
+            "SELECT action || ': ' || reason FROM audit_logs WHERE action = 'hide_product'"
+        )
+        .await,
+        "hide_product: ảnh không thật"
+    );
+
+    // A posted position that is not a number is dropped, never followed.
+    let res = send(
+        &e.router,
+        post_form(
+            &format!("/admin/products/{id}/delete"),
+            &[("reason", "trùng"), ("provider_id", "//evil.example")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res.headers()[header::LOCATION], "/admin/products");
+    assert!(page(&e, &list, &admin)
+        .await
+        .contains("Chưa có sản phẩm nào."));
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn services_are_created_for_a_provider_edited_and_deleted() {
+    let e = env_with_origin().await;
+    let (admin, _, business) = setup(&e).await;
+    let (category, _) = categories_of(&e, "service").await[0].clone();
+    let list = format!("/admin/services?provider_id={business}");
+
+    let all = page(&e, "/admin/services", &admin).await;
+    assert!(
+        !all.contains(r#"id="them-dich-vu""#),
+        "create needs a provider"
+    );
+    assert!(page(&e, &list, &admin)
+        .await
+        .contains(r#"id="them-dich-vu""#));
+
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/services",
+            &[
+                ("business_id", &business.to_string()),
+                ("category_id", "abc"),
+                ("name", " "),
+                ("price_note", "Từ 500.000đ"),
+            ],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    let html = body_text(res).await;
+    assert!(html.contains("Vui lòng nhập tên."));
+    assert!(
+        html.contains(r#"id="new-category-error""#),
+        "category on its field"
+    );
+    assert!(html.contains(r#"value="Từ 500.000đ""#), "typed price kept");
+
+    let category = category.to_string();
+    let fields = [
+        ("business_id", business.to_string()),
+        ("category_id", category.clone()),
+        ("name", "Múc bùn".to_owned()),
+        ("price_note", String::new()),
+        ("description", String::new()),
+    ];
+    let pairs: Vec<(&str, &str)> = fields.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    let res = send(
+        &e.router,
+        post_form("/admin/services", &pairs, Some(&admin)),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let detail = res.headers()[header::LOCATION].to_str().unwrap().to_owned();
+    assert!(page(&e, &detail, &admin)
+        .await
+        .contains(&format!(r#"<option value="{category}" selected>"#)));
+
+    let res = send(
+        &e.router,
+        post_form(
+            &detail,
+            &[("category_id", &category), ("name", "Múc bùn vườn")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+
+    let res = send(
+        &e.router,
+        post_form(
+            &format!("{detail}/delete"),
+            &[("reason", "nhập nhầm")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res.headers()[header::LOCATION], list.as_str());
+    let res = send(&e.router, get_page(&detail, Some(&admin))).await;
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn inquiry_status_and_review_visibility_are_set_from_their_lists() {
+    let e = env_with_origin().await;
+    let (admin, _, business) = setup(&e).await;
+    let inquiry = one_i32(
+        &e,
+        &format!(
+            "INSERT INTO inquiries (business_id, topic, requester_name, requester_phone) \
+             VALUES ({business}, 'Múc bùn', 'Chú Tư', '0987654321') RETURNING id"
+        ),
+    )
+    .await;
+    let review = one_i32(
+        &e,
+        &format!(
+            "INSERT INTO reviews (business_id, rating, comment, reviewer_name, reviewer_phone_hash) \
+             VALUES ({business}, 2, 'Làm ẩu', 'Chú Tư', 'h') RETURNING id"
+        ),
+    )
+    .await;
+
+    let html = page(&e, "/admin/inquiries", &admin).await;
+    assert!(html.contains(r#"x-data="autoSubmit""#));
+    assert!(html.contains(r#"<option value="new" selected>Mới</option>"#));
+    let res = send(
+        &e.router,
+        post_form(
+            &format!("/admin/inquiries/{inquiry}/status"),
+            &[("status", "contacted"), ("page", "1")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res.headers()[header::LOCATION], "/admin/inquiries");
+    assert_eq!(
+        one_text(
+            &e,
+            &format!("SELECT status FROM inquiries WHERE id = {inquiry}")
+        )
+        .await,
+        "contacted"
+    );
+    let res = send(
+        &e.router,
+        post_form(
+            &format!("/admin/inquiries/{inquiry}/status"),
+            &[("status", "archived")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    let html = page(&e, &format!("/admin/reviews?hide={review}"), &admin).await;
+    assert!(html.contains("Ẩn đánh giá của Chú Tư?"));
+    let res = send(
+        &e.router,
+        post_form(
+            &format!("/admin/reviews/{review}/visibility"),
+            &[("is_visible", "false"), ("reason", "không phải khách")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        one_text(
+            &e,
+            &format!("SELECT is_visible::text FROM reviews WHERE id = {review}")
+        )
+        .await,
+        "false"
+    );
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn moderation_pages_need_their_permissions() {
+    let e = env_with_origin().await;
+    setup(&e).await;
+    let provider = sign_in(&e, "nongdan", "matkhau123").await;
+    for path in [
+        "/admin/products",
+        "/admin/services",
+        "/admin/inquiries",
+        "/admin/reviews",
+    ] {
+        let res = send(&e.router, get_page(path, Some(&provider))).await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN, "{path}");
+    }
+    e.cleanup().await;
+}

@@ -4,9 +4,13 @@
 
 pub mod categories;
 pub mod dashboard;
+pub mod inquiries;
 pub mod locations;
+pub mod products;
 pub mod providers;
+pub mod reviews;
 pub mod roles;
+pub mod services;
 pub mod users;
 
 use application::{
@@ -19,12 +23,16 @@ use application::{
 };
 use axum::{http::StatusCode, response::Response};
 use domain::{Error, ErrorCode};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     app_state::AppState,
     cookies::Flash,
-    pages::forms::{is_form_error, FormErrors},
+    pages::{
+        forms::{is_form_error, FormErrors},
+        listing::{parse_opt, with_query},
+        see_other,
+    },
     routes,
     shell::Shell,
     views::render_page_status,
@@ -228,12 +236,77 @@ impl<F> Outcome<F> {
     }
 }
 
+/// Which page of an admin list a row action came from, so the redirect lands
+/// back there. Sent as hidden fields and rebuilt from the numbers in them,
+/// never from a posted URL, so a form cannot redirect anywhere else.
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
+#[serde(default)]
+pub struct ListPosition {
+    pub page: String,
+    pub provider_id: String,
+}
+
+impl ListPosition {
+    /// The query that reproduces this position (nothing for page 1 and no
+    /// filter).
+    pub fn query(&self) -> Vec<(&'static str, String)> {
+        let mut q = Vec::new();
+        if let Some(p) = parse_opt::<i32>(&self.provider_id).filter(|p| *p > 0) {
+            q.push(("provider_id", p.to_string()));
+        }
+        if let Some(n) = parse_opt::<i64>(&self.page).filter(|n| *n > 1) {
+            q.push(("page", n.to_string()));
+        }
+        q
+    }
+
+    /// The list at `route` with this position and `extra` parameters.
+    pub fn href(&self, route: &str, extra: &[(&str, &str)]) -> Result<String, Error> {
+        let query = self.query();
+        let mut params: Vec<(&str, &str)> = query.iter().map(|(k, v)| (*k, v.as_str())).collect();
+        params.extend_from_slice(extra);
+        Ok(with_query(&url(route, &[])?, &params))
+    }
+
+    /// 303 back to the list at `route`, with `flash`.
+    pub fn back_to(&self, route: &str, flash: Flash) -> Result<Response, Error> {
+        let mut response = see_other(&self.href(route, &[])?)?;
+        flash.set_on(&mut response);
+        Ok(response)
+    }
+
+    pub fn provider_id(&self) -> Option<i32> {
+        parse_opt::<i32>(&self.provider_id).filter(|p| *p > 0)
+    }
+
+    pub fn page(&self) -> i64 {
+        parse_opt(&self.page).unwrap_or(1)
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::expect_used)]
 mod tests {
     use domain::models::user::ActorRecord;
 
     use super::*;
+
+    #[test]
+    fn a_list_position_keeps_only_numbers() {
+        let p = ListPosition {
+            page: "3".into(),
+            provider_id: "//evil.example".into(),
+        };
+        assert_eq!(p.query(), vec![("page", "3".to_owned())]);
+        let p = ListPosition {
+            page: "1".into(),
+            provider_id: " 7 ".into(),
+        };
+        assert_eq!(
+            p.href("admin_products", &[("hide", "9")]).ok().as_deref(),
+            Some("/admin/products?provider_id=7&hide=9")
+        );
+    }
 
     fn actor(permissions: &[&str]) -> Actor {
         Actor::from_record(ActorRecord {

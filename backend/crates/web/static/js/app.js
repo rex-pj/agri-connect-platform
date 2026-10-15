@@ -99,6 +99,14 @@ document.addEventListener("alpine:init", () => {
     },
   }));
 
+  // A select that saves its form as soon as it changes. Without JS the
+  // form's own submit button does the same.
+  Alpine.data("autoSubmit", () => ({
+    submit() {
+      this.$el.form?.requestSubmit();
+    },
+  }));
+
   // Folds a panel behind a toggle button. Without JS the panel stays open and
   // the button (x-cloak) stays hidden.
   Alpine.data("collapse", () => ({

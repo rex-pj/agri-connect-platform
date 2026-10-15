@@ -1,0 +1,53 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "molecules/admin_header.html" as header %}
+{% import "organisms/service_fields.html" as fields %}
+{% import "organisms/confirm_sheet.html" as confirm %}
+{#- One service: edit, hide (confirmation with a reason) / show, delete
+    (confirmation with a reason). `page.body` is
+    web::pages::admin::services::ServicePage. Each confirmation has its own
+    `dialog` scope. -#}
+{% block title %}{{ page.body.service.name }} — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+{% set s = b.service %}
+{{ header::admin_header(title=s.name, icon="fa-screwdriver-wrench", sub=s.business_name, back_href=b.provider_services_href, back_label="Dịch vụ của nhà cung cấp") }}
+<div class="admin-body">
+  {% if b.flash == "service_created" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã thêm dịch vụ.") }}{% endif %}
+  {% if b.flash == "service_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã lưu thay đổi.") }}{% endif %}
+  {% if b.flash == "service_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã ẩn dịch vụ.") }}{% endif %}
+  {% if b.flash == "service_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Dịch vụ đã hiển thị lại.") }}{% endif %}
+  {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
+
+  <section class="admin-card p-3" aria-labelledby="edit-title">
+    <h2 class="detail-card__title" id="edit-title">Thông tin</h2>
+    <form method="post" action="{{ b.update_action }}" novalidate>
+      {{ fields::service_fields(form=b.form, errors=b.errors, categories=b.categories, limits=b.limits, prefix="edit") }}
+      <button type="submit" class="btn btn-success btn-lg">{{ atoms::icon(name="fa-floppy-disk") }} Lưu</button>
+    </form>
+  </section>
+
+  <section class="admin-card p-3">
+    <h2 class="detail-card__title">Hiển thị</h2>
+    <p class="small text-muted"><a href="{{ b.provider_href }}">{{ s.business_name }}</a> · {% if s.is_active %}Đang hiển thị.{% else %}Đang ẩn khỏi trang công khai.{% endif %}</p>
+    <div class="d-flex flex-wrap gap-2">
+      {% if s.is_active %}
+      <div x-data="dialog" x-on:keydown.escape.window="hide">
+        <a class="btn btn-outline-warning" href="#an-dich-vu" x-on:click.prevent="show">{{ atoms::icon(name="fa-eye-slash") }} Ẩn</a>
+        {{ confirm::confirm_sheet(id="an-dich-vu", title="Ẩn dịch vụ " ~ s.name ~ "?", icon="fa-eye-slash", action=b.status_action, button="Xác nhận ẩn", hidden_name="is_active", hidden_value="false") }}
+      </div>
+      {% else %}
+      <form method="post" action="{{ b.status_action }}">
+        <input type="hidden" name="is_active" value="true">
+        <button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-eye") }} Hiển thị lại</button>
+      </form>
+      {% endif %}
+      <div x-data="dialog" x-on:keydown.escape.window="hide">
+        <a class="btn btn-outline-danger" href="#xoa-dich-vu" x-on:click.prevent="show">{{ atoms::icon(name="fa-trash") }} Xoá</a>
+        {{ confirm::confirm_sheet(id="xoa-dich-vu", title="Xoá dịch vụ " ~ s.name ~ "?", icon="fa-trash", action=b.delete_action, button="Xác nhận xoá", button_class="btn-danger") }}
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock content %}

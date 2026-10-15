@@ -1,0 +1,73 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "molecules/admin_header.html" as header %}
+{% import "molecules/pagination_nav.html" as paging %}
+{% import "organisms/confirm_sheet.html" as confirm %}
+{#- `page.body` is web::pages::admin::products::ProductsPage. "Ẩn" and "Xoá"
+    reload the list with that row's confirmation open (`b.confirm`); every
+    form sends the list position back so the redirect lands here again. -#}
+{% block title %}Sản phẩm — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+{% if b.provider_name %}{% set sub = b.provider_name ~ " · " ~ b.total ~ " sản phẩm" %}{% else %}{% set sub = b.total ~ " sản phẩm" %}{% endif %}
+{{ header::admin_header(title="Sản phẩm", icon="fa-box-open", sub=sub) }}
+<div class="admin-body" x-data="dialog" data-open="{% if b.confirm %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+  {% if b.flash == "product_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã ẩn sản phẩm.") }}{% endif %}
+  {% if b.flash == "product_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Sản phẩm đã hiển thị lại.") }}{% endif %}
+  {% if b.flash == "product_deleted" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã xoá sản phẩm.") }}{% endif %}
+  {% if b.provider_name %}<p class="mb-0"><a href="{{ b.all_href }}">{{ atoms::icon(name="fa-xmark", class="me-1") }}Xem tất cả nhà cung cấp</a></p>{% endif %}
+
+  <div class="admin-card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="admin-table-head">
+          <tr><th>Sản phẩm</th><th>Nhà cung cấp</th><th class="text-end">Giá</th><th class="text-center">Trạng thái</th><th class="text-end">Thao tác</th></tr>
+        </thead>
+        <tbody>
+          {% for r in b.rows %}
+          {% set p = r.product %}
+          <tr{% if not p.is_active %} class="table-warning"{% endif %}>
+            <td>
+              <div class="d-flex align-items-center gap-2">
+                {% if p.image_file_id %}<img class="rounded object-fit-cover flex-shrink-0" width="48" height="48" src="{{ file_url(id=p.image_file_id, variant="thumb") }}" alt="" loading="lazy" decoding="async">{% endif %}
+                <div><a class="fw-bold text-decoration-none" href="{{ r.public_href }}">{{ p.name }}</a><span class="d-block small text-muted">{{ p.category }}</span></div>
+              </div>
+            </td>
+            <td><a class="text-decoration-none" href="{{ r.provider_href }}">{{ p.business_name }}</a></td>
+            <td class="text-end text-nowrap">{% if p.price %}{{ p.price | vnd }}{% if p.unit %}/{{ p.unit }}{% endif %}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+            <td class="text-center">{% if p.is_active %}<span class="badge text-bg-success">Hiển thị</span>{% else %}<span class="badge text-bg-secondary">Đã ẩn</span>{% endif %}</td>
+            <td class="text-end">
+              <div class="d-inline-flex gap-2">
+                {% if p.is_active %}
+                <a class="btn btn-sm btn-outline-warning" href="{{ r.hide_href }}#xac-nhan" aria-label="Ẩn {{ p.name }}">{{ atoms::icon(name="fa-eye-slash") }}</a>
+                {% else %}
+                <form method="post" action="{{ r.status_action }}">
+                  <input type="hidden" name="is_active" value="true">
+                  {% for k, v in b.position %}{% if v %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+                  <button type="submit" class="btn btn-sm btn-outline-success" aria-label="Hiển thị lại {{ p.name }}">{{ atoms::icon(name="fa-eye") }}</button>
+                </form>
+                {% endif %}
+                <a class="btn btn-sm btn-outline-danger" href="{{ r.delete_href }}#xac-nhan" aria-label="Xoá {{ p.name }}">{{ atoms::icon(name="fa-trash") }}</a>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-center text-muted py-4">Chưa có sản phẩm nào.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% if b.pagination %}{{ paging::pagination_nav(p=b.pagination) }}{% endif %}
+
+  {% if b.confirm %}
+  {% set c = b.confirm %}
+  {% if c.kind == "hide" %}
+  {{ confirm::confirm_sheet(id="xac-nhan", title="Ẩn sản phẩm " ~ c.name ~ "?", icon="fa-eye-slash", action=c.action, button="Xác nhận ẩn", hidden_name="is_active", hidden_value="false", keep=b.position) }}
+  {% else %}
+  {{ confirm::confirm_sheet(id="xac-nhan", title="Xoá sản phẩm " ~ c.name ~ "?", icon="fa-trash", action=c.action, button="Xác nhận xoá", button_class="btn-danger", keep=b.position) }}
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock content %}

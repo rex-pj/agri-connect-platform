@@ -1,0 +1,55 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "atoms/inquiry_status.html" as inquiry %}
+{% import "molecules/admin_header.html" as header %}
+{% import "molecules/pagination_nav.html" as paging %}
+{#- `page.body` is web::pages::admin::inquiries::InquiriesPage. Each row's
+    status is a small form; with JS the select saves itself (`autoSubmit`),
+    without JS its button does. -#}
+{% block title %}Yêu cầu liên hệ — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+{{ header::admin_header(title="Yêu cầu liên hệ", icon="fa-envelope-open-text", sub=b.total ~ " yêu cầu") }}
+<div class="admin-body">
+  {% if b.flash == "inquiry_status_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã lưu trạng thái.") }}{% endif %}
+
+  <div class="admin-card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="admin-table-head">
+          <tr><th>Người gửi</th><th>Nhà cung cấp</th><th>Chủ đề</th><th>Trạng thái</th></tr>
+        </thead>
+        <tbody>
+          {% for r in b.rows %}
+          {% set q = r.inquiry %}
+          <tr{% if q.status == "new" %} class="table-success"{% endif %}>
+            <td class="fw-semibold">{{ q.requester_name }}<a class="d-block small text-decoration-none" href="tel:{{ q.requester_phone }}">{{ atoms::icon(name="fa-phone", class="me-1") }}{{ q.requester_phone }}</a><span class="d-block small text-muted"><time datetime="{{ q.created_on | utc_iso }}">{{ q.created_on | vn_datetime }}</time></span></td>
+            <td><a class="text-decoration-none" href="{{ r.provider_href }}">{{ q.business_name }}</a></td>
+            <td>{{ q.topic }}</td>
+            <td>
+              {% if b.can_manage %}
+              <form class="d-flex gap-2" method="post" action="{{ r.action }}">
+                {% for k, v in b.position %}{% if v %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+                <label class="visually-hidden" for="status-{{ q.id }}">Trạng thái yêu cầu của {{ q.requester_name }}</label>
+                <select class="form-select form-select-sm w-auto" id="status-{{ q.id }}" name="status" x-data="autoSubmit" x-on:change="submit">
+                  {% for s in b.statuses %}<option value="{{ s }}"{% if s == q.status %} selected{% endif %}>{{ inquiry::label(status=s) }}</option>{% endfor %}
+                </select>
+                <button type="submit" class="btn btn-sm btn-outline-success" aria-label="Lưu trạng thái">{{ atoms::icon(name="fa-check") }}</button>
+              </form>
+              {% else %}
+              <span class="badge text-bg-light border">{{ inquiry::label(status=q.status) }}</span>
+              {% endif %}
+              {% if q.updated_by_name %}<span class="d-block small text-muted mt-1">{{ q.updated_by_name }}</span>{% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="text-center text-muted py-4">Chưa có yêu cầu nào.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% if b.pagination %}{{ paging::pagination_nav(p=b.pagination) }}{% endif %}
+</div>
+{% endblock content %}

@@ -53,10 +53,21 @@ pub enum Flash {
     ProviderVerified,
     ProviderUnverified,
     ProviderAccountAssigned,
+    ProductHidden,
+    ProductShown,
+    ProductDeleted,
+    ServiceCreated,
+    ServiceSaved,
+    ServiceHidden,
+    ServiceShown,
+    ServiceDeleted,
+    InquiryStatusSaved,
+    ReviewHidden,
+    ReviewShown,
 }
 
 impl Flash {
-    const ALL: [Flash; 21] = [
+    const ALL: [Flash; 32] = [
         Flash::ContactSent,
         Flash::PasswordReset,
         Flash::DemoLoaded,
@@ -78,6 +89,17 @@ impl Flash {
         Flash::ProviderVerified,
         Flash::ProviderUnverified,
         Flash::ProviderAccountAssigned,
+        Flash::ProductHidden,
+        Flash::ProductShown,
+        Flash::ProductDeleted,
+        Flash::ServiceCreated,
+        Flash::ServiceSaved,
+        Flash::ServiceHidden,
+        Flash::ServiceShown,
+        Flash::ServiceDeleted,
+        Flash::InquiryStatusSaved,
+        Flash::ReviewHidden,
+        Flash::ReviewShown,
     ];
 
     const fn as_str(self) -> &'static str {
@@ -103,6 +125,17 @@ impl Flash {
             Flash::ProviderVerified => "provider_verified",
             Flash::ProviderUnverified => "provider_unverified",
             Flash::ProviderAccountAssigned => "provider_account_assigned",
+            Flash::ProductHidden => "product_hidden",
+            Flash::ProductShown => "product_shown",
+            Flash::ProductDeleted => "product_deleted",
+            Flash::ServiceCreated => "service_created",
+            Flash::ServiceSaved => "service_saved",
+            Flash::ServiceHidden => "service_hidden",
+            Flash::ServiceShown => "service_shown",
+            Flash::ServiceDeleted => "service_deleted",
+            Flash::InquiryStatusSaved => "inquiry_status_saved",
+            Flash::ReviewHidden => "review_hidden",
+            Flash::ReviewShown => "review_shown",
         }
     }
 

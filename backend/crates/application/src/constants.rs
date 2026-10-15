@@ -63,3 +63,7 @@ pub const CATEGORY_ICON_MAX: usize = 100;
 pub const CATEGORY_COLOR_MAX: usize = 20;
 pub const CATEGORY_DESCRIPTION_MAX: usize = 300;
 pub const LOCATION_LABEL_MAX: usize = 150;
+pub const SERVICE_NAME_MAX: usize = 300;
+pub const SERVICE_PRICE_NOTE_MAX: usize = 300;
+/// `services.description` is TEXT; this keeps a listing readable on a phone.
+pub const SERVICE_DESCRIPTION_MAX: usize = 2000;

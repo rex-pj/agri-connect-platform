@@ -8,7 +8,10 @@
 
 use application::{
     authz::Actor,
-    catalogue::{PERM_PROVIDER_ACCOUNT_ASSIGN, PERM_PROVIDER_VERIFY},
+    catalogue::{
+        PERM_LISTING_MODERATE, PERM_PROVIDER_ACCOUNT_ASSIGN, PERM_PROVIDER_VERIFY,
+        PERM_SERVICE_MANAGE,
+    },
     outputs::{AdminPagedResponse, AdminProviderDetailDto, AdminProviderDto},
 };
 use axum::{extract::State, http::StatusCode, response::Response};
@@ -21,7 +24,7 @@ use crate::{
     extract::{ApiForm, ApiPath, ApiQuery},
     middleware::auth::Viewer,
     pages::{
-        admin::{is_refusal, render_admin, url, Outcome},
+        admin::{is_refusal, render_admin, url, ListPosition, Outcome},
         canonical_url,
         forms::{reason, FormErrors},
         listing::{parse_opt, Pagination},
@@ -108,6 +111,10 @@ pub struct ProviderPage {
     pub can_assign: bool,
     pub verification_action: String,
     pub account_action: String,
+    /// This provider's services and products in their admin lists, when the
+    /// visitor may manage them.
+    pub services_href: Option<String>,
+    pub products_href: Option<String>,
     pub form: AccountForm,
     pub errors: FormErrors,
     /// The unverify dialog re-opens after a refusal.
@@ -133,7 +140,16 @@ async fn provider_page(
             .unwrap_or_else(|| provider.phone.clone()),
         ..AccountForm::default()
     });
+    let own = ListPosition {
+        provider_id: id_text.clone(),
+        ..ListPosition::default()
+    };
+    let list_of = |perm: &str, route: &str| -> Result<Option<String>, Error> {
+        actor.can(perm).then(|| own.href(route, &[])).transpose()
+    };
     let body = ProviderPage {
+        services_href: list_of(PERM_SERVICE_MANAGE, "admin_services")?,
+        products_href: list_of(PERM_LISTING_MODERATE, "admin_products")?,
         public_href: canonical_url("provider", id, &provider.name)?,
         provider,
         can_verify: actor.can(PERM_PROVIDER_VERIFY),

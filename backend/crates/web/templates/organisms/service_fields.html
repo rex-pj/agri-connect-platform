@@ -1,0 +1,18 @@
+{#- The boxes of a service, shared by the create and edit forms. `form` is
+    web::pages::admin::services::ServiceForm (the values as typed), `errors`
+    its FormErrors, `categories` the active service categories, `limits` the
+    use case's lengths. -#}
+{% import "molecules/form_field.html" as field %}
+{% macro service_fields(form, errors, categories, limits, prefix) -%}
+<div class="form-field">
+  <label class="form-label fw-semibold" for="{{ prefix }}-category">Danh mục <span class="text-danger" aria-hidden="true">*</span></label>
+  <select class="form-select{% if errors.fields.category_id %} is-invalid{% endif %}" id="{{ prefix }}-category" name="category_id" required{% if errors.fields.category_id %} aria-invalid="true" aria-describedby="{{ prefix }}-category-error"{% endif %}>
+    <option value="">Chọn danh mục</option>
+    {% for c in categories %}<option value="{{ c.id }}"{% if c.id == form.category_id | int(default=0) %} selected{% endif %}>{{ c.name }}</option>{% endfor %}
+  </select>
+  {% if errors.fields.category_id %}<div class="invalid-feedback" id="{{ prefix }}-category-error">{{ errors.fields.category_id }}</div>{% endif %}
+</div>
+{{ field::input(id=prefix ~ "-name", name="name", label="Tên dịch vụ", value=form.name, error=errors.fields.name | default(value=""), required=true, maxlength=limits.name, placeholder="Múc bùn vườn sầu riêng") }}
+{{ field::input(id=prefix ~ "-price", name="price_note", label="Giá (ghi chú)", value=form.price_note, error=errors.fields.price_note | default(value=""), maxlength=limits.price_note, placeholder="Từ 500.000đ/công") }}
+{{ field::textarea(id=prefix ~ "-description", name="description", label="Mô tả", value=form.description, error=errors.fields.description | default(value=""), maxlength=limits.description, rows=3) }}
+{%- endmacro service_fields %}

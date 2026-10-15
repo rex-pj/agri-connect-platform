@@ -1,0 +1,57 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "molecules/admin_header.html" as header %}
+{% import "molecules/pagination_nav.html" as paging %}
+{% import "organisms/confirm_sheet.html" as confirm %}
+{#- `page.body` is web::pages::admin::reviews::ReviewsPage. "Ẩn" reloads the
+    list with that row's confirmation open (`b.confirm`); every form sends the
+    page number back so the redirect lands here again. -#}
+{% block title %}Đánh giá — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+{{ header::admin_header(title="Đánh giá", icon="fa-star", sub=b.total ~ " đánh giá") }}
+<div class="admin-body" x-data="dialog" data-open="{% if b.confirm %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+  {% if b.flash == "review_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã ẩn đánh giá.") }}{% endif %}
+  {% if b.flash == "review_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đánh giá đã hiển thị lại.") }}{% endif %}
+
+  <div class="admin-card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="admin-table-head">
+          <tr><th>Người đánh giá</th><th>Nhà cung cấp</th><th>Nội dung</th><th class="text-center">Trạng thái</th><th class="text-end"></th></tr>
+        </thead>
+        <tbody>
+          {% for r in b.rows %}
+          {% set v = r.review %}
+          <tr{% if not v.is_visible %} class="table-warning"{% endif %}>
+            <td class="fw-semibold">{{ v.reviewer_name }}<span class="d-block small text-muted"><time datetime="{{ v.created_on | utc_iso }}">{{ v.created_on | vn_datetime }}</time></span></td>
+            <td><a class="text-decoration-none" href="{{ r.provider_href }}">{{ v.business_name }}</a></td>
+            <td><span class="text-warning text-nowrap" aria-label="{{ v.rating }} trên 5 sao">{% for i in range(end=v.rating) %}{{ atoms::icon(name="fa-star") }}{% endfor %}</span>{% if v.comment %}<span class="d-block small">{{ v.comment }}</span>{% endif %}</td>
+            <td class="text-center">{% if v.is_visible %}<span class="badge text-bg-success">Hiển thị</span>{% else %}<span class="badge text-bg-secondary">Đã ẩn</span>{% if v.updated_by_name %}<span class="d-block small text-muted">{{ v.updated_by_name }}</span>{% endif %}{% endif %}</td>
+            <td class="text-end">
+              {% if v.is_visible %}
+              <a class="btn btn-sm btn-outline-warning" href="{{ r.hide_href }}#xac-nhan" aria-label="Ẩn đánh giá của {{ v.reviewer_name }}">{{ atoms::icon(name="fa-eye-slash") }}</a>
+              {% else %}
+              <form method="post" action="{{ r.action }}">
+                <input type="hidden" name="is_visible" value="true">
+                {% for k, x in b.position %}{% if x %}<input type="hidden" name="{{ k }}" value="{{ x }}">{% endif %}{% endfor %}
+                <button type="submit" class="btn btn-sm btn-outline-success" aria-label="Hiển thị lại đánh giá của {{ v.reviewer_name }}">{{ atoms::icon(name="fa-eye") }}</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-center text-muted py-4">Chưa có đánh giá nào.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% if b.pagination %}{{ paging::pagination_nav(p=b.pagination) }}{% endif %}
+
+  {% if b.confirm %}
+  {{ confirm::confirm_sheet(id="xac-nhan", title="Ẩn đánh giá của " ~ b.confirm.reviewer ~ "?", icon="fa-eye-slash", action=b.confirm.action, button="Xác nhận ẩn", hidden_name="is_visible", hidden_value="false", keep=b.position) }}
+  {% endif %}
+</div>
+{% endblock content %}

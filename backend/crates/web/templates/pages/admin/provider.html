@@ -63,6 +63,7 @@
 
   <section class="admin-card p-3">
     <h2 class="detail-card__title">Dịch vụ ({{ p.services | length }})</h2>
+    {% if b.services_href %}<p class="mb-2"><a href="{{ b.services_href }}">{{ atoms::icon(name="fa-screwdriver-wrench", class="me-1") }}Quản lý dịch vụ</a></p>{% endif %}
     {% if p.services %}
     <ul class="list-unstyled mb-0">
       {% for s in p.services %}<li class="py-1 border-bottom"><span class="fw-semibold">{{ s.name }}</span> <span class="ac-tag">{{ s.category }}</span>{% if s.price_note %} <span class="small text-muted">· {{ s.price_note }}</span>{% endif %}{% if not s.is_active %} <span class="badge text-bg-secondary">Đã ẩn</span>{% endif %}</li>{% endfor %}
@@ -72,6 +73,7 @@
 
   <section class="admin-card p-3">
     <h2 class="detail-card__title">Sản phẩm ({{ p.products | length }})</h2>
+    {% if b.products_href %}<p class="mb-2"><a href="{{ b.products_href }}">{{ atoms::icon(name="fa-box-open", class="me-1") }}Kiểm duyệt sản phẩm</a></p>{% endif %}
     {% if p.products %}
     <ul class="list-unstyled mb-0">
       {% for x in p.products %}<li class="py-1 border-bottom"><span class="fw-semibold">{{ x.name }}</span> <span class="ac-tag">{{ x.category }}</span>{% if x.price %} <span class="small text-muted">· {{ x.price | vnd }}{% if x.unit %}/{{ x.unit }}{% endif %}</span>{% endif %}{% if not x.is_active %} <span class="badge text-bg-secondary">Đã ẩn</span>{% endif %}</li>{% endfor %}

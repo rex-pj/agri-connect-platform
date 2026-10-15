@@ -221,7 +221,7 @@ impl ServiceRepositoryTrait for ServiceRepository {
 
     async fn check_category_is_service(&self, category_id: i32) -> Result<bool, Error> {
         Category::find_by_id(category_id)
-            .filter(category::Column::Type.eq("service"))
+            .filter(category::Column::Type.eq(domain::constants::CATEGORY_TYPE_SERVICE))
             .filter(category::Column::IsActive.eq(true))
             .count(self.db.as_ref())
             .await

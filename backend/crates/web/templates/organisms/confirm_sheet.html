@@ -3,9 +3,10 @@
     an element with `x-data="dialog"`: with JS it is a sheet opened by a
     trigger with `x-on:click.prevent="show"`; without JS the trigger is an
     anchor to `#{{ id }}` and the form is submitted in place. `hidden_name` /
-    `hidden_value`: one extra field the action needs (e.g. is_active=false). -#}
+    `hidden_value`: one extra field the action needs (e.g. is_active=false).
+    `keep`: a map of further hidden fields, e.g. the list page to return to. -#}
 {% import "atoms/icon.html" as atoms %}
-{% macro confirm_sheet(id, title, icon, action, button, hidden_name="", hidden_value="", button_class="btn-warning", reason_label="Lý do (ghi vào nhật ký)") -%}
+{% macro confirm_sheet(id, title, icon, action, button, hidden_name="", hidden_value="", button_class="btn-warning", reason_label="Lý do (ghi vào nhật ký)", keep="") -%}
 <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
 <section class="contact-sheet" id="{{ id }}" aria-labelledby="{{ id }}-title" :class="sheetClass">
   <div class="contact-sheet__header">
@@ -14,6 +15,7 @@
   </div>
   <form class="contact-sheet__form" method="post" action="{{ action }}">
     {% if hidden_name %}<input type="hidden" name="{{ hidden_name }}" value="{{ hidden_value }}">{% endif %}
+    {% if keep %}{% for k, v in keep %}{% if v %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}{% endif %}
     <div class="form-field">
       <label class="form-label fw-semibold" for="{{ id }}-reason">{{ reason_label }}</label>
       <textarea class="form-control" id="{{ id }}-reason" name="reason" rows="2" maxlength="500" x-ref="first"></textarea>

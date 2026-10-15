@@ -33,7 +33,8 @@ use crate::{
     },
     constants::{
         ADMIN_PAGE_SIZE, CATEGORY_COLOR_MAX, CATEGORY_DESCRIPTION_MAX, CATEGORY_ICON_MAX,
-        CATEGORY_NAME_MAX, CATEGORY_SLUG_MAX, LOCATION_LABEL_MAX,
+        CATEGORY_NAME_MAX, CATEGORY_SLUG_MAX, LOCATION_LABEL_MAX, SERVICE_DESCRIPTION_MAX,
+        SERVICE_NAME_MAX, SERVICE_PRICE_NOTE_MAX,
     },
     inputs::CategoryInput,
     outputs::{
@@ -896,24 +897,20 @@ impl AdminUseCase {
         price_note: Option<String>,
     ) -> Result<AdminServiceDto> {
         actor.require(PERM_SERVICE_MANAGE)?;
-        let name = name.trim().to_string();
-        if name.is_empty() {
-            return Err(Error::new(ErrorCode::NameRequired));
-        }
-        let biz_exists = self
+        if !self
             .business_repo
             .check_exists_for_admin(business_id)
-            .await?;
-        if !biz_exists {
+            .await?
+        {
             return Err(Error::new(ErrorCode::ProviderNotFound));
         }
-        let valid_cat = self
-            .service_repo
-            .check_category_is_service(category_id)
+        let ServiceFields {
+            name,
+            description,
+            price_note,
+        } = self
+            .validate_service(category_id, name, description, price_note)
             .await?;
-        if !valid_cat {
-            return Err(Error::new(ErrorCode::InvalidServiceCategory));
-        }
         let id = self
             .service_repo
             .create(NewService {
@@ -938,17 +935,13 @@ impl AdminUseCase {
         price_note: Option<String>,
     ) -> Result<AdminServiceDto> {
         actor.require(PERM_SERVICE_MANAGE)?;
-        let name = name.trim().to_string();
-        if name.is_empty() {
-            return Err(Error::new(ErrorCode::NameRequired));
-        }
-        let valid_cat = self
-            .service_repo
-            .check_category_is_service(category_id)
+        let ServiceFields {
+            name,
+            description,
+            price_note,
+        } = self
+            .validate_service(category_id, name, description, price_note)
             .await?;
-        if !valid_cat {
-            return Err(Error::new(ErrorCode::InvalidServiceCategory));
-        }
         let updated = self
             .service_repo
             .update(UpdateService {
@@ -964,6 +957,41 @@ impl AdminUseCase {
             return Err(Error::new(ErrorCode::ServiceNotFound));
         }
         self.load_service_admin(id).await
+    }
+
+    /// Every rule of a service's boxes, reported together; the category must
+    /// be an active service category.
+    async fn validate_service(
+        &self,
+        category_id: i32,
+        name: String,
+        description: Option<String>,
+        price_note: Option<String>,
+    ) -> Result<ServiceFields> {
+        let name = name.trim().to_owned();
+        let description = non_blank(description);
+        let price_note = non_blank(price_note);
+        let opt = |v: &Option<String>, max| v.as_deref().map_or(Ok(()), |v| max_chars(v, max));
+        let category_ok = self
+            .service_repo
+            .check_category_is_service(category_id)
+            .await?;
+        Validation::new()
+            .check(name.is_empty(), "name", ErrorCode::NameRequired)
+            .rule("name", max_chars(&name, SERVICE_NAME_MAX))
+            .check(
+                !category_ok,
+                "category_id",
+                ErrorCode::InvalidServiceCategory,
+            )
+            .rule("description", opt(&description, SERVICE_DESCRIPTION_MAX))
+            .rule("price_note", opt(&price_note, SERVICE_PRICE_NOTE_MAX))
+            .finish()?;
+        Ok(ServiceFields {
+            name,
+            description,
+            price_note,
+        })
     }
 
     pub async fn toggle_service_active(
@@ -1138,4 +1166,11 @@ fn refuse_self(actor: &Actor, target_user_id: i32) -> Result<()> {
         return Err(Error::new(ErrorCode::CannotChangeOwnAccount));
     }
     Ok(())
+}
+
+/// A service's boxes once its rules pass: trimmed, blanks as `None`.
+struct ServiceFields {
+    name: String,
+    description: Option<String>,
+    price_note: Option<String>,
 }

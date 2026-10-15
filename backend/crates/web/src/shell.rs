@@ -10,10 +10,10 @@ use application::{
     catalogue::{PERM_ADMIN_DASHBOARD_VIEW, PERM_OWN_LISTING_CREATE},
 };
 use axum::{extract::FromRequestParts, http::request::Parts};
-use domain::{Error, ErrorCode};
+use domain::Error;
 use serde::Serialize;
 
-use crate::{app_state::AppState, middleware::auth::MaybeActor, routes};
+use crate::{app_state::AppState, middleware::auth::Viewer, routes};
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct Link {
@@ -64,7 +64,7 @@ fn link(route: &str, icon: &'static str, label: &'static str) -> Link {
 
 /// Where "my area" is for this visitor: the admin panel, the provider
 /// dashboard, or the account page (which asks anonymous visitors to log in).
-fn home_area(actor: Option<&Actor>) -> Link {
+pub fn home_area(actor: Option<&Actor>) -> Link {
     match actor {
         Some(a) if a.can(PERM_ADMIN_DASHBOARD_VIEW) => {
             link("admin_dashboard", "fa-shield-halved", "Quản trị")
@@ -191,11 +191,7 @@ impl FromRequestParts<AppState> for Shell {
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let actor = match MaybeActor::from_request_parts(parts, state).await {
-            Ok(MaybeActor(actor)) => actor,
-            Err(e) if e.code() == ErrorCode::InvalidToken => None,
-            Err(e) => return Err(e),
-        };
+        let Viewer(actor) = Viewer::from_request_parts(parts, state).await?;
         Ok(Self::new(
             parts.uri.path(),
             parts.uri.query(),

@@ -1,0 +1,16 @@
+{% extends "layouts/base.html" %}
+{% import "atoms/icon.html" as atoms %}
+{#- Sign-in, registration, password and setup pages: one card on the green
+    background, no app frame. Never indexed. Pages fill `card`. -#}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
+{% block body %}
+<main class="auth-shell">
+  <div class="auth-card">
+    <a class="auth-brand" href="{{ url_for(name="home") }}">
+      <span class="auth-brand__icon">{{ atoms::icon(name="fa-seedling") }}</span>
+      <span class="auth-brand__name">{{ site.name }}</span>
+    </a>
+    {% block card %}{% endblock card %}
+  </div>
+</main>
+{% endblock body %}

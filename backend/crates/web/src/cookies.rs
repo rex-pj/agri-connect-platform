@@ -33,17 +33,30 @@ const FLASH_MAX_AGE_SECS: u32 = 60;
 #[serde(rename_all = "snake_case")]
 pub enum Flash {
     ContactSent,
+    PasswordReset,
+    DemoLoaded,
+    DemoRemoved,
 }
 
 impl Flash {
+    const ALL: [Flash; 4] = [
+        Flash::ContactSent,
+        Flash::PasswordReset,
+        Flash::DemoLoaded,
+        Flash::DemoRemoved,
+    ];
+
     const fn as_str(self) -> &'static str {
         match self {
             Flash::ContactSent => "contact_sent",
+            Flash::PasswordReset => "password_reset",
+            Flash::DemoLoaded => "demo_loaded",
+            Flash::DemoRemoved => "demo_removed",
         }
     }
 
     fn parse(value: &str) -> Option<Self> {
-        (value == Flash::ContactSent.as_str()).then_some(Flash::ContactSent)
+        Self::ALL.into_iter().find(|f| f.as_str() == value)
     }
 
     /// Adds the cookie to a redirect. Not `Secure`: it carries no secret, and
@@ -126,5 +139,8 @@ mod tests {
             .contains("Max-Age=0"));
         // A forged value is ignored.
         assert_eq!(Flash::parse("<script>"), None);
+        for flash in Flash::ALL {
+            assert_eq!(Flash::parse(flash.as_str()), Some(flash));
+        }
     }
 }

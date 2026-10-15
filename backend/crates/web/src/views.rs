@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 
+use application::constants::{PASSWORD_MIN_CHARS, PASSWORD_RESET_EXPIRY_HOURS, USERNAME_MIN_LEN};
 use axum::{
     http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
@@ -60,12 +61,28 @@ pub struct Views {
     site: SiteConfig,
 }
 
+/// The use cases' field rules, so forms can say `minlength` without
+/// repeating the numbers.
+#[derive(Clone, Copy, Serialize)]
+struct FieldLimits {
+    password_min_chars: usize,
+    username_min_len: usize,
+    reset_link_hours: i64,
+}
+
+const FIELD_LIMITS: FieldLimits = FieldLimits {
+    password_min_chars: PASSWORD_MIN_CHARS,
+    username_min_len: USERNAME_MIN_LEN,
+    reset_link_hours: PASSWORD_RESET_EXPIRY_HOURS,
+};
+
 /// What every template sees: `site`, `lang`, the frame (`shell`: nav, tabs,
 /// account menu) and the handler's `page`.
 #[derive(Serialize)]
 struct PageContext<'a, T: Serialize> {
     site: &'a SiteConfig,
     lang: &'static str,
+    limits: FieldLimits,
     shell: &'a Shell,
     page: &'a T,
 }
@@ -197,6 +214,7 @@ impl Views {
         let context = tera::Context::from_serialize(PageContext {
             site: &self.site,
             lang: "vi",
+            limits: FIELD_LIMITS,
             shell,
             page,
         })

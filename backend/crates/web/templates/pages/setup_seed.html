@@ -1,0 +1,47 @@
+{% extends "layouts/app.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "molecules/page_hero.html" as hero %}
+{#- Demo data: how much is loaded, load it, remove it. `page` is
+    web::pages::setup::SeedPage. Removing needs a ticked confirmation, so it
+    is safe without JS too. Real listings are never touched. -#}
+{% block title %}Dữ liệu mẫu — {{ site.name }}{% endblock title %}
+{% block meta %}<meta name="robots" content="noindex">{% endblock meta %}
+{% block main %}
+{{ hero::page_hero(title="Dữ liệu mẫu", back_href=url_for(name="admin_dashboard"), back_label="Quản trị", variant="", icon="fa-database", sub="Nhà cung cấp, dịch vụ và sản phẩm mẫu để thử nghiệm") }}
+<div class="detail-body seed-page">
+  {% if page.flash == "demo_loaded" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã nạp dữ liệu mẫu.") }}{% endif %}
+  {% if page.flash == "demo_removed" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã xoá toàn bộ dữ liệu mẫu.") }}{% endif %}
+  {% if page.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=page.errors.message) }}{% endif %}
+
+  <section class="detail-card">
+    <h2 class="detail-card__title">Hiện có</h2>
+    <p class="seed-count"><strong>{{ page.status.demo_business_count }}</strong> nhà cung cấp mẫu · <strong>{{ page.status.business_count }}</strong> nhà cung cấp tất cả</p>
+  </section>
+
+  {% if page.status.is_seeded %}
+  <section class="detail-card">
+    <h2 class="detail-card__title">Xoá dữ liệu mẫu</h2>
+    <p class="small text-muted">Chỉ xoá các nhà cung cấp mẫu cùng dịch vụ và sản phẩm của họ. Dữ liệu thật không bị ảnh hưởng.</p>
+    <form method="post" action="{{ url_for(name="setup_seed") }}">
+      <input type="hidden" name="action" value="remove">
+      <div class="form-check mb-3">
+        <input class="form-check-input{% if page.errors.fields.confirm %} is-invalid{% endif %}" type="checkbox" id="seed_confirm" name="confirm" required{% if page.errors.fields.confirm %} aria-invalid="true" aria-describedby="seed_confirm-error"{% endif %}>
+        <label class="form-check-label" for="seed_confirm">Tôi hiểu: {{ page.status.demo_business_count }} nhà cung cấp mẫu sẽ bị xoá.</label>
+        {% if page.errors.fields.confirm %}<div class="invalid-feedback" id="seed_confirm-error">{{ page.errors.fields.confirm }}</div>{% endif %}
+      </div>
+      <button type="submit" class="btn btn-outline-danger btn-lg w-100">{{ atoms::icon(name="fa-trash") }} Xoá dữ liệu mẫu</button>
+    </form>
+  </section>
+  {% else %}
+  <section class="detail-card">
+    <h2 class="detail-card__title">Nạp dữ liệu mẫu</h2>
+    <p class="small text-muted">Vài nhà cung cấp ở Cái Lậy, Tiền Giang cùng dịch vụ và sản phẩm, để thử các trang.</p>
+    <form method="post" action="{{ url_for(name="setup_seed") }}">
+      <input type="hidden" name="action" value="load">
+      <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-download") }} Nạp dữ liệu mẫu</button>
+    </form>
+  </section>
+  {% endif %}
+</div>
+{% endblock main %}

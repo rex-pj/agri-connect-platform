@@ -14,7 +14,6 @@ pub const FILE_THUMB_PATH: &str = "/files/{id}/thumb";
 pub const ROUTES: &[(&str, &str)] = &[
     ("home", "/"),
     ("login", "/login"),
-    ("login_reset", "/login?reset=1"),
     ("logout", "/logout"),
     ("register", "/register"),
     ("forgot_password", "/forgot-password"),

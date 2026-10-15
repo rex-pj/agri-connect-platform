@@ -4,21 +4,12 @@
 
 use axum::{
     body::Body,
-    http::{header, Request, Response, StatusCode},
+    http::{header, Request, StatusCode},
 };
-use integration_tests::{register_provider, send, Env};
+use integration_tests::{
+    body_text, env_with_origin, form_body, get_page, register_provider, send, Env, TEST_ORIGIN,
+};
 use sea_orm::{ConnectionTrait, Statement};
-use web::routings::app_routing::RouterConfig;
-
-const ORIGIN: &str = "http://localhost:3000";
-
-fn get(uri: &str, cookie: Option<&str>) -> Request<Body> {
-    let mut req = Request::get(uri).header(header::ACCEPT, "text/html");
-    if let Some(c) = cookie {
-        req = req.header(header::COOKIE, c);
-    }
-    req.body(Body::empty()).unwrap()
-}
 
 fn post_contact(form: &str, origin: &str) -> Request<Body> {
     Request::post("/contact")
@@ -29,34 +20,8 @@ fn post_contact(form: &str, origin: &str) -> Request<Body> {
         .unwrap()
 }
 
-async fn text(res: Response<Body>) -> String {
-    let bytes = axum::body::to_bytes(res.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    String::from_utf8(bytes.to_vec()).unwrap()
-}
-
-/// Percent-encodes a form value (UTF-8 bytes, `+` for spaces).
-fn enc(value: &str) -> String {
-    value
-        .bytes()
-        .map(|b| match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' => (b as char).to_string(),
-            b' ' => "+".to_owned(),
-            _ => format!("%{b:02X}"),
-        })
-        .collect()
-}
-
 async fn env() -> Env {
-    Env::with(
-        None,
-        RouterConfig {
-            allowed_origins: vec![ORIGIN.to_owned()],
-            ..RouterConfig::default()
-        },
-    )
-    .await
+    env_with_origin().await
 }
 
 /// A provider "Vườn nongdan" with one service; returns (business id, canonical URL).
@@ -99,12 +64,14 @@ async fn inquiries(e: &Env) -> i64 {
 }
 
 fn valid_form(id: i32) -> String {
-    format!(
-        "business_id={id}&requester_phone=0912345678&topic={}&requester_name={}&note={}",
-        enc("Múc bùn ao"),
-        enc("Nguyễn Văn A"),
-        enc("Ao 500 m2")
-    )
+    let id = id.to_string();
+    form_body(&[
+        ("business_id", &id),
+        ("requester_phone", "0912345678"),
+        ("topic", "Múc bùn ao"),
+        ("requester_name", "Nguyễn Văn A"),
+        ("note", "Ao 500 m2"),
+    ])
 }
 
 #[tokio::test]
@@ -117,14 +84,14 @@ async fn the_provider_page_has_its_services_a_call_button_and_the_form() {
         format!("/providers/{id}"),
         format!("/providers/{id}/sai-ten"),
     ] {
-        let res = send(&e.router, get(&uri, None)).await;
+        let res = send(&e.router, get_page(&uri, None)).await;
         assert_eq!(res.status(), StatusCode::MOVED_PERMANENTLY, "{uri}");
         assert_eq!(res.headers()[header::LOCATION], canonical.as_str());
     }
 
-    let res = send(&e.router, get(&canonical, None)).await;
+    let res = send(&e.router, get_page(&canonical, None)).await;
     assert_eq!(res.status(), StatusCode::OK);
-    let html = text(res).await;
+    let html = body_text(res).await;
     assert!(html.contains("<title>Vườn nongdan — Agri-Connect</title>"));
     assert!(html.contains(r#"content="Múc bùn, nạo vét kênh mương.""#));
     assert!(html.contains("Ấp 3, Cai Lậy, Tiền Giang"));
@@ -145,7 +112,7 @@ async fn a_sent_form_redirects_and_thanks_the_visitor_once() {
     let e = env().await;
     let (id, canonical) = provider(&e).await;
 
-    let res = send(&e.router, post_contact(&valid_form(id), ORIGIN)).await;
+    let res = send(&e.router, post_contact(&valid_form(id), TEST_ORIGIN)).await;
     // 303: reloading the thank-you page must not post the form again.
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
     assert_eq!(res.headers()[header::LOCATION], canonical.as_str());
@@ -156,7 +123,7 @@ async fn a_sent_form_redirects_and_thanks_the_visitor_once() {
     assert!(flash.starts_with("flash=contact_sent;"), "{flash}");
     assert_eq!(inquiries(&e).await, 1);
 
-    let res = send(&e.router, get(&canonical, Some("flash=contact_sent"))).await;
+    let res = send(&e.router, get_page(&canonical, Some("flash=contact_sent"))).await;
     let clears = res.headers()[header::SET_COOKIE]
         .to_str()
         .unwrap()
@@ -165,7 +132,7 @@ async fn a_sent_form_redirects_and_thanks_the_visitor_once() {
         clears.contains("Max-Age=0"),
         "the flash is used up: {clears}"
     );
-    assert!(text(res).await.contains("Đã gửi yêu cầu!"));
+    assert!(body_text(res).await.contains("Đã gửi yêu cầu!"));
     e.cleanup().await;
 }
 
@@ -174,14 +141,18 @@ async fn a_sent_form_redirects_and_thanks_the_visitor_once() {
 async fn a_rejected_form_comes_back_with_messages_and_what_was_typed() {
     let e = env().await;
     let (id, _) = provider(&e).await;
-    let form = format!(
-        "business_id={id}&requester_phone=123&topic=&requester_name={}&note=",
-        enc("<script>alert(1)</script>")
-    );
+    let id_text = id.to_string();
+    let form = form_body(&[
+        ("business_id", &id_text),
+        ("requester_phone", "123"),
+        ("topic", ""),
+        ("requester_name", "<script>alert(1)</script>"),
+        ("note", ""),
+    ]);
 
-    let res = send(&e.router, post_contact(&form, ORIGIN)).await;
+    let res = send(&e.router, post_contact(&form, TEST_ORIGIN)).await;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
-    let html = text(res).await;
+    let html = body_text(res).await;
     assert!(html.contains("Vui lòng kiểm tra lại thông tin."));
     assert!(
         html.contains("Vui lòng chọn dịch vụ cần liên hệ."),
@@ -207,9 +178,11 @@ async fn contact_for_a_missing_provider_or_from_another_site_is_refused() {
     let e = env().await;
     let (id, _) = provider(&e).await;
 
-    let res = send(&e.router, post_contact(&valid_form(999_999), ORIGIN)).await;
+    let res = send(&e.router, post_contact(&valid_form(999_999), TEST_ORIGIN)).await;
     assert_eq!(res.status(), StatusCode::NOT_FOUND);
-    assert!(text(res).await.contains("Không tìm thấy nhà cung cấp."));
+    assert!(body_text(res)
+        .await
+        .contains("Không tìm thấy nhà cung cấp."));
 
     let res = send(
         &e.router,
@@ -226,7 +199,7 @@ async fn contact_for_a_missing_provider_or_from_another_site_is_refused() {
 async fn a_missing_provider_page_is_a_404() {
     let e = env().await;
     for uri in ["/providers/999999/x", "/providers/khong-so"] {
-        let res = send(&e.router, get(uri, None)).await;
+        let res = send(&e.router, get_page(uri, None)).await;
         assert_eq!(res.status(), StatusCode::NOT_FOUND, "{uri}");
     }
     e.cleanup().await;

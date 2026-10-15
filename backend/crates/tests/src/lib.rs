@@ -322,3 +322,79 @@ pub async fn categories_of(env: &Env, kind: &str) -> Vec<(i32, String)> {
         })
         .collect()
 }
+
+/// The origin the test routers accept for non-GET requests.
+pub const TEST_ORIGIN: &str = "http://localhost:3000";
+
+/// A router that accepts `TEST_ORIGIN`, like production accepts APP_URL.
+pub async fn env_with_origin() -> Env {
+    Env::with(
+        None,
+        RouterConfig {
+            allowed_origins: vec![TEST_ORIGIN.to_owned()],
+            ..RouterConfig::default()
+        },
+    )
+    .await
+}
+
+/// Encodes `pairs` the way a browser submits a form.
+pub fn form_body(pairs: &[(&str, &str)]) -> String {
+    let enc = |s: &str| -> String {
+        s.bytes()
+            .map(|b| match b {
+                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'*' => {
+                    (b as char).to_string()
+                }
+                b' ' => "+".to_owned(),
+                _ => format!("%{b:02X}"),
+            })
+            .collect()
+    };
+    pairs
+        .iter()
+        .map(|(k, v)| format!("{}={}", enc(k), enc(v)))
+        .collect::<Vec<_>>()
+        .join("&")
+}
+
+/// A page form POST from our own origin, with an optional Cookie header.
+pub fn post_form(path: &str, pairs: &[(&str, &str)], cookie: Option<&str>) -> Request<Body> {
+    let mut req = Request::post(path)
+        .header(header::ACCEPT, "text/html")
+        .header(header::ORIGIN, TEST_ORIGIN)
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded");
+    if let Some(c) = cookie {
+        req = req.header(header::COOKIE, c);
+    }
+    req.body(Body::from(form_body(pairs))).unwrap()
+}
+
+/// A browser page GET with an optional Cookie header.
+pub fn get_page(path: &str, cookie: Option<&str>) -> Request<Body> {
+    let mut req = Request::get(path).header(header::ACCEPT, "text/html");
+    if let Some(c) = cookie {
+        req = req.header(header::COOKIE, c);
+    }
+    req.body(Body::empty()).unwrap()
+}
+
+pub async fn body_text(res: Response<Body>) -> String {
+    let bytes = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    String::from_utf8(bytes.to_vec()).unwrap()
+}
+
+/// `name=value; …` for the cookies a response sets (not the expiring ones),
+/// to send back as a browser would.
+pub fn cookies_from(res: &Response<Body>) -> String {
+    res.headers()
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .filter(|c| !c.contains("Max-Age=0"))
+        .filter_map(|c| c.split(';').next())
+        .collect::<Vec<_>>()
+        .join("; ")
+}

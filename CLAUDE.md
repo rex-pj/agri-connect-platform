@@ -269,10 +269,13 @@ All routes are defined as SvelteKit file-system pages under `client-app/src/rout
 
 | Route              | Description                             |
 | ------------------ | --------------------------------------- |
-| `/login`           | Admin / provider login, first-run setup |
-| `/register`        | Provider self-registration              |
-| `/forgot-password` | Request password reset email            |
-| `/reset-password`  | Consume reset token, set new password   |
+| `/login`           | Login (**Rust**, `web/src/pages/auth.rs`); signed in → own area by permission; no admin yet → `/setup` |
+| `/register`        | Provider self-registration (**Rust**)   |
+| `/forgot-password` | Request password reset email (**Rust**) |
+| `/reset-password`  | Consume reset token, set new password (**Rust**) |
+| `/setup`           | First admin + optional demo data (**Rust**, `web/src/pages/setup.rs`); closed once an admin exists |
+| `/setup/seed`      | Demo data page: load / remove (`system.demo.manage`) (**Rust**) |
+| `/logout`          | POST: ends the session family, clears both cookies (**Rust**, `web/src/session.rs`) |
 
 ### App `(app)/`
 
@@ -308,7 +311,7 @@ All routes are defined as SvelteKit file-system pages under `client-app/src/rout
 | `/admin/agri-connect/[id]` | Provider detail                                 |
 | `/admin/inquiries`         | Inquiry status management                       |
 | `/admin/reviews`           | Review visibility management                    |
-| `/admin/logout`            | POST action — clears cookie, redirects to login |
+| `/admin/logout`            | POST (**Rust**): same as `/logout`, lands on `/login` |
 
 ---
 

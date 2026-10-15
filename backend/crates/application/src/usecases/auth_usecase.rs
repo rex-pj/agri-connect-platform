@@ -227,6 +227,13 @@ impl AuthUseCase {
 
     // ── First-admin bootstrap ─────────────────────────────────────────────────
 
+    /// True until the first admin exists: /login sends visitors to /setup and
+    /// /setup refuses once it is false. Public on purpose: the setup page
+    /// itself reveals the same fact.
+    pub async fn needs_first_admin(&self) -> Result<bool> {
+        Ok(self.user_repo.count_by_role(ROLE_ADMIN).await? == 0)
+    }
+
     pub async fn create_first_admin(
         &self,
         username: String,
@@ -234,7 +241,7 @@ impl AuthUseCase {
         password: String,
         full_name: Option<String>,
     ) -> Result<LoginResponse> {
-        if self.user_repo.count_by_role(ROLE_ADMIN).await? > 0 {
+        if !self.needs_first_admin().await? {
             return Err(Error::new(ErrorCode::AdminAlreadyExists));
         }
 

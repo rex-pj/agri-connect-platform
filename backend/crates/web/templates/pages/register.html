@@ -1,0 +1,33 @@
+{% extends "layouts/auth.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "molecules/form_field.html" as field %}
+{#- `page` is web::pages::auth::RegisterPage. -#}
+{% block title %}Đăng ký nhà cung cấp — {{ site.name }}{% endblock title %}
+{% block card %}
+{% set v = page.values %}
+{% set e = page.errors.fields %}
+<h1 class="auth-title">Đăng ký nhà cung cấp</h1>
+<p class="auth-sub">Đưa dịch vụ của bạn đến nông dân trong vùng.</p>
+<form class="auth-form" method="post" action="{{ url_for(name="register") }}">
+  {% if page.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=page.errors.message) }}{% endif %}
+  <fieldset class="auth-fieldset">
+    <legend class="auth-legend">Cơ sở của bạn</legend>
+    {{ field::input(id="r_biz_name", name="business_name", label="Tên cơ sở", value=v.business_name, error=e.business_name | default(value=""), required=true, autocomplete="organization", first=true) }}
+    {{ field::input(id="r_biz_phone", name="business_phone", label="Số điện thoại", type="tel", value=v.business_phone, error=e.business_phone | default(value=""), required=true, placeholder="0901234567", pattern="0[0-9]{9}", inputmode="numeric", autocomplete="tel") }}
+  </fieldset>
+  <fieldset class="auth-fieldset">
+    <legend class="auth-legend">Tài khoản</legend>
+    {{ field::input(id="r_fullname", name="full_name", label="Họ và tên", value=v.full_name, autocomplete="name") }}
+    {{ field::input(id="r_email", name="email", label="Email", type="email", value=v.email, error=e.email | default(value=""), required=true, autocomplete="email") }}
+    {{ field::input(id="r_user", name="username", label="Tên đăng nhập", value=v.username, error=e.username | default(value=""), required=true, autocomplete="username", minlength=limits.username_min_len) }}
+    {{ field::input(id="r_pw", name="password", label="Mật khẩu", type="password", error=e.password | default(value=""), required=true, autocomplete="new-password", minlength=limits.password_min_chars) }}
+    {{ field::input(id="r_pw2", name="password2", label="Nhập lại mật khẩu", type="password", error=e.password2 | default(value=""), required=true, autocomplete="new-password") }}
+  </fieldset>
+  <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-user-plus") }} Tạo tài khoản</button>
+</form>
+<p class="auth-footer">
+  <span class="text-muted small">Đã có tài khoản?</span>
+  <a class="small" href="{{ url_for(name="login") }}">Đăng nhập</a>
+</p>
+{% endblock card %}

@@ -1,8 +1,10 @@
 //! Server-rendered pages. Each module is one route (or a family of them):
 //! it builds a view model from use cases and hands it to `render_page`.
 
+pub mod auth;
 pub mod cards;
 pub mod explore;
+pub mod forms;
 pub mod home;
 pub mod listing;
 pub mod product;
@@ -10,6 +12,7 @@ pub mod products;
 pub mod provider;
 pub mod search;
 pub mod services;
+pub mod setup;
 
 use axum::{
     http::{header, HeaderValue, StatusCode},

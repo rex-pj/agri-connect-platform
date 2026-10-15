@@ -1,13 +1,17 @@
 {#- Labelled form controls with their error message. `error` is the localised
     text for this field, empty when it is fine; it is linked to the control so
     screen readers read it with the field. `first`: the field a `dialog`
-    focuses when it opens. -#}
+    focuses when it opens. A password field never echoes a value back and
+    gets a show/hide button (Alpine `passwordToggle`; hidden without JS). -#}
 
-{% macro input(id, name, label, value="", type="text", error="", required=false, placeholder="", pattern="", inputmode="", autocomplete="", maxlength=0, first=false) -%}
+{% macro input(id, name, label, value="", type="text", error="", required=false, placeholder="", pattern="", inputmode="", autocomplete="", maxlength=0, minlength=0, first=false) -%}
 <div class="form-field">
   <label class="form-label fw-semibold" for="{{ id }}">{{ label }}{% if required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
-  <input class="form-control{% if error %} is-invalid{% endif %}" id="{{ id }}" name="{{ name }}" type="{{ type }}" value="{{ value }}"{% if required %} required{% endif %}{% if placeholder %} placeholder="{{ placeholder }}"{% endif %}{% if pattern %} pattern="{{ pattern }}"{% endif %}{% if inputmode %} inputmode="{{ inputmode }}"{% endif %}{% if autocomplete %} autocomplete="{{ autocomplete }}"{% endif %}{% if maxlength %} maxlength="{{ maxlength }}"{% endif %}{% if first %} x-ref="first"{% endif %}{% if error %} aria-invalid="true" aria-describedby="{{ id }}-error"{% endif %}>
+  {% if type == "password" %}<div class="input-group has-validation" x-data="passwordToggle">{% endif %}
+  <input class="form-control{% if error %} is-invalid{% endif %}" id="{{ id }}" name="{{ name }}" type="{{ type }}"{% if type != "password" %} value="{{ value }}"{% endif %}{% if required %} required{% endif %}{% if placeholder %} placeholder="{{ placeholder }}"{% endif %}{% if pattern %} pattern="{{ pattern }}"{% endif %}{% if inputmode %} inputmode="{{ inputmode }}"{% endif %}{% if autocomplete %} autocomplete="{{ autocomplete }}"{% endif %}{% if maxlength %} maxlength="{{ maxlength }}"{% endif %}{% if minlength %} minlength="{{ minlength }}"{% endif %}{% if first %} x-ref="first"{% endif %}{% if type == "password" %} :type="inputType"{% endif %}{% if error %} aria-invalid="true" aria-describedby="{{ id }}-error"{% endif %}>
+  {% if type == "password" %}<button type="button" class="btn btn-outline-secondary password-toggle" aria-label="Hiện mật khẩu" aria-controls="{{ id }}" x-cloak x-on:click="toggle" :aria-pressed="pressed"><i class="fa-solid fa-eye" aria-hidden="true" x-show="hidden"></i><i class="fa-solid fa-eye-slash" aria-hidden="true" x-show="shown" x-cloak></i></button>{% endif %}
   {% if error %}<div class="invalid-feedback" id="{{ id }}-error">{{ error }}</div>{% endif %}
+  {% if type == "password" %}</div>{% endif %}
 </div>
 {%- endmacro input %}
 

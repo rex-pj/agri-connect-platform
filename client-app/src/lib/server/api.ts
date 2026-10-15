@@ -7,26 +7,8 @@ import { ROUTES } from '$lib/routes';
 
 export const API_BASE = PRIVATE_API_URL ?? 'http://localhost:3000';
 
-// ── Auth cookie ───────────────────────────────────────────────────────────────
-
-/** Matches JWT expiry configured in the backend (constants::JWT_EXPIRY_HOURS). */
-export const AUTH_COOKIE_MAX_AGE = 60 * 60; // 1 hour
-
-const IS_PROD = process.env.NODE_ENV === 'production';
-
-export function authCookieOptions() {
-    return {
-        path:     '/' as const,
-        httpOnly: true,
-        sameSite: 'strict' as const,
-        secure:   IS_PROD,
-        maxAge:   AUTH_COOKIE_MAX_AGE,
-    };
-}
-
-export function setAuthCookie(cookies: Cookies, token: string): void {
-    cookies.set('auth_token', token, authCookieOptions());
-}
+// The session cookies are written by the Rust server (web::session); this
+// app only reads auth_token to call the API.
 
 // ── Request helpers ───────────────────────────────────────────────────────────
 

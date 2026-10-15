@@ -201,6 +201,37 @@ impl AppRouting {
             .route("/api/admin/setup", post(AuthHandler::create_first_admin))
             .layer(limiter(&config.limiters.auth, Scope::AllRequests));
 
+        // ── AUTH pages: the same budget as the auth API, on the writes only ──
+        // (reading the login page is free; trying passwords is not).
+        let auth_pages = Router::new()
+            .route(
+                "/login",
+                get(pages::auth::login_page).post(pages::auth::login),
+            )
+            .route(
+                "/register",
+                get(pages::auth::register_page).post(pages::auth::register),
+            )
+            .route(
+                "/forgot-password",
+                get(pages::auth::forgot_page).post(pages::auth::forgot),
+            )
+            .route(
+                "/reset-password",
+                get(pages::auth::reset_page).post(pages::auth::reset),
+            )
+            .route(
+                "/setup",
+                get(pages::setup::setup_page).post(pages::setup::setup),
+            )
+            .layer(limiter(&config.limiters.auth, Scope::WritesOnly));
+
+        // The demo data page: an admin action, on the signed-in budget.
+        let member_pages = Router::new().route(
+            "/setup/seed",
+            get(pages::setup::seed).post(pages::setup::seed_action),
+        );
+
         // ── USER routes (authenticated, no rate limit) ───────────────────────
         let user_routes = Router::new()
             .route("/api/users/me", get(AuthHandler::me))
@@ -354,6 +385,8 @@ impl AppRouting {
             .merge(contact_routes)
             .merge(upload_routes)
             .merge(auth_routes)
+            .merge(auth_pages)
+            .merge(member_pages.layer(limiter(&config.limiters.member_write, Scope::WritesOnly)))
             .merge(user_routes.layer(limiter(&config.limiters.member_write, Scope::WritesOnly)))
             .merge(admin_routes.layer(limiter(&config.limiters.member_write, Scope::WritesOnly)))
             .merge(provider_routes.layer(limiter(&config.limiters.member_write, Scope::WritesOnly)))

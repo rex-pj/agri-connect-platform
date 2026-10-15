@@ -1063,3 +1063,43 @@ Tests:
   - both logout routes → 303, cleared cookies, dead family;
   - a password reset and a deactivation end sessions;
   - expired tokens are refused and purged.
+
+### S12b — auth and setup pages (same branch)
+
+Done:
+- **`/login`, `/register`, `/forgot-password`, `/reset-password`, `/setup`, `/setup/seed` are served by Rust** (`web/src/pages/auth.rs`, `setup.rs`) on a new `layouts/auth.html` (one card, `noindex, nofollow`). The SvelteKit routes are deleted, and so is its now-unused cookie writer in `lib/server/api.ts`.
+- **Bug 0.1 fixed:** a signed-in visitor on `/login` or `/register`, and every successful sign-in, lands on their own area by permission: admin dashboard, provider dashboard or account. This is the same rule as the last tab (`shell::home_area`). It used to be the admin dashboard for everyone.
+- **Bug 0.2 fixed:** `/login` sends a fresh installation to `/setup`, and `/setup` goes to `/login` once an admin exists. Both call `AuthUseCase::needs_first_admin` directly. A setup that loses the race to another (`admin_already_exists`) also goes to `/login`.
+- **Sign-in starts a session** (S12a cookies) everywhere: login, registration, setup.
+- **Forms:**
+  - fields are re-shown with one message each; passwords are never echoed;
+  - a mistyped confirmation is `password_mismatch` on the confirmation field, checked before the use case runs, so a typo never creates an account;
+  - the lockout replaces the form with its own panel (423) and a reset link;
+  - `/forgot-password` gives the same answer for known and unknown addresses;
+  - a used or expired reset link shows "Liên kết không hợp lệ";
+  - after a reset, `/login` thanks the user once (flash, replacing `?reset=1`).
+- **Setup:** the demo data box is unticked by default (§8.4). When ticked, the demo data loads in the same request. A failed load is logged and can be retried from `/setup/seed`; the admin exists either way.
+- **`/setup/seed`:** a new `SetupUseCase::demo_status` requires `system.demo.manage`. The page shows the counts. Load is one button; Remove needs a ticked confirmation (`confirmation_required`), so it is safe without JS. A provider gets 403, and an anonymous visitor goes to `/login`.
+- **Shared:**
+  - `pages::forms::{FormErrors, is_form_error, confirm_password}`, also used by the contact form now;
+  - `Viewer`, a lenient session extractor that `Shell` uses too;
+  - `limits` (password and username minimums, reset link hours) in every template context, so forms show `minlength` without repeating numbers.
+- **Alpine `passwordToggle`** on every password field (hidden without JS).
+- **Rate limits:** the page forms use the auth budget (10/min) on writes only; `/setup/seed` uses the signed-in budget.
+
+Bug found and fixed:
+- **The account lockout never worked.** `record_failed_login` built its UPDATE with `?` placeholders in `Expr::cust_with_exprs`. sea-query left them unbound, the UPDATE failed, and the use case deliberately swallows that failure (a wrong password must not become a 500). Five wrong passwords therefore never locked anything. The new login test caught it. The SQL now uses `$1`/`$2`, and the placeholder convention test covers `cust_with_exprs` too; it fails on the old code.
+
+Not done:
+- `register` and `create_first_admin` do not validate the email address beyond the browser's `type=email`.
+- `create_first_admin` is check-then-insert, so two simultaneous setups could both succeed. Both are rate-limited and one-time; noted for a later hardening pass.
+- Password reset tokens are still stored raw (refresh tokens are hashed).
+
+Tests (database):
+- a fresh install redirects `/login` → `/setup`; setup opens a session, then closes; a signed-in admin on `/login` goes to `/admin/dashboard`;
+- a mismatch → 400, nothing created, no password echoed; the demo box loads demo data and flashes;
+- a wrong password → 401 with the username kept; a provider lands on `/provider/dashboard`; five failures → 423 lockout panel;
+- registration: a field error under the phone, values kept; success signs in; signed-in `/register` and `/login` redirect;
+- the reset flow: the same answer for unknown emails, the invalid-link state, success → `/login` with a one-time thanks, a token works once;
+- the demo page: anonymous → `/login`, provider → 403, removal needs the tick, only demo rows are removed;
+- a cross-site login post → 403 and no cookies.

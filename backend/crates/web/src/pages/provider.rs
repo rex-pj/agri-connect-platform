@@ -21,9 +21,8 @@ use crate::{
     app_state::AppState,
     constants::META_DESCRIPTION_MAX_CHARS,
     cookies::{Flash, TakeFlash},
-    error_response::error_body,
     extract::{ApiForm, ApiPath},
-    pages::{canonical_url, moved_permanently, parse_id, see_other, summary},
+    pages::{canonical_url, forms::FormErrors, moved_permanently, parse_id, see_other, summary},
     shell::Shell,
     views::{render_page, render_page_status},
 };
@@ -195,18 +194,11 @@ pub async fn submit_contact(
             Ok(response)
         }
         Err(err) if err.kind() == ErrorKind::BadRequest => {
-            let body = error_body(&state, &err);
-            let errors = body
-                .field_errors
-                .into_iter()
-                .filter_map(|(field, mut messages)| {
-                    (!messages.is_empty()).then(|| (field, messages.swap_remove(0)))
-                })
-                .collect();
+            let form = FormErrors::from_error(&state, &err);
             let contact = ContactState {
                 values: v,
-                errors,
-                message: Some(body.message),
+                errors: form.fields,
+                message: form.message,
                 open: true,
             };
             let page = page(provider, contact, false);

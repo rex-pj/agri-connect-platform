@@ -7,7 +7,7 @@ use axum::{
     extract::FromRequestParts,
     http::{header, request::Parts},
 };
-use domain::Error;
+use domain::{Error, ErrorCode};
 
 use crate::{app_state::AppState, cookies::request_cookie};
 
@@ -44,6 +44,25 @@ impl FromRequestParts<AppState> for MaybeActor {
         };
         let claims = state.token_service.verify(token)?;
         Ok(Self(state.usecases.auth.actor(claims.user_id).await?))
+    }
+}
+
+/// Who is looking at a page. Unlike `MaybeActor`, an expired or forged session
+/// cookie is simply "nobody": a stale cookie must never make a page fail.
+pub struct Viewer(pub Option<Actor>);
+
+impl FromRequestParts<AppState> for Viewer {
+    type Rejection = Error;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        match MaybeActor::from_request_parts(parts, state).await {
+            Ok(MaybeActor(actor)) => Ok(Self(actor)),
+            Err(e) if e.code() == ErrorCode::InvalidToken => Ok(Self(None)),
+            Err(e) => Err(e),
+        }
     }
 }
 

@@ -141,6 +141,25 @@ document.addEventListener("alpine:init", () => {
     },
   }));
 
+  // Show/hide a password field. Without JS the field is a normal password
+  // input and the button (x-cloak) stays hidden.
+  Alpine.data("passwordToggle", () => ({
+    shown: false,
+
+    toggle() {
+      this.shown = !this.shown;
+    },
+    get hidden() {
+      return !this.shown;
+    },
+    get inputType() {
+      return this.shown ? "text" : "password";
+    },
+    get pressed() {
+      return this.shown ? "true" : "false";
+    },
+  }));
+
   // Share the current page: the phone's share sheet, else copy the link.
   Alpine.data("shareButton", () => ({
     status: "",

@@ -530,8 +530,8 @@ impl UserRepositoryTrait for UserRepository {
             .col_expr(
                 user::Column::LockedUntil,
                 Expr::cust_with_exprs(
-                    "CASE WHEN failed_login_attempts + 1 >= ? \
-                     THEN NOW() + (? * INTERVAL '1 minute') \
+                    "CASE WHEN failed_login_attempts + 1 >= $1 \
+                     THEN NOW() + ($2 * INTERVAL '1 minute') \
                      ELSE locked_until END",
                     [Expr::value(max_attempts), Expr::value(lockout_minutes)],
                 ),

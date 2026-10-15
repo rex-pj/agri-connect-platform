@@ -77,6 +77,8 @@ error_codes! {
     UsernameTooShort          => (BadRequest,      "username_too_short"),
     PasswordTooShort          => (BadRequest,      "password_too_short"),
     PasswordTooLong           => (BadRequest,      "password_too_long"),
+    PasswordMismatch          => (BadRequest,      "password_mismatch"),
+    ConfirmationRequired      => (BadRequest,      "confirmation_required"),
     InvalidPhone              => (BadRequest,      "invalid_phone"),
     InvalidCoordinates        => (BadRequest,      "invalid_coordinates"),
     RadiusOutOfRange          => (BadRequest,      "radius_out_of_range"),

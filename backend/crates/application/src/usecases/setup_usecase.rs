@@ -67,6 +67,13 @@ impl SetupUseCase {
         self.load_status().await
     }
 
+    /// For the demo data page: who may load or remove demo data may see how
+    /// much of it there is.
+    pub async fn demo_status(&self, actor: &Actor) -> Result<SetupStatusDto> {
+        actor.require(PERM_SYSTEM_DEMO_MANAGE)?;
+        self.load_status().await
+    }
+
     async fn load_status(&self) -> Result<SetupStatusDto> {
         let (business_count, user_count, demo_business_count) = tokio::try_join!(
             self.business_repo.count_all(),

@@ -386,23 +386,14 @@ pub async fn create_product(
                     price: v.price,
                     unit: v.unit,
                 },
+                image,
             )
             .await
     }
     .await;
-    let product = match created {
-        Ok(p) => p,
-        Err(err) => {
-            let errors = FormErrors::from_error(&state, &err);
-            return refused(&state, &shell, &actor, None, form, err, errors).await;
-        }
-    };
-    if let Some(image) = image {
-        state
-            .usecases
-            .media
-            .attach_product_image(&actor, product.id, image)
-            .await?;
+    if let Err(err) = created {
+        let errors = FormErrors::from_error(&state, &err);
+        return refused(&state, &shell, &actor, None, form, err, errors).await;
     }
     to_dashboard(Flash::ProductCreated)
 }

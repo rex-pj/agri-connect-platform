@@ -354,6 +354,15 @@ pub fn build_state(
         jpeg_quality: IMAGE_JPEG_QUALITY,
     }));
 
+    let media = MediaUseCase::new(MediaDeps {
+        products: product_repo.clone(),
+        files: file_repo,
+        storage: uploads.storage,
+        images,
+        events: events.clone(),
+        max_upload_bytes: uploads.max_bytes,
+    });
+
     let usecases = UseCases {
         explore: ExploreUseCase::new(
             business_repo.clone(),
@@ -363,14 +372,7 @@ pub fn build_state(
             product_repo.clone(),
         ),
         health: HealthUseCase::new(health_repo),
-        media: MediaUseCase::new(MediaDeps {
-            products: product_repo.clone(),
-            files: file_repo,
-            storage: uploads.storage,
-            images,
-            events: events.clone(),
-            max_upload_bytes: uploads.max_bytes,
-        }),
+        media: media.clone(),
         product: ProductUseCase::new(product_repo.clone()),
         admin: AdminUseCase::new(AdminDeps {
             business_repo: business_repo.clone(),
@@ -387,7 +389,6 @@ pub fn build_state(
         }),
         auth: AuthUseCase::new(AuthDeps {
             user_repo: user_repo.clone(),
-            business_repo: business_repo.clone(),
             permission_repo: permission_repo.clone(),
             refresh_repo: Arc::new(RefreshTokenRepository::new(Arc::clone(&db))),
             email,
@@ -407,6 +408,7 @@ pub fn build_state(
         provider_dashboard: ProviderDashboardUseCase::new(
             business_repo.clone(),
             product_repo.clone(),
+            media,
             events,
         ),
         setup: SetupUseCase::new(

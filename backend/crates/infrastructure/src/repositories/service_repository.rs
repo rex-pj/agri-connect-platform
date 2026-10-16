@@ -99,6 +99,7 @@ impl ServiceRepositoryTrait for ServiceRepository {
         }
         query
             .order_by_desc(service::Column::CreatedOn)
+            .order_by_desc(service::Column::Id)
             .limit(limit as u64)
             .offset(offset as u64)
             .into_model::<AdminServiceRow>()

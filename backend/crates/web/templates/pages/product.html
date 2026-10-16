@@ -1,6 +1,5 @@
 {% extends "layouts/app.html" %}
 {% import "atoms/icon.html" as atoms %}
-{% import "atoms/badge.html" as badge %}
 {% import "molecules/page_hero.html" as hero %}
 {#- Product detail. `page` is web::pages::product::ProductPage. With a photo
     the page is two columns on a wide screen; without, one narrow column. -#}
@@ -24,7 +23,6 @@
     {% endif %}
     <div class="detail-body">
       <section class="detail-card">
-        {% if not p.is_available %}{{ badge::badge(text="Hết hàng", variant="danger", class="mb-2") }}{% endif %}
         <div class="detail-price">
           {% if p.price %}
           <span class="detail-price__amount">{{ p.price | vnd }}</span>
@@ -51,6 +49,7 @@
           </div>
         </div>
         <a class="btn btn-success btn-lg w-100" href="tel:{{ p.vendor_phone }}">{{ atoms::icon(name="fa-phone") }} Gọi tư vấn ngay</a>
+        <a class="btn btn-outline-success w-100 mt-2" href="{{ page.provider_href }}">{{ atoms::icon(name="fa-store") }} Xem nhà cung cấp &amp; gửi yêu cầu</a>
       </section>
     </div>
   </div>

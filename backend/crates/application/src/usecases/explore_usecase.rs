@@ -23,7 +23,7 @@ use crate::{
         ExploreData, InquiryCreatedDto, LocationDto, ProductDto, ServiceDto,
     },
     pagination::{paginate, total_pages},
-    validation::{non_blank, validate_coordinates, validate_phone},
+    validation::{non_blank, point_wkt, validate_coordinates, validate_phone},
 };
 
 // ── Use case ──────────────────────────────────────────────────────────────────
@@ -65,7 +65,7 @@ impl ExploreUseCase {
                 .with_param("max", RADIUS_MAX_M));
         }
 
-        let point_wkt = format!("SRID=4326;POINT({} {})", params.lng, params.lat);
+        let point_wkt = point_wkt(params.lat, params.lng);
         let results = self
             .business_repo
             .search_geo(&point_wkt, params.radius, params.service_id)
@@ -157,13 +157,30 @@ impl ExploreUseCase {
     }
 
     /// The single home of the inquiry rules; every contact form posts here.
+    /// A chosen service must be one the provider shows publicly; its name is
+    /// the topic when none was typed.
     pub async fn contact_request(&self, input: ContactInput) -> Result<InquiryCreatedDto> {
         let requester_name = input.requester_name.trim().to_owned();
         let requester_phone = input.requester_phone.trim().to_owned();
-        let topic = input.topic.trim().to_owned();
         let note = non_blank(input.note);
 
+        let provider = self.business_repo.find_detail(input.business_id).await?;
+        let service = input.service_id.map(|id| {
+            provider
+                .as_ref()
+                .and_then(|p| p.services.iter().find(|s| s.id == id))
+        });
+        let topic = match (input.topic.trim(), service.flatten()) {
+            ("", Some(s)) => s.name.clone(),
+            (typed, _) => typed.to_owned(),
+        };
+
         Validation::new()
+            .check(
+                provider.is_some() && service.is_some_and(|s| s.is_none()),
+                "service_id",
+                ErrorCode::ServiceNotOffered,
+            )
             .check(
                 requester_name.is_empty(),
                 "requester_name",
@@ -192,7 +209,7 @@ impl ExploreUseCase {
             )
             .finish()?;
 
-        if !self.business_repo.check_exists(input.business_id).await? {
+        if provider.is_none() {
             return Err(Error::new(ErrorCode::ProviderNotFound));
         }
 

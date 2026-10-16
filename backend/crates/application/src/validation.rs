@@ -5,7 +5,7 @@ use domain::{Error, ErrorCode, Result};
 
 use crate::constants::{
     EMAIL_MAX, LAT_MAX, LAT_MIN, LNG_MAX, LNG_MIN, PASSWORD_MAX_BYTES, PASSWORD_MIN_CHARS,
-    USERNAME_MIN_LEN,
+    USERNAME_MAX_LEN, USERNAME_MIN_LEN,
 };
 
 /// 10-digit Vietnamese mobile number starting with 0. Mirrors the
@@ -22,11 +22,21 @@ pub fn validate_phone(phone: &str) -> Result<()> {
     }
 }
 
+/// A login name: at least `USERNAME_MIN_LEN` and at most `USERNAME_MAX_LEN`
+/// characters, no spaces (callers pass it trimmed and lowercased). Letters
+/// with Vietnamese marks are fine.
 pub fn validate_username(username: &str) -> Result<()> {
-    if username.chars().count() < USERNAME_MIN_LEN {
+    let length = username.chars().count();
+    if length < USERNAME_MIN_LEN {
         return Err(Error::new(ErrorCode::UsernameTooShort).with_param("min", USERNAME_MIN_LEN));
     }
-    Ok(())
+    if username
+        .chars()
+        .any(|c| c.is_whitespace() || c.is_control())
+    {
+        return Err(Error::new(ErrorCode::UsernameHasSpaces));
+    }
+    max_chars(username, USERNAME_MAX_LEN)
 }
 
 /// An address mail can be sent to: `local@domain.tld`, no spaces, one `@`,
@@ -67,6 +77,11 @@ pub fn validate_coordinates(lat: f64, lng: f64) -> Result<()> {
     } else {
         Err(Error::new(ErrorCode::InvalidCoordinates))
     }
+}
+
+/// The PostGIS point for a validated position: SRID 4326, longitude first.
+pub fn point_wkt(lat: f64, lng: f64) -> String {
+    format!("SRID=4326;POINT({lng} {lat})")
 }
 
 /// A product price, when given, must be a positive number of đồng.
@@ -137,6 +152,18 @@ mod tests {
         }
         let long = format!("{}@x.vn", "a".repeat(EMAIL_MAX));
         assert!(validate_email(&long).is_err());
+    }
+
+    #[test]
+    fn usernames_are_bounded_and_have_no_spaces() {
+        assert!(validate_username("nông_dân.7").is_ok());
+        let code = |u: &str| validate_username(u).err().map(|e| e.code());
+        assert_eq!(code("ab"), Some(ErrorCode::UsernameTooShort));
+        assert_eq!(code("nong dan"), Some(ErrorCode::UsernameHasSpaces));
+        assert_eq!(
+            code(&"a".repeat(USERNAME_MAX_LEN + 1)),
+            Some(ErrorCode::FieldTooLong)
+        );
     }
 
     #[test]

@@ -24,6 +24,8 @@ pub struct ProductPage {
     /// The description shortened for `<meta name="description">`; `None`
     /// when the product has none (the template writes a sentence instead).
     pub meta_description: Option<String>,
+    /// The seller's page, with its services and the contact form.
+    pub provider_href: String,
 }
 
 async fn load(state: &AppState, raw_id: &str) -> Result<ProductDto, Error> {
@@ -56,6 +58,7 @@ pub async fn show(
         return moved_permanently(&canonical);
     }
     let page = ProductPage {
+        provider_href: canonical_url("provider", product.business_id, &product.vendor_name)?,
         meta_description: product
             .description
             .as_deref()

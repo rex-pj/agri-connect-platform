@@ -63,12 +63,27 @@ async fn inquiries(e: &Env) -> i64 {
     row.try_get("", "n").unwrap()
 }
 
-fn valid_form(id: i32) -> String {
+async fn service_of(e: &Env, business_id: i32) -> i32 {
+    e.t.db
+        .query_one(Statement::from_string(
+            e.t.db.get_database_backend(),
+            format!("SELECT id FROM services WHERE business_id = {business_id}"),
+        ))
+        .await
+        .unwrap()
+        .unwrap()
+        .try_get("", "id")
+        .unwrap()
+}
+
+/// The form as the page sends it: the service select, no typed topic.
+fn valid_form(id: i32, service_id: i32) -> String {
     let id = id.to_string();
+    let service_id = service_id.to_string();
     form_body(&[
         ("business_id", &id),
         ("requester_phone", "0912345678"),
-        ("topic", "Múc bùn ao"),
+        ("service_id", &service_id),
         ("requester_name", "Nguyễn Văn A"),
         ("note", "Ao 500 m2"),
     ])
@@ -101,7 +116,11 @@ async fn the_provider_page_has_its_services_a_call_button_and_the_form() {
     assert!(html.contains(r#"action="/contact""#));
     assert!(html.contains(&format!(r#"name="business_id" value="{id}""#)));
     assert!(html.contains(r##"href="#lien-he""##) && html.contains(r#"id="lien-he""#));
-    assert!(html.contains(r#"<option value="Múc bùn ao">"#));
+    let service_id = service_of(&e, id).await;
+    assert!(html.contains(r#"name="service_id""#));
+    assert!(html.contains(&format!(
+        r#"<option value="{service_id}">Múc bùn ao</option>"#
+    )));
     assert!(!html.contains("Đã gửi yêu cầu"));
     e.cleanup().await;
 }
@@ -111,8 +130,13 @@ async fn the_provider_page_has_its_services_a_call_button_and_the_form() {
 async fn a_sent_form_redirects_and_thanks_the_visitor_once() {
     let e = env().await;
     let (id, canonical) = provider(&e).await;
+    let service_id = service_of(&e, id).await;
 
-    let res = send(&e.router, post_contact(&valid_form(id), TEST_ORIGIN)).await;
+    let res = send(
+        &e.router,
+        post_contact(&valid_form(id, service_id), TEST_ORIGIN),
+    )
+    .await;
     // 303: reloading the thank-you page must not post the form again.
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
     assert_eq!(res.headers()[header::LOCATION], canonical.as_str());
@@ -122,6 +146,21 @@ async fn a_sent_form_redirects_and_thanks_the_visitor_once() {
         .to_owned();
     assert!(flash.starts_with("flash=contact_sent;"), "{flash}");
     assert_eq!(inquiries(&e).await, 1);
+    // The inquiry names the service, and its name is the topic.
+    let row =
+        e.t.db
+            .query_one(Statement::from_string(
+                e.t.db.get_database_backend(),
+                "SELECT service_id, topic FROM inquiries",
+            ))
+            .await
+            .unwrap()
+            .unwrap();
+    assert_eq!(
+        row.try_get::<Option<i32>>("", "service_id").unwrap(),
+        Some(service_id)
+    );
+    assert_eq!(row.try_get::<String>("", "topic").unwrap(), "Múc bùn ao");
 
     let res = send(&e.router, get_page(&canonical, Some("flash=contact_sent"))).await;
     let clears = res.headers()[header::SET_COOKIE]
@@ -177,8 +216,13 @@ async fn a_rejected_form_comes_back_with_messages_and_what_was_typed() {
 async fn contact_for_a_missing_provider_or_from_another_site_is_refused() {
     let e = env().await;
     let (id, _) = provider(&e).await;
+    let service_id = service_of(&e, id).await;
 
-    let res = send(&e.router, post_contact(&valid_form(999_999), TEST_ORIGIN)).await;
+    let res = send(
+        &e.router,
+        post_contact(&valid_form(999_999, service_id), TEST_ORIGIN),
+    )
+    .await;
     assert_eq!(res.status(), StatusCode::NOT_FOUND);
     assert!(body_text(res)
         .await
@@ -186,10 +230,52 @@ async fn contact_for_a_missing_provider_or_from_another_site_is_refused() {
 
     let res = send(
         &e.router,
-        post_contact(&valid_form(id), "https://evil.example"),
+        post_contact(&valid_form(id, service_id), "https://evil.example"),
     )
     .await;
     assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    assert_eq!(inquiries(&e).await, 0);
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn an_inquiry_cannot_name_another_providers_service() {
+    let e = env().await;
+    let (id, _) = provider(&e).await;
+    let theirs = service_of(&e, id).await;
+    register_provider(&e.state, "nguoikhac", "0907654321").await;
+    let other: i32 =
+        e.t.db
+            .query_one(Statement::from_string(
+                e.t.db.get_database_backend(),
+                "SELECT id FROM businesses WHERE name = 'Vườn nguoikhac'",
+            ))
+            .await
+            .unwrap()
+            .unwrap()
+            .try_get("", "id")
+            .unwrap();
+
+    // The JSON API, which used to store any service id it was given.
+    let body = serde_json::json!({
+        "business_id": other,
+        "service_id": theirs,
+        "topic": "Múc bùn",
+        "requester_name": "Nguyễn Văn A",
+        "requester_phone": "0912345678",
+    });
+    let req = Request::post("/api/explore/contact")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+    let res = send(&e.router, req).await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    let json = integration_tests::json_body(res).await;
+    assert_eq!(
+        json["field_errors"]["service_id"][0],
+        "Nhà cung cấp này không còn dịch vụ đó. Vui lòng chọn lại."
+    );
     assert_eq!(inquiries(&e).await, 0);
     e.cleanup().await;
 }

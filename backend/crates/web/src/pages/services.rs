@@ -15,8 +15,8 @@ use crate::{
     pages::{
         cards::ProviderCard,
         listing::{
-            category_sub, chips, find_category, parse_opt, redirect_to_canonical, with_query,
-            FilterForm, Pagination, SortChip,
+            category_sub, chips, find_category, parse_opt, past_the_end, redirect_to_canonical,
+            with_query, FilterForm, Pagination, SortChip,
         },
         parse_id,
     },
@@ -102,6 +102,9 @@ pub async fn list(
     ];
     let active = usize::from(service_id.is_some()) + usize::from(sort != ProviderSort::default());
 
+    if let Some(redirect) = past_the_end(&path, &kept, result.page, result.total_pages) {
+        return redirect;
+    }
     let page = ServicesPage {
         title: "Danh mục dịch vụ".to_owned(),
         icon: "fa-border-all".to_owned(),
@@ -167,6 +170,9 @@ pub async fn category(
         })
         .await?;
 
+    if let Some(redirect) = past_the_end(&canonical, &[], result.page, result.total_pages) {
+        return redirect;
+    }
     let page = ServicesPage {
         title: category.name.clone(),
         icon: category.icon.clone().unwrap_or_else(|| "fa-tag".to_owned()),

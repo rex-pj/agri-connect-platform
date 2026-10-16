@@ -32,6 +32,16 @@ pub struct BusinessProfile {
     pub lng: Option<f64>,
 }
 
+/// A provider's own profile as they save it, already validated.
+pub struct ProfileUpdate {
+    pub name: String,
+    pub phone: String,
+    pub description: Option<String>,
+    pub address: Option<String>,
+    /// `SRID=4326;POINT(lng lat)`, or `None` for no location.
+    pub location_wkt: Option<String>,
+}
+
 pub struct BusinessAdminView {
     pub id: i32,
     pub name: String,

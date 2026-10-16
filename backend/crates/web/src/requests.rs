@@ -211,6 +211,10 @@ pub struct ProvidersQuery {
     pub lng: Option<f64>,
     pub radius: Option<f64>,
     // ── shared ────────────────────────────────────────────────────────────
+    /// A service *category* id: providers offering a live service in it.
+    /// `category_id` is the clear name; `service_id` is kept for existing
+    /// clients (it is not a `services.id`, unlike the inquiry's).
+    #[serde(alias = "category_id")]
     pub service_id: Option<i32>,
     // ── browse fields ─────────────────────────────────────────────────────
     pub name: Option<String>,

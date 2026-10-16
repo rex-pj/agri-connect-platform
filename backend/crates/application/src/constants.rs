@@ -15,6 +15,10 @@ pub const LOGIN_LOCK_MINUTES: i64 = 15;
 
 // ── Validation ─────────────────────────────────────────────────────────────────
 pub const USERNAME_MIN_LEN: usize = 3;
+/// Long enough for any real login name; the column holds 100.
+pub const USERNAME_MAX_LEN: usize = 50;
+/// The `users.full_name` column.
+pub const FULL_NAME_MAX: usize = 200;
 /// `users.email` is VARCHAR(255).
 pub const EMAIL_MAX: usize = 255;
 /// Counted in characters, so a Vietnamese password is not penalised for its
@@ -24,7 +28,9 @@ pub const PASSWORD_MIN_CHARS: usize = 8;
 /// would look accepted while only its prefix counts. Reject instead.
 pub const PASSWORD_MAX_BYTES: usize = 72;
 pub const REQUESTER_NAME_MAX_LEN: usize = 100;
-pub const TOPIC_MAX_LEN: usize = 255;
+/// The `inquiries.topic` column. The contact form's topic is a service name,
+/// so this must be at least `SERVICE_NAME_MAX` (asserted at compile time).
+pub const TOPIC_MAX_LEN: usize = 300;
 pub const NOTE_MAX_LEN: usize = 1000;
 
 // ── Geography ─────────────────────────────────────────────────────────────────
@@ -34,7 +40,8 @@ pub const LNG_MIN: f64 = -180.0;
 pub const LNG_MAX: f64 = 180.0;
 pub const RADIUS_MIN_M: f64 = 100.0;
 pub const RADIUS_MAX_M: f64 = 50_000.0;
-pub const RADIUS_DEFAULT_M: f64 = 5_000.0;
+/// A farm visit by motorbike; the near-me page and the JSON API share it.
+pub const RADIUS_DEFAULT_M: f64 = 10_000.0;
 
 // ── Uploads ───────────────────────────────────────────────────────────────────
 /// Used when UPLOAD_MAX_BYTES is unset. A phone photo is 2–4 MB.
@@ -73,3 +80,6 @@ pub const PRODUCT_DESCRIPTION_MAX: usize = 2000;
 pub const BUSINESS_NAME_MAX: usize = 200;
 pub const BUSINESS_ADDRESS_MAX: usize = 500;
 pub const BUSINESS_DESCRIPTION_MAX: usize = 2000;
+
+// Every service name must fit as a contact topic.
+const _: () = assert!(TOPIC_MAX_LEN >= SERVICE_NAME_MAX);

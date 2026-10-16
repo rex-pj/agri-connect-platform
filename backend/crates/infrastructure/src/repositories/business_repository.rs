@@ -6,15 +6,16 @@ use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
     sea_query::{Alias, Expr, Func, Order, Query, SimpleExpr, SubQueryStatement},
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, JoinType,
-    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait, RelationTrait, Set, Value,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait,
+    FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait,
+    RelationTrait, Set, Value,
 };
 use tracing::error;
 
 use domain::{
     models::business::{
         BusinessAdminDetail, BusinessAdminView, BusinessBrowse, BusinessDetail, BusinessGeoResult,
-        BusinessProfile, ProductAdminItem, ProviderSort, Service, ServiceAdminItem,
+        BusinessProfile, ProductAdminItem, ProfileUpdate, ProviderSort, Service, ServiceAdminItem,
     },
     repositories::business_repository_trait::BusinessRepositoryTrait,
 };
@@ -201,6 +202,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .limit(50);
 
         QueryTrait::query(&mut query).order_by_expr(Expr::cust("distance_m"), Order::Asc);
+        let query = query.order_by_asc(business::Column::Id);
 
         let businesses = query.into_model::<GeoRow>().all(db).await.map_err(|e| {
             error!("business search_geo error: {e}");
@@ -283,6 +285,8 @@ impl BusinessRepositoryTrait for BusinessRepository {
         };
 
         let businesses = query
+            // A fixed order for ties, so no row repeats or goes missing across pages.
+            .order_by_desc(business::Column::Id)
             .limit(limit as u64)
             .offset(offset as u64)
             .into_model::<BusinessBrowseRow>()
@@ -376,6 +380,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .filter(Expr::exists(svc_subq))
             .order_by_desc(business::Column::IsVerified)
             .order_by_desc(business::Column::CreatedOn)
+            .order_by_desc(business::Column::Id)
             .limit(limit as u64)
             .into_model::<BusinessBrowseRow>()
             .all(db)
@@ -470,20 +475,6 @@ impl BusinessRepositoryTrait for BusinessRepository {
 
     // ── Existence checks ──────────────────────────────────────────────────────
 
-    async fn check_exists(&self, id: i32) -> Result<bool, Error> {
-        Business::find()
-            .filter(business::Column::Id.eq(id))
-            .filter(business::Column::IsActive.eq(true))
-            .filter(business::Column::DeletedAt.is_null())
-            .count(self.db.as_ref())
-            .await
-            .map(|c| c > 0)
-            .map_err(|e| {
-                error!("business check_exists error: {e}");
-                Error::internal("Database error.")
-            })
-    }
-
     async fn check_exists_for_admin(&self, id: i32) -> Result<bool, Error> {
         Business::find()
             .filter(business::Column::Id.eq(id))
@@ -553,6 +544,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .filter(business::Column::DeletedAt.is_null())
             .order_by_desc(business::Column::IsVerified)
             .order_by_desc(business::Column::CreatedOn)
+            .order_by_desc(business::Column::Id)
             .limit(limit as u64)
             .offset(offset as u64)
             .into_model::<BusinessAdminRow>()
@@ -819,44 +811,20 @@ impl BusinessRepositoryTrait for BusinessRepository {
         }))
     }
 
-    async fn update_profile_text(
-        &self,
-        user_id: i32,
-        name: &str,
-        phone: &str,
-        description: Option<&str>,
-        address: Option<&str>,
-    ) -> Result<bool, Error> {
-        Business::update_many()
-            .col_expr(business::Column::Name, Expr::value(name.to_string()))
-            .col_expr(business::Column::Phone, Expr::value(phone.to_string()))
+    // ── Profile update (location via ST_GeographyFromText in the same UPDATE) ─
+
+    async fn update_profile(&self, user_id: i32, profile: &ProfileUpdate) -> Result<bool, Error> {
+        let mut update = Business::update_many()
+            .col_expr(business::Column::Name, Expr::value(profile.name.clone()))
+            .col_expr(business::Column::Phone, Expr::value(profile.phone.clone()))
             .col_expr(
                 business::Column::Description,
-                Expr::value(description.map(str::to_string)),
+                Expr::value(profile.description.clone()),
             )
             .col_expr(
                 business::Column::Address,
-                Expr::value(address.map(str::to_string)),
+                Expr::value(profile.address.clone()),
             )
-            .col_expr(
-                business::Column::UpdatedOn,
-                Expr::current_timestamp().into(),
-            )
-            .filter(business::Column::OwnerId.eq(user_id))
-            .filter(business::Column::DeletedAt.is_null())
-            .exec(self.db.as_ref())
-            .await
-            .map(|r| r.rows_affected > 0)
-            .map_err(|e| {
-                error!("business update_profile_text error (user_id={user_id}): {e}");
-                Error::internal("Failed to update profile.")
-            })
-    }
-
-    // ── Location update (PostGIS ST_GeographyFromText via Expr::cust_with_values) ─
-
-    async fn update_location(&self, user_id: i32, point_wkt: &str) -> Result<(), Error> {
-        let mut update = Business::update_many()
             .col_expr(
                 business::Column::UpdatedOn,
                 Expr::current_timestamp().into(),
@@ -864,18 +832,20 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .filter(business::Column::OwnerId.eq(user_id))
             .filter(business::Column::DeletedAt.is_null());
 
-        QueryTrait::query(&mut update).value(
-            Alias::new("location"),
-            Expr::cust_with_values("ST_GeographyFromText($1)", [point_wkt.to_owned()]),
-        );
+        // The location column is not in the entity (PostGIS type).
+        let location = match &profile.location_wkt {
+            Some(wkt) => Expr::cust_with_values("ST_GeographyFromText($1)", [wkt.clone()]),
+            None => Expr::cust("NULL"),
+        };
+        QueryTrait::query(&mut update).value(Alias::new("location"), location);
 
         update
             .exec(self.db.as_ref())
             .await
-            .map(|_| ())
+            .map(|r| r.rows_affected > 0)
             .map_err(|e| {
-                error!("business update_location error (user_id={user_id}): {e}");
-                Error::internal("Failed to update GPS location.")
+                error!("business update_profile error (user_id={user_id}): {e}");
+                Error::internal("Failed to update profile.")
             })
     }
 
@@ -918,31 +888,33 @@ impl BusinessRepositoryTrait for BusinessRepository {
                 Error::internal("Failed to load statistics.")
             })
     }
+}
 
-    async fn create_for_registration(
-        &self,
-        name: &str,
-        phone: &str,
-        user_id: i32,
-    ) -> Result<i32, Error> {
-        let new_business = business::ActiveModel {
-            name: Set(name.to_string()),
-            phone: Set(phone.to_string()),
-            owner_id: Set(Some(user_id)),
-            is_verified: Set(false),
-            is_active: Set(true),
-            ..Default::default()
-        };
+/// The business a provider signs up with, owned by `user_id`; inside the
+/// sign-up's transaction (see `UserRepository::create_with_business`).
+pub(crate) async fn insert_registration_business<C: ConnectionTrait>(
+    db: &C,
+    name: &str,
+    phone: &str,
+    user_id: i32,
+) -> Result<i32, Error> {
+    let new_business = business::ActiveModel {
+        name: Set(name.to_string()),
+        phone: Set(phone.to_string()),
+        owner_id: Set(Some(user_id)),
+        is_verified: Set(false),
+        is_active: Set(true),
+        ..Default::default()
+    };
 
-        Business::insert(new_business)
-            .exec(self.db.as_ref())
-            .await
-            .map(|r| r.last_insert_id)
-            .map_err(|e| {
-                error!("business create_for_registration error: {e}");
-                Error::internal("Failed to create business profile.")
-            })
-    }
+    Business::insert(new_business)
+        .exec(db)
+        .await
+        .map(|r| r.last_insert_id)
+        .map_err(|e| {
+            error!("business create_for_registration error: {e}");
+            Error::internal("Failed to create business profile.")
+        })
 }
 
 // ── Shared helper: load distinct service category names per business ──────────

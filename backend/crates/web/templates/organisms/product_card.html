@@ -1,10 +1,9 @@
 {#- A product in a list: photo (or the category icon), name, price, seller,
     and a call button. `p` is a ProductDto. -#}
 {% import "atoms/icon.html" as atoms %}
-{% import "atoms/badge.html" as badge %}
 {% macro product_card(p) -%}
 {% set href = url_for(name="product", id=p.id, slug=p.name | slugify) %}
-<article class="card h-100 product-card hover-lift{% if not p.is_available %} opacity-75{% endif %}">
+<article class="card h-100 product-card hover-lift">
   <a class="product-card__img" href="{{ href }}" tabindex="-1" aria-hidden="true">
     <div class="ratio ratio-1x1">
       {% if p.image_file_id %}
@@ -16,7 +15,6 @@
       </div>
       {% endif %}
     </div>
-    {% if not p.is_available %}{{ badge::badge(text="Hết hàng", variant="danger", class="product-card__sold-out") }}{% endif %}
   </a>
   <div class="card-body d-flex flex-column p-3 gap-2">
     <h3 class="card-title fs-6 fw-bold mb-0 product-card__name"><a class="text-decoration-none text-dark" href="{{ href }}">{{ p.name }}</a></h3>

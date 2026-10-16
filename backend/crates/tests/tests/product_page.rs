@@ -78,6 +78,13 @@ async fn the_detail_page_shows_price_description_and_a_call_button() {
     assert!(html.contains("28.000 ₫") && html.contains("/kg"));
     assert!(html.contains(r#"href="tel:0901234567""#));
     assert!(html.contains("Vườn nongdan"));
+    // The way to the seller's page and its contact form.
+    let link = html
+        .split(r#"href="/providers/"#)
+        .nth(1)
+        .and_then(|rest| rest.split('"').next())
+        .unwrap_or_default();
+    assert!(link.ends_with("/vuon-nongdan"), "provider link: {link:?}");
     assert!(!html.contains("product-detail--photo"), "no photo yet");
     assert!(!html.contains("{{") && !html.contains("{%"));
     e.cleanup().await;

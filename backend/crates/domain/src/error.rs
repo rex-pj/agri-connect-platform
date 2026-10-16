@@ -75,6 +75,7 @@ error_codes! {
 
     // ── Field rules ──────────────────────────────────────────────────────────
     UsernameTooShort          => (BadRequest,      "username_too_short"),
+    UsernameHasSpaces         => (BadRequest,      "username_has_spaces"),
     InvalidEmail              => (BadRequest,      "invalid_email"),
     PasswordTooShort          => (BadRequest,      "password_too_short"),
     PasswordTooLong           => (BadRequest,      "password_too_long"),
@@ -94,6 +95,7 @@ error_codes! {
     RequesterNameTooLong      => (BadRequest,      "requester_name_too_long"),
     TopicRequired             => (BadRequest,      "topic_required"),
     TopicTooLong              => (BadRequest,      "topic_too_long"),
+    ServiceNotOffered         => (BadRequest,      "service_not_offered"),
     NoteTooLong               => (BadRequest,      "note_too_long"),
     InvalidPrice              => (BadRequest,      "invalid_price"),
     InvalidRole               => (BadRequest,      "invalid_role"),

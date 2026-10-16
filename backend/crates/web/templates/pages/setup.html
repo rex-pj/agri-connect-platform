@@ -12,9 +12,9 @@
 <p class="auth-sub">Đây là tài khoản quản trị đầu tiên của hệ thống.</p>
 <form class="auth-form" method="post" action="{{ url_for(name="setup") }}">
   {% if page.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=page.errors.message) }}{% endif %}
-  {{ field::input(id="su_name", name="full_name", label="Họ và tên", value=v.full_name, autocomplete="name") }}
+  {{ field::input(id="su_name", name="full_name", label="Họ và tên", value=v.full_name, error=e.full_name | default(value=""), autocomplete="name", maxlength=limits.full_name_max) }}
   {{ field::input(id="su_email", name="email", label="Email", type="email", value=v.email, error=e.email | default(value=""), required=true, autocomplete="email") }}
-  {{ field::input(id="su_user", name="username", label="Tên đăng nhập", value=v.username, error=e.username | default(value=""), required=true, autocomplete="username", minlength=limits.username_min_len) }}
+  {{ field::input(id="su_user", name="username", label="Tên đăng nhập", value=v.username, error=e.username | default(value=""), required=true, autocomplete="username", minlength=limits.username_min_len, maxlength=limits.username_max_len) }}
   {{ field::input(id="su_pw", name="password", label="Mật khẩu", type="password", error=e.password | default(value=""), required=true, autocomplete="new-password", minlength=limits.password_min_chars) }}
   {{ field::input(id="su_pw2", name="password2", label="Nhập lại mật khẩu", type="password", error=e.password2 | default(value=""), required=true, autocomplete="new-password") }}
   <div class="form-check seed-toggle">

@@ -18,7 +18,9 @@
     {% if contact.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=contact.message) }}{% endif %}
     {{ field::input(id="cs_phone", name="requester_phone", label="Số điện thoại", type="tel", value=contact.values.requester_phone, error=contact.errors.requester_phone | default(value=""), required=true, placeholder="0901234567", pattern="0[0-9]{9}", inputmode="numeric", autocomplete="tel", first=true) }}
     {% if provider.services %}
-    {{ field::select(id="cs_topic", name="topic", label="Dịch vụ cần", options=provider.services | map(attribute="name"), value=contact.values.topic, error=contact.errors.topic | default(value=""), required=true, placeholder="— Chọn dịch vụ —") }}
+    {#- The service's name becomes the topic on the server; a topic or
+        service error is about this one box. -#}
+    {{ field::select(id="cs_topic", name="service_id", label="Dịch vụ cần", options=provider.services, value_key="id", label_key="name", value=contact.values.service_id, error=contact.errors.service_id | default(value=contact.errors.topic | default(value="")), required=true, placeholder="— Chọn dịch vụ —") }}
     {% else %}
     {{ field::input(id="cs_topic", name="topic", label="Bạn cần gì?", value=contact.values.topic, error=contact.errors.topic | default(value=""), required=true, maxlength=limits.topic_max) }}
     {% endif %}

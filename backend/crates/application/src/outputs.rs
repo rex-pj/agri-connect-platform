@@ -59,7 +59,7 @@ pub struct ProductDto {
     pub category_icon: Option<String>,
     pub vendor_name: String,
     pub vendor_phone: String,
-    pub is_available: bool,
+    pub business_id: i32,
     pub created_on: DateTime<Utc>,
     /// Served at `/files/{id}` and `/files/{id}/thumb`.
     pub image_file_id: Option<Uuid>,
@@ -77,7 +77,7 @@ impl From<ProductView> for ProductDto {
             category_icon: p.category_icon,
             vendor_name: p.vendor_name,
             vendor_phone: p.vendor_phone,
-            is_available: p.is_available,
+            business_id: p.business_id,
             created_on: p.created_on,
             image_file_id: p.image_file_id,
         }

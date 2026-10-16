@@ -83,6 +83,85 @@ async fn the_profile_reports_every_rule_and_saves_a_location() {
     let html = page(&e, "/provider/dashboard", &cookie).await;
     assert!(html.contains("Vườn Út Hiền"));
     assert!(html.contains(r#"value="10.4048""#), "location stored");
+
+    // Both boxes emptied: the pin comes off the map.
+    let res = send(
+        &e.router,
+        post_form(
+            "/provider/profile",
+            &[
+                ("name", "Vườn Út Hiền"),
+                ("phone", "0901234567"),
+                ("lat", ""),
+                ("lng", ""),
+            ],
+            Some(&cookie),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        count(
+            &e,
+            "SELECT count(*) FROM businesses WHERE location IS NOT NULL"
+        )
+        .await,
+        0,
+        "location removed"
+    );
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_new_product_and_its_photo_are_saved_together() {
+    let e = env_with_origin().await;
+    let (cookie, category) = provider(&e).await;
+    // A role that may add listings but not edit them: the photo belongs to
+    // the new product, so adding it needs no edit permission.
+    e.t.db
+        .execute_unprepared(
+            "DELETE FROM role_permissions WHERE permission_id = \
+             (SELECT id FROM permissions WHERE code = 'own.listing.update')",
+        )
+        .await
+        .unwrap();
+
+    let photo = photo(64, 48);
+    let res = send(
+        &e.router,
+        post_multipart_form(
+            "/provider/products/new",
+            &[("category_id", &category), ("name", "Sầu riêng Ri6")],
+            Some(&photo),
+            &cookie,
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        count(
+            &e,
+            "SELECT count(*) FROM products WHERE image_file_id IS NOT NULL"
+        )
+        .await,
+        1
+    );
+    assert_eq!(count(&e, "SELECT count(*) FROM files").await, 1);
+
+    // A refused form stores no photo.
+    let res = send(
+        &e.router,
+        post_multipart_form(
+            "/provider/products/new",
+            &[("category_id", &category), ("name", " ")],
+            Some(&photo),
+            &cookie,
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(count(&e, "SELECT count(*) FROM files").await, 1);
     e.cleanup().await;
 }
 

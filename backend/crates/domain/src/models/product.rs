@@ -29,7 +29,8 @@ pub struct ProductView {
     pub vendor_name: String,
     pub vendor_phone: String,
     pub image_file_id: Option<Uuid>,
-    pub is_available: bool,
+    /// The provider selling it, for the link to its page.
+    pub business_id: i32,
     pub created_on: DateTime<Utc>,
 }
 
@@ -53,6 +54,8 @@ pub struct NewProduct {
     pub description: Option<String>,
     pub price: Option<i64>,
     pub unit: Option<String>,
+    /// Its photo, stored already; inserted with the row.
+    pub image_file_id: Option<Uuid>,
     pub created_by: i32,
 }
 

@@ -88,6 +88,8 @@ impl ProviderDashboardHandler {
                     price: req.price,
                     unit: req.unit,
                 },
+                // The JSON API sends the photo separately (PUT …/image).
+                None,
             )
             .await?;
 

@@ -768,11 +768,6 @@ body:has(.app-nav__search-row.open) .app-main {
   text-transform: uppercase;
   opacity: 0.8;
 }
-.product-card__sold-out {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-}
 .product-card__name {
   display: -webkit-box;
   -webkit-line-clamp: 2;

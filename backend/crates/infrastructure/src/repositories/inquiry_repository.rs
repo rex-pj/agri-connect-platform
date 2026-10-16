@@ -100,6 +100,7 @@ impl InquiryRepositoryTrait for InquiryRepository {
             )
             .join(JoinType::InnerJoin, inquiry::Relation::Business.def())
             .order_by_desc(inquiry::Column::CreatedOn)
+            .order_by_desc(inquiry::Column::Id)
             .limit(limit as u64)
             .offset(offset as u64)
             .into_model::<InquiryAdminRow>()

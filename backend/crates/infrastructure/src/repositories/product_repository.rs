@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use chrono::Utc;
-use sea_orm::sea_query::Expr;
+use sea_orm::sea_query::{Expr, NullOrdering, Order};
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, FromQueryResult, JoinType,
     PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set, Statement,
@@ -50,7 +50,7 @@ struct ProductViewRow {
     category_icon: Option<String>,
     vendor_name: String,
     vendor_phone: String,
-    is_available: bool,
+    business_id: i32,
     created_on: DateTimeWithTimeZone,
     image_file_id: Option<Uuid>,
 }
@@ -98,7 +98,7 @@ fn base_product_view_query() -> sea_orm::Select<ProductEntity> {
         .column_as(category::Column::Icon, "category_icon")
         .column_as(business::Column::Name, "vendor_name")
         .column_as(business::Column::Phone, "vendor_phone")
-        .column_as(product::Column::IsActive, "is_available")
+        .column(product::Column::BusinessId)
         .column(product::Column::CreatedOn)
         .column(product::Column::ImageFileId)
         .join(JoinType::InnerJoin, product::Relation::Business.def())
@@ -160,6 +160,7 @@ impl ProductRepositoryTrait for ProductRepository {
         }
         query
             .order_by_desc(product::Column::CreatedOn)
+            .order_by_desc(product::Column::Id)
             .limit(limit as u64)
             .offset(offset as u64)
             .into_model::<AdminProductRow>()
@@ -247,12 +248,21 @@ impl ProductRepositoryTrait for ProductRepository {
         );
 
         let query = match sort {
-            ProductSort::PriceAsc => query.order_by_asc(product::Column::Price),
-            ProductSort::PriceDesc => query.order_by_desc(product::Column::Price),
+            // Unpriced ("Liên hệ giá") last both ways: Postgres puts NULL first
+            // in a descending sort.
+            ProductSort::PriceAsc => {
+                query.order_by_with_nulls(product::Column::Price, Order::Asc, NullOrdering::Last)
+            }
+            ProductSort::PriceDesc => {
+                query.order_by_with_nulls(product::Column::Price, Order::Desc, NullOrdering::Last)
+            }
             ProductSort::Newest => query.order_by_desc(product::Column::CreatedOn),
         };
 
         query
+            // Ties (same price, or demo rows loaded in one transaction with
+            // one created_on) need a fixed order, or rows repeat across pages.
+            .order_by_desc(product::Column::Id)
             .limit(limit as u64)
             .offset(offset as u64)
             .into_model::<ProductViewRow>()
@@ -293,6 +303,7 @@ impl ProductRepositoryTrait for ProductRepository {
             .filter(product::Column::IsActive.eq(true))
             .filter(product::Column::DeletedAt.is_null())
             .order_by_desc(product::Column::CreatedOn)
+            .order_by_desc(product::Column::Id)
             .limit(limit as u64)
             .into_model::<ProductViewRow>()
             .all(self.db.as_ref())
@@ -326,6 +337,7 @@ impl ProductRepositoryTrait for ProductRepository {
             .filter(business::Column::DeletedAt.is_null())
             .filter(product::Column::DeletedAt.is_null())
             .order_by_desc(product::Column::CreatedOn)
+            .order_by_desc(product::Column::Id)
             .into_model::<ProviderProductRow>()
             .all(self.db.as_ref())
             .await
@@ -357,6 +369,7 @@ impl ProductRepositoryTrait for ProductRepository {
             description: Set(product.description),
             price: Set(product.price),
             unit: Set(product.unit),
+            image_file_id: Set(product.image_file_id),
             created_by: Set(Some(product.created_by)),
             ..Default::default()
         };
@@ -555,7 +568,7 @@ fn map_view_row(r: ProductViewRow) -> ProductView {
         category_icon: r.category_icon,
         vendor_name: r.vendor_name,
         vendor_phone: r.vendor_phone,
-        is_available: r.is_available,
+        business_id: r.business_id,
         created_on: r.created_on.with_timezone(&Utc),
         image_file_id: r.image_file_id,
     }

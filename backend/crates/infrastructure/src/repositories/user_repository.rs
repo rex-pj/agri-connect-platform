@@ -25,7 +25,7 @@ use domain::{
 
 use domain::{Error, ErrorCode};
 
-use crate::repositories::unique_or_internal;
+use crate::repositories::{business_repository::insert_registration_business, unique_or_internal};
 use crate::{
     db_types::DateTimeWithTimeZone,
     entities::{
@@ -223,6 +223,24 @@ impl UserRepositoryTrait for UserRepository {
         let id = insert_user(&txn, user).await?;
         txn.commit().await.map_err(fail)?;
         Ok(Some(id))
+    }
+
+    async fn create_with_business(
+        &self,
+        user: NewUser,
+        business_name: &str,
+        business_phone: &str,
+    ) -> Result<i32, Error> {
+        let fail = |e: DbErr| {
+            error!("user create_with_business error: {e}");
+            Error::internal("Failed to create account.")
+        };
+        // Dropped without commit on any error: the account goes too.
+        let txn = self.db.begin().await.map_err(fail)?;
+        let id = insert_user(&txn, user).await?;
+        insert_registration_business(&txn, business_name, business_phone, id).await?;
+        txn.commit().await.map_err(fail)?;
+        Ok(id)
     }
 
     async fn find_by_username(&self, username: &str) -> Result<Option<ExistingUser>, Error> {

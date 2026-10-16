@@ -216,3 +216,81 @@ async fn category_pages_have_one_url_and_only_product_categories_exist() {
     }
     e.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn unpriced_products_come_last_in_both_price_orders() {
+    let e = Env::new().await;
+    seeded(&e).await;
+    e.t.db
+        .execute_unprepared(
+            "INSERT INTO products (business_id, category_id, name)
+             SELECT business_id, category_id, 'Liên hệ giá' FROM products LIMIT 1",
+        )
+        .await
+        .unwrap();
+    for sort in ["price_desc", "price_asc"] {
+        let shown = names(&html(&e, &format!("/products?sort={sort}")).await);
+        assert_eq!(
+            shown.last().map(String::as_str),
+            Some("Liên hệ giá"),
+            "{sort}: {shown:?}"
+        );
+    }
+    assert_eq!(
+        names(&html(&e, "/products?sort=price_desc").await)
+            .first()
+            .map(String::as_str),
+        Some("Sầu riêng Ri6")
+    );
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn rows_with_equal_sort_values_never_repeat_across_pages() {
+    let e = Env::new().await;
+    seeded(&e).await;
+    // Like demo data: many rows, one created_on (a single transaction).
+    e.t.db
+        .execute_unprepared(
+            "INSERT INTO products (business_id, category_id, name, price, created_on)
+             SELECT p.business_id, p.category_id, 'Lô ' || g, 1000, '2026-01-01'
+             FROM (SELECT business_id, category_id FROM products LIMIT 1) p,
+                  generate_series(1, 45) g;
+             UPDATE products SET created_on = '2026-01-01'",
+        )
+        .await
+        .unwrap();
+    let mut seen = Vec::new();
+    for page in 1..=3 {
+        seen.extend(names(&html(&e, &format!("/products?page={page}")).await));
+    }
+    let total = seen.len();
+    seen.sort();
+    seen.dedup();
+    assert_eq!(seen.len(), total, "a row appeared twice");
+    assert_eq!(total, 49);
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_page_past_the_end_redirects_to_the_last_page() {
+    let e = Env::new().await;
+    let [(cat, slug), _] = seeded(&e).await;
+    let res = send(&e.router, page("/products?q=g%E1%BA%A1o&page=9")).await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res.headers()[header::LOCATION], "/products?q=g%E1%BA%A1o");
+    let res = send(
+        &e.router,
+        page(&format!("/products/category/{cat}/{slug}?page=4")),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        res.headers()[header::LOCATION],
+        format!("/products/category/{cat}/{slug}").as_str()
+    );
+    e.cleanup().await;
+}

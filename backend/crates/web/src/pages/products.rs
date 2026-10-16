@@ -16,8 +16,8 @@ use crate::{
     extract::{ApiPath, ApiQuery},
     pages::{
         listing::{
-            category_sub, chips, find_category, parse_opt, parse_price, redirect_to_canonical,
-            with_query, FilterForm, Pagination, PriceRange, SortChip,
+            category_sub, chips, find_category, parse_opt, parse_price, past_the_end,
+            redirect_to_canonical, with_query, FilterForm, Pagination, PriceRange, SortChip,
         },
         parse_id,
     },
@@ -123,6 +123,9 @@ pub async fn list(
         + usize::from(min_price.is_some() || max_price.is_some())
         + usize::from(sort != ProductSort::default());
 
+    if let Some(redirect) = past_the_end(&path, &kept, result.page, result.total_pages) {
+        return redirect;
+    }
     let page = ProductsPage {
         title: "Sản phẩm nông nghiệp".to_owned(),
         icon: "fa-bag-shopping".to_owned(),
@@ -203,6 +206,9 @@ pub async fn category(
         )
         .await?;
 
+    if let Some(redirect) = past_the_end(&canonical, &[], result.page, result.total_pages) {
+        return redirect;
+    }
     let page = ProductsPage {
         title: category.name.clone(),
         icon: category.icon.clone().unwrap_or_else(|| "fa-tag".to_owned()),

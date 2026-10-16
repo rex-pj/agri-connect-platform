@@ -162,7 +162,9 @@ impl MediaUseCase {
 
     /// Stores both objects, then the row. A failure after an object was
     /// written deletes what was written, so nothing is left without a row.
-    async fn store(&self, actor: &Actor, image: ProcessedImage) -> Result<Uuid> {
+    /// For a use case that saves the image together with its owner; it
+    /// checks who is asking and calls `discard` if that save fails.
+    pub(crate) async fn store(&self, actor: &Actor, image: ProcessedImage) -> Result<Uuid> {
         let id = Uuid::new_v4();
         let (storage_key, thumb_key) = object_keys(id);
         let row = NewFile {
@@ -192,7 +194,7 @@ impl MediaUseCase {
         Ok(id)
     }
 
-    async fn discard(&self, id: Uuid) {
+    pub(crate) async fn discard(&self, id: Uuid) {
         if let Err(e) = release_file(self.files.as_ref(), self.storage.as_ref(), id).await {
             warn!(file = %id, error = %e, "could not discard an unused upload");
         }

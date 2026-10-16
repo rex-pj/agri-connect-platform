@@ -9,7 +9,6 @@ use domain::{
         user::{NewResetToken, NewUser},
     },
     repositories::{
-        business_repository_trait::BusinessRepositoryTrait,
         permission_repository_trait::PermissionRepositoryTrait,
         refresh_token_repository_trait::RefreshTokenRepositoryTrait,
         user_repository_trait::UserRepositoryTrait,
@@ -22,18 +21,20 @@ use uuid::Uuid;
 use crate::{
     authz::Actor,
     constants::{
-        LOGIN_FAIL_MAX_ATTEMPTS, LOGIN_LOCK_MINUTES, PASSWORD_RESET_EXPIRY_HOURS,
-        REFRESH_REUSE_GRACE_SECS,
+        BUSINESS_NAME_MAX, FULL_NAME_MAX, LOGIN_FAIL_MAX_ATTEMPTS, LOGIN_LOCK_MINUTES,
+        PASSWORD_RESET_EXPIRY_HOURS, REFRESH_REUSE_GRACE_SECS,
     },
     outputs::{LoginResponse, MeResponse},
     ports::{EmailService, PasswordHasher, SessionClaims, TokenService},
-    validation::{validate_email, validate_password, validate_phone, validate_username},
+    validation::{
+        max_chars, max_chars_opt, non_blank, validate_email, validate_password, validate_phone,
+        validate_username,
+    },
 };
 
 #[derive(Clone)]
 pub struct AuthUseCase {
     user_repo: Arc<dyn UserRepositoryTrait + Send + Sync>,
-    business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
     permission_repo: Arc<dyn PermissionRepositoryTrait + Send + Sync>,
     refresh_repo: Arc<dyn RefreshTokenRepositoryTrait + Send + Sync>,
     email: Arc<dyn EmailService>,
@@ -46,7 +47,6 @@ pub struct AuthUseCase {
 /// compatible types by position.
 pub struct AuthDeps {
     pub user_repo: Arc<dyn UserRepositoryTrait + Send + Sync>,
-    pub business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
     pub permission_repo: Arc<dyn PermissionRepositoryTrait + Send + Sync>,
     pub refresh_repo: Arc<dyn RefreshTokenRepositoryTrait + Send + Sync>,
     pub email: Arc<dyn EmailService>,
@@ -81,7 +81,6 @@ impl AuthUseCase {
     pub fn new(d: AuthDeps) -> Self {
         Self {
             user_repo: d.user_repo,
-            business_repo: d.business_repo,
             permission_repo: d.permission_repo,
             refresh_repo: d.refresh_repo,
             email: d.email,
@@ -292,10 +291,12 @@ impl AuthUseCase {
 
         let username = username.trim().to_lowercase();
         let email = email.trim().to_lowercase();
+        let full_name = non_blank(full_name);
         Validation::new()
             .rule("username", validate_username(&username))
             .rule("email", validate_email(&email))
             .rule("password", validate_password(&password))
+            .rule("full_name", max_chars_opt(&full_name, FULL_NAME_MAX))
             .finish()?;
 
         let password_hash = self.password_hasher.hash(&password).await?;
@@ -337,15 +338,21 @@ impl AuthUseCase {
         let email = email.trim().to_lowercase();
         let business_name = business_name.trim().to_owned();
         let business_phone = business_phone.trim().to_owned();
+        let full_name = non_blank(full_name);
 
         Validation::new()
             .rule("username", validate_username(&username))
             .rule("email", validate_email(&email))
             .rule("password", validate_password(&password))
+            .rule("full_name", max_chars_opt(&full_name, FULL_NAME_MAX))
             .check(
                 business_name.is_empty(),
                 "business_name",
                 ErrorCode::BusinessNameRequired,
+            )
+            .rule(
+                "business_name",
+                max_chars(&business_name, BUSINESS_NAME_MAX),
             )
             .rule("business_phone", validate_phone(&business_phone))
             .finish()?;
@@ -358,19 +365,21 @@ impl AuthUseCase {
         }
 
         let password_hash = self.password_hasher.hash(&password).await?;
+        // The account and its business in one transaction: never an account
+        // that can log in but has nothing to manage (and keeps its username).
         let user_id = self
             .user_repo
-            .create(NewUser {
-                username: username.clone(),
-                email,
-                password_hash,
-                role: ROLE_PROVIDER.into(),
-                full_name,
-            })
-            .await?;
-
-        self.business_repo
-            .create_for_registration(&business_name, &business_phone, user_id)
+            .create_with_business(
+                NewUser {
+                    username: username.clone(),
+                    email,
+                    password_hash,
+                    role: ROLE_PROVIDER.into(),
+                    full_name,
+                },
+                &business_name,
+                &business_phone,
+            )
             .await?;
 
         let token = self.token_svc.mint(user_id, &username)?;

@@ -76,6 +76,7 @@ impl ReviewRepositoryTrait for ReviewRepository {
             )
             .join(JoinType::InnerJoin, review::Relation::Business.def())
             .order_by_desc(review::Column::CreatedOn)
+            .order_by_desc(review::Column::Id)
             .limit(limit as u64)
             .offset(offset as u64)
             .into_model::<ReviewAdminRow>()

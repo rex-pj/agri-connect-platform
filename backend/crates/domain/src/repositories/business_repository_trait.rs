@@ -4,7 +4,7 @@ use crate::{
     error::Error,
     models::business::{
         BusinessAdminDetail, BusinessAdminView, BusinessBrowse, BusinessDetail, BusinessGeoResult,
-        BusinessProfile, ProviderSort,
+        BusinessProfile, ProfileUpdate, ProviderSort,
     },
 };
 
@@ -36,8 +36,6 @@ pub trait BusinessRepositoryTrait {
 
     async fn find_detail(&self, id: i32) -> Result<Option<BusinessDetail>, Error>;
 
-    async fn check_exists(&self, id: i32) -> Result<bool, Error>;
-
     async fn list_for_admin(
         &self,
         limit: i64,
@@ -54,16 +52,9 @@ pub trait BusinessRepositoryTrait {
 
     async fn get_profile_by_user(&self, user_id: i32) -> Result<Option<BusinessProfile>, Error>;
 
-    async fn update_profile_text(
-        &self,
-        user_id: i32,
-        name: &str,
-        phone: &str,
-        description: Option<&str>,
-        address: Option<&str>,
-    ) -> Result<bool, Error>;
-
-    async fn update_location(&self, user_id: i32, point_wkt: &str) -> Result<(), Error>;
+    /// Replaces the profile of the business `user_id` owns, location included
+    /// (`None` removes it), in one statement. False when they own none.
+    async fn update_profile(&self, user_id: i32, profile: &ProfileUpdate) -> Result<bool, Error>;
 
     async fn get_business_id_by_user(&self, user_id: i32) -> Result<Option<i32>, Error>;
 
@@ -72,13 +63,4 @@ pub trait BusinessRepositoryTrait {
     async fn count_all(&self) -> Result<i64, Error>;
 
     async fn count_verified(&self) -> Result<i64, Error>;
-
-    /// Create a new business during provider self-registration.
-    /// Returns the new business `id`.
-    async fn create_for_registration(
-        &self,
-        name: &str,
-        phone: &str,
-        user_id: i32,
-    ) -> Result<i32, Error>;
 }

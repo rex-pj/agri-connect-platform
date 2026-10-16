@@ -1,5 +1,7 @@
 use std::num::NonZeroU32;
 
+use application::constants::RADIUS_DEFAULT_M;
+
 const fn per_minute(n: u32) -> NonZeroU32 {
     // A zero quota would block every request; fall back to 1/min so a typo
     // here throttles hard instead of failing to compile in a const context.
@@ -59,5 +61,7 @@ pub const SEARCH_PREVIEW_COUNT: usize = 6;
 /// The radius choices on /explore, in metres. Each is inside the use case's
 /// 100 m – 50 km bounds.
 pub const EXPLORE_RADII_M: [i64; 4] = [5_000, 10_000, 25_000, 50_000];
-/// A farm visit by motorbike; the onboarding promises "trong 10 km".
-pub const EXPLORE_DEFAULT_RADIUS_M: i64 = 10_000;
+/// The use case's default (the onboarding promises "trong 10 km"), as a
+/// whole number of metres for the radius links. Must be one of the choices.
+pub const EXPLORE_DEFAULT_RADIUS_M: i64 = RADIUS_DEFAULT_M as i64;
+const _: () = assert!(EXPLORE_RADII_M[1] == EXPLORE_DEFAULT_RADIUS_M);

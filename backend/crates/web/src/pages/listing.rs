@@ -6,7 +6,7 @@ use application::outputs::CategoryDto;
 use domain::{Error, ErrorCode};
 use serde::Serialize;
 
-use crate::pages::moved_permanently;
+use crate::pages::{moved_permanently, see_other};
 
 /// Pages shown either side of the current one before an ellipsis.
 const PAGE_WINDOW: i64 = 2;
@@ -133,6 +133,26 @@ pub fn redirect_to_canonical(
     Some(moved_permanently(&with_query(canonical, keep)))
 }
 
+/// A page number past the last page (an old link after listings were
+/// removed, or a typed one): 303 to the last page, keeping the filters,
+/// instead of an empty list. `None` when `page` is a page that exists.
+pub fn past_the_end(
+    path: &str,
+    params: &[(&str, &str)],
+    page: i64,
+    total_pages: i64,
+) -> Option<Result<axum::response::Response, Error>> {
+    if total_pages < 1 || page <= total_pages {
+        return None;
+    }
+    let last = total_pages.to_string();
+    let mut all = params.to_vec();
+    if total_pages > 1 {
+        all.push(("page", &last));
+    }
+    Some(see_other(&with_query(path, &all)))
+}
+
 /// The hero line of a category page: its description and how many results.
 pub fn category_sub(category: &CategoryDto, total: i64, noun: &str) -> String {
     let count = (total > 0).then(|| format!("{total} {noun}"));
@@ -250,6 +270,27 @@ mod tests {
         assert_eq!(page_numbers(10, 20), n(&[1, 0, 8, 9, 10, 11, 12, 0, 20]));
         assert_eq!(page_numbers(20, 20), n(&[1, 0, 18, 19, 20]));
         assert_eq!(page_numbers(4, 20), n(&[1, 2, 3, 4, 5, 6, 0, 20]));
+    }
+
+    #[test]
+    fn a_page_past_the_end_goes_to_the_last_one() {
+        let location = |page, total| {
+            past_the_end("/products", &[("q", "gạo")], page, total)
+                .and_then(Result::ok)
+                .map(|r| {
+                    r.headers()[axum::http::header::LOCATION]
+                        .to_str()
+                        .unwrap_or_default()
+                        .to_owned()
+                })
+        };
+        assert_eq!(
+            location(9, 3),
+            Some("/products?q=g%E1%BA%A1o&page=3".into())
+        );
+        assert_eq!(location(4, 1), Some("/products?q=g%E1%BA%A1o".into()));
+        assert_eq!(location(3, 3), None);
+        assert_eq!(location(5, 0), None, "an empty list has no last page");
     }
 
     #[test]

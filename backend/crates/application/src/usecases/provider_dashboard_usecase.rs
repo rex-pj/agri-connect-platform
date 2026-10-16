@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use domain::{
     events::{Change, DomainEvent, Entity},
-    models::product::{NewProduct, UpdateProduct},
+    models::{
+        business::ProfileUpdate,
+        product::{NewProduct, UpdateProduct},
+    },
     repositories::{
         business_repository_trait::BusinessRepositoryTrait,
         product_repository_trait::ProductRepositoryTrait,
@@ -22,9 +25,11 @@ use crate::{
     },
     inputs::{CreateProductInput, UpdateProductInput, UpdateProfileInput},
     outputs::{ProviderProductDto, ProviderProfileDto},
-    ports::EventBus,
+    ports::{EventBus, ProcessedImage},
+    usecases::media_usecase::MediaUseCase,
     validation::{
-        max_chars, max_chars_opt, non_blank, validate_coordinates, validate_phone, validate_price,
+        max_chars, max_chars_opt, non_blank, point_wkt, validate_coordinates, validate_phone,
+        validate_price,
     },
 };
 
@@ -34,6 +39,8 @@ use crate::{
 pub struct ProviderDashboardUseCase {
     business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
     product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
+    /// Stores a new product's photo together with the product.
+    media: MediaUseCase,
     events: Arc<dyn EventBus>,
 }
 
@@ -41,11 +48,13 @@ impl ProviderDashboardUseCase {
     pub fn new(
         business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
         product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
+        media: MediaUseCase,
         events: Arc<dyn EventBus>,
     ) -> Self {
         Self {
             business_repo,
             product_repo,
+            media,
             events,
         }
     }
@@ -104,7 +113,8 @@ impl ProviderDashboardUseCase {
         let phone = input.phone.trim().to_owned();
         let description = non_blank(input.description);
         let address = non_blank(input.address);
-        // Both or neither: one coordinate alone is not a place.
+        // Both or neither: one coordinate alone is not a place. Neither means
+        // no location, so a provider can take a wrong pin off the map.
         let position = match (input.lat, input.lng) {
             (Some(lat), Some(lng)) => Some((lat, lng)),
             (None, None) => None,
@@ -127,12 +137,15 @@ impl ProviderDashboardUseCase {
 
         let updated = self
             .business_repo
-            .update_profile_text(
+            .update_profile(
                 actor.user_id,
-                &name,
-                &phone,
-                description.as_deref(),
-                address.as_deref(),
+                &ProfileUpdate {
+                    name,
+                    phone,
+                    description,
+                    address,
+                    location_wkt: position.map(|(lat, lng)| point_wkt(lat, lng)),
+                },
             )
             .await?;
 
@@ -140,20 +153,19 @@ impl ProviderDashboardUseCase {
             return Err(Error::new(ErrorCode::ProviderNotFound));
         }
 
-        if let Some((lat, lng)) = position {
-            let wkt = format!("SRID=4326;POINT({lng} {lat})");
-            self.business_repo
-                .update_location(actor.user_id, &wkt)
-                .await?;
-        }
-
         self.get_profile(actor).await
     }
 
+    /// Creates one of the actor's products, with its photo when given (checked
+    /// and re-encoded already by `MediaUseCase::prepare_image`). The photo is
+    /// stored only once the boxes pass, and goes in with the row: there is
+    /// never a product left without the photo that was sent with it, nor a
+    /// stored photo without its product.
     pub async fn create_product(
         &self,
         actor: &Actor,
         input: CreateProductInput,
+        image: Option<ProcessedImage>,
     ) -> Result<ProviderProductDto> {
         actor.require(PERM_OWN_LISTING_CREATE)?;
         let fields = self
@@ -172,7 +184,11 @@ impl ProviderDashboardUseCase {
             .await?
             .ok_or_else(|| Error::new(ErrorCode::AccountNotLinkedToBusiness))?;
 
-        let new_id = self
+        let image_file_id = match image {
+            Some(image) => Some(self.media.store(actor, image).await?),
+            None => None,
+        };
+        let created = self
             .product_repo
             .create(NewProduct {
                 business_id,
@@ -181,9 +197,18 @@ impl ProviderDashboardUseCase {
                 description: fields.description,
                 price: input.price,
                 unit: fields.unit,
+                image_file_id,
                 created_by: actor.user_id,
             })
-            .await?;
+            .await;
+        let new_id = match (created, image_file_id) {
+            (Ok(id), _) => id,
+            (Err(e), Some(file)) => {
+                self.media.discard(file).await;
+                return Err(e);
+            }
+            (Err(e), None) => return Err(e),
+        };
 
         self.product_repo
             .find_provider_product_by_id(new_id)

@@ -31,6 +31,15 @@ pub trait UserRepositoryTrait {
     /// `None`.
     async fn create_first_admin(&self, user: NewUser) -> Result<Option<i32>, Error>;
 
+    /// Self-registration: the provider account and the business it owns, both
+    /// or neither. Returns the user id.
+    async fn create_with_business(
+        &self,
+        user: NewUser,
+        business_name: &str,
+        business_phone: &str,
+    ) -> Result<i32, Error>;
+
     async fn find_by_username(&self, username: &str) -> Result<Option<ExistingUser>, Error>;
 
     async fn find_by_email(&self, email: &str) -> Result<Option<UserByEmail>, Error>;

@@ -22,7 +22,10 @@ use crate::{
     constants::META_DESCRIPTION_MAX_CHARS,
     cookies::{Flash, TakeFlash},
     extract::{ApiForm, ApiPath},
-    pages::{canonical_url, forms::FormErrors, moved_permanently, parse_id, see_other, summary},
+    pages::{
+        canonical_url, forms::FormErrors, listing::parse_opt, moved_permanently, parse_id,
+        see_other, summary,
+    },
     shell::Shell,
     views::{render_page, render_page_status},
 };
@@ -33,6 +36,8 @@ pub struct ContactValues {
     pub requester_name: String,
     pub requester_phone: String,
     pub topic: String,
+    /// The chosen service's id as sent, so the select keeps it.
+    pub service_id: String,
     pub note: String,
 }
 
@@ -47,6 +52,10 @@ pub struct ContactForm {
     pub requester_phone: String,
     #[serde(default)]
     pub topic: String,
+    /// The service select (a provider with services); its name becomes the
+    /// topic. Blank or not a number: none chosen.
+    #[serde(default)]
+    pub service_id: String,
     #[serde(default)]
     pub note: String,
 }
@@ -57,6 +66,7 @@ impl ContactForm {
             requester_name: self.requester_name.clone(),
             requester_phone: self.requester_phone.clone(),
             topic: self.topic.clone(),
+            service_id: self.service_id.clone(),
             note: self.note.clone(),
         }
     }
@@ -183,7 +193,7 @@ pub async fn submit_contact(
             requester_name: v.requester_name.clone(),
             requester_phone: v.requester_phone.clone(),
             note: Some(v.note.clone()),
-            service_id: None,
+            service_id: parse_opt(&v.service_id),
         })
         .await;
 

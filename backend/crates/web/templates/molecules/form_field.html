@@ -15,12 +15,18 @@
 </div>
 {%- endmacro input %}
 
-{% macro select(id, name, label, options, value="", error="", required=false, placeholder="") -%}
+{#- `options` are strings (each is value and label), or objects whose
+    `value_key` field is the value and `label_key` field the label. `value`
+    is the chosen value as text, as the form sent it. -#}
+{% macro select(id, name, label, options, value="", error="", required=false, placeholder="", value_key="", label_key="") -%}
 <div class="form-field">
   <label class="form-label fw-semibold" for="{{ id }}">{{ label }}{% if required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
   <select class="form-select{% if error %} is-invalid{% endif %}" id="{{ id }}" name="{{ name }}"{% if required %} required{% endif %}{% if error %} aria-invalid="true" aria-describedby="{{ id }}-error"{% endif %}>
     {% if placeholder %}<option value="">{{ placeholder }}</option>{% endif %}
-    {% for option in options %}<option value="{{ option }}"{% if option == value %} selected{% endif %}>{{ option }}</option>{% endfor %}
+    {% for option in options %}
+    {%- if value_key %}{% set v = option[value_key] ~ "" %}{% set l = option[label_key] %}{% else %}{% set v = option %}{% set l = option %}{% endif -%}
+    <option value="{{ v }}"{% if v == value %} selected{% endif %}>{{ l }}</option>
+    {%- endfor %}
   </select>
   {% if error %}<div class="invalid-feedback" id="{{ id }}-error">{{ error }}</div>{% endif %}
 </div>

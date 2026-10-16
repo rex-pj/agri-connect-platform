@@ -6,9 +6,9 @@
 use std::collections::HashMap;
 
 use application::constants::{
-    BUSINESS_ADDRESS_MAX, BUSINESS_DESCRIPTION_MAX, BUSINESS_NAME_MAX, PASSWORD_MIN_CHARS,
-    PASSWORD_RESET_EXPIRY_HOURS, PRODUCT_DESCRIPTION_MAX, PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX,
-    USERNAME_MIN_LEN,
+    BUSINESS_ADDRESS_MAX, BUSINESS_DESCRIPTION_MAX, BUSINESS_NAME_MAX, FULL_NAME_MAX,
+    PASSWORD_MIN_CHARS, PASSWORD_RESET_EXPIRY_HOURS, PRODUCT_DESCRIPTION_MAX, PRODUCT_NAME_MAX,
+    PRODUCT_UNIT_MAX, USERNAME_MAX_LEN, USERNAME_MIN_LEN,
 };
 use axum::{
     http::{header, HeaderMap, HeaderValue, StatusCode},
@@ -71,6 +71,8 @@ pub struct Views {
 struct FieldLimits {
     password_min_chars: usize,
     username_min_len: usize,
+    username_max_len: usize,
+    full_name_max: usize,
     reset_link_hours: i64,
     business_name_max: usize,
     business_address_max: usize,
@@ -83,6 +85,8 @@ struct FieldLimits {
 const FIELD_LIMITS: FieldLimits = FieldLimits {
     password_min_chars: PASSWORD_MIN_CHARS,
     username_min_len: USERNAME_MIN_LEN,
+    username_max_len: USERNAME_MAX_LEN,
+    full_name_max: FULL_NAME_MAX,
     reset_link_hours: PASSWORD_RESET_EXPIRY_HOURS,
     business_name_max: BUSINESS_NAME_MAX,
     business_address_max: BUSINESS_ADDRESS_MAX,

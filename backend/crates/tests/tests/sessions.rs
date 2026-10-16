@@ -6,7 +6,7 @@ use axum::{
     body::Body,
     http::{header, Request, Response, StatusCode},
 };
-use integration_tests::{register_provider, send, Env};
+use integration_tests::{known_reset_token, register_provider, send, Env};
 use sea_orm::{ConnectionTrait, Statement};
 
 async fn login(e: &Env) -> (i32, application::usecases::auth_usecase::SessionTokens) {
@@ -152,6 +152,71 @@ async fn the_middleware_renews_an_expired_session_for_the_same_request() {
 
 #[tokio::test]
 #[ignore = "needs TEST_DATABASE_URL"]
+async fn a_renewal_survives_an_error_page() {
+    let e = Env::new().await;
+    let (_, tokens) = login(&e).await;
+
+    // The first page after the access token expired is a dead link.
+    let req = Request::get("/products/999999/khong-con")
+        .header(header::ACCEPT, "text/html")
+        .header(header::COOKIE, format!("refresh_token={}", tokens.refresh))
+        .body(Body::empty())
+        .unwrap();
+    let res = send(&e.router, req).await;
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+    let set = set_cookies(&res);
+    let refresh = cookie_value(&set, "refresh_token").expect("the rotated refresh cookie");
+    assert!(cookie_value(&set, "auth_token").is_some());
+    // The browser now holds a token that still renews.
+    assert!(e
+        .state
+        .usecases
+        .auth
+        .refresh_session(&refresh)
+        .await
+        .unwrap()
+        .is_some());
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn the_tab_that_loses_a_renewal_race_leaves_the_cookies_alone() {
+    let e = Env::new().await;
+    let (_, tokens) = login(&e).await;
+    let page = || {
+        Request::get("/")
+            .header(header::ACCEPT, "text/html")
+            .header(header::COOKIE, format!("refresh_token={}", tokens.refresh))
+            .body(Body::empty())
+            .unwrap()
+    };
+    let first = send(&e.router, page()).await;
+    let winner = set_cookies(&first);
+    assert!(cookie_value(&winner, "refresh_token").is_some());
+
+    // A second tab sent the same old token a moment later.
+    let second = send(&e.router, page()).await;
+    assert_eq!(second.status(), StatusCode::OK);
+    assert!(
+        set_cookies(&second).is_empty(),
+        "clearing here would wipe the winner's cookies"
+    );
+    // And the family is intact.
+    let rotated = cookie_value(&winner, "refresh_token").unwrap();
+    assert!(e
+        .state
+        .usecases
+        .auth
+        .refresh_session(&rotated)
+        .await
+        .unwrap()
+        .is_some());
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
 async fn a_valid_access_token_or_a_bearer_header_never_rotates() {
     let e = Env::new().await;
     let (_, tokens) = login(&e).await;
@@ -244,25 +309,28 @@ async fn deactivation_and_password_resets_end_sessions() {
     let (user_id, tokens) = login(&e).await;
     let auth = &e.state.usecases.auth;
 
-    // A password reset ends every session of the account.
+    // A password reset ends every session of the account. Two links were
+    // requested; the newer one is used.
     auth.forgot_password("nongdan@example.vn".into())
         .await
         .unwrap();
-    let reset: String =
-        e.t.db
-            .query_one(Statement::from_string(
-                e.t.db.get_database_backend(),
-                format!("SELECT token FROM password_reset_tokens WHERE user_id = {user_id}"),
-            ))
-            .await
-            .unwrap()
-            .unwrap()
-            .try_get("", "token")
-            .unwrap();
-    auth.reset_password(reset, "matkhaumoi123".into())
+    let older = known_reset_token(&e, "lien-ket-cu").await;
+    auth.forgot_password("nongdan@example.vn".into())
+        .await
+        .unwrap();
+    let newer = known_reset_token(&e, "lien-ket-moi").await;
+    auth.reset_password(newer, "matkhaumoi123".into())
         .await
         .unwrap();
     assert_eq!(auth.refresh_session(&tokens.refresh).await.unwrap(), None);
+    assert_eq!(
+        auth.reset_password(older, "matkhaukhac123".into())
+            .await
+            .err()
+            .map(|e| e.code()),
+        Some(domain::ErrorCode::ResetTokenInvalid),
+        "an older link dies with the reset"
+    );
 
     // A deactivated account cannot renew either.
     let login = auth
@@ -277,6 +345,47 @@ async fn deactivation_and_password_resets_end_sessions() {
         .await
         .unwrap();
     assert_eq!(auth.refresh_session(&fresh.refresh).await.unwrap(), None);
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_password_change_signs_other_devices_out_at_once() {
+    let e = Env::new().await;
+    let (user_id, other_device) = login(&e).await;
+    let me = |access: &str| {
+        Request::get("/api/users/me")
+            .header(header::AUTHORIZATION, format!("Bearer {access}"))
+            .body(Body::empty())
+            .unwrap()
+    };
+    assert_eq!(
+        send(&e.router, me(&other_device.access)).await.status(),
+        StatusCode::OK
+    );
+
+    // The cut-off is in whole seconds, like `iat`: let the old token's second pass.
+    tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
+    let auth = &e.state.usecases.auth;
+    auth.change_password(user_id, "matkhau123".into(), "matkhaumoi123".into())
+        .await
+        .unwrap();
+    let this_device = auth.start_session(user_id).await.unwrap();
+
+    let res = send(&e.router, me(&other_device.access)).await;
+    assert_eq!(
+        res.status(),
+        StatusCode::UNAUTHORIZED,
+        "still within its hour"
+    );
+    assert_eq!(
+        integration_tests::json_body(res).await["code"],
+        "invalid_token"
+    );
+    assert_eq!(
+        send(&e.router, me(&this_device.access)).await.status(),
+        StatusCode::OK
+    );
     e.cleanup().await;
 }
 

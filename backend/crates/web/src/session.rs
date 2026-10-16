@@ -10,7 +10,10 @@
 //! rewrites this request's `Cookie` header, so the handler sees a live
 //! session without a second round trip.
 
-use application::{constants::JWT_EXPIRY_HOURS, usecases::auth_usecase::SessionTokens};
+use application::{
+    constants::JWT_EXPIRY_HOURS,
+    usecases::auth_usecase::{Renewal, SessionTokens},
+};
 use axum::{
     extract::{Request, State},
     http::{header, HeaderMap, HeaderValue},
@@ -119,8 +122,8 @@ pub async fn renew(
         return next.run(req).await;
     };
 
-    match state.usecases.auth.refresh_session(&refresh).await {
-        Ok(Some(tokens)) => {
+    match state.usecases.auth.renew_session(&refresh).await {
+        Ok(Renewal::Renewed(tokens)) => {
             if let Some(cookie) = with_session_cookies(req.headers(), &tokens) {
                 req.headers_mut().insert(header::COOKIE, cookie);
             }
@@ -128,7 +131,12 @@ pub async fn renew(
             policy.set(&mut response, &tokens);
             response
         }
-        Ok(None) => {
+        Ok(Renewal::Raced) => {
+            // Another tab renewed first and set the new cookies; clearing
+            // them here could arrive last and sign the visitor out.
+            next.run(req).await
+        }
+        Ok(Renewal::Ended) => {
             // Spent, expired or revoked: drop the dead cookies so the browser
             // stops sending them, and carry on signed out.
             let mut response = next.run(req).await;

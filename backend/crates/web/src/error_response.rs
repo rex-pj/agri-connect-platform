@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 
 use axum::{
     extract::{Request, State},
-    http::header,
+    http::{header, HeaderMap},
     middleware::Next,
     response::{IntoResponse, Response},
     Json,
@@ -116,18 +116,48 @@ pub async fn render_errors(State(state): State<AppState>, req: Request, next: Ne
         }
         None => (status, Json(body)).into_response(),
     };
-    for (name, value) in headers.iter() {
-        rendered
-            .headers_mut()
-            .entry(name)
-            .or_insert_with(|| value.clone());
-    }
+    carry_headers(&headers, rendered.headers_mut());
     rendered
+}
+
+/// Copies every header of `from` that the rendered page did not set itself,
+/// with all of its values: a renewed session sends two `Set-Cookie` lines,
+/// and keeping only the first would leave the browser a spent refresh token.
+fn carry_headers(from: &HeaderMap, to: &mut HeaderMap) {
+    for name in from.keys() {
+        if to.contains_key(name) {
+            continue;
+        }
+        for value in from.get_all(name) {
+            to.append(name.clone(), value.clone());
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::is_machine_path;
+    use axum::http::{header, HeaderMap, HeaderValue};
+
+    use super::{carry_headers, is_machine_path};
+
+    #[test]
+    fn every_cookie_survives_the_error_page_and_page_headers_win() {
+        let mut from = HeaderMap::new();
+        from.append(header::SET_COOKIE, HeaderValue::from_static("auth_token=a"));
+        from.append(
+            header::SET_COOKIE,
+            HeaderValue::from_static("refresh_token=r"),
+        );
+        from.insert(header::CACHE_CONTROL, HeaderValue::from_static("public"));
+        let mut to = HeaderMap::new();
+        to.insert(header::CACHE_CONTROL, HeaderValue::from_static("private"));
+        carry_headers(&from, &mut to);
+        assert_eq!(to.get_all(header::SET_COOKIE).iter().count(), 2);
+        assert_eq!(
+            to.get(header::CACHE_CONTROL).map(|v| v.as_bytes()),
+            Some(&b"private"[..])
+        );
+    }
 
     #[test]
     fn api_assets_probes_and_files_are_not_pages() {

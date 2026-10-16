@@ -315,6 +315,7 @@ mod tests {
             role_code: "any".into(),
             is_active: true,
             permissions: permissions.iter().map(|p| (*p).to_owned()).collect(),
+            sessions_valid_after: None,
         })
         .expect("an active record is an actor")
     }

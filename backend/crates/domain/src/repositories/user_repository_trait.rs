@@ -26,6 +26,11 @@ pub trait UserRepositoryTrait {
 
     async fn create(&self, user: NewUser) -> Result<i32, Error>;
 
+    /// Creates `user` (an admin) only if no account with its role exists yet,
+    /// atomically: of two concurrent calls, one creates and the other gets
+    /// `None`.
+    async fn create_first_admin(&self, user: NewUser) -> Result<Option<i32>, Error>;
+
     async fn find_by_username(&self, username: &str) -> Result<Option<ExistingUser>, Error>;
 
     async fn find_by_email(&self, email: &str) -> Result<Option<UserByEmail>, Error>;
@@ -34,11 +39,19 @@ pub trait UserRepositoryTrait {
 
     async fn update_password(&self, user_id: i32, password_hash: &str) -> Result<(), Error>;
 
+    /// Session tokens of `user_id` issued before now stop working.
+    async fn end_sessions(&self, user_id: i32) -> Result<(), Error>;
+
     async fn create_reset_token(&self, token: NewResetToken) -> Result<(), Error>;
 
-    async fn find_valid_reset_token(&self, token: &str) -> Result<Option<ResetToken>, Error>;
+    /// Marks the unexpired, unused token with this hash as used and returns
+    /// it, in one statement: of two concurrent resets with the same link,
+    /// exactly one gets it.
+    async fn claim_reset_token(&self, token_hash: &str) -> Result<Option<ResetToken>, Error>;
 
-    async fn consume_reset_token(&self, token_id: i32) -> Result<(), Error>;
+    /// Marks every unused reset token of `user_id` as used, so older links
+    /// stop working once the password was reset.
+    async fn retire_reset_tokens(&self, user_id: i32) -> Result<(), Error>;
 
     async fn count_all(&self) -> Result<i64, Error>;
 

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use chrono::Utc;
 use domain::{
     models::{permission::PermissionModel, user::ActorRecord},
     repositories::permission_repository_trait::PermissionRepositoryTrait,
@@ -10,7 +11,10 @@ use sea_orm::{
     ConnectionTrait, DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QueryOrder, Statement,
 };
 
-use crate::entities::permission::{self, Entity as Permission};
+use crate::{
+    db_types::DateTimeWithTimeZone,
+    entities::permission::{self, Entity as Permission},
+};
 
 pub struct PermissionRepository {
     db: Arc<DatabaseConnection>,
@@ -63,6 +67,7 @@ struct ActorRow {
     username: String,
     role_code: String,
     is_active: bool,
+    sessions_valid_after: Option<DateTimeWithTimeZone>,
 }
 
 #[derive(FromQueryResult)]
@@ -147,7 +152,8 @@ impl PermissionRepositoryTrait for PermissionRepository {
         let Some(user) = ActorRow::find_by_statement(Statement::from_sql_and_values(
             db.get_database_backend(),
             "SELECT u.id, u.username, r.code AS role_code,
-                    (u.is_active AND u.deleted_at IS NULL) AS is_active
+                    (u.is_active AND u.deleted_at IS NULL) AS is_active,
+                    u.sessions_valid_after
              FROM users u JOIN roles r ON r.id = u.role_id
              WHERE u.id = $1",
             [user_id.into()],
@@ -171,6 +177,7 @@ impl PermissionRepositoryTrait for PermissionRepository {
             role_code: user.role_code,
             is_active: user.is_active,
             permissions,
+            sessions_valid_after: user.sessions_valid_after.map(|t| t.with_timezone(&Utc)),
         }))
     }
 }

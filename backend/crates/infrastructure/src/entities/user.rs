@@ -19,6 +19,7 @@ pub struct Model {
     pub created_by: Option<i32>,
     pub updated_by: Option<i32>,
     pub deleted_at: Option<DateTimeWithTimeZone>,
+    pub sessions_valid_after: Option<DateTimeWithTimeZone>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

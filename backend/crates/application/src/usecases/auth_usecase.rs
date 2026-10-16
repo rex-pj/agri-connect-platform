@@ -26,7 +26,7 @@ use crate::{
         REFRESH_REUSE_GRACE_SECS,
     },
     outputs::{LoginResponse, MeResponse},
-    ports::{EmailService, PasswordHasher, TokenService},
+    ports::{EmailService, PasswordHasher, SessionClaims, TokenService},
     validation::{validate_email, validate_password, validate_phone, validate_username},
 };
 
@@ -66,6 +66,17 @@ pub struct SessionTokens {
     pub refresh_expires_at: DateTime<Utc>,
 }
 
+/// What became of a refresh token presented for renewal.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Renewal {
+    Renewed(SessionTokens),
+    /// A concurrent request rotated it a moment ago: no new pair here, but
+    /// the session lives on in the cookies that request set.
+    Raced,
+    /// Unknown, expired, revoked, reused or its account is gone.
+    Ended,
+}
+
 impl AuthUseCase {
     pub fn new(d: AuthDeps) -> Self {
         Self {
@@ -90,6 +101,25 @@ impl AuthUseCase {
             .find_actor(user_id)
             .await?
             .and_then(Actor::from_record))
+    }
+
+    /// The `Actor` behind a verified session token, like `actor`, except that
+    /// a token minted before the account's sessions were ended (its password
+    /// changed or was reset) is `invalid_token`: the other devices must log in
+    /// again now, not when their access token runs out.
+    pub async fn session_actor(&self, claims: &SessionClaims) -> Result<Option<Actor>> {
+        let Some(record) = self.permission_repo.find_actor(claims.user_id).await? else {
+            return Ok(None);
+        };
+        // Whole seconds: `iat` has no fraction, and the token this browser
+        // got with the change was minted within the same second.
+        if record
+            .sessions_valid_after
+            .is_some_and(|cutoff| claims.issued_at < cutoff.timestamp())
+        {
+            return Err(Error::new(ErrorCode::InvalidToken).with_detail("session ended"));
+        }
+        Ok(Actor::from_record(record))
     }
 
     pub async fn login(&self, username: String, password: String) -> Result<LoginResponse> {
@@ -156,34 +186,47 @@ impl AuthUseCase {
         })
     }
 
-    /// Exchanges a refresh token for a fresh pair. `None` means "no session":
-    /// unknown, expired, revoked, or already spent. A spent token shown again
-    /// after the grace period means a copy exists elsewhere, so the whole
-    /// family is revoked and both holders must log in again.
+    /// Exchanges a refresh token for a fresh pair; `None` when there is no
+    /// new pair for any reason (see `renew_session` for which).
     pub async fn refresh_session(&self, raw: &str) -> Result<Option<SessionTokens>> {
+        Ok(match self.renew_session(raw).await? {
+            Renewal::Renewed(tokens) => Some(tokens),
+            Renewal::Raced | Renewal::Ended => None,
+        })
+    }
+
+    /// Exchanges a refresh token for a fresh pair. A spent token shown again
+    /// within the grace period is a concurrent request (two tabs) that lost
+    /// the race: `Raced`, and the winner's cookies must be left alone. After
+    /// the grace period it means a copy exists elsewhere, so the whole family
+    /// is revoked and both holders must log in again.
+    pub async fn renew_session(&self, raw: &str) -> Result<Renewal> {
         let Some(token) = self.refresh_repo.find_by_hash(&hash_token(raw)).await? else {
-            return Ok(None);
+            return Ok(Renewal::Ended);
         };
         let now = Utc::now();
         if token.revoked_at.is_some() || token.expires_at <= now {
-            return Ok(None);
+            return Ok(Renewal::Ended);
         }
         if let Some(used_at) = token.used_at {
             if now - used_at > Duration::seconds(REFRESH_REUSE_GRACE_SECS) {
                 tracing::warn!(user_id = token.user_id, family = %token.family_id, "refresh token reused; revoking its family");
                 self.refresh_repo.revoke_family(token.family_id).await?;
+                return Ok(Renewal::Ended);
             }
-            return Ok(None);
+            return Ok(Renewal::Raced);
         }
         if !self.refresh_repo.claim(token.id).await? {
             // A concurrent request rotated it a moment ago.
-            return Ok(None);
+            return Ok(Renewal::Raced);
         }
-        let issued = self.issue(token.user_id, token.family_id).await?;
-        if issued.is_none() {
-            self.refresh_repo.revoke_family(token.family_id).await?;
+        match self.issue(token.user_id, token.family_id).await? {
+            Some(tokens) => Ok(Renewal::Renewed(tokens)),
+            None => {
+                self.refresh_repo.revoke_family(token.family_id).await?;
+                Ok(Renewal::Ended)
+            }
         }
-        Ok(issued)
     }
 
     /// Logout: the session's whole family stops working at once.
@@ -256,16 +299,19 @@ impl AuthUseCase {
             .finish()?;
 
         let password_hash = self.password_hasher.hash(&password).await?;
+        // The check above answers early; this one is the guarantee, under a
+        // lock, for two setup forms sent at the same moment.
         let user_id = self
             .user_repo
-            .create(NewUser {
+            .create_first_admin(NewUser {
                 username: username.clone(),
                 email,
                 password_hash,
                 role: ROLE_ADMIN.into(),
                 full_name: Some(full_name.unwrap_or_else(|| "Administrator".to_owned())),
             })
-            .await?;
+            .await?
+            .ok_or_else(|| Error::new(ErrorCode::AdminAlreadyExists))?;
 
         let token = self.token_svc.mint(user_id, &username)?;
         Ok(LoginResponse {
@@ -387,8 +433,10 @@ impl AuthUseCase {
         let new_hash = self.password_hasher.hash(&new_password).await?;
         self.user_repo.update_password(user_id, &new_hash).await?;
         // A changed password is often a suspicion: every signed-in device is
-        // signed out. The browser that made the change gets a new session
-        // from its caller (web::pages::account).
+        // signed out, now (access tokens) and for good (refresh tokens). The
+        // browser that made the change gets a new session from its caller
+        // (web::pages::account).
+        self.user_repo.end_sessions(user_id).await?;
         self.refresh_repo.revoke_user(user_id).await
     }
 
@@ -407,7 +455,7 @@ impl AuthUseCase {
         self.user_repo
             .create_reset_token(NewResetToken {
                 user_id: user.id,
-                token: token.clone(),
+                token_hash: hash_token(&token),
                 expires_at: Utc::now() + Duration::hours(PASSWORD_RESET_EXPIRY_HOURS),
             })
             .await?;
@@ -423,19 +471,27 @@ impl AuthUseCase {
             .rule("new_password", validate_password(&new_password))
             .finish()?;
 
+        // Hash first: the slow step must not sit between claiming the token
+        // and using it.
+        let new_hash = self.password_hasher.hash(&new_password).await?;
+        // Claimed before the password changes, so a link sent twice at once
+        // resets the password once.
         let reset_token = self
             .user_repo
-            .find_valid_reset_token(&token)
+            .claim_reset_token(&hash_token(token.trim()))
             .await?
             .ok_or_else(|| Error::new(ErrorCode::ResetTokenInvalid))?;
 
-        let new_hash = self.password_hasher.hash(&new_password).await?;
         self.user_repo
             .update_password(reset_token.user_id, &new_hash)
             .await?;
-        self.user_repo.consume_reset_token(reset_token.id).await?;
+        // Any other link still in the inbox stops working too.
+        self.user_repo
+            .retire_reset_tokens(reset_token.user_id)
+            .await?;
         // Whoever asked for the reset may be locking someone else out: every
         // existing session of the account ends here.
+        self.user_repo.end_sessions(reset_token.user_id).await?;
         self.refresh_repo.revoke_user(reset_token.user_id).await?;
         if let Err(e) = self.user_repo.reset_failed_login(reset_token.user_id).await {
             tracing::warn!(user_id = reset_token.user_id, error = %e, "could not reset failed-login counter");

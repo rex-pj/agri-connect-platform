@@ -72,7 +72,8 @@ pub struct ResetToken {
 
 pub struct NewResetToken {
     pub user_id: i32,
-    pub token: String,
+    /// SHA-256 of the emailed token; the raw value is never stored.
+    pub token_hash: String,
     pub expires_at: DateTime<Utc>,
 }
 
@@ -85,4 +86,6 @@ pub struct ActorRecord {
     pub role_code: String,
     pub is_active: bool,
     pub permissions: Vec<String>,
+    /// Session tokens issued before this were ended (password changed).
+    pub sessions_valid_after: Option<DateTime<Utc>>,
 }

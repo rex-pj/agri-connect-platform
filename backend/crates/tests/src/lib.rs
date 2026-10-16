@@ -323,6 +323,24 @@ pub async fn categories_of(env: &Env, kind: &str) -> Vec<(i32, String)> {
         .collect()
 }
 
+/// Only the hash of a reset token is stored, and the email that carries the
+/// raw one goes to the log. Re-keys the newest reset token to `raw`, so a
+/// test can follow "the link in the latest email"; returns `raw`.
+pub async fn known_reset_token(env: &Env, raw: &str) -> String {
+    env.t
+        .db
+        .execute(sea_orm::Statement::from_sql_and_values(
+            env.t.db.get_database_backend(),
+            "UPDATE password_reset_tokens \
+             SET token = encode(sha256(convert_to($1, 'UTF8')), 'hex') \
+             WHERE id = (SELECT max(id) FROM password_reset_tokens)",
+            [raw.into()],
+        ))
+        .await
+        .unwrap();
+    raw.to_owned()
+}
+
 /// The origin the test routers accept for non-GET requests.
 pub const TEST_ORIGIN: &str = "http://localhost:5173";
 

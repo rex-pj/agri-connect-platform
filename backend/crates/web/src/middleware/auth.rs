@@ -42,7 +42,7 @@ impl FromRequestParts<AppState> for MaybeActor {
             return Ok(Self(None));
         };
         let claims = state.token_service.verify(token)?;
-        Ok(Self(state.usecases.auth.actor(claims.user_id).await?))
+        Ok(Self(state.usecases.auth.session_actor(&claims).await?))
     }
 }
 

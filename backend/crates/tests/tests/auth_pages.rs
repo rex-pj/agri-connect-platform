@@ -4,7 +4,8 @@
 
 use axum::http::{header, StatusCode};
 use integration_tests::{
-    body_text, cookies_from, env_with_origin, get_page, post_form, register_provider, send, Env,
+    body_text, cookies_from, env_with_origin, get_page, known_reset_token, post_form,
+    register_provider, send, Env,
 };
 use sea_orm::{ConnectionTrait, Statement};
 
@@ -226,7 +227,8 @@ async fn the_password_reset_flow_ends_on_the_login_page_once() {
             "same answer for {email}"
         );
     }
-    let token: String =
+    // Only one email existed, so only one token was made; it is stored hashed.
+    let stored: String =
         e.t.db
             .query_one(Statement::from_string(
                 e.t.db.get_database_backend(),
@@ -237,6 +239,8 @@ async fn the_password_reset_flow_ends_on_the_login_page_once() {
             .unwrap()
             .try_get("", "token")
             .unwrap();
+    assert_eq!(stored.len(), 64, "hex SHA-256, never the emailed token");
+    let token = known_reset_token(&e, "lien-ket-trong-email").await;
 
     let page = body_text(send(&e.router, get_page("/reset-password", None)).await).await;
     assert!(page.contains("Liên kết không hợp lệ"), "no token");

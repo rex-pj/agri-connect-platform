@@ -11,6 +11,7 @@ mod m20261013_000001_baseline;
 mod m20261014_000002_search;
 mod m20261014_000003_files;
 mod m20261015_000004_refresh_tokens;
+mod m20261016_000005_session_epoch;
 pub mod search;
 
 pub struct Migrator;
@@ -23,6 +24,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20261014_000002_search::Migration),
             Box::new(m20261014_000003_files::Migration),
             Box::new(m20261015_000004_refresh_tokens::Migration),
+            Box::new(m20261016_000005_session_epoch::Migration),
         ]
     }
 }

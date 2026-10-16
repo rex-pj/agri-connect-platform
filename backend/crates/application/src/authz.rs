@@ -78,6 +78,7 @@ mod tests {
             role_code: "admin".into(),
             is_active: active,
             permissions: perms.iter().map(|p| (*p).to_owned()).collect(),
+            sessions_valid_after: None,
         })
     }
 

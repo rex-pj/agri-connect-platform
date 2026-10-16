@@ -20,6 +20,9 @@ pub struct SessionClaims {
     pub username: String,
     /// Expiry as a Unix timestamp in seconds.
     pub expires_at: i64,
+    /// When it was minted, Unix seconds; 0 for tokens minted before the
+    /// claim existed (they are older than any cut-off).
+    pub issued_at: i64,
 }
 
 /// Mint and verify signed session tokens.

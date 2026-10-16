@@ -21,6 +21,9 @@ struct Claims {
     sub: i32,
     username: String,
     exp: i64,
+    /// Absent from tokens minted before it was added: 0, i.e. "very old".
+    #[serde(default)]
+    iat: i64,
 }
 
 pub struct JwtTokenService {
@@ -44,10 +47,12 @@ impl JwtTokenService {
 
 impl TokenService for JwtTokenService {
     fn mint(&self, user_id: i32, username: &str) -> Result<String> {
+        let now = Utc::now();
         let claims = Claims {
             sub: user_id,
             username: username.to_owned(),
-            exp: (Utc::now() + Duration::hours(JWT_EXPIRY_HOURS)).timestamp(),
+            exp: (now + Duration::hours(JWT_EXPIRY_HOURS)).timestamp(),
+            iat: now.timestamp(),
         };
         encode(&Header::new(Algorithm::HS256), &claims, &self.encoding)
             .map_err(|e| Error::internal(format!("jwt encode: {e}")))
@@ -67,6 +72,7 @@ impl TokenService for JwtTokenService {
             user_id: data.claims.sub,
             username: data.claims.username,
             expires_at: data.claims.exp,
+            issued_at: data.claims.iat,
         })
     }
 }
@@ -131,6 +137,7 @@ mod tests {
             sub: 1,
             username: "x".into(),
             exp: Utc::now().timestamp() - 1,
+            iat: Utc::now().timestamp() - 3601,
         };
         let token = encode(&Header::new(Algorithm::HS256), &claims, &svc.encoding)
             .map_err(|e| Error::internal(e.to_string()))?;

@@ -38,11 +38,22 @@ pub struct ProfileMenu {
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct ProviderCta {
+    #[serde(flatten)]
+    pub link: Link,
+    pub title: &'static str,
+    pub sub: &'static str,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct Shell {
     pub path: String,
     pub tabs: Vec<Tab>,
     /// `None` on error pages, which are rendered without knowing the session.
     pub profile: Option<ProfileMenu>,
+    /// The invitation to sell here (anonymous visitors) or the way back to
+    /// the dashboard (providers); `None` for everyone else.
+    pub provider_cta: Option<ProviderCta>,
     /// The `q` the user searched for, so the bar shows it after a search.
     pub search_query: String,
     pub search_url: String,
@@ -76,6 +87,27 @@ pub fn home_area(actor: Option<&Actor>) -> Link {
     }
 }
 
+/// Providers are otherwise invisible to visitors: the menu only says how to
+/// sign up, so the home page invites them, and brings signed-in providers back
+/// to their dashboard. Admins have their own panel and see nothing.
+pub fn provider_cta(actor: Option<&Actor>) -> Option<ProviderCta> {
+    match actor {
+        None => Some(ProviderCta {
+            link: link("register", "fa-store", "Đăng ký"),
+            title: "Bạn là nhà cung cấp?",
+            sub: "Đăng ký để nông dân trong vùng tìm thấy bạn",
+        }),
+        Some(a) if !a.can(PERM_ADMIN_DASHBOARD_VIEW) && a.can(PERM_OWN_LISTING_CREATE) => {
+            Some(ProviderCta {
+                link: link("provider_dashboard", "fa-store", "Quản lý"),
+                title: "Cửa hàng của bạn",
+                sub: "Cập nhật sản phẩm, ảnh và số điện thoại",
+            })
+        }
+        Some(_) => None,
+    }
+}
+
 fn is_active(path: &str, href: &str) -> bool {
     if href == "/" {
         path == "/"
@@ -88,12 +120,13 @@ impl Shell {
     pub fn new(path: &str, query: Option<&str>, actor: Option<&Actor>) -> Self {
         let mut shell = Self::without_session(path, query);
         shell.tabs = tabs(path, home_area(actor));
+        shell.provider_cta = provider_cta(actor);
         shell.profile = Some(match actor {
             None => ProfileMenu {
                 signed_in: false,
                 items: vec![
                     link("login", "fa-right-to-bracket", "Đăng nhập"),
-                    link("register", "fa-user-plus", "Đăng ký"),
+                    link("register", "fa-store", "Đăng ký nhà cung cấp"),
                 ],
                 logout: None,
             },
@@ -127,6 +160,7 @@ impl Shell {
             path: path.to_owned(),
             tabs: tabs(path, home_area(None)),
             profile: None,
+            provider_cta: None,
             search_query,
             search_url,
         }
@@ -230,6 +264,17 @@ mod tests {
         assert_eq!(href(provider.as_ref()), Some("/provider/dashboard".into()));
         assert_eq!(href(neither.as_ref()), Some("/account".into()));
         assert_eq!(href(None), Some("/account".into()));
+    }
+
+    #[test]
+    fn the_provider_invitation_goes_to_visitors_and_providers_only() {
+        let href = |a: Option<&Actor>| provider_cta(a).map(|c| c.link.href);
+        assert_eq!(href(None), Some("/register".into()));
+        let provider = actor(&[PERM_OWN_LISTING_CREATE]);
+        assert_eq!(href(provider.as_ref()), Some("/provider/dashboard".into()));
+        let admin = actor(&[PERM_ADMIN_DASHBOARD_VIEW, PERM_OWN_LISTING_CREATE]);
+        assert_eq!(href(admin.as_ref()), None);
+        assert_eq!(href(actor(&[]).as_ref()), None);
     }
 
     #[test]

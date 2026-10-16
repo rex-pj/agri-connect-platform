@@ -93,12 +93,12 @@ infrastructure/repositories/  — Sea-ORM implementations injected at startup
 
 Templates live under `backend/crates/web/templates/` and are organized by atomic level (Tera macros):
 
-| Level     | Folder       | Examples                                                                                     |
-| --------- | ------------ | -------------------------------------------------------------------------------------------- |
-| Atoms     | `atoms/`     | `icon`, `alert`, `inquiry_status`                                                            |
-| Molecules | `molecules/` | `form_field`, `page_hero`, `section_header`, `pagination_nav`, `empty_state`, `admin_header` |
+| Level     | Folder       | Examples                                                                                       |
+| --------- | ------------ | ---------------------------------------------------------------------------------------------- |
+| Atoms     | `atoms/`     | `icon`, `alert`, `inquiry_status`                                                              |
+| Molecules | `molecules/` | `form_field`, `page_hero`, `section_header`, `pagination_nav`, `empty_state`, `admin_header`   |
 | Organisms | `organisms/` | `product_card`, `provider_card`, `category_grid`, `contact_sheet`, `confirm_sheet`, `*_fields` |
-| Layouts   | `layouts/`   | `app.html` (public + provider), `admin.html` (admin panel)                                   |
+| Layouts   | `layouts/`   | `app.html` (public + provider), `admin.html` (admin panel)                                     |
 
 **Rules:**
 
@@ -146,28 +146,28 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 
 ### Public (no auth)
 
-| Method | Path                          | Description                                                                        |
-| ------ | ----------------------------- | ---------------------------------------------------------------------------------- |
-| GET    | `/health`                     | Health check                                                                       |
-| GET    | `/api/explore/providers`      | Geo-search (`lat`, `lng`, `radius?`, `service_id?`) or browse (paginated, `page?`) |
-| GET    | `/api/explore/providers/{id}` | Provider detail                                                                    |
-| GET    | `/api/explore/featured`       | Home featured data (providers, products, categories)                               |
-| GET    | `/api/explore/categories`     | Category listing (filter by `type=service\|product`)                               |
-| GET    | `/api/explore/locations`      | Location presets listing                                                           |
-| GET    | `/api/explore/products`       | Browse products (paginated, filter by `category_id?`)                              |
-| GET    | `/api/explore/products/{id}`  | Product detail                                                                     |
-| POST   | `/api/explore/contact`        | Submit contact/inquiry (rate-limited: 30/min)                                      |
-| POST   | `/contact`                   | Same inquiry as a page form (urlencoded); 303 + one-time flash, or the page re-shown with field errors |
-| GET    | `/files/{id}`, `/files/{id}/thumb` | Uploaded image (JPEG, cached forever; ids are never reused)             |
+| Method | Path                               | Description                                                                                            |
+| ------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| GET    | `/health`                          | Health check                                                                                           |
+| GET    | `/api/explore/providers`           | Geo-search (`lat`, `lng`, `radius?`, `service_id?`) or browse (paginated, `page?`)                     |
+| GET    | `/api/explore/providers/{id}`      | Provider detail                                                                                        |
+| GET    | `/api/explore/featured`            | Home featured data (providers, products, categories)                                                   |
+| GET    | `/api/explore/categories`          | Category listing (filter by `type=service\|product`)                                                   |
+| GET    | `/api/explore/locations`           | Location presets listing                                                                               |
+| GET    | `/api/explore/products`            | Browse products (paginated, filter by `category_id?`)                                                  |
+| GET    | `/api/explore/products/{id}`       | Product detail                                                                                         |
+| POST   | `/api/explore/contact`             | Submit contact/inquiry (rate-limited: 30/min)                                                          |
+| POST   | `/contact`                         | Same inquiry as a page form (urlencoded); 303 + one-time flash, or the page re-shown with field errors |
+| GET    | `/files/{id}`, `/files/{id}/thumb` | Uploaded image (JPEG, cached forever; ids are never reused)                                            |
 
 ### Auth (rate-limited: 10 req/min)
 
-| Method | Path                                | Description                                        |
-| ------ | ----------------------------------- | -------------------------------------------------- |
-| POST   | `/api/auth/tokens`                  | Login → JWT                                        |
-| POST   | `/api/users`                        | Provider self-registration                         |
-| POST   | `/api/auth/password-resets`         | Send password reset email                          |
-| PATCH  | `/api/auth/password-resets/{token}` | Consume reset token, set new password              |
+| Method | Path                                | Description                                         |
+| ------ | ----------------------------------- | --------------------------------------------------- |
+| POST   | `/api/auth/tokens`                  | Login → JWT                                         |
+| POST   | `/api/users`                        | Provider self-registration                          |
+| POST   | `/api/auth/password-resets`         | Send password reset email                           |
+| PATCH  | `/api/auth/password-resets/{token}` | Consume reset token, set new password               |
 | POST   | `/api/admin/setup`                  | Create first admin account (rate-limited, one-time) |
 
 ### User (session required)
@@ -179,66 +179,66 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 
 ### Admin (each route checks its own permission key, e.g. `user.read`, `provider.verify`)
 
-| Method | Path                                       | Description                       |
-| ------ | ------------------------------------------ | --------------------------------- |
-| GET    | `/api/admin/stats`                         | Dashboard statistics              |
-| GET    | `/api/admin/users`                         | User list (paginated)             |
-| GET    | `/api/admin/users/{id}`                    | User detail                       |
-| PATCH  | `/api/admin/users/{id}/role`               | Update user role                  |
-| PATCH  | `/api/admin/users/{id}/status`             | Toggle user active state          |
-| GET    | `/api/admin/users/{id}/permissions`        | Effective permissions (via role)  |
-| GET    | `/api/admin/roles`                         | Role listing                      |
-| GET    | `/api/admin/roles/{id}`                    | Role detail                       |
-| GET    | `/api/admin/permissions`                   | All available permissions         |
-| GET    | `/api/admin/categories`                    | Category listing                  |
-| POST   | `/api/admin/categories`                    | Create category                   |
-| GET    | `/api/admin/categories/{id}`               | Category detail                   |
-| PUT    | `/api/admin/categories/{id}`               | Update category                   |
-| PATCH  | `/api/admin/categories/{id}/status`        | Toggle category active state      |
-| GET    | `/api/admin/providers`                     | Provider list (paginated)         |
-| GET    | `/api/admin/providers/{id}`                | Provider detail                   |
-| PATCH  | `/api/admin/providers/{id}/verification`   | Set verification badge (`is_verified`, `reason?`) |
-| POST   | `/api/admin/providers/{id}/users`          | Link a provider account (or create one); one business per account |
-| GET    | `/api/admin/inquiries`                     | Inquiry list (paginated)          |
-| PATCH  | `/api/admin/inquiries/{id}/status`         | Update inquiry status             |
-| GET    | `/api/admin/reviews`                       | Review list (paginated)           |
-| PATCH  | `/api/admin/reviews/{id}/visibility`       | Toggle review visibility          |
-| GET    | `/api/admin/locations`                     | Location preset list              |
-| POST   | `/api/admin/locations`                     | Create location preset            |
-| GET    | `/api/admin/locations/{id}`                | Location preset detail            |
-| PUT    | `/api/admin/locations/{id}`                | Update location preset            |
-| PATCH  | `/api/admin/locations/{id}/status`         | Toggle location active state      |
-| DELETE | `/api/admin/locations/{id}`                | Delete location preset            |
-| GET    | `/api/admin/products`                      | Product list (paginated)          |
-| GET    | `/api/admin/products/{id}`                 | Product detail                    |
-| PATCH  | `/api/admin/products/{id}/active`          | Toggle product active state       |
-| DELETE | `/api/admin/products/{id}`                 | Delete product                    |
-| GET    | `/api/admin/services`                      | Service list (paginated)          |
-| POST   | `/api/admin/services`                      | Create service                    |
-| GET    | `/api/admin/services/{id}`                 | Service detail                    |
-| PUT    | `/api/admin/services/{id}`                 | Update service                    |
-| PATCH  | `/api/admin/services/{id}/active`          | Toggle service active state       |
-| DELETE | `/api/admin/services/{id}`                 | Delete service                    |
+| Method | Path                                     | Description                                                       |
+| ------ | ---------------------------------------- | ----------------------------------------------------------------- |
+| GET    | `/api/admin/stats`                       | Dashboard statistics                                              |
+| GET    | `/api/admin/users`                       | User list (paginated)                                             |
+| GET    | `/api/admin/users/{id}`                  | User detail                                                       |
+| PATCH  | `/api/admin/users/{id}/role`             | Update user role                                                  |
+| PATCH  | `/api/admin/users/{id}/status`           | Toggle user active state                                          |
+| GET    | `/api/admin/users/{id}/permissions`      | Effective permissions (via role)                                  |
+| GET    | `/api/admin/roles`                       | Role listing                                                      |
+| GET    | `/api/admin/roles/{id}`                  | Role detail                                                       |
+| GET    | `/api/admin/permissions`                 | All available permissions                                         |
+| GET    | `/api/admin/categories`                  | Category listing                                                  |
+| POST   | `/api/admin/categories`                  | Create category                                                   |
+| GET    | `/api/admin/categories/{id}`             | Category detail                                                   |
+| PUT    | `/api/admin/categories/{id}`             | Update category                                                   |
+| PATCH  | `/api/admin/categories/{id}/status`      | Toggle category active state                                      |
+| GET    | `/api/admin/providers`                   | Provider list (paginated)                                         |
+| GET    | `/api/admin/providers/{id}`              | Provider detail                                                   |
+| PATCH  | `/api/admin/providers/{id}/verification` | Set verification badge (`is_verified`, `reason?`)                 |
+| POST   | `/api/admin/providers/{id}/users`        | Link a provider account (or create one); one business per account |
+| GET    | `/api/admin/inquiries`                   | Inquiry list (paginated)                                          |
+| PATCH  | `/api/admin/inquiries/{id}/status`       | Update inquiry status                                             |
+| GET    | `/api/admin/reviews`                     | Review list (paginated)                                           |
+| PATCH  | `/api/admin/reviews/{id}/visibility`     | Toggle review visibility                                          |
+| GET    | `/api/admin/locations`                   | Location preset list                                              |
+| POST   | `/api/admin/locations`                   | Create location preset                                            |
+| GET    | `/api/admin/locations/{id}`              | Location preset detail                                            |
+| PUT    | `/api/admin/locations/{id}`              | Update location preset                                            |
+| PATCH  | `/api/admin/locations/{id}/status`       | Toggle location active state                                      |
+| DELETE | `/api/admin/locations/{id}`              | Delete location preset                                            |
+| GET    | `/api/admin/products`                    | Product list (paginated)                                          |
+| GET    | `/api/admin/products/{id}`               | Product detail                                                    |
+| PATCH  | `/api/admin/products/{id}/active`        | Toggle product active state                                       |
+| DELETE | `/api/admin/products/{id}`               | Delete product                                                    |
+| GET    | `/api/admin/services`                    | Service list (paginated)                                          |
+| POST   | `/api/admin/services`                    | Create service                                                    |
+| GET    | `/api/admin/services/{id}`               | Service detail                                                    |
+| PUT    | `/api/admin/services/{id}`               | Update service                                                    |
+| PATCH  | `/api/admin/services/{id}/active`        | Toggle service active state                                       |
+| DELETE | `/api/admin/services/{id}`               | Delete service                                                    |
 
 ### Provider Dashboard (`own.*` permissions; reads need only a session)
 
-| Method | Path                          | Description                 |
-| ------ | ----------------------------- | --------------------------- |
-| GET    | `/api/provider/profile`       | View own business profile   |
-| PUT    | `/api/provider/profile`       | Update own business profile |
-| GET    | `/api/provider/products`      | List own products           |
-| POST   | `/api/provider/products`      | Create product              |
-| PUT    | `/api/provider/products/{id}` | Update product              |
-| DELETE | `/api/provider/products/{id}` | Delete product              |
+| Method | Path                                | Description                                             |
+| ------ | ----------------------------------- | ------------------------------------------------------- |
+| GET    | `/api/provider/profile`             | View own business profile                               |
+| PUT    | `/api/provider/profile`             | Update own business profile                             |
+| GET    | `/api/provider/products`            | List own products                                       |
+| POST   | `/api/provider/products`            | Create product                                          |
+| PUT    | `/api/provider/products/{id}`       | Update product                                          |
+| DELETE | `/api/provider/products/{id}`       | Delete product                                          |
 | PUT    | `/api/provider/products/{id}/image` | Replace product image (multipart field `image`; 20/min) |
 
 ### Setup (first-run / development only)
 
-| Method | Path               | Description                      |
-| ------ | ------------------ | -------------------------------- |
+| Method | Path                | Description                      |
+| ------ | ------------------- | -------------------------------- |
 | GET    | `/api/setup/status` | Check whether first admin exists |
-| POST   | `/api/setup/seed`  | Load demo data (flagged is_demo) |
-| DELETE | `/api/setup/seed`  | Remove all demo data             |
+| POST   | `/api/setup/seed`   | Load demo data (flagged is_demo) |
+| DELETE | `/api/setup/seed`   | Remove all demo data             |
 
 ---
 
@@ -264,58 +264,58 @@ Every page is a handler in `backend/crates/web/src/pages/`, routed in `web/src/r
 
 ### Auth
 
-| Route              | Description                             |
-| ------------------ | --------------------------------------- |
+| Route              | Description                                                                                  |
+| ------------------ | -------------------------------------------------------------------------------------------- |
 | `/login`           | Login (`web/src/pages/auth.rs`); signed in → own area by permission; no admin yet → `/setup` |
-| `/register`        | Provider self-registration   |
-| `/forgot-password` | Request password reset email |
-| `/reset-password`  | Consume reset token, set new password |
-| `/setup`           | First admin + optional demo data (`web/src/pages/setup.rs`); closed once an admin exists |
-| `/setup/seed`      | Demo data page: load / remove (`system.demo.manage`) |
-| `/logout`          | POST: ends the session family, clears both cookies (`web/src/session.rs`) |
+| `/register`        | Provider self-registration                                                                   |
+| `/forgot-password` | Request password reset email                                                                 |
+| `/reset-password`  | Consume reset token, set new password                                                        |
+| `/setup`           | First admin + optional demo data (`web/src/pages/setup.rs`); closed once an admin exists     |
+| `/setup/seed`      | Demo data page: load / remove (`system.demo.manage`)                                         |
+| `/logout`          | POST: ends the session family, clears both cookies (`web/src/session.rs`)                    |
 
 ### App
 
-| Route                            | Description                                    |
-| -------------------------------- | ---------------------------------------------- |
-| `/`                              | Home: featured products, providers, categories (`web/src/pages/home.rs`) |
-| `/products`                      | Product listing: GET filter form, page links (`web/src/pages/products.rs`) |
-| `/products/[id]`                 | 301 → `/products/[id]/[slug]`       |
-| `/products/[id]/[slug]`          | Product detail (`web/src/pages/product.rs`; any other spelling 301s here) |
-| `/products/category/[id]/[slug]` | Products in a category (slug is the category slug, others 301) |
-| `/services`                      | Provider directory: GET filter form, page links (`web/src/pages/services.rs`) |
-| `/services/category/[id]/[slug]` | Providers of one service (category slug canonical) |
-| `/search`                        | Providers + products for `q`; link tabs (`tab=`) work without JS (`web/src/pages/search.rs`) |
-| `/explore`                       | Providers near a GPS position (`ac-geolocate` island) or a location preset (GET form); radius/service links (`web/src/pages/explore.rs`) |
-| `/providers/[id]`                | 301 → `/providers/[id]/[slug]`      |
-| `/providers/[id]/[slug]`         | Provider detail + contact form (`web/src/pages/provider.rs`) |
-| `/account`                       | Profile, password change (signs out other devices), logout (`web/src/pages/account.rs`) |
-| `/provider/dashboard`            | Products (photo thumbs) + business profile with GPS fill (`ac-geolocate` fill mode) (`web/src/pages/dashboard.rs`) |
-| `/provider/products/new`, `/provider/products/[id]/edit` | Multipart product form with photo (checked before anything is saved), delete (confirm) |
+| Route                                                    | Description                                                                                                                              |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                                                      | Home: featured products, providers, categories (`web/src/pages/home.rs`)                                                                 |
+| `/products`                                              | Product listing: GET filter form, page links (`web/src/pages/products.rs`)                                                               |
+| `/products/[id]`                                         | 301 → `/products/[id]/[slug]`                                                                                                            |
+| `/products/[id]/[slug]`                                  | Product detail (`web/src/pages/product.rs`; any other spelling 301s here)                                                                |
+| `/products/category/[id]/[slug]`                         | Products in a category (slug is the category slug, others 301)                                                                           |
+| `/services`                                              | Provider directory: GET filter form, page links (`web/src/pages/services.rs`)                                                            |
+| `/services/category/[id]/[slug]`                         | Providers of one service (category slug canonical)                                                                                       |
+| `/search`                                                | Providers + products for `q`; link tabs (`tab=`) work without JS (`web/src/pages/search.rs`)                                             |
+| `/explore`                                               | Providers near a GPS position (`ac-geolocate` island) or a location preset (GET form); radius/service links (`web/src/pages/explore.rs`) |
+| `/providers/[id]`                                        | 301 → `/providers/[id]/[slug]`                                                                                                           |
+| `/providers/[id]/[slug]`                                 | Provider detail + contact form (`web/src/pages/provider.rs`)                                                                             |
+| `/account`                                               | Profile, password change (signs out other devices), logout (`web/src/pages/account.rs`)                                                  |
+| `/provider/dashboard`                                    | Products (photo thumbs) + business profile with GPS fill (`ac-geolocate` fill mode) (`web/src/pages/dashboard.rs`)                       |
+| `/provider/products/new`, `/provider/products/[id]/edit` | Multipart product form with photo (checked before anything is saved), delete (confirm)                                                   |
 
 ### Admin
 
-| Route                      | Description                                     |
-| -------------------------- | ----------------------------------------------- |
-| `/admin`                   | 303 → `/admin/dashboard` (anonymous → `/login`) |
-| `/admin/dashboard`         | Stats + demo-data warning (`web/src/pages/admin/`; frame `layouts/admin.html`, menu filtered by permission) |
-| `/admin/users`             | User list, paged (`web/src/pages/admin/users.rs`) |
-| `/admin/users/[id]`        | Role change, deactivate (confirm + reason) / reactivate, effective permissions |
-| `/admin/roles`             | Roles with grant counts              |
-| `/admin/roles/[id]`        | Editable permission grid, `POST …/permissions` (`role.permission.manage`; cannot revoke it from your own role; audited) |
-| `/admin/permissions`       | Permissions × roles, read-only       |
-| `/admin/categories`        | Category list + create form (`web/src/pages/admin/categories.rs`) |
-| `/admin/categories/[id]`   | Edit; hide (confirm + reason) / show |
-| `/admin/locations`         | Location presets + create form (`web/src/pages/admin/locations.rs`) |
-| `/admin/locations/[id]`    | Edit, hide / show, delete (confirm + reason) → list |
-| `/admin/explore`           | Provider list, paged (`web/src/pages/admin/providers.rs`) |
-| `/admin/explore/[id]`      | Details, verify / unverify (confirm + reason), assign the managing account |
-| `/admin/products`          | Products (filter `provider_id`): hide (confirm + reason) / show, delete (confirm + reason) (`web/src/pages/admin/products.rs`) |
-| `/admin/services`          | Services (filter `provider_id`; create form only for one provider) |
-| `/admin/services/[id]`     | Edit, hide / show, delete (confirm + reason) |
-| `/admin/inquiries`         | Status per row (select + button; `autoSubmit` with JS) |
-| `/admin/reviews`           | Hide (confirm + reason) / show |
-| `/admin/logout`            | POST: same as `/logout`, lands on `/login` |
+| Route                    | Description                                                                                                                    |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `/admin`                 | 303 → `/admin/dashboard` (anonymous → `/login`)                                                                                |
+| `/admin/dashboard`       | Stats + demo-data warning (`web/src/pages/admin/`; frame `layouts/admin.html`, menu filtered by permission)                    |
+| `/admin/users`           | User list, paged (`web/src/pages/admin/users.rs`)                                                                              |
+| `/admin/users/[id]`      | Role change, deactivate (confirm + reason) / reactivate, effective permissions                                                 |
+| `/admin/roles`           | Roles with grant counts                                                                                                        |
+| `/admin/roles/[id]`      | Editable permission grid, `POST …/permissions` (`role.permission.manage`; cannot revoke it from your own role; audited)        |
+| `/admin/permissions`     | Permissions × roles, read-only                                                                                                 |
+| `/admin/categories`      | Category list + create form (`web/src/pages/admin/categories.rs`)                                                              |
+| `/admin/categories/[id]` | Edit; hide (confirm + reason) / show                                                                                           |
+| `/admin/locations`       | Location presets + create form (`web/src/pages/admin/locations.rs`)                                                            |
+| `/admin/locations/[id]`  | Edit, hide / show, delete (confirm + reason) → list                                                                            |
+| `/admin/explore`         | Provider list, paged (`web/src/pages/admin/providers.rs`)                                                                      |
+| `/admin/explore/[id]`    | Details, verify / unverify (confirm + reason), assign the managing account                                                     |
+| `/admin/products`        | Products (filter `provider_id`): hide (confirm + reason) / show, delete (confirm + reason) (`web/src/pages/admin/products.rs`) |
+| `/admin/services`        | Services (filter `provider_id`; create form only for one provider)                                                             |
+| `/admin/services/[id]`   | Edit, hide / show, delete (confirm + reason)                                                                                   |
+| `/admin/inquiries`       | Status per row (select + button; `autoSubmit` with JS)                                                                         |
+| `/admin/reviews`         | Hide (confirm + reason) / show                                                                                                 |
+| `/admin/logout`          | POST: same as `/logout`, lands on `/login`                                                                                     |
 
 ---
 
@@ -413,21 +413,25 @@ Canonical product, provider and category URLs end in a slug from the `slugify` f
 These rules were codified after a full architectural review. Violations are compile-time detectable — enforce them on every PR.
 
 **Layer dependency direction** (dependencies may only point inward):
+
 ```
 middleware / handlers  →  application (use cases, ports)  →  domain  ←  infrastructure
 ```
 
 **Domain types**
+
 - `UserRole` lives in `domain/models/role.rs`. No other layer redefines role semantics. Handlers and use cases both import `UserRole` from the domain — never from middleware.
 - A domain model struct that is used as input to a use case must carry every field that the use case needs to enforce a business rule. Never rely on a silent SQL `WHERE` filter to enforce a domain invariant that belongs in the use case (e.g. `is_active` on `UserCredentials`).
 
 **Application layer (`application/`)**
+
 - Use cases depend only on domain models, repository traits, and the port traits in `application/ports.rs`. Never import from `middleware::`, `handlers::`, or concrete infrastructure types (e.g. `jsonwebtoken`, `bcrypt`).
 - Infrastructure concerns that a use case needs (password hashing, token minting) must be abstracted behind a port trait in `application/ports.rs` and injected via `Arc<dyn PortTrait>` in the constructor — same pattern as repository traits.
 - Shared validation rules live in `application/src/validation.rs` and return coded errors; forms collect them with `domain::Validation` so every bad field is reported at once. Never scatter the same rule as a private function in multiple use case files.
 - Before any `user_repo.update_role()` call, check the code against an active row in `roles`, so arbitrary strings never reach the role column.
 
 **Middleware layer (`middleware/`)**
+
 - Middleware only finds out who is calling (`MaybeActor`, from the bearer token or the `auth_token` cookie); it never decides access. Handlers that need a session call `require_actor`, then pass `&actor` to the use case.
 - Every state-changing use case, and every admin read, starts with `actor.require(PERM_...)?`. Permission keys live in `application/src/catalogue.rs`. Never compare role names: a convention test rejects it, and another fails when a use case taking an `Actor` checks nothing.
 - Permissions are loaded from the database on every request, so a revocation or a deactivated account takes effect on the next request, not when the token expires.
@@ -435,12 +439,14 @@ middleware / handlers  →  application (use cases, ports)  →  domain  ←  in
 - Domain events (`domain/src/events.rs`) are published after a change is stored; the audit log is a subscriber. New side effects (notifications, webhooks) subscribe; use cases do not call them.
 
 **Infrastructure layer (`infrastructure/`)**
+
 - Concrete library types (`jsonwebtoken`, `bcrypt`, Sea-ORM) are confined to `infrastructure/`. Implement the port traits from `application/ports.rs` here.
 - Uploads never reach storage as sent: `MediaUseCase` passes them through the `ImageProcessor` port (type sniffed from bytes, pixel cap checked before decoding, re-encoded as JPEG, EXIF dropped). Storage is the `FileStorage` port (`GCS_BUCKET`, else `UPLOAD_DIR`). Templates link images only with `file_url(id=…, variant="thumb")`. Old images are deleted by the file-cleanup event subscriber, never inline.
 - A write that can hit a UNIQUE constraint maps the failure with `repositories::unique_or_internal` to a field error (e.g. `slug_taken`), never a 500.
 - `JwtTokenService` (in `infrastructure/jwt_token_service.rs`) is the only file that calls `jsonwebtoken::encode`. `BcryptPasswordHasher` (in `infrastructure/bcrypt_password_hasher.rs`) is the only file that calls `bcrypt::hash` / `bcrypt::verify`.
 
 **Errors (`domain/src/error.rs`, `web/src/error_response.rs`)**
+
 - `IntoResponse for Error` (behind domain's `axum` feature) only sets the status and parks the error; `render_errors` writes the localised body. Every router must sit under that layer.
 
 ### Pages
@@ -460,17 +466,17 @@ middleware / handlers  →  application (use cases, ports)  →  domain  ←  in
 
 Public content pages fill `{% block title %}` and `{% block meta %}` (a `<meta name="description">`) from the loaded data; never a generic fallback.
 
-| Route group                                                  | SEO required | Notes                                                       |
-| ------------------------------------------------------------ | ------------ | ----------------------------------------------------------- |
-| `/` (home)                                                   | Yes          | Static title + description                                  |
-| `/products`, `/products/[id]/[slug]`                         | Yes          | Product name & description in meta                          |
-| `/products/category/[id]/[slug]`                             | Yes          | Category name in title                                      |
-| `/services/category/[id]/[slug]`                             | Yes          | Category name in title                                      |
-| `/explore`                                                   | Yes          | Near-me page                                                |
-| `/providers/[id]/[slug]`                                     | Yes          | Provider name & description in meta                         |
-| `/account`, `/provider/**`                                   | No           | Authenticated; `<meta name="robots" content="noindex">`     |
-| `/login`, `/register`, `/forgot-password`, `/reset-password` | No           | Auth flows; `noindex`                                       |
-| `/admin/**`                                                  | No           | Admin panel; `noindex`                                      |
+| Route group                                                  | SEO required | Notes                                                   |
+| ------------------------------------------------------------ | ------------ | ------------------------------------------------------- |
+| `/` (home)                                                   | Yes          | Static title + description                              |
+| `/products`, `/products/[id]/[slug]`                         | Yes          | Product name & description in meta                      |
+| `/products/category/[id]/[slug]`                             | Yes          | Category name in title                                  |
+| `/services/category/[id]/[slug]`                             | Yes          | Category name in title                                  |
+| `/explore`                                                   | Yes          | Near-me page                                            |
+| `/providers/[id]/[slug]`                                     | Yes          | Provider name & description in meta                     |
+| `/account`, `/provider/**`                                   | No           | Authenticated; `<meta name="robots" content="noindex">` |
+| `/login`, `/register`, `/forgot-password`, `/reset-password` | No           | Auth flows; `noindex`                                   |
+| `/admin/**`                                                  | No           | Admin panel; `noindex`                                  |
 
 ---
 
@@ -480,7 +486,7 @@ Public content pages fill `{% block title %}` and `{% block meta %}` (a `<meta n
 cd backend
 # Copy .env.example to .env; needs DATABASE_URL (PostgreSQL + PostGIS) and a 32-byte JWT_SECRET
 cargo run --bin agri-connect
-# Browse http://localhost:3000: the Rust server serves every page and the API.
+# Browse http://localhost:5173: the Rust server serves every page and the API.
 
 # Before every push: both must pass across the whole workspace
 cargo clippy --workspace --all-targets -- -D warnings

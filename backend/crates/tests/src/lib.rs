@@ -40,7 +40,7 @@ pub fn token_service() -> Arc<dyn TokenService> {
 }
 
 pub fn email_service() -> Arc<dyn EmailService> {
-    Arc::new(LogEmailService::new("http://localhost:3000".into()))
+    Arc::new(LogEmailService::new("http://localhost:5173".into()))
 }
 
 /// Uploads kept in memory, with the production size cap unless given.
@@ -324,7 +324,7 @@ pub async fn categories_of(env: &Env, kind: &str) -> Vec<(i32, String)> {
 }
 
 /// The origin the test routers accept for non-GET requests.
-pub const TEST_ORIGIN: &str = "http://localhost:3000";
+pub const TEST_ORIGIN: &str = "http://localhost:5173";
 
 /// A router that accepts `TEST_ORIGIN`, like production accepts APP_URL.
 pub async fn env_with_origin() -> Env {

@@ -63,9 +63,16 @@ body {
 }
 
 /* ── Bootstrap overrides ─────────────────────────────────────────────────── */
-/* Tap targets of at least 44px (48 here) for thumbs on small screens. */
+/* Tap targets of at least 44px (48 here) for thumbs on small screens. The
+   vertical padding is derived from the target height so one line of text
+   fills it exactly and sits centred; a bare min-height would leave the
+   extra space under the text (.btn is inline-block). */
 .btn {
-  min-height: 48px;
+  --app-btn-h: 48px;
+  --bs-btn-padding-y: calc(
+    (var(--app-btn-h) - var(--bs-btn-line-height) * 1em - 2 * var(--bs-btn-border-width)) / 2
+  );
+  min-height: var(--app-btn-h);
   font-size: 1rem;
   font-weight: 600;
   border-radius: 12px;
@@ -75,7 +82,7 @@ body {
   transform: scale(0.97);
 }
 .btn-lg {
-  min-height: 52px;
+  --app-btn-h: 52px;
 }
 .form-control,
 .form-select {
@@ -806,6 +813,24 @@ body:has(.app-nav__search-row.open) .app-main {
   flex-direction: column;
   gap: 16px;
   padding: 24px 16px 16px;
+}
+
+/* ── Molecule: provider invitation (molecules/provider_cta) ──────────────── */
+.provider-cta__icon {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--p100);
+  color: var(--p700);
+  font-size: 1.3rem;
+}
+.provider-cta__text {
+  flex: 1;
+  min-width: 0;
 }
 
 /* ── Molecule: page hero (molecules/page_hero) ───────────────────────────── */

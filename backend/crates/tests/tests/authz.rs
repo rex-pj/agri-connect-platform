@@ -9,7 +9,7 @@ use integration_tests::{first_admin, json_body, register_provider, send, Env};
 use sea_orm::ConnectionTrait;
 use web::{app_state::AppState, routings::app_routing::RouterConfig};
 
-const ORIGIN: &str = "http://localhost:3000";
+const ORIGIN: &str = "http://localhost:5173";
 
 async fn env() -> Env {
     Env::with(

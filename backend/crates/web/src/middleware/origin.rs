@@ -123,8 +123,8 @@ mod tests {
             Some("https://agri.vn".to_owned())
         );
         assert_eq!(
-            origin_of("http://localhost:3000/x?y"),
-            Some("http://localhost:3000".to_owned())
+            origin_of("http://localhost:5173/x?y"),
+            Some("http://localhost:5173".to_owned())
         );
         assert_eq!(origin_of("not a url"), None);
     }

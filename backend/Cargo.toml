@@ -8,6 +8,8 @@ members = [
     "migration",
     "crates/tests",
 ]
+# Bare `cargo run` / `cargo build` target the server; CI and pre-push checks pass --workspace.
+default-members = ["crates/web"]
 
 [workspace.package]
 edition = "2021"

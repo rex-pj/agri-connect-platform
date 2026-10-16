@@ -5,6 +5,7 @@
 {% import "molecules/section_header.html" as section %}
 {% import "molecules/geo_cta.html" as geo %}
 {% import "molecules/empty_state.html" as empty %}
+{% import "molecules/provider_cta.html" as seller %}
 {#- Home: category shortcuts, featured products, the near-me banner and
     featured providers. `page` is web::pages::home::HomePage. -#}
 {% block title %}{{ site.name }} — Nền tảng nông nghiệp Đồng bằng sông Cửu Long{% endblock title %}
@@ -29,6 +30,10 @@
   </div>
   {% endif %}
 </section>
+
+{% if shell.provider_cta %}
+<section class="home-section">{{ seller::provider_cta(cta=shell.provider_cta) }}</section>
+{% endif %}
 
 {% if not page.products and not page.providers %}
 {{ empty::empty_state(icon="fa-seedling", title="Nền tảng đang khởi động", hint="Chưa có dữ liệu. Hãy thử tìm dịch vụ gần bạn.", action_href=url_for(name="explore"), action_icon="fa-location-dot", action_label="Tìm thợ gần tôi") }}

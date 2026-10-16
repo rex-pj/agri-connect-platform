@@ -21,10 +21,10 @@ pub const DB_MAX_CONNECTIONS: u32 = 20;
 
 // ── Server ────────────────────────────────────────────────────────────────────
 /// Used when BIND_ADDR is unset. 0.0.0.0 so the container port mapping works.
-pub const DEFAULT_BIND_ADDR: &str = "0.0.0.0:3000";
+pub const DEFAULT_BIND_ADDR: &str = "0.0.0.0:5173";
 
-/// Used when APP_URL is unset: Rust is the front door on :3000 in development.
-pub const DEFAULT_APP_URL: &str = "http://localhost:3000";
+/// Used when APP_URL is unset: Rust is the front door on :5173 in development.
+pub const DEFAULT_APP_URL: &str = "http://localhost:5173";
 
 // ── Uploads ───────────────────────────────────────────────────────────────────
 /// Decoding is the expensive part of an upload; this budget is per client and

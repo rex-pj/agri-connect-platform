@@ -128,7 +128,7 @@ fn init_tracing() -> Result<(), StartupError> {
 fn app_url() -> String {
     optional_env("APP_URL").unwrap_or_else(|| {
         warn!(
-            "APP_URL not set; assuming http://localhost:3000 for reset links and the Origin check"
+            "APP_URL not set; assuming http://localhost:5173 for reset links and the Origin check"
         );
         DEFAULT_APP_URL.to_owned()
     })

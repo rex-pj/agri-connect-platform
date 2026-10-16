@@ -148,8 +148,8 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 
 | Method | Path                               | Description                                                                                            |
 | ------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| GET    | `/health`                          | Health check                                                                                           |
-| GET    | `/api/explore/providers`           | Geo-search (`lat`, `lng`, `radius?`, `service_id?`) or browse (paginated, `page?`)                     |
+| GET    | `/health/live`, `/health/ready`    | Liveness; readiness (database reachable)                                                               |
+| GET    | `/api/explore/providers`           | Geo-search (`lat`, `lng`, `radius?` default 10 km, `category_id?`) or browse (paginated, `page?`)      |
 | GET    | `/api/explore/providers/{id}`      | Provider detail                                                                                        |
 | GET    | `/api/explore/featured`            | Home featured data (providers, products, categories)                                                   |
 | GET    | `/api/explore/categories`          | Category listing (filter by `type=service\|product`)                                                   |
@@ -220,7 +220,7 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 | PATCH  | `/api/admin/services/{id}/active`        | Toggle service active state                                       |
 | DELETE | `/api/admin/services/{id}`               | Delete service                                                    |
 
-### Provider Dashboard (`own.*` permissions; reads need only a session)
+### Provider Dashboard (`own.*` permissions; reads need only a session, except the inquiry inbox: `own.inquiry.manage`)
 
 | Method | Path                                | Description                                             |
 | ------ | ----------------------------------- | ------------------------------------------------------- |
@@ -245,8 +245,8 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 ## Security Model
 
 - **JWT expiry:** 1 hour
-- **Browser sessions:** httpOnly `auth_token` (the JWT) + `refresh_token` cookies, `SameSite=Lax`, `Secure` behind TLS. Refresh tokens last `REFRESH_TOKEN_DAYS` (30), are stored as SHA-256 hashes, rotate on every use; a spent one reused after 30 s revokes its whole family. `session::renew` renews an expired access token before any handler runs. `POST /logout` (and `/admin/logout`) ends the family; a password reset ends every session of the account.
-- **Password reset token TTL:** 1 hour (single-use)
+- **Browser sessions:** httpOnly `auth_token` (the JWT) + `refresh_token` cookies, `SameSite=Lax`, `Secure` behind TLS. Refresh tokens last `REFRESH_TOKEN_DAYS` (30), are stored as SHA-256 hashes, rotate on every use; a spent one reused after 30 s revokes its whole family. `session::renew` renews an expired access token before any handler runs. `POST /logout` (and `/admin/logout`) ends the family. A password change or reset ends every other session at once: it sets `users.sessions_valid_after`, and access tokens issued before it (`iat`) are refused.
+- **Password reset token TTL:** 1 hour, single-use (claimed atomically), stored as a SHA-256 hash; a reset retires the account's other links
 - **Account lockout:** 5 failed login attempts → 15-minute lockout
 - **Password:** at least 8 characters, at most 72 bytes (bcrypt ignores the rest)
 - **JWT secret:** at least 32 bytes; startup refuses a shorter one
@@ -292,6 +292,7 @@ Every page is a handler in `backend/crates/web/src/pages/`, routed in `web/src/r
 | `/account`                                               | Profile, password change (signs out other devices), logout (`web/src/pages/account.rs`)                                                  |
 | `/provider/dashboard`                                    | Products (photo thumbs) + business profile with GPS fill (`ac-geolocate` fill mode) (`web/src/pages/dashboard.rs`)                       |
 | `/provider/products/new`, `/provider/products/[id]/edit` | Multipart product form with photo (checked before anything is saved), delete (confirm)                                                   |
+| `/provider/inquiries`                                    | Farmers' contact requests to this business: call button, status per card (`own.inquiry.manage`) (`web/src/pages/inbox.rs`)              |
 
 ### Admin
 
@@ -407,6 +408,8 @@ Canonical product, provider and category URLs end in a slug from the `slugify` f
 - All location data uses **SRID 4326** (WGS84). Never mix geometry and geography types in the same query.
 - Phone number pattern for Vietnamese mobile: `0\d{9}` (10 digits starting with 0).
 - Radius validation bounds: 100 m minimum, 50 000 m maximum.
+- Public provider lists (directory, near-me, search) include providers with no service yet, so a new sign-up can be found; a service filter (`category_id`) matches only a live service in a live category. The home page's featured providers need at least one live service.
+- Every list sort ends with an `id` tiebreaker, and price sorts put unpriced products last, so pages never repeat or skip rows.
 
 ### Backend — DDD / Layer Integrity Rules
 

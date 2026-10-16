@@ -34,8 +34,8 @@ fn names(html: &str) -> Vec<String> {
 }
 
 /// Three providers: two offering the first service category (one verified),
-/// one offering the second; plus one with no active service, which the
-/// directory never lists. Returns the two service categories.
+/// one offering the second; plus a new sign-up with no service yet, listed
+/// so farmers can find it. Returns the two service categories.
 async fn seeded(e: &Env) -> [(i32, String); 2] {
     let cats = categories_of(e, "service").await;
     let (a, b) = (cats[0].0, cats[1].0);
@@ -45,7 +45,7 @@ async fn seeded(e: &Env) -> [(i32, String); 2] {
                  ('Cơ khí Bảy Tốt', '0901000001', 'Ấp 1, Cai Lậy, Tiền Giang', FALSE, now() - interval '3 day'),
                  ('Múc bùn Út Hiền', '0901000002', 'Long Xuyên, An Giang', TRUE, now() - interval '2 day'),
                  ('Drone phun Ba Lúa', '0901000003', NULL, FALSE, now() - interval '1 day'),
-                 ('Chưa có dịch vụ', '0901000004', NULL, TRUE, now());
+                 ('Vườn mới đăng ký', '0901000004', NULL, FALSE, now() - interval '4 day');
              INSERT INTO services (business_id, category_id, name)
              SELECT b.id, v.cat, v.svc FROM businesses b JOIN (VALUES
                  ('Cơ khí Bảy Tốt', {a}, 'Sửa máy cày'),
@@ -70,13 +70,18 @@ async fn the_directory_searches_filters_and_sorts_providers() {
         all.contains(r#"<meta name="description" content="Tìm nhà cung cấp dịch vụ nông nghiệp"#)
     );
     assert!(
-        all.contains("<strong>3</strong> nhà cung cấp"),
-        "no-service business hidden"
+        all.contains("<strong>4</strong> nhà cung cấp"),
+        "a new sign-up without services is listed too"
     );
     // Default order: verified first, then newest.
     assert_eq!(
         names(&all),
-        ["Múc bùn Út Hiền", "Drone phun Ba Lúa", "Cơ khí Bảy Tốt"]
+        [
+            "Múc bùn Út Hiền",
+            "Drone phun Ba Lúa",
+            "Cơ khí Bảy Tốt",
+            "Vườn mới đăng ký"
+        ]
     );
     assert!(all.contains("Cai Lậy, Tiền Giang"), "district on the card");
     assert!(all.contains(r#"href="/explore""#), "near-me banner");
@@ -84,14 +89,23 @@ async fn the_directory_searches_filters_and_sorts_providers() {
     let sorted = html(&e, "/services?sort=name_asc").await;
     assert_eq!(
         names(&sorted),
-        ["Cơ khí Bảy Tốt", "Drone phun Ba Lúa", "Múc bùn Út Hiền"]
+        [
+            "Cơ khí Bảy Tốt",
+            "Drone phun Ba Lúa",
+            "Múc bùn Út Hiền",
+            "Vườn mới đăng ký"
+        ]
     );
 
     let searched = html(&e, "/services?q=muc+bun").await;
     assert_eq!(names(&searched), ["Múc bùn Út Hiền"]);
 
     let in_service = html(&e, &format!("/services?service_id={a}")).await;
-    assert_eq!(names(&in_service).len(), 2);
+    assert_eq!(
+        names(&in_service).len(),
+        2,
+        "filtering needs a matching service"
+    );
     assert!(in_service.contains(&format!(r#"name="service_id" value="{a}" checked"#)));
     assert!(
         !in_service.contains("Khoảng giá"),
@@ -106,7 +120,7 @@ async fn hand_edited_queries_and_empty_results() {
     let e = Env::new().await;
     seeded(&e).await;
     let page = html(&e, "/services?service_id=khong&sort=rating&page=-3").await;
-    assert_eq!(names(&page).len(), 3);
+    assert_eq!(names(&page).len(), 4);
 
     let none = html(&e, "/services?q=khong-co-ai").await;
     assert!(none.contains("Không tìm thấy nhà cung cấp nào"));
@@ -138,5 +152,30 @@ async fn service_category_pages_have_one_url() {
         let res = send(&e.router, page(&uri)).await;
         assert_eq!(res.status(), StatusCode::NOT_FOUND, "{uri}");
     }
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_hidden_category_matches_no_provider() {
+    let e = Env::new().await;
+    let [(a, _), _] = seeded(&e).await;
+    let api = |id: i32| {
+        Request::get(format!("/api/explore/providers?service_id={id}"))
+            .body(Body::empty())
+            .unwrap()
+    };
+    let total = |json: serde_json::Value| json["total"].as_i64();
+    let shown = integration_tests::json_body(send(&e.router, api(a)).await).await;
+    assert_eq!(total(shown), Some(2));
+
+    e.t.db
+        .execute_unprepared(&format!(
+            "UPDATE categories SET is_active = FALSE WHERE id = {a}"
+        ))
+        .await
+        .unwrap();
+    let hidden = integration_tests::json_body(send(&e.router, api(a)).await).await;
+    assert_eq!(total(hidden), Some(0), "its services no longer count");
     e.cleanup().await;
 }

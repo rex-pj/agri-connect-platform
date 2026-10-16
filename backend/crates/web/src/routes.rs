@@ -31,6 +31,8 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("provider_product_new", "/provider/products/new"),
     ("provider_product_edit", "/provider/products/{id}/edit"),
     ("provider_product_delete", "/provider/products/{id}/delete"),
+    ("provider_inquiries", "/provider/inquiries"),
+    ("provider_inquiry_status", "/provider/inquiries/{id}/status"),
     ("product", "/products/{id}/{slug}"),
     ("product_by_id", "/products/{id}"),
     ("product_category", "/products/category/{id}/{slug}"),

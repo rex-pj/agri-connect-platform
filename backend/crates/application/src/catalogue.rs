@@ -34,6 +34,7 @@ pub const PERM_OWN_PROFILE_UPDATE: &str = "own.profile.update";
 pub const PERM_OWN_LISTING_CREATE: &str = "own.listing.create";
 pub const PERM_OWN_LISTING_UPDATE: &str = "own.listing.update";
 pub const PERM_OWN_LISTING_DELETE: &str = "own.listing.delete";
+pub const PERM_OWN_INQUIRY_MANAGE: &str = "own.inquiry.manage";
 
 const ADMIN: &[&str] = &[ROLE_ADMIN];
 const PROVIDER: &[&str] = &[ROLE_PROVIDER];
@@ -155,6 +156,11 @@ pub static PERMISSIONS: &[PermissionSeed] = &[
     PermissionSeed {
         key: PERM_OWN_LISTING_DELETE,
         name: "Xoá sản phẩm của mình",
+        default_roles: PROVIDER,
+    },
+    PermissionSeed {
+        key: PERM_OWN_INQUIRY_MANAGE,
+        name: "Xem và xử lý yêu cầu liên hệ gửi tới mình",
         default_roles: PROVIDER,
     },
 ];

@@ -9,6 +9,7 @@ pub mod dashboard;
 pub mod explore;
 pub mod forms;
 pub mod home;
+pub mod inbox;
 pub mod listing;
 pub mod product;
 pub mod products;

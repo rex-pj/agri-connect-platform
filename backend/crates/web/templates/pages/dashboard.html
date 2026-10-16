@@ -30,6 +30,17 @@
     {{ empty::empty_state(icon="fa-store-slash", title="Tài khoản chưa gắn với cửa hàng nào", hint="Liên hệ quản trị viên để được gán cửa hàng.") }}
   </section>
   {% else %}
+  {% if page.inbox %}
+  <a class="detail-card d-flex align-items-center gap-3 text-decoration-none" href="{{ page.inbox.href }}">
+    <span class="provider-cta__icon">{{ atoms::icon(name="fa-envelope-open-text") }}</span>
+    <span class="flex-grow-1">
+      <strong class="d-block text-body">Yêu cầu liên hệ</strong>
+      <span class="small text-muted">{% if page.inbox.new_count > 0 %}{{ page.inbox.new_count }} người đang chờ bạn gọi{% else %}{{ page.inbox.total }} yêu cầu{% endif %}</span>
+    </span>
+    {% if page.inbox.new_count > 0 %}<span class="badge text-bg-success fs-6">{{ page.inbox.new_count }}</span>{% endif %}
+    {{ atoms::icon(name="fa-chevron-right", class="text-muted") }}
+  </a>
+  {% endif %}
   <section class="detail-card" aria-labelledby="products-title">
     <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
       <h2 class="detail-card__title mb-0" id="products-title">{{ atoms::icon(name="fa-box-open", class="me-1") }} Sản phẩm ({{ page.rows | length }})</h2>

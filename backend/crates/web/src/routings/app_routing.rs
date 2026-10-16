@@ -340,6 +340,11 @@ impl AppRouting {
                 "/provider/products/{id}/delete",
                 post(pages::dashboard::delete_product),
             )
+            .route("/provider/inquiries", get(pages::inbox::list))
+            .route(
+                "/provider/inquiries/{id}/status",
+                post(pages::inbox::change_status),
+            )
             .route("/account/password", post(pages::account::change_password));
 
         // ── USER routes (authenticated, no rate limit) ───────────────────────

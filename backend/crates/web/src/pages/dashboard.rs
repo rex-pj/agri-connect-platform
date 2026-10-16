@@ -9,7 +9,10 @@
 
 use application::{
     authz::Actor,
-    catalogue::{PERM_OWN_LISTING_CREATE, PERM_OWN_LISTING_DELETE, PERM_OWN_PROFILE_UPDATE},
+    catalogue::{
+        PERM_OWN_INQUIRY_MANAGE, PERM_OWN_LISTING_CREATE, PERM_OWN_LISTING_DELETE,
+        PERM_OWN_PROFILE_UPDATE,
+    },
     inputs::{CreateProductInput, UpdateProductInput, UpdateProfileInput},
     outputs::{CategoryDto, ProviderProductDto, ProviderProfileDto},
     ports::ProcessedImage,
@@ -93,6 +96,14 @@ pub struct ProductRow {
 }
 
 #[derive(Serialize)]
+pub struct InboxLink {
+    pub href: String,
+    pub total: i64,
+    /// Not called back yet.
+    pub new_count: i64,
+}
+
+#[derive(Serialize)]
 pub struct DashboardPage {
     /// `None` when the account manages no business yet.
     pub profile: Option<ProviderProfileDto>,
@@ -104,6 +115,8 @@ pub struct DashboardPage {
     pub new_href: String,
     pub can_edit_profile: bool,
     pub can_create: bool,
+    /// The link to the inquiry inbox, when the actor may read it.
+    pub inbox: Option<InboxLink>,
     pub flash: Option<Flash>,
 }
 
@@ -141,6 +154,17 @@ async fn dashboard_page(
             FormErrors::default(),
         ),
     };
+    let inbox = match (&profile, actor.can(PERM_OWN_INQUIRY_MANAGE)) {
+        (Some(_), true) => {
+            let (total, new_count) = usecase.count_own_inquiries(actor).await?;
+            Some(InboxLink {
+                href: url("provider_inquiries", &[])?,
+                total,
+                new_count,
+            })
+        }
+        _ => None,
+    };
     let body = DashboardPage {
         public_href: profile
             .as_ref()
@@ -154,6 +178,7 @@ async fn dashboard_page(
         new_href: url("provider_product_new", &[])?,
         can_edit_profile: actor.can(PERM_OWN_PROFILE_UPDATE),
         can_create: actor.can(PERM_OWN_LISTING_CREATE),
+        inbox,
         flash,
     };
     render_page_status(state, shell, status, "pages/dashboard.html", &body)

@@ -163,21 +163,6 @@ impl BusinessRepositoryTrait for BusinessRepository {
     ) -> Result<Vec<BusinessGeoResult>, Error> {
         let db = self.db.as_ref();
 
-        // EXISTS subquery: business must have at least one active service
-        let mut svc_subq = ServiceEntity::find()
-            .select_only()
-            .column(service::Column::Id)
-            .filter(
-                Expr::col((service::Entity, service::Column::BusinessId))
-                    .equals((business::Entity, business::Column::Id)),
-            )
-            .filter(service::Column::IsActive.eq(true))
-            .filter(service::Column::DeletedAt.is_null());
-
-        if let Some(svc_id) = service_id {
-            svc_subq = svc_subq.filter(service::Column::CategoryId.eq(svc_id));
-        }
-
         let distance_expr = Expr::cust_with_values(
             r#"ST_Distance("businesses".location, ST_GeographyFromText($1))"#,
             [Value::from(point_wkt.to_owned())],
@@ -198,8 +183,10 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .filter(business::Column::IsActive.eq(true))
             .filter(business::Column::DeletedAt.is_null())
             .filter(within_filter)
-            .filter(Expr::exists(svc_subq.into_query()))
             .limit(50);
+        if let Some(id) = service_id {
+            query = query.filter(offers_service(id));
+        }
 
         QueryTrait::query(&mut query).order_by_expr(Expr::cust("distance_m"), Order::Asc);
         let query = query.order_by_asc(business::Column::Id);
@@ -233,7 +220,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .collect())
     }
 
-    // ── Browse — businesses with services (two-query, avoids ARRAY_AGG) ────────
+    // ── Browse — businesses with their services (two-query, avoids ARRAY_AGG) ─
 
     async fn browse(
         &self,
@@ -245,21 +232,6 @@ impl BusinessRepositoryTrait for BusinessRepository {
     ) -> Result<Vec<BusinessBrowse>, Error> {
         let db = self.db.as_ref();
 
-        // Build EXISTS subquery: business must have at least one matching active service
-        let mut svc_subq = ServiceEntity::find()
-            .select_only()
-            .column(service::Column::Id)
-            .filter(
-                Expr::col((service::Entity, service::Column::BusinessId))
-                    .equals((business::Entity, business::Column::Id)),
-            )
-            .filter(service::Column::IsActive.eq(true))
-            .filter(service::Column::DeletedAt.is_null());
-
-        if let Some(id) = service_id {
-            svc_subq = svc_subq.filter(service::Column::CategoryId.eq(id));
-        }
-
         let mut query = Business::find()
             .select_only()
             .column(business::Column::Id)
@@ -269,9 +241,11 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .column(business::Column::IsVerified)
             .column(business::Column::CreatedOn)
             .filter(business::Column::IsActive.eq(true))
-            .filter(business::Column::DeletedAt.is_null())
-            .filter(Expr::exists(svc_subq.into_query()));
+            .filter(business::Column::DeletedAt.is_null());
 
+        if let Some(id) = service_id {
+            query = query.filter(offers_service(id));
+        }
         if let Some(q) = name.as_deref().filter(|q| !q.trim().is_empty()) {
             query = query.filter(text_contains(BUSINESS_SEARCH_COLUMNS, q));
         }
@@ -323,25 +297,14 @@ impl BusinessRepositoryTrait for BusinessRepository {
         service_id: Option<i32>,
         name: Option<String>,
     ) -> Result<i64, Error> {
-        let mut svc_subq = ServiceEntity::find()
-            .select_only()
-            .column(service::Column::Id)
-            .filter(
-                Expr::col((service::Entity, service::Column::BusinessId))
-                    .equals((business::Entity, business::Column::Id)),
-            )
-            .filter(service::Column::IsActive.eq(true))
-            .filter(service::Column::DeletedAt.is_null());
-
-        if let Some(id) = service_id {
-            svc_subq = svc_subq.filter(service::Column::CategoryId.eq(id));
-        }
-
+        // The same conditions as `browse`, so the page count matches the pages.
         let mut query = Business::find()
             .filter(business::Column::IsActive.eq(true))
-            .filter(business::Column::DeletedAt.is_null())
-            .filter(Expr::exists(svc_subq.into_query()));
+            .filter(business::Column::DeletedAt.is_null());
 
+        if let Some(id) = service_id {
+            query = query.filter(offers_service(id));
+        }
         if let Some(q) = name.as_deref().filter(|q| !q.trim().is_empty()) {
             query = query.filter(text_contains(BUSINESS_SEARCH_COLUMNS, q));
         }
@@ -356,15 +319,18 @@ impl BusinessRepositoryTrait for BusinessRepository {
     async fn featured(&self, limit: i64) -> Result<Vec<BusinessBrowse>, Error> {
         let db = self.db.as_ref();
 
+        // The home page shows off providers with something to offer.
         let svc_subq = ServiceEntity::find()
             .select_only()
             .column(service::Column::Id)
+            .join(JoinType::InnerJoin, service::Relation::Category.def())
             .filter(
                 Expr::col((service::Entity, service::Column::BusinessId))
                     .equals((business::Entity, business::Column::Id)),
             )
             .filter(service::Column::IsActive.eq(true))
             .filter(service::Column::DeletedAt.is_null())
+            .filter(category::Column::IsActive.eq(true))
             .into_query();
 
         let businesses = Business::find()
@@ -915,6 +881,29 @@ pub(crate) async fn insert_registration_business<C: ConnectionTrait>(
             error!("business create_for_registration error: {e}");
             Error::internal("Failed to create business profile.")
         })
+}
+
+// ── Shared helper: the "offers this kind of service" filter ───────────────────
+
+/// The business offers a live service in the live category `category_id`.
+/// The only service condition on the public lists: a provider with no
+/// services yet (a new sign-up) is still listed, so farmers can find it.
+fn offers_service(category_id: i32) -> SimpleExpr {
+    Expr::exists(
+        ServiceEntity::find()
+            .select_only()
+            .column(service::Column::Id)
+            .join(JoinType::InnerJoin, service::Relation::Category.def())
+            .filter(
+                Expr::col((service::Entity, service::Column::BusinessId))
+                    .equals((business::Entity, business::Column::Id)),
+            )
+            .filter(service::Column::IsActive.eq(true))
+            .filter(service::Column::DeletedAt.is_null())
+            .filter(service::Column::CategoryId.eq(category_id))
+            .filter(category::Column::IsActive.eq(true))
+            .into_query(),
+    )
 }
 
 // ── Shared helper: load distinct service category names per business ──────────

@@ -1,14 +1,15 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    sea_query::Expr, ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, JoinType,
-    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
+    sea_query::Expr, ColumnTrait, ConnectionTrait, DatabaseConnection, DbErr, EntityTrait,
+    FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait,
+    Set, Statement,
 };
 use std::sync::Arc;
 use tracing::error;
 
 use domain::{
-    models::inquiry::{InquiryAdmin, NewInquiry},
+    models::inquiry::{InquiryAdmin, InquiryForOwner, NewInquiry},
     repositories::inquiry_repository_trait::InquiryRepositoryTrait,
 };
 
@@ -188,5 +189,110 @@ impl InquiryRepositoryTrait for InquiryRepository {
             return Err(Error::new(ErrorCode::InquiryNotFound));
         }
         Ok(())
+    }
+
+    async fn count_for_owner(&self, owner_user: i32) -> Result<(i64, i64), Error> {
+        let row = OwnerCountsRow::find_by_statement(Statement::from_sql_and_values(
+            self.db.get_database_backend(),
+            format!(
+                "SELECT count(*) AS total, count(*) FILTER (WHERE i.status = 'new') AS fresh \
+                 {OWNED_INQUIRIES}"
+            ),
+            [owner_user.into()],
+        ))
+        .one(self.db.as_ref())
+        .await
+        .map_err(owner_error("count_for_owner"))?;
+        Ok(row.map_or((0, 0), |r| (r.total, r.fresh)))
+    }
+
+    async fn list_for_owner(
+        &self,
+        owner_user: i32,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<InquiryForOwner>, Error> {
+        let rows = InquiryForOwnerRow::find_by_statement(Statement::from_sql_and_values(
+            self.db.get_database_backend(),
+            format!(
+                "SELECT i.id, s.name AS service_name, i.topic, i.requester_name, \
+                        i.requester_phone, i.note, i.status, i.created_on \
+                 {OWNED_INQUIRIES} \
+                 ORDER BY i.created_on DESC, i.id DESC LIMIT $2 OFFSET $3"
+            ),
+            [owner_user.into(), limit.into(), offset.into()],
+        ))
+        .all(self.db.as_ref())
+        .await
+        .map_err(owner_error("list_for_owner"))?;
+        Ok(rows
+            .into_iter()
+            .map(|r| InquiryForOwner {
+                id: r.id,
+                service_name: r.service_name,
+                topic: r.topic,
+                requester_name: r.requester_name,
+                requester_phone: r.requester_phone,
+                note: r.note,
+                status: r.status,
+                created_on: r.created_on.with_timezone(&Utc),
+            })
+            .collect())
+    }
+
+    async fn update_status_for_owner(
+        &self,
+        id: i32,
+        owner_user: i32,
+        status: &str,
+    ) -> Result<bool, Error> {
+        // The ownership check is in the same statement as the change.
+        self.db
+            .execute(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                "UPDATE inquiries i SET status = $3, updated_on = now(), updated_by = $2 \
+                 FROM businesses b \
+                 WHERE i.id = $1 AND b.id = i.business_id \
+                   AND b.owner_id = $2 AND b.deleted_at IS NULL",
+                [id.into(), owner_user.into(), status.into()],
+            ))
+            .await
+            .map(|r| r.rows_affected() > 0)
+            .map_err(|e| {
+                error!("inquiry update_status_for_owner error: {e}");
+                Error::internal("Failed to update status.")
+            })
+    }
+}
+
+#[derive(FromQueryResult)]
+struct OwnerCountsRow {
+    total: i64,
+    fresh: i64,
+}
+
+#[derive(FromQueryResult)]
+struct InquiryForOwnerRow {
+    id: i32,
+    service_name: Option<String>,
+    topic: String,
+    requester_name: String,
+    requester_phone: String,
+    note: Option<String>,
+    status: String,
+    created_on: DateTimeWithTimeZone,
+}
+
+/// Inquiries to the live business `$1` owns, with the service each names.
+/// Shared by the count and the list so the two can never disagree.
+const OWNED_INQUIRIES: &str = "FROM inquiries i \
+     JOIN businesses b ON b.id = i.business_id AND b.deleted_at IS NULL \
+     LEFT JOIN services s ON s.id = i.service_id \
+     WHERE b.owner_id = $1";
+
+fn owner_error(what: &'static str) -> impl Fn(DbErr) -> Error {
+    move |e| {
+        error!("inquiry {what} error: {e}");
+        Error::internal("Failed to load inquiries.")
     }
 }

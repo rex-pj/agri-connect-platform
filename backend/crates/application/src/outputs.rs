@@ -1,5 +1,8 @@
 use chrono::{DateTime, Utc};
-use domain::models::product::{AdminProduct, ProductView, ProviderProduct};
+use domain::models::{
+    inquiry::InquiryForOwner,
+    product::{AdminProduct, ProductView, ProviderProduct},
+};
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -165,6 +168,46 @@ pub struct CategoryDto {
 }
 
 // ── Provider dashboard ────────────────────────────────────────────────────────
+
+/// A contact request in the provider's own inbox.
+#[derive(Debug, Serialize)]
+pub struct OwnInquiryDto {
+    pub id: i32,
+    pub service_name: Option<String>,
+    pub topic: String,
+    pub requester_name: String,
+    pub requester_phone: String,
+    pub note: Option<String>,
+    pub status: String,
+    pub created_on: DateTime<Utc>,
+}
+
+impl From<InquiryForOwner> for OwnInquiryDto {
+    fn from(i: InquiryForOwner) -> Self {
+        Self {
+            id: i.id,
+            service_name: i.service_name,
+            topic: i.topic,
+            requester_name: i.requester_name,
+            requester_phone: i.requester_phone,
+            note: i.note,
+            status: i.status,
+            created_on: i.created_on,
+        }
+    }
+}
+
+/// One page of the provider's inbox, and how many still wait for a call.
+#[derive(Debug, Serialize)]
+pub struct OwnInquiriesResponse {
+    pub items: Vec<OwnInquiryDto>,
+    pub total: i64,
+    /// Still `new`: nobody has called back yet.
+    pub new_count: i64,
+    pub page: i64,
+    pub per_page: i64,
+    pub total_pages: i64,
+}
 
 #[derive(Serialize)]
 pub struct ProviderProfileDto {

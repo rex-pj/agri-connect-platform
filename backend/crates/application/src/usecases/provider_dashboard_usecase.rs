@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use domain::{
+    constants::INQUIRY_STATUSES,
     events::{Change, DomainEvent, Entity},
     models::{
         business::ProfileUpdate,
@@ -8,6 +9,7 @@ use domain::{
     },
     repositories::{
         business_repository_trait::BusinessRepositoryTrait,
+        inquiry_repository_trait::InquiryRepositoryTrait,
         product_repository_trait::ProductRepositoryTrait,
     },
     Error, ErrorCode, Result, Validation,
@@ -16,15 +18,16 @@ use domain::{
 use crate::{
     authz::Actor,
     catalogue::{
-        PERM_OWN_LISTING_CREATE, PERM_OWN_LISTING_DELETE, PERM_OWN_LISTING_UPDATE,
-        PERM_OWN_PROFILE_UPDATE,
+        PERM_OWN_INQUIRY_MANAGE, PERM_OWN_LISTING_CREATE, PERM_OWN_LISTING_DELETE,
+        PERM_OWN_LISTING_UPDATE, PERM_OWN_PROFILE_UPDATE,
     },
     constants::{
-        BUSINESS_ADDRESS_MAX, BUSINESS_DESCRIPTION_MAX, BUSINESS_NAME_MAX, PRODUCT_DESCRIPTION_MAX,
-        PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX,
+        BUSINESS_ADDRESS_MAX, BUSINESS_DESCRIPTION_MAX, BUSINESS_NAME_MAX, PAGE_SIZE,
+        PRODUCT_DESCRIPTION_MAX, PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX,
     },
     inputs::{CreateProductInput, UpdateProductInput, UpdateProfileInput},
-    outputs::{ProviderProductDto, ProviderProfileDto},
+    outputs::{OwnInquiriesResponse, OwnInquiryDto, ProviderProductDto, ProviderProfileDto},
+    pagination::{paginate, total_pages},
     ports::{EventBus, ProcessedImage},
     usecases::media_usecase::MediaUseCase,
     validation::{
@@ -39,24 +42,85 @@ use crate::{
 pub struct ProviderDashboardUseCase {
     business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
     product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
+    inquiry_repo: Arc<dyn InquiryRepositoryTrait + Send + Sync>,
     /// Stores a new product's photo together with the product.
     media: MediaUseCase,
     events: Arc<dyn EventBus>,
 }
 
+/// Everything `ProviderDashboardUseCase` depends on, named.
+pub struct ProviderDashboardDeps {
+    pub business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
+    pub product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
+    pub inquiry_repo: Arc<dyn InquiryRepositoryTrait + Send + Sync>,
+    pub media: MediaUseCase,
+    pub events: Arc<dyn EventBus>,
+}
+
 impl ProviderDashboardUseCase {
-    pub fn new(
-        business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
-        product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
-        media: MediaUseCase,
-        events: Arc<dyn EventBus>,
-    ) -> Self {
+    pub fn new(d: ProviderDashboardDeps) -> Self {
         Self {
-            business_repo,
-            product_repo,
-            media,
-            events,
+            business_repo: d.business_repo,
+            product_repo: d.product_repo,
+            inquiry_repo: d.inquiry_repo,
+            media: d.media,
+            events: d.events,
         }
+    }
+
+    // ── Inquiries farmers sent to the actor's business ─────────────────────────
+
+    /// One page of the inbox, newest first. Farmers' phone numbers: a
+    /// permission, not just a session.
+    pub async fn list_own_inquiries(
+        &self,
+        actor: &Actor,
+        page: i64,
+    ) -> Result<OwnInquiriesResponse> {
+        actor.require(PERM_OWN_INQUIRY_MANAGE)?;
+        let (page, offset) = paginate(page, PAGE_SIZE);
+        let ((total, new_count), items) = tokio::try_join!(
+            self.inquiry_repo.count_for_owner(actor.user_id),
+            self.inquiry_repo
+                .list_for_owner(actor.user_id, PAGE_SIZE, offset),
+        )?;
+        Ok(OwnInquiriesResponse {
+            items: items.into_iter().map(OwnInquiryDto::from).collect(),
+            total,
+            new_count,
+            page,
+            per_page: PAGE_SIZE,
+            total_pages: total_pages(total, PAGE_SIZE),
+        })
+    }
+
+    /// How many inquiries there are and how many still wait, for the
+    /// dashboard's link to the inbox.
+    pub async fn count_own_inquiries(&self, actor: &Actor) -> Result<(i64, i64)> {
+        actor.require(PERM_OWN_INQUIRY_MANAGE)?;
+        self.inquiry_repo.count_for_owner(actor.user_id).await
+    }
+
+    /// Marks one of the actor's inquiries contacted, closed or spam. Someone
+    /// else's looks the same as a missing one.
+    pub async fn set_own_inquiry_status(
+        &self,
+        actor: &Actor,
+        inquiry_id: i32,
+        status: &str,
+    ) -> Result<()> {
+        actor.require(PERM_OWN_INQUIRY_MANAGE)?;
+        if !INQUIRY_STATUSES.contains(&status) {
+            return Err(Error::new(ErrorCode::InvalidInquiryStatus));
+        }
+        if !self
+            .inquiry_repo
+            .update_status_for_owner(inquiry_id, actor.user_id, status)
+            .await?
+        {
+            return Err(Error::new(ErrorCode::InquiryNotFound));
+        }
+        Ok(())
     }
 
     // Reading your own business needs a session but no permission: a provider

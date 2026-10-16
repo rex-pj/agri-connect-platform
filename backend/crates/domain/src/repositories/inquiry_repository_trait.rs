@@ -2,7 +2,7 @@ use async_trait::async_trait;
 
 use crate::{
     error::Error,
-    models::inquiry::{InquiryAdmin, NewInquiry},
+    models::inquiry::{InquiryAdmin, InquiryForOwner, NewInquiry},
 };
 
 #[async_trait]
@@ -16,4 +16,25 @@ pub trait InquiryRepositoryTrait {
     async fn find_by_id_admin(&self, id: i32) -> Result<Option<InquiryAdmin>, Error>;
 
     async fn update_status(&self, id: i32, status: &str, admin_id: i32) -> Result<(), Error>;
+
+    // ── The provider's own inbox: inquiries to the business `owner_user` owns ──
+
+    /// (all, still `new`).
+    async fn count_for_owner(&self, owner_user: i32) -> Result<(i64, i64), Error>;
+
+    /// Newest first.
+    async fn list_for_owner(
+        &self,
+        owner_user: i32,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<InquiryForOwner>, Error>;
+
+    /// False when the inquiry is not one sent to their business.
+    async fn update_status_for_owner(
+        &self,
+        id: i32,
+        owner_user: i32,
+        status: &str,
+    ) -> Result<bool, Error>;
 }

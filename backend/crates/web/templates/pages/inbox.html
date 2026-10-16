@@ -1,0 +1,52 @@
+{% extends "layouts/app.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "atoms/inquiry_status.html" as inquiry %}
+{% import "molecules/empty_state.html" as empty %}
+{% import "molecules/pagination_nav.html" as paging %}
+{#- The provider's inbox: farmers who asked to be called back. `page` is
+    web::pages::inbox::InboxPage. Each card's status is a small form; with JS
+    the select saves itself (`autoSubmit`), without JS its button does. -#}
+{% block title %}Yêu cầu liên hệ — {{ site.name }}{% endblock title %}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
+{% block main %}
+<header class="acct-header">
+  <span class="acct-avatar">{{ atoms::icon(name="fa-envelope-open-text") }}</span>
+  <div>
+    <h1 class="acct-name">Yêu cầu liên hệ</h1>
+    <span class="acct-role">{{ page.new_count }} chưa gọi · {{ page.total }} tất cả</span>
+  </div>
+</header>
+
+<div class="detail-body">
+  <a class="back-link" href="{{ page.dashboard_href }}">{{ atoms::icon(name="fa-arrow-left") }} Quản lý cửa hàng</a>
+  {% if page.flash == "inquiry_status_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã lưu trạng thái.") }}{% endif %}
+
+  {% for r in page.rows %}
+  {% set q = r.inquiry %}
+  <section class="detail-card{% if q.status == "new" %} border border-success{% endif %}" aria-labelledby="inq-{{ q.id }}">
+    <div class="d-flex justify-content-between align-items-start gap-2">
+      <h2 class="detail-card__title mb-1" id="inq-{{ q.id }}">{{ q.requester_name }}</h2>
+      <span class="badge {% if q.status == "new" %}text-bg-success{% else %}text-bg-light border{% endif %}">{{ inquiry::label(status=q.status) }}</span>
+    </div>
+    <p class="mb-1 fw-semibold">{% if q.service_name %}{{ q.service_name }}{% else %}{{ q.topic }}{% endif %}</p>
+    {% if q.note %}<p class="detail-card__text mb-1">{{ q.note }}</p>{% endif %}
+    <p class="small text-muted mb-2"><time datetime="{{ q.created_on | utc_iso }}">{{ q.created_on | vn_datetime }}</time></p>
+    <a class="btn btn-success btn-lg w-100 mb-2" href="tel:{{ q.requester_phone }}">{{ atoms::icon(name="fa-phone") }} Gọi {{ q.requester_phone }}</a>
+    <form class="d-flex gap-2" method="post" action="{{ r.action }}">
+      <input type="hidden" name="page" value="{{ page.page }}">
+      <label class="visually-hidden" for="status-{{ q.id }}">Trạng thái yêu cầu của {{ q.requester_name }}</label>
+      <select class="form-select" id="status-{{ q.id }}" name="status" x-data="autoSubmit" x-on:change="submit">
+        {% for s in page.statuses %}<option value="{{ s }}"{% if s == q.status %} selected{% endif %}>{{ inquiry::label(status=s) }}</option>{% endfor %}
+      </select>
+      <button type="submit" class="btn btn-outline-success" aria-label="Lưu trạng thái">{{ atoms::icon(name="fa-check") }}</button>
+    </form>
+  </section>
+  {% else %}
+  <section class="detail-card">
+    {{ empty::empty_state(icon="fa-inbox", title="Chưa có yêu cầu nào", hint="Khi nông dân gửi yêu cầu từ trang cửa hàng của bạn, yêu cầu sẽ hiện ở đây.") }}
+  </section>
+  {% endfor %}
+  {% if page.pagination %}{{ paging::pagination_nav(p=page.pagination) }}{% endif %}
+</div>
+{% endblock main %}

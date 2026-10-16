@@ -10,14 +10,15 @@ use domain::{
     repositories::{
         audit_log_repository_trait::AuditLogRepositoryTrait,
         file_repository_trait::FileRepositoryTrait,
+        inquiry_repository_trait::InquiryRepositoryTrait,
         product_repository_trait::ProductRepositoryTrait,
     },
     Result,
 };
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::{
-    ports::{EventBus, FileStorage},
+    ports::{EmailService, EventBus, FileStorage, InquiryNotice},
     usecases::media_usecase::release_file,
 };
 
@@ -79,6 +80,7 @@ pub fn audit_action(event: &DomainEvent) -> String {
         (Change::AccountAssigned { .. }, _) => format!("assign_{entity}_account"),
         (Change::Updated, _) => format!("update_{entity}"),
         (Change::StatusChanged { .. }, _) => format!("set_{entity}_status"),
+        (Change::Created, _) => format!("create_{entity}"),
     }
 }
 
@@ -89,6 +91,11 @@ impl EventSubscriber for AuditLogSubscriber {
     }
 
     async fn handle(&self, event: &DomainEvent) -> Result<()> {
+        // The audit log is what signed-in users changed; a visitor's contact
+        // request is the inquiry itself, already stored.
+        let Some(actor_id) = event.actor_id else {
+            return Ok(());
+        };
         let reason = match (&event.change, &event.reason) {
             (Change::RoleChanged { role }, Some(r)) => Some(format!("{role}: {r}")),
             (Change::RoleChanged { role }, None) => Some(role.clone()),
@@ -112,7 +119,7 @@ impl EventSubscriber for AuditLogSubscriber {
         };
         self.repo
             .log(
-                event.actor_id,
+                actor_id,
                 &audit_action(event),
                 event.entity.as_str(),
                 event.entity_id,
@@ -165,13 +172,72 @@ impl EventSubscriber for FileCleanupSubscriber {
     }
 }
 
+/// Emails the provider when a farmer sends them an inquiry, so the "they will
+/// call you back" on the contact form holds even when nobody opens the inbox.
+/// The email goes out in the background: the farmer's form never waits on the
+/// mail server, and a failed delivery is logged by the adapter.
+pub struct InquiryNotificationSubscriber {
+    inquiries: Arc<dyn InquiryRepositoryTrait + Send + Sync>,
+    email: Arc<dyn EmailService>,
+    /// The provider inbox page, from the web layer's route table.
+    inbox_path: String,
+}
+
+impl InquiryNotificationSubscriber {
+    pub fn new(
+        inquiries: Arc<dyn InquiryRepositoryTrait + Send + Sync>,
+        email: Arc<dyn EmailService>,
+        inbox_path: String,
+    ) -> Self {
+        Self {
+            inquiries,
+            email,
+            inbox_path,
+        }
+    }
+}
+
+#[async_trait]
+impl EventSubscriber for InquiryNotificationSubscriber {
+    fn name(&self) -> &'static str {
+        "inquiry_notification"
+    }
+
+    async fn handle(&self, event: &DomainEvent) -> Result<()> {
+        if !(event.entity == Entity::Inquiry && event.change == Change::Created) {
+            return Ok(());
+        }
+        let Some(inquiry) = self.inquiries.find_for_notice(event.entity_id).await? else {
+            return Ok(());
+        };
+        let Some(to) = inquiry.recipient_email else {
+            info!(
+                inquiry = event.entity_id,
+                "no email address to notify the provider at"
+            );
+            return Ok(());
+        };
+        let notice = InquiryNotice {
+            business_name: inquiry.business_name,
+            requester_name: inquiry.requester_name,
+            requester_phone: inquiry.requester_phone,
+            topic: inquiry.topic,
+            note: inquiry.note,
+            inbox_path: self.inbox_path.clone(),
+        };
+        let email = Arc::clone(&self.email);
+        tokio::spawn(async move { email.send_new_inquiry(&to, &notice).await });
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn event(entity: Entity, change: Change) -> DomainEvent {
         DomainEvent {
-            actor_id: 1,
+            actor_id: Some(1),
             entity,
             entity_id: 2,
             change,

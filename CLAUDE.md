@@ -439,7 +439,7 @@ middleware / handlers  →  application (use cases, ports)  →  domain  ←  in
 - Every state-changing use case, and every admin read, starts with `actor.require(PERM_...)?`. Permission keys live in `application/src/catalogue.rs`. Never compare role names: a convention test rejects it, and another fails when a use case taking an `Actor` checks nothing.
 - Permissions are loaded from the database on every request, so a revocation or a deactivated account takes effect on the next request, not when the token expires.
 - Non-GET requests with a foreign `Origin` are refused (`cross_origin_request`); `APP_URL` and `CORS_ORIGINS` are the allowed origins.
-- Domain events (`domain/src/events.rs`) are published after a change is stored; the audit log is a subscriber. New side effects (notifications, webhooks) subscribe; use cases do not call them.
+- Domain events (`domain/src/events.rs`) are published after a change is stored; the audit log is a subscriber. New side effects (notifications, webhooks) subscribe; use cases do not call them. A visitor's event (a farmer's inquiry) has no `actor_id` and is not audited; the inquiry subscriber emails the provider (the managing account, else the business's address) in a background task, linking to `/provider/inquiries`.
 
 **Infrastructure layer (`infrastructure/`)**
 

@@ -10,6 +10,23 @@ use domain::Result;
 #[async_trait]
 pub trait EmailService: Send + Sync {
     async fn send_password_reset(&self, to_email: &str, token: &str);
+
+    /// Tells a provider a farmer asked to be called back.
+    async fn send_new_inquiry(&self, to_email: &str, notice: &InquiryNotice);
+}
+
+/// What the provider's "new inquiry" email says. The farmer typed the name,
+/// topic and note: adapters must send them as plain text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InquiryNotice {
+    pub business_name: String,
+    pub requester_name: String,
+    pub requester_phone: String,
+    pub topic: String,
+    pub note: Option<String>,
+    /// The path of the provider's inbox page; the adapter puts its own
+    /// origin (APP_URL) in front, as for reset links.
+    pub inbox_path: String,
 }
 
 /// What a verified session token says about its holder. No role: what the

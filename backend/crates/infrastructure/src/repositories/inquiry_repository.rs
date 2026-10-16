@@ -9,7 +9,7 @@ use std::sync::Arc;
 use tracing::error;
 
 use domain::{
-    models::inquiry::{InquiryAdmin, InquiryForOwner, NewInquiry},
+    models::inquiry::{InquiryAdmin, InquiryForNotice, InquiryForOwner, NewInquiry},
     repositories::inquiry_repository_trait::InquiryRepositoryTrait,
 };
 
@@ -191,6 +191,36 @@ impl InquiryRepositoryTrait for InquiryRepository {
         Ok(())
     }
 
+    async fn find_for_notice(&self, id: i32) -> Result<Option<InquiryForNotice>, Error> {
+        // The managing account's address, if it is live, else the business's.
+        let row = InquiryNoticeRow::find_by_statement(Statement::from_sql_and_values(
+            self.db.get_database_backend(),
+            "SELECT b.name AS business_name, \
+                    COALESCE(u.email, NULLIF(TRIM(b.email), '')) AS recipient_email, \
+                    i.requester_name, i.requester_phone, i.topic, i.note \
+             FROM inquiries i \
+             JOIN businesses b ON b.id = i.business_id \
+             LEFT JOIN users u ON u.id = b.owner_id \
+                  AND u.is_active AND u.deleted_at IS NULL \
+             WHERE i.id = $1",
+            [id.into()],
+        ))
+        .one(self.db.as_ref())
+        .await
+        .map_err(|e| {
+            error!("inquiry find_for_notice error: {e}");
+            Error::internal("Failed to load inquiry.")
+        })?;
+        Ok(row.map(|r| InquiryForNotice {
+            business_name: r.business_name,
+            recipient_email: r.recipient_email,
+            requester_name: r.requester_name,
+            requester_phone: r.requester_phone,
+            topic: r.topic,
+            note: r.note,
+        }))
+    }
+
     async fn count_for_owner(&self, owner_user: i32) -> Result<(i64, i64), Error> {
         let row = OwnerCountsRow::find_by_statement(Statement::from_sql_and_values(
             self.db.get_database_backend(),
@@ -263,6 +293,16 @@ impl InquiryRepositoryTrait for InquiryRepository {
                 Error::internal("Failed to update status.")
             })
     }
+}
+
+#[derive(FromQueryResult)]
+struct InquiryNoticeRow {
+    business_name: String,
+    recipient_email: Option<String>,
+    requester_name: String,
+    requester_phone: String,
+    topic: String,
+    note: Option<String>,
 }
 
 #[derive(FromQueryResult)]

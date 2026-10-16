@@ -114,7 +114,7 @@ impl AdminUseCase {
     ) {
         self.events
             .publish(DomainEvent {
-                actor_id: actor.user_id,
+                actor_id: Some(actor.user_id),
                 entity,
                 entity_id,
                 change,

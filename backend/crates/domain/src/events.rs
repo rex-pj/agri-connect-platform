@@ -66,12 +66,15 @@ pub enum Change {
     StatusChanged {
         status: String,
     },
+    /// It was just made (an inquiry a farmer sent).
+    Created,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DomainEvent {
-    /// The user who made the change.
-    pub actor_id: i32,
+    /// The signed-in user who made the change; `None` for a visitor (a
+    /// farmer's contact request).
+    pub actor_id: Option<i32>,
     pub entity: Entity,
     pub entity_id: i32,
     pub change: Change,

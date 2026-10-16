@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use domain::{
+    events::{Change, DomainEvent, Entity},
     models::{business::BusinessBrowse, inquiry::NewInquiry},
     repositories::{
         business_repository_trait::BusinessRepositoryTrait,
@@ -23,6 +24,7 @@ use crate::{
         ExploreData, InquiryCreatedDto, LocationDto, ProductDto, ServiceDto,
     },
     pagination::{paginate, total_pages},
+    ports::EventBus,
     validation::{non_blank, point_wkt, validate_coordinates, validate_phone},
 };
 
@@ -35,6 +37,8 @@ pub struct ExploreUseCase {
     inquiry_repo: Arc<dyn InquiryRepositoryTrait + Send + Sync>,
     location_repo: Arc<dyn LocationRepositoryTrait + Send + Sync>,
     product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
+    /// Announces new inquiries (the provider is emailed).
+    events: Arc<dyn EventBus>,
 }
 
 impl ExploreUseCase {
@@ -44,6 +48,7 @@ impl ExploreUseCase {
         inquiry_repo: Arc<dyn InquiryRepositoryTrait + Send + Sync>,
         location_repo: Arc<dyn LocationRepositoryTrait + Send + Sync>,
         product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
+        events: Arc<dyn EventBus>,
     ) -> Self {
         Self {
             business_repo,
@@ -51,6 +56,7 @@ impl ExploreUseCase {
             inquiry_repo,
             location_repo,
             product_repo,
+            events,
         }
     }
 
@@ -224,6 +230,17 @@ impl ExploreUseCase {
                 note,
             })
             .await?;
+
+        // No actor: the farmer is not signed in.
+        self.events
+            .publish(DomainEvent {
+                actor_id: None,
+                entity: Entity::Inquiry,
+                entity_id: id,
+                change: Change::Created,
+                reason: None,
+            })
+            .await;
 
         Ok(InquiryCreatedDto { id })
     }

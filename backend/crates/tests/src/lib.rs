@@ -11,7 +11,7 @@ use std::{
 use application::{
     catalogue::CATALOGUE,
     constants::{DEFAULT_UPLOAD_MAX_BYTES, REFRESH_TOKEN_DEFAULT_DAYS},
-    ports::{EmailService, TokenService},
+    ports::{EmailService, InquiryNotice, TokenService},
 };
 use axum::{
     body::Body,
@@ -43,6 +43,40 @@ pub fn email_service() -> Arc<dyn EmailService> {
     Arc::new(LogEmailService::new("http://localhost:5173".into()))
 }
 
+/// An `EmailService` that keeps the "new inquiry" emails it was asked to send,
+/// so a test can read them. Reset emails are only logged, as in development.
+#[derive(Default)]
+pub struct RecordingEmail {
+    inquiries: std::sync::Mutex<Vec<(String, InquiryNotice)>>,
+}
+
+impl RecordingEmail {
+    /// (recipient, notice) of every "new inquiry" email so far. They are sent
+    /// in the background, so this waits (up to 2 s) until `at_least` arrived.
+    pub async fn inquiries(&self, at_least: usize) -> Vec<(String, InquiryNotice)> {
+        for _ in 0..100 {
+            let sent = self.inquiries.lock().unwrap().clone();
+            if sent.len() >= at_least {
+                return sent;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        self.inquiries.lock().unwrap().clone()
+    }
+}
+
+#[async_trait::async_trait]
+impl EmailService for RecordingEmail {
+    async fn send_password_reset(&self, _to_email: &str, _token: &str) {}
+
+    async fn send_new_inquiry(&self, to_email: &str, notice: &InquiryNotice) {
+        self.inquiries
+            .lock()
+            .unwrap()
+            .push((to_email.to_owned(), notice.clone()));
+    }
+}
+
 /// Uploads kept in memory, with the production size cap unless given.
 pub fn memory_uploads(max_bytes: Option<usize>) -> Uploads {
     Uploads {
@@ -57,10 +91,18 @@ pub fn state(db: DatabaseConnection) -> AppState {
 }
 
 pub fn state_with_uploads(db: DatabaseConnection, uploads: Uploads) -> AppState {
+    state_with_email(db, uploads, email_service())
+}
+
+pub fn state_with_email(
+    db: DatabaseConnection,
+    uploads: Uploads,
+    email: Arc<dyn EmailService>,
+) -> AppState {
     build_state(
         web::startup::Databases::single(db),
         token_service(),
-        email_service(),
+        email,
         web::views::SiteConfig::default(),
         uploads,
         REFRESH_TOKEN_DEFAULT_DAYS,
@@ -190,6 +232,8 @@ pub struct Env {
     pub t: TestDb,
     pub state: AppState,
     pub router: Router,
+    /// What the app emailed (only the "new inquiry" emails are kept).
+    pub mail: Arc<RecordingEmail>,
 }
 
 impl Env {
@@ -204,9 +248,15 @@ impl Env {
             .apply(&CATALOGUE)
             .await
             .unwrap();
-        let state = state_with_uploads(t.db.clone(), memory_uploads(max_upload_bytes));
+        let mail = Arc::new(RecordingEmail::default());
+        let state = state_with_email(t.db.clone(), memory_uploads(max_upload_bytes), mail.clone());
         let router = router_with(state.clone(), config);
-        Env { t, state, router }
+        Env {
+            t,
+            state,
+            router,
+            mail,
+        }
     }
 
     pub async fn cleanup(self) {

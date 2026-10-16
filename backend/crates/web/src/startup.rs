@@ -9,7 +9,9 @@ use application::{
         DEFAULT_UPLOAD_MAX_BYTES, IMAGE_JPEG_QUALITY, IMAGE_MAIN_MAX_SIDE, IMAGE_MAX_PIXELS,
         IMAGE_THUMB_MAX_SIDE, REFRESH_TOKEN_DEFAULT_DAYS,
     },
-    events::{AuditLogSubscriber, FileCleanupSubscriber, InProcessEventBus},
+    events::{
+        AuditLogSubscriber, FileCleanupSubscriber, InProcessEventBus, InquiryNotificationSubscriber,
+    },
     ports::{EmailService, EventBus, FileStorage, PasswordHasher, TokenService},
     usecases::{
         admin_usecase::{AdminDeps, AdminUseCase},
@@ -51,6 +53,7 @@ use crate::{
     constants::{DB_MAX_CONNECTIONS, DEFAULT_APP_URL, DEFAULT_BIND_ADDR, DEFAULT_UPLOAD_DIR},
     locale::Locale,
     middleware::{origin::origin_of, rate_limit::Limiters},
+    routes,
     routings::app_routing::{AppRouting, RouterConfig},
     views::{SiteConfig, Views},
 };
@@ -337,14 +340,22 @@ pub fn build_state(
     let health_repo = Arc::new(HealthRepository::new(Arc::clone(&db)));
 
     let password_hasher: Arc<dyn PasswordHasher> = Arc::new(BcryptPasswordHasher);
-    // Subscribers run in this order for every event. Notifications and
-    // webhooks would be added here.
+    // The inbox the "new inquiry" email links to, from the route table.
+    let inbox_path = routes::url("provider_inquiries", &[])
+        .map_err(|e| domain::Error::internal(format!("route provider_inquiries: {e}")))?;
+    // Subscribers run in this order for every event. Webhooks would be added
+    // here.
     let events: Arc<dyn EventBus> = Arc::new(InProcessEventBus::new(vec![
         Arc::new(AuditLogSubscriber::new(audit_log_repo)),
         Arc::new(FileCleanupSubscriber::new(
             product_repo.clone(),
             file_repo.clone(),
             uploads.storage.clone(),
+        )),
+        Arc::new(InquiryNotificationSubscriber::new(
+            inquiry_repo.clone(),
+            email.clone(),
+            inbox_path,
         )),
     ]));
     let images = Arc::new(RasterImageProcessor::new(ImageRules {
@@ -370,6 +381,7 @@ pub fn build_state(
             inquiry_repo.clone(),
             location_repo.clone(),
             product_repo.clone(),
+            events.clone(),
         ),
         health: HealthUseCase::new(health_repo),
         media: media.clone(),

@@ -178,7 +178,7 @@ impl PermissionUseCase {
         }
         self.events
             .publish(DomainEvent {
-                actor_id: actor.user_id,
+                actor_id: Some(actor.user_id),
                 entity: Entity::Role,
                 entity_id: role_id,
                 change: Change::PermissionsChanged {

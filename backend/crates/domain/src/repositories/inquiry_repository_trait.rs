@@ -2,12 +2,15 @@ use async_trait::async_trait;
 
 use crate::{
     error::Error,
-    models::inquiry::{InquiryAdmin, InquiryForOwner, NewInquiry},
+    models::inquiry::{InquiryAdmin, InquiryForNotice, InquiryForOwner, NewInquiry},
 };
 
 #[async_trait]
 pub trait InquiryRepositoryTrait {
     async fn create(&self, inquiry: NewInquiry) -> Result<i32, Error>;
+
+    /// The inquiry `id` with the email address of the provider it went to.
+    async fn find_for_notice(&self, id: i32) -> Result<Option<InquiryForNotice>, Error>;
 
     async fn count_admin(&self) -> Result<i64, Error>;
 

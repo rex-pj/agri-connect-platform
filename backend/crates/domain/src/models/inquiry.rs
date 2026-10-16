@@ -32,3 +32,15 @@ pub struct InquiryForOwner {
     pub status: String,
     pub created_on: chrono::DateTime<chrono::Utc>,
 }
+
+/// A new inquiry and where to tell its provider about it.
+pub struct InquiryForNotice {
+    pub business_name: String,
+    /// The account managing the business, else the business's own address;
+    /// `None` when neither exists (nobody to tell).
+    pub recipient_email: Option<String>,
+    pub requester_name: String,
+    pub requester_phone: String,
+    pub topic: String,
+    pub note: Option<String>,
+}

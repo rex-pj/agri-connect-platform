@@ -176,3 +176,65 @@ async fn without_the_permission_there_is_no_inbox() {
     assert!(!dashboard.contains(r#"href="/provider/inquiries""#));
     e.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_new_request_is_emailed_to_the_provider_and_not_audited() {
+    let e = env_with_origin().await;
+    register_provider(&e.state, "nongdan", "0901234567").await;
+    let id = inquiry_to(&e, business_of(&e, "nongdan").await).await;
+
+    let sent = e.mail.inquiries(1).await;
+    assert_eq!(sent.len(), 1);
+    let (to, notice) = &sent[0];
+    assert_eq!(to, "nongdan@example.vn", "the managing account");
+    assert_eq!(notice.business_name, "Vườn nongdan");
+    assert_eq!(notice.requester_phone, "0912345678");
+    assert_eq!(notice.topic, "Múc bùn ao");
+    assert_eq!(notice.inbox_path, "/provider/inquiries");
+
+    // A visitor's request is not an admin action.
+    let audited: i64 =
+        e.t.db
+            .query_one(Statement::from_string(
+                e.t.db.get_database_backend(),
+                format!("SELECT count(*) AS n FROM audit_logs WHERE entity_id = {id}"),
+            ))
+            .await
+            .unwrap()
+            .unwrap()
+            .try_get("", "n")
+            .unwrap();
+    assert_eq!(audited, 0);
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn without_a_live_account_the_business_address_is_used_or_nobody() {
+    let e = env_with_origin().await;
+    register_provider(&e.state, "nongdan", "0901234567").await;
+    let business = business_of(&e, "nongdan").await;
+    e.t.db
+        .execute_unprepared("UPDATE users SET is_active = FALSE")
+        .await
+        .unwrap();
+
+    // Deactivated account, no business address: nobody to tell.
+    inquiry_to(&e, business).await;
+    assert!(e.mail.inquiries(1).await.is_empty());
+
+    e.t.db
+        .execute_unprepared(&format!(
+            "UPDATE businesses SET email = 'vuon@example.vn' WHERE id = {business}"
+        ))
+        .await
+        .unwrap();
+    inquiry_to(&e, business).await;
+    let sent = e.mail.inquiries(1).await;
+    assert_eq!(
+        sent.iter().map(|(to, _)| to.as_str()).collect::<Vec<_>>(),
+        ["vuon@example.vn"]
+    );
+    e.cleanup().await;
+}

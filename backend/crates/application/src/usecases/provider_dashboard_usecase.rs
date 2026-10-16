@@ -122,7 +122,7 @@ impl ProviderDashboardUseCase {
         }
         self.events
             .publish(DomainEvent {
-                actor_id: actor.user_id,
+                actor_id: Some(actor.user_id),
                 entity: Entity::Inquiry,
                 entity_id: inquiry_id,
                 change: Change::StatusChanged {
@@ -390,7 +390,7 @@ impl ProviderDashboardUseCase {
         // Its image is removed by the file-cleanup subscriber.
         self.events
             .publish(DomainEvent {
-                actor_id: actor.user_id,
+                actor_id: Some(actor.user_id),
                 entity: Entity::Product,
                 entity_id: product_id,
                 change: Change::Deleted,

@@ -1485,6 +1485,7 @@ version = "0.1.0"
 dependencies = [
  "agri-connect-migration",
  "application",
+ "async-trait",
  "axum",
  "domain",
  "image",

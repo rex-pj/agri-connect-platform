@@ -513,6 +513,8 @@ impl AdminUseCase {
                 },
             )
             .await?;
+        self.publish(actor, Entity::Category, id, Change::Updated, None)
+            .await;
         self.load_category_detail(id).await
     }
 
@@ -589,6 +591,16 @@ impl AdminUseCase {
         self.inquiry_repo
             .update_status(id, &status, actor.user_id)
             .await?;
+        self.publish(
+            actor,
+            Entity::Inquiry,
+            id,
+            Change::StatusChanged {
+                status: status.clone(),
+            },
+            None,
+        )
+        .await;
         let inquiry = self
             .inquiry_repo
             .find_by_id_admin(id)
@@ -737,6 +749,8 @@ impl AdminUseCase {
         self.location_repo
             .update(id, label, lat, lng, display_order)
             .await?;
+        self.publish(actor, Entity::Location, id, Change::Updated, None)
+            .await;
         self.load_location_admin(id).await
     }
 

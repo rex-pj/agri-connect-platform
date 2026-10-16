@@ -409,7 +409,7 @@ pub fn build_state(
             business_repo: business_repo.clone(),
             product_repo: product_repo.clone(),
             inquiry_repo: inquiry_repo.clone(),
-            media,
+            media: media.clone(),
             events,
         }),
         setup: SetupUseCase::new(
@@ -417,6 +417,7 @@ pub fn build_state(
             demo_repo,
             business_repo.clone(),
             user_repo.clone(),
+            media,
         ),
         stats: StatsUseCase::new(business_repo, product_repo, user_repo),
     };

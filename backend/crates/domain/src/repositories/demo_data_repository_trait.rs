@@ -1,6 +1,9 @@
 use async_trait::async_trait;
 
-use crate::{error::Error, models::catalogue::DemoReport};
+use crate::{
+    error::Error,
+    models::catalogue::{DemoRemoval, DemoReport},
+};
 
 /// Sample listings for testing. Every row it writes is flagged `is_demo`, so
 /// `remove` can never touch a real listing.
@@ -12,5 +15,6 @@ pub trait DemoDataRepositoryTrait {
     async fn load(&self) -> Result<DemoReport, Error>;
 
     /// Deletes every demo business; services and products follow by cascade.
-    async fn remove(&self) -> Result<u64, Error>;
+    /// Returns the photos of the deleted products, still in storage.
+    async fn remove(&self) -> Result<DemoRemoval, Error>;
 }

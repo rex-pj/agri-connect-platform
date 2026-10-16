@@ -31,6 +31,12 @@ fn session_token(parts: &Parts) -> Option<&str> {
 /// again" from "not logged in".
 pub struct MaybeActor(pub Option<Actor>);
 
+/// The actor already resolved for this request. A page takes `Shell` and
+/// `Viewer` (and some take both): the account and its permissions are read
+/// once per request, not once per extractor.
+#[derive(Clone)]
+struct ResolvedActor(Option<Actor>);
+
 impl FromRequestParts<AppState> for MaybeActor {
     type Rejection = Error;
 
@@ -38,11 +44,16 @@ impl FromRequestParts<AppState> for MaybeActor {
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
+        if let Some(ResolvedActor(actor)) = parts.extensions.get::<ResolvedActor>() {
+            return Ok(Self(actor.clone()));
+        }
         let Some(token) = session_token(parts) else {
             return Ok(Self(None));
         };
         let claims = state.token_service.verify(token)?;
-        Ok(Self(state.usecases.auth.session_actor(&claims).await?))
+        let actor = state.usecases.auth.session_actor(&claims).await?;
+        parts.extensions.insert(ResolvedActor(actor.clone()));
+        Ok(Self(actor))
     }
 }
 

@@ -206,3 +206,25 @@ async fn bad_uploads_get_a_reason_and_store_nothing() {
     assert_eq!(file_rows(&e).await, 0);
     e.t.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn removing_demo_data_removes_the_photos_of_its_products() {
+    let e = env().await;
+    let token = register_provider(&e.state, "nongdan", "0901234567").await;
+    let id = product(&e, &token).await;
+    let file = put_photo(&e, id, &token).await;
+    // As if this were a demo business someone had added a photo to.
+    e.t.db
+        .execute_unprepared("UPDATE businesses SET is_demo = TRUE")
+        .await
+        .unwrap();
+    let admin = integration_tests::first_admin(&e.state).await;
+
+    let removed = e.state.usecases.setup.remove_demo(&admin).await.unwrap();
+    assert_eq!(removed, 1);
+    assert_eq!(file_rows(&e).await, 0, "the files row went too");
+    let res = send(&e.router, get(&format!("/files/{file}"))).await;
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+    e.cleanup().await;
+}

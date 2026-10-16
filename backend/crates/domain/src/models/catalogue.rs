@@ -61,3 +61,11 @@ pub struct DemoReport {
     pub services: u64,
     pub products: u64,
 }
+
+/// What removing the demo data deleted: the businesses (their services and
+/// products went with them) and the photos those products had, which the
+/// caller removes from storage.
+pub struct DemoRemoval {
+    pub businesses: u64,
+    pub image_files: Vec<uuid::Uuid>,
+}

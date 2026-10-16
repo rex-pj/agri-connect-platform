@@ -17,6 +17,7 @@ pub enum Entity {
     Product,
     Service,
     Role,
+    Inquiry,
 }
 
 impl Entity {
@@ -30,6 +31,7 @@ impl Entity {
             Entity::Product => "product",
             Entity::Service => "service",
             Entity::Role => "role",
+            Entity::Inquiry => "inquiry",
         }
     }
 }
@@ -57,6 +59,12 @@ pub enum Change {
     /// A business is now managed by the provider account `username`.
     AccountAssigned {
         username: String,
+    },
+    /// Its fields were edited (a category, a location preset).
+    Updated,
+    /// An inquiry moved to `status` (contacted, closed, spam…).
+    StatusChanged {
+        status: String,
     },
 }
 

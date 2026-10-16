@@ -16,6 +16,7 @@ use crate::{
     authz::Actor,
     catalogue::{PERM_ADMIN_DASHBOARD_VIEW, PERM_SYSTEM_DEMO_MANAGE},
     outputs::SetupStatusDto,
+    usecases::media_usecase::MediaUseCase,
 };
 
 #[derive(Clone)]
@@ -24,6 +25,8 @@ pub struct SetupUseCase {
     demo_repo: Arc<dyn DemoDataRepositoryTrait + Send + Sync>,
     business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
     user_repo: Arc<dyn UserRepositoryTrait + Send + Sync>,
+    /// Removes the photos of demo products when the demo data goes.
+    media: MediaUseCase,
 }
 
 impl SetupUseCase {
@@ -32,12 +35,14 @@ impl SetupUseCase {
         demo_repo: Arc<dyn DemoDataRepositoryTrait + Send + Sync>,
         business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
         user_repo: Arc<dyn UserRepositoryTrait + Send + Sync>,
+        media: MediaUseCase,
     ) -> Self {
         Self {
             catalogue_repo,
             demo_repo,
             business_repo,
             user_repo,
+            media,
         }
     }
 
@@ -108,7 +113,16 @@ impl SetupUseCase {
     pub async fn remove_demo(&self, actor: &Actor) -> Result<u64> {
         actor.require(PERM_SYSTEM_DEMO_MANAGE)?;
         let removed = self.demo_repo.remove().await?;
-        info!(businesses = removed, "demo data removed");
-        Ok(removed)
+        // Photos someone uploaded to a demo product go too; a failure only
+        // orphans an object (logged), the rows are already gone.
+        for file in &removed.image_files {
+            self.media.discard(*file).await;
+        }
+        info!(
+            businesses = removed.businesses,
+            photos = removed.image_files.len(),
+            "demo data removed"
+        );
+        Ok(removed.businesses)
     }
 }

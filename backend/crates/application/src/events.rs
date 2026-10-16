@@ -77,6 +77,8 @@ pub fn audit_action(event: &DomainEvent) -> String {
         (Change::ImageReplaced { .. }, _) => format!("replace_{entity}_image"),
         (Change::PermissionsChanged { .. }, _) => format!("change_{entity}_permissions"),
         (Change::AccountAssigned { .. }, _) => format!("assign_{entity}_account"),
+        (Change::Updated, _) => format!("update_{entity}"),
+        (Change::StatusChanged { .. }, _) => format!("set_{entity}_status"),
     }
 }
 
@@ -91,6 +93,8 @@ impl EventSubscriber for AuditLogSubscriber {
             (Change::RoleChanged { role }, Some(r)) => Some(format!("{role}: {r}")),
             (Change::RoleChanged { role }, None) => Some(role.clone()),
             (Change::AccountAssigned { username }, _) => Some(username.clone()),
+            (Change::StatusChanged { status }, Some(r)) => Some(format!("{status}: {r}")),
+            (Change::StatusChanged { status }, None) => Some(status.clone()),
             // The audit row says what changed: "+key, -key: reason".
             (Change::PermissionsChanged { added, removed }, r) => {
                 let diff = added
@@ -205,5 +209,20 @@ mod tests {
             audit_action(&event(Entity::Review, Change::Visibility { visible: true })),
             "show_review"
         );
+    }
+
+    #[test]
+    fn edits_and_inquiry_handling_have_their_own_actions() {
+        assert_eq!(
+            audit_action(&event(Entity::Category, Change::Updated)),
+            "update_category"
+        );
+        let handled = event(
+            Entity::Inquiry,
+            Change::StatusChanged {
+                status: "contacted".into(),
+            },
+        );
+        assert_eq!(audit_action(&handled), "set_inquiry_status");
     }
 }

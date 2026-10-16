@@ -120,6 +120,17 @@ impl ProviderDashboardUseCase {
         {
             return Err(Error::new(ErrorCode::InquiryNotFound));
         }
+        self.events
+            .publish(DomainEvent {
+                actor_id: actor.user_id,
+                entity: Entity::Inquiry,
+                entity_id: inquiry_id,
+                change: Change::StatusChanged {
+                    status: status.to_owned(),
+                },
+                reason: None,
+            })
+            .await;
         Ok(())
     }
 

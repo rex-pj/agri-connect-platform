@@ -8,8 +8,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use domain::{
-    models::catalogue::DemoReport,
-    repositories::demo_data_repository_trait::DemoDataRepositoryTrait, Error, Result,
+    models::catalogue::{DemoRemoval, DemoReport},
+    repositories::demo_data_repository_trait::DemoDataRepositoryTrait,
+    Error, Result,
 };
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DbErr, FromQueryResult, Statement, TransactionTrait,
@@ -32,6 +33,11 @@ impl DemoDataRepository {
 #[derive(FromQueryResult)]
 struct CountRow {
     n: i64,
+}
+
+#[derive(FromQueryResult)]
+struct ImageRow {
+    image_file_id: uuid::Uuid,
 }
 
 fn db_error(step: &str, e: DbErr) -> Error {
@@ -77,14 +83,34 @@ impl DemoDataRepositoryTrait for DemoDataRepository {
         })
     }
 
-    async fn remove(&self) -> Result<u64> {
-        let db = self.db.as_ref();
-        db.execute(Statement::from_string(
-            db.get_database_backend(),
-            "DELETE FROM businesses WHERE is_demo",
+    async fn remove(&self) -> Result<DemoRemoval> {
+        // The cascade deletes the products, so their photos are read first,
+        // in the same transaction: no photo can be added in between unseen.
+        let txn = self.db.begin().await.map_err(|e| db_error("begin", e))?;
+        let backend = txn.get_database_backend();
+        let image_files = ImageRow::find_by_statement(Statement::from_string(
+            backend,
+            "SELECT p.image_file_id FROM products p JOIN businesses b ON b.id = p.business_id \
+             WHERE b.is_demo AND p.image_file_id IS NOT NULL FOR UPDATE OF p",
         ))
+        .all(&txn)
         .await
-        .map(|r| r.rows_affected())
-        .map_err(|e| db_error("remove", e))
+        .map_err(|e| db_error("remove images", e))?
+        .into_iter()
+        .map(|r| r.image_file_id)
+        .collect();
+        let businesses = txn
+            .execute(Statement::from_string(
+                backend,
+                "DELETE FROM businesses WHERE is_demo",
+            ))
+            .await
+            .map(|r| r.rows_affected())
+            .map_err(|e| db_error("remove", e))?;
+        txn.commit().await.map_err(|e| db_error("commit", e))?;
+        Ok(DemoRemoval {
+            businesses,
+            image_files,
+        })
     }
 }

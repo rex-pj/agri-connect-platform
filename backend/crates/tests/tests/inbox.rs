@@ -91,6 +91,21 @@ async fn a_provider_sees_and_handles_the_requests_sent_to_them() {
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
     assert_eq!(res.headers()[header::LOCATION], "/provider/inquiries");
     assert_eq!(status_of(&e, id).await, "contacted");
+    let audited: String =
+        e.t.db
+            .query_one(Statement::from_string(
+                e.t.db.get_database_backend(),
+                format!(
+                    "SELECT action || ': ' || reason AS line FROM audit_logs \
+                     WHERE entity_type = 'inquiry' AND entity_id = {id}"
+                ),
+            ))
+            .await
+            .unwrap()
+            .unwrap()
+            .try_get("", "line")
+            .unwrap();
+    assert_eq!(audited, "set_inquiry_status: contacted");
 
     // A made-up status is refused, the stored one kept.
     let res = send(

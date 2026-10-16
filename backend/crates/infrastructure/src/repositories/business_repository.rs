@@ -20,8 +20,9 @@ use domain::{
     repositories::business_repository_trait::BusinessRepositoryTrait,
 };
 
-use domain::Error;
+use domain::{Error, ErrorCode};
 
+use crate::repositories::unique_or_internal;
 use crate::search::{text_contains, BUSINESS_SEARCH_COLUMNS};
 use crate::{
     db_types::DateTimeWithTimeZone,
@@ -727,9 +728,14 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .exec(self.db.as_ref())
             .await
             .map(|_| ())
+            // A concurrent assignment gave the account another business first.
             .map_err(|e| {
-                error!("business assign_user error: {e}");
-                Error::internal("Failed to link account to business.")
+                unique_or_internal(
+                    e,
+                    "username",
+                    ErrorCode::ProviderAccountInUse,
+                    "business assign_user",
+                )
             })
     }
 

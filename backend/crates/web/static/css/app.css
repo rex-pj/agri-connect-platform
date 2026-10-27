@@ -28,6 +28,8 @@
   --bg: #f5f8f6;
   --surface: #ffffff;
   --border: #c8d8ce;
+  /* Lighter rule: admin cards, the admin sidebar. */
+  --hairline: #e5e7eb;
   --text: #0c1a12;
   --text2: #2d4a38;
   --muted: #5e7a68;
@@ -803,6 +805,11 @@ body:has(.app-nav__search-row.open) .app-main {
   color: var(--text);
 }
 .section-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0 4px;
   font-size: 0.85rem;
   font-weight: 700;
   color: var(--p600);
@@ -1274,7 +1281,7 @@ body:has(.app-nav__search-row.open) .app-main {
   aspect-ratio: 16 / 9;
   max-height: 400px;
   overflow: hidden;
-  background: #f3f4f6;
+  background: var(--bg);
 }
 .product-detail__photo img {
   display: block;
@@ -1348,12 +1355,12 @@ body:has(.app-nav__search-row.open) .app-main {
   font-size: 1.3rem;
 }
 .detail-price__unit {
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.95rem;
 }
 .detail-price__note {
   margin: 0;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.8rem;
 }
 .vendor-row {
@@ -2325,7 +2332,7 @@ a.chip {
   flex-direction: column;
   gap: 2px;
   padding: 12px 8px;
-  border-right: 1px solid #e5e7eb;
+  border-right: 1px solid var(--hairline);
   background: #f4f7f5;
 }
 /* Phone: with JS the menu is a drawer that slides in under the sticky
@@ -2333,7 +2340,7 @@ a.chip {
 @media (max-width: 767.98px) {
   .ash-sidebar {
     border-right: none;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid var(--hairline);
   }
   .ash-sidebar.is-collapsible {
     position: fixed;
@@ -2345,7 +2352,7 @@ a.chip {
     overflow-y: auto;
     overscroll-behavior: contain;
     border-bottom: none;
-    border-right: 1px solid #e5e7eb;
+    border-right: 1px solid var(--hairline);
     box-shadow: 8px 0 24px rgba(2, 44, 34, 0.18);
     transform: translateX(-100%);
     visibility: hidden;
@@ -2464,7 +2471,7 @@ a.chip {
 }
 .admin-card,
 .admin-section {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--hairline);
   border-radius: 14px;
   background: var(--surface);
 }
@@ -2629,7 +2636,7 @@ a.chip {
   gap: 12px;
   height: 100%;
   padding: 16px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--hairline);
   border-radius: 14px;
   background: var(--surface);
 }
@@ -2644,8 +2651,8 @@ a.chip {
   font-size: 1.25rem;
 }
 .stat-card__icon--green {
-  background: #d1fae5;
-  color: #065f46;
+  background: var(--p100);
+  color: var(--p700);
 }
 .stat-card__icon--blue {
   background: #dbeafe;

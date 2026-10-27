@@ -19,7 +19,7 @@
   <fieldset class="auth-fieldset">
     <legend class="auth-legend">{{ t(key="nav.account") }}</legend>
     {{ field::input(id="r_fullname", name="full_name", label=t(key="form.full_name"), value=v.full_name, error=e.full_name | default(value=""), autocomplete="name", maxlength=limits.full_name_max) }}
-    {{ field::input(id="r_email", name="email", label="Email", type="email", value=v.email, error=e.email | default(value=""), required=true, autocomplete="email") }}
+    {{ field::input(id="r_email", name="email", label=t(key="form.email"), type="email", value=v.email, error=e.email | default(value=""), required=true, autocomplete="email") }}
     {{ field::input(id="r_user", name="username", label=t(key="form.username"), value=v.username, error=e.username | default(value=""), required=true, autocomplete="username", minlength=limits.username_min_len, maxlength=limits.username_max_len) }}
     {{ field::input(id="r_pw", name="password", label=t(key="form.password"), type="password", error=e.password | default(value=""), required=true, autocomplete="new-password", minlength=limits.password_min_chars) }}
     {{ field::input(id="r_pw2", name="password2", label=t(key="form.password_again"), type="password", error=e.password2 | default(value=""), required=true, autocomplete="new-password") }}

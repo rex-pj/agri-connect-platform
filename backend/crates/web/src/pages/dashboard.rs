@@ -95,7 +95,8 @@ impl ProfileForm {
 pub struct ProductRow {
     pub product: ProviderProductDto,
     pub edit_href: String,
-    pub public_href: String,
+    /// The page farmers see; `None` while an admin hides it (it would 404).
+    pub public_href: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -103,6 +104,8 @@ pub struct ServiceRow {
     pub service: ProviderServiceDto,
     /// `None` when the actor may neither edit nor delete it.
     pub edit_href: Option<String>,
+    /// The page farmers see; `None` while an admin hides it (it would 404).
+    pub public_href: Option<String>,
 }
 
 /// The services section: the rows, and whether another may be added.
@@ -172,7 +175,10 @@ async fn dashboard_page(
         for product in products {
             rows.push(ProductRow {
                 edit_href: url("provider_product_edit", &[("id", &product.id.to_string())])?,
-                public_href: canonical_url("product", product.id, &product.name)?,
+                public_href: product
+                    .is_active
+                    .then(|| canonical_url("product", product.id, &product.name))
+                    .transpose()?,
                 product,
             });
         }
@@ -181,6 +187,10 @@ async fn dashboard_page(
             service_rows.push(ServiceRow {
                 edit_href: can_manage
                     .then(|| url("provider_service_edit", &[("id", &service.id.to_string())]))
+                    .transpose()?,
+                public_href: service
+                    .is_active
+                    .then(|| canonical_url("service", service.id, &service.name))
                     .transpose()?,
                 service,
             });

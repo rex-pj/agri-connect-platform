@@ -28,8 +28,8 @@
   <section class="admin-section" aria-labelledby="info-title">
     <h2 class="admin-section__title" id="info-title">{{ t(key="admin.info") }}</h2>
     <dl class="acct-rows">
-      <div class="acct-row"><dt>{{ t(key="form.phone_short") }}</dt><dd><a href="tel:{{ p.phone }}">{{ p.phone }}</a></dd></div>
-      {% if p.email %}<div class="acct-row"><dt>Email</dt><dd>{{ p.email }}</dd></div>{% endif %}
+      <div class="acct-row"><dt>{{ t(key="form.phone_short") }}</dt><dd><a href="tel:{{ p.phone }}">{{ p.phone | phone }}</a></dd></div>
+      {% if p.email %}<div class="acct-row"><dt>{{ t(key="form.email") }}</dt><dd>{{ p.email }}</dd></div>{% endif %}
       {% if p.address %}<div class="acct-row"><dt>{{ t(key="form.address") }}</dt><dd>{{ p.address }}</dd></div>{% endif %}
       <div class="acct-row"><dt>{{ t(key="admin.created") }}</dt><dd><time datetime="{{ p.created_on | utc_iso }}">{{ p.created_on | vn_datetime }}</time></dd></div>
     </dl>
@@ -90,7 +90,7 @@
     <form class="form-stack" method="post" action="{{ b.account_action }}" novalidate>
       {{ field::input(id="acc-username", name="username", label=t(key="form.username"), value=b.form.username, error=e.username | default(value=""), required=true, autocomplete="off", minlength=limits.username_min_len) }}
       <p class="small text-muted mb-0">{{ t(key="admin.assign_hint") }}</p>
-      {{ field::input(id="acc-email", name="email", label="Email", type="email", value=b.form.email, error=e.email | default(value=""), autocomplete="off", inputmode="email") }}
+      {{ field::input(id="acc-email", name="email", label=t(key="form.email"), type="email", value=b.form.email, error=e.email | default(value=""), autocomplete="off", inputmode="email") }}
       {{ field::input(id="acc-password", name="password", label=t(key="form.password"), type="password", error=e.password | default(value=""), autocomplete="new-password", minlength=limits.password_min_chars) }}
       <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-user-plus") }} {{ t(key="admin.assign") }}</button></div>
     </form>

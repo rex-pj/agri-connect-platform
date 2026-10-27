@@ -1,6 +1,7 @@
 {#- The "find someone near me" banner. A plain link: the explore page asks for
-    the location, not this banner. Blank `title` / `sub` / `button` take the
-    usual wording. -#}
+    the location, not this banner. Blank `title` / `button` take the usual
+    wording; `sub`, the line below, comes from the caller (it names the
+    radius). -#}
 {% import "atoms/icon.html" as atoms %}
 {% macro geo_cta(href, title="", sub="", button="") -%}
 <a class="geo-cta" href="{{ href }}">
@@ -11,7 +12,7 @@
     <span class="geo-cta__pin">{{ atoms::icon(name="fa-location-dot") }}</span>
     <span class="geo-cta__text">
       <strong class="geo-cta__title">{% if title %}{{ title }}{% else %}{{ t(key="geo.title") }}{% endif %}</strong>
-      <span class="geo-cta__sub">{% if sub %}{{ sub }}{% else %}{{ t(key="geo.sub_services") }}{% endif %}</span>
+      {% if sub %}<span class="geo-cta__sub">{{ sub }}</span>{% endif %}
     </span>
   </span>
   <span class="geo-cta__btn">{% if button %}{{ button }}{% else %}{{ t(key="geo.button") }}{% endif %} {{ atoms::icon(name="fa-arrow-right") }}</span>

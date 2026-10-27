@@ -15,7 +15,7 @@
 {% block main %}
 <div class="home-categories">{{ grid::category_grid(items=page.categories) }}</div>
 
-<section class="home-section">{{ geo::geo_cta(href=url_for(name="explore")) }}</section>
+<section class="home-section">{{ geo::geo_cta(href=url_for(name="explore"), sub=t(key="geo.sub_services", km=limits.near_me_km)) }}</section>
 
 {% if page.services %}
 <section class="home-section">

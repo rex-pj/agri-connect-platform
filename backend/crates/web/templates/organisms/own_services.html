@@ -19,8 +19,8 @@
     <li class="d-flex align-items-center gap-3 py-2 border-bottom">
       {% if x.image_file_id %}<img class="rounded object-fit-cover flex-shrink-0" width="56" height="56" src="{{ file_url(id=x.image_file_id, variant="thumb") }}" alt="" loading="lazy" decoding="async">{% else %}<span class="dash-thumb flex-shrink-0">{{ atoms::icon(name=x.category_icon | default(value="fa-tag")) }}</span>{% endif %}
       <div class="flex-grow-1 min-w-0">
-        <strong class="d-block text-truncate">{{ x.name }}</strong>
-        <span class="small text-muted">{% if x.price_note %}{{ x.price_note | price_note }}{% else %}{{ t(key="price.contact") }}{% endif %} · {{ x.category }}</span>
+        {% if r.public_href %}<a class="fw-bold text-decoration-none d-block text-truncate" href="{{ r.public_href }}">{{ x.name }}</a>{% else %}<strong class="d-block text-truncate">{{ x.name }}</strong>{% endif %}
+        <span class="small text-muted">{% if x.price_note %}{{ x.price_note | price_note }}{% else %}{{ t(key="price.ask") }}{% endif %} · {{ x.category }}</span>
         {% if not x.is_active %}<span class="badge text-bg-secondary ms-1">{{ t(key="dashboard.hidden_by_admin") }}</span>{% endif %}
       </div>
       {% if r.edit_href %}<a class="btn btn-outline-success" href="{{ r.edit_href }}" aria-label="{{ t(key="common.edit_label", name=x.name) }}">{{ atoms::icon(name="fa-pen") }}</a>{% endif %}

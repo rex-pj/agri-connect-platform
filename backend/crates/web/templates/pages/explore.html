@@ -74,7 +74,7 @@
 
   <section data-panel="services"{% if page.tab != "services" %} hidden{% endif %} :hidden="panelHidden">
     {% if page.services %}
-    <p class="small text-muted mb-3"><strong>{{ page.services | length }}</strong> {{ t(key="explore.services_near") }}</p>
+    <p class="small text-muted mb-2"><strong>{{ page.services | length }}{% if page.services | length >= page.results_max %}+{% endif %}</strong> {{ t(key="explore.services_near") }}</p>
     {{ services::service_grid(services=page.services) }}
     {% elif page.wider %}
     {% set wider_label = t(key="explore.search_within", area=page.wider.label) %}
@@ -86,7 +86,7 @@
 
   <section data-panel="products"{% if page.tab != "products" %} hidden{% endif %} :hidden="panelHidden">
     {% if page.products %}
-    <p class="small text-muted mb-3"><strong>{{ page.products | length }}</strong> {{ t(key="explore.products_near") }}</p>
+    <p class="small text-muted mb-2"><strong>{{ page.products | length }}{% if page.products | length >= page.results_max %}+{% endif %}</strong> {{ t(key="explore.products_near") }}</p>
     <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 row-cols-xl-6 g-2 g-md-3">
       {% for p in page.products %}<div class="col">{{ products::product_card(p=p) }}</div>{% endfor %}
     </div>
@@ -100,7 +100,7 @@
 
   <section data-panel="providers"{% if page.tab != "providers" %} hidden{% endif %} :hidden="panelHidden">
     {% if page.providers %}
-    <p class="small text-muted mb-3"><strong>{{ page.providers | length }}</strong> {{ t(key="explore.shops_near") }}</p>
+    <p class="small text-muted mb-2"><strong>{{ page.providers | length }}{% if page.providers | length >= page.results_max %}+{% endif %}</strong> {{ t(key="explore.shops_near") }}</p>
     <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
       {% for p in page.providers %}<div class="col">{{ providers::provider_card(p=p) }}</div>{% endfor %}
     </div>

@@ -22,6 +22,7 @@ use tera::{Tera, Value};
 
 use crate::{
     app_state::AppState,
+    constants::EXPLORE_DEFAULT_RADIUS_M,
     extract::ApiPath,
     locale::{fill, Lang, Locale, Locales},
     routes,
@@ -108,6 +109,8 @@ struct FieldLimits {
     product_unit_max: usize,
     product_description_max: usize,
     audit_reason_max: usize,
+    /// The near-me radius before the visitor picks one.
+    near_me_km: i64,
 }
 
 const FIELD_LIMITS: FieldLimits = FieldLimits {
@@ -123,6 +126,7 @@ const FIELD_LIMITS: FieldLimits = FieldLimits {
     product_unit_max: PRODUCT_UNIT_MAX,
     product_description_max: PRODUCT_DESCRIPTION_MAX,
     audit_reason_max: AUDIT_REASON_MAX,
+    near_me_km: EXPLORE_DEFAULT_RADIUS_M / 1000,
 };
 
 /// What every template sees: `site`, `lang` (and `languages` for the

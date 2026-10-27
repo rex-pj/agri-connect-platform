@@ -137,7 +137,7 @@ profile           = "Hồ sơ"
 [text.provider_cta]
 register       = "Đăng ký"
 visitor_title  = "Bạn là nhà cung cấp?"
-visitor_sub    = "Đăng ký để nông dân trong vùng tìm thấy bạn"
+visitor_sub    = "Đăng ký để bà con trong vùng tìm thấy bạn"
 provider_title = "Cửa hàng của bạn"
 provider_sub   = "Cập nhật sản phẩm, ảnh và số điện thoại"
 
@@ -214,6 +214,7 @@ change      = "Đổi ảnh"
 formats     = "JPG, PNG hoặc WebP · tối đa {max_mb} MB"
 
 [text.form]
+email              = "Email"
 optional           = "(không bắt buộc)"
 show_password      = "Hiện mật khẩu"
 name               = "Tên"
@@ -243,9 +244,9 @@ show_all          = "Xem tất cả"
 [text.geo]
 title          = "Tìm thợ gần bạn ngay"
 button         = "Bật định vị"
-sub_services   = "Cơ khí · Phun thuốc · Múc bùn — trong 10 km"
-sub_category   = "Trong 10 km — bật định vị để lọc theo khoảng cách"
-sub_shops      = "Cửa hàng quanh bạn — trong 10 km"
+sub_services   = "Cơ khí · Phun thuốc · Múc bùn — trong {km} km"
+sub_category   = "Trong {km} km — bật định vị để lọc theo khoảng cách"
+sub_shops      = "Cửa hàng quanh bạn — trong {km} km"
 title_services = "Tìm dịch vụ gần bạn"
 title_shops    = "Tìm cửa hàng gần bạn"
 
@@ -324,6 +325,7 @@ label        = "Bộ lọc"
 all          = "Tất cả"
 category     = "Danh mục"
 service_type = "Loại dịch vụ"
+product_type = "Loại sản phẩm"
 price        = "Khoảng giá (đồng)"
 price_from   = "Từ"
 price_min    = "Giá tối thiểu"
@@ -355,7 +357,6 @@ description_placeholder = "Máy gì, làm ở đâu, bao lâu xong"
 
 [text.price]
 ask     = "Liên hệ giá"
-contact = "Liên hệ"
 
 [text.distance]
 away     = "Cách bạn"
@@ -506,7 +507,7 @@ back_to_login    = "Về đăng nhập"
 link_invalid     = "Liên kết không hợp lệ"
 link_invalid_sub = "Liên kết đã hết hạn hoặc đã được dùng. Hãy yêu cầu liên kết mới."
 resend_link      = "Gửi lại liên kết"
-register_sub     = "Đưa dịch vụ của bạn đến nông dân trong vùng."
+register_sub     = "Đưa dịch vụ của bạn đến bà con trong vùng."
 your_business    = "Cơ sở của bạn"
 business_name    = "Tên cơ sở"
 create_account   = "Tạo tài khoản"
@@ -530,7 +531,6 @@ calls_sub                = "trong {days} ngày qua, từ dịch vụ, sản ph�
 inbox_waiting            = "{count} người đang chờ bạn gọi"
 products_count           = "Sản phẩm ({count})"
 services_count           = "Dịch vụ ({count})"
-hidden                   = "Đang ẩn"
 hidden_by_admin          = "Quản trị viên đã ẩn"
 no_products              = "Chưa có sản phẩm"
 no_products_hint         = "Thêm sản phẩm để bà con tìm thấy bạn."
@@ -548,7 +548,6 @@ add_product              = "Thêm sản phẩm"
 edit_product             = "Sửa sản phẩm"
 product_photo            = "Ảnh sản phẩm"
 product_photo_hint       = "Ảnh thật sản phẩm của bạn giúp bà con tin và gọi đặt hàng."
-choose_type              = "Chọn loại"
 product_name             = "Tên sản phẩm"
 product_name_placeholder = "Sầu riêng Ri6"
 price_dong               = "Giá (đồng)"
@@ -558,6 +557,7 @@ delete_product_what      = "sản phẩm này cùng ảnh"
 add_service              = "Thêm dịch vụ"
 edit_service             = "Sửa dịch vụ"
 service_hidden_by_admin  = "Quản trị viên đã ẩn dịch vụ này nên bà con không thấy. Liên hệ quản trị viên để được hiện lại."
+product_hidden_by_admin  = "Quản trị viên đã ẩn sản phẩm này nên bà con không thấy. Liên hệ quản trị viên để được hiện lại."
 service_cannot_edit      = "Tài khoản của bạn chưa được phép sửa dịch vụ."
 service_photo            = "Ảnh dịch vụ"
 service_photo_hint       = "Ảnh thật máy móc hoặc công trình bạn đã làm: bà con tin hơn, và dịch vụ có ảnh được ưu tiên hiện ở trang chủ."
@@ -571,7 +571,7 @@ call          = "Gọi {phone}"
 status_of     = "Trạng thái yêu cầu của {name}"
 save_status   = "Lưu trạng thái"
 empty         = "Chưa có yêu cầu nào"
-empty_hint    = "Khi nông dân gửi yêu cầu từ trang cửa hàng của bạn, yêu cầu sẽ hiện ở đây."
+empty_hint    = "Khi bà con gửi yêu cầu từ trang cửa hàng của bạn, yêu cầu sẽ hiện ở đây."
 
 [text.product]
 meta         = "Mua {name} từ {vendor} trên {site}. Liên hệ cửa hàng để biết giá chính xác."
@@ -632,11 +632,11 @@ Mở liên kết sau để đặt mật khẩu mới (hiệu lực {hours} giờ
 Nếu bạn không yêu cầu, hãy bỏ qua email này.
 
 {site}"""
-inquiry_subject = "Có nông dân cần bạn gọi lại – {site}"
+inquiry_subject = "Có bà con cần bạn gọi lại – {site}"
 inquiry_body    = """
 Xin chào {business},
 
-Một nông dân vừa gửi yêu cầu liên hệ tới cửa hàng của bạn:
+Bà con vừa gửi yêu cầu liên hệ tới cửa hàng của bạn:
 
 Họ tên: {name}
 Số điện thoại: {phone}

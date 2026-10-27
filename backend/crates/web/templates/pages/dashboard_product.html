@@ -20,24 +20,28 @@
 </header>
 
 <div class="detail-body">
+  {% if x and not x.is_active %}{{ alerts::alert(kind="warning", icon="fa-eye-slash", text=t(key="dashboard.product_hidden_by_admin")) }}{% endif %}
   <section class="detail-card">
     <form class="auth-form" method="post" action="{{ page.action }}" enctype="multipart/form-data" novalidate>
       {% if page.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=page.errors.message) }}{% endif %}
-      {{ photo::photo_picker(id="pr-image", label=t(key="dashboard.product_photo"), max_mb=page.max_upload_mb, hint=t(key="dashboard.product_photo_hint"), current=x.image_file_id | default(value=""), error=e.image | default(value="")) }}
-      <div class="form-field">
-        <label class="form-label fw-semibold" for="pr-category">{{ t(key="category_form.type") }} <span class="text-danger" aria-hidden="true">*</span></label>
-        <select class="form-select{% if e.category_id %} is-invalid{% endif %}" id="pr-category" name="category_id" required{% if e.category_id %} aria-invalid="true" aria-describedby="pr-category-error"{% endif %}>
-          <option value="">{{ t(key="dashboard.choose_type") }}</option>
-          {% for c in page.categories %}<option value="{{ c.id }}"{% if c.id == f.category_id | int(default=0) %} selected{% endif %}>{{ c.name }}</option>{% endfor %}
-        </select>
-        {% if e.category_id %}<div class="invalid-feedback" id="pr-category-error">{{ e.category_id }}</div>{% endif %}
-      </div>
+      {#- In the order of the service form: what it is, its name and price,
+          then the photo. -#}
+      <fieldset class="form-field"{% if e.category_id %} aria-describedby="pr-category-error"{% endif %}>
+        <legend class="form-label fw-semibold fs-6">{{ t(key="filters.product_type") }} <span class="text-danger" aria-hidden="true">*</span></legend>
+        <div class="choice-grid">
+          {% for c in page.categories %}
+          <label class="choice-card"><input class="visually-hidden" type="radio" name="category_id" value="{{ c.id }}" required{% if c.id == f.category_id | int(default=0) %} checked{% endif %}>{{ atoms::icon(name=c.icon | default(value="fa-tag"), class="choice-card__icon") }}<span>{{ c.name }}</span></label>
+          {% endfor %}
+        </div>
+        {% if e.category_id %}<div class="invalid-feedback d-block" id="pr-category-error">{{ e.category_id }}</div>{% endif %}
+      </fieldset>
       {{ field::input(id="pr-name", name="name", label=t(key="dashboard.product_name"), value=f.name, error=e.name | default(value=""), required=true, maxlength=limits.product_name_max, placeholder=t(key="dashboard.product_name_placeholder")) }}
       <div class="row g-2">
         <div class="col-7">{{ field::input(id="pr-price", name="price", label=t(key="dashboard.price_dong"), value=f.price, error=e.price | default(value=""), inputmode="numeric", placeholder="85.000") }}</div>
         <div class="col-5">{{ field::input(id="pr-unit", name="unit", label=t(key="dashboard.unit"), value=f.unit, error=e.unit | default(value=""), maxlength=limits.product_unit_max, placeholder="kg") }}</div>
       </div>
       {{ field::textarea(id="pr-description", name="description", label=t(key="form.description"), value=f.description, error=e.description | default(value=""), maxlength=limits.product_description_max, rows=3) }}
+      {{ photo::photo_picker(id="pr-image", label=t(key="dashboard.product_photo"), max_mb=page.max_upload_mb, hint=t(key="dashboard.product_photo_hint"), current=x.image_file_id | default(value=""), error=e.image | default(value="")) }}
       <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-floppy-disk") }} {% if x %}{{ t(key="common.save") }}{% else %}{{ t(key="dashboard.add_product") }}{% endif %}</button>
     </form>
   </section>

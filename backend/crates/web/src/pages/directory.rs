@@ -14,7 +14,10 @@ use crate::{
         cards::ProviderCard,
         listing::{past_the_end, FilterForm, Pagination},
         search::TabLink,
-        services::{borrowed, near_me_href, url, view_tabs, ListQuery, ListState, VIEW_PROVIDERS},
+        services::{
+            borrowed, near_me_href, near_me_sub, url, view_tabs, ListQuery, ListState,
+            VIEW_PROVIDERS,
+        },
     },
     shell::Shell,
     views::render_page,
@@ -64,7 +67,7 @@ pub async fn list(
         providers: result.items.into_iter().map(ProviderCard::from).collect(),
         back_href: url("home", &[])?,
         tabs: view_tabs(state.locale(), VIEW_PROVIDERS, &borrowed(&kept))?,
-        geo_sub: state.locale().text("geo.sub_shops"),
+        geo_sub: near_me_sub(state.locale(), "geo.sub_shops"),
         near_href: near_me_href(VIEW_PROVIDERS, list.service_id)?,
     };
     render_page(&state, &shell, "pages/providers.html", &page)

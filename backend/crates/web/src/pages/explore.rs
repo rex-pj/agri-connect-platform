@@ -10,7 +10,7 @@
 
 use application::outputs::{CategoryDto, LocationDto, ProductDto};
 use application::{
-    constants::{LAT_MAX, LAT_MIN, LNG_MAX, LNG_MIN},
+    constants::{GEO_RESULTS_MAX, LAT_MAX, LAT_MIN, LNG_MAX, LNG_MIN},
     inputs::GeoSearchParams,
 };
 use axum::{extract::State, response::Response};
@@ -95,6 +95,8 @@ pub struct ExplorePage {
     pub locations: Vec<LocationDto>,
     pub location_id: Option<i32>,
     pub radius_km: i64,
+    /// A near-me list stops at this many; a full one is counted with a "+".
+    pub results_max: i64,
     pub radius_links: Vec<RadiusLink>,
     /// The next larger radius, offered when nothing is found.
     pub wider: Option<RadiusLink>,
@@ -262,6 +264,7 @@ pub async fn show(
         },
         locations,
         radius_km: radius / 1000,
+        results_max: GEO_RESULTS_MAX,
         wider: EXPLORE_RADII_M
             .iter()
             .find(|&&r| r > radius)

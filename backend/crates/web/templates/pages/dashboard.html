@@ -59,7 +59,7 @@
   <section class="detail-card" aria-labelledby="products-title">
     <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
       <h2 class="detail-card__title mb-0" id="products-title">{{ atoms::icon(name="fa-box-open", class="me-1") }} {{ t(key="dashboard.products_count", count=page.rows | length) }}</h2>
-      {% if page.can_create %}<a class="btn btn-success" href="{{ page.new_href }}">{{ atoms::icon(name="fa-plus") }} {{ t(key="common.add") }}</a>{% endif %}
+      {% if page.can_create and page.rows %}<a class="btn btn-success" href="{{ page.new_href }}">{{ atoms::icon(name="fa-plus") }} {{ t(key="common.add") }}</a>{% endif %}
     </div>
     {% if page.rows %}
     <ul class="list-unstyled mb-0">
@@ -68,14 +68,16 @@
       <li class="d-flex align-items-center gap-3 py-2 border-bottom">
         {% if x.image_file_id %}<img class="rounded object-fit-cover flex-shrink-0" width="56" height="56" src="{{ file_url(id=x.image_file_id, variant="thumb") }}" alt="" loading="lazy" decoding="async">{% else %}<span class="dash-thumb flex-shrink-0">{{ atoms::icon(name="fa-image") }}</span>{% endif %}
         <div class="flex-grow-1 min-w-0">
-          <a class="fw-bold text-decoration-none d-block text-truncate" href="{{ r.public_href }}">{{ x.name }}</a>
-          <span class="small text-muted">{% if x.price %}{{ x.price | vnd }}{% if x.unit %}/{{ x.unit }}{% endif %}{% else %}{{ t(key="price.contact") }}{% endif %} · {{ x.category }}</span>
-          {% if not x.is_active %}<span class="badge text-bg-secondary ms-1">{{ t(key="dashboard.hidden") }}</span>{% endif %}
+          {% if r.public_href %}<a class="fw-bold text-decoration-none d-block text-truncate" href="{{ r.public_href }}">{{ x.name }}</a>{% else %}<strong class="d-block text-truncate">{{ x.name }}</strong>{% endif %}
+          <span class="small text-muted">{% if x.price %}{{ x.price | vnd }}{% if x.unit %}/{{ x.unit }}{% endif %}{% else %}{{ t(key="price.ask") }}{% endif %} · {{ x.category }}</span>
+          {% if not x.is_active %}<span class="badge text-bg-secondary ms-1">{{ t(key="dashboard.hidden_by_admin") }}</span>{% endif %}
         </div>
         <a class="btn btn-outline-success" href="{{ r.edit_href }}" aria-label="{{ t(key="common.edit_label", name=x.name) }}">{{ atoms::icon(name="fa-pen") }}</a>
       </li>
       {% endfor %}
     </ul>
+    {% elif page.can_create %}
+    {{ empty::empty_state(icon="fa-box-open", title=t(key="dashboard.no_products"), hint=t(key="dashboard.no_products_hint"), action_href=page.new_href, action_icon="fa-plus", action_label=t(key="dashboard.add_product")) }}
     {% else %}
     {{ empty::empty_state(icon="fa-box-open", title=t(key="dashboard.no_products"), hint=t(key="dashboard.no_products_hint")) }}
     {% endif %}
@@ -114,7 +116,7 @@
     </form>
     {% else %}
     <dl class="acct-rows">
-      <div class="acct-row"><dt>{{ t(key="form.phone_short") }}</dt><dd>{{ p.phone }}</dd></div>
+      <div class="acct-row"><dt>{{ t(key="form.phone_short") }}</dt><dd>{{ p.phone | phone }}</dd></div>
       {% if p.address %}<div class="acct-row"><dt>{{ t(key="form.address") }}</dt><dd>{{ p.address }}</dd></div>{% endif %}
     </dl>
     {% endif %}

@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     app_state::AppState,
+    constants::EXPLORE_DEFAULT_RADIUS_M,
     extract::{ApiPath, ApiQuery},
     locale::Locale,
     pages::{
@@ -148,6 +149,11 @@ pub(super) fn near_me_href(view: &str, service_id: Option<i32>) -> Result<String
     ))
 }
 
+/// The near-me banner's line (`key`), with the radius near-me starts at.
+pub(super) fn near_me_sub(locale: &Locale, key: &str) -> String {
+    locale.text_with(key, &[("km", &(EXPLORE_DEFAULT_RADIUS_M / 1000))])
+}
+
 pub(super) fn view_tabs(
     locale: &Locale,
     active: &str,
@@ -230,7 +236,7 @@ pub async fn list(
         sub: state.locale().text("services.sub"),
         back_href: url("home", &[])?,
         back_label: state.locale().text("nav.home"),
-        geo_sub: state.locale().text("geo.sub_services"),
+        geo_sub: near_me_sub(state.locale(), "geo.sub_services"),
         category: None,
         pagination: Pagination::new(&path, &borrowed(&kept), result.page, result.total_pages),
         filtered: list.filtered(),
@@ -286,7 +292,7 @@ pub async fn category(
         sub: category_sub(state.locale(), &category, result.total, "services.count"),
         back_href: url("services", &[])?,
         back_label: state.locale().text("nav.services"),
-        geo_sub: state.locale().text("geo.sub_category"),
+        geo_sub: near_me_sub(state.locale(), "geo.sub_category"),
         pagination: Pagination::new(&canonical, &[], result.page, result.total_pages),
         filtered: false,
         filters: None,

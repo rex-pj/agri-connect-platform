@@ -20,7 +20,7 @@
           {% for r in b.rows %}
           {% set p = r.provider %}
           <tr{% if not p.is_active %} class="table-light text-body-secondary"{% endif %}>
-            <td><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ p.name }}</a><a class="d-block small text-muted text-decoration-none" href="tel:{{ p.phone }}">{{ p.phone }}</a>{% if p.address %}<span class="d-block small text-muted">{{ p.address }}</span>{% endif %}</td>
+            <td><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ p.name }}</a><a class="d-block small text-muted text-decoration-none" href="tel:{{ p.phone }}">{{ p.phone | phone }}</a>{% if p.address %}<span class="d-block small text-muted">{{ p.address }}</span>{% endif %}</td>
             <td class="text-center">{{ p.service_count }} / {{ p.product_count }}</td>
             <td>{% if p.linked_username %}<span class="badge text-bg-light border">{{ p.linked_username }}</span>{% else %}<span class="small text-muted">{{ t(key="admin.none") }}</span>{% endif %}</td>
             <td class="text-center">{{ status::verified(on=p.is_verified) }}</td>

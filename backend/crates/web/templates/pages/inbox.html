@@ -12,7 +12,7 @@
 {% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
 {% block main %}
 <header class="acct-header">
-  <span class="acct-avatar">{{ atoms::icon(name="fa-envelope-open-text") }}</span>
+  <a class="acct-avatar text-decoration-none" href="{{ page.dashboard_href }}" aria-label="{{ t(key="dashboard.back") }}">{{ atoms::icon(name="fa-arrow-left") }}</a>
   <div>
     <h1 class="acct-name">{{ t(key="contact.title") }}</h1>
     <span class="acct-role">{{ t(key="inbox.counts", new=page.new_count, total=page.total) }}</span>
@@ -20,7 +20,6 @@
 </header>
 
 <div class="detail-body">
-  <a class="back-link" href="{{ page.dashboard_href }}">{{ atoms::icon(name="fa-arrow-left") }} {{ t(key="dashboard.title") }}</a>
   {% if page.flash == "inquiry_status_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="inbox.status_saved")) }}{% endif %}
 
   {% for r in page.rows %}
@@ -33,7 +32,7 @@
     <p class="mb-1 fw-semibold">{% if q.service_name %}{{ q.service_name }}{% else %}{{ q.topic }}{% endif %}</p>
     {% if q.note %}<p class="detail-card__text mb-1">{{ q.note }}</p>{% endif %}
     <p class="small text-muted mb-2"><time datetime="{{ q.created_on | utc_iso }}">{{ q.created_on | vn_datetime }}</time></p>
-    <a class="btn btn-success btn-lg w-100 mb-2" href="tel:{{ q.requester_phone }}">{{ atoms::icon(name="fa-phone") }} {{ t(key="inbox.call", phone=q.requester_phone) }}</a>
+    <a class="btn btn-success btn-lg w-100 mb-2" href="tel:{{ q.requester_phone }}">{{ atoms::icon(name="fa-phone") }} {{ t(key="inbox.call", phone=q.requester_phone | phone) }}</a>
     <form class="d-flex gap-2" method="post" action="{{ r.action }}" x-data="autoSubmit" x-on:change="submit">
       <input type="hidden" name="page" value="{{ page.page }}">
       <label class="visually-hidden" for="status-{{ q.id }}">{{ t(key="inbox.status_of", name=q.requester_name) }}</label>

@@ -12,9 +12,9 @@
 {% block title %}{{ t(key="directory.title") }} — {{ site.name }}{% endblock title %}
 {% block meta %}<meta name="description" content="{{ t(key="directory.meta") }}">{% endblock meta %}
 {% block main %}
-{{ hero::page_hero(title=t(key="nav.shops"), back_href=page.back_href, back_label=t(key="nav.home"), variant="", icon="fa-store", sub=t(key="directory.sub")) }}
+{{ hero::page_hero(title=t(key="directory.title"), back_href=page.back_href, back_label=t(key="nav.home"), variant="", icon="fa-store", sub=t(key="directory.sub")) }}
 
-{{ tabs::tab_nav(tabs=page.tabs, label="Xem theo") }}
+{{ tabs::tab_nav(tabs=page.tabs, label=t(key="list.view_by")) }}
 
 <div class="list-tools">{{ filters::list_filters(f=page.filters) }}</div>
 

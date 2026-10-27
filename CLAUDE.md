@@ -292,17 +292,17 @@ Every page is a handler in `backend/crates/web/src/pages/`, routed in `web/src/r
 | `/`                                                      | Home: service then product category tiles, near-me banner, featured services, featured products (`web/src/pages/home.rs`)                |
 | `/products`                                              | Product listing: GET filter form, page links (`web/src/pages/products.rs`)                                                               |
 | `/products/[id]`                                         | 301 → `/products/[id]/[slug]`                                                                                                            |
-| `/products/[id]/[slug]`                                  | Product detail + the seller's services (`web/src/pages/product.rs`; any other spelling 301s here)                                     |
+| `/products/[id]/[slug]`                                  | Product detail + the seller's services + contact form about it (`return_to=product`) (`product.rs`; other spellings 301)                                   |
 | `/products/category/[id]/[slug]`                         | Products in a category (slug is the category slug, others 301)                                                                           |
 | `/services`                                              | Service listing: one card per public service (photo, price, provider, call); GET filter form, page links (`web/src/pages/services.rs`)   |
 | `/services/category/[id]/[slug]`                         | Services in one category (category slug canonical)                                                                                       |
 | `/services/[id]`                                         | 301 → `/services/[id]/[slug]`                                                                                                            |
 | `/services/[id]/[slug]`                                  | Service detail + the provider's other services + contact form with it chosen (`return_to=service`) (`web/src/pages/service.rs`)          |
 | `/search`                                                | Services + products + shops for `q`; link tabs (`tab=`) work without JS (`web/src/pages/search.rs`)                                      |
-| `/explore`                                               | Services, providers and products near a position (`ac-geolocate`) or preset, three tabs; featured services before one (`explore.rs`)     |
+| `/explore`                                               | Services, products and shops near a position (`ac-geolocate`) or preset, tabs in that order (as `/search`); featured services before one (`explore.rs`)     |
 | `/providers`                                             | Provider directory (new sign-ups without a service too); found by name or by their services (`web/src/pages/directory.rs`)               |
 | `/providers/[id]`                                        | 301 → `/providers/[id]/[slug]`                                                                                                           |
-| `/providers/[id]/[slug]`                                 | Provider detail + contact form (`web/src/pages/provider.rs`)                                                                             |
+| `/providers/[id]/[slug]`                                 | Provider detail: services, products, contact form (`web/src/pages/provider.rs`)                                                                           |
 | `/account`                                               | Profile, password change (signs out other devices), logout (`web/src/pages/account.rs`)                                                  |
 | `/provider/dashboard`                                    | Services + products (photo thumbs) + business profile with GPS fill (`ac-geolocate` fill mode) (`web/src/pages/dashboard.rs`)            |
 | `/provider/products/new`, `/provider/products/[id]/edit` | Multipart product form with photo (checked before anything is saved), delete (confirm)                                                   |

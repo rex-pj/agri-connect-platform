@@ -1,4 +1,4 @@
-//! GET /explore — services, providers and products near the visitor, in three
+//! GET /explore — services, products and providers near the visitor, in three
 //! tabs (`tab=providers`, `tab=products`; links, so they work without JS).
 //! Before a position is known it features services, like the home page.
 //!
@@ -218,9 +218,10 @@ pub async fn show(
         }
     };
     let tabs = [
+        // The order of the bottom tabs and the search page's.
         (TAB_SERVICES, "nav.services", services.len()),
-        (TAB_PROVIDERS, "nav.shops", providers.len()),
         (TAB_PRODUCTS, "nav.products", products.len()),
+        (TAB_PROVIDERS, "nav.shops", providers.len()),
     ]
     .into_iter()
     .map(|(t, label, count)| TabLink {

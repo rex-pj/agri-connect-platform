@@ -314,7 +314,7 @@ name_placeholder = "Nguyễn Văn A"
 note             = "Ghi chú (không bắt buộc)"
 note_placeholder = "Diện tích, thời gian cần làm…"
 send             = "Gửi yêu cầu"
-sent             = "Đã gửi yêu cầu! Nhà cung cấp sẽ liên hệ lại sớm."
+sent             = "Đã gửi yêu cầu! Cửa hàng sẽ liên hệ lại sớm."
 
 [text.error_page]
 reference = "Mã tham chiếu: {id}"
@@ -372,6 +372,7 @@ all_products = "Tất cả sản phẩm"
 all_services = "Tất cả dịch vụ"
 all_shops    = "Tất cả cửa hàng"
 come_back    = "Hãy quay lại sau."
+view_by      = "Xem theo"
 
 [text.products]
 title                 = "Sản phẩm nông nghiệp"
@@ -404,16 +405,16 @@ search_near           = "Tìm gần bạn"
 none_yet              = "Chưa có dịch vụ nào"
 
 [text.directory]
-title              = "Cửa hàng, nhà cung cấp"
+title              = "Cửa hàng nông nghiệp"
 meta               = "Danh bạ cửa hàng và nhà cung cấp dịch vụ nông nghiệp tại Đồng bằng sông Cửu Long. Kết nối trực tiếp, không qua trung gian."
-sub                = "Tất cả nhà cung cấp — tìm theo tên hoặc dịch vụ"
+sub                = "Tất cả cửa hàng — tìm theo tên hoặc dịch vụ"
 search_placeholder = "Tìm cửa hàng, dịch vụ..."
 count              = "{count} nhà cung cấp"
-unit               = "nhà cung cấp"
-none_found         = "Không tìm thấy nhà cung cấp nào"
+unit               = "cửa hàng"
+none_found         = "Không tìm thấy cửa hàng nào"
 none_found_hint    = "Thử từ khoá khác, xoá bộ lọc, hoặc tìm trong dịch vụ."
 search_services    = "Tìm trong dịch vụ"
-none_yet           = "Chưa có nhà cung cấp nào"
+none_yet           = "Chưa có cửa hàng nào"
 
 [text.inquiries]
 count = "{count} yêu cầu"
@@ -573,24 +574,27 @@ empty         = "Chưa có yêu cầu nào"
 empty_hint    = "Khi nông dân gửi yêu cầu từ trang cửa hàng của bạn, yêu cầu sẽ hiện ở đây."
 
 [text.product]
-meta         = "Mua {name} từ {vendor} trên {site}. Liên hệ nhà cung cấp để biết giá chính xác."
-price_note   = "Giá tham khảo — liên hệ nhà cung cấp để biết giá chính xác"
+meta         = "Mua {name} từ {vendor} trên {site}. Liên hệ cửa hàng để biết giá chính xác."
+price_note   = "Giá tham khảo — liên hệ cửa hàng để biết giá chính xác"
 description  = "Mô tả sản phẩm"
-see_provider = "Xem nhà cung cấp & gửi yêu cầu"
 shop_also    = "Cửa hàng này còn làm:"
+share_text   = "{name} – {vendor} tại {area}"
+
+[text.shop]
+heading = "Cửa hàng"
+see     = "Xem cửa hàng"
 
 [text.provider]
 meta       = "Liên hệ {name} để biết thêm về dịch vụ nông nghiệp tại {area}."
-verified   = "Xác minh"
+verify     = "Xác minh"
 services   = "Dịch vụ cung cấp"
+products   = "Sản phẩm đang bán"
 share_text = "{name} – dịch vụ nông nghiệp tại {area}"
 
 [text.service]
 meta             = "{name} của {provider} tại {area}. Xem giá tham khảo và gọi thẳng, không qua trung gian."
 price_note       = "Giá tham khảo — gọi để hỏi giá theo diện tích, thời gian"
 description      = "Mô tả dịch vụ"
-provider         = "Người làm"
-see_shop         = "Xem cửa hàng"
 others           = "Dịch vụ khác của {provider}"
 more_in_category = "Xem thêm dịch vụ {category}"
 share_text       = "{name} – {provider} tại {area}"

@@ -2,21 +2,23 @@
 {% import "atoms/icon.html" as atoms %}
 {% import "molecules/call_button.html" as call %}
 {% import "atoms/alert.html" as alerts %}
+{% import "atoms/badge.html" as badge %}
 {% import "molecules/share_button.html" as share %}
 {% import "organisms/contact_sheet.html" as sheet %}
+{% import "organisms/product_card.html" as cards %}
 {#- Provider detail. `page` is web::pages::provider::ProviderPage. The call
     button is the main action; the contact form is the fallback for when
-    nobody answers. -#}
+    nobody answers. Then what they do and what they sell. -#}
 {% block title %}{{ page.provider.name }} — {{ site.name }}{% endblock title %}
 {% block meta %}<meta name="description" content="{% if page.meta_description %}{{ page.meta_description }}{% else %}{{ t(key="provider.meta", name=page.provider.name, area=page.area) }}{% endif %}">{% endblock meta %}
 {% block main %}
 {% set p = page.provider %}
 <header class="page-hero page-hero--detail">
-  <a class="back-link" href="{{ url_for(name="services") }}">{{ atoms::icon(name="fa-arrow-left") }} {{ t(key="nav.services") }}</a>
+  <a class="back-link" href="{{ url_for(name="providers") }}">{{ atoms::icon(name="fa-arrow-left") }} {{ t(key="nav.shops") }}</a>
   <div class="provider-hero__row">
     <h1 class="page-hero__title provider-hero__title">{{ p.name }}</h1>
     <div class="provider-hero__actions">
-      {% if p.is_verified %}<span class="provider-hero__verified">{{ atoms::icon(name="fa-circle-check") }} {{ t(key="provider.verified") }}</span>{% endif %}
+      {% if p.is_verified %}{{ badge::badge(text=t(key="status.verified"), variant="hero", icon="fa-circle-check") }}{% endif %}
       {{ share::share_button(title=p.name, text=page.share_text) }}
     </div>
   </div>
@@ -56,6 +58,15 @@
       </li>
       {% endfor %}
     </ul>
+  </section>
+  {% endif %}
+
+  {% if page.products %}
+  <section class="detail-card">
+    <h2 class="detail-card__title">{{ t(key="provider.products") }}</h2>
+    <div class="row row-cols-2 row-cols-md-3 g-2 g-md-3">
+      {% for x in page.products %}<div class="col">{{ cards::product_card(p=x) }}</div>{% endfor %}
+    </div>
   </section>
   {% endif %}
 

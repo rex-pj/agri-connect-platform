@@ -72,7 +72,7 @@
       {% else %}
       <form method="post" action="{{ b.verification_action }}">
         <input type="hidden" name="is_verified" value="true">
-        <button type="submit" class="btn btn-outline-success">{{ atoms::icon(name="fa-circle-check") }} {{ t(key="provider.verified") }}</button>
+        <button type="submit" class="btn btn-outline-success">{{ atoms::icon(name="fa-circle-check") }} {{ t(key="provider.verify") }}</button>
       </form>
       {% endif %}
     </div>

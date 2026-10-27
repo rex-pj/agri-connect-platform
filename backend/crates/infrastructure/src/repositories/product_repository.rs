@@ -640,6 +640,9 @@ fn apply_filter<Q: QueryFilter>(mut query: Q, filter: &ProductFilter) -> Q {
     if let Some(id) = filter.category_id {
         query = query.filter(product::Column::CategoryId.eq(id));
     }
+    if let Some(id) = filter.business_id {
+        query = query.filter(product::Column::BusinessId.eq(id));
+    }
     if let Some(q) = filter.name.as_deref().filter(|q| !q.trim().is_empty()) {
         query = query.filter(text_contains(PRODUCT_SEARCH_COLUMNS, q));
     }

@@ -27,7 +27,7 @@
 {% if page.products %}
 <section class="home-section">
   {{ section::section_header(title=t(key="home.featured_products"), more_href=url_for(name="products")) }}
-  <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 row-cols-xl-6 g-3">
+  <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 row-cols-xl-6 g-2 g-md-3">
     {% for p in page.products %}<div class="col">{{ products::product_card(p=p) }}</div>{% endfor %}
   </div>
 </section>

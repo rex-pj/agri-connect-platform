@@ -97,6 +97,7 @@ pub async fn list(
                 name: (!search.is_empty()).then(|| search.clone()),
                 min_price,
                 max_price,
+                ..ProductFilter::default()
             },
             sort,
             parse_opt(&q.page).unwrap_or(1),

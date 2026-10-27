@@ -15,7 +15,7 @@
 {% block main %}
 {{ hero::page_hero(title=page.title, back_href=page.back_href, back_label=page.back_label, variant="", icon=page.icon, sub=page.sub) }}
 
-{{ tabs::tab_nav(tabs=page.tabs, label="Xem theo") }}
+{{ tabs::tab_nav(tabs=page.tabs, label=t(key="list.view_by")) }}
 
 {% if page.filters %}
 <div class="list-tools">{{ filters::list_filters(f=page.filters) }}</div>

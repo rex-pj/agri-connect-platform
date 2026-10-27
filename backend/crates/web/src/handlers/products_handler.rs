@@ -27,6 +27,7 @@ impl ProductsHandler {
                     name: q.name,
                     min_price: q.min_price,
                     max_price: q.max_price,
+                    ..ProductFilter::default()
                 },
                 ProductSort::parse(q.sort.as_deref()),
                 q.page.unwrap_or(1),

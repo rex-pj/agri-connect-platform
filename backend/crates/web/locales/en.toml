@@ -305,7 +305,7 @@ name_placeholder = "Nguyen Van A"
 note             = "Note (optional)"
 note_placeholder = "Field size, when you need it…"
 send             = "Send request"
-sent             = "Request sent! The provider will call you back soon."
+sent             = "Request sent! The shop will call you back soon."
 
 [text.error_page]
 reference = "Reference: {id}"
@@ -363,6 +363,7 @@ all_products = "All products"
 all_services = "All services"
 all_shops    = "All shops"
 come_back    = "Please come back later."
+view_by      = "View by"
 
 [text.products]
 title                 = "Farm products"
@@ -395,16 +396,16 @@ search_near           = "Search near you"
 none_yet              = "No services yet"
 
 [text.directory]
-title              = "Shops and providers"
+title              = "Farm shops"
 meta               = "Directory of shops and farm service providers in the Mekong Delta. Connect directly, no middleman."
-sub                = "All providers — search by name or service"
+sub                = "All shops — search by name or service"
 search_placeholder = "Search shops, services..."
 count              = "{count} providers"
-unit               = "providers"
-none_found         = "No providers found"
+unit               = "shops"
+none_found         = "No shops found"
 none_found_hint    = "Try other words, clear the filters, or search the services."
 search_services    = "Search services"
-none_yet           = "No providers yet"
+none_yet           = "No shops yet"
 
 [text.inquiries]
 count = "{count} requests"
@@ -564,24 +565,27 @@ empty         = "No requests yet"
 empty_hint    = "When farmers send a request from your shop page, it shows up here."
 
 [text.product]
-meta         = "Buy {name} from {vendor} on {site}. Contact the provider for the exact price."
-price_note   = "Guide price — contact the provider for the exact price"
+meta         = "Buy {name} from {vendor} on {site}. Contact the shop for the exact price."
+price_note   = "Guide price — contact the shop for the exact price"
 description  = "Product description"
-see_provider = "View provider & send a request"
 shop_also    = "This shop also offers:"
+share_text   = "{name} – {vendor} in {area}"
+
+[text.shop]
+heading = "Shop"
+see     = "View shop"
 
 [text.provider]
 meta       = "Contact {name} to learn more about their farm services in {area}."
-verified   = "Verified"
+verify     = "Verify"
 services   = "Services offered"
+products   = "Products for sale"
 share_text = "{name} – farm services in {area}"
 
 [text.service]
 meta             = "{name} by {provider} in {area}. See the guide price and call directly, no middleman."
 price_note       = "Guide price — call to ask about your field size and timing"
 description      = "Service description"
-provider         = "Provided by"
-see_shop         = "View shop"
 others           = "More services from {provider}"
 more_in_category = "More {category} services"
 share_text       = "{name} – {provider} in {area}"

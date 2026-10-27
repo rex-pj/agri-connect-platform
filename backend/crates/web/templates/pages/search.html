@@ -39,7 +39,7 @@
       {% if page.products_more %}<a class="section-more" href="{{ page.products_more }}">{{ t(key="common.see_more") }} {{ atoms::icon(name="fa-chevron-right") }}</a>{% endif %}
     </div>
     {% if page.products %}
-    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-2 g-md-3">
+    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 row-cols-xl-6 g-2 g-md-3">
       {% for p in page.products %}<div class="col">{{ products::product_card(p=p) }}</div>{% endfor %}
     </div>
     {% else %}

@@ -386,9 +386,9 @@ async fn the_directory_lists_every_provider_and_finds_them_by_their_services() {
     let seed = seeded(&e).await;
 
     let all = html(&e, "/providers").await;
-    assert!(all.contains("<title>Cửa hàng, nhà cung cấp — Agri-Connect</title>"));
+    assert!(all.contains("<title>Cửa hàng nông nghiệp — Agri-Connect</title>"));
     assert!(
-        all.contains("<strong>4</strong> nhà cung cấp"),
+        all.contains("<strong>4</strong> cửa hàng"),
         "a new sign-up without services is listed too"
     );
     // Default order: verified first, then newest.
@@ -429,7 +429,7 @@ async fn the_directory_lists_every_provider_and_finds_them_by_their_services() {
     );
 
     let none = html(&e, "/providers?q=khong-co-ai").await;
-    assert!(none.contains("Không tìm thấy nhà cung cấp nào"));
+    assert!(none.contains("Không tìm thấy cửa hàng nào"));
     assert!(none.contains(r#"href="/providers?q=khong-co-ai""#));
     assert_eq!(
         provider_names(&html(&e, "/providers?service_id=khong&sort=rating&page=-3").await).len(),

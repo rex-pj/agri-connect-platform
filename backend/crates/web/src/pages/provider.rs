@@ -11,10 +11,13 @@ use std::collections::BTreeMap;
 use application::{
     constants::{NOTE_MAX_LEN, REQUESTER_NAME_MAX_LEN, TOPIC_MAX_LEN},
     inputs::ContactInput,
-    outputs::BusinessDetailDto,
+    outputs::{BusinessDetailDto, ProductDto, PublicServiceDto},
 };
 use axum::{extract::State, response::Response};
-use domain::{Error, ErrorCode, ErrorKind};
+use domain::{
+    models::product::{ProductFilter, ProductSort},
+    Error, ErrorCode, ErrorKind,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -25,7 +28,7 @@ use crate::{
     locale::Locale,
     pages::{
         canonical_url, forms::FormErrors, listing::parse_opt, moved_permanently, parse_id,
-        see_other, service as service_page, summary,
+        product as product_page, see_other, service as service_page, summary,
     },
     shell::Shell,
     views::{render_page, render_page_status},
@@ -59,14 +62,26 @@ pub struct ContactForm {
     pub service_id: String,
     #[serde(default)]
     pub note: String,
-    /// `service` when the form was on a service's page: the visitor lands
-    /// back there. The page is rebuilt from `service_id`, never a posted URL.
+    /// `service` or `product` when the form was on that record's page: the
+    /// visitor lands back there. The page is rebuilt from `service_id` or
+    /// `product_id`, never a posted URL.
     #[serde(default)]
     pub return_to: String,
+    /// The product whose page the form was on (`return_to=product`).
+    #[serde(default)]
+    pub product_id: String,
 }
 
 /// `return_to` of the form on a service's own page.
 pub const RETURN_TO_SERVICE: &str = "service";
+/// `return_to` of the form on a product's own page.
+pub const RETURN_TO_PRODUCT: &str = "product";
+
+/// The page the form was sent from, when it was not the provider's own.
+enum Origin {
+    Service(PublicServiceDto),
+    Product(ProductDto),
+}
 
 impl ContactForm {
     fn values(&self) -> ContactValues {
@@ -108,6 +123,8 @@ pub(super) const LIMITS: ContactLimits = ContactLimits {
 #[derive(Serialize)]
 pub struct ProviderPage {
     pub provider: BusinessDetailDto,
+    /// What the provider sells (the first page, newest first).
+    pub products: Vec<ProductDto>,
     pub meta_description: Option<String>,
     pub contact: ContactState,
     pub limits: ContactLimits,
@@ -140,14 +157,30 @@ pub(super) fn area_of(locale: &Locale, address: Option<&str>) -> String {
         .map_or_else(|| locale.text(DEFAULT_AREA), str::to_owned)
 }
 
+/// A provider's public products, newest first (one page of them).
+async fn products_of(state: &AppState, business_id: i32) -> Result<Vec<ProductDto>, Error> {
+    let filter = ProductFilter {
+        business_id: Some(business_id),
+        ..ProductFilter::default()
+    };
+    Ok(state
+        .usecases
+        .product
+        .browse_products(filter, ProductSort::default(), 1)
+        .await?
+        .items)
+}
+
 fn page(
     locale: &Locale,
     provider: BusinessDetailDto,
+    products: Vec<ProductDto>,
     contact: ContactState,
     sent: bool,
 ) -> ProviderPage {
     let area = area_of(locale, provider.address.as_deref());
     ProviderPage {
+        products,
         share_text: locale.text_with(
             "provider.share_text",
             &[("name", &provider.name), ("area", &area)],
@@ -186,10 +219,55 @@ pub async fn show(
         return moved_permanently(&canonical);
     }
     let sent = flash.0 == Some(Flash::ContactSent);
-    let page = page(state.locale(), provider, ContactState::default(), sent);
+    let products = products_of(&state, provider.id).await?;
+    let page = page(
+        state.locale(),
+        provider,
+        products,
+        ContactState::default(),
+        sent,
+    );
     let mut response = render_page(&state, &shell, "pages/provider.html", &page)?;
     flash.clear_on(&mut response);
     Ok(response)
+}
+
+/// Sent from a service's or a product's page: that record, if it is still
+/// this provider's and public; otherwise (`None`) the visitor lands on the
+/// provider.
+async fn origin_of(state: &AppState, form: &ContactForm) -> Result<Option<Origin>, Error> {
+    let found = match form.return_to.as_str() {
+        RETURN_TO_SERVICE => match parse_opt::<i32>(&form.service_id) {
+            Some(id) => state
+                .usecases
+                .explore
+                .get_service(id)
+                .await
+                .map(|s| (s.business_id == form.business_id).then_some(Origin::Service(s))),
+            None => Ok(None),
+        },
+        RETURN_TO_PRODUCT => match parse_opt::<i32>(&form.product_id) {
+            Some(id) => state
+                .usecases
+                .product
+                .get_product_by_id(id)
+                .await
+                .map(|p| (p.business_id == form.business_id).then_some(Origin::Product(p))),
+            None => Ok(None),
+        },
+        _ => Ok(None),
+    };
+    match found {
+        Err(e)
+            if matches!(
+                e.code(),
+                ErrorCode::ServiceNotFound | ErrorCode::ProductNotFound
+            ) =>
+        {
+            Ok(None)
+        }
+        other => other,
+    }
 }
 
 /// POST /contact
@@ -205,20 +283,7 @@ pub async fn submit_contact(
         .get_provider_detail(form.business_id)
         .await?;
     let v = form.values();
-    // Sent from a service's page: that service, if it is still this
-    // provider's and public; otherwise the visitor lands on the provider.
-    let service = match (
-        form.return_to == RETURN_TO_SERVICE,
-        parse_opt::<i32>(&v.service_id),
-    ) {
-        (true, Some(id)) => match state.usecases.explore.get_service(id).await {
-            Ok(s) if s.business_id == form.business_id => Some(s),
-            Ok(_) => None,
-            Err(e) if e.code() == ErrorCode::ServiceNotFound => None,
-            Err(e) => return Err(e),
-        },
-        _ => None,
-    };
+    let origin = origin_of(&state, &form).await?;
     let result = state
         .usecases
         .explore
@@ -234,8 +299,9 @@ pub async fn submit_contact(
 
     match result {
         Ok(_) => {
-            let back = match &service {
-                Some(s) => service_page::canonical(s)?,
+            let back = match &origin {
+                Some(Origin::Service(s)) => service_page::canonical(s)?,
+                Some(Origin::Product(p)) => product_page::canonical(p)?,
                 None => canonical(&provider)?,
             };
             let mut response = see_other(&back)?;
@@ -250,13 +316,22 @@ pub async fn submit_contact(
                 message: form.message,
                 open: true,
             };
-            if let Some(service) = service {
-                let status = err.kind().status();
-                return service_page::render(
-                    &state, &shell, service, provider, contact, false, status,
-                );
+            let status = err.kind().status();
+            match origin {
+                Some(Origin::Service(service)) => {
+                    return service_page::render(
+                        &state, &shell, service, provider, contact, false, status,
+                    );
+                }
+                Some(Origin::Product(product)) => {
+                    return product_page::render(
+                        &state, &shell, product, provider, contact, false, status,
+                    );
+                }
+                None => {}
             }
-            let page = page(state.locale(), provider, contact, false);
+            let products = products_of(&state, provider.id).await?;
+            let page = page(state.locale(), provider, products, contact, false);
             render_page_status(
                 &state,
                 &shell,

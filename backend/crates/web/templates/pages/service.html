@@ -58,7 +58,7 @@
 
       <section class="detail-card">
         <div class="d-flex align-items-start justify-content-between gap-2">
-          <h2 class="detail-card__title">{{ t(key="service.provider") }}</h2>
+          <h2 class="detail-card__title">{{ t(key="shop.heading") }}</h2>
           {{ share::share_button(title=s.name, text=page.share_text) }}
         </div>
         <div class="vendor-row">
@@ -68,7 +68,7 @@
             <span class="d-block small text-muted">{{ atoms::icon(name="fa-location-dot", class="me-1") }}{{ page.area }}</span>
           </div>
         </div>
-        <a class="btn btn-outline-success w-100" href="{{ page.provider_href }}">{{ atoms::icon(name="fa-store") }} {{ t(key="service.see_shop") }}</a>
+        <a class="btn btn-outline-success w-100" href="{{ page.provider_href }}">{{ atoms::icon(name="fa-store") }} {{ t(key="shop.see") }}</a>
       </section>
 
       {% if page.others %}

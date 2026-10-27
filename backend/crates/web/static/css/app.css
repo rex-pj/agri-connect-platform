@@ -770,6 +770,12 @@ body:has(.app-nav__search-row.open) .app-main {
   background: #fee2e2;
   color: #991b1b;
 }
+/* On a green page hero. */
+.ac-badge--hero {
+  border: 1px solid rgba(167, 243, 208, 0.3);
+  background: rgba(52, 211, 153, 0.25);
+  color: var(--p200);
+}
 .ac-tag {
   display: inline-flex;
   align-items: center;
@@ -1392,19 +1398,6 @@ body:has(.app-nav__search-row.open) .app-main {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-.provider-hero__verified {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 12px;
-  border-radius: 20px;
-  border: 1px solid rgba(167, 243, 208, 0.3);
-  background: rgba(52, 211, 153, 0.25);
-  color: var(--p200);
-  font-size: 0.8rem;
-  font-weight: 700;
-  white-space: nowrap;
 }
 .provider-hero__address {
   margin: 0;

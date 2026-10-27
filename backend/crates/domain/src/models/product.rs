@@ -75,6 +75,8 @@ pub struct UpdateProduct {
 #[derive(Debug, Default)]
 pub struct ProductFilter {
     pub category_id: Option<i32>,
+    /// One seller's products (their public page).
+    pub business_id: Option<i32>,
     pub name: Option<String>,
     pub min_price: Option<i64>,
     pub max_price: Option<i64>,

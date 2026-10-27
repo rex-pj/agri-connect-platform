@@ -5,8 +5,11 @@ use axum::{
     body::Body,
     http::{header, Request, Response, StatusCode},
 };
-use integration_tests::{create_product, put_photo, register_provider, send, Env};
-use sea_orm::ConnectionTrait;
+use infrastructure::entities::{business, inquiry};
+use integration_tests::{
+    create_product, env_with_origin, post_form, put_photo, register_provider, send, Env,
+};
+use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 use web::views::PAGE_CSP;
 
 const NAME: &str = "Gạo Thơm ST25 An Giang";
@@ -169,5 +172,81 @@ async fn the_page_shows_what_else_the_seller_does() {
     let after = text(send(&e.router, page(&uri)).await).await;
     assert!(after.contains("Cửa hàng này còn làm"));
     assert!(after.contains(&format!(r#"href="/services/{service}/xay-xat-lua""#)));
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn the_contact_form_asks_about_this_product_and_lands_back_on_it() {
+    let e = env_with_origin().await;
+    let (_, id) = seeded(&e, &rice()).await;
+    let canonical = format!("/products/{id}/{SLUG}");
+    let business = business::Entity::find()
+        .filter(business::Column::Name.eq("Vườn nongdan"))
+        .one(&e.t.db)
+        .await
+        .unwrap()
+        .unwrap()
+        .id
+        .to_string();
+
+    let html = text(send(&e.router, page(&canonical)).await).await;
+    assert!(html.contains(r#"name="return_to" value="product""#));
+    assert!(html.contains(&format!(r#"name="product_id" value="{id}""#)));
+    assert!(
+        html.contains(&format!(r#"name="topic" type="text" value="{NAME}""#)),
+        "the topic is this product"
+    );
+
+    // A refused form re-shows this page; a sent one lands back on it.
+    let product = id.to_string();
+    let form = |name: &'static str| {
+        post_form(
+            "/contact",
+            &[
+                ("business_id", business.as_str()),
+                ("product_id", product.as_str()),
+                ("return_to", "product"),
+                ("topic", NAME),
+                ("requester_phone", "0912345678"),
+                ("requester_name", name),
+            ],
+            None,
+        )
+    };
+    let res = send(&e.router, form("")).await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    let refused = text(res).await;
+    assert!(refused.contains(&format!("<title>{NAME} — Agri-Connect</title>")));
+    assert!(
+        refused.contains(r#"value="0912345678""#),
+        "typed phone kept"
+    );
+
+    let res = send(&e.router, form("Chú Năm")).await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res.headers()[header::LOCATION], canonical.as_str());
+    let stored = inquiry::Entity::find().one(&e.t.db).await.unwrap().unwrap();
+    assert_eq!(stored.topic, NAME);
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn the_sellers_page_lists_their_products() {
+    let e = Env::new().await;
+    let (_, id) = seeded(&e, &rice()).await;
+    let res = send(&e.router, page(&format!("/products/{id}/{SLUG}"))).await;
+    let html = text(res).await;
+    let provider = html
+        .split(r#"href="/providers/"#)
+        .nth(1)
+        .and_then(|rest| rest.split('"').next())
+        .unwrap_or_default()
+        .to_owned();
+
+    let shop = text(send(&e.router, page(&format!("/providers/{provider}"))).await).await;
+    assert!(shop.contains("Sản phẩm đang bán"));
+    assert!(shop.contains(&format!(r#"href="/products/{id}/{SLUG}""#)));
     e.cleanup().await;
 }

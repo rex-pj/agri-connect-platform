@@ -51,7 +51,7 @@
       <strong class="d-block text-body">{{ t(key="contact.title") }}</strong>
       <span class="small text-muted">{% if page.inbox.new_count > 0 %}{{ t(key="dashboard.inbox_waiting", count=page.inbox.new_count) }}{% else %}{{ t(key="inquiries.count", count=page.inbox.total) }}{% endif %}</span>
     </span>
-    {% if page.inbox.new_count > 0 %}<span class="badge text-bg-success fs-6">{{ page.inbox.new_count }}</span>{% endif %}
+    {% if page.inbox.new_count > 0 %}<span class="badge text-bg-info fs-6">{{ page.inbox.new_count }}</span>{% endif %}
     {{ atoms::icon(name="fa-chevron-right", class="text-muted") }}
   </a>
   {% endif %}

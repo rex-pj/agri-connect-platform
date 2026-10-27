@@ -1,11 +1,18 @@
 {% extends "layouts/app.html" %}
 {% import "atoms/icon.html" as atoms %}
 {% import "molecules/call_button.html" as call %}
+{% import "atoms/alert.html" as alerts %}
+{% import "atoms/badge.html" as badge %}
 {% import "atoms/photo_placeholder.html" as placeholder %}
 {% import "molecules/page_hero.html" as hero %}
-{#- Product detail. `page` is web::pages::product::ProductPage. Photo first
-    (or a "no photo yet" placeholder in its place), two columns on a wide
-    screen. -#}
+{% import "molecules/share_button.html" as share %}
+{% import "organisms/contact_sheet.html" as sheet %}
+{#- Product detail, laid out like a service's page. `page` is
+    web::pages::product::ProductPage. Photo first (or a "no photo yet"
+    placeholder), then price with the call and contact buttons, description,
+    the seller (verified badge, area, their page and services), and the
+    contact form about this product (a bottom sheet with JS, a plain section
+    without). -#}
 {% block title %}{{ page.product.name }} — {{ site.name }}{% endblock title %}
 {% block meta %}<meta name="description" content="{% if page.meta_description %}{{ page.meta_description }}{% else %}{{ t(key="product.meta", name=page.product.name, vendor=page.product.vendor_name, site=site.name) }}{% endif %}">{% endblock meta %}
 {% block main %}
@@ -17,12 +24,14 @@
     {% if p.image_file_id %}
     <img src="{{ file_url(id=p.image_file_id) }}" alt="{{ p.name }}">
     {% else %}
-    {{ placeholder::photo_placeholder(icon=icon, size="lg") }}
+    {{ placeholder::photo_placeholder(icon=icon, category=p.category, size="lg") }}
     {% endif %}
   </div>
   <div class="product-detail__panel">
-    {{ hero::page_hero(title=p.name, back_href="", back_label="", badge_icon=icon, badge_text=p.category, variant="compact") }}
-    <div class="detail-body">
+    {{ hero::page_hero(title=p.name, badge_icon=icon, badge_text=p.category, variant="compact") }}
+    <div class="detail-body" x-data="dialog" data-open="{% if page.contact.open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+      {% if page.sent %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="contact.sent")) }}{% endif %}
+
       <section class="detail-card">
         <div class="detail-price">
           {% if p.price %}
@@ -33,30 +42,46 @@
           {% endif %}
         </div>
         <p class="detail-price__note">{{ t(key="product.price_note") }}</p>
+        <div class="provider-actions mt-3">
+          {{ call::call_button(phone=p.vendor_phone, kind="product", id=p.id, class="btn btn-success btn-lg btn-call") }}
+          <a class="btn btn-outline-success btn-lg" href="#lien-he" x-on:click.prevent="show">{{ atoms::icon(name="fa-comment-dots") }} {{ t(key="contact.send") }}</a>
+        </div>
       </section>
+
       {% if p.description %}
       <section class="detail-card">
         <h2 class="detail-card__title">{{ t(key="product.description") }}</h2>
         <p class="detail-card__text">{{ p.description }}</p>
       </section>
       {% endif %}
+
       <section class="detail-card">
-        <h2 class="detail-card__title">{{ t(key="footer.providers") }}</h2>
+        <div class="d-flex align-items-start justify-content-between gap-2">
+          <h2 class="detail-card__title">{{ t(key="shop.heading") }}</h2>
+          {{ share::share_button(title=p.name, text=page.share_text) }}
+        </div>
         <div class="vendor-row">
           <span class="vendor-row__icon">{{ atoms::icon(name="fa-shop") }}</span>
           <div class="vendor-row__info">
-            <strong>{{ p.vendor_name }}</strong>
+            <strong>{{ p.vendor_name }}</strong>{% if page.provider.is_verified %} {{ badge::badge(text=t(key="status.verified"), icon="fa-circle-check") }}{% endif %}
+            <span class="d-block small text-muted">{{ atoms::icon(name="fa-location-dot", class="me-1") }}{{ page.area }}</span>
           </div>
         </div>
-        {{ call::call_button(phone=p.vendor_phone, kind="product", id=p.id, class="btn btn-success btn-lg btn-call w-100") }}
-        <a class="btn btn-outline-success w-100 mt-2" href="{{ page.provider_href }}">{{ atoms::icon(name="fa-store") }} {{ t(key="product.see_provider") }}</a>
-        {% if page.provider_services %}
-        <p class="small text-muted mt-3 mb-2">{{ t(key="product.shop_also") }}</p>
-        <div class="d-flex flex-wrap gap-2">
-          {% for s in page.provider_services %}<a class="chip text-decoration-none" href="{{ s.href }}">{{ atoms::icon(name=s.category_icon | default(value="fa-tag")) }} {{ s.name }}</a>{% endfor %}
-        </div>
-        {% endif %}
+        <a class="btn btn-outline-success w-100" href="{{ page.provider_href }}">{{ atoms::icon(name="fa-store") }} {{ t(key="shop.see") }}</a>
       </section>
+
+      {% if page.provider_services %}
+      <section class="detail-card">
+        <h2 class="detail-card__title">{{ t(key="product.shop_also") }}</h2>
+        <ul class="list-unstyled mb-0">
+          {% for o in page.provider_services %}
+          <li class="py-2 border-bottom"><a class="link-row d-flex align-items-center gap-2 text-decoration-none" href="{{ o.href }}">{{ atoms::icon(name=o.category_icon | default(value="fa-tag"), class="text-success") }}<span class="flex-grow-1 fw-semibold">{{ o.name }}</span>{% if o.price_note %}<span class="small text-muted">{{ o.price_note | price_note }}</span>{% endif %}{{ atoms::icon(name="fa-chevron-right", class="text-muted") }}</a></li>
+          {% endfor %}
+        </ul>
+      </section>
+      {% endif %}
+
+      {{ sheet::contact_sheet(provider=page.provider, contact=page.contact, limits=page.limits, return_to=page.return_to, product_id=p.id) }}
     </div>
   </div>
 </div>

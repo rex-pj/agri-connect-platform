@@ -80,7 +80,21 @@
     {% set wider_label = t(key="explore.search_within", area=page.wider.label) %}
     {{ empty::empty_state(icon="fa-magnifying-glass", title=none_title, hint=t(key="explore.hint_services_wider"), action_href=page.wider.href, action_icon="fa-expand", action_label=wider_label) }}
     {% else %}
-    {{ empty::empty_state(icon="fa-magnifying-glass", title=none_title, hint=t(key="explore.hint_services")) }}
+    {{ empty::empty_state(icon="fa-magnifying-glass", title=none_title, hint=t(key="explore.hint_services"), action_href=url_for(name="services"), action_icon="fa-border-all", action_label=t(key="list.all_services")) }}
+    {% endif %}
+  </section>
+
+  <section data-panel="products"{% if page.tab != "products" %} hidden{% endif %} :hidden="panelHidden">
+    {% if page.products %}
+    <p class="small text-muted mb-3"><strong>{{ page.products | length }}</strong> {{ t(key="explore.products_near") }}</p>
+    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 row-cols-xl-6 g-2 g-md-3">
+      {% for p in page.products %}<div class="col">{{ products::product_card(p=p) }}</div>{% endfor %}
+    </div>
+    {% elif page.wider %}
+    {% set wider_label = t(key="explore.search_within", area=page.wider.label) %}
+    {{ empty::empty_state(icon="fa-magnifying-glass", title=no_product_title, hint=t(key="explore.hint_products_wider"), action_href=page.wider.href, action_icon="fa-expand", action_label=wider_label) }}
+    {% else %}
+    {{ empty::empty_state(icon="fa-magnifying-glass", title=no_product_title, hint=t(key="explore.hint_products"), action_href=url_for(name="products"), action_icon="fa-bag-shopping", action_label=t(key="list.all_products")) }}
     {% endif %}
   </section>
 
@@ -94,21 +108,7 @@
     {% set wider_label = t(key="explore.search_within", area=page.wider.label) %}
     {{ empty::empty_state(icon="fa-magnifying-glass", title=no_shop_title, hint=t(key="explore.hint_shops_wider"), action_href=page.wider.href, action_icon="fa-expand", action_label=wider_label) }}
     {% else %}
-    {{ empty::empty_state(icon="fa-magnifying-glass", title=no_shop_title, hint=t(key="explore.hint_shops")) }}
-    {% endif %}
-  </section>
-
-  <section data-panel="products"{% if page.tab != "products" %} hidden{% endif %} :hidden="panelHidden">
-    {% if page.products %}
-    <p class="small text-muted mb-3"><strong>{{ page.products | length }}</strong> {{ t(key="explore.products_near") }}</p>
-    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-2 g-md-3">
-      {% for p in page.products %}<div class="col">{{ products::product_card(p=p) }}</div>{% endfor %}
-    </div>
-    {% elif page.wider %}
-    {% set wider_label = t(key="explore.search_within", area=page.wider.label) %}
-    {{ empty::empty_state(icon="fa-magnifying-glass", title=no_product_title, hint=t(key="explore.hint_products_wider"), action_href=page.wider.href, action_icon="fa-expand", action_label=wider_label) }}
-    {% else %}
-    {{ empty::empty_state(icon="fa-magnifying-glass", title=no_product_title, hint=t(key="explore.hint_products"), action_href=url_for(name="products"), action_icon="fa-bag-shopping", action_label=t(key="list.all_products")) }}
+    {{ empty::empty_state(icon="fa-magnifying-glass", title=no_shop_title, hint=t(key="explore.hint_shops"), action_href=url_for(name="providers"), action_icon="fa-store", action_label=t(key="list.all_shops")) }}
     {% endif %}
   </section>
 </div>

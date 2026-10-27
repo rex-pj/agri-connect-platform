@@ -77,6 +77,7 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("admin_location_status", "/admin/locations/{id}/status"),
     ("admin_location_delete", "/admin/locations/{id}/delete"),
     ("admin_products", "/admin/products"),
+    ("admin_product", "/admin/products/{id}"),
     ("admin_product_status", "/admin/products/{id}/status"),
     ("admin_product_delete", "/admin/products/{id}/delete"),
     ("admin_services", "/admin/services"),

@@ -21,18 +21,12 @@ use crate::{
     labels::Worded,
     middleware::auth::Viewer,
     pages::{
-        admin::{is_refusal, render_admin, url},
+        admin::{is_refusal, render_admin, url, ListPosition, SearchBox},
         forms::{reason, FormErrors},
-        listing::{parse_opt, Pagination},
+        listing::Pagination,
         parse_id, see_other,
     },
 };
-
-#[derive(Debug, Default, Deserialize)]
-#[serde(default)]
-pub struct ListQuery {
-    pub page: String,
-}
 
 #[derive(Serialize)]
 pub struct UserRow {
@@ -45,13 +39,14 @@ pub struct UsersPage {
     pub total: i64,
     pub rows: Vec<UserRow>,
     pub pagination: Option<Pagination>,
+    pub search: SearchBox,
 }
 
 /// GET /admin/users
 pub async fn list(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
-    ApiQuery(q): ApiQuery<ListQuery>,
+    ApiQuery(position): ApiQuery<ListPosition>,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
@@ -65,7 +60,7 @@ pub async fn list(
     } = state
         .usecases
         .admin
-        .list_users(&actor, parse_opt(&q.page).unwrap_or(1))
+        .list_users(&actor, position.page(), position.search())
         .await?
         .worded(state.locale());
     let path = url("admin_users", &[])?;
@@ -77,7 +72,8 @@ pub async fn list(
     let body = UsersPage {
         total,
         rows,
-        pagination: Pagination::new(&path, &[], page, total_pages),
+        pagination: position.pagination(&path, page, total_pages),
+        search: position.search_box("admin_users")?,
     };
     render_admin(
         &state,

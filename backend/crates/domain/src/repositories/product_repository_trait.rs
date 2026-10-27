@@ -5,20 +5,23 @@ use crate::{
     error::Error,
     models::product::{
         AdminProduct, NewProduct, ProductFilter, ProductSort, ProductView, ProviderProduct,
-        UpdateProduct,
+        UpdateProduct, UpdateProductAdmin,
     },
 };
 
 #[async_trait]
 pub trait ProductRepositoryTrait {
+    /// The admin list, narrowed to one provider and / or to names containing
+    /// `search` (accents and case ignored).
     async fn list_admin(
         &self,
         provider_id: Option<i32>,
+        search: Option<&str>,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<AdminProduct>, Error>;
 
-    async fn count_admin(&self, provider_id: Option<i32>) -> Result<i64, Error>;
+    async fn count_admin(&self, provider_id: Option<i32>, search: Option<&str>) -> Result<i64, Error>;
 
     async fn find_by_id_admin(&self, id: i32) -> Result<Option<AdminProduct>, Error>;
 
@@ -58,6 +61,9 @@ pub trait ProductRepositoryTrait {
     async fn find_provider_product_by_id(&self, id: i32) -> Result<Option<ProviderProduct>, Error>;
 
     async fn update(&self, product: UpdateProduct) -> Result<bool, Error>;
+
+    /// The admin's edit; false when there is no such live product.
+    async fn update_admin(&self, product: UpdateProductAdmin) -> Result<bool, Error>;
 
     async fn soft_delete(&self, id: i32, owner_user: i32) -> Result<bool, Error>;
 

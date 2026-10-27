@@ -3,14 +3,15 @@
 {% import "atoms/admin_thumb.html" as thumb %}
 {% import "atoms/status_badge.html" as status %}
 {% import "molecules/admin_header.html" as header %}
+{% import "molecules/admin_search.html" as search %}
 {% import "molecules/admin_filter.html" as filter %}
 {% import "molecules/pagination_nav.html" as paging %}
 {% import "molecules/row_action.html" as row %}
 {% import "organisms/confirm_sheet.html" as confirm %}
 {#- `page.body` is web::pages::admin::products::ProductsPage. "Ẩn" and "Xoá"
     reload the list with that row's confirmation open (`b.confirm`); every
-    form sends the list position back so the redirect lands here again. A
-    product has no admin page: its last button opens the public one. -#}
+    form sends the list position back (`back=list`) so the redirect lands
+    here again; the last button opens the product's own page. -#}
 {% block title %}{{ t(key="admin_menu.products") }} — {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
@@ -22,6 +23,7 @@
   {% if b.flash == "product_deleted" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="dashboard.product_deleted")) }}{% endif %}
   {% if b.filter %}{{ filter::admin_filter(f=b.filter) }}{% endif %}
 
+  {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.products")) }}
   <div class="admin-card">
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0 admin-table">
@@ -35,7 +37,7 @@
             <td>
               <div class="d-flex align-items-center gap-2">
                 {{ thumb::admin_thumb(file_id=p.image_file_id) }}
-                <div><span class="fw-bold">{{ p.name }}</span><span class="d-block small text-muted">{{ p.category }}</span></div>
+                <div><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ p.name }}</a><span class="d-block small text-muted">{{ p.category }}</span></div>
               </div>
             </td>
             <td><a class="text-decoration-none" href="{{ r.provider_href }}">{{ p.business_name }}</a></td>
@@ -46,15 +48,15 @@
                 {% if p.is_active %}
                 {{ row::hide(href=r.hide_href ~ "#xac-nhan", name=p.name) }}
                 {% else %}
-                {{ row::show(action=r.status_action, name=p.name, field="is_active", keep=b.position) }}
+                {{ row::show(action=r.status_action, name=p.name, field="is_active", keep=b.keep) }}
                 {% endif %}
                 {{ row::delete(href=r.delete_href ~ "#xac-nhan", name=p.name) }}
-                {{ row::public(href=r.public_href, name=p.name) }}
+                {{ row::open(href=r.href, name=p.name) }}
               </div>
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="5" class="text-center text-muted py-4">{{ t(key="admin.no_products") }}</td></tr>
+          <tr><td colspan="5" class="text-center text-muted py-4">{% if b.search.q %}{{ t(key="admin_search.none", q=b.search.q) }}{% else %}{{ t(key="admin.no_products") }}{% endif %}</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -65,9 +67,9 @@
   {% if b.confirm %}
   {% set c = b.confirm %}
   {% if c.kind == "hide" %}
-  {{ confirm::confirm_sheet(id="xac-nhan", title=t(key="admin.hide_product_title", name=c.name), icon="fa-eye-slash", action=c.action, button=t(key="admin.confirm_hide"), reason_max=limits.audit_reason_max, effect="hide", what=t(key="admin.product_what"), hidden_name="is_active", hidden_value="false", keep=b.position) }}
+  {{ confirm::confirm_sheet(id="xac-nhan", title=t(key="admin.hide_product_title", name=c.name), icon="fa-eye-slash", action=c.action, button=t(key="admin.confirm_hide"), reason_max=limits.audit_reason_max, effect="hide", what=t(key="admin.product_what"), hidden_name="is_active", hidden_value="false", keep=b.keep) }}
   {% else %}
-  {{ confirm::confirm_sheet(id="xac-nhan", title=t(key="admin.delete_product_title", name=c.name), icon="fa-trash", action=c.action, button=t(key="common.confirm_delete"), reason_max=limits.audit_reason_max, effect="delete", what=t(key="dashboard.delete_product_what"), button_class="btn-danger", keep=b.position) }}
+  {{ confirm::confirm_sheet(id="xac-nhan", title=t(key="admin.delete_product_title", name=c.name), icon="fa-trash", action=c.action, button=t(key="common.confirm_delete"), reason_max=limits.audit_reason_max, effect="delete", what=t(key="dashboard.delete_product_what"), button_class="btn-danger", keep=b.keep) }}
   {% endif %}
   {% endif %}
 </div>

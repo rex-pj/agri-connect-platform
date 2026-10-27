@@ -14,14 +14,17 @@ use crate::{
 
 #[async_trait]
 pub trait ServiceRepositoryTrait {
+    /// The admin list, narrowed to one provider and / or to names containing
+    /// `search` (accents and case ignored).
     async fn list_admin(
         &self,
         provider_id: Option<i32>,
+        search: Option<&str>,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<AdminService>, Error>;
 
-    async fn count_admin(&self, provider_id: Option<i32>) -> Result<i64, Error>;
+    async fn count_admin(&self, provider_id: Option<i32>, search: Option<&str>) -> Result<i64, Error>;
 
     async fn find_by_id_admin(&self, id: i32) -> Result<Option<AdminService>, Error>;
 

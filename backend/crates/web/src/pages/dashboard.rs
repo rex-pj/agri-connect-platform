@@ -16,12 +16,12 @@ use application::{
         PERM_OWN_SERVICE_UPDATE,
     },
     constants::{CALL_STATS_DAYS, SERVICES_PER_BUSINESS_MAX},
-    inputs::{CreateProductInput, UpdateProductInput, UpdateProfileInput},
+    inputs::UpdateProfileInput,
     outputs::{CategoryDto, ProviderProductDto, ProviderProfileDto, ProviderServiceDto},
     ports::ProcessedImage,
 };
 use axum::{extract::State, http::StatusCode, response::Response};
-use domain::{constants::CATEGORY_TYPE_PRODUCT, Error, ErrorCode};
+use domain::{Error, ErrorCode};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -33,8 +33,8 @@ use crate::{
     pages::{
         admin::is_refusal,
         canonical_url,
-        forms::{optional_coordinate, vnd_amount, FormErrors},
-        listing::parse_opt,
+        forms::{optional_coordinate, FormErrors},
+        product_form::{product_categories, ProductForm},
         parse_id, see_other,
     },
     routes,
@@ -293,50 +293,6 @@ pub async fn update_profile(
 
 // ── Product forms ───────────────────────────────────────────────────────────
 
-/// The product form as typed (the photo arrives separately).
-#[derive(Debug, Default, Deserialize, Serialize)]
-#[serde(default)]
-pub struct ProductForm {
-    pub category_id: String,
-    pub name: String,
-    pub price: String,
-    pub unit: String,
-    pub description: String,
-}
-
-/// The form's values, parsed for the use case.
-struct ProductValues {
-    category_id: i32,
-    name: String,
-    price: Option<i64>,
-    unit: Option<String>,
-    description: Option<String>,
-}
-
-impl ProductForm {
-    fn from_dto(p: &ProviderProductDto) -> Self {
-        Self {
-            category_id: p.category_id.to_string(),
-            name: p.name.clone(),
-            price: p.price.map(|v| v.to_string()).unwrap_or_default(),
-            unit: p.unit.clone().unwrap_or_default(),
-            description: p.description.clone().unwrap_or_default(),
-        }
-    }
-
-    /// An unparsable category becomes 0, which the use case reports on that
-    /// field.
-    fn values(&self) -> Result<ProductValues, Error> {
-        Ok(ProductValues {
-            category_id: parse_opt(&self.category_id).unwrap_or(0),
-            name: self.name.clone(),
-            price: vnd_amount(&self.price, "price")?,
-            unit: Some(self.unit.clone()),
-            description: Some(self.description.clone()),
-        })
-    }
-}
-
 #[derive(Serialize)]
 pub struct ProductPage {
     /// `None` on the create page.
@@ -375,17 +331,21 @@ async fn product_page(
         (
             product
                 .as_ref()
-                .map(ProductForm::from_dto)
+                .map(|p| {
+                    ProductForm::stored(
+                        p.category_id,
+                        &p.name,
+                        p.price,
+                        p.unit.as_deref(),
+                        p.description.as_deref(),
+                    )
+                })
                 .unwrap_or_default(),
             FormErrors::default(),
         )
     });
     let body = ProductPage {
-        categories: state
-            .usecases
-            .explore
-            .get_categories(Some(CATEGORY_TYPE_PRODUCT))
-            .await?,
+        categories: product_categories(state).await?,
         product,
         form,
         errors,
@@ -459,21 +419,10 @@ pub async fn create_product(
         }
     };
     let created = async {
-        let v = form.values()?;
         state
             .usecases
             .provider_dashboard
-            .create_product(
-                &actor,
-                CreateProductInput {
-                    category_id: v.category_id,
-                    name: v.name,
-                    description: v.description,
-                    price: v.price,
-                    unit: v.unit,
-                },
-                image,
-            )
+            .create_product(&actor, form.create_input()?, image)
             .await
     }
     .await;
@@ -528,20 +477,7 @@ pub async fn update_product(
         }
     };
     let updated = async {
-        let v = form.values()?;
-        dashboard
-            .update_product(
-                &actor,
-                UpdateProductInput {
-                    product_id: id,
-                    category_id: v.category_id,
-                    name: v.name,
-                    description: v.description,
-                    price: v.price,
-                    unit: v.unit,
-                },
-            )
-            .await
+        dashboard.update_product(&actor, form.update_input(id)?).await
     }
     .await;
     if let Err(err) = updated {

@@ -13,14 +13,16 @@ use uuid::Uuid;
 use domain::{
     models::product::{
         AdminProduct, NewProduct, ProductFilter, ProductSort, ProductView, ProviderProduct,
-        UpdateProduct,
+        UpdateProduct, UpdateProductAdmin,
     },
     repositories::product_repository_trait::ProductRepositoryTrait,
 };
 
 use domain::Error;
 
-use crate::search::{text_contains, PRODUCT_SEARCH_COLUMNS};
+use crate::search::{
+    search_condition, text_contains, ADMIN_PRODUCT_SEARCH_COLUMNS, PRODUCT_SEARCH_COLUMNS,
+};
 use crate::{
     db_types::DateTimeWithTimeZone,
     entities::{
@@ -51,6 +53,7 @@ struct ProductViewRow {
     category_icon: Option<String>,
     vendor_name: String,
     vendor_phone: String,
+    vendor_verified: bool,
     business_id: i32,
     created_on: DateTimeWithTimeZone,
     image_file_id: Option<Uuid>,
@@ -106,6 +109,7 @@ fn base_product_view_query() -> sea_orm::Select<ProductEntity> {
         .column_as(category::Column::Icon, "category_icon")
         .column_as(business::Column::Name, "vendor_name")
         .column_as(business::Column::Phone, "vendor_phone")
+        .column_as(business::Column::IsVerified, "vendor_verified")
         .column(product::Column::BusinessId)
         .column(product::Column::CreatedOn)
         .column(product::Column::ImageFileId)
@@ -159,10 +163,11 @@ impl ProductRepositoryTrait for ProductRepository {
     async fn list_admin(
         &self,
         provider_id: Option<i32>,
+        search: Option<&str>,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<AdminProduct>, Error> {
-        let mut query = base_admin_product_query();
+        let mut query = base_admin_product_query().filter(search_condition(ADMIN_PRODUCT_SEARCH_COLUMNS, search));
         if let Some(bid) = provider_id {
             query = query.filter(product::Column::BusinessId.eq(bid));
         }
@@ -181,11 +186,12 @@ impl ProductRepositoryTrait for ProductRepository {
             })
     }
 
-    async fn count_admin(&self, provider_id: Option<i32>) -> Result<i64, Error> {
+    async fn count_admin(&self, provider_id: Option<i32>, search: Option<&str>) -> Result<i64, Error> {
         let mut query = ProductEntity::find()
             .join(JoinType::InnerJoin, product::Relation::Business.def())
             .filter(product::Column::DeletedAt.is_null())
-            .filter(business::Column::DeletedAt.is_null());
+            .filter(business::Column::DeletedAt.is_null())
+            .filter(search_condition(ADMIN_PRODUCT_SEARCH_COLUMNS, search));
         if let Some(bid) = provider_id {
             query = query.filter(product::Column::BusinessId.eq(bid));
         }
@@ -491,6 +497,35 @@ impl ProductRepositoryTrait for ProductRepository {
             })
     }
 
+    async fn update_admin(&self, product: UpdateProductAdmin) -> Result<bool, Error> {
+        ProductEntity::update_many()
+            .col_expr(
+                product::Column::CategoryId,
+                Expr::value(product.category_id),
+            )
+            .col_expr(product::Column::Name, Expr::value(product.name))
+            .col_expr(
+                product::Column::Description,
+                Expr::value(product.description),
+            )
+            .col_expr(product::Column::Price, Expr::value(product.price))
+            .col_expr(product::Column::Unit, Expr::value(product.unit))
+            .col_expr(
+                product::Column::UpdatedBy,
+                Expr::value(Some(product.updated_by)),
+            )
+            .col_expr(product::Column::UpdatedOn, Expr::current_timestamp().into())
+            .filter(product::Column::Id.eq(product.id))
+            .filter(product::Column::DeletedAt.is_null())
+            .exec(self.db.as_ref())
+            .await
+            .map(|r| r.rows_affected > 0)
+            .map_err(|e| {
+                error!("product update_admin error (id={}): {e}", product.id);
+                Error::internal("Failed to update product.")
+            })
+    }
+
     async fn soft_delete(&self, id: i32, owner_user: i32) -> Result<bool, Error> {
         let db = self.db.as_ref();
 
@@ -612,6 +647,7 @@ fn map_view_row(r: ProductViewRow, distance_m: Option<f64>) -> ProductView {
         category_icon: r.category_icon,
         vendor_name: r.vendor_name,
         vendor_phone: r.vendor_phone,
+        vendor_verified: r.vendor_verified,
         business_id: r.business_id,
         created_on: r.created_on.with_timezone(&Utc),
         image_file_id: r.image_file_id,

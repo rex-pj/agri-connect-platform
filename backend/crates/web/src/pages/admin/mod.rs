@@ -315,6 +315,8 @@ pub struct RowConfirm {
 pub struct ListPosition {
     pub page: String,
     pub provider_id: String,
+    /// The name search box (`q`), kept like the page and the provider.
+    pub q: String,
 }
 
 impl ListPosition {
@@ -324,6 +326,9 @@ impl ListPosition {
         let mut q = Vec::new();
         if let Some(p) = parse_opt::<i32>(&self.provider_id).filter(|p| *p > 0) {
             q.push(("provider_id", p.to_string()));
+        }
+        if let Some(s) = self.search() {
+            q.push(("q", s.to_owned()));
         }
         if let Some(n) = parse_opt::<i64>(&self.page).filter(|n| *n > 1) {
             q.push(("page", n.to_string()));
@@ -350,14 +355,34 @@ impl ListPosition {
         parse_opt::<i32>(&self.provider_id).filter(|p| *p > 0)
     }
 
-    /// The page links of the list at `path`, keeping its provider filter.
+    /// The text typed in the search box, trimmed; `None` when blank.
+    pub fn search(&self) -> Option<&str> {
+        Some(self.q.trim()).filter(|q| !q.is_empty())
+    }
+
+    /// The page links of the list at `path`, keeping its provider filter and
+    /// search.
     pub fn pagination(&self, path: &str, current: i64, total: i64) -> Option<Pagination> {
-        let provider = self.provider_id().map(|p| p.to_string());
-        let params: Vec<(&str, &str)> = provider
-            .as_deref()
-            .map(|p| vec![("provider_id", p)])
-            .unwrap_or_default();
+        let mut kept = self.query();
+        kept.retain(|(k, _)| *k != "page");
+        let params: Vec<(&str, &str)> = kept.iter().map(|(k, v)| (*k, v.as_str())).collect();
         Pagination::new(path, &params, current, total)
+    }
+
+    /// The search box above the list at `route` (`molecules/admin_search`):
+    /// it keeps the provider filter, and its way out clears only the search.
+    pub fn search_box(&self, route: &str) -> Result<SearchBox, Error> {
+        let provider_id = self.provider_id().map(|p| p.to_string()).unwrap_or_default();
+        let without_search = ListPosition {
+            provider_id: provider_id.clone(),
+            ..ListPosition::default()
+        };
+        Ok(SearchBox {
+            action: url(route, &[])?,
+            q: self.search().unwrap_or_default().to_owned(),
+            provider_id,
+            clear_href: without_search.href(route, &[])?,
+        })
     }
 
     /// The bar above the list at `route` when it is narrowed to one provider
@@ -384,6 +409,17 @@ impl ListPosition {
     }
 }
 
+/// The name search above an admin list: where it submits, what was typed,
+/// the provider filter it keeps (blank: none) and the list without the
+/// search.
+#[derive(Debug, Serialize)]
+pub struct SearchBox {
+    pub action: String,
+    pub q: String,
+    pub provider_id: String,
+    pub clear_href: String,
+}
+
 /// The one provider an admin list is narrowed to: its name, its admin page,
 /// and the whole list.
 #[derive(Debug, Serialize)]
@@ -405,15 +441,27 @@ mod tests {
         let p = ListPosition {
             page: "3".into(),
             provider_id: "//evil.example".into(),
+            ..ListPosition::default()
         };
         assert_eq!(p.query(), vec![("page", "3".to_owned())]);
         let p = ListPosition {
             page: "1".into(),
             provider_id: " 7 ".into(),
+            q: "  ".into(),
         };
         assert_eq!(
             p.href("admin_products", &[("hide", "9")]).ok().as_deref(),
             Some("/admin/products?provider_id=7&hide=9")
+        );
+        let p = ListPosition {
+            page: "2".into(),
+            provider_id: "7".into(),
+            q: " phan bon ".into(),
+        };
+        assert_eq!(
+            p.href("admin_products", &[]).ok().as_deref(),
+            Some("/admin/products?provider_id=7&q=phan+bon&page=2"),
+            "the search is kept, trimmed and encoded"
         );
     }
 

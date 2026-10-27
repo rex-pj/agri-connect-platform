@@ -27,19 +27,13 @@ use crate::{
     extract::{ApiForm, ApiPath, ApiQuery},
     middleware::auth::Viewer,
     pages::{
-        admin::{is_refusal, render_admin, url, ListPosition, Outcome},
+        admin::{is_refusal, render_admin, url, ListPosition, Outcome, SearchBox},
         canonical_url,
         forms::{reason, FormErrors},
-        listing::{parse_opt, Pagination},
+        listing::Pagination,
         parse_id, see_other,
     },
 };
-
-#[derive(Debug, Default, Deserialize)]
-#[serde(default)]
-pub struct ListQuery {
-    pub page: String,
-}
 
 #[derive(Serialize)]
 pub struct ProviderRow {
@@ -52,13 +46,14 @@ pub struct ProvidersPage {
     pub total: i64,
     pub rows: Vec<ProviderRow>,
     pub pagination: Option<Pagination>,
+    pub search: SearchBox,
 }
 
 /// GET /admin/explore
 pub async fn list(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
-    ApiQuery(q): ApiQuery<ListQuery>,
+    ApiQuery(position): ApiQuery<ListPosition>,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
@@ -72,7 +67,7 @@ pub async fn list(
     } = state
         .usecases
         .admin
-        .list_providers(&actor, parse_opt(&q.page).unwrap_or(1))
+        .list_providers(&actor, position.page(), position.search())
         .await?;
     let path = url("admin_explore", &[])?;
     let mut rows = Vec::with_capacity(items.len());
@@ -83,7 +78,8 @@ pub async fn list(
     let body = ProvidersPage {
         total,
         rows,
-        pagination: Pagination::new(&path, &[], page, total_pages),
+        pagination: position.pagination(&path, page, total_pages),
+        search: position.search_box("admin_explore")?,
     };
     render_admin(
         &state,

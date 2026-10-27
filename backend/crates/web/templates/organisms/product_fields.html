@@ -1,0 +1,36 @@
+{#- The boxes of a product, shared by the provider's own form and the admin's.
+    `form` is web::pages::product_form::ProductForm (the values as typed),
+    `errors` its FormErrors' `fields`, `categories` the active product
+    categories, `limits` the global field limits. `cards`: the category as
+    large tappable cards with their icons (the provider's phone form) instead
+    of a select. -#}
+{% import "atoms/icon.html" as atoms %}
+{% import "molecules/form_field.html" as field %}
+{% macro product_fields(form, errors, categories, limits, prefix, cards=false) -%}
+{% if cards %}
+<fieldset class="form-field"{% if errors.category_id %} aria-describedby="{{ prefix }}-category-error"{% endif %}>
+  <legend class="form-label fw-semibold fs-6">{{ t(key="filters.product_type") }} <span class="text-danger" aria-hidden="true">*</span></legend>
+  <div class="choice-grid">
+    {% for c in categories %}
+    <label class="choice-card"><input class="visually-hidden" type="radio" name="category_id" value="{{ c.id }}" required{% if c.id == form.category_id | int(default=0) %} checked{% endif %}>{{ atoms::icon(name=c.icon | default(value="fa-tag"), class="choice-card__icon") }}<span>{{ c.name }}</span></label>
+    {% endfor %}
+  </div>
+  {% if errors.category_id %}<div class="invalid-feedback d-block" id="{{ prefix }}-category-error">{{ errors.category_id }}</div>{% endif %}
+</fieldset>
+{% else %}
+<div class="form-field">
+  <label class="form-label fw-semibold" for="{{ prefix }}-category">{{ t(key="filters.product_type") }} <span class="text-danger" aria-hidden="true">*</span></label>
+  <select class="form-select{% if errors.category_id %} is-invalid{% endif %}" id="{{ prefix }}-category" name="category_id" required{% if errors.category_id %} aria-invalid="true" aria-describedby="{{ prefix }}-category-error"{% endif %}>
+    <option value="">{{ t(key="service_form.choose_category") }}</option>
+    {% for c in categories %}<option value="{{ c.id }}"{% if c.id == form.category_id | int(default=0) %} selected{% endif %}>{{ c.name }}</option>{% endfor %}
+  </select>
+  {% if errors.category_id %}<div class="invalid-feedback" id="{{ prefix }}-category-error">{{ errors.category_id }}</div>{% endif %}
+</div>
+{% endif %}
+{{ field::input(id=prefix ~ "-name", name="name", label=t(key="dashboard.product_name"), value=form.name, error=errors.name | default(value=""), required=true, maxlength=limits.product_name_max, placeholder=t(key="dashboard.product_name_placeholder")) }}
+<div class="row g-2">
+  <div class="col-7">{{ field::input(id=prefix ~ "-price", name="price", label=t(key="dashboard.price_dong"), value=form.price, error=errors.price | default(value=""), inputmode="numeric", placeholder="85.000") }}</div>
+  <div class="col-5">{{ field::input(id=prefix ~ "-unit", name="unit", label=t(key="dashboard.unit"), value=form.unit, error=errors.unit | default(value=""), maxlength=limits.product_unit_max, placeholder="kg") }}</div>
+</div>
+{{ field::textarea(id=prefix ~ "-description", name="description", label=t(key="form.description"), value=form.description, error=errors.description | default(value=""), maxlength=limits.product_description_max, rows=3) }}
+{%- endmacro product_fields %}

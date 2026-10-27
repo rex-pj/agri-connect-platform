@@ -64,7 +64,16 @@ pub trait UserRepositoryTrait {
 
     async fn count_all(&self) -> Result<i64, Error>;
 
-    async fn list_for_admin(&self, limit: i64, offset: i64) -> Result<Vec<UserAdmin>, Error>;
+    /// The admin list; `search` narrows it to accounts whose username, name
+    /// or email contains it (accents and case ignored).
+    async fn list_for_admin(
+        &self,
+        search: Option<&str>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<UserAdmin>, Error>;
+
+    async fn count_for_admin(&self, search: Option<&str>) -> Result<i64, Error>;
 
     async fn find_by_id_for_admin(&self, id: i32) -> Result<Option<UserAdminDetail>, Error>;
 

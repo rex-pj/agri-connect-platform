@@ -29,8 +29,7 @@ use crate::{
     },
     constants::{
         BUSINESS_ADDRESS_MAX, BUSINESS_DESCRIPTION_MAX, BUSINESS_NAME_MAX, CALL_STATS_DAYS,
-        PAGE_SIZE, PRODUCT_DESCRIPTION_MAX, PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX,
-        SERVICES_PER_BUSINESS_MAX,
+        PAGE_SIZE, SERVICES_PER_BUSINESS_MAX,
     },
     inputs::{CreateProductInput, ServiceInput, UpdateProductInput, UpdateProfileInput},
     outputs::{
@@ -39,10 +38,12 @@ use crate::{
     },
     pagination::{paginate, total_pages},
     ports::{EventBus, ProcessedImage},
-    usecases::{media_usecase::MediaUseCase, service_rules::validate_service},
+    usecases::{
+        media_usecase::MediaUseCase, product_rules::validate_product,
+        service_rules::validate_service,
+    },
     validation::{
         max_chars, max_chars_opt, non_blank, point_wkt, validate_coordinates, validate_phone,
-        validate_price,
     },
 };
 
@@ -275,15 +276,15 @@ impl ProviderDashboardUseCase {
         image: Option<ProcessedImage>,
     ) -> Result<ProviderProductDto> {
         actor.require(PERM_OWN_LISTING_CREATE)?;
-        let fields = self
-            .validate_product(
-                input.category_id,
-                input.name,
-                input.description,
-                input.price,
-                input.unit,
-            )
-            .await?;
+        let fields = validate_product(
+            self.product_repo.as_ref(),
+            input.category_id,
+            input.name,
+            input.description,
+            input.price,
+            input.unit,
+        )
+        .await?;
 
         let business_id = self
             .business_repo
@@ -330,15 +331,15 @@ impl ProviderDashboardUseCase {
         input: UpdateProductInput,
     ) -> Result<ProviderProductDto> {
         actor.require(PERM_OWN_LISTING_UPDATE)?;
-        let fields = self
-            .validate_product(
-                input.category_id,
-                input.name,
-                input.description,
-                input.price,
-                input.unit,
-            )
-            .await?;
+        let fields = validate_product(
+            self.product_repo.as_ref(),
+            input.category_id,
+            input.name,
+            input.description,
+            input.price,
+            input.unit,
+        )
+        .await?;
 
         let updated = self
             .product_repo
@@ -366,45 +367,6 @@ impl ProviderDashboardUseCase {
             .ok_or_else(|| Error::internal("product updated but could not be reloaded"))
     }
 
-    /// Every rule of a product's boxes, reported together; the category must
-    /// be an active product category.
-    async fn validate_product(
-        &self,
-        category_id: i32,
-        name: String,
-        description: Option<String>,
-        price: Option<i64>,
-        unit: Option<String>,
-    ) -> Result<ProductFields> {
-        let name = name.trim().to_owned();
-        let description = non_blank(description);
-        let unit = non_blank(unit);
-        let category_ok = self
-            .product_repo
-            .check_category_is_product(category_id)
-            .await?;
-        Validation::new()
-            .check(name.is_empty(), "name", ErrorCode::NameRequired)
-            .rule("name", max_chars(&name, PRODUCT_NAME_MAX))
-            .check(
-                !category_ok,
-                "category_id",
-                ErrorCode::InvalidProductCategory,
-            )
-            .rule("price", validate_price(price))
-            .rule("unit", max_chars_opt(&unit, PRODUCT_UNIT_MAX))
-            .rule(
-                "description",
-                max_chars_opt(&description, PRODUCT_DESCRIPTION_MAX),
-            )
-            .finish()?;
-        Ok(ProductFields {
-            name,
-            description,
-            unit,
-        })
-    }
-
     pub async fn delete_product(&self, actor: &Actor, product_id: i32) -> Result<()> {
         actor.require(PERM_OWN_LISTING_DELETE)?;
 
@@ -425,13 +387,6 @@ impl ProviderDashboardUseCase {
 
         Ok(())
     }
-}
-
-/// A product's boxes once its rules pass: trimmed, blanks as `None`.
-struct ProductFields {
-    name: String,
-    description: Option<String>,
-    unit: Option<String>,
 }
 
 // ── The actor's own services ──────────────────────────────────────────────────

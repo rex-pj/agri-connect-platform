@@ -26,6 +26,7 @@ use domain::{
 use domain::{Error, ErrorCode};
 
 use crate::repositories::{business_repository::insert_registration_business, unique_or_internal};
+use crate::search::{search_condition, ADMIN_USER_SEARCH_COLUMNS};
 use crate::{
     db_types::DateTimeWithTimeZone,
     entities::{
@@ -278,7 +279,25 @@ impl UserRepositoryTrait for UserRepository {
             })
     }
 
-    async fn list_for_admin(&self, limit: i64, offset: i64) -> Result<Vec<UserAdmin>, Error> {
+    async fn count_for_admin(&self, search: Option<&str>) -> Result<i64, Error> {
+        UserEntity::find()
+            .filter(user::Column::DeletedAt.is_null())
+            .filter(search_condition(ADMIN_USER_SEARCH_COLUMNS, search))
+            .count(self.db.as_ref())
+            .await
+            .map(|c| c as i64)
+            .map_err(|e| {
+                error!("user count_for_admin error: {e}");
+                Error::internal("Failed to count users.")
+            })
+    }
+
+    async fn list_for_admin(
+        &self,
+        search: Option<&str>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<UserAdmin>, Error> {
         UserEntity::find()
             .select_only()
             .column(user::Column::Id)
@@ -300,6 +319,7 @@ impl UserRepositoryTrait for UserRepository {
             )
             .join(JoinType::LeftJoin, user::Relation::Role.def())
             .filter(user::Column::DeletedAt.is_null())
+            .filter(search_condition(ADMIN_USER_SEARCH_COLUMNS, search))
             .order_by_asc(user::Column::Id)
             .limit(limit as u64)
             .offset(offset as u64)

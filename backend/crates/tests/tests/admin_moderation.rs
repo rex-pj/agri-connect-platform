@@ -79,6 +79,7 @@ async fn a_product_is_hidden_and_deleted_behind_confirmations_on_its_list_page()
             &[
                 ("is_active", "false"),
                 ("reason", "ảnh không thật"),
+                ("back", "list"),
                 ("provider_id", &business.to_string()),
             ],
             Some(&admin),
@@ -101,7 +102,11 @@ async fn a_product_is_hidden_and_deleted_behind_confirmations_on_its_list_page()
         &e.router,
         post_form(
             &format!("/admin/products/{id}/delete"),
-            &[("reason", "trùng"), ("provider_id", "//evil.example")],
+            &[
+                ("reason", "trùng"),
+                ("back", "list"),
+                ("provider_id", "//evil.example"),
+            ],
             Some(&admin),
         ),
     )
@@ -341,5 +346,143 @@ async fn moderation_pages_need_their_permissions() {
         let res = send(&e.router, get_page(path, Some(&provider))).await;
         assert_eq!(res.status(), StatusCode::FORBIDDEN, "{path}");
     }
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_product_is_edited_hidden_and_deleted_on_its_own_admin_page() {
+    let e = env_with_origin().await;
+    let (admin, token, business) = setup(&e).await;
+    let (category, _) = categories_of(&e, "product").await[0].clone();
+    let id = create_product(
+        &e,
+        &token,
+        &format!(r#"{{"category_id":{category},"name":"Sầu riêng Ri6","price":85000}}"#),
+    )
+    .await;
+    let own = format!("/admin/products/{id}");
+
+    let list = page(&e, "/admin/products", &admin).await;
+    assert!(list.contains(&format!(r#"href="{own}""#)), "rows open the page");
+    let html = page(&e, &own, &admin).await;
+    assert!(html.contains(r#"value="Sầu riêng Ri6""#));
+    assert!(html.contains(r#"value="85000""#));
+
+    // The owner's rules: a blank name is refused in place, typed values kept.
+    let category = category.to_string();
+    let form = |name: &'static str, price: &'static str| {
+        post_form(
+            &own,
+            &[
+                ("category_id", category.as_str()),
+                ("name", name),
+                ("price", price),
+                ("unit", "kg"),
+            ],
+            Some(&admin),
+        )
+    };
+    let res = send(&e.router, form("", "90.000")).await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert!(body_text(res).await.contains(r#"value="90.000""#));
+
+    let res = send(&e.router, form("Sầu riêng Monthong", "90.000")).await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res.headers()[header::LOCATION], own.as_str());
+    assert_eq!(
+        one_text(&e, &format!("SELECT name FROM products WHERE id = {id}")).await,
+        "Sầu riêng Monthong"
+    );
+    assert_eq!(
+        one_i32(
+            &e,
+            &format!("SELECT price::int FROM products WHERE id = {id}")
+        )
+        .await,
+        90000
+    );
+    assert_eq!(
+        one_text(
+            &e,
+            "SELECT action FROM audit_logs WHERE entity_type = 'product' ORDER BY id DESC LIMIT 1"
+        )
+        .await,
+        "update_product"
+    );
+
+    // Its own page's actions land back on it; a deletion on the provider's
+    // products.
+    let res = send(
+        &e.router,
+        post_form(
+            &format!("{own}/status"),
+            &[("is_active", "false")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.headers()[header::LOCATION], own.as_str());
+    let res = send(
+        &e.router,
+        post_form(&format!("{own}/delete"), &[], Some(&admin)),
+    )
+    .await;
+    assert_eq!(
+        res.headers()[header::LOCATION],
+        format!("/admin/products?provider_id={business}").as_str()
+    );
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn admin_lists_find_records_by_name_without_diacritics() {
+    let e = env_with_origin().await;
+    let (admin, token, _) = setup(&e).await;
+    let (category, _) = categories_of(&e, "product").await[0].clone();
+    for name in ["Sầu riêng Ri6", "Phân bón NPK"] {
+        create_product(
+            &e,
+            &token,
+            &format!(r#"{{"category_id":{category},"name":"{name}"}}"#),
+        )
+        .await;
+    }
+
+    let html = page(&e, "/admin/products?q=sau+rieng", &admin).await;
+    assert!(html.contains("Sầu riêng Ri6") && !html.contains("Phân bón NPK"));
+    assert!(html.contains(r#"name="q" value="sau rieng""#), "the box keeps it");
+    // A row's confirmation keeps the search, so the redirect lands on it.
+    let id = one_i32(&e, "SELECT id FROM products WHERE name = 'Sầu riêng Ri6'").await;
+    let html = page(&e, &format!("/admin/products?q=sau+rieng&hide={id}"), &admin).await;
+    assert!(html.contains(r#"name="q" value="sau rieng""#));
+    let res = send(
+        &e.router,
+        post_form(
+            &format!("/admin/products/{id}/status"),
+            &[("is_active", "false"), ("back", "list"), ("q", "sau rieng")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.headers()[header::LOCATION], "/admin/products?q=sau+rieng");
+
+    // The shop's products by the shop's name; nothing found says so.
+    assert!(page(&e, "/admin/products?q=vuon+nongdan", &admin)
+        .await
+        .contains("Phân bón NPK"));
+    assert!(page(&e, "/admin/products?q=khong-co", &admin)
+        .await
+        .contains("Không có kết quả cho “khong-co”"));
+    // Accounts by username, shops by name.
+    let users = page(&e, "/admin/users?q=NONGDAN", &admin).await;
+    assert!(users.contains("nongdan"));
+    assert!(page(&e, "/admin/explore?q=vuon", &admin)
+        .await
+        .contains("Vườn nongdan"));
+    assert!(!page(&e, "/admin/explore?q=khong-co", &admin)
+        .await
+        .contains("Vườn nongdan"));
     e.cleanup().await;
 }

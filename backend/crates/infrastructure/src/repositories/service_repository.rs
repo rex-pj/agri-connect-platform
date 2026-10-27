@@ -30,7 +30,10 @@ use crate::{
         category::{self, Entity as Category},
         service::{self, Entity as ServiceEntity},
     },
-    search::{text_contains, SERVICE_LISTING_SEARCH_COLUMNS},
+    search::{
+        search_condition, text_contains, ADMIN_SERVICE_SEARCH_COLUMNS,
+        SERVICE_LISTING_SEARCH_COLUMNS,
+    },
 };
 
 pub struct ServiceRepository {
@@ -291,10 +294,11 @@ impl ServiceRepositoryTrait for ServiceRepository {
     async fn list_admin(
         &self,
         provider_id: Option<i32>,
+        search: Option<&str>,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<AdminService>, Error> {
-        let mut query = base_admin_service_query();
+        let mut query = base_admin_service_query().filter(search_condition(ADMIN_SERVICE_SEARCH_COLUMNS, search));
         if let Some(bid) = provider_id {
             query = query.filter(service::Column::BusinessId.eq(bid));
         }
@@ -313,11 +317,12 @@ impl ServiceRepositoryTrait for ServiceRepository {
             })
     }
 
-    async fn count_admin(&self, provider_id: Option<i32>) -> Result<i64, Error> {
+    async fn count_admin(&self, provider_id: Option<i32>, search: Option<&str>) -> Result<i64, Error> {
         let mut query = ServiceEntity::find()
             .join(JoinType::InnerJoin, service::Relation::Business.def())
             .filter(service::Column::DeletedAt.is_null())
-            .filter(business::Column::DeletedAt.is_null());
+            .filter(business::Column::DeletedAt.is_null())
+            .filter(search_condition(ADMIN_SERVICE_SEARCH_COLUMNS, search));
         if let Some(bid) = provider_id {
             query = query.filter(service::Column::BusinessId.eq(bid));
         }

@@ -29,3 +29,11 @@ pub const SERVICE_SEARCH_INDEXES: &[(&str, &str, &str)] = &[
     ("ix_services_name_fold", "services", "name"),
     ("ix_services_description_fold", "services", "description"),
 ];
+
+/// The folded indexes for the admin's account search (username, name,
+/// email), added after the lists above had run.
+pub const USER_SEARCH_INDEXES: &[(&str, &str, &str)] = &[
+    ("ix_users_username_fold", "users", "username"),
+    ("ix_users_full_name_fold", "users", "full_name"),
+    ("ix_users_email_fold", "users", "email"),
+];

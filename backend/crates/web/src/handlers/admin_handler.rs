@@ -1,5 +1,5 @@
 use application::authz::require_actor;
-use application::inputs::CategoryInput;
+use application::inputs::{CategoryInput, UpdateProductInput};
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use domain::Error;
 
@@ -9,7 +9,8 @@ use crate::{
     labels::Worded,
     middleware::auth::MaybeActor,
     requests::{
-        AdminCreateServiceRequest, AdminListQuery, AdminPageQuery, AdminUpdateServiceRequest,
+        AdminCreateServiceRequest, AdminListQuery, AdminPageQuery, AdminUpdateProductRequest,
+        AdminUpdateServiceRequest,
         AssignUserRequest, CreateCategoryRequest, CreateLocationRequest, DeleteWithReasonBody,
         SetVerificationRequest, ToggleActiveRequest, ToggleVisibleRequest, UpdateCategoryRequest,
         UpdateInquiryStatusRequest, UpdateLocationRequest, UpdateUserRoleRequest,
@@ -40,7 +41,7 @@ impl AdminHandler {
         let result = state
             .usecases
             .admin
-            .list_providers(&actor, q.page.unwrap_or(1))
+            .list_providers(&actor, q.page.unwrap_or(1), q.name.as_deref())
             .await?;
         Ok(Json(result))
     }
@@ -114,7 +115,7 @@ impl AdminHandler {
         let result = state
             .usecases
             .admin
-            .list_users(&actor, q.page.unwrap_or(1))
+            .list_users(&actor, q.page.unwrap_or(1), q.name.as_deref())
             .await?;
         Ok(Json(result.worded(state.locale())))
     }
@@ -402,7 +403,12 @@ impl AdminHandler {
         let result = state
             .usecases
             .admin
-            .list_products_admin(&actor, q.page.unwrap_or(1), q.provider_id)
+            .list_products_admin(
+                &actor,
+                q.page.unwrap_or(1),
+                q.provider_id,
+                q.name.as_deref(),
+            )
             .await?;
         Ok(Json(result))
     }
@@ -415,6 +421,32 @@ impl AdminHandler {
     ) -> Result<impl IntoResponse, Error> {
         let actor = require_actor(actor)?;
         let result = state.usecases.admin.get_product_admin(&actor, id).await?;
+        Ok(Json(result))
+    }
+
+    /// PUT /api/admin/products/{id}
+    pub async fn update_product(
+        MaybeActor(actor): MaybeActor,
+        State(state): State<AppState>,
+        ApiPath(id): ApiPath<i32>,
+        ApiJson(req): ApiJson<AdminUpdateProductRequest>,
+    ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
+        let result = state
+            .usecases
+            .admin
+            .update_product_admin(
+                &actor,
+                UpdateProductInput {
+                    product_id: id,
+                    category_id: req.category_id,
+                    name: req.name,
+                    description: req.description,
+                    price: req.price,
+                    unit: req.unit,
+                },
+            )
+            .await?;
         Ok(Json(result))
     }
 
@@ -463,7 +495,12 @@ impl AdminHandler {
         let result = state
             .usecases
             .admin
-            .list_services_admin(&actor, q.page.unwrap_or(1), q.provider_id)
+            .list_services_admin(
+                &actor,
+                q.page.unwrap_or(1),
+                q.provider_id,
+                q.name.as_deref(),
+            )
             .await?;
         Ok(Json(result))
     }

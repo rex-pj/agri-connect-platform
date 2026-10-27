@@ -51,6 +51,8 @@ pub struct ResetPasswordRequest {
 #[derive(Deserialize)]
 pub struct AdminPageQuery {
     pub page: Option<i64>,
+    /// Narrows a searchable list to names containing it.
+    pub name: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -190,6 +192,8 @@ impl OwnServiceRequest {
 pub struct AdminListQuery {
     pub page: Option<i64>,
     pub provider_id: Option<i32>,
+    /// Names containing it (the record's or its business's).
+    pub name: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -207,6 +211,15 @@ pub struct AdminUpdateServiceRequest {
     pub name: String,
     pub description: Option<String>,
     pub price_note: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct AdminUpdateProductRequest {
+    pub category_id: i32,
+    pub name: String,
+    pub description: Option<String>,
+    pub price: Option<i64>,
+    pub unit: Option<String>,
 }
 
 // ── Products ──────────────────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ use domain::{
     models::{
         category::{CategoryAdmin, NewCategory, UpdateCategory},
         location::Location,
+        product::UpdateProductAdmin,
         role::UserRole,
         service::{NewService, UpdateService},
         user::NewUser,
@@ -35,7 +36,7 @@ use crate::{
         ADMIN_PAGE_SIZE, CATEGORY_COLOR_MAX, CATEGORY_DESCRIPTION_MAX, CATEGORY_ICON_MAX,
         CATEGORY_NAME_MAX, CATEGORY_SLUG_MAX, LOCATION_LABEL_MAX,
     },
-    inputs::CategoryInput,
+    inputs::{CategoryInput, UpdateProductInput},
     outputs::{
         AdminCategoryDto, AdminInquiryDto, AdminLocationDto, AdminPagedResponse, AdminProductDto,
         AdminProductItemDto, AdminProviderDetailDto, AdminProviderDto, AdminReviewDto,
@@ -44,7 +45,10 @@ use crate::{
     },
     pagination::{paginate, total_pages},
     ports::{EventBus, PasswordHasher},
-    usecases::service_rules::{validate_service, ServiceFields},
+    usecases::{
+        product_rules::{validate_product, ProductFields},
+        service_rules::{validate_service, ServiceFields},
+    },
     validation::{
         audit_reason, max_chars, max_chars_opt, non_blank, validate_coordinates, validate_email,
         validate_password, validate_slug, validate_username,
@@ -178,13 +182,14 @@ impl AdminUseCase {
         &self,
         actor: &Actor,
         page: i64,
+        search: Option<&str>,
     ) -> Result<AdminPagedResponse<AdminProviderDto>> {
         actor.require(PERM_PROVIDER_READ)?;
         let (page, offset) = paginate(page, ADMIN_PAGE_SIZE);
-        let total = self.business_repo.count_all().await?;
+        let total = self.business_repo.count_for_admin(search).await?;
         let items = self
             .business_repo
-            .list_for_admin(ADMIN_PAGE_SIZE, offset)
+            .list_for_admin(search, ADMIN_PAGE_SIZE, offset)
             .await?;
 
         Ok(AdminPagedResponse {
@@ -395,13 +400,14 @@ impl AdminUseCase {
         &self,
         actor: &Actor,
         page: i64,
+        search: Option<&str>,
     ) -> Result<AdminPagedResponse<AdminUserDto>> {
         actor.require(PERM_USER_READ)?;
         let (page, offset) = paginate(page, ADMIN_PAGE_SIZE);
-        let total = self.user_repo.count_all().await?;
+        let total = self.user_repo.count_for_admin(search).await?;
         let items = self
             .user_repo
-            .list_for_admin(ADMIN_PAGE_SIZE, offset)
+            .list_for_admin(search, ADMIN_PAGE_SIZE, offset)
             .await?;
 
         Ok(AdminPagedResponse {
@@ -834,13 +840,14 @@ impl AdminUseCase {
         actor: &Actor,
         page: i64,
         provider_id: Option<i32>,
+        search: Option<&str>,
     ) -> Result<AdminPagedResponse<AdminProductDto>> {
         actor.require(PERM_LISTING_MODERATE)?;
         let (page, offset) = paginate(page, ADMIN_PAGE_SIZE);
-        let total = self.product_repo.count_admin(provider_id).await?;
+        let total = self.product_repo.count_admin(provider_id, search).await?;
         let items = self
             .product_repo
-            .list_admin(provider_id, ADMIN_PAGE_SIZE, offset)
+            .list_admin(provider_id, search, ADMIN_PAGE_SIZE, offset)
             .await?;
         Ok(AdminPagedResponse {
             items: items.into_iter().map(AdminProductDto::from).collect(),
@@ -863,6 +870,55 @@ impl AdminUseCase {
             .await?
             .ok_or_else(|| Error::new(ErrorCode::ProductNotFound))?;
         Ok(AdminProductDto::from(p))
+    }
+
+    /// An admin's edit of any product: the same rules as the owner's form
+    /// (`product_rules`); its visibility and photo stay as they are.
+    pub async fn update_product_admin(
+        &self,
+        actor: &Actor,
+        input: UpdateProductInput,
+    ) -> Result<AdminProductDto> {
+        actor.require(PERM_LISTING_MODERATE)?;
+        let UpdateProductInput {
+            product_id: id,
+            category_id,
+            name,
+            description,
+            price,
+            unit,
+        } = input;
+        let ProductFields {
+            name,
+            description,
+            unit,
+        } = validate_product(
+            self.product_repo.as_ref(),
+            category_id,
+            name,
+            description,
+            price,
+            unit,
+        )
+        .await?;
+        let updated = self
+            .product_repo
+            .update_admin(UpdateProductAdmin {
+                id,
+                category_id,
+                name,
+                description,
+                price,
+                unit,
+                updated_by: actor.user_id,
+            })
+            .await?;
+        if !updated {
+            return Err(Error::new(ErrorCode::ProductNotFound));
+        }
+        self.publish(actor, Entity::Product, id, Change::Updated, None)
+            .await;
+        self.load_product_admin(id).await
     }
 
     pub async fn toggle_product_active(
@@ -911,13 +967,14 @@ impl AdminUseCase {
         actor: &Actor,
         page: i64,
         provider_id: Option<i32>,
+        search: Option<&str>,
     ) -> Result<AdminPagedResponse<AdminServiceDto>> {
         actor.require(PERM_SERVICE_MANAGE)?;
         let (page, offset) = paginate(page, ADMIN_PAGE_SIZE);
-        let total = self.service_repo.count_admin(provider_id).await?;
+        let total = self.service_repo.count_admin(provider_id, search).await?;
         let items = self
             .service_repo
-            .list_admin(provider_id, ADMIN_PAGE_SIZE, offset)
+            .list_admin(provider_id, search, ADMIN_PAGE_SIZE, offset)
             .await?;
         Ok(AdminPagedResponse {
             items: items.into_iter().map(AdminServiceDto::from).collect(),

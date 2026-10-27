@@ -24,7 +24,7 @@ use crate::{
     pages::{
         admin::{
             is_refusal, render_admin, url, Asked, ListPosition, ListReturn, Outcome,
-            ProviderFilter, RowConfirm, BACK_TO_LIST,
+            ProviderFilter, RowConfirm, SearchBox, BACK_TO_LIST,
         },
         forms::{reason, FormErrors},
         listing::Pagination,
@@ -38,6 +38,7 @@ use crate::{
 pub struct ListQuery {
     pub page: String,
     pub provider_id: String,
+    pub q: String,
     /// The service whose hide confirmation is open.
     pub hide: String,
     /// The service whose delete confirmation is open.
@@ -71,6 +72,7 @@ pub struct ServicesPage {
     pub pagination: Option<Pagination>,
     /// Set when the list is one provider's.
     pub filter: Option<ProviderFilter>,
+    pub search: SearchBox,
     pub create: Option<CreateForm>,
     pub limits: &'static Limits,
     pub confirm: Option<RowConfirm>,
@@ -98,7 +100,7 @@ async fn list_page(
     } = state
         .usecases
         .admin
-        .list_services_admin(actor, position.page(), provider_id)
+        .list_services_admin(actor, position.page(), provider_id, position.search())
         .await?;
     let position = ListPosition {
         page: page.to_string(),
@@ -153,6 +155,7 @@ async fn list_page(
     let body = ServicesPage {
         total,
         filter: position.provider_filter("admin_services", name)?,
+        search: position.search_box("admin_services")?,
         pagination: position.pagination(&path, page, total_pages),
         rows,
         create,
@@ -184,6 +187,7 @@ pub async fn list(
     let position = ListPosition {
         page: q.page,
         provider_id: q.provider_id,
+        q: q.q,
     };
     let asked = Asked::new(&q.hide, &q.delete);
     let mut response = list_page(
@@ -392,6 +396,7 @@ pub struct StatusForm {
     pub back: String,
     pub page: String,
     pub provider_id: String,
+    pub q: String,
 }
 
 /// POST /admin/services/{id}/status
@@ -420,6 +425,7 @@ pub async fn change_status(
         return ListPosition {
             page: form.page,
             provider_id: form.provider_id,
+            q: form.q,
         }
         .back_to("admin_services", flash);
     }
@@ -435,6 +441,7 @@ pub struct DeleteForm {
     pub back: String,
     pub page: String,
     pub provider_id: String,
+    pub q: String,
 }
 
 /// POST /admin/services/{id}/delete: back to the list it was sent from, else
@@ -458,6 +465,7 @@ pub async fn delete(
         ListPosition {
             page: form.page,
             provider_id: form.provider_id,
+            q: form.q,
         }
     } else {
         ListPosition {

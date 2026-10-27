@@ -1,6 +1,7 @@
 {% extends "layouts/admin.html" %}
 {% import "atoms/status_badge.html" as status %}
 {% import "molecules/admin_header.html" as header %}
+{% import "molecules/admin_search.html" as search %}
 {% import "molecules/pagination_nav.html" as paging %}
 {% import "molecules/row_action.html" as row %}
 {#- `page.body` is web::pages::admin::users::UsersPage. Changes happen on each
@@ -10,6 +11,7 @@
 {% set b = page.body %}
 {{ header::admin_header(title=t(key="admin_menu.users"), icon="fa-users", sub=t(key="users.count", count=b.total)) }}
 <div class="admin-body">
+  {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.users")) }}
   <div class="admin-card">
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0 admin-table">
@@ -27,7 +29,7 @@
             <td class="text-end"><div class="row-actions">{{ row::open(href=r.href, name=u.username) }}</div></td>
           </tr>
           {% else %}
-          <tr><td colspan="5" class="text-center text-muted py-4">{{ t(key="admin.no_users") }}</td></tr>
+          <tr><td colspan="5" class="text-center text-muted py-4">{% if b.search.q %}{{ t(key="admin_search.none", q=b.search.q) }}{% else %}{{ t(key="admin.no_users") }}{% endif %}</td></tr>
           {% endfor %}
         </tbody>
       </table>

@@ -4,6 +4,7 @@
 {% import "atoms/admin_thumb.html" as thumb %}
 {% import "atoms/status_badge.html" as status %}
 {% import "molecules/admin_header.html" as header %}
+{% import "molecules/admin_search.html" as search %}
 {% import "molecules/admin_filter.html" as filter %}
 {% import "molecules/pagination_nav.html" as paging %}
 {% import "molecules/row_action.html" as row %}
@@ -34,6 +35,7 @@
   <p class="small text-muted mb-0">{{ t(key="admin.services_add_hint", action=t(key="admin.manage_services")) }}</p>
   {% endif %}
 
+  {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.services")) }}
   <div class="admin-card">
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0 admin-table">
@@ -66,7 +68,7 @@
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="5" class="text-center text-muted py-4">{{ t(key="admin.no_services") }}</td></tr>
+          <tr><td colspan="5" class="text-center text-muted py-4">{% if b.search.q %}{{ t(key="admin_search.none", q=b.search.q) }}{% else %}{{ t(key="admin.no_services") }}{% endif %}</td></tr>
           {% endfor %}
         </tbody>
       </table>

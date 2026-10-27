@@ -73,6 +73,7 @@ pub async fn list(
     let position = ListPosition {
         page: q.page,
         provider_id: q.provider_id,
+        ..ListPosition::default()
     };
     let AdminPagedResponse {
         items,
@@ -166,6 +167,7 @@ pub async fn change_visibility(
     ListPosition {
         page: form.page,
         provider_id: form.provider_id,
+        ..ListPosition::default()
     }
     .back_to("admin_reviews", flash)
 }

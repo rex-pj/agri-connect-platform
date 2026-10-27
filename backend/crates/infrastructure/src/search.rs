@@ -27,6 +27,19 @@ pub const SERVICE_LISTING_SEARCH_COLUMNS: &[(&str, &str)] = &[
 pub const PRODUCT_SEARCH_COLUMNS: &[(&str, &str)] =
     &[("products", "name"), ("products", "description")];
 
+/// The admin lists' name search: a record by its own name, a product or
+/// service also by its business's name.
+pub const ADMIN_BUSINESS_SEARCH_COLUMNS: &[(&str, &str)] = &[("businesses", "name")];
+pub const ADMIN_PRODUCT_SEARCH_COLUMNS: &[(&str, &str)] =
+    &[("products", "name"), ("businesses", "name")];
+pub const ADMIN_SERVICE_SEARCH_COLUMNS: &[(&str, &str)] =
+    &[("services", "name"), ("businesses", "name")];
+pub const ADMIN_USER_SEARCH_COLUMNS: &[(&str, &str)] = &[
+    ("users", "username"),
+    ("users", "full_name"),
+    ("users", "email"),
+];
+
 /// Postgres' default LIKE escape character.
 const LIKE_ESCAPE: char = '\\';
 
@@ -73,6 +86,15 @@ pub fn text_contains(columns: &[(&str, &str)], query: &str) -> Condition {
         })
 }
 
+/// `text_contains` for an optional search box: blank or absent matches
+/// everything (an empty condition adds nothing to the WHERE clause).
+pub fn search_condition(columns: &[(&str, &str)], search: Option<&str>) -> Condition {
+    match search.map(str::trim).filter(|q| !q.is_empty()) {
+        Some(q) => text_contains(columns, q),
+        None => Condition::all(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -84,12 +106,17 @@ mod tests {
             .iter()
             .chain(PRODUCT_SEARCH_COLUMNS)
             .chain(SERVICE_SEARCH_COLUMNS)
-            .chain(SERVICE_LISTING_SEARCH_COLUMNS);
+            .chain(SERVICE_LISTING_SEARCH_COLUMNS)
+            .chain(ADMIN_BUSINESS_SEARCH_COLUMNS)
+            .chain(ADMIN_PRODUCT_SEARCH_COLUMNS)
+            .chain(ADMIN_SERVICE_SEARCH_COLUMNS)
+            .chain(ADMIN_USER_SEARCH_COLUMNS);
         for (table, column) in searched {
             assert!(
                 migration::search::SEARCH_INDEXES
                     .iter()
                     .chain(migration::search::SERVICE_SEARCH_INDEXES)
+                    .chain(migration::search::USER_SEARCH_INDEXES)
                     .any(|(_, t, c)| t == table && c == column),
                 "{table}.{column} is searched but has no folded index"
             );

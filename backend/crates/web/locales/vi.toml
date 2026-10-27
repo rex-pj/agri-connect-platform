@@ -241,6 +241,15 @@ menu = "Menu"
 selected_provider = "Nhà cung cấp đang chọn"
 show_all          = "Xem tất cả"
 
+[text.admin_search]
+label     = "Tìm theo tên"
+clear     = "Bỏ tìm kiếm"
+none      = "Không có kết quả cho “{q}”"
+users     = "Tên đăng nhập, họ tên hoặc email"
+providers = "Tên cửa hàng"
+products  = "Tên sản phẩm hoặc cửa hàng"
+services  = "Tên dịch vụ hoặc cửa hàng"
+
 [text.geo]
 title          = "Tìm thợ gần bạn ngay"
 button         = "Bật định vị"
@@ -761,10 +770,13 @@ hide_service          = "Ẩn dịch vụ"
 hide_service_title    = "Ẩn dịch vụ {name}?"
 delete_service_title  = "Xoá dịch vụ {name}?"
 delete_service_note   = "Xoá hẳn dịch vụ khỏi nền tảng. Không hoàn tác được."
+hide_product          = "Ẩn sản phẩm"
+delete_product_note   = "Xoá hẳn sản phẩm khỏi nền tảng. Không hoàn tác được."
 no_services           = "Chưa có dịch vụ nào."
 added_by_owner        = "Nhà cung cấp tự thêm"
 services_add_hint     = 'Để thêm dịch vụ, mở trang một nhà cung cấp và chọn "{action}".'
 provider_services     = "Dịch vụ của nhà cung cấp"
+provider_products     = "Sản phẩm của nhà cung cấp"
 view_photo            = "Xem ảnh {name}"
 # Providers
 provider_verified         = "Đã cấp huy hiệu xác minh."

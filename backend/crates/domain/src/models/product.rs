@@ -28,6 +28,8 @@ pub struct ProductView {
     pub category_icon: Option<String>,
     pub vendor_name: String,
     pub vendor_phone: String,
+    /// The seller carries the verified badge.
+    pub vendor_verified: bool,
     pub image_file_id: Option<Uuid>,
     /// The provider selling it, for the link to its page.
     pub business_id: i32,
@@ -69,6 +71,18 @@ pub struct UpdateProduct {
     pub description: Option<String>,
     pub price: Option<i64>,
     pub unit: Option<String>,
+}
+
+/// An admin's edit of any product (no owner check; visibility is its own
+/// switch).
+pub struct UpdateProductAdmin {
+    pub id: i32,
+    pub category_id: i32,
+    pub name: String,
+    pub description: Option<String>,
+    pub price: Option<i64>,
+    pub unit: Option<String>,
+    pub updated_by: i32,
 }
 
 /// Public product search criteria; every field narrows the result.

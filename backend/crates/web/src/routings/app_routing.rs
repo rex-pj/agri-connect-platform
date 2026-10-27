@@ -325,6 +325,10 @@ impl AppRouting {
             )
             .route("/admin/products", get(pages::admin::products::list))
             .route(
+                "/admin/products/{id}",
+                get(pages::admin::products::show).post(pages::admin::products::update),
+            )
+            .route(
                 "/admin/products/{id}/status",
                 post(pages::admin::products::change_status),
             )
@@ -487,7 +491,10 @@ impl AppRouting {
             )
             // Products
             .route("/api/admin/products", get(AdminHandler::list_products))
-            .route("/api/admin/products/{id}", get(AdminHandler::get_product))
+            .route(
+                "/api/admin/products/{id}",
+                get(AdminHandler::get_product).put(AdminHandler::update_product),
+            )
             .route(
                 "/api/admin/products/{id}/active",
                 patch(AdminHandler::toggle_product_active),

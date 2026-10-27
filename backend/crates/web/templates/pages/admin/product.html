@@ -1,0 +1,63 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "atoms/status_badge.html" as status %}
+{% import "molecules/admin_header.html" as header %}
+{% import "organisms/product_fields.html" as fields %}
+{% import "organisms/confirm_sheet.html" as confirm %}
+{#- One product: edit, hide (confirmation with a reason) / show, delete
+    (confirmation with a reason), laid out like a service's page. `page.body`
+    is web::pages::admin::products::ProductPage. Each confirmation has its
+    own `dialog` scope: its section. -#}
+{% block title %}{{ page.body.product.name }} — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+{% set p = b.product %}
+{% if b.public_href %}
+{{ header::admin_header(title=p.name, icon="fa-box-open", sub=p.business_name, back_href=b.provider_products_href, back_label=t(key="admin.provider_products"), action_href=b.public_href, action_icon="fa-arrow-up-right-from-square", action_label=t(key="admin.public_page"), action_class="btn-outline-secondary") }}
+{% else %}
+{{ header::admin_header(title=p.name, icon="fa-box-open", sub=p.business_name, back_href=b.provider_products_href, back_label=t(key="admin.provider_products")) }}
+{% endif %}
+<div class="admin-body">
+  {% if b.flash == "product_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.saved")) }}{% endif %}
+  {% if b.flash == "product_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.product_hidden")) }}{% endif %}
+  {% if b.flash == "product_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.product_shown")) }}{% endif %}
+  {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
+
+  <section class="admin-section" aria-labelledby="edit-title">
+    <h2 class="admin-section__title" id="edit-title">{{ t(key="admin.info") }}</h2>
+    {% if p.image_file_id %}
+    <a href="{{ file_url(id=p.image_file_id) }}" aria-label="{{ t(key="admin.view_photo", name=p.name) }}"><img class="rounded object-fit-cover" width="96" height="96" src="{{ file_url(id=p.image_file_id, variant="thumb") }}" alt=""></a>
+    {% endif %}
+    <form class="form-stack" method="post" action="{{ b.update_action }}" novalidate>
+      {{ fields::product_fields(form=b.form, errors=b.errors.fields, categories=b.categories, limits=limits, prefix="edit") }}
+      <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button></div>
+    </form>
+  </section>
+
+  <section class="admin-section" aria-labelledby="status-title" x-data="dialog" x-on:keydown.escape.window="hide">
+    <h2 class="admin-section__title" id="status-title">{{ t(key="admin.visibility") }}</h2>
+    <p class="admin-status">{{ status::visibility(on=p.is_active) }}<span><a href="{{ b.provider_href }}">{{ p.business_name }}</a> · {% if p.is_active %}{{ t(key="admin.public_on") }}{% else %}{{ t(key="admin.public_off") }}{% endif %}</span></p>
+    <div class="admin-actions">
+      {% if p.is_active %}
+      <a class="btn btn-outline-warning" href="#an-san-pham" x-on:click.prevent="show">{{ atoms::icon(name="fa-eye-slash") }} {{ t(key="admin.hide_product") }}</a>
+      {% else %}
+      <form method="post" action="{{ b.status_action }}">
+        <input type="hidden" name="is_active" value="true">
+        <button type="submit" class="btn btn-outline-success">{{ atoms::icon(name="fa-eye") }} {{ t(key="admin.show_again") }}</button>
+      </form>
+      {% endif %}
+    </div>
+    {% if p.is_active %}
+    {{ confirm::confirm_sheet(id="an-san-pham", title=t(key="admin.hide_product_title", name=p.name), icon="fa-eye-slash", action=b.status_action, button=t(key="admin.confirm_hide"), reason_max=limits.audit_reason_max, effect="hide", what=t(key="admin.product_what"), hidden_name="is_active", hidden_value="false") }}
+    {% endif %}
+  </section>
+
+  <section class="admin-section" aria-labelledby="delete-title" x-data="dialog" x-on:keydown.escape.window="hide">
+    <h2 class="admin-section__title" id="delete-title">{{ t(key="admin.delete") }}</h2>
+    <p class="small text-muted">{{ t(key="admin.delete_product_note") }}</p>
+    <div class="admin-actions"><a class="btn btn-outline-danger" href="#xoa-san-pham" x-on:click.prevent="show">{{ atoms::icon(name="fa-trash") }} {{ t(key="dashboard.delete_product") }}</a></div>
+    {{ confirm::confirm_sheet(id="xoa-san-pham", title=t(key="admin.delete_product_title", name=p.name), icon="fa-trash", action=b.delete_action, button=t(key="common.confirm_delete"), reason_max=limits.audit_reason_max, effect="delete", what=t(key="dashboard.delete_product_what"), button_class="btn-danger") }}
+  </section>
+</div>
+{% endblock content %}

@@ -37,11 +37,16 @@ pub trait BusinessRepositoryTrait {
 
     async fn find_detail(&self, id: i32) -> Result<Option<BusinessDetail>, Error>;
 
+    /// The admin list; `search` narrows it to names containing it (accents
+    /// and case ignored).
     async fn list_for_admin(
         &self,
+        search: Option<&str>,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<BusinessAdminView>, Error>;
+
+    async fn count_for_admin(&self, search: Option<&str>) -> Result<i64, Error>;
 
     /// Sets the badge; `Some((name, changed))`, or `None` when there is no
     /// such business.

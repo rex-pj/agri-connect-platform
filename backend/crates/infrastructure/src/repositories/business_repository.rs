@@ -23,7 +23,10 @@ use domain::{
 use domain::{Error, ErrorCode};
 
 use crate::repositories::unique_or_internal;
-use crate::search::{text_contains, BUSINESS_SEARCH_COLUMNS, SERVICE_SEARCH_COLUMNS};
+use crate::search::{
+    search_condition, text_contains, ADMIN_BUSINESS_SEARCH_COLUMNS, BUSINESS_SEARCH_COLUMNS,
+    SERVICE_SEARCH_COLUMNS,
+};
 use crate::{
     db_types::DateTimeWithTimeZone,
     entities::{
@@ -518,6 +521,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
 
     async fn list_for_admin(
         &self,
+        search: Option<&str>,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<BusinessAdminView>, Error> {
@@ -568,6 +572,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             )
             .join(JoinType::LeftJoin, business::Relation::Owner.def())
             .filter(business::Column::DeletedAt.is_null())
+            .filter(search_condition(ADMIN_BUSINESS_SEARCH_COLUMNS, search))
             .order_by_desc(business::Column::IsVerified)
             .order_by_desc(business::Column::CreatedOn)
             .order_by_desc(business::Column::Id)
@@ -887,6 +892,19 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .map_err(|e| {
                 error!("business count_all error: {e}");
                 Error::internal("Failed to load stats.")
+            })
+    }
+
+    async fn count_for_admin(&self, search: Option<&str>) -> Result<i64, Error> {
+        Business::find()
+            .filter(business::Column::DeletedAt.is_null())
+            .filter(search_condition(ADMIN_BUSINESS_SEARCH_COLUMNS, search))
+            .count(self.db.as_ref())
+            .await
+            .map(|c| c as i64)
+            .map_err(|e| {
+                error!("business count_for_admin error: {e}");
+                Error::internal("Failed to count providers.")
             })
     }
 

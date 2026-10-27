@@ -1,7 +1,8 @@
-{#- Section title with an optional "see more" link. -#}
-{% macro section_header(title, more_href="", more_label="Xem thêm") -%}
+{#- Section title with an optional "see more" link (blank `more_label`: the
+    usual wording). -#}
+{% macro section_header(title, more_href="", more_label="") -%}
 <div class="section-header mb-3">
   <h2 class="section-title">{{ title }}</h2>
-  {% if more_href %}<a class="section-more" href="{{ more_href }}">{{ more_label }}</a>{% endif %}
+  {% if more_href %}<a class="section-more" href="{{ more_href }}">{% if more_label %}{{ more_label }}{% else %}{{ t(key="common.see_more") }}{% endif %}</a>{% endif %}
 </div>
 {%- endmacro section_header %}

@@ -1,9 +1,12 @@
-{#- The thumb-reach tab bar. Tabs and the active one come from the server. -#}
+{#- The thumb-reach tab bar (the top bar on a wide screen). Tabs and the active
+    one come from the server; a `wide_only` tab shows on the wide bar only, a
+    `phone_only` one (the account tab, which the wide bar's account button
+    already covers) on the phone bar only. -#}
 {% import "atoms/icon.html" as atoms %}
 {% macro bottom_nav(tabs) -%}
-<nav class="bottom-nav" aria-label="Điều hướng chính">
+<nav class="bottom-nav" aria-label="{{ t(key="nav_bar.main") }}">
   {% for tab in tabs %}
-  <a class="bottom-nav__tab{% if tab.active %} bottom-nav__tab--active{% endif %}" href="{{ tab.href }}"{% if tab.active %} aria-current="page"{% endif %}>
+  <a class="bottom-nav__tab{% if tab.active %} bottom-nav__tab--active{% endif %}{% if tab.wide_only %} d-none d-xl-flex{% endif %}{% if tab.phone_only %} d-xl-none{% endif %}" href="{{ tab.href }}"{% if tab.active %} aria-current="page"{% endif %}>
     <span class="bottom-nav__pill">{{ atoms::icon(name=tab.icon, class="bottom-nav__icon") }}</span>
     <span class="bottom-nav__label">{{ tab.label }}</span>
   </a>

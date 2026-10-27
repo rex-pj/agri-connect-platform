@@ -85,7 +85,7 @@ async fn the_detail_page_shows_price_description_and_a_call_button() {
         .and_then(|rest| rest.split('"').next())
         .unwrap_or_default();
     assert!(link.ends_with("/vuon-nongdan"), "provider link: {link:?}");
-    assert!(!html.contains("product-detail--photo"), "no photo yet");
+    assert!(html.contains("Chưa có ảnh"), "says there is no photo yet");
     assert!(!html.contains("{{") && !html.contains("{%"));
     e.cleanup().await;
 }
@@ -98,7 +98,7 @@ async fn a_product_with_a_photo_shows_the_full_size_image() {
     let file = put_photo(&e, id, &token).await;
 
     let html = text(send(&e.router, page(&format!("/products/{id}/{SLUG}"))).await).await;
-    assert!(html.contains("product-detail--photo"));
+    assert!(!html.contains("Chưa có ảnh"));
     // The main image, not the thumbnail the cards use.
     assert!(html.contains(&format!(r#"src="/files/{file}""#)), "{html}");
     e.cleanup().await;
@@ -140,5 +140,34 @@ async fn missing_hidden_and_mistyped_products_are_a_404_page() {
             "{uri}"
         );
     }
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn the_page_shows_what_else_the_seller_does() {
+    let e = Env::new().await;
+    let (token, id) = seeded(&e, &rice()).await;
+    let uri = format!("/products/{id}/{SLUG}");
+    let before = text(send(&e.router, page(&uri)).await).await;
+    assert!(!before.contains("Cửa hàng này còn làm"), "nothing else yet");
+
+    let category = integration_tests::categories_of(&e, "service").await[0].0;
+    let req = Request::post("/api/provider/services")
+        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(format!(
+            r#"{{"category_id":{category},"name":"Xay xát lúa"}}"#
+        )))
+        .unwrap();
+    let res = send(&e.router, req).await;
+    assert_eq!(res.status(), StatusCode::CREATED);
+    let service = integration_tests::json_body(res).await["id"]
+        .as_i64()
+        .unwrap();
+
+    let after = text(send(&e.router, page(&uri)).await).await;
+    assert!(after.contains("Cửa hàng này còn làm"));
+    assert!(after.contains(&format!(r#"href="/services/{service}/xay-xat-lua""#)));
     e.cleanup().await;
 }

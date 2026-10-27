@@ -6,6 +6,7 @@ use domain::Error;
 use crate::{
     app_state::AppState,
     extract::{ApiJson, ApiPath, ApiQuery},
+    labels::Worded,
     middleware::auth::MaybeActor,
     requests::{
         AdminCreateServiceRequest, AdminListQuery, AdminPageQuery, AdminUpdateServiceRequest,
@@ -60,6 +61,22 @@ impl AdminHandler {
         Ok(Json(result))
     }
 
+    /// PATCH /api/admin/providers/{id}/status
+    pub async fn toggle_provider_active(
+        MaybeActor(actor): MaybeActor,
+        State(state): State<AppState>,
+        ApiPath(id): ApiPath<i32>,
+        ApiJson(req): ApiJson<ToggleActiveRequest>,
+    ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
+        let result = state
+            .usecases
+            .admin
+            .toggle_provider_active(&actor, id, req.is_active, req.reason)
+            .await?;
+        Ok(Json(result))
+    }
+
     /// POST /api/admin/providers/{id}/users
     pub async fn assign_provider_user(
         MaybeActor(actor): MaybeActor,
@@ -84,7 +101,7 @@ impl AdminHandler {
     ) -> Result<impl IntoResponse, Error> {
         let actor = require_actor(actor)?;
         let result = state.usecases.admin.get_user_detail(&actor, id).await?;
-        Ok(Json(result))
+        Ok(Json(result.worded(state.locale())))
     }
 
     /// GET /api/admin/users
@@ -99,7 +116,7 @@ impl AdminHandler {
             .admin
             .list_users(&actor, q.page.unwrap_or(1))
             .await?;
-        Ok(Json(result))
+        Ok(Json(result.worded(state.locale())))
     }
 
     /// PATCH /api/admin/users/{id}/role
@@ -115,7 +132,7 @@ impl AdminHandler {
             .admin
             .update_user_role(&actor, id, req.role_code)
             .await?;
-        Ok(Json(result))
+        Ok(Json(result.worded(state.locale())))
     }
 
     /// PATCH /api/admin/users/{id}/status
@@ -228,13 +245,13 @@ impl AdminHandler {
     pub async fn list_inquiries(
         MaybeActor(actor): MaybeActor,
         State(state): State<AppState>,
-        ApiQuery(q): ApiQuery<AdminPageQuery>,
+        ApiQuery(q): ApiQuery<AdminListQuery>,
     ) -> Result<impl IntoResponse, Error> {
         let actor = require_actor(actor)?;
         let result = state
             .usecases
             .admin
-            .list_inquiries(&actor, q.page.unwrap_or(1))
+            .list_inquiries(&actor, q.page.unwrap_or(1), q.provider_id)
             .await?;
         Ok(Json(result))
     }
@@ -259,13 +276,13 @@ impl AdminHandler {
     pub async fn list_reviews(
         MaybeActor(actor): MaybeActor,
         State(state): State<AppState>,
-        ApiQuery(q): ApiQuery<AdminPageQuery>,
+        ApiQuery(q): ApiQuery<AdminListQuery>,
     ) -> Result<impl IntoResponse, Error> {
         let actor = require_actor(actor)?;
         let result = state
             .usecases
             .admin
-            .list_reviews(&actor, q.page.unwrap_or(1))
+            .list_reviews(&actor, q.page.unwrap_or(1), q.provider_id)
             .await?;
         Ok(Json(result))
     }

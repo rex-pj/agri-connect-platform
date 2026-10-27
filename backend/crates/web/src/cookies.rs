@@ -53,6 +53,8 @@ pub enum Flash {
     ProviderVerified,
     ProviderUnverified,
     ProviderAccountAssigned,
+    ProviderActivated,
+    ProviderDeactivated,
     ProductHidden,
     ProductShown,
     ProductDeleted,
@@ -70,7 +72,7 @@ pub enum Flash {
 }
 
 impl Flash {
-    const ALL: [Flash; 35] = [
+    const ALL: [Flash; 37] = [
         Flash::ContactSent,
         Flash::PasswordReset,
         Flash::DemoLoaded,
@@ -92,6 +94,8 @@ impl Flash {
         Flash::ProviderVerified,
         Flash::ProviderUnverified,
         Flash::ProviderAccountAssigned,
+        Flash::ProviderActivated,
+        Flash::ProviderDeactivated,
         Flash::ProductHidden,
         Flash::ProductShown,
         Flash::ProductDeleted,
@@ -131,6 +135,8 @@ impl Flash {
             Flash::ProviderVerified => "provider_verified",
             Flash::ProviderUnverified => "provider_unverified",
             Flash::ProviderAccountAssigned => "provider_account_assigned",
+            Flash::ProviderActivated => "provider_activated",
+            Flash::ProviderDeactivated => "provider_deactivated",
             Flash::ProductHidden => "product_hidden",
             Flash::ProductShown => "product_shown",
             Flash::ProductDeleted => "product_deleted",

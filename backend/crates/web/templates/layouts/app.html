@@ -1,12 +1,14 @@
 {% extends "layouts/base.html" %}
 {% import "organisms/app_nav.html" as nav %}
 {% import "organisms/bottom_nav.html" as bottom %}
-{#- Public and signed-in app pages: top bar, content, bottom tabs. Pages fill
-    `main`; the frame comes from `shell` (web::shell). -#}
+{% import "organisms/app_footer.html" as footer %}
+{#- Public and signed-in app pages: top bar, content, footer, bottom tabs.
+    Pages fill `main`; the frame comes from `shell` (web::shell). -#}
 {% block body %}
 {{ nav::app_nav(shell=shell, site_name=site.name) }}
 <main class="app-main" id="main">
 {% block main %}{% endblock main %}
 </main>
+{{ footer::app_footer(shell=shell, site=site, year=year, languages=languages) }}
 {{ bottom::bottom_nav(tabs=shell.tabs) }}
 {% endblock body %}

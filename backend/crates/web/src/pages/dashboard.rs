@@ -1,5 +1,6 @@
-//! The provider's own area: /provider/dashboard (business profile and the
-//! product list), /provider/products/new and /provider/products/{id}/edit.
+//! The provider's own area: /provider/dashboard (business profile, the
+//! service and product lists), /provider/products/new and
+//! /provider/products/{id}/edit. The service forms are in `own_services`.
 //!
 //! Product forms are `multipart/form-data` because they carry the photo;
 //! they work without JS. The photo is checked before anything is saved
@@ -11,10 +12,12 @@ use application::{
     authz::Actor,
     catalogue::{
         PERM_OWN_INQUIRY_MANAGE, PERM_OWN_LISTING_CREATE, PERM_OWN_LISTING_DELETE,
-        PERM_OWN_PROFILE_UPDATE,
+        PERM_OWN_PROFILE_UPDATE, PERM_OWN_SERVICE_CREATE, PERM_OWN_SERVICE_DELETE,
+        PERM_OWN_SERVICE_UPDATE,
     },
+    constants::{CALL_STATS_DAYS, SERVICES_PER_BUSINESS_MAX},
     inputs::{CreateProductInput, UpdateProductInput, UpdateProfileInput},
-    outputs::{CategoryDto, ProviderProductDto, ProviderProfileDto},
+    outputs::{CategoryDto, ProviderProductDto, ProviderProfileDto, ProviderServiceDto},
     ports::ProcessedImage,
 };
 use axum::{extract::State, http::StatusCode, response::Response};
@@ -39,11 +42,11 @@ use crate::{
     views::render_page_status,
 };
 
-fn url(name: &str, params: &[(&str, &str)]) -> Result<String, Error> {
+pub(super) fn url(name: &str, params: &[(&str, &str)]) -> Result<String, Error> {
     routes::url(name, params).map_err(|e| Error::internal(format!("dashboard links: {e}")))
 }
 
-fn to_dashboard(flash: Flash) -> Result<Response, Error> {
+pub(super) fn to_dashboard(flash: Flash) -> Result<Response, Error> {
     let mut response = see_other(&url("provider_dashboard", &[])?)?;
     flash.set_on(&mut response);
     Ok(response)
@@ -96,6 +99,25 @@ pub struct ProductRow {
 }
 
 #[derive(Serialize)]
+pub struct ServiceRow {
+    pub service: ProviderServiceDto,
+    /// `None` when the actor may neither edit nor delete it.
+    pub edit_href: Option<String>,
+}
+
+/// The services section: the rows, and whether another may be added.
+#[derive(Serialize)]
+pub struct ServicesSection {
+    pub rows: Vec<ServiceRow>,
+    pub new_href: String,
+    /// Allowed, and the business is under the cap.
+    pub can_create: bool,
+    /// At the cap (the "add" button gives way to a note).
+    pub full: bool,
+    pub max: u64,
+}
+
+#[derive(Serialize)]
 pub struct InboxLink {
     pub href: String,
     pub total: i64,
@@ -113,10 +135,18 @@ pub struct DashboardPage {
     pub profile_action: String,
     pub rows: Vec<ProductRow>,
     pub new_href: String,
+    pub services: ServicesSection,
+    /// Services come first unless the business lists only products: the
+    /// people to reach first are service providers.
+    pub services_first: bool,
     pub can_edit_profile: bool,
     pub can_create: bool,
     /// The link to the inquiry inbox, when the actor may read it.
     pub inbox: Option<InboxLink>,
+    /// Taps on this business's call buttons in the last `call_days` days;
+    /// `None` without a business.
+    pub calls: Option<i64>,
+    pub call_days: i64,
     pub flash: Option<Flash>,
 }
 
@@ -135,15 +165,36 @@ async fn dashboard_page(
         Err(e) => return Err(e),
     };
     let mut rows = Vec::new();
+    let mut service_rows = Vec::new();
     if profile.is_some() {
-        for product in usecase.list_products(actor).await? {
+        let (products, services) =
+            tokio::try_join!(usecase.list_products(actor), usecase.list_services(actor))?;
+        for product in products {
             rows.push(ProductRow {
                 edit_href: url("provider_product_edit", &[("id", &product.id.to_string())])?,
                 public_href: canonical_url("product", product.id, &product.name)?,
                 product,
             });
         }
+        let can_manage = actor.can(PERM_OWN_SERVICE_UPDATE) || actor.can(PERM_OWN_SERVICE_DELETE);
+        for service in services {
+            service_rows.push(ServiceRow {
+                edit_href: can_manage
+                    .then(|| url("provider_service_edit", &[("id", &service.id.to_string())]))
+                    .transpose()?,
+                service,
+            });
+        }
     }
+    let full = service_rows.len() as u64 >= SERVICES_PER_BUSINESS_MAX;
+    let services_first = !service_rows.is_empty() || rows.is_empty();
+    let services = ServicesSection {
+        can_create: actor.can(PERM_OWN_SERVICE_CREATE) && !full,
+        full,
+        max: SERVICES_PER_BUSINESS_MAX,
+        new_href: url("provider_service_new", &[])?,
+        rows: service_rows,
+    };
     let (form, errors) = match typed {
         Some(t) => t,
         None => (
@@ -176,9 +227,13 @@ async fn dashboard_page(
         profile_action: url("provider_profile", &[])?,
         rows,
         new_href: url("provider_product_new", &[])?,
+        services,
+        services_first,
         can_edit_profile: actor.can(PERM_OWN_PROFILE_UPDATE),
         can_create: actor.can(PERM_OWN_LISTING_CREATE),
         inbox,
+        calls: usecase.count_own_calls(actor).await?,
+        call_days: CALL_STATS_DAYS,
         flash,
     };
     render_page_status(state, shell, status, "pages/dashboard.html", &body)
@@ -327,17 +382,13 @@ async fn product_page(
         action,
         delete_action,
         dashboard_href: url("provider_dashboard", &[])?,
-        max_upload_mb: state
-            .usecases
-            .media
-            .max_upload_bytes()
-            .div_ceil(1024 * 1024),
+        max_upload_mb: max_upload_mb(state),
     };
     render_page_status(state, shell, status, "pages/dashboard_product.html", &body)
 }
 
 /// The photo, checked and re-encoded, or the form's refusal of it.
-async fn prepare(
+pub(super) async fn prepare(
     state: &AppState,
     upload: Option<Vec<u8>>,
 ) -> Result<Option<ProcessedImage>, Error> {
@@ -513,4 +564,13 @@ pub async fn delete_product(
         .delete_product(&actor, id)
         .await?;
     to_dashboard(Flash::ProductDeleted)
+}
+
+/// The upload cap in whole megabytes, for the photo box's hint.
+pub(super) fn max_upload_mb(state: &AppState) -> usize {
+    state
+        .usecases
+        .media
+        .max_upload_bytes()
+        .div_ceil(1024 * 1024)
 }

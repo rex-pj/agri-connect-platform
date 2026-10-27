@@ -21,3 +21,11 @@ pub const SEARCH_INDEXES: &[(&str, &str, &str)] = &[
     ("ix_products_name_fold", "products", "name"),
     ("ix_products_description_fold", "products", "description"),
 ];
+
+/// The folded search indexes on services (name, description), added after
+/// `SEARCH_INDEXES` had run; kept apart so that migration's list never
+/// changes under a database it already built.
+pub const SERVICE_SEARCH_INDEXES: &[(&str, &str, &str)] = &[
+    ("ix_services_name_fold", "services", "name"),
+    ("ix_services_description_fold", "services", "description"),
+];

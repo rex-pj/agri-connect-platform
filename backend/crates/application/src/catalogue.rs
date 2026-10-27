@@ -23,6 +23,7 @@ pub const PERM_CATEGORY_MANAGE: &str = "category.manage";
 pub const PERM_LOCATION_MANAGE: &str = "location.manage";
 pub const PERM_PROVIDER_READ: &str = "provider.read";
 pub const PERM_PROVIDER_VERIFY: &str = "provider.verify";
+pub const PERM_PROVIDER_STATUS_UPDATE: &str = "provider.status.update";
 pub const PERM_PROVIDER_ACCOUNT_ASSIGN: &str = "provider.account.assign";
 pub const PERM_LISTING_MODERATE: &str = "listing.moderate";
 pub const PERM_SERVICE_MANAGE: &str = "service.manage";
@@ -34,133 +35,124 @@ pub const PERM_OWN_PROFILE_UPDATE: &str = "own.profile.update";
 pub const PERM_OWN_LISTING_CREATE: &str = "own.listing.create";
 pub const PERM_OWN_LISTING_UPDATE: &str = "own.listing.update";
 pub const PERM_OWN_LISTING_DELETE: &str = "own.listing.delete";
+pub const PERM_OWN_SERVICE_CREATE: &str = "own.service.create";
+pub const PERM_OWN_SERVICE_UPDATE: &str = "own.service.update";
+pub const PERM_OWN_SERVICE_DELETE: &str = "own.service.delete";
 pub const PERM_OWN_INQUIRY_MANAGE: &str = "own.inquiry.manage";
 
 const ADMIN: &[&str] = &[ROLE_ADMIN];
 const PROVIDER: &[&str] = &[ROLE_PROVIDER];
 
 pub static ROLES: &[RoleSeed] = &[
-    RoleSeed {
-        code: ROLE_ADMIN,
-        name: "Quản trị viên",
-        description: "Quản lý toàn bộ nền tảng",
-    },
+    RoleSeed { code: ROLE_ADMIN },
     RoleSeed {
         code: ROLE_PROVIDER,
-        name: "Nhà cung cấp",
-        description: "Chủ doanh nghiệp quản lý hồ sơ và sản phẩm của mình",
     },
 ];
 
 pub static PERMISSIONS: &[PermissionSeed] = &[
     PermissionSeed {
         key: PERM_ADMIN_DASHBOARD_VIEW,
-        name: "Xem bảng điều khiển quản trị",
         default_roles: ADMIN,
     },
     PermissionSeed {
         key: PERM_USER_READ,
-        name: "Xem người dùng",
         default_roles: ADMIN,
     },
     PermissionSeed {
         key: PERM_USER_ROLE_UPDATE,
-        name: "Đổi vai trò người dùng",
         default_roles: ADMIN,
     },
     PermissionSeed {
         key: PERM_USER_STATUS_UPDATE,
-        name: "Khoá / mở khoá người dùng",
         default_roles: ADMIN,
     },
     PermissionSeed {
         key: PERM_ROLE_READ,
-        name: "Xem vai trò",
         default_roles: ADMIN,
     },
     PermissionSeed {
         key: PERM_ROLE_PERMISSION_MANAGE,
-        name: "Phân quyền cho vai trò",
         default_roles: ADMIN,
     },
     PermissionSeed {
         key: PERM_CATEGORY_MANAGE,
-        name: "Quản lý danh mục",
         default_roles: ADMIN,
     },
     PermissionSeed {
         key: PERM_LOCATION_MANAGE,
-        name: "Quản lý khu vực",
         default_roles: ADMIN,
     },
     PermissionSeed {
         key: PERM_PROVIDER_READ,
-        name: "Xem nhà cung cấp",
         default_roles: ADMIN,
     },
     PermissionSeed {
         key: PERM_PROVIDER_VERIFY,
-        name: "Xác minh nhà cung cấp",
+        default_roles: ADMIN,
+    },
+    PermissionSeed {
+        key: PERM_PROVIDER_STATUS_UPDATE,
         default_roles: ADMIN,
     },
     PermissionSeed {
         key: PERM_PROVIDER_ACCOUNT_ASSIGN,
-        name: "Gán tài khoản cho nhà cung cấp",
         default_roles: ADMIN,
     },
     PermissionSeed {
         key: PERM_LISTING_MODERATE,
-        name: "Ẩn / xoá sản phẩm",
         default_roles: ADMIN,
     },
     PermissionSeed {
         key: PERM_SERVICE_MANAGE,
-        name: "Quản lý dịch vụ",
         default_roles: ADMIN,
     },
     PermissionSeed {
         key: PERM_INQUIRY_READ,
-        name: "Xem yêu cầu liên hệ",
         default_roles: ADMIN,
     },
     PermissionSeed {
         key: PERM_INQUIRY_MANAGE,
-        name: "Cập nhật trạng thái yêu cầu",
         default_roles: ADMIN,
     },
     PermissionSeed {
         key: PERM_REVIEW_MODERATE,
-        name: "Duyệt đánh giá",
         default_roles: ADMIN,
     },
     PermissionSeed {
         key: PERM_SYSTEM_DEMO_MANAGE,
-        name: "Nạp / xoá dữ liệu mẫu",
         default_roles: ADMIN,
     },
     PermissionSeed {
         key: PERM_OWN_PROFILE_UPDATE,
-        name: "Cập nhật hồ sơ doanh nghiệp của mình",
         default_roles: PROVIDER,
     },
     PermissionSeed {
         key: PERM_OWN_LISTING_CREATE,
-        name: "Thêm sản phẩm của mình",
         default_roles: PROVIDER,
     },
     PermissionSeed {
         key: PERM_OWN_LISTING_UPDATE,
-        name: "Sửa sản phẩm của mình",
         default_roles: PROVIDER,
     },
     PermissionSeed {
         key: PERM_OWN_LISTING_DELETE,
-        name: "Xoá sản phẩm của mình",
+        default_roles: PROVIDER,
+    },
+    PermissionSeed {
+        key: PERM_OWN_SERVICE_CREATE,
+        default_roles: PROVIDER,
+    },
+    PermissionSeed {
+        key: PERM_OWN_SERVICE_UPDATE,
+        default_roles: PROVIDER,
+    },
+    PermissionSeed {
+        key: PERM_OWN_SERVICE_DELETE,
         default_roles: PROVIDER,
     },
     PermissionSeed {
         key: PERM_OWN_INQUIRY_MANAGE,
-        name: "Xem và xử lý yêu cầu liên hệ gửi tới mình",
         default_roles: PROVIDER,
     },
 ];

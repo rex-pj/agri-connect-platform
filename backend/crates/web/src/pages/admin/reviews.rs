@@ -2,7 +2,9 @@
 //!
 //! Hiding asks for confirmation and a reason: the row's link reloads the
 //! list with `?hide={id}`, which renders that confirmation open (a dialog
-//! with JS, an anchored form without). Showing again is one button.
+//! with JS, an anchored form without). Showing again is one button. The
+//! list can be narrowed to one provider (`?provider_id=`, linked from the
+//! provider's page); every form keeps the list position.
 
 use application::outputs::{AdminPagedResponse, AdminReviewDto};
 use axum::{extract::State, http::StatusCode, response::Response};
@@ -15,7 +17,7 @@ use crate::{
     extract::{ApiForm, ApiPath, ApiQuery},
     middleware::auth::Viewer,
     pages::{
-        admin::{render_admin, url, ListPosition},
+        admin::{render_admin, url, ListPosition, ProviderFilter},
         forms::reason,
         listing::{parse_opt, Pagination},
         parse_id, see_other,
@@ -26,6 +28,7 @@ use crate::{
 #[serde(default)]
 pub struct ListQuery {
     pub page: String,
+    pub provider_id: String,
     /// The review whose hide confirmation is open.
     pub hide: String,
 }
@@ -50,6 +53,8 @@ pub struct ReviewsPage {
     pub total: i64,
     pub rows: Vec<ReviewRow>,
     pub pagination: Option<Pagination>,
+    /// Set when the list is one provider's.
+    pub filter: Option<ProviderFilter>,
     pub position: ListPosition,
     pub confirm: Option<Confirm>,
     pub flash: Option<Flash>,
@@ -65,6 +70,10 @@ pub async fn list(
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
+    let position = ListPosition {
+        page: q.page,
+        provider_id: q.provider_id,
+    };
     let AdminPagedResponse {
         items,
         total,
@@ -74,11 +83,11 @@ pub async fn list(
     } = state
         .usecases
         .admin
-        .list_reviews(&actor, parse_opt(&q.page).unwrap_or(1))
+        .list_reviews(&actor, position.page(), position.provider_id())
         .await?;
     let position = ListPosition {
         page: page.to_string(),
-        ..ListPosition::default()
+        ..position
     };
     let hide = parse_opt::<i32>(&q.hide);
     let mut confirm = None;
@@ -100,10 +109,12 @@ pub async fn list(
         });
     }
     let path = url("admin_reviews", &[])?;
+    let name = rows.first().map(|r| r.review.business_name.clone());
     let body = ReviewsPage {
         total,
         rows,
-        pagination: Pagination::new(&path, &[], page, total_pages),
+        pagination: position.pagination(&path, page, total_pages),
+        filter: position.provider_filter("admin_reviews", name)?,
         position,
         confirm,
         flash: flash.0,
@@ -127,6 +138,7 @@ pub struct VisibilityForm {
     pub is_visible: String,
     pub reason: String,
     pub page: String,
+    pub provider_id: String,
 }
 
 /// POST /admin/reviews/{id}/visibility
@@ -153,7 +165,7 @@ pub async fn change_visibility(
     };
     ListPosition {
         page: form.page,
-        ..ListPosition::default()
+        provider_id: form.provider_id,
     }
     .back_to("admin_reviews", flash)
 }

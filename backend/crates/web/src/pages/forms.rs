@@ -73,7 +73,7 @@ pub fn confirm_password(
 
 /// An optional "why" box for the audit log: blank means no reason.
 pub fn reason(raw: &str) -> Option<String> {
-    Some(raw.trim().to_owned()).filter(|r| !r.is_empty())
+    application::validation::audit_reason(Some(raw.to_owned()))
 }
 
 /// A whole-number box: blank is the type's default (0), anything else must

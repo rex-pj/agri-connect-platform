@@ -16,7 +16,7 @@ use application::{
     usecases::{
         admin_usecase::{AdminDeps, AdminUseCase},
         auth_usecase::{AuthDeps, AuthUseCase},
-        explore_usecase::ExploreUseCase,
+        explore_usecase::{ExploreDeps, ExploreUseCase},
         health_usecase::HealthUseCase,
         media_usecase::{MediaDeps, MediaUseCase},
         permission_usecase::{PermissionDeps, PermissionUseCase},
@@ -30,18 +30,19 @@ use infrastructure::{
     bcrypt_password_hasher::BcryptPasswordHasher,
     catalogue_repository::CatalogueRepository,
     demo_data_repository::DemoDataRepository,
-    email_service::{LogEmailService, SmtpConfig, SmtpEmailService},
+    email_service::{EmailTexts, LogEmailService, SmtpConfig, SmtpEmailService},
     file_storage::ObjectFileStorage,
     image_processor::{ImageRules, RasterImageProcessor},
     jwt_token_service::JwtTokenService,
     repositories::{
         audit_log_repository::AuditLogRepository, business_repository::BusinessRepository,
-        category_repository::CategoryRepository, file_repository::FileRepository,
-        health_repository::HealthRepository, inquiry_repository::InquiryRepository,
-        location_repository::LocationRepository, permission_repository::PermissionRepository,
-        product_repository::ProductRepository, refresh_token_repository::RefreshTokenRepository,
-        review_repository::ReviewRepository, role_repository::RoleRepository,
-        service_repository::ServiceRepository, user_repository::UserRepository,
+        call_repository::CallRepository, category_repository::CategoryRepository,
+        file_repository::FileRepository, health_repository::HealthRepository,
+        inquiry_repository::InquiryRepository, location_repository::LocationRepository,
+        permission_repository::PermissionRepository, product_repository::ProductRepository,
+        refresh_token_repository::RefreshTokenRepository, review_repository::ReviewRepository,
+        role_repository::RoleRepository, service_repository::ServiceRepository,
+        user_repository::UserRepository,
     },
 };
 use migration::{Migrator, MigratorTrait};
@@ -51,7 +52,7 @@ use tracing::{info, warn};
 use crate::{
     app_state::{AppState, UseCases},
     constants::{DB_MAX_CONNECTIONS, DEFAULT_APP_URL, DEFAULT_BIND_ADDR, DEFAULT_UPLOAD_DIR},
-    locale::Locale,
+    locale::{Lang, Locale, Locales},
     middleware::{origin::origin_of, rate_limit::Limiters},
     routes,
     routings::app_routing::{AppRouting, RouterConfig},
@@ -137,7 +138,22 @@ fn app_url() -> String {
     })
 }
 
-fn email_service(app_url: String) -> Result<Arc<dyn EmailService>, StartupError> {
+/// The emails' wording, from the locale file; signed with the site name.
+fn email_texts(locale: &Locale, site_name: &str) -> EmailTexts {
+    EmailTexts {
+        site_name: site_name.to_owned(),
+        reset_subject: locale.text("email.reset_subject"),
+        reset_body: locale.text("email.reset_body"),
+        inquiry_subject: locale.text("email.inquiry_subject"),
+        inquiry_body: locale.text("email.inquiry_body"),
+        inquiry_note: locale.text("email.inquiry_note"),
+    }
+}
+
+fn email_service(
+    app_url: String,
+    texts: EmailTexts,
+) -> Result<Arc<dyn EmailService>, StartupError> {
     let Some(host) = optional_env("SMTP_HOST") else {
         warn!("SMTP_HOST not set; password-reset emails will be written to the log, not sent");
         return Ok(Arc::new(LogEmailService::new(app_url)));
@@ -171,6 +187,7 @@ fn email_service(app_url: String) -> Result<Arc<dyn EmailService>, StartupError>
         credentials,
         from,
         app_url,
+        texts,
     })?))
 }
 
@@ -224,12 +241,17 @@ fn router_config(app_url: &str, limiters: Limiters) -> Result<RouterConfig, Star
     })
 }
 
-/// `SITE_NAME` / `SITE_DESCRIPTION`, shown in every page's title and meta tags.
+/// `SITE_NAME` / `SITE_DESCRIPTION`, shown in every page's title and meta
+/// tags, and the help lines the footer offers (`SITE_SUPPORT_PHONE`,
+/// `SITE_SUPPORT_ZALO_URL`, `SITE_SUPPORT_EMAIL`).
 fn site_config() -> SiteConfig {
     let defaults = SiteConfig::default();
     SiteConfig {
         name: optional_env("SITE_NAME").unwrap_or(defaults.name),
-        description: optional_env("SITE_DESCRIPTION").unwrap_or(defaults.description),
+        description: optional_env("SITE_DESCRIPTION"),
+        support_phone: optional_env("SITE_SUPPORT_PHONE"),
+        support_zalo_url: optional_env("SITE_SUPPORT_ZALO_URL"),
+        support_email: optional_env("SITE_SUPPORT_EMAIL"),
     }
 }
 
@@ -328,6 +350,7 @@ pub fn build_state(
     let location_repo = Arc::new(LocationRepository::new(Arc::clone(&db)));
     let review_repo = Arc::new(ReviewRepository::new(Arc::clone(&db)));
     let service_repo = Arc::new(ServiceRepository::new(Arc::clone(&db)));
+    let call_repo = Arc::new(CallRepository::new(Arc::clone(&db)));
     let file_repo = Arc::new(FileRepository::new(Arc::clone(&db)));
     // Read-only, and checked on many requests: the natural first user of a replica.
     let permission_repo = Arc::new(PermissionRepository::new(Arc::clone(&dbs.read)));
@@ -349,6 +372,7 @@ pub fn build_state(
         Arc::new(AuditLogSubscriber::new(audit_log_repo)),
         Arc::new(FileCleanupSubscriber::new(
             product_repo.clone(),
+            service_repo.clone(),
             file_repo.clone(),
             uploads.storage.clone(),
         )),
@@ -367,6 +391,7 @@ pub fn build_state(
 
     let media = MediaUseCase::new(MediaDeps {
         products: product_repo.clone(),
+        services: service_repo.clone(),
         files: file_repo,
         storage: uploads.storage,
         images,
@@ -375,14 +400,16 @@ pub fn build_state(
     });
 
     let usecases = UseCases {
-        explore: ExploreUseCase::new(
-            business_repo.clone(),
-            category_repo.clone(),
-            inquiry_repo.clone(),
-            location_repo.clone(),
-            product_repo.clone(),
-            events.clone(),
-        ),
+        explore: ExploreUseCase::new(ExploreDeps {
+            business_repo: business_repo.clone(),
+            category_repo: category_repo.clone(),
+            inquiry_repo: inquiry_repo.clone(),
+            location_repo: location_repo.clone(),
+            product_repo: product_repo.clone(),
+            service_repo: service_repo.clone(),
+            call_repo: call_repo.clone(),
+            events: events.clone(),
+        }),
         health: HealthUseCase::new(health_repo),
         media: media.clone(),
         product: ProductUseCase::new(product_repo.clone()),
@@ -395,7 +422,7 @@ pub fn build_state(
             review_repo,
             product_repo: product_repo.clone(),
             role_repo: role_repo.clone(),
-            service_repo,
+            service_repo: service_repo.clone(),
             events: events.clone(),
             password_hasher: password_hasher.clone(),
         }),
@@ -420,6 +447,8 @@ pub fn build_state(
         provider_dashboard: ProviderDashboardUseCase::new(ProviderDashboardDeps {
             business_repo: business_repo.clone(),
             product_repo: product_repo.clone(),
+            service_repo,
+            call_repo: call_repo.clone(),
             inquiry_repo: inquiry_repo.clone(),
             media: media.clone(),
             events,
@@ -431,14 +460,15 @@ pub fn build_state(
             user_repo.clone(),
             media,
         ),
-        stats: StatsUseCase::new(business_repo, product_repo, user_repo),
+        stats: StatsUseCase::new(business_repo, product_repo, user_repo, call_repo.clone()),
     };
 
+    let locales = Arc::new(Locales::load()?);
     Ok(AppState {
         usecases: Arc::new(usecases),
         token_service,
-        locale: Arc::new(Locale::vi()?),
-        views: Arc::new(Views::new(site)?),
+        views: Arc::new(Views::new(site, Arc::clone(&locales))?),
+        locales,
     })
 }
 
@@ -499,11 +529,14 @@ pub async fn start() -> Result<(), StartupError> {
     let token_service: Arc<dyn TokenService> =
         Arc::new(JwtTokenService::new(&required_env("JWT_SECRET")?)?);
     let app_url = app_url();
+    let site = site_config();
+    // Emails go out in the default language: whom they reach has not chosen one.
+    let texts = email_texts(Locales::load()?.get(Lang::DEFAULT), &site.name);
     let state = build_state(
         dbs,
         token_service,
-        email_service(app_url.clone())?,
-        site_config(),
+        email_service(app_url.clone(), texts)?,
+        site,
         uploads()?,
         refresh_days()?,
     )?;

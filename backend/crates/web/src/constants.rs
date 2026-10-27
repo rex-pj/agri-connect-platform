@@ -46,8 +46,6 @@ pub const DEFAULT_UPLOAD_DIR: &str = "./data/uploads";
 // ── Home page ─────────────────────────────────────────────────────────────────
 /// Featured products shown: one row on a wide screen, three on a phone.
 pub const HOME_PRODUCT_COUNT: usize = 6;
-/// Featured providers under the near-me banner.
-pub const HOME_PROVIDER_COUNT: usize = 3;
 
 // ── Pages ─────────────────────────────────────────────────────────────────────
 /// Search engines show about this much of a meta description.

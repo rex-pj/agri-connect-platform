@@ -1,11 +1,15 @@
 //! View models shared by the list pages. Templates get display-ready values;
 //! the formatting rules live here, where they can be tested.
 
-use application::outputs::{BusinessBrowseDto, BusinessSearchDto};
+use application::outputs::{BusinessBrowseDto, BusinessSearchDto, PublicServiceDto};
+use domain::Error;
 use serde::Serialize;
+use uuid::Uuid;
+
+use crate::pages::canonical_url;
 
 /// What `organisms/provider_card.html` shows.
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct ProviderCard {
     pub id: i32,
     pub name: String,
@@ -15,8 +19,9 @@ pub struct ProviderCard {
     pub district: Option<String>,
     pub is_verified: bool,
     pub services: Vec<String>,
-    /// "850 m" or "2.3 km (~5 phút xe máy)"; only on the near-me results.
-    pub distance: Option<String>,
+    /// Metres away, only on the near-me results; the template words it
+    /// (`distance` filter).
+    pub distance_m: Option<f64>,
 }
 
 impl From<BusinessBrowseDto> for ProviderCard {
@@ -28,7 +33,7 @@ impl From<BusinessBrowseDto> for ProviderCard {
             phone: b.phone,
             is_verified: b.is_verified,
             services: b.services,
-            distance: None,
+            distance_m: None,
         }
     }
 }
@@ -37,7 +42,7 @@ impl From<BusinessSearchDto> for ProviderCard {
     fn from(b: BusinessSearchDto) -> Self {
         Self {
             district: district(b.address.as_deref()),
-            distance: Some(distance(b.distance_m)),
+            distance_m: Some(b.distance_m),
             id: b.id,
             name: b.name,
             phone: b.phone,
@@ -47,18 +52,57 @@ impl From<BusinessSearchDto> for ProviderCard {
     }
 }
 
-/// Typical motorbike speed on rural roads, for the "~N phút" estimate.
-const MOTORBIKE_KMH: f64 = 30.0;
+/// What `organisms/service_card.html` shows: the service first (photo, name,
+/// price), then who offers it and how to reach them.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ServiceCard {
+    pub id: i32,
+    pub name: String,
+    /// The service's own page.
+    pub href: String,
+    pub category: String,
+    pub category_icon: Option<String>,
+    /// The category label is left out when the name already says it (a
+    /// blank name took the category's), so "Phun thuốc" is not read twice.
+    pub show_category: bool,
+    pub price_note: Option<String>,
+    pub image_file_id: Option<Uuid>,
+    pub provider_name: String,
+    pub provider_verified: bool,
+    pub phone: String,
+    pub district: Option<String>,
+    /// Only on the near-me results.
+    pub distance_m: Option<f64>,
+}
 
-/// Metres under a kilometre, otherwise kilometres with one decimal and the
-/// ride time: farmers judge a provider by "how long to get here".
-fn distance(metres: f64) -> String {
-    if metres < 1000.0 {
-        return format!("{} m", metres.round());
+impl ServiceCard {
+    pub fn new(s: PublicServiceDto) -> Result<Self, Error> {
+        Ok(Self {
+            href: canonical_url("service", s.id, &s.name)?,
+            show_category: !same_label(&s.name, &s.category),
+            district: district(s.business_address.as_deref()),
+            distance_m: s.distance_m,
+            id: s.id,
+            name: s.name,
+            category: s.category,
+            category_icon: s.category_icon,
+            price_note: s.price_note,
+            image_file_id: s.image_file_id,
+            provider_name: s.business_name,
+            provider_verified: s.business_verified,
+            phone: s.business_phone,
+        })
     }
-    let km = metres / 1000.0;
-    let minutes = (km / MOTORBIKE_KMH * 60.0).round();
-    format!("{km:.1} km (~{minutes} phút xe máy)")
+
+    pub fn all(services: Vec<PublicServiceDto>) -> Result<Vec<Self>, Error> {
+        services.into_iter().map(Self::new).collect()
+    }
+}
+
+/// True when a service's name is just its category's ("Phun thuốc" in
+/// "Phun thuốc"), ignoring case and surrounding spaces.
+pub fn same_label(name: &str, category: &str) -> bool {
+    name.trim().to_lowercase() == category.trim().to_lowercase()
 }
 
 fn district(address: Option<&str>) -> Option<String> {
@@ -79,10 +123,10 @@ mod tests {
     use super::district;
 
     #[test]
-    fn distance_reads_as_metres_or_km_with_ride_time() {
-        assert_eq!(super::distance(849.6), "850 m");
-        assert_eq!(super::distance(2_300.0), "2.3 km (~5 phút xe máy)");
-        assert_eq!(super::distance(15_000.0), "15.0 km (~30 phút xe máy)");
+    fn a_name_that_is_its_category_is_not_labelled_twice() {
+        assert!(super::same_label("Phun thuốc", "Phun thuốc"));
+        assert!(super::same_label(" phun THUỐC ", "Phun thuốc"));
+        assert!(!super::same_label("Phun thuốc drone", "Phun thuốc"));
     }
 
     #[test]

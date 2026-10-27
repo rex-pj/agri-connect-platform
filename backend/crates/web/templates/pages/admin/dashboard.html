@@ -5,13 +5,13 @@
 {% block title %}Dashboard — {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
-{{ header::admin_header(title="Dashboard", icon="fa-gauge", sub="Tổng quan hoạt động nền tảng") }}
+{{ header::admin_header(title=t(key="admin_menu.dashboard"), icon="fa-gauge", sub=t(key="admin.dashboard_sub")) }}
 <div class="admin-body">
   {% if b.demo_count %}
   <div class="alert alert-warning d-flex flex-wrap align-items-center gap-2" role="status">
     {{ atoms::icon(name="fa-triangle-exclamation") }}
-    <span class="flex-grow-1">Đang có <strong>{{ b.demo_count }}</strong> nhà cung cấp mẫu hiển thị lẫn với dữ liệu thật.</span>
-    <a class="btn btn-sm btn-warning" href="{{ url_for(name="setup_seed") }}">Quản lý dữ liệu mẫu</a>
+    <span class="flex-grow-1">{{ t(key="admin.demo_warning_before") }} <strong>{{ b.demo_count }}</strong> {{ t(key="admin.demo_warning_after") }}</span>
+    <a class="btn btn-sm btn-warning" href="{{ url_for(name="setup_seed") }}">{{ t(key="admin.manage_demo") }}</a>
   </div>
   {% endif %}
   <div class="row g-3 g-md-4">

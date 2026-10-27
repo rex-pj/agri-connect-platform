@@ -100,14 +100,28 @@ document.addEventListener("alpine:init", () => {
   }));
 
   // Shows the photo chosen in a file box before the form is sent (a blob:
-  // URL, allowed by the page CSP). Without JS the box works the same, just
-  // without the preview.
+  // URL, allowed by the page CSP), and hides the native box: the photo tile
+  // (a label for it) opens the picker instead. Without JS the box works the
+  // same, just without the preview. `data-has-current`: a photo is stored.
   Alpine.data("imagePreview", () => ({
     src: "",
     chosen: false,
+    hasCurrent: false,
 
+    init() {
+      this.hasCurrent = this.$el.dataset.hasCurrent === "true";
+    },
     get unchanged() {
       return !this.chosen;
+    },
+    get hasPhoto() {
+      return this.chosen || this.hasCurrent;
+    },
+    get tileClass() {
+      return this.hasPhoto ? "photo-picker__tile--filled" : "";
+    },
+    get inputClass() {
+      return "visually-hidden";
     },
     pick() {
       if (this.src) URL.revokeObjectURL(this.src);
@@ -119,9 +133,13 @@ document.addEventListener("alpine:init", () => {
 
   // A select that saves its form as soon as it changes. Without JS the
   // form's own submit button does the same.
+  // On a form: any change saves it. Its save button (x-show="withoutScript")
+  // is only for visitors without JS.
   Alpine.data("autoSubmit", () => ({
+    withoutScript: false,
+
     submit() {
-      this.$el.form?.requestSubmit();
+      this.$root.requestSubmit();
     },
   }));
 
@@ -132,6 +150,9 @@ document.addEventListener("alpine:init", () => {
 
     toggle() {
       this.open = !this.open;
+    },
+    close() {
+      this.open = false;
     },
     get expanded() {
       return this.open ? "true" : "false";
@@ -204,6 +225,23 @@ document.addEventListener("alpine:init", () => {
         setTimeout(() => (this.status = ""), 3000);
       } catch {
         // No clipboard (insecure origin, old browser): nothing to offer.
+      }
+    },
+  }));
+
+  // A tap on a public call button: counted with a beacon, which the browser
+  // sends even as the phone app opens. The tel: link works the same without
+  // JS, only uncounted. Attributes: data-call-url, data-call-kind, data-call-id.
+  Alpine.data("callBeacon", () => ({
+    count() {
+      const { callUrl, callKind, callId } = this.$el.dataset;
+      const body = new Blob([JSON.stringify({ kind: callKind, id: Number(callId) })], {
+        type: "application/json",
+      });
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(callUrl, body);
+      } else {
+        fetch(callUrl, { method: "POST", body, keepalive: true }).catch(() => {});
       }
     },
   }));

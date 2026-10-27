@@ -54,7 +54,7 @@ pub struct ErrorBody {
 }
 
 pub fn error_body(state: &AppState, err: &Error) -> ErrorBody {
-    let locale = &state.locale;
+    let locale = state.locale();
     ErrorBody {
         code: err.code().as_str(),
         message: locale.error_text(err.code(), err.params()),
@@ -105,7 +105,7 @@ pub async fn render_errors(State(state): State<AppState>, req: Request, next: Ne
         request_id,
     };
     let mut rendered = match html.then(|| {
-        let shell = Shell::without_session(&path, query.as_deref());
+        let shell = Shell::without_session(state.locale(), &path, query.as_deref());
         views::render_page_status(&state, &shell, status, "pages/error.html", &page)
     }) {
         Some(Ok(page)) => page,

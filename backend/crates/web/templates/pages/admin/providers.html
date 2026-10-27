@@ -1,33 +1,34 @@
 {% extends "layouts/admin.html" %}
-{% import "atoms/icon.html" as atoms %}
+{% import "atoms/status_badge.html" as status %}
 {% import "molecules/admin_header.html" as header %}
 {% import "molecules/pagination_nav.html" as paging %}
+{% import "molecules/row_action.html" as row %}
 {#- `page.body` is web::pages::admin::providers::ProvidersPage. Verification
     and accounts are changed on each provider's page. -#}
-{% block title %}Nhà cung cấp — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ t(key="admin_menu.providers") }} — {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
-{{ header::admin_header(title="Nhà cung cấp", icon="fa-store", sub=b.total ~ " nhà cung cấp") }}
+{{ header::admin_header(title=t(key="admin_menu.providers"), icon="fa-store", sub=t(key="directory.count", count=b.total)) }}
 <div class="admin-body">
   <div class="admin-card">
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
+      <table class="table table-hover align-middle mb-0 admin-table">
         <thead class="admin-table-head">
-          <tr><th>Nhà cung cấp</th><th class="text-center">Dịch vụ / SP</th><th>Tài khoản</th><th class="text-center">Xác minh</th><th>Tạo lúc</th><th></th></tr>
+          <tr><th>{{ t(key="common.provider") }}</th><th class="text-center">{{ t(key="admin.col_listings") }}</th><th>{{ t(key="nav.account") }}</th><th class="text-center">{{ t(key="provider.verified") }}</th><th>{{ t(key="admin.created") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
         </thead>
         <tbody>
           {% for r in b.rows %}
           {% set p = r.provider %}
-          <tr{% if not p.is_active %} class="table-warning"{% endif %}>
+          <tr{% if not p.is_active %} class="table-light text-body-secondary"{% endif %}>
             <td><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ p.name }}</a><a class="d-block small text-muted text-decoration-none" href="tel:{{ p.phone }}">{{ p.phone }}</a>{% if p.address %}<span class="d-block small text-muted">{{ p.address }}</span>{% endif %}</td>
             <td class="text-center">{{ p.service_count }} / {{ p.product_count }}</td>
-            <td>{% if p.linked_username %}<span class="badge text-bg-light border">{{ p.linked_username }}</span>{% else %}<span class="small text-muted">Chưa có</span>{% endif %}</td>
-            <td class="text-center">{% if p.is_verified %}<span class="badge text-bg-success">{{ atoms::icon(name="fa-circle-check") }} Đã xác minh</span>{% else %}<span class="badge text-bg-secondary">Chưa</span>{% endif %}</td>
+            <td>{% if p.linked_username %}<span class="badge text-bg-light border">{{ p.linked_username }}</span>{% else %}<span class="small text-muted">{{ t(key="admin.none") }}</span>{% endif %}</td>
+            <td class="text-center">{{ status::verified(on=p.is_verified) }}</td>
             <td class="small text-muted"><time datetime="{{ p.created_on | utc_iso }}">{{ p.created_on | vn_datetime }}</time>{% if p.created_by_name %}<span class="d-block">{{ p.created_by_name }}</span>{% endif %}</td>
-            <td class="text-end"><a class="btn btn-sm btn-outline-success" href="{{ r.href }}" aria-label="Chi tiết {{ p.name }}">{{ atoms::icon(name="fa-chevron-right") }}</a></td>
+            <td class="text-end"><div class="row-actions">{{ row::open(href=r.href, name=p.name) }}</div></td>
           </tr>
           {% else %}
-          <tr><td colspan="6" class="text-center text-muted py-4">Chưa có nhà cung cấp nào.</td></tr>
+          <tr><td colspan="6" class="text-center text-muted py-4">{{ t(key="admin.no_providers") }}</td></tr>
           {% endfor %}
         </tbody>
       </table>

@@ -18,7 +18,7 @@ use crate::{
     extract::{ApiForm, ApiPath, ApiQuery},
     middleware::auth::Viewer,
     pages::{
-        admin::{render_admin, url, ListPosition},
+        admin::{render_admin, url, ListPosition, ProviderFilter, RowConfirm},
         canonical_url,
         forms::reason,
         listing::{parse_opt, Pagination},
@@ -47,25 +47,15 @@ pub struct ProductRow {
     pub status_action: String,
 }
 
-/// The confirmation open on this render.
-#[derive(Serialize)]
-pub struct Confirm {
-    /// "hide" or "delete".
-    pub kind: &'static str,
-    pub name: String,
-    pub action: String,
-}
-
 #[derive(Serialize)]
 pub struct ProductsPage {
     pub total: i64,
     pub rows: Vec<ProductRow>,
     pub pagination: Option<Pagination>,
     /// Set when the list is one provider's.
-    pub provider_name: Option<String>,
-    pub all_href: String,
+    pub filter: Option<ProviderFilter>,
     pub position: ListPosition,
-    pub confirm: Option<Confirm>,
+    pub confirm: Option<RowConfirm>,
     pub flash: Option<Flash>,
 }
 
@@ -105,14 +95,14 @@ pub async fn list(
     for product in items {
         let id = product.id.to_string();
         if hide == Some(product.id) && product.is_active {
-            confirm = Some(Confirm {
+            confirm = Some(RowConfirm {
                 kind: "hide",
                 name: product.name.clone(),
                 action: url("admin_product_status", &[("id", &id)])?,
             });
         }
         if delete == Some(product.id) {
-            confirm = Some(Confirm {
+            confirm = Some(RowConfirm {
                 kind: "delete",
                 name: product.name.clone(),
                 action: url("admin_product_delete", &[("id", &id)])?,
@@ -131,18 +121,12 @@ pub async fn list(
         });
     }
     let path = url("admin_products", &[])?;
-    let filter: Vec<(&str, &str)> = match position.provider_id() {
-        Some(_) => vec![("provider_id", position.provider_id.trim())],
-        None => Vec::new(),
-    };
+    let name = rows.first().map(|r| r.product.business_name.clone());
     let body = ProductsPage {
         total,
-        provider_name: position
-            .provider_id()
-            .and_then(|_| rows.first().map(|r| r.product.business_name.clone())),
-        pagination: Pagination::new(&path, &filter, page, total_pages),
+        filter: position.provider_filter("admin_products", name)?,
+        pagination: position.pagination(&path, page, total_pages),
         rows,
-        all_href: path.clone(),
         position,
         confirm,
         flash: flash.0,

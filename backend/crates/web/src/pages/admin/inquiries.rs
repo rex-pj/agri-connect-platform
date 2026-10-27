@@ -3,6 +3,8 @@
 //!
 //! Each row is a small form: a status select and a save button. With JS the
 //! select submits itself (Alpine `autoSubmit`); without, the button does.
+//! The list can be narrowed to one provider (`?provider_id=`, linked from the
+//! provider's page); every form keeps the list position.
 
 use application::{
     catalogue::PERM_INQUIRY_MANAGE,
@@ -18,8 +20,8 @@ use crate::{
     extract::{ApiForm, ApiPath, ApiQuery},
     middleware::auth::Viewer,
     pages::{
-        admin::{render_admin, url, ListPosition},
-        listing::{parse_opt, Pagination},
+        admin::{render_admin, url, ListPosition, ProviderFilter},
+        listing::Pagination,
         parse_id, see_other,
     },
 };
@@ -28,6 +30,7 @@ use crate::{
 #[serde(default)]
 pub struct ListQuery {
     pub page: String,
+    pub provider_id: String,
 }
 
 #[derive(Serialize)]
@@ -45,6 +48,8 @@ pub struct InquiriesPage {
     /// The codes the select offers; the template names them.
     pub statuses: &'static [&'static str],
     pub can_manage: bool,
+    /// Set when the list is one provider's.
+    pub filter: Option<ProviderFilter>,
     pub position: ListPosition,
     pub flash: Option<Flash>,
 }
@@ -59,6 +64,10 @@ pub async fn list(
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
+    let position = ListPosition {
+        page: q.page,
+        provider_id: q.provider_id,
+    };
     let AdminPagedResponse {
         items,
         total,
@@ -68,8 +77,12 @@ pub async fn list(
     } = state
         .usecases
         .admin
-        .list_inquiries(&actor, parse_opt(&q.page).unwrap_or(1))
+        .list_inquiries(&actor, position.page(), position.provider_id())
         .await?;
+    let position = ListPosition {
+        page: page.to_string(),
+        ..position
+    };
     let mut rows = Vec::with_capacity(items.len());
     for inquiry in items {
         rows.push(InquiryRow {
@@ -82,16 +95,15 @@ pub async fn list(
         });
     }
     let path = url("admin_inquiries", &[])?;
+    let name = rows.first().map(|r| r.inquiry.business_name.clone());
     let body = InquiriesPage {
         total,
         rows,
-        pagination: Pagination::new(&path, &[], page, total_pages),
+        pagination: position.pagination(&path, page, total_pages),
         statuses: INQUIRY_STATUSES,
         can_manage: actor.can(PERM_INQUIRY_MANAGE),
-        position: ListPosition {
-            page: page.to_string(),
-            ..ListPosition::default()
-        },
+        filter: position.provider_filter("admin_inquiries", name)?,
+        position,
         flash: flash.0,
     };
     let mut response = render_admin(
@@ -111,6 +123,7 @@ pub async fn list(
 pub struct StatusForm {
     pub status: String,
     pub page: String,
+    pub provider_id: String,
 }
 
 /// POST /admin/inquiries/{id}/status
@@ -131,7 +144,7 @@ pub async fn change_status(
         .await?;
     ListPosition {
         page: form.page,
-        ..ListPosition::default()
+        provider_id: form.provider_id,
     }
     .back_to("admin_inquiries", Flash::InquiryStatusSaved)
 }

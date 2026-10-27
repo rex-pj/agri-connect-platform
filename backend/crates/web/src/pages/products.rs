@@ -46,7 +46,7 @@ pub struct ProductsPage {
     pub icon: String,
     pub sub: String,
     pub back_href: String,
-    pub back_label: &'static str,
+    pub back_label: String,
     /// Set on the category page.
     pub category: Option<CategoryDto>,
     /// Set on /products only; the category page has no filter panel.
@@ -63,9 +63,9 @@ fn url(name: &str, params: &[(&str, &str)]) -> Result<String, Error> {
 
 fn sort_label(sort: ProductSort) -> &'static str {
     match sort {
-        ProductSort::Newest => "Mới nhất",
-        ProductSort::PriceAsc => "Giá tăng dần",
-        ProductSort::PriceDesc => "Giá giảm dần",
+        ProductSort::Newest => "sort.newest",
+        ProductSort::PriceAsc => "sort.price_asc",
+        ProductSort::PriceDesc => "sort.price_desc",
     }
 }
 
@@ -127,28 +127,31 @@ pub async fn list(
         return redirect;
     }
     let page = ProductsPage {
-        title: "Sản phẩm nông nghiệp".to_owned(),
+        title: state.locale().text("products.title"),
         icon: "fa-bag-shopping".to_owned(),
-        sub: format!(
-            "{} — từ các nhà cung cấp uy tín",
-            categories
-                .iter()
-                .map(|c| c.name.as_str())
-                .collect::<Vec<_>>()
-                .join(" · ")
+        sub: state.locale().text_with(
+            "products.sub",
+            &[(
+                "categories",
+                &categories
+                    .iter()
+                    .map(|c| c.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" · "),
+            )],
         ),
         back_href: url("home", &[])?,
-        back_label: "Trang chủ",
+        back_label: state.locale().text("nav.home"),
         category: None,
         pagination: Pagination::new(&path, &kept, result.page, result.total_pages),
         filtered: !search.is_empty() || active > 0,
         filters: Some(FilterForm {
             reset_href: with_query(&path, &[("q", search.as_str())]),
             action: path,
-            placeholder: "Tìm sản phẩm...",
+            placeholder: state.locale().text("products.search_placeholder"),
             q: search,
             category_param: "category_id",
-            category_label: "Danh mục",
+            category_label: state.locale().text("filters.category"),
             category_id,
             categories: chips(&categories),
             price: Some(PriceRange {
@@ -160,7 +163,7 @@ pub async fn list(
                 .into_iter()
                 .map(|s| SortChip {
                     value: s.as_str(),
-                    label: sort_label(s),
+                    label: state.locale().text(sort_label(s)),
                 })
                 .collect(),
             active,
@@ -212,9 +215,9 @@ pub async fn category(
     let page = ProductsPage {
         title: category.name.clone(),
         icon: category.icon.clone().unwrap_or_else(|| "fa-tag".to_owned()),
-        sub: category_sub(&category, result.total, "sản phẩm"),
+        sub: category_sub(state.locale(), &category, result.total, "products.count"),
         back_href: url("products", &[])?,
-        back_label: "Sản phẩm",
+        back_label: state.locale().text("nav.products"),
         pagination: Pagination::new(&canonical, &[], result.page, result.total_pages),
         filtered: false,
         filters: None,

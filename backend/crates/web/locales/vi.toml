@@ -1,4 +1,5 @@
-# User-facing text for every domain::ErrorCode. Keys are the wire codes.
+# User-facing text. [errors]: one entry per domain::ErrorCode, keyed by the
+# wire code; [text]: every other word the app shows (see below).
 # {name} placeholders are filled from the error's parameters.
 # Every locale file must define exactly the same keys (see locale tests).
 
@@ -56,6 +57,7 @@ invalid_category_type          = "Loại danh mục không hợp lệ."
 invalid_inquiry_status         = "Trạng thái yêu cầu không hợp lệ."
 invalid_product_category       = "Danh mục sản phẩm không hợp lệ."
 invalid_service_category       = "Danh mục dịch vụ không hợp lệ."
+invalid_call_target            = "Không rõ nút gọi này thuộc dịch vụ, sản phẩm hay cửa hàng nào."
 
 file_too_large                 = "Ảnh quá lớn. Tối đa {max_mb} MB."
 image_required                 = "Vui lòng chọn ảnh."
@@ -70,6 +72,7 @@ provider_account_in_use        = "Tài khoản này đang quản lý một nhà 
 slug_taken                     = "Đường dẫn này đã được dùng cho danh mục khác."
 location_label_taken           = "Đã có khu vực với tên này."
 demo_already_loaded            = "Dữ liệu mẫu đã được nạp."
+service_limit_reached          = "Mỗi cửa hàng đăng tối đa {max} dịch vụ. Hãy xoá bớt dịch vụ cũ trước khi thêm."
 
 account_not_found              = "Không tìm thấy tài khoản."
 account_not_linked_to_business = "Tài khoản chưa được liên kết với cơ sở nào."
@@ -83,3 +86,741 @@ location_not_found             = "Không tìm thấy khu vực."
 inquiry_not_found              = "Không tìm thấy yêu cầu."
 review_not_found               = "Không tìm thấy đánh giá."
 file_not_found                 = "Không tìm thấy ảnh."
+
+# Every other word the app shows, by area. Templates: t(key="nav.home",
+# name=…); Rust: locale.text("nav.home") / text_with(key, &[("name", …)]).
+# {name} placeholders are filled from those arguments.
+
+[text.site]
+description = "Tìm thợ múc bùn, phun thuốc, sửa máy nổ nhanh chóng gần bạn nhất."
+region      = "Đồng bằng sông Cửu Long"
+
+[text.language]
+# Each language is named in itself, the same in every file.
+label = "Ngôn ngữ"
+vi    = "Tiếng Việt"
+en    = "English"
+
+[text.common]
+add            = "Thêm"
+back_home      = "Về trang chủ"
+close          = "Đóng"
+confirm_delete = "Xác nhận xoá"
+delete_title   = "Xoá {name}?"
+edit_label     = "Sửa {name}"
+logout         = "Đăng xuất"
+provider       = "Nhà cung cấp"
+save           = "Lưu"
+search         = "Tìm kiếm"
+see_more       = "Xem thêm"
+
+[text.nav]
+home     = "Trang chủ"
+near_me  = "Gần tôi"
+services = "Dịch vụ"
+products = "Sản phẩm"
+shops    = "Cửa hàng"
+account  = "Tài khoản"
+
+[text.nav_bar]
+label              = "Thanh trên cùng"
+main               = "Điều hướng chính"
+search_placeholder = "Tìm dịch vụ, nông sản..."
+
+[text.account_menu]
+admin             = "Quản trị"
+manage            = "Quản lý"
+login             = "Đăng nhập"
+register_provider = "Đăng ký nhà cung cấp"
+profile           = "Hồ sơ"
+
+[text.provider_cta]
+register       = "Đăng ký"
+visitor_title  = "Bạn là nhà cung cấp?"
+visitor_sub    = "Đăng ký để nông dân trong vùng tìm thấy bạn"
+provider_title = "Cửa hàng của bạn"
+provider_sub   = "Cập nhật sản phẩm, ảnh và số điện thoại"
+
+[text.footer]
+promise           = "Nông dân gọi thẳng thợ và đại lý gần nhà — không qua trung gian."
+values_label      = "Giá trị"
+value_local       = "Gần"
+value_transparent = "Minh bạch"
+value_timely      = "Kịp thời"
+explore           = "Khám phá"
+providers         = "Nhà cung cấp"
+help_title        = "Cần giúp đỡ?"
+zalo              = "Nhắn Zalo"
+
+[text.role]
+admin    = "Quản trị viên"
+provider = "Nhà cung cấp"
+
+# Roles and permissions by their code (the database `name` is only a fallback
+# for a row the catalogue no longer has).
+[text.role_description]
+admin    = "Quản lý toàn bộ nền tảng"
+provider = "Chủ doanh nghiệp quản lý hồ sơ, dịch vụ và sản phẩm của mình"
+
+[text.permission]
+"admin.dashboard.view"    = "Xem bảng điều khiển quản trị"
+"user.read"               = "Xem người dùng"
+"user.role.update"        = "Đổi vai trò người dùng"
+"user.status.update"      = "Khoá / mở khoá người dùng"
+"role.read"               = "Xem vai trò"
+"role.permission.manage"  = "Phân quyền cho vai trò"
+"category.manage"         = "Quản lý danh mục"
+"location.manage"         = "Quản lý khu vực"
+"provider.read"           = "Xem nhà cung cấp"
+"provider.verify"         = "Xác minh nhà cung cấp"
+"provider.status.update"  = "Tắt / bật nhà cung cấp"
+"provider.account.assign" = "Gán tài khoản cho nhà cung cấp"
+"listing.moderate"        = "Ẩn / xoá sản phẩm"
+"service.manage"          = "Quản lý dịch vụ"
+"inquiry.read"            = "Xem yêu cầu liên hệ"
+"inquiry.manage"          = "Cập nhật trạng thái yêu cầu"
+"review.moderate"         = "Duyệt đánh giá"
+"system.demo.manage"      = "Nạp / xoá dữ liệu mẫu"
+"own.profile.update"      = "Cập nhật hồ sơ doanh nghiệp của mình"
+"own.listing.create"      = "Thêm sản phẩm của mình"
+"own.listing.update"      = "Sửa sản phẩm của mình"
+"own.listing.delete"      = "Xoá sản phẩm của mình"
+"own.service.create"      = "Thêm dịch vụ của mình"
+"own.service.update"      = "Sửa dịch vụ của mình (cả ảnh)"
+"own.service.delete"      = "Xoá dịch vụ của mình"
+"own.inquiry.manage"      = "Xem và xử lý yêu cầu liên hệ gửi tới mình"
+
+[text.status]
+shown      = "Hiển thị"
+hidden     = "Đã ẩn"
+active     = "Hoạt động"
+off        = "Đã tắt"
+verified   = "Đã xác minh"
+unverified = "Chưa xác minh"
+
+[text.inquiry_status]
+new       = "Mới"
+contacted = "Đã liên hệ"
+closed    = "Đã xong"
+spam      = "Rác"
+
+[text.photo]
+none        = "Chưa có ảnh"
+current_alt = "Ảnh hiện tại"
+chosen_alt  = "Ảnh vừa chọn"
+choose      = "Chọn ảnh"
+choose_hint = "Chụp hoặc chọn từ máy"
+change      = "Đổi ảnh"
+formats     = "JPG, PNG hoặc WebP · tối đa {max_mb} MB"
+
+[text.form]
+optional           = "(không bắt buộc)"
+show_password      = "Hiện mật khẩu"
+name               = "Tên"
+description        = "Mô tả"
+display_order      = "Thứ tự"
+full_name          = "Họ và tên"
+username           = "Tên đăng nhập"
+password           = "Mật khẩu"
+password_again     = "Nhập lại mật khẩu"
+current_password   = "Mật khẩu hiện tại"
+new_password       = "Mật khẩu mới"
+new_password_again = "Nhập lại mật khẩu mới"
+phone              = "Số điện thoại"
+phone_short        = "Điện thoại"
+address            = "Địa chỉ"
+about              = "Giới thiệu"
+lat                = "Vĩ độ"
+lng                = "Kinh độ"
+
+[text.admin_layout]
+menu = "Menu"
+
+[text.admin_filter]
+selected_provider = "Nhà cung cấp đang chọn"
+show_all          = "Xem tất cả"
+
+[text.geo]
+title          = "Tìm thợ gần bạn ngay"
+button         = "Bật định vị"
+sub_services   = "Cơ khí · Phun thuốc · Múc bùn — trong 10 km"
+sub_category   = "Trong 10 km — bật định vị để lọc theo khoảng cách"
+sub_shops      = "Cửa hàng quanh bạn — trong 10 km"
+title_services = "Tìm dịch vụ gần bạn"
+title_shops    = "Tìm cửa hàng gần bạn"
+
+[text.geolocate]
+fill             = "Lấy vị trí hiện tại"
+busy             = "Đang định vị…"
+filled           = "Đã điền vị trí. Bấm Lưu để cập nhật."
+denied_fill      = "Bạn đã chặn quyền định vị. Hãy nhập toạ độ."
+failed           = "Không lấy được vị trí. Hãy thử lại."
+unsupported_fill = "Trình duyệt không hỗ trợ định vị. Hãy nhập toạ độ."
+locate_me        = "XÁC ĐỊNH VỊ TRÍ CỦA TÔI"
+locating         = "Đang xác định vị trí…"
+denied_settings  = "Bạn đã chặn quyền định vị. Vui lòng cho phép trong cài đặt trình duyệt."
+failed_gps       = "Không lấy được vị trí. Hãy thử lại hoặc kiểm tra GPS."
+unsupported_pick = "Trình duyệt không hỗ trợ định vị. Vui lòng chọn khu vực bên dưới."
+refresh          = "Cập nhật"
+denied           = "Bạn đã chặn quyền định vị."
+failed_short     = "Không lấy được vị trí."
+unsupported      = "Trình duyệt không hỗ trợ định vị."
+
+[text.pagination]
+label = "Phân trang"
+prev  = "Trang trước"
+next  = "Trang sau"
+page  = "Trang {number}"
+
+[text.row]
+hide         = "Ẩn"
+hide_label   = "Ẩn {name}"
+show         = "Hiện"
+show_label   = "Hiển thị lại {name}"
+delete       = "Xoá"
+delete_label = "Xoá {name}"
+open         = "Mở"
+open_label   = "Mở {name}"
+public       = "Xem"
+public_label = "Xem trang công khai của {name}"
+
+[text.share]
+copied = "Đã sao chép đường dẫn"
+label  = "Chia sẻ"
+
+[text.category_form]
+type  = "Loại"
+slug  = "Đường dẫn (slug)"
+icon  = "Biểu tượng"
+color = "Màu"
+
+[text.category_type]
+service = "Dịch vụ"
+product = "Sản phẩm"
+
+[text.confirm]
+reason_label  = "Lý do (ghi vào nhật ký, không bắt buộc)"
+hide_effect   = "Bà con sẽ không thấy {what} nữa. Có thể hiển thị lại bất cứ lúc nào."
+delete_effect = "Xoá hẳn {what}, không lấy lại được."
+
+[text.contact]
+title            = "Yêu cầu liên hệ"
+sub_before       = "Gửi yêu cầu tới"
+sub_after        = ". Họ sẽ gọi lại cho bạn."
+service          = "Dịch vụ cần"
+choose_service   = "— Chọn dịch vụ —"
+topic            = "Bạn cần gì?"
+name_placeholder = "Nguyễn Văn A"
+note             = "Ghi chú (không bắt buộc)"
+note_placeholder = "Diện tích, thời gian cần làm…"
+send             = "Gửi yêu cầu"
+sent             = "Đã gửi yêu cầu! Nhà cung cấp sẽ liên hệ lại sớm."
+
+[text.error_page]
+reference = "Mã tham chiếu: {id}"
+
+[text.filters]
+label        = "Bộ lọc"
+all          = "Tất cả"
+category     = "Danh mục"
+service_type = "Loại dịch vụ"
+price        = "Khoảng giá (đồng)"
+price_from   = "Từ"
+price_min    = "Giá tối thiểu"
+price_to     = "Đến"
+price_max    = "Giá tối đa"
+sort         = "Sắp xếp"
+reset        = "Xoá bộ lọc"
+apply        = "Áp dụng"
+
+[text.sort]
+newest         = "Mới nhất"
+price_asc      = "Giá tăng dần"
+price_desc     = "Giá giảm dần"
+verified_first = "Ưu tiên xác minh"
+name_asc       = "A → Z"
+
+[text.location_form]
+label             = "Tên khu vực"
+label_placeholder = "Cai Lậy, Tiền Giang"
+coordinates       = "Toạ độ"
+
+[text.service_form]
+choose_category         = "Chọn danh mục"
+name                    = "Tên dịch vụ (bỏ trống: dùng tên loại)"
+name_placeholder        = "Múc bùn vườn sầu riêng"
+price                   = "Giá"
+price_placeholder       = "Từ 500.000đ/công, hoặc: Liên hệ"
+description_placeholder = "Máy gì, làm ở đâu, bao lâu xong"
+
+[text.price]
+ask     = "Liên hệ giá"
+contact = "Liên hệ"
+
+[text.distance]
+away     = "Cách bạn"
+metres   = "{metres} m"
+km_ride  = "{km} km (~{minutes} phút xe máy)"
+
+[text.card]
+new_provider = "Mới tham gia — chưa cập nhật dịch vụ"
+details      = "Xem chi tiết"
+
+[text.list]
+for_query    = "cho “{q}”"
+all_products = "Tất cả sản phẩm"
+all_services = "Tất cả dịch vụ"
+all_shops    = "Tất cả cửa hàng"
+come_back    = "Hãy quay lại sau."
+
+[text.products]
+title                 = "Sản phẩm nông nghiệp"
+sub                   = "{categories} — từ các nhà cung cấp uy tín"
+search_placeholder    = "Tìm sản phẩm..."
+count                 = "{count} sản phẩm"
+unit                  = "sản phẩm"
+meta                  = "Khám phá các sản phẩm nông nghiệp từ nhà cung cấp uy tín tại Đồng bằng sông Cửu Long: gạo, trái cây, phân bón, thuốc bảo vệ thực vật và nhiều hơn nữa."
+meta_category         = "Xem các sản phẩm nông nghiệp trong danh mục {category} từ các nhà cung cấp uy tín tại Đồng bằng sông Cửu Long."
+none_found            = "Không tìm thấy sản phẩm nào"
+none_found_hint       = "Thử từ khoá khác hoặc xoá bộ lọc để xem tất cả sản phẩm."
+none_in_category      = "Chưa có sản phẩm nào trong danh mục này"
+none_in_category_hint = "Hãy thử chọn danh mục khác hoặc xem tất cả sản phẩm."
+none_yet              = "Chưa có sản phẩm nào"
+
+[text.services]
+title                 = "Dịch vụ nông nghiệp"
+sub                   = "Dịch vụ quanh vùng — gọi thẳng, không qua trung gian"
+search_placeholder    = "Tìm dịch vụ..."
+count                 = "{count} dịch vụ"
+unit                  = "dịch vụ"
+meta                  = "Dịch vụ nông nghiệp tại Đồng bằng sông Cửu Long: xem ảnh, giá tham khảo và gọi thẳng cho người làm, không qua trung gian."
+meta_category         = "Dịch vụ {category} tại Đồng bằng sông Cửu Long: xem ảnh, giá tham khảo và gọi thẳng cho người làm, không qua trung gian."
+none_found            = "Không tìm thấy dịch vụ nào"
+none_found_hint       = "Thử từ khoá khác, xoá bộ lọc, hoặc tìm trong cửa hàng."
+search_shops          = "Tìm trong cửa hàng"
+none_in_category      = "Chưa có dịch vụ nào trong danh mục này"
+none_in_category_hint = "Hãy thử dịch vụ khác hoặc tìm thợ gần bạn."
+search_near           = "Tìm gần bạn"
+none_yet              = "Chưa có dịch vụ nào"
+
+[text.directory]
+title              = "Cửa hàng, nhà cung cấp"
+meta               = "Danh bạ cửa hàng và nhà cung cấp dịch vụ nông nghiệp tại Đồng bằng sông Cửu Long. Kết nối trực tiếp, không qua trung gian."
+sub                = "Tất cả nhà cung cấp — tìm theo tên hoặc dịch vụ"
+search_placeholder = "Tìm cửa hàng, dịch vụ..."
+count              = "{count} nhà cung cấp"
+unit               = "nhà cung cấp"
+none_found         = "Không tìm thấy nhà cung cấp nào"
+none_found_hint    = "Thử từ khoá khác, xoá bộ lọc, hoặc tìm trong dịch vụ."
+search_services    = "Tìm trong dịch vụ"
+none_yet           = "Chưa có nhà cung cấp nào"
+
+[text.inquiries]
+count = "{count} yêu cầu"
+
+[text.reviews]
+count = "{count} đánh giá"
+
+[text.users]
+count = "{count} tài khoản"
+
+[text.search]
+tab_all          = "Tất cả"
+title_query      = "Tìm kiếm “{q}”"
+placeholder      = "Tìm dịch vụ, nông sản, cửa hàng..."
+prompt           = "Nhập từ khoá để tìm kiếm"
+prompt_hint      = "Tìm dịch vụ, sản phẩm nông nghiệp và cửa hàng."
+tabs_label       = "Loại kết quả"
+no_services      = "Không có dịch vụ phù hợp"
+no_services_hint = "Thử từ khoá khác hoặc xem toàn bộ dịch vụ."
+no_products      = "Không có sản phẩm phù hợp"
+no_products_hint = "Thử từ khoá khác hoặc xem toàn bộ danh mục sản phẩm."
+no_shops         = "Không có cửa hàng phù hợp"
+no_shops_hint    = "Thử từ khoá khác hoặc xem toàn bộ cửa hàng."
+
+[text.home]
+title             = "Nền tảng nông nghiệp Đồng bằng sông Cửu Long"
+meta              = "Tìm dịch vụ nông nghiệp (múc bùn, phun thuốc, sửa máy) và sản phẩm uy tín tại Đồng bằng sông Cửu Long: xem ảnh, giá tham khảo, gọi thẳng không qua trung gian."
+featured_services = "Dịch vụ nổi bật"
+featured_products = "Sản phẩm nổi bật"
+empty             = "Nền tảng đang khởi động"
+empty_hint        = "Chưa có dữ liệu. Hãy thử tìm dịch vụ gần bạn."
+empty_action      = "Tìm thợ gần tôi"
+
+[text.explore]
+title               = "Tìm dịch vụ gần bạn"
+meta                = "Tìm nhà cung cấp dịch vụ nông nghiệp gần bạn nhất: cơ giới, phân bón, thuốc BVTV, máy bay phun thuốc và nhiều hơn nữa. Bật định vị để lọc theo khoảng cách."
+locate_title        = "Tìm thợ gần bạn"
+locate_sub_before   = "Cho phép xác định vị trí để tìm nhà cung cấp trong bán kính"
+locate_sub_after    = "từ bạn"
+km                  = "{km} km"
+privacy             = "Vị trí chỉ dùng để tìm thợ, không được lưu lại"
+pick_area           = "Hoặc chọn khu vực"
+choose_area         = "— Chọn tỉnh / huyện —"
+search_area         = "Tìm theo khu vực"
+near_title          = "Tìm dịch vụ gần tôi"
+located             = "Đã xác định vị trí"
+radius              = "Bán kính"
+radius_label        = "Bán kính:"
+service_categories  = "Danh mục dịch vụ"
+results_label       = "Kết quả gần bạn"
+no_services         = "Không tìm thấy dịch vụ trong bán kính {km} km"
+no_shops            = "Không tìm thấy cửa hàng trong bán kính {km} km"
+no_products         = "Không tìm thấy sản phẩm trong bán kính {km} km"
+services_near       = "dịch vụ gần bạn"
+shops_near          = "cửa hàng gần bạn"
+products_near       = "sản phẩm gần bạn"
+search_within       = "Tìm trong {area}"
+hint_services_wider = "Hãy thử bỏ bộ lọc, mở rộng phạm vi, hoặc xem tab Cửa hàng."
+hint_services       = "Hãy thử bỏ bộ lọc dịch vụ hoặc xem tab Cửa hàng."
+hint_shops_wider    = "Hãy thử bỏ bộ lọc hoặc mở rộng phạm vi."
+hint_shops          = "Hãy thử bỏ bộ lọc dịch vụ."
+hint_products_wider = "Hãy thử mở rộng phạm vi."
+hint_products       = "Hãy xem toàn bộ sản phẩm."
+
+[text.account]
+info             = "Thông tin tài khoản"
+role             = "Vai trò"
+joined           = "Ngày tham gia"
+security         = "Bảo mật"
+password_changed = "Đã đổi mật khẩu. Các thiết bị khác đã được đăng xuất."
+password_note    = "Đổi mật khẩu sẽ đăng xuất mọi thiết bị khác."
+change_password  = "Đổi mật khẩu"
+logout_note      = "Kết thúc phiên đăng nhập trên thiết bị này."
+
+[text.auth]
+login_sub        = "Dành cho nhà cung cấp và quản trị viên."
+locked_title     = "Tài khoản tạm thời bị khoá"
+locked_reset     = "Hoặc đặt lại mật khẩu để mở khoá ngay:"
+reset_password   = "Đặt lại mật khẩu"
+reset_done       = "Mật khẩu đã được đặt lại. Vui lòng đăng nhập lại."
+reset_sub        = "Nhập mật khẩu mới cho tài khoản của bạn."
+forgot_title     = "Quên mật khẩu"
+forgot_link      = "Quên mật khẩu?"
+forgot_sub       = "Nhập email đã đăng ký, chúng tôi sẽ gửi liên kết đặt lại mật khẩu."
+send_link        = "Gửi liên kết"
+check_inbox      = "Kiểm tra hộp thư"
+check_inbox_sub  = "Nếu email này có tài khoản, chúng tôi đã gửi liên kết đặt lại mật khẩu. Liên kết có hiệu lực trong {hours} giờ."
+back_to_login    = "Về đăng nhập"
+link_invalid     = "Liên kết không hợp lệ"
+link_invalid_sub = "Liên kết đã hết hạn hoặc đã được dùng. Hãy yêu cầu liên kết mới."
+resend_link      = "Gửi lại liên kết"
+register_sub     = "Đưa dịch vụ của bạn đến nông dân trong vùng."
+your_business    = "Cơ sở của bạn"
+business_name    = "Tên cơ sở"
+create_account   = "Tạo tài khoản"
+have_account     = "Đã có tài khoản?"
+
+[text.dashboard]
+title                    = "Quản lý cửa hàng"
+back                     = "Về trang quản lý"
+product_created          = "Đã thêm sản phẩm."
+product_saved            = "Đã lưu sản phẩm."
+product_deleted          = "Đã xoá sản phẩm."
+service_created          = "Đã thêm dịch vụ."
+service_saved            = "Đã lưu dịch vụ."
+service_deleted          = "Đã xoá dịch vụ."
+profile_saved            = "Đã lưu thông tin cửa hàng."
+no_business              = "Tài khoản chưa gắn với cửa hàng nào"
+no_business_hint         = "Liên hệ quản trị viên để được gán cửa hàng."
+calls_label              = "Lượt bấm gọi"
+calls                    = "{count} lượt bấm gọi"
+calls_sub                = "trong {days} ngày qua, từ dịch vụ, sản phẩm và trang cửa hàng của bạn"
+inbox_waiting            = "{count} người đang chờ bạn gọi"
+products_count           = "Sản phẩm ({count})"
+services_count           = "Dịch vụ ({count})"
+hidden                   = "Đang ẩn"
+hidden_by_admin          = "Quản trị viên đã ẩn"
+no_products              = "Chưa có sản phẩm"
+no_products_hint         = "Thêm sản phẩm để bà con tìm thấy bạn."
+no_services              = "Chưa có dịch vụ"
+no_services_hint         = "Thêm dịch vụ để bà con tìm thấy bạn khi lọc theo dịch vụ."
+no_services_ask_admin    = "Liên hệ quản trị viên để thêm dịch vụ."
+services_full            = "Đã đủ {max} dịch vụ. Xoá bớt để thêm dịch vụ mới."
+profile                  = "Thông tin cửa hàng"
+public_page              = "Xem trang bà con thấy"
+business_name            = "Tên cửa hàng"
+location                 = "Vị trí trên bản đồ"
+location_hint            = "Để bà con gần bạn tìm thấy. Bấm nút khi đang ở cửa hàng, hoặc nhập toạ độ."
+save_profile             = "Lưu thông tin"
+add_product              = "Thêm sản phẩm"
+edit_product             = "Sửa sản phẩm"
+product_photo            = "Ảnh sản phẩm"
+product_photo_hint       = "Ảnh thật sản phẩm của bạn giúp bà con tin và gọi đặt hàng."
+choose_type              = "Chọn loại"
+product_name             = "Tên sản phẩm"
+product_name_placeholder = "Sầu riêng Ri6"
+price_dong               = "Giá (đồng)"
+unit                     = "Đơn vị"
+delete_product           = "Xoá sản phẩm"
+delete_product_what      = "sản phẩm này cùng ảnh"
+add_service              = "Thêm dịch vụ"
+edit_service             = "Sửa dịch vụ"
+service_hidden_by_admin  = "Quản trị viên đã ẩn dịch vụ này nên bà con không thấy. Liên hệ quản trị viên để được hiện lại."
+service_cannot_edit      = "Tài khoản của bạn chưa được phép sửa dịch vụ."
+service_photo            = "Ảnh dịch vụ"
+service_photo_hint       = "Ảnh thật máy móc hoặc công trình bạn đã làm: bà con tin hơn, và dịch vụ có ảnh được ưu tiên hiện ở trang chủ."
+delete_service           = "Xoá dịch vụ"
+delete_service_what      = "dịch vụ này cùng ảnh"
+
+[text.inbox]
+counts        = "{new} chưa gọi · {total} tất cả"
+status_saved  = "Đã lưu trạng thái."
+call          = "Gọi {phone}"
+status_of     = "Trạng thái yêu cầu của {name}"
+save_status   = "Lưu trạng thái"
+empty         = "Chưa có yêu cầu nào"
+empty_hint    = "Khi nông dân gửi yêu cầu từ trang cửa hàng của bạn, yêu cầu sẽ hiện ở đây."
+
+[text.product]
+meta         = "Mua {name} từ {vendor} trên {site}. Liên hệ nhà cung cấp để biết giá chính xác."
+price_note   = "Giá tham khảo — liên hệ nhà cung cấp để biết giá chính xác"
+description  = "Mô tả sản phẩm"
+see_provider = "Xem nhà cung cấp & gửi yêu cầu"
+shop_also    = "Cửa hàng này còn làm:"
+
+[text.provider]
+meta       = "Liên hệ {name} để biết thêm về dịch vụ nông nghiệp tại {area}."
+verified   = "Xác minh"
+services   = "Dịch vụ cung cấp"
+share_text = "{name} – dịch vụ nông nghiệp tại {area}"
+
+[text.service]
+meta             = "{name} của {provider} tại {area}. Xem giá tham khảo và gọi thẳng, không qua trung gian."
+price_note       = "Giá tham khảo — gọi để hỏi giá theo diện tích, thời gian"
+description      = "Mô tả dịch vụ"
+provider         = "Người làm"
+see_shop         = "Xem cửa hàng"
+others           = "Dịch vụ khác của {provider}"
+more_in_category = "Xem thêm dịch vụ {category}"
+share_text       = "{name} – {provider} tại {area}"
+
+[text.setup]
+title     = "Thiết lập hệ thống"
+heading   = "Tạo tài khoản quản trị viên"
+sub       = "Đây là tài khoản quản trị đầu tiên của hệ thống."
+demo      = "Nạp dữ liệu mẫu để thử nghiệm"
+demo_hint = "Vài nhà cung cấp, dịch vụ và sản phẩm mẫu. Có thể xoá bất cứ lúc nào."
+
+[text.seed]
+sub            = "Nhà cung cấp, dịch vụ và sản phẩm mẫu để thử nghiệm"
+loaded         = "Đã nạp dữ liệu mẫu."
+removed        = "Đã xoá toàn bộ dữ liệu mẫu."
+current        = "Hiện có"
+demo_providers = "nhà cung cấp mẫu"
+all_providers  = "nhà cung cấp tất cả"
+remove         = "Xoá dữ liệu mẫu"
+remove_note    = "Chỉ xoá các nhà cung cấp mẫu cùng dịch vụ và sản phẩm của họ. Dữ liệu thật không bị ảnh hưởng."
+remove_confirm = "Tôi hiểu: {count} nhà cung cấp mẫu sẽ bị xoá."
+load           = "Nạp dữ liệu mẫu"
+load_note      = "Vài nhà cung cấp ở Cai Lậy, Tiền Giang cùng dịch vụ và sản phẩm, để thử các trang."
+
+[text.email]
+reset_subject   = "Đặt lại mật khẩu – {site}"
+reset_body      = """
+Xin chào,
+
+Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn.
+Mở liên kết sau để đặt mật khẩu mới (hiệu lực {hours} giờ):
+
+{url}
+
+Nếu bạn không yêu cầu, hãy bỏ qua email này.
+
+{site}"""
+inquiry_subject = "Có nông dân cần bạn gọi lại – {site}"
+inquiry_body    = """
+Xin chào {business},
+
+Một nông dân vừa gửi yêu cầu liên hệ tới cửa hàng của bạn:
+
+Họ tên: {name}
+Số điện thoại: {phone}
+Cần: {topic}
+{note}
+Hãy gọi lại sớm. Xem và đánh dấu đã gọi tại:
+{inbox}
+
+{site}"""
+inquiry_note    = "Ghi chú: {note}\n"
+
+[text.admin_menu]
+dashboard   = "Dashboard"
+content     = "Nội dung"
+providers   = "Nhà cung cấp"
+products    = "Sản phẩm"
+services    = "Dịch vụ"
+categories  = "Danh mục"
+inquiries   = "Yêu cầu"
+reviews     = "Đánh giá"
+locations   = "Khu vực"
+system      = "Hệ thống"
+users       = "Người dùng"
+roles       = "Vai trò"
+permissions = "Quyền hạn"
+demo_data   = "Dữ liệu mẫu"
+
+[text.admin_stats]
+providers = "Tổng nhà cung cấp"
+verified  = "Đã xác minh"
+products  = "Sản phẩm đang bán"
+users     = "Tài khoản hệ thống"
+calls     = "Lượt bấm gọi ({days} ngày)"
+
+[text.permission_group]
+system    = "Hệ thống"
+users     = "Người dùng và vai trò"
+providers = "Nhà cung cấp"
+listings  = "Sản phẩm và dịch vụ"
+catalogue = "Danh mục và khu vực"
+feedback  = "Yêu cầu và đánh giá"
+own       = "Nhà cung cấp: hồ sơ của mình"
+other     = "Khác"
+
+[text.admin]
+# Shared by the admin pages
+info                 = "Thông tin"
+visibility           = "Hiển thị"
+activity             = "Hoạt động"
+created              = "Tạo lúc"
+created_label        = "Tạo"
+delete               = "Xoá"
+save_changes         = "Lưu thay đổi"
+saved                = "Đã lưu thay đổi."
+show_again           = "Hiển thị lại"
+confirm_hide         = "Xác nhận ẩn"
+confirm_off          = "Xác nhận tắt"
+public_on            = "Đang hiện ở trang công khai."
+public_off           = "Đang ẩn khỏi trang công khai."
+public_page          = "Trang công khai"
+none                 = "Chưa có"
+yes                  = "Có"
+no                   = "Không"
+col_actions          = "Thao tác"
+col_status           = "Trạng thái"
+col_updated          = "Cập nhật"
+col_code             = "Mã"
+col_content          = "Nội dung"
+col_listings         = "Dịch vụ / SP"
+col_permission       = "Quyền"
+col_permission_count = "Số quyền"
+col_reviewer         = "Người đánh giá"
+col_sender           = "Người gửi"
+col_topic            = "Chủ đề"
+# Dashboard
+dashboard_sub        = "Tổng quan hoạt động nền tảng"
+demo_warning_before  = "Đang có"
+demo_warning_after   = "nhà cung cấp mẫu hiển thị lẫn với dữ liệu thật."
+manage_demo          = "Quản lý dữ liệu mẫu"
+# Categories
+categories_sub       = "{count} danh mục dịch vụ và sản phẩm"
+add_category         = "Thêm danh mục"
+product_category     = "Danh mục sản phẩm"
+service_category     = "Danh mục dịch vụ"
+category_created     = "Đã thêm danh mục."
+category_hidden      = "Đã ẩn danh mục khỏi trang công khai."
+category_shown       = "Đã hiển thị lại danh mục."
+category_on          = "Danh mục và các tin trong đó đang hiện ở trang công khai."
+category_off         = "Danh mục và các tin trong đó đang ẩn khỏi trang công khai."
+hide_category        = "Ẩn danh mục"
+hide_category_title  = "Ẩn danh mục {name}?"
+hide_category_note   = "Danh mục cùng dịch vụ và sản phẩm trong đó sẽ ẩn khỏi trang công khai. Có thể hiển thị lại bất cứ lúc nào."
+no_categories        = "Chưa có danh mục nào."
+# Locations
+locations_sub         = "{count} khu vực gợi ý ở trang Gần tôi"
+add_location          = "Thêm khu vực"
+location_created      = "Đã thêm khu vực."
+location_hidden       = "Đã ẩn khu vực khỏi trang Gần tôi."
+location_shown        = "Đã hiển thị lại khu vực."
+location_deleted      = "Đã xoá khu vực."
+location_on           = "Đang hiện ở trang Gần tôi."
+location_off          = "Đang ẩn khỏi trang Gần tôi."
+location_what         = "khu vực này"
+hide_location         = "Ẩn khu vực"
+hide_location_title   = "Ẩn khu vực {name}?"
+hide_location_note    = "Khu vực này sẽ không còn trong danh sách chọn của bà con. Có thể hiển thị lại bất cứ lúc nào."
+delete_location       = "Xoá khu vực"
+delete_location_title = "Xoá khu vực {name}?"
+delete_location_note  = "Xoá hẳn khu vực khỏi danh sách gợi ý. Không hoàn tác được."
+no_locations          = "Chưa có khu vực nào."
+# Products and services
+product_hidden        = "Đã ẩn sản phẩm."
+product_shown         = "Đã hiển thị lại sản phẩm."
+product_what          = "sản phẩm này"
+hide_product_title    = "Ẩn sản phẩm {name}?"
+delete_product_title  = "Xoá sản phẩm {name}?"
+no_products           = "Chưa có sản phẩm nào."
+service_hidden        = "Đã ẩn dịch vụ."
+service_shown         = "Đã hiển thị lại dịch vụ."
+service_what          = "dịch vụ này"
+hide_service          = "Ẩn dịch vụ"
+hide_service_title    = "Ẩn dịch vụ {name}?"
+delete_service_title  = "Xoá dịch vụ {name}?"
+delete_service_note   = "Xoá hẳn dịch vụ khỏi nền tảng. Không hoàn tác được."
+no_services           = "Chưa có dịch vụ nào."
+added_by_owner        = "Nhà cung cấp tự thêm"
+services_add_hint     = 'Để thêm dịch vụ, mở trang một nhà cung cấp và chọn "{action}".'
+provider_services     = "Dịch vụ của nhà cung cấp"
+view_photo            = "Xem ảnh {name}"
+# Providers
+provider_verified         = "Đã cấp huy hiệu xác minh."
+provider_unverified       = "Đã bỏ huy hiệu xác minh."
+provider_activated        = "Đã bật lại nhà cung cấp."
+provider_deactivated      = "Đã tắt nhà cung cấp. Bà con không còn thấy họ."
+provider_account_assigned = "Đã gán tài khoản. Chủ cơ sở có thể đăng nhập để quản lý."
+provider_on               = "Bà con thấy nhà cung cấp cùng dịch vụ và sản phẩm của họ."
+provider_off              = "Nhà cung cấp, dịch vụ và sản phẩm của họ đang ẩn khỏi trang công khai."
+turn_off_provider         = "Tắt nhà cung cấp"
+turn_on_provider          = "Bật lại nhà cung cấp"
+turn_off_provider_title   = "Tắt nhà cung cấp {name}?"
+turn_off_provider_note    = "Nhà cung cấp cùng dịch vụ và sản phẩm của họ sẽ ẩn khỏi trang công khai. Có thể bật lại bất cứ lúc nào."
+verify_badge              = "Huy hiệu xác minh"
+verified_on               = "Bà con thấy dấu xác minh trên trang của nhà cung cấp."
+verified_off              = "Chỉ cấp khi đã kiểm tra thông tin thật."
+unverify                  = "Bỏ xác minh"
+unverify_title            = "Bỏ xác minh {name}?"
+unverify_note             = "Dấu xác minh sẽ biến mất khỏi trang của nhà cung cấp. Có thể cấp lại bất cứ lúc nào."
+confirm_unverify          = "Xác nhận bỏ xác minh"
+managing_account          = "Tài khoản quản lý"
+linked_before             = "Đang gán:"
+linked_after              = ". Gán tài khoản khác sẽ thay thế."
+no_account                = "Chưa có tài khoản. Chủ cơ sở cần tài khoản để tự cập nhật sản phẩm."
+assign_hint               = "Nếu tài khoản nhà cung cấp này đã có, chỉ cần tên đăng nhập. Tạo mới thì nhập thêm email và mật khẩu:"
+assign                    = "Gán tài khoản"
+manage_services           = "Quản lý dịch vụ"
+manage_products           = "Quản lý sản phẩm"
+provider_no_services      = "Chưa có dịch vụ."
+provider_no_products      = "Chưa có sản phẩm."
+no_providers              = "Chưa có nhà cung cấp nào."
+# Inquiries and reviews
+no_inquiries      = "Chưa có yêu cầu nào."
+review_hidden     = "Đã ẩn đánh giá."
+review_shown      = "Đã hiển thị lại đánh giá."
+review_of         = "đánh giá của {name}"
+review_what       = "đánh giá này"
+hide_review_title = "Ẩn đánh giá của {name}?"
+rating            = "{rating} trên 5 sao"
+no_reviews        = "Chưa có đánh giá nào."
+# Users, roles and permissions
+role_changed           = "Đã đổi vai trò. Quyền mới có hiệu lực ngay."
+user_activated         = "Đã bật lại tài khoản."
+user_deactivated       = "Đã tắt tài khoản. Người dùng đã bị đăng xuất."
+change_role            = "Đổi vai trò"
+save_role              = "Lưu vai trò"
+account_status         = "Trạng thái tài khoản"
+user_on                = "Tắt tài khoản sẽ đăng xuất người dùng ngay và chặn đăng nhập."
+user_off               = "Người dùng không đăng nhập được."
+turn_off_account       = "Tắt tài khoản"
+turn_on_account        = "Bật lại tài khoản"
+turn_off_account_title = "Tắt tài khoản {name}?"
+turn_off_account_note  = "Tài khoản bị đăng xuất ngay và không đăng nhập được cho đến khi bật lại."
+user_permissions       = "Quyền hiện có ({count})"
+user_permissions_note  = "Quyền đến từ vai trò; sửa ở trang vai trò."
+no_users               = "Chưa có người dùng nào."
+roles_sub              = "Mỗi vai trò có một bộ quyền. Mở vai trò để xem hoặc sửa quyền."
+no_roles               = "Chưa có vai trò nào."
+permissions_sub        = "Quyền được gán cho vai trò, không gán cho từng người. Mở một vai trò để sửa."
+permissions_saved      = "Đã lưu quyền. Có hiệu lực ngay ở lần tải trang tiếp theo của mỗi người dùng."
+save_permissions       = "Lưu quyền"
+reason_placeholder     = "Ví dụ: cho nhà cung cấp tự quản lý dịch vụ"
+read_only              = "Bạn chỉ có quyền xem."

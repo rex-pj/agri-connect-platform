@@ -360,7 +360,14 @@ fn access_is_never_decided_by_comparing_roles() {
 #[test]
 fn every_use_case_taking_an_actor_checks_a_permission_first() {
     // Reading your own data needs a session but no permission key.
-    const SESSION_ONLY: &[&str] = &["get_profile", "list_products", "get_product"];
+    const SESSION_ONLY: &[&str] = &[
+        "get_profile",
+        "list_products",
+        "get_product",
+        "list_services",
+        "get_service",
+        "count_own_calls",
+    ];
     let sig = regex::Regex::new(r"pub async fn (\w+)\(\s*&self,\s*actor: &Actor").unwrap();
     let mut missing = Vec::new();
     for (file, src) in sources("application") {
@@ -382,5 +389,119 @@ fn every_use_case_taking_an_actor_checks_a_permission_first() {
         missing.is_empty(),
         "use cases that take an Actor but never require a permission:\n{}",
         missing.join("\n")
+    );
+}
+
+// ── User-facing text ─────────────────────────────────────────────────────────
+
+/// The code a production build runs: everything before `#[cfg(test)]`,
+/// `//` comment lines blanked so line numbers still match.
+fn shipped(src: &str) -> String {
+    src.lines()
+        .take_while(|l| l.trim() != "#[cfg(test)]")
+        .map(|l| {
+            if l.trim_start().starts_with("//") {
+                ""
+            } else {
+                l
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// A template with its `{# … #}` comments blanked, line numbers kept.
+fn without_tera_comments(src: &str) -> String {
+    regex::Regex::new(r"(?s)\{#.*?#\}")
+        .unwrap()
+        .replace_all(src, |c: &regex::Captures| {
+            c[0].chars().filter(|ch| *ch == '\n').collect::<String>()
+        })
+        .into_owned()
+}
+
+#[test]
+fn every_text_key_used_has_text() {
+    let locale = web::locale::Locale::vi().unwrap();
+    let sections: std::collections::BTreeSet<&str> = locale
+        .text_keys()
+        .filter_map(|k| k.split('.').next())
+        .collect();
+    let mut missing = Vec::new();
+
+    let in_template = regex::Regex::new(r#"\bt\(key="([^"]+)""#).unwrap();
+    for (file, src) in templates() {
+        for (i, line) in src.lines().enumerate() {
+            for m in in_template.captures_iter(line) {
+                if locale.lookup(&m[1]).is_none() {
+                    missing.push(format!("templates/{file}:{}: {}", i + 1, &m[1]));
+                }
+            }
+        }
+    }
+
+    // Rust passes keys around as plain literals (menu tables, sort labels);
+    // any literal shaped `section.name` with a known section must exist.
+    let in_rust = regex::Regex::new(r#""([a-z_]+)\.([a-z0-9_.]+)""#).unwrap();
+    for (file, src) in sources("web") {
+        for (i, line) in shipped(&src).lines().enumerate() {
+            for m in in_rust.captures_iter(line) {
+                let key = format!("{}.{}", &m[1], &m[2]);
+                if sections.contains(&m[1]) && locale.lookup(&key).is_none() {
+                    missing.push(format!("{file}:{}: {key}", i + 1));
+                }
+            }
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "keys with no text in web/locales/vi.toml:\n{}",
+        missing.join("\n")
+    );
+}
+
+#[test]
+fn user_facing_text_lives_in_the_locale_files() {
+    // Vietnamese letters: any of them in code or markup is text that a
+    // second language could not replace.
+    let vietnamese = regex::Regex::new(
+        "[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ\
+         ÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ]",
+    )
+    .unwrap();
+    // Category and location seeds (rows an admin edits afterwards, so they are
+    // data, not wording), and the slug rule that folds `đ` to `d`.
+    const ALLOWED: &[&str] = &["application/src/catalogue.rs", "web/src/slug.rs"];
+    let mut found = Vec::new();
+    for name in ["domain", "application", "infrastructure", "web"] {
+        for (file, src) in sources(name) {
+            if ALLOWED.contains(&file.as_str()) {
+                continue;
+            }
+            for (i, line) in shipped(&src).lines().enumerate() {
+                if vietnamese.is_match(line) {
+                    found.push(format!("{file}:{}: {}", i + 1, line.trim()));
+                }
+            }
+        }
+    }
+    for (file, src) in templates() {
+        for (i, line) in without_tera_comments(&src).lines().enumerate() {
+            if vietnamese.is_match(line) {
+                found.push(format!("templates/{file}:{}: {}", i + 1, line.trim()));
+            }
+        }
+    }
+    let app_js = crates_dir().join("web/static/js/app.js");
+    for (i, line) in fs::read_to_string(app_js).unwrap().lines().enumerate() {
+        if !line.trim_start().starts_with("//") && vietnamese.is_match(line) {
+            found.push(format!("web/static/js/app.js:{}: {}", i + 1, line.trim()));
+        }
+    }
+    assert!(
+        found.is_empty(),
+        "user-facing text belongs in web/locales/vi.toml ([text], read with t() or \
+         Locale::text), not in code:\n{}",
+        found.join("\n")
     );
 }

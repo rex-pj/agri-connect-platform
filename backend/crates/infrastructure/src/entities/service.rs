@@ -16,6 +16,7 @@ pub struct Model {
     pub created_by: Option<i32>,
     pub updated_by: Option<i32>,
     pub deleted_at: Option<DateTimeWithTimeZone>,
+    pub image_file_id: Option<Uuid>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

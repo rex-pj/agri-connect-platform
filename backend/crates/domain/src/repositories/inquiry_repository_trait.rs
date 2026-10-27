@@ -12,9 +12,15 @@ pub trait InquiryRepositoryTrait {
     /// The inquiry `id` with the email address of the provider it went to.
     async fn find_for_notice(&self, id: i32) -> Result<Option<InquiryForNotice>, Error>;
 
-    async fn count_admin(&self) -> Result<i64, Error>;
+    /// `provider_id`: only that business's.
+    async fn count_admin(&self, provider_id: Option<i32>) -> Result<i64, Error>;
 
-    async fn list_admin(&self, limit: i64, offset: i64) -> Result<Vec<InquiryAdmin>, Error>;
+    async fn list_admin(
+        &self,
+        provider_id: Option<i32>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<InquiryAdmin>, Error>;
 
     async fn find_by_id_admin(&self, id: i32) -> Result<Option<InquiryAdmin>, Error>;
 

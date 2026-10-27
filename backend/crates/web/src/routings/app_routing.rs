@@ -29,7 +29,7 @@ use crate::{
         setup_handler::SetupHandler, stats_handler::StatsHandler,
     },
     middleware::{
-        client_ip, origin,
+        client_ip, language, origin,
         rate_limit::{self, Limiters, Scope},
     },
     pages,
@@ -118,6 +118,9 @@ impl AppRouting {
                 "/services/category/{id}/{slug}",
                 get(pages::services::category),
             )
+            .route("/services/{id}", get(pages::service::by_id))
+            .route("/services/{id}/{slug}", get(pages::service::show))
+            .route("/providers", get(pages::directory::list))
             .route("/providers/{id}", get(pages::provider::by_id))
             .route("/providers/{id}/{slug}", get(pages::provider::show))
             .route("/health/live", get(HealthHandler::live))
@@ -130,6 +133,12 @@ impl AppRouting {
             .route(
                 "/api/explore/providers/{id}",
                 get(ExploreHandler::get_provider_by_id),
+            )
+            // GET /api/explore/services — near me when lat+lng present, browse otherwise
+            .route("/api/explore/services", get(ExploreHandler::list_services))
+            .route(
+                "/api/explore/services/{id}",
+                get(ExploreHandler::get_service_by_id),
             )
             // /featured replaces the old /explore verb
             .route(
@@ -161,6 +170,9 @@ impl AppRouting {
             )
             // The page form: same rules and budget as the JSON endpoint.
             .route("/contact", post(pages::provider::submit_contact))
+            .route("/language", post(pages::language::switch))
+            // Call-button taps: the click-to-call count, same budget.
+            .route("/api/explore/calls", post(ExploreHandler::record_call))
             // Logging out is a write; under the same budget as the contact form.
             .route("/logout", post(session::logout))
             .route("/admin/logout", post(session::admin_logout))
@@ -181,6 +193,19 @@ impl AppRouting {
             .route(
                 "/provider/products/{id}/edit",
                 post(pages::dashboard::update_product),
+            )
+            .route(
+                "/api/provider/services/{id}/image",
+                put(MediaHandler::put_service_image),
+            )
+            // The service forms carry an optional photo.
+            .route(
+                "/provider/services/new",
+                post(pages::own_services::create_service),
+            )
+            .route(
+                "/provider/services/{id}/edit",
+                post(pages::own_services::update_service),
             )
             .layer(DefaultBodyLimit::max(
                 state.usecases.media.max_upload_bytes() + MULTIPART_OVERHEAD_BYTES,
@@ -294,6 +319,10 @@ impl AppRouting {
                 "/admin/explore/{id}/account",
                 post(pages::admin::providers::assign_account),
             )
+            .route(
+                "/admin/explore/{id}/status",
+                post(pages::admin::providers::change_status),
+            )
             .route("/admin/products", get(pages::admin::products::list))
             .route(
                 "/admin/products/{id}/status",
@@ -340,6 +369,18 @@ impl AppRouting {
                 "/provider/products/{id}/delete",
                 post(pages::dashboard::delete_product),
             )
+            .route(
+                "/provider/services/new",
+                get(pages::own_services::new_service),
+            )
+            .route(
+                "/provider/services/{id}/edit",
+                get(pages::own_services::edit_service),
+            )
+            .route(
+                "/provider/services/{id}/delete",
+                post(pages::own_services::delete_service),
+            )
             .route("/provider/inquiries", get(pages::inbox::list))
             .route(
                 "/provider/inquiries/{id}/status",
@@ -372,6 +413,10 @@ impl AppRouting {
             .route(
                 "/api/admin/providers/{id}/verification",
                 patch(AdminHandler::set_verification),
+            )
+            .route(
+                "/api/admin/providers/{id}/status",
+                patch(AdminHandler::toggle_provider_active),
             )
             .route(
                 "/api/admin/providers/{id}/users",
@@ -493,6 +538,22 @@ impl AppRouting {
             .route(
                 "/api/provider/products/{id}",
                 delete(ProviderDashboardHandler::delete_product),
+            )
+            .route(
+                "/api/provider/services",
+                get(ProviderDashboardHandler::list_services),
+            )
+            .route(
+                "/api/provider/services",
+                post(ProviderDashboardHandler::create_service),
+            )
+            .route(
+                "/api/provider/services/{id}",
+                put(ProviderDashboardHandler::update_service),
+            )
+            .route(
+                "/api/provider/services/{id}",
+                delete(ProviderDashboardHandler::delete_service),
             );
 
         let mut router = Router::new()
@@ -555,6 +616,9 @@ impl AppRouting {
                 origin::enforce(allowed_origins.clone(), req, next)
             }))
             .layer(error_renderer)
+            // Outermost of the page layers: every page and error body is worded
+            // in the visitor's language.
+            .layer(middleware::from_fn(language::scope_request))
             .layer(
                 TraceLayer::new_for_http()
                     .make_span_with(request_span)

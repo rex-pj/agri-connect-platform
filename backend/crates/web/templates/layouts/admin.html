@@ -1,26 +1,29 @@
 {% extends "layouts/base.html" %}
 {% import "atoms/icon.html" as atoms %}
+{% import "molecules/language_switch.html" as lang %}
 {#- The admin panel frame: top bar, permission-filtered menu, content. On a
-    phone the menu folds behind a button (Alpine `collapse`); without JS it
-    simply sits above the content. Pages set `page.admin` (AdminNav) and
-    `page.body`, and fill `content`. Never indexed. -#}
+    phone the menu is a drawer under the header, opened by a button (Alpine
+    `collapse`) and closed by the button, the dimmed page or Escape; without
+    JS it simply sits above the content. Pages set `page.admin` (AdminNav)
+    and `page.body`, and fill `content`. Never indexed. -#}
 {% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
 {% block body %}
-<div class="ash-layout" x-data="collapse">
+<div class="ash-layout" x-data="collapse" x-on:keydown.escape.window="close">
   <header class="ash-header">
     <div class="d-flex align-items-center gap-2">
-      <button type="button" class="ash-menu-btn d-md-none" aria-label="Menu" aria-controls="admin-menu" x-cloak x-on:click="toggle" :class="buttonClass" :aria-expanded="expanded">{{ atoms::icon(name="fa-bars") }}</button>
+      <button type="button" class="ash-menu-btn d-md-none" aria-label="{{ t(key="admin_layout.menu") }}" aria-controls="admin-menu" x-cloak x-on:click="toggle" :class="buttonClass" :aria-expanded="expanded">{{ atoms::icon(name="fa-bars") }}</button>
       <a class="ash-logo" href="{{ url_for(name="admin_dashboard") }}">{{ atoms::icon(name="fa-seedling", class="ash-logo__icon") }} <span>{{ site.name }} Admin</span></a>
     </div>
     <div class="d-flex align-items-center gap-2">
+      {{ lang::language_switch(languages=languages, back=shell.here, compact=true) }}
       <span class="ash-user d-none d-md-inline">{{ atoms::icon(name="fa-circle-user", class="me-1") }}{{ page.admin.username }}</span>
-      <a class="btn btn-sm btn-outline-light" href="{{ url_for(name="home") }}">{{ atoms::icon(name="fa-house") }}<span class="d-none d-sm-inline ms-1">Trang chủ</span></a>
+      <a class="btn btn-sm btn-outline-light" href="{{ url_for(name="home") }}">{{ atoms::icon(name="fa-house") }}<span class="d-none d-sm-inline ms-1">{{ t(key="nav.home") }}</span></a>
       <form method="post" action="{{ url_for(name="admin_logout") }}">
-        <button type="submit" class="btn btn-sm btn-outline-danger">{{ atoms::icon(name="fa-right-from-bracket") }}<span class="d-none d-sm-inline ms-1">Đăng xuất</span></button>
+        <button type="submit" class="btn btn-sm btn-outline-danger">{{ atoms::icon(name="fa-right-from-bracket") }}<span class="d-none d-sm-inline ms-1">{{ t(key="common.logout") }}</span></button>
       </form>
     </div>
   </header>
-  <nav class="ash-sidebar" id="admin-menu" aria-label="Quản trị" :class="panelClass">
+  <nav class="ash-sidebar" id="admin-menu" aria-label="{{ t(key="account_menu.admin") }}" :class="panelClass">
     {% for group in page.admin.groups %}
     {% if group.label %}<p class="ash-group-label">{{ group.label }}</p>{% endif %}
     {% for item in group.items %}
@@ -28,6 +31,7 @@
     {% endfor %}
     {% endfor %}
   </nav>
+  <button type="button" class="ash-backdrop d-md-none" tabindex="-1" aria-hidden="true" x-show="open" x-cloak x-on:click="close"></button>
   <main class="ash-content" id="main">
     {% block content %}{% endblock content %}
   </main>

@@ -10,3 +10,8 @@ pub const CATEGORY_TYPE_SERVICE: &str = "service";
 pub const CATEGORY_TYPE_PRODUCT: &str = "product";
 pub const CATEGORY_TYPES: &[&str] = &[CATEGORY_TYPE_SERVICE, CATEGORY_TYPE_PRODUCT];
 pub const INQUIRY_STATUSES: &[&str] = &["new", "contacted", "closed", "spam"];
+
+/// What a public call button was on (`data-call-kind` in the templates).
+pub const CALL_KIND_SERVICE: &str = "service";
+pub const CALL_KIND_PRODUCT: &str = "product";
+pub const CALL_KIND_PROVIDER: &str = "provider";

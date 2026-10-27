@@ -5,41 +5,41 @@
 {#- Demo data: how much is loaded, load it, remove it. `page.body` is
     web::pages::setup::SeedPage. Removing needs a ticked confirmation, so
     it is safe without JS too. Real listings are never touched. -#}
-{% block title %}Dữ liệu mẫu — {{ site.name }}{% endblock title %}
+{% block title %}{{ t(key="admin_menu.demo_data") }} — {{ site.name }}{% endblock title %}
 {% block content %}
 {% set page = page.body %}
-{{ header::admin_header(title="Dữ liệu mẫu", icon="fa-database", sub="Nhà cung cấp, dịch vụ và sản phẩm mẫu để thử nghiệm") }}
-<div class="admin-body seed-page">
-  {% if page.flash == "demo_loaded" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã nạp dữ liệu mẫu.") }}{% endif %}
-  {% if page.flash == "demo_removed" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã xoá toàn bộ dữ liệu mẫu.") }}{% endif %}
+{{ header::admin_header(title=t(key="admin_menu.demo_data"), icon="fa-database", sub=t(key="seed.sub")) }}
+<div class="admin-body">
+  {% if page.flash == "demo_loaded" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="seed.loaded")) }}{% endif %}
+  {% if page.flash == "demo_removed" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="seed.removed")) }}{% endif %}
   {% if page.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=page.errors.message) }}{% endif %}
 
-  <section class="detail-card">
-    <h2 class="detail-card__title">Hiện có</h2>
-    <p class="seed-count"><strong>{{ page.status.demo_business_count }}</strong> nhà cung cấp mẫu · <strong>{{ page.status.business_count }}</strong> nhà cung cấp tất cả</p>
+  <section class="admin-section" aria-labelledby="seed-count-title">
+    <h2 class="admin-section__title" id="seed-count-title">{{ t(key="seed.current") }}</h2>
+    <p class="seed-count"><strong>{{ page.status.demo_business_count }}</strong> {{ t(key="seed.demo_providers") }} · <strong>{{ page.status.business_count }}</strong> {{ t(key="seed.all_providers") }}</p>
   </section>
 
   {% if page.status.is_seeded %}
-  <section class="detail-card">
-    <h2 class="detail-card__title">Xoá dữ liệu mẫu</h2>
-    <p class="small text-muted">Chỉ xoá các nhà cung cấp mẫu cùng dịch vụ và sản phẩm của họ. Dữ liệu thật không bị ảnh hưởng.</p>
-    <form method="post" action="{{ url_for(name="setup_seed") }}">
+  <section class="admin-section" aria-labelledby="seed-remove-title">
+    <h2 class="admin-section__title" id="seed-remove-title">{{ t(key="seed.remove") }}</h2>
+    <p class="small text-muted">{{ t(key="seed.remove_note") }}</p>
+    <form class="form-stack" method="post" action="{{ url_for(name="setup_seed") }}">
       <input type="hidden" name="action" value="remove">
-      <div class="form-check mb-3">
+      <div class="form-check">
         <input class="form-check-input{% if page.errors.fields.confirm %} is-invalid{% endif %}" type="checkbox" id="seed_confirm" name="confirm" required{% if page.errors.fields.confirm %} aria-invalid="true" aria-describedby="seed_confirm-error"{% endif %}>
-        <label class="form-check-label" for="seed_confirm">Tôi hiểu: {{ page.status.demo_business_count }} nhà cung cấp mẫu sẽ bị xoá.</label>
+        <label class="form-check-label" for="seed_confirm">{{ t(key="seed.remove_confirm", count=page.status.demo_business_count) }}</label>
         {% if page.errors.fields.confirm %}<div class="invalid-feedback" id="seed_confirm-error">{{ page.errors.fields.confirm }}</div>{% endif %}
       </div>
-      <button type="submit" class="btn btn-outline-danger btn-lg w-100">{{ atoms::icon(name="fa-trash") }} Xoá dữ liệu mẫu</button>
+      <div class="admin-actions"><button type="submit" class="btn btn-outline-danger">{{ atoms::icon(name="fa-trash") }} {{ t(key="seed.remove") }}</button></div>
     </form>
   </section>
   {% else %}
-  <section class="detail-card">
-    <h2 class="detail-card__title">Nạp dữ liệu mẫu</h2>
-    <p class="small text-muted">Vài nhà cung cấp ở Cái Lậy, Tiền Giang cùng dịch vụ và sản phẩm, để thử các trang.</p>
-    <form method="post" action="{{ url_for(name="setup_seed") }}">
+  <section class="admin-section" aria-labelledby="seed-load-title">
+    <h2 class="admin-section__title" id="seed-load-title">{{ t(key="seed.load") }}</h2>
+    <p class="small text-muted">{{ t(key="seed.load_note") }}</p>
+    <form class="admin-actions" method="post" action="{{ url_for(name="setup_seed") }}">
       <input type="hidden" name="action" value="load">
-      <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-download") }} Nạp dữ liệu mẫu</button>
+      <button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-download") }} {{ t(key="seed.load") }}</button>
     </form>
   </section>
   {% endif %}

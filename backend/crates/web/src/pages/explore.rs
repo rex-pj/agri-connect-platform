@@ -1,4 +1,6 @@
-//! GET /explore — providers near the visitor.
+//! GET /explore — services, providers and products near the visitor, in three
+//! tabs (`tab=providers`, `tab=products`; links, so they work without JS).
+//! Before a position is known it features services, like the home page.
 //!
 //! The position comes from the `ac-geolocate` island (`lat`, `lng`) or, with
 //! or without JS, from a location preset chosen in a GET form
@@ -12,18 +14,17 @@ use application::{
     inputs::GeoSearchParams,
 };
 use axum::{extract::State, response::Response};
-use domain::Error;
+use domain::{constants::CATEGORY_TYPE_SERVICE, Error};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     app_state::AppState,
-    constants::{
-        EXPLORE_DEFAULT_RADIUS_M, EXPLORE_RADII_M, HOME_PRODUCT_COUNT, HOME_PROVIDER_COUNT,
-    },
+    constants::{EXPLORE_DEFAULT_RADIUS_M, EXPLORE_RADII_M},
     extract::ApiQuery,
     pages::{
-        cards::{tile, CategoryTile, ProviderCard},
+        cards::{tile, CategoryTile, ProviderCard, ServiceCard},
         listing::{parse_opt, with_query},
+        search::TabLink,
     },
     routes,
     shell::Shell,
@@ -38,6 +39,8 @@ pub struct ExploreQuery {
     pub location_id: String,
     pub radius: String,
     pub service_id: String,
+    /// `providers` for the shops tab; anything else shows the services.
+    pub tab: String,
 }
 
 /// Where the search is centred.
@@ -97,11 +100,21 @@ pub struct ExplorePage {
     pub wider: Option<RadiusLink>,
     pub service_tiles: Vec<CategoryTile>,
     pub service_id: Option<i32>,
+    /// The results tab shown without JS: `services`, `providers` or `products`.
+    pub tab: &'static str,
+    pub tabs: Vec<TabLink>,
+    /// Services whose provider is within the radius, nearest first.
+    pub services: Vec<ServiceCard>,
     pub providers: Vec<ProviderCard>,
-    pub featured_providers: Vec<ProviderCard>,
-    pub product_tiles: Vec<CategoryTile>,
-    pub featured_products: Vec<ProductDto>,
+    /// Products whose seller is within the radius, nearest first.
+    pub products: Vec<ProductDto>,
+    /// Before a position is known: the same featured services as the home page.
+    pub featured_services: Vec<ServiceCard>,
 }
+
+const TAB_SERVICES: &str = "services";
+pub(super) const TAB_PROVIDERS: &str = "providers";
+const TAB_PRODUCTS: &str = "products";
 
 fn url(name: &str, params: &[(&str, &str)]) -> Result<String, Error> {
     routes::url(name, params).map_err(|e| Error::internal(format!("explore links: {e}")))
@@ -132,10 +145,8 @@ pub async fn show(
     ApiQuery(q): ApiQuery<ExploreQuery>,
 ) -> Result<Response, Error> {
     let explore = &state.usecases.explore;
-    let (featured, service_categories, product_categories, locations) = tokio::try_join!(
-        explore.get_explore_data(),
-        explore.get_categories(Some("service")),
-        explore.get_categories(Some("product")),
+    let (service_categories, locations) = tokio::try_join!(
+        explore.get_categories(Some(CATEGORY_TYPE_SERVICE)),
         explore.get_locations(),
     )?;
 
@@ -153,9 +164,14 @@ pub async fn show(
     let service_id =
         parse_opt::<i32>(&q.service_id).filter(|id| service_categories.iter().any(|c| c.id == *id));
 
+    let tab = [TAB_PROVIDERS, TAB_PRODUCTS]
+        .into_iter()
+        .find(|t| *t == q.tab.trim())
+        .unwrap_or(TAB_SERVICES);
+
     let path = url("explore", &[])?;
-    // A link to this page with the position kept and the given filters.
-    let link = |radius: i64, service: Option<i32>| {
+    // A link to this page with the position kept and the given filters and tab.
+    let link_to = |radius: i64, service: Option<i32>, tab: &str| {
         let mut params: Vec<(&str, String)> =
             position.as_ref().map(Position::params).unwrap_or_default();
         if radius != EXPLORE_DEFAULT_RADIUS_M {
@@ -164,27 +180,57 @@ pub async fn show(
         if let Some(id) = service {
             params.push(("service_id", id.to_string()));
         }
+        if tab != TAB_SERVICES {
+            params.push(("tab", tab.to_owned()));
+        }
         let borrowed: Vec<(&str, &str)> = params.iter().map(|(k, v)| (*k, v.as_str())).collect();
         with_query(&path, &borrowed)
     };
+    let link = |radius: i64, service: Option<i32>| link_to(radius, service, tab);
 
-    let providers = match &position {
-        None => Vec::new(),
+    let (services, providers, products, featured_services) = match &position {
+        // No position yet: what the home page features, instead of results.
+        None => (
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            ServiceCard::all(explore.get_explore_data().await?.featured_services)?,
+        ),
         Some(p) => {
             let (lat, lng) = p.coordinates();
-            explore
-                .search_providers(GeoSearchParams {
-                    lat,
-                    lng,
-                    radius: radius as f64,
-                    service_id,
-                })
-                .await?
-                .into_iter()
-                .map(ProviderCard::from)
-                .collect()
+            let params = || GeoSearchParams {
+                lat,
+                lng,
+                radius: radius as f64,
+                service_id,
+            };
+            let (services, providers, products) = tokio::try_join!(
+                explore.search_services(params()),
+                explore.search_providers(params()),
+                explore.search_products(params()),
+            )?;
+            (
+                ServiceCard::all(services)?,
+                providers.into_iter().map(ProviderCard::from).collect(),
+                products,
+                Vec::new(),
+            )
         }
     };
+    let tabs = [
+        (TAB_SERVICES, "nav.services", services.len()),
+        (TAB_PROVIDERS, "nav.shops", providers.len()),
+        (TAB_PRODUCTS, "nav.products", products.len()),
+    ]
+    .into_iter()
+    .map(|(t, label, count)| TabLink {
+        tab: t,
+        label: state.locale().text(label),
+        href: link_to(radius, service_id, t),
+        count: Some(count as i64),
+        active: t == tab,
+    })
+    .collect();
 
     let mut service_tiles = Vec::with_capacity(service_categories.len());
     for c in &service_categories {
@@ -202,15 +248,6 @@ pub async fn show(
         t.active = active;
         service_tiles.push(t);
     }
-    let mut product_tiles = Vec::with_capacity(product_categories.len());
-    for c in &product_categories {
-        let href = url(
-            "product_category",
-            &[("id", &c.id.to_string()), ("slug", &c.slug)],
-        )?;
-        product_tiles.push(tile(&c.name, icon(c), href));
-    }
-
     let page = ExplorePage {
         located: position.is_some(),
         place: match &position {
@@ -242,19 +279,12 @@ pub async fn show(
             .collect(),
         service_tiles,
         service_id,
+        tab,
+        tabs,
+        services,
         providers,
-        featured_providers: featured
-            .featured_providers
-            .into_iter()
-            .take(HOME_PROVIDER_COUNT)
-            .map(ProviderCard::from)
-            .collect(),
-        product_tiles,
-        featured_products: featured
-            .featured_products
-            .into_iter()
-            .take(HOME_PRODUCT_COUNT)
-            .collect(),
+        products,
+        featured_services,
     };
     render_page(&state, &shell, "pages/explore.html", &page)
 }

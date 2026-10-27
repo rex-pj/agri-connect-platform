@@ -18,6 +18,7 @@ use crate::{
         RoleGrantsDto, UserPermissionsDto,
     },
     ports::EventBus,
+    validation::audit_reason,
 };
 
 /// The permission model: what exists, which role grants what, and editing a
@@ -185,7 +186,7 @@ impl PermissionUseCase {
                     added: changes.added,
                     removed: changes.removed,
                 },
-                reason,
+                reason: audit_reason(reason),
             })
             .await;
         Ok(())

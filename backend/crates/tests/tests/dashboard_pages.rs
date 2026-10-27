@@ -173,6 +173,10 @@ async fn a_product_is_added_with_its_photo_edited_and_deleted() {
 
     let new_page = page(&e, "/provider/products/new", &cookie).await;
     assert!(new_page.contains(r#"enctype="multipart/form-data""#));
+    assert!(
+        !new_page.contains("capture="),
+        "the gallery can be used too"
+    );
 
     // Every box rule at once; the typed price is kept.
     let res = send(

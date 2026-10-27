@@ -13,7 +13,11 @@ use crate::{
     app_state::AppState,
     constants::META_DESCRIPTION_MAX_CHARS,
     extract::ApiPath,
-    pages::{canonical_url, moved_permanently, parse_id, summary},
+    pages::{
+        canonical_url, moved_permanently, parse_id,
+        service::{service_links, OtherService},
+        summary,
+    },
     shell::Shell,
     views::render_page,
 };
@@ -26,6 +30,8 @@ pub struct ProductPage {
     pub meta_description: Option<String>,
     /// The seller's page, with its services and the contact form.
     pub provider_href: String,
+    /// What else the seller does: their services, each to its own page.
+    pub provider_services: Vec<OtherService>,
 }
 
 async fn load(state: &AppState, raw_id: &str) -> Result<ProductDto, Error> {
@@ -57,7 +63,13 @@ pub async fn show(
     if shell.path != canonical {
         return moved_permanently(&canonical);
     }
+    let provider = state
+        .usecases
+        .explore
+        .get_provider_detail(product.business_id)
+        .await?;
     let page = ProductPage {
+        provider_services: service_links(&provider.services, None)?,
         provider_href: canonical_url("provider", product.business_id, &product.vendor_name)?,
         meta_description: product
             .description

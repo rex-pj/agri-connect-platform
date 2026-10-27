@@ -21,7 +21,7 @@ agri-connect-platform/
 │   │   │   ├── src/pages/      # Server-rendered pages (one module per page or area)
 │   │   │   ├── templates/      # Tera: atoms/ molecules/ organisms/ pages/ layouts/
 │   │   │   ├── static/         # CSS, fonts, Bootstrap, Alpine, the committed islands.js
-│   │   │   └── locales/vi.toml # User-facing text for every error code
+│   │   │   └── locales/       # vi.toml, en.toml: every user-facing word ([errors] by code, [text] by key)
 │   │   └── tests/              # Integration + convention tests (no workspace lints)
 │   ├── islands/                # Svelte custom elements → static/js/islands.js (Node only here)
 │   └── migration/              # Sea-ORM migrations: DDL only, append-only
@@ -95,7 +95,7 @@ Templates live under `backend/crates/web/templates/` and are organized by atomic
 
 | Level     | Folder       | Examples                                                                                       |
 | --------- | ------------ | ---------------------------------------------------------------------------------------------- |
-| Atoms     | `atoms/`     | `icon`, `alert`, `inquiry_status`                                                              |
+| Atoms     | `atoms/`     | `icon`, `alert`, `inquiry_status`, `photo_placeholder`                                         |
 | Molecules | `molecules/` | `form_field`, `page_hero`, `section_header`, `pagination_nav`, `empty_state`, `admin_header`   |
 | Organisms | `organisms/` | `product_card`, `provider_card`, `category_grid`, `contact_sheet`, `confirm_sheet`, `*_fields` |
 | Layouts   | `layouts/`   | `app.html` (public + provider), `admin.html` (admin panel)                                     |
@@ -120,10 +120,11 @@ Templates live under `backend/crates/web/templates/` and are organized by atomic
 | `users`                 | id, username, email, password_hash, full_name, role_id, is_active, failed_login_attempts, locked_until | Soft-deletable                                 |
 | `categories`            | id, name, slug, type, icon, display_order, is_active                                                   | Types: `service`, `product`                    |
 | `businesses`            | id, name, phone, email, description, address, lat, lng, is_verified, is_active                         | Provider/business listing                      |
-| `services`              | id, business_id, category_id, name, description, price_note, is_active                                 | Services offered by a business                 |
+| `services`              | id, business_id, category_id, name, description, price_note, is_active, image_file_id                  | Offered by a business; `is_active` is admin's  |
 | `products`              | id, business_id, category_id, name, description, price, unit, is_active                                | Products sold by a business                    |
 | `inquiries`             | id, business_id, service_id, topic, requester_name, requester_phone, note, status                      | Statuses: `new`, `contacted`, `closed`, `spam` |
 | `reviews`               | id, business_id, reviewer_name, rating (1–5), comment, is_visible                                      | Moderated by admin                             |
+| `call_clicks`           | id, business_id, service_id, product_id, created_on                                                    | Click-to-call taps; never who called           |
 | `password_reset_tokens` | id, user_id, token, expires_at, consumed_at                                                            | Single-use, 1-hour TTL                         |
 
 ### Geo Query Pattern
@@ -151,12 +152,15 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 | GET    | `/health/live`, `/health/ready`    | Liveness; readiness (database reachable)                                                               |
 | GET    | `/api/explore/providers`           | Geo-search (`lat`, `lng`, `radius?` default 10 km, `category_id?`) or browse (paginated, `page?`)      |
 | GET    | `/api/explore/providers/{id}`      | Provider detail                                                                                        |
-| GET    | `/api/explore/featured`            | Home featured data (providers, products, categories)                                                   |
+| GET    | `/api/explore/services`            | Same two modes as providers, over public services (`name?` = text, `sort?`); each with its business    |
+| GET    | `/api/explore/services/{id}`       | Public service detail                                                                                  |
+| GET    | `/api/explore/featured`            | Home featured data: services (one per verified provider), providers, products                          |
 | GET    | `/api/explore/categories`          | Category listing (filter by `type=service\|product`)                                                   |
 | GET    | `/api/explore/locations`           | Location presets listing                                                                               |
 | GET    | `/api/explore/products`            | Browse products (paginated, filter by `category_id?`)                                                  |
 | GET    | `/api/explore/products/{id}`       | Product detail                                                                                         |
 | POST   | `/api/explore/contact`             | Submit contact/inquiry (rate-limited: 30/min)                                                          |
+| POST   | `/api/explore/calls`               | A tap on a public call button (`{kind, id}`, 204; 30/min); the business is looked up from the record    |
 | POST   | `/contact`                         | Same inquiry as a page form (urlencoded); 303 + one-time flash, or the page re-shown with field errors |
 | GET    | `/files/{id}`, `/files/{id}/thumb` | Uploaded image (JPEG, cached forever; ids are never reused)                                            |
 
@@ -198,10 +202,11 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 | GET    | `/api/admin/providers`                   | Provider list (paginated)                                         |
 | GET    | `/api/admin/providers/{id}`              | Provider detail                                                   |
 | PATCH  | `/api/admin/providers/{id}/verification` | Set verification badge (`is_verified`, `reason?`)                 |
+| PATCH  | `/api/admin/providers/{id}/status`       | Turn a provider on / off (`is_active`, `reason?`; off: gone from public pages) |
 | POST   | `/api/admin/providers/{id}/users`        | Link a provider account (or create one); one business per account |
-| GET    | `/api/admin/inquiries`                   | Inquiry list (paginated)                                          |
+| GET    | `/api/admin/inquiries`                   | Inquiry list (paginated, `provider_id?`)                          |
 | PATCH  | `/api/admin/inquiries/{id}/status`       | Update inquiry status                                             |
-| GET    | `/api/admin/reviews`                     | Review list (paginated)                                           |
+| GET    | `/api/admin/reviews`                     | Review list (paginated, `provider_id?`)                           |
 | PATCH  | `/api/admin/reviews/{id}/visibility`     | Toggle review visibility                                          |
 | GET    | `/api/admin/locations`                   | Location preset list                                              |
 | POST   | `/api/admin/locations`                   | Create location preset                                            |
@@ -231,6 +236,11 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 | PUT    | `/api/provider/products/{id}`       | Update product                                          |
 | DELETE | `/api/provider/products/{id}`       | Delete product                                          |
 | PUT    | `/api/provider/products/{id}/image` | Replace product image (multipart field `image`; 20/min) |
+| GET    | `/api/provider/services`            | List own services (admin-hidden ones too)               |
+| POST   | `/api/provider/services`            | Create service (blank name → category name; max 20)     |
+| PUT    | `/api/provider/services/{id}`       | Update service (never changes admin visibility)         |
+| DELETE | `/api/provider/services/{id}`       | Delete service                                          |
+| PUT    | `/api/provider/services/{id}/image` | Replace service image (multipart field `image`; 20/min) |
 
 ### Setup (first-run / development only)
 
@@ -273,25 +283,30 @@ Every page is a handler in `backend/crates/web/src/pages/`, routed in `web/src/r
 | `/setup`           | First admin + optional demo data (`web/src/pages/setup.rs`); closed once an admin exists     |
 | `/setup/seed`      | Demo data page: load / remove (`system.demo.manage`)                                         |
 | `/logout`          | POST: ends the session family, clears both cookies (`web/src/session.rs`)                    |
+| `/language`        | POST: language switch (`lang` = vi / en, `back` = a local path); `lang` cookie, 303 back (`web/src/pages/language.rs`) |
 
 ### App
 
 | Route                                                    | Description                                                                                                                              |
 | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `/`                                                      | Home: featured products, providers, categories (`web/src/pages/home.rs`)                                                                 |
+| `/`                                                      | Home: service then product category tiles, near-me banner, featured services, featured products (`web/src/pages/home.rs`)                |
 | `/products`                                              | Product listing: GET filter form, page links (`web/src/pages/products.rs`)                                                               |
 | `/products/[id]`                                         | 301 → `/products/[id]/[slug]`                                                                                                            |
-| `/products/[id]/[slug]`                                  | Product detail (`web/src/pages/product.rs`; any other spelling 301s here)                                                                |
+| `/products/[id]/[slug]`                                  | Product detail + the seller's services (`web/src/pages/product.rs`; any other spelling 301s here)                                     |
 | `/products/category/[id]/[slug]`                         | Products in a category (slug is the category slug, others 301)                                                                           |
-| `/services`                                              | Provider directory: GET filter form, page links (`web/src/pages/services.rs`)                                                            |
-| `/services/category/[id]/[slug]`                         | Providers of one service (category slug canonical)                                                                                       |
-| `/search`                                                | Providers + products for `q`; link tabs (`tab=`) work without JS (`web/src/pages/search.rs`)                                             |
-| `/explore`                                               | Providers near a GPS position (`ac-geolocate` island) or a location preset (GET form); radius/service links (`web/src/pages/explore.rs`) |
+| `/services`                                              | Service listing: one card per public service (photo, price, provider, call); GET filter form, page links (`web/src/pages/services.rs`)   |
+| `/services/category/[id]/[slug]`                         | Services in one category (category slug canonical)                                                                                       |
+| `/services/[id]`                                         | 301 → `/services/[id]/[slug]`                                                                                                            |
+| `/services/[id]/[slug]`                                  | Service detail + the provider's other services + contact form with it chosen (`return_to=service`) (`web/src/pages/service.rs`)          |
+| `/search`                                                | Services + products + shops for `q`; link tabs (`tab=`) work without JS (`web/src/pages/search.rs`)                                      |
+| `/explore`                                               | Services, providers and products near a position (`ac-geolocate`) or preset, three tabs; featured services before one (`explore.rs`)     |
+| `/providers`                                             | Provider directory (new sign-ups without a service too); found by name or by their services (`web/src/pages/directory.rs`)               |
 | `/providers/[id]`                                        | 301 → `/providers/[id]/[slug]`                                                                                                           |
 | `/providers/[id]/[slug]`                                 | Provider detail + contact form (`web/src/pages/provider.rs`)                                                                             |
 | `/account`                                               | Profile, password change (signs out other devices), logout (`web/src/pages/account.rs`)                                                  |
-| `/provider/dashboard`                                    | Products (photo thumbs) + business profile with GPS fill (`ac-geolocate` fill mode) (`web/src/pages/dashboard.rs`)                       |
+| `/provider/dashboard`                                    | Services + products (photo thumbs) + business profile with GPS fill (`ac-geolocate` fill mode) (`web/src/pages/dashboard.rs`)            |
 | `/provider/products/new`, `/provider/products/[id]/edit` | Multipart product form with photo (checked before anything is saved), delete (confirm)                                                   |
+| `/provider/services/new`, `/provider/services/[id]/edit` | Multipart service form: category cards, optional photo, delete (confirm) (`own.service.*`) (`web/src/pages/own_services.rs`)             |
 | `/provider/inquiries`                                    | Farmers' contact requests to this business: call button, status per card (`own.inquiry.manage`) (`web/src/pages/inbox.rs`)              |
 
 ### Admin
@@ -305,17 +320,17 @@ Every page is a handler in `backend/crates/web/src/pages/`, routed in `web/src/r
 | `/admin/roles`           | Roles with grant counts                                                                                                        |
 | `/admin/roles/[id]`      | Editable permission grid, `POST …/permissions` (`role.permission.manage`; cannot revoke it from your own role; audited)        |
 | `/admin/permissions`     | Permissions × roles, read-only                                                                                                 |
-| `/admin/categories`      | Category list + create form (`web/src/pages/admin/categories.rs`)                                                              |
+| `/admin/categories`      | Category list (row: hide (confirm + reason) / show, open) + create form (`web/src/pages/admin/categories.rs`) |
 | `/admin/categories/[id]` | Edit; hide (confirm + reason) / show                                                                                           |
-| `/admin/locations`       | Location presets + create form (`web/src/pages/admin/locations.rs`)                                                            |
-| `/admin/locations/[id]`  | Edit, hide / show, delete (confirm + reason) → list                                                                            |
+| `/admin/locations`       | Location presets (row: hide (confirm + reason) / show, delete (confirm), open) + create form (`web/src/pages/admin/locations.rs`) |
+| `/admin/locations/[id]`  | Edit, hide (confirm + reason) / show, delete (confirm + reason) → list                                                                         |
 | `/admin/explore`         | Provider list, paged (`web/src/pages/admin/providers.rs`)                                                                      |
-| `/admin/explore/[id]`    | Details, verify / unverify (confirm + reason), assign the managing account                                                     |
+| `/admin/explore/[id]`    | Details, turn off (confirm + reason) / on, verify / unverify (confirm + reason), assign the managing account; links to its services, products, inquiries, reviews                                                   |
 | `/admin/products`        | Products (filter `provider_id`): hide (confirm + reason) / show, delete (confirm + reason) (`web/src/pages/admin/products.rs`) |
-| `/admin/services`        | Services (filter `provider_id`; create form only for one provider)                                                             |
+| `/admin/services`        | Services (filter `provider_id`; row: hide / show, delete, open; create form only for one provider) |
 | `/admin/services/[id]`   | Edit, hide / show, delete (confirm + reason)                                                                                   |
-| `/admin/inquiries`       | Status per row (select + button; `autoSubmit` with JS)                                                                         |
-| `/admin/reviews`         | Hide (confirm + reason) / show                                                                                                 |
+| `/admin/inquiries`       | Status per row (select + button; `autoSubmit` with JS); filter `provider_id`                                                                       |
+| `/admin/reviews`         | Hide (confirm + reason) / show; filter `provider_id`                                                                                               |
 | `/admin/logout`          | POST: same as `/logout`, lands on `/login`                                                                                     |
 
 ---
@@ -400,7 +415,7 @@ Canonical product, provider and category URLs end in a slug from the `slugify` f
 - Layered architecture is strict: handlers call use cases; use cases call repository traits; infrastructure implements traits. Never skip a layer.
 - Sea-ORM entities are in `infrastructure/src/entities/`; never define raw SQL structs that duplicate an entity.
 - Business rules and validation belong in use cases (`application/src/validation.rs` for shared rules), not in handlers or request structs.
-- Every failure is a `domain::Error` with an `ErrorCode`. Never put user-facing text in Rust: add the code to `domain/src/error.rs` and its Vietnamese text to `web/locales/vi.toml` (a test fails if either is missing). Never build an error response with an ad-hoc status code.
+- Every failure is a `domain::Error` with an `ErrorCode`. Never put user-facing text in Rust: add the code to `domain/src/error.rs` and its Vietnamese text to `web/locales/vi.toml` `[errors]` (a test fails if either is missing). Never build an error response with an ad-hoc status code.
 - Handlers extract with `ApiJson` / `ApiPath` / `ApiQuery` from `web::extract`, never axum's own, so malformed input gets a coded error.
 - Environment variables are read only in `web/src/startup.rs`; everything else receives configuration as arguments.
 - Migrations are DDL only and append-only: never edit or delete one that has run anywhere. Reference data (roles, permissions, categories, locations) lives in `application/src/catalogue.rs` and is seeded idempotently at startup; demo data only through `/api/setup/seed`.
@@ -408,7 +423,10 @@ Canonical product, provider and category URLs end in a slug from the `slugify` f
 - All location data uses **SRID 4326** (WGS84). Never mix geometry and geography types in the same query.
 - Phone number pattern for Vietnamese mobile: `0\d{9}` (10 digits starting with 0).
 - Radius validation bounds: 100 m minimum, 50 000 m maximum.
-- Public provider lists (directory, near-me, search) include providers with no service yet, so a new sign-up can be found; a service filter (`category_id`) matches only a live service in a live category. The home page's featured providers need at least one live service.
+- `/services` lists services, not providers; a service is public when it is shown, not deleted, in a shown category and its business is live (`live_public` in the service repository, the one place that says so). Searching a service matches its name, description and the business's name; searching a provider matches its name, description and its live services' text.
+- Public provider lists (`/providers`, near-me shops tab, search's shops tab) include providers with no service yet, so a new sign-up can be found; a service filter (`category_id`) matches only a live service in a live category. Featured services (home, near-me before a position): one per verified provider, those with a photo first, providers rotated by day, every category once before a repeat (`pick_featured`). Service cards are compact rows at every width (a fixed 104/120 px square photo beside the text, one call button), and fewer than three keep the two-column width (`service-grid--1/--2`), never one card across a wide screen. The default service order and the near-me services take turns by provider (`with_provider_turn`: each provider's first service before anyone's second); an explicit sort is kept as chosen. The wide top bar has a "Cửa hàng" tab (`wide_only`); on a phone the directory is a home page tile. The "Tài khoản" tab is `phone_only`: on a wide screen the top bar's account button covers it. `/services` and `/providers` open with "Dịch vụ | Cửa hàng" tabs (`services::view_tabs`: both read `ListQuery`, so a switch keeps the search, category and sort); their near-me banner comes after the third card (`near_me_href`, category and tab kept), and an empty search offers the other list as its second action.
+- Providers manage their own services (`own.service.create` / `update` / `delete`). Every owner-scoped query matches the owner in the same statement (an `in_subquery` on the business), the business comes from the session, never the request, and someone else's service answers `service_not_found`. `is_active` is the admin's moderation switch: an owner's edit never changes it. A business lists at most `SERVICES_PER_BUSINESS_MAX` services (hidden ones count; the business row is locked while counting). Admin and owner forms share `usecases::service_rules::validate_service` (a blank name takes the category's).
+- Repository queries use Sea-ORM's query builder (`find`, `update_many`, `Query::select` subqueries, `lock_exclusive` in a transaction), not raw SQL strings; `Expr::cust_with_values` only for a PostGIS fragment the builder cannot express.
 - Every list sort ends with an `id` tiebreaker, and price sorts put unpriced products last, so pages never repeat or skip rows.
 
 ### Backend — DDD / Layer Integrity Rules
@@ -439,12 +457,13 @@ middleware / handlers  →  application (use cases, ports)  →  domain  ←  in
 - Every state-changing use case, and every admin read, starts with `actor.require(PERM_...)?`. Permission keys live in `application/src/catalogue.rs`. Never compare role names: a convention test rejects it, and another fails when a use case taking an `Actor` checks nothing.
 - Permissions are loaded from the database on every request, so a revocation or a deactivated account takes effect on the next request, not when the token expires.
 - Non-GET requests with a foreign `Origin` are refused (`cross_origin_request`); `APP_URL` and `CORS_ORIGINS` are the allowed origins.
+- Public call buttons are `molecules/call_button.html`: a plain `tel:` link that Alpine `callBeacon` counts with `sendBeacon` to `/api/explore/calls` (uncounted without JS); its label is always the phone number. Counts cover `CALL_STATS_DAYS` (admin dashboard total, the provider's own on their dashboard); nothing about the caller is stored.
 - Domain events (`domain/src/events.rs`) are published after a change is stored; the audit log is a subscriber. New side effects (notifications, webhooks) subscribe; use cases do not call them. A visitor's event (a farmer's inquiry) has no `actor_id` and is not audited; the inquiry subscriber emails the provider (the managing account, else the business's address) in a background task, linking to `/provider/inquiries`.
 
 **Infrastructure layer (`infrastructure/`)**
 
 - Concrete library types (`jsonwebtoken`, `bcrypt`, Sea-ORM) are confined to `infrastructure/`. Implement the port traits from `application/ports.rs` here.
-- Uploads never reach storage as sent: `MediaUseCase` passes them through the `ImageProcessor` port (type sniffed from bytes, pixel cap checked before decoding, re-encoded as JPEG, EXIF dropped). Storage is the `FileStorage` port (`GCS_BUCKET`, else `UPLOAD_DIR`). Templates link images only with `file_url(id=…, variant="thumb")`. Old images are deleted by the file-cleanup event subscriber, never inline.
+- Uploads never reach storage as sent: `MediaUseCase` passes them through the `ImageProcessor` port (type sniffed from bytes, pixel cap checked before decoding, re-encoded as JPEG, EXIF dropped). Storage is the `FileStorage` port (`GCS_BUCKET`, else `UPLOAD_DIR`). Templates link images only with `file_url(id=…, variant="thumb")`. Old images are deleted by the file-cleanup event subscriber, never inline. Products and services each have one optional image, replaced through `MediaUseCase::swap_image`.
 - A write that can hit a UNIQUE constraint maps the failure with `repositories::unique_or_internal` to a field error (e.g. `slug_taken`), never a 500.
 - `JwtTokenService` (in `infrastructure/jwt_token_service.rs`) is the only file that calls `jsonwebtoken::encode`. `BcryptPasswordHasher` (in `infrastructure/bcrypt_password_hasher.rs`) is the only file that calls `bcrypt::hash` / `bcrypt::verify`.
 
@@ -454,16 +473,20 @@ middleware / handlers  →  application (use cases, ports)  →  domain  ←  in
 
 ### Pages
 
-- A page is a handler in `web/src/pages/` that takes `Shell` (the frame: top bar, account menu, bottom tabs, built from the session) and renders through `views::render_page`. Admin pages render through `pages::admin::render_admin` (the admin frame, menu filtered by permission). A stale session cookie renders the page signed out; it never fails it.
+- A page is a handler in `web/src/pages/` that takes `Shell` (the frame: top bar, account menu, bottom tabs, footer, built from the session) and renders through `views::render_page`. The admin panel is never a tab: admins reach it from the account menu and the footer. The footer (`organisms/app_footer.html`) reuses the tabs for its browse links and the account menu's links for its account column, and shows the platform's help lines from `SITE_SUPPORT_PHONE` / `SITE_SUPPORT_ZALO_URL` / `SITE_SUPPORT_EMAIL`; each unset one is hidden, never a made-up number. Admin pages render through `pages::admin::render_admin` (the admin frame, menu filtered by permission). A stale session cookie renders the page signed out; it never fails it.
 - Templates follow the atomic levels above. Links come from `url_for`, product and provider slugs from the `slugify` filter, images from `file_url(id=…, variant="thumb")`, field limits (`maxlength`, `minlength`) from the global `limits`, never typed numbers.
+- **No words in code:** every user-facing word lives in `web/locales/vi.toml` and `en.toml` (same keys, a test compares them; `[text]` nested tables read as dotted keys). Templates say `t(key="area.name", count=…)` (an unknown key fails the render, like `url_for`); page code says `state.locale().text("area.name")` / `text_with(key, &[("name", &value)])`, the request's language; `Shell` takes the `Locale`, `Views` holds one Tera set per language; emails get their wording at startup (`EmailTexts`). A sentence that wraps markup is split into `_before` / `_after` keys (never `| safe`). Roles and permissions are worded by code (`role.<code>`, `role_description.<code>`, `permission.<key>`) through `labels::Worded`, in pages and the JSON API alike; the database `name` (seeded as the code) is only the fallback. Convention tests fail on a key with no text and on Vietnamese letters outside the locale files (category and location seeds in `catalogue.rs`, which admins edit, and the slug rule excepted).
 - **Bootstrap first:** Bootstrap 5 components and utilities before custom CSS; custom styles go in `static/css/app.css` only for what Bootstrap cannot do. No `style=""` attributes and no `<style>` elements: the page CSP is `style-src 'self'`.
 - Interactive bits are Alpine components (CSP build) registered in `static/js/app.js`; attribute values name a component property, never an expression (convention test). Markup must work without them: links and plain forms first.
 - What Alpine cannot do (today only geolocation) is an island: a Svelte custom element in `backend/islands/src` (light DOM, no `<style>`, all text passed as attributes), built with `npm run build` into `static/js/islands.js`, which is committed. CI rebuilds it and fails on a diff. Pages that use one load it in `{% block scripts %}`. Node is needed only for this.
 - **Large tap targets** (min 44 px) and **minimal text**: the primary users are farmers on low-end Android phones with poor connectivity.
 - Custom SQL in `Expr::cust_with_values` uses `$1`, `$2`: a `?` is left unbound and the query fails at runtime (convention test).
 - Page forms post urlencoded (`ApiForm`) and follow Post/Redirect/Get: success is a 303 with a `cookies::Flash`; a broken rule re-renders the page with the error's status, the typed values and one message per field (from `error_body`). The rules stay in the use case the JSON API uses. A form with a file box posts `multipart/form-data`, read with `ApiMultipart::into_form`; a photo is checked with `MediaUseCase::prepare_image` before anything else is saved, and ownership is checked before the body is read.
-- An action that needs a second look (deactivate, hide, delete) uses `organisms/confirm_sheet.html` inside an `x-data="dialog"` element; without JS it is an anchored form on the page. On a list, the row's link reloads the list with `?hide={id}` (or `?delete=`) and the server renders that confirmation open. Row forms send the list position back as `page` / `provider_id` (`pages::admin::ListPosition`), rebuilt from numbers, never a posted URL.
+- An action that needs a second look (deactivate, hide, delete) uses `organisms/confirm_sheet.html` inside an `x-data="dialog"` element; without JS it is an anchored form on the page. It says what will happen (`effect="hide"` / `"delete"` with `what`, else `note`), and its reason box is optional, capped at `limits.audit_reason_max` (`AUDIT_REASON_MAX`, also cut server-side by `validation::audit_reason`). On a list, the row's link reloads the list with `?hide={id}` (or `?delete=`) and the server renders that confirmation open. Row forms send the list position back as `page` / `provider_id` (`pages::admin::ListPosition`), rebuilt from numbers, never a posted URL; for a record that also has its own page they add `back=list` (`ListReturn`), else its handler lands on that page.
+- Every admin hide / deactivate / delete asks for confirmation and a reason (audited); show / activate is one button. Lists narrowed to one provider (`provider_id`: products, services, inquiries, reviews) use `ListPosition::provider_filter` / `pagination` and `molecules/admin_filter.html`.
+- Admin lists end each row with `molecules/row_action.html` macros, one per kind (`show` green or `hide` amber, `delete` red, then `open`, or `public` for a record with no admin page), in that order; icon-only on a narrow screen, icon and a short word from 992 px. A table has only the ones its records support. States are `atoms/status_badge.html` (`visibility`, `account`, `verified`); a hidden or switched-off row is grey (`table-light text-body-secondary`), never amber, and green never marks anything but shown / active / verified / call. Rows start with `atoms/admin_thumb.html` where the record has a photo. Inquiry statuses are `inquiry_status::label(badge=true)` (new is blue). Detail pages are `admin-section` cards (title, then `admin-status` line, then one `admin-actions` row); forms are `form-stack`; deleting is its own card at the end. An admin page's one top action (add, public page) goes in `admin_header`'s `action_*`.
 - The session lives in httpOnly cookies (`auth_token`, `refresh_token`); no script ever reads a token.
+- **Languages:** Vietnamese by default; English when the `lang` cookie says so (only an explicit choice, never `Accept-Language`: farmers' phones are often set to English). `middleware::language` scopes every request with it (outermost of the page layers, so error bodies and the JSON API follow it too); `locale::current()` reads it. The switch is `molecules/language_switch.html`: each language named in itself, never a flag, a plain POST back to `shell.here`; in the footer's bottom bar, under the auth card, and compact (`VI | EN`) in the admin bar. Emails go out in the default language.
 
 ### SEO
 
@@ -474,7 +497,9 @@ Public content pages fill `{% block title %}` and `{% block meta %}` (a `<meta n
 | `/` (home)                                                   | Yes          | Static title + description                              |
 | `/products`, `/products/[id]/[slug]`                         | Yes          | Product name & description in meta                      |
 | `/products/category/[id]/[slug]`                             | Yes          | Category name in title                                  |
-| `/services/category/[id]/[slug]`                             | Yes          | Category name in title                                  |
+| `/services`, `/services/category/[id]/[slug]`                | Yes          | Category name in title                                  |
+| `/services/[id]/[slug]`                                      | Yes          | Service + provider name in title, description in meta   |
+| `/providers`                                                 | Yes          | Static title + description                              |
 | `/explore`                                                   | Yes          | Near-me page                                            |
 | `/providers/[id]/[slug]`                                     | Yes          | Provider name & description in meta                     |
 | `/account`, `/provider/**`                                   | No           | Authenticated; `<meta name="robots" content="noindex">` |

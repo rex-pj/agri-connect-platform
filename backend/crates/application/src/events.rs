@@ -12,6 +12,7 @@ use domain::{
         file_repository_trait::FileRepositoryTrait,
         inquiry_repository_trait::InquiryRepositoryTrait,
         product_repository_trait::ProductRepositoryTrait,
+        service_repository_trait::ServiceRepositoryTrait,
     },
     Result,
 };
@@ -67,8 +68,10 @@ impl AuditLogSubscriber {
 pub fn audit_action(event: &DomainEvent) -> String {
     let entity = event.entity.as_str();
     match (&event.change, event.entity) {
-        (Change::Visibility { visible: true }, Entity::Provider) => "verify_provider".into(),
-        (Change::Visibility { visible: false }, Entity::Provider) => "unverify_provider".into(),
+        (Change::Verification { verified: true }, _) => "verify_provider".into(),
+        (Change::Verification { verified: false }, _) => "unverify_provider".into(),
+        (Change::Visibility { visible: true }, Entity::Provider) => "activate_provider".into(),
+        (Change::Visibility { visible: false }, Entity::Provider) => "deactivate_provider".into(),
         (Change::Visibility { visible: true }, Entity::User) => "activate_user".into(),
         (Change::Visibility { visible: false }, Entity::User) => "deactivate_user".into(),
         (Change::Visibility { visible: true }, _) => format!("show_{entity}"),
@@ -129,11 +132,13 @@ impl EventSubscriber for AuditLogSubscriber {
     }
 }
 
-/// Removes images nothing points at any more: the one a product just
-/// replaced, and the one of a product just deleted. A failure leaves an
-/// orphaned object (logged by the bus), never a broken image on a live page.
+/// Removes images nothing points at any more: the one a product or service
+/// just replaced, and the one of a product or service just deleted. A failure
+/// leaves an orphaned object (logged by the bus), never a broken image on a
+/// live page.
 pub struct FileCleanupSubscriber {
     products: Arc<dyn ProductRepositoryTrait + Send + Sync>,
+    services: Arc<dyn ServiceRepositoryTrait + Send + Sync>,
     files: Arc<dyn FileRepositoryTrait + Send + Sync>,
     storage: Arc<dyn FileStorage>,
 }
@@ -141,11 +146,13 @@ pub struct FileCleanupSubscriber {
 impl FileCleanupSubscriber {
     pub fn new(
         products: Arc<dyn ProductRepositoryTrait + Send + Sync>,
+        services: Arc<dyn ServiceRepositoryTrait + Send + Sync>,
         files: Arc<dyn FileRepositoryTrait + Send + Sync>,
         storage: Arc<dyn FileStorage>,
     ) -> Self {
         Self {
             products,
+            services,
             files,
             storage,
         }
@@ -161,8 +168,9 @@ impl EventSubscriber for FileCleanupSubscriber {
     async fn handle(&self, event: &DomainEvent) -> Result<()> {
         let unreferenced = match (&event.change, event.entity) {
             (Change::ImageReplaced { previous }, _) => *previous,
-            // Products are soft-deleted, so the row still names its image.
+            // Both are soft-deleted, so the row still names its image.
             (Change::Deleted, Entity::Product) => self.products.image_of(event.entity_id).await?,
+            (Change::Deleted, Entity::Service) => self.services.image_of(event.entity_id).await?,
             _ => None,
         };
         match unreferenced {
@@ -252,9 +260,16 @@ mod tests {
         assert_eq!(
             audit_action(&event(
                 Entity::Provider,
-                Change::Visibility { visible: true }
+                Change::Verification { verified: true }
             )),
             "verify_provider"
+        );
+        assert_eq!(
+            audit_action(&event(
+                Entity::Provider,
+                Change::Visibility { visible: false }
+            )),
+            "deactivate_provider"
         );
         assert_eq!(
             audit_action(&event(Entity::User, Change::Visibility { visible: false })),

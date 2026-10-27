@@ -8,7 +8,7 @@ INSERT INTO products (business_id, category_id, name, description, price, unit)
 
                 ('Vườn Tư Phát', 'nong-san',
                  'Sầu riêng Ri6',
-                 'Sầu riêng Cái Lậy chín cây, múi vàng, hạt lép, ngọt béo, thu hoạch đúng mùa.',
+                 'Sầu riêng Cai Lậy chín cây, múi vàng, hạt lép, ngọt béo, thu hoạch đúng mùa.',
                  '85000', 'kg'),
 
                 ('Cơ sở Năm Hùng', 'nong-san',

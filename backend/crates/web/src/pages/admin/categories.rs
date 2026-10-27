@@ -4,6 +4,8 @@
 //! Hiding a category takes its listings off the public pages, so it asks for
 //! confirmation and a reason (a dialog with JS, the same form on the page
 //! without). Showing it again is one button. A category never changes type.
+//! The list's rows carry the same switch (`?hide={id}` opens the
+//! confirmation there); sent with `back=list`, it lands back on the list.
 
 use application::{
     constants::{
@@ -20,11 +22,15 @@ use serde::{Deserialize, Serialize};
 use crate::{
     app_state::AppState,
     cookies::{Flash, TakeFlash},
-    extract::{ApiForm, ApiPath},
+    extract::{ApiForm, ApiPath, ApiQuery},
     middleware::auth::Viewer,
     pages::{
-        admin::{is_refusal, render_admin, url, Outcome},
+        admin::{
+            is_refusal, render_admin, url, ListPosition, ListReturn, Outcome, RowConfirm,
+            BACK_TO_LIST,
+        },
         forms::{reason, whole_number, FormErrors},
+        listing::parse_opt,
         parse_id, see_other,
     },
 };
@@ -92,6 +98,9 @@ const LIMITS: Limits = Limits {
 pub struct CategoryRow {
     pub category: AdminCategoryDto,
     pub href: String,
+    /// The list again with this row's hide confirmation open.
+    pub hide_href: String,
+    pub status_action: String,
 }
 
 #[derive(Serialize)]
@@ -101,20 +110,50 @@ pub struct CategoriesPage {
     pub form: CategoryForm,
     pub errors: FormErrors,
     pub create_action: String,
+    pub confirm: Option<RowConfirm>,
+    /// The hidden fields of every row action: land back here.
+    pub keep: ListReturn,
+    pub flash: Option<Flash>,
 }
 
-async fn list_page(
-    state: &AppState,
-    actor: &Actor,
+/// The list page around the create form; `hide`: the row whose hide
+/// confirmation is open.
+struct ListView {
     form: CategoryForm,
     errors: FormErrors,
+    hide: Option<i32>,
+    flash: Option<Flash>,
     status: StatusCode,
-) -> Result<Response, Error> {
+}
+
+async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Response, Error> {
+    let ListView {
+        form,
+        errors,
+        hide,
+        flash,
+        status,
+    } = view;
     let categories = state.usecases.admin.list_categories(actor).await?;
+    let position = ListPosition::default();
+    let mut confirm = None;
     let mut rows = Vec::with_capacity(categories.len());
     for category in categories {
-        let href = url("admin_category", &[("id", &category.id.to_string())])?;
-        rows.push(CategoryRow { category, href });
+        let id = category.id.to_string();
+        let status_action = url("admin_category_status", &[("id", &id)])?;
+        if hide == Some(category.id) && category.is_active {
+            confirm = Some(RowConfirm {
+                kind: "hide",
+                name: category.name.clone(),
+                action: status_action.clone(),
+            });
+        }
+        rows.push(CategoryRow {
+            href: url("admin_category", &[("id", &id)])?,
+            hide_href: position.href("admin_categories", &[("hide", &id)])?,
+            status_action,
+            category,
+        });
     }
     let path = url("admin_categories", &[])?;
     let body = CategoriesPage {
@@ -123,6 +162,9 @@ async fn list_page(
         form,
         errors,
         create_action: path.clone(),
+        confirm,
+        keep: ListReturn::new(position),
+        flash,
     };
     render_admin(
         state,
@@ -134,19 +176,36 @@ async fn list_page(
     )
 }
 
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct ListQuery {
+    /// The category whose hide confirmation is open.
+    pub hide: String,
+}
+
 /// GET /admin/categories
 pub async fn list(
     Viewer(viewer): Viewer,
+    flash: TakeFlash,
     State(state): State<AppState>,
+    ApiQuery(q): ApiQuery<ListQuery>,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
-    let form = CategoryForm {
-        category_type: "service".to_owned(),
-        ..CategoryForm::default()
+    let view = ListView {
+        form: CategoryForm {
+            category_type: "service".to_owned(),
+            ..CategoryForm::default()
+        },
+        errors: FormErrors::default(),
+        hide: parse_opt(&q.hide),
+        flash: flash.0,
+        status: StatusCode::OK,
     };
-    list_page(&state, &actor, form, FormErrors::default(), StatusCode::OK).await
+    let mut response = list_page(&state, &actor, view).await?;
+    flash.clear_on(&mut response);
+    Ok(response)
 }
 
 /// POST /admin/categories
@@ -170,8 +229,14 @@ pub async fn create(
     match result {
         Ok(created) => redirect_to(created.id, Flash::CategoryCreated),
         Err(err) if is_refusal(&err) => {
-            let errors = FormErrors::from_error(&state, &err);
-            list_page(&state, &actor, form, errors, err.kind().status()).await
+            let view = ListView {
+                errors: FormErrors::from_error(&state, &err),
+                form,
+                hide: None,
+                flash: None,
+                status: err.kind().status(),
+            };
+            list_page(&state, &actor, view).await
         }
         Err(err) => Err(err),
     }
@@ -288,6 +353,8 @@ pub struct StatusForm {
     /// "true" to show, "false" to hide.
     pub is_active: String,
     pub reason: String,
+    /// `list` when sent from the list's row: land back there.
+    pub back: String,
 }
 
 /// POST /admin/categories/{id}/status
@@ -307,9 +374,16 @@ pub async fn change_status(
         .admin
         .toggle_category_active(&actor, id, show, reason(&form.reason))
         .await;
+    let flash = if show {
+        Flash::CategoryShown
+    } else {
+        Flash::CategoryHidden
+    };
     match result {
-        Ok(_) if show => redirect_to(id, Flash::CategoryShown),
-        Ok(_) => redirect_to(id, Flash::CategoryHidden),
+        Ok(_) if form.back == BACK_TO_LIST => {
+            ListPosition::default().back_to("admin_categories", flash)
+        }
+        Ok(_) => redirect_to(id, flash),
         Err(err) if is_refusal(&err) => {
             let outcome = Outcome::refused(&state, &err, None, !show);
             category_page(&state, &actor, id, outcome).await

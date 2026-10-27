@@ -22,9 +22,10 @@ use crate::{
     constants::META_DESCRIPTION_MAX_CHARS,
     cookies::{Flash, TakeFlash},
     extract::{ApiForm, ApiPath},
+    locale::Locale,
     pages::{
         canonical_url, forms::FormErrors, listing::parse_opt, moved_permanently, parse_id,
-        see_other, summary,
+        see_other, service as service_page, summary,
     },
     shell::Shell,
     views::{render_page, render_page_status},
@@ -58,7 +59,14 @@ pub struct ContactForm {
     pub service_id: String,
     #[serde(default)]
     pub note: String,
+    /// `service` when the form was on a service's page: the visitor lands
+    /// back there. The page is rebuilt from `service_id`, never a posted URL.
+    #[serde(default)]
+    pub return_to: String,
 }
+
+/// `return_to` of the form on a service's own page.
+pub const RETURN_TO_SERVICE: &str = "service";
 
 impl ContactForm {
     fn values(&self) -> ContactValues {
@@ -91,7 +99,7 @@ pub struct ContactLimits {
     pub note_max: usize,
 }
 
-const LIMITS: ContactLimits = ContactLimits {
+pub(super) const LIMITS: ContactLimits = ContactLimits {
     name_max: REQUESTER_NAME_MAX_LEN,
     topic_max: TOPIC_MAX_LEN,
     note_max: NOTE_MAX_LEN,
@@ -111,8 +119,9 @@ pub struct ProviderPage {
     pub sent: bool,
 }
 
-/// The region the platform serves; stands in for a missing address.
-const DEFAULT_AREA: &str = "Đồng bằng sông Cửu Long";
+/// The region the platform serves (its text key); stands in for a missing
+/// address.
+pub(super) const DEFAULT_AREA: &str = "site.region";
 
 async fn load(state: &AppState, raw_id: &str) -> Result<BusinessDetailDto, Error> {
     let id = parse_id(raw_id, ErrorCode::ProviderNotFound)?;
@@ -123,14 +132,26 @@ fn canonical(provider: &BusinessDetailDto) -> Result<String, Error> {
     canonical_url("provider", provider.id, &provider.name)
 }
 
-fn page(provider: BusinessDetailDto, contact: ContactState, sent: bool) -> ProviderPage {
-    let area = provider
-        .address
-        .clone()
-        .filter(|a| !a.trim().is_empty())
-        .unwrap_or_else(|| DEFAULT_AREA.to_owned());
+/// Where a provider works, or the region when the address is unknown.
+pub(super) fn area_of(locale: &Locale, address: Option<&str>) -> String {
+    address
+        .map(str::trim)
+        .filter(|a| !a.is_empty())
+        .map_or_else(|| locale.text(DEFAULT_AREA), str::to_owned)
+}
+
+fn page(
+    locale: &Locale,
+    provider: BusinessDetailDto,
+    contact: ContactState,
+    sent: bool,
+) -> ProviderPage {
+    let area = area_of(locale, provider.address.as_deref());
     ProviderPage {
-        share_text: format!("{} – dịch vụ nông nghiệp tại {area}", provider.name),
+        share_text: locale.text_with(
+            "provider.share_text",
+            &[("name", &provider.name), ("area", &area)],
+        ),
         area,
         meta_description: provider
             .description
@@ -165,7 +186,7 @@ pub async fn show(
         return moved_permanently(&canonical);
     }
     let sent = flash.0 == Some(Flash::ContactSent);
-    let page = page(provider, ContactState::default(), sent);
+    let page = page(state.locale(), provider, ContactState::default(), sent);
     let mut response = render_page(&state, &shell, "pages/provider.html", &page)?;
     flash.clear_on(&mut response);
     Ok(response)
@@ -184,6 +205,20 @@ pub async fn submit_contact(
         .get_provider_detail(form.business_id)
         .await?;
     let v = form.values();
+    // Sent from a service's page: that service, if it is still this
+    // provider's and public; otherwise the visitor lands on the provider.
+    let service = match (
+        form.return_to == RETURN_TO_SERVICE,
+        parse_opt::<i32>(&v.service_id),
+    ) {
+        (true, Some(id)) => match state.usecases.explore.get_service(id).await {
+            Ok(s) if s.business_id == form.business_id => Some(s),
+            Ok(_) => None,
+            Err(e) if e.code() == ErrorCode::ServiceNotFound => None,
+            Err(e) => return Err(e),
+        },
+        _ => None,
+    };
     let result = state
         .usecases
         .explore
@@ -199,7 +234,11 @@ pub async fn submit_contact(
 
     match result {
         Ok(_) => {
-            let mut response = see_other(&canonical(&provider)?)?;
+            let back = match &service {
+                Some(s) => service_page::canonical(s)?,
+                None => canonical(&provider)?,
+            };
+            let mut response = see_other(&back)?;
             Flash::ContactSent.set_on(&mut response);
             Ok(response)
         }
@@ -211,7 +250,13 @@ pub async fn submit_contact(
                 message: form.message,
                 open: true,
             };
-            let page = page(provider, contact, false);
+            if let Some(service) = service {
+                let status = err.kind().status();
+                return service_page::render(
+                    &state, &shell, service, provider, contact, false, status,
+                );
+            }
+            let page = page(state.locale(), provider, contact, false);
             render_page_status(
                 &state,
                 &shell,

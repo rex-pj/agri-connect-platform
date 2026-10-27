@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use domain::models::{
     inquiry::InquiryForOwner,
     product::{AdminProduct, ProductView, ProviderProduct},
+    service::{AdminService, ProviderService, PublicService},
 };
 use serde::Serialize;
 use uuid::Uuid;
@@ -66,6 +67,9 @@ pub struct ProductDto {
     pub created_on: DateTime<Utc>,
     /// Served at `/files/{id}` and `/files/{id}/thumb`.
     pub image_file_id: Option<Uuid>,
+    /// Metres from the searched point; only on a near-me search.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub distance_m: Option<f64>,
 }
 
 impl From<ProductView> for ProductDto {
@@ -83,6 +87,7 @@ impl From<ProductView> for ProductDto {
             business_id: p.business_id,
             created_on: p.created_on,
             image_file_id: p.image_file_id,
+            distance_m: p.distance_m,
         }
     }
 }
@@ -129,6 +134,62 @@ pub struct BrowseResponse {
     pub total_pages: i64,
 }
 
+/// A service as farmers see it: in the listing, near-me results and on its
+/// own page.
+#[derive(Serialize)]
+pub struct PublicServiceDto {
+    pub id: i32,
+    pub name: String,
+    pub description: Option<String>,
+    pub price_note: Option<String>,
+    pub category_id: i32,
+    pub category: String,
+    pub category_slug: String,
+    pub category_icon: Option<String>,
+    pub image_file_id: Option<Uuid>,
+    pub business_id: i32,
+    pub business_name: String,
+    pub business_phone: String,
+    pub business_address: Option<String>,
+    pub business_verified: bool,
+    pub created_on: DateTime<Utc>,
+    /// Metres from the searched point; only on a near-me search.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub distance_m: Option<f64>,
+}
+
+impl From<PublicService> for PublicServiceDto {
+    fn from(s: PublicService) -> Self {
+        Self {
+            id: s.id,
+            name: s.name,
+            description: s.description,
+            price_note: s.price_note,
+            category_id: s.category_id,
+            category: s.category,
+            category_slug: s.category_slug,
+            category_icon: s.category_icon,
+            image_file_id: s.image_file_id,
+            business_id: s.business_id,
+            business_name: s.business_name,
+            business_phone: s.business_phone,
+            business_address: s.business_address,
+            business_verified: s.business_verified,
+            created_on: s.created_on,
+            distance_m: s.distance_m,
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct ServiceBrowseResponse {
+    pub items: Vec<PublicServiceDto>,
+    pub total: i64,
+    pub page: i64,
+    pub per_page: i64,
+    pub total_pages: i64,
+}
+
 #[derive(Serialize)]
 pub struct ServiceDto {
     pub id: i32,
@@ -137,6 +198,7 @@ pub struct ServiceDto {
     pub price_note: Option<String>,
     pub category: String,
     pub category_icon: Option<String>,
+    pub image_file_id: Option<Uuid>,
 }
 
 #[derive(Serialize)]
@@ -152,6 +214,8 @@ pub struct BusinessDetailDto {
 
 #[derive(Serialize)]
 pub struct ExploreData {
+    /// One service per verified provider, those with a photo first.
+    pub featured_services: Vec<PublicServiceDto>,
     pub featured_providers: Vec<BusinessBrowseDto>,
     pub featured_products: Vec<ProductDto>,
 }
@@ -261,6 +325,8 @@ pub struct AdminStatsDto {
     pub verified_businesses: i64,
     pub active_products: i64,
     pub total_users: i64,
+    /// Taps on public call buttons in the last `CALL_STATS_DAYS` days.
+    pub recent_calls: i64,
 }
 
 #[derive(Serialize)]
@@ -347,6 +413,14 @@ pub struct VerificationDto {
     pub id: i32,
     pub name: String,
     pub is_verified: bool,
+}
+
+/// A provider turned on or off by the admin.
+#[derive(Serialize)]
+pub struct ProviderStatusDto {
+    pub id: i32,
+    pub name: String,
+    pub is_active: bool,
 }
 
 #[derive(Serialize)]
@@ -461,8 +535,66 @@ pub struct AdminServiceDto {
     pub business_id: i32,
     pub business_name: String,
     pub is_active: bool,
+    pub image_file_id: Option<Uuid>,
+    /// Listed by the provider themselves, not by an admin for them.
+    pub added_by_owner: bool,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
+}
+
+impl From<AdminService> for AdminServiceDto {
+    fn from(s: AdminService) -> Self {
+        Self {
+            added_by_owner: s.created_by.is_some() && s.created_by == s.owner_id,
+            id: s.id,
+            name: s.name,
+            description: s.description,
+            price_note: s.price_note,
+            category: s.category,
+            category_id: s.category_id,
+            business_id: s.business_id,
+            business_name: s.business_name,
+            is_active: s.is_active,
+            image_file_id: s.image_file_id,
+            created_on: s.created_on,
+            updated_on: s.updated_on,
+        }
+    }
+}
+
+// ── Provider services ─────────────────────────────────────────────────────────
+
+/// One of the provider's own services, hidden ones included.
+#[derive(Serialize)]
+pub struct ProviderServiceDto {
+    pub id: i32,
+    pub name: String,
+    pub description: Option<String>,
+    pub price_note: Option<String>,
+    pub category: String,
+    pub category_id: i32,
+    pub category_icon: Option<String>,
+    /// `false` when an admin hid it; only an admin can show it again.
+    pub is_active: bool,
+    pub image_file_id: Option<Uuid>,
+    pub created_on: DateTime<Utc>,
+}
+
+impl From<ProviderService> for ProviderServiceDto {
+    fn from(s: ProviderService) -> Self {
+        Self {
+            id: s.id,
+            name: s.name,
+            description: s.description,
+            price_note: s.price_note,
+            category: s.category,
+            category_id: s.category_id,
+            category_icon: s.category_icon,
+            is_active: s.is_active,
+            image_file_id: s.image_file_id,
+            created_on: s.created_on,
+        }
+    }
 }
 
 // ── Inquiry ───────────────────────────────────────────────────────────────────

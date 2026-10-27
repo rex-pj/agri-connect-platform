@@ -1,5 +1,6 @@
 pub mod audit_log_repository_trait;
 pub mod business_repository_trait;
+pub mod call_repository_trait;
 pub mod catalogue_repository_trait;
 pub mod category_repository_trait;
 pub mod demo_data_repository_trait;

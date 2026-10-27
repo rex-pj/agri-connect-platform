@@ -1,16 +1,16 @@
 //! Shapes of the reference-data catalogue seeded at every startup, and of the
 //! reports the seeders return. The data itself lives in `application`.
 
+/// Roles and permissions carry no wording: pages name them by code from the
+/// locale file (`role.<code>`, `permission.<key>`). The database `name`
+/// column gets the code, a fallback for rows the catalogue no longer has.
 pub struct RoleSeed {
     pub code: &'static str,
-    pub name: &'static str,
-    pub description: &'static str,
 }
 
 pub struct PermissionSeed {
     /// Dotted key checked by use cases, e.g. `provider.verify`.
     pub key: &'static str,
-    pub name: &'static str,
     /// Role codes that get this permission by default. Applied once: on a fresh
     /// database, or when the permission row is first created.
     pub default_roles: &'static [&'static str],

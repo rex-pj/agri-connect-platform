@@ -1,25 +1,29 @@
 {% extends "layouts/admin.html" %}
+{% import "atoms/status_badge.html" as status %}
 {% import "molecules/admin_header.html" as header %}
+{% import "molecules/row_action.html" as row %}
 {#- `page.body` is web::pages::admin::roles::RolesPage. -#}
-{% block title %}Vai trò — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ t(key="admin_menu.roles") }} — {{ site.name }} Admin{% endblock title %}
 {% block content %}
-{{ header::admin_header(title="Vai trò", icon="fa-shield-halved", sub="Mỗi vai trò có một bộ quyền. Mở vai trò để xem hoặc sửa quyền.") }}
+{{ header::admin_header(title=t(key="admin_menu.roles"), icon="fa-shield-halved", sub=t(key="admin.roles_sub")) }}
 <div class="admin-body">
   <div class="admin-card">
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
+      <table class="table table-hover align-middle mb-0 admin-table">
         <thead class="admin-table-head">
-          <tr><th>Tên</th><th>Mã</th><th class="text-center">Số quyền</th><th class="text-center">Trạng thái</th><th></th></tr>
+          <tr><th>{{ t(key="form.name") }}</th><th>{{ t(key="admin.col_code") }}</th><th class="text-center">{{ t(key="admin.col_permission_count") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
         </thead>
         <tbody>
           {% for r in page.body.roles %}
-          <tr>
-            <td class="fw-semibold">{{ r.role.name }}<span class="d-block small text-muted">{{ r.role.description | default(value="") }}</span></td>
+          <tr{% if not r.role.is_active %} class="table-light text-body-secondary"{% endif %}>
+            <td><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ r.role.name }}</a>{% if r.role.description %}<span class="d-block small text-muted">{{ r.role.description }}</span>{% endif %}</td>
             <td><code>{{ r.role.code }}</code></td>
             <td class="text-center">{{ r.granted }}</td>
-            <td class="text-center">{% if r.role.is_active %}<span class="badge text-bg-success">Hoạt động</span>{% else %}<span class="badge text-bg-secondary">Tắt</span>{% endif %}</td>
-            <td class="text-end"><a class="btn btn-sm btn-outline-success" href="{{ r.href }}">Quyền</a></td>
+            <td class="text-center">{{ status::account(on=r.role.is_active) }}</td>
+            <td class="text-end"><div class="row-actions">{{ row::open(href=r.href, name=r.role.name) }}</div></td>
           </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-center text-muted py-4">{{ t(key="admin.no_roles") }}</td></tr>
           {% endfor %}
         </tbody>
       </table>

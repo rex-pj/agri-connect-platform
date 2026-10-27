@@ -1,16 +1,21 @@
 use std::sync::Arc;
 
+use chrono::{Duration, Utc};
+
 use domain::{
     constants::INQUIRY_STATUSES,
     events::{Change, DomainEvent, Entity},
     models::{
         business::ProfileUpdate,
         product::{NewProduct, UpdateProduct},
+        service::{NewService, UpdateOwnService},
     },
     repositories::{
         business_repository_trait::BusinessRepositoryTrait,
+        call_repository_trait::CallRepositoryTrait,
         inquiry_repository_trait::InquiryRepositoryTrait,
         product_repository_trait::ProductRepositoryTrait,
+        service_repository_trait::ServiceRepositoryTrait,
     },
     Error, ErrorCode, Result, Validation,
 };
@@ -19,17 +24,22 @@ use crate::{
     authz::Actor,
     catalogue::{
         PERM_OWN_INQUIRY_MANAGE, PERM_OWN_LISTING_CREATE, PERM_OWN_LISTING_DELETE,
-        PERM_OWN_LISTING_UPDATE, PERM_OWN_PROFILE_UPDATE,
+        PERM_OWN_LISTING_UPDATE, PERM_OWN_PROFILE_UPDATE, PERM_OWN_SERVICE_CREATE,
+        PERM_OWN_SERVICE_DELETE, PERM_OWN_SERVICE_UPDATE,
     },
     constants::{
-        BUSINESS_ADDRESS_MAX, BUSINESS_DESCRIPTION_MAX, BUSINESS_NAME_MAX, PAGE_SIZE,
-        PRODUCT_DESCRIPTION_MAX, PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX,
+        BUSINESS_ADDRESS_MAX, BUSINESS_DESCRIPTION_MAX, BUSINESS_NAME_MAX, CALL_STATS_DAYS,
+        PAGE_SIZE, PRODUCT_DESCRIPTION_MAX, PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX,
+        SERVICES_PER_BUSINESS_MAX,
     },
-    inputs::{CreateProductInput, UpdateProductInput, UpdateProfileInput},
-    outputs::{OwnInquiriesResponse, OwnInquiryDto, ProviderProductDto, ProviderProfileDto},
+    inputs::{CreateProductInput, ServiceInput, UpdateProductInput, UpdateProfileInput},
+    outputs::{
+        OwnInquiriesResponse, OwnInquiryDto, ProviderProductDto, ProviderProfileDto,
+        ProviderServiceDto,
+    },
     pagination::{paginate, total_pages},
     ports::{EventBus, ProcessedImage},
-    usecases::media_usecase::MediaUseCase,
+    usecases::{media_usecase::MediaUseCase, service_rules::validate_service},
     validation::{
         max_chars, max_chars_opt, non_blank, point_wkt, validate_coordinates, validate_phone,
         validate_price,
@@ -42,6 +52,8 @@ use crate::{
 pub struct ProviderDashboardUseCase {
     business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
     product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
+    service_repo: Arc<dyn ServiceRepositoryTrait + Send + Sync>,
+    call_repo: Arc<dyn CallRepositoryTrait + Send + Sync>,
     inquiry_repo: Arc<dyn InquiryRepositoryTrait + Send + Sync>,
     /// Stores a new product's photo together with the product.
     media: MediaUseCase,
@@ -52,6 +64,8 @@ pub struct ProviderDashboardUseCase {
 pub struct ProviderDashboardDeps {
     pub business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
     pub product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
+    pub service_repo: Arc<dyn ServiceRepositoryTrait + Send + Sync>,
+    pub call_repo: Arc<dyn CallRepositoryTrait + Send + Sync>,
     pub inquiry_repo: Arc<dyn InquiryRepositoryTrait + Send + Sync>,
     pub media: MediaUseCase,
     pub events: Arc<dyn EventBus>,
@@ -62,6 +76,8 @@ impl ProviderDashboardUseCase {
         Self {
             business_repo: d.business_repo,
             product_repo: d.product_repo,
+            service_repo: d.service_repo,
+            call_repo: d.call_repo,
             inquiry_repo: d.inquiry_repo,
             media: d.media,
             events: d.events,
@@ -101,6 +117,24 @@ impl ProviderDashboardUseCase {
         self.inquiry_repo.count_for_owner(actor.user_id).await
     }
 
+    /// Taps on the actor's call buttons in the last `CALL_STATS_DAYS` days;
+    /// `None` when the account manages no business. A session is enough: it
+    /// is the provider's own number.
+    pub async fn count_own_calls(&self, actor: &Actor) -> Result<Option<i64>> {
+        let Some(business_id) = self
+            .business_repo
+            .get_business_id_by_user(actor.user_id)
+            .await?
+        else {
+            return Ok(None);
+        };
+        let since = Utc::now() - Duration::days(CALL_STATS_DAYS);
+        self.call_repo
+            .count_since(Some(business_id), since)
+            .await
+            .map(Some)
+    }
+
     /// Marks one of the actor's inquiries contacted, closed or spam. Someone
     /// else's looks the same as a missing one.
     pub async fn set_own_inquiry_status(
@@ -120,17 +154,15 @@ impl ProviderDashboardUseCase {
         {
             return Err(Error::new(ErrorCode::InquiryNotFound));
         }
-        self.events
-            .publish(DomainEvent {
-                actor_id: Some(actor.user_id),
-                entity: Entity::Inquiry,
-                entity_id: inquiry_id,
-                change: Change::StatusChanged {
-                    status: status.to_owned(),
-                },
-                reason: None,
-            })
-            .await;
+        self.announce(
+            actor,
+            Entity::Inquiry,
+            inquiry_id,
+            Change::StatusChanged {
+                status: status.to_owned(),
+            },
+        )
+        .await;
         Ok(())
     }
 
@@ -388,14 +420,7 @@ impl ProviderDashboardUseCase {
         }
 
         // Its image is removed by the file-cleanup subscriber.
-        self.events
-            .publish(DomainEvent {
-                actor_id: Some(actor.user_id),
-                entity: Entity::Product,
-                entity_id: product_id,
-                change: Change::Deleted,
-                reason: None,
-            })
+        self.announce(actor, Entity::Product, product_id, Change::Deleted)
             .await;
 
         Ok(())
@@ -407,4 +432,159 @@ struct ProductFields {
     name: String,
     description: Option<String>,
     unit: Option<String>,
+}
+
+// ── The actor's own services ──────────────────────────────────────────────────
+//
+// Every write derives the business from the session (never from the request)
+// and matches the service by owner in the same statement, so someone else's
+// service looks the same as a missing one. `is_active` stays the admin's: an
+// edit never shows a service an admin hid.
+
+impl ProviderDashboardUseCase {
+    /// The actor's services, hidden ones too. A session is enough, as for
+    /// products.
+    pub async fn list_services(&self, actor: &Actor) -> Result<Vec<ProviderServiceDto>> {
+        let services = self.service_repo.list_by_owner(actor.user_id).await?;
+        Ok(services.into_iter().map(ProviderServiceDto::from).collect())
+    }
+
+    pub async fn get_service(&self, actor: &Actor, service_id: i32) -> Result<ProviderServiceDto> {
+        self.service_repo
+            .find_owned(service_id, actor.user_id)
+            .await?
+            .map(ProviderServiceDto::from)
+            .ok_or_else(|| Error::new(ErrorCode::ServiceNotFound))
+    }
+
+    /// Creates one of the actor's services, with its photo when given
+    /// (checked and re-encoded already by `MediaUseCase::prepare_image`). The
+    /// photo is stored only once the boxes pass and goes in with the row; a
+    /// business already listing `SERVICES_PER_BUSINESS_MAX` is refused.
+    pub async fn create_service(
+        &self,
+        actor: &Actor,
+        input: ServiceInput,
+        image: Option<ProcessedImage>,
+    ) -> Result<ProviderServiceDto> {
+        actor.require(PERM_OWN_SERVICE_CREATE)?;
+        let fields = validate_service(
+            self.service_repo.as_ref(),
+            input.category_id,
+            input.name,
+            input.description,
+            input.price_note,
+        )
+        .await?;
+
+        let business_id = self
+            .business_repo
+            .get_business_id_by_user(actor.user_id)
+            .await?
+            .ok_or_else(|| Error::new(ErrorCode::AccountNotLinkedToBusiness))?;
+
+        let image_file_id = match image {
+            Some(image) => Some(self.media.store(actor, image).await?),
+            None => None,
+        };
+        let created = self
+            .service_repo
+            .create_capped(
+                NewService {
+                    business_id,
+                    category_id: input.category_id,
+                    name: fields.name,
+                    description: fields.description,
+                    price_note: fields.price_note,
+                    image_file_id,
+                    created_by: actor.user_id,
+                },
+                SERVICES_PER_BUSINESS_MAX,
+            )
+            .await;
+        let id = match created {
+            Ok(Some(id)) => id,
+            refused => {
+                if let Some(file) = image_file_id {
+                    self.media.discard(file).await;
+                }
+                return Err(match refused {
+                    Err(e) => e,
+                    Ok(_) => Error::new(ErrorCode::ServiceLimitReached)
+                        .with_param("max", SERVICES_PER_BUSINESS_MAX),
+                });
+            }
+        };
+
+        self.announce(actor, Entity::Service, id, Change::Created)
+            .await;
+        self.get_service(actor, id).await
+    }
+
+    /// Edits one of the actor's services; its photo is replaced separately
+    /// (`MediaUseCase::attach_service_image`).
+    pub async fn update_service(
+        &self,
+        actor: &Actor,
+        service_id: i32,
+        input: ServiceInput,
+    ) -> Result<ProviderServiceDto> {
+        actor.require(PERM_OWN_SERVICE_UPDATE)?;
+        let fields = validate_service(
+            self.service_repo.as_ref(),
+            input.category_id,
+            input.name,
+            input.description,
+            input.price_note,
+        )
+        .await?;
+
+        let updated = self
+            .service_repo
+            .update_owned(UpdateOwnService {
+                id: service_id,
+                owner_user: actor.user_id,
+                category_id: input.category_id,
+                name: fields.name,
+                description: fields.description,
+                price_note: fields.price_note,
+            })
+            .await?;
+        if !updated {
+            return Err(Error::new(ErrorCode::ServiceNotFound));
+        }
+
+        self.announce(actor, Entity::Service, service_id, Change::Updated)
+            .await;
+        self.get_service(actor, service_id).await
+    }
+
+    pub async fn delete_service(&self, actor: &Actor, service_id: i32) -> Result<()> {
+        actor.require(PERM_OWN_SERVICE_DELETE)?;
+        if !self
+            .service_repo
+            .soft_delete_owned(service_id, actor.user_id)
+            .await?
+        {
+            return Err(Error::new(ErrorCode::ServiceNotFound));
+        }
+        // Its image is removed by the file-cleanup subscriber; past inquiries
+        // keep their topic and still point at the (soft-deleted) row.
+        self.announce(actor, Entity::Service, service_id, Change::Deleted)
+            .await;
+        Ok(())
+    }
+
+    /// Publishes a change the actor made to one of their own records.
+    async fn announce(&self, actor: &Actor, entity: Entity, entity_id: i32, change: Change) {
+        self.events
+            .publish(DomainEvent {
+                actor_id: Some(actor.user_id),
+                entity,
+                entity_id,
+                change,
+                reason: None,
+            })
+            .await;
+    }
 }

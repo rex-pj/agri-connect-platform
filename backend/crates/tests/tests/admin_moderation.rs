@@ -185,6 +185,29 @@ async fn services_are_created_for_a_provider_edited_and_deleted() {
     .await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
 
+    // From the list's row: hide behind a confirmation, back on the same list.
+    let id = detail.rsplit('/').next().unwrap();
+    let html = page(&e, &format!("{list}&hide={id}"), &admin).await;
+    assert!(html.contains("Ẩn dịch vụ Múc bùn vườn?"));
+    assert!(html.contains(r#"name="back" value="list""#));
+    let res = send(
+        &e.router,
+        post_form(
+            &format!("{detail}/status"),
+            &[
+                ("is_active", "false"),
+                ("back", "list"),
+                ("provider_id", &business.to_string()),
+            ],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.headers()[header::LOCATION], list.as_str());
+    assert!(page(&e, &format!("{list}&delete={id}"), &admin)
+        .await
+        .contains("Xoá dịch vụ Múc bùn vườn?"));
+
     let res = send(
         &e.router,
         post_form(
@@ -226,17 +249,41 @@ async fn inquiry_status_and_review_visibility_are_set_from_their_lists() {
     let html = page(&e, "/admin/inquiries", &admin).await;
     assert!(html.contains(r#"x-data="autoSubmit""#));
     assert!(html.contains(r#"<option value="new" selected>Mới</option>"#));
+
+    // Narrowed to one provider: its rows only, and the forms keep the filter.
+    let own = format!("/admin/inquiries?provider_id={business}");
+    let html = page(&e, &own, &admin).await;
+    assert!(html.contains("Vườn nongdan · 1 yêu cầu"));
+    assert!(html.contains(&format!(r#"name="provider_id" value="{business}""#)));
+    let other = business + 1000;
+    for list in ["inquiries", "reviews"] {
+        let html = page(&e, &format!("/admin/{list}?provider_id={other}"), &admin).await;
+        assert!(!html.contains("Chú Tư"), "{list}: another provider's rows");
+        assert!(html.contains(r#"class="admin-filter""#));
+    }
+    assert!(page(
+        &e,
+        &format!("/admin/reviews?provider_id={business}"),
+        &admin
+    )
+    .await
+    .contains("Vườn nongdan · 1 đánh giá"));
+
     let res = send(
         &e.router,
         post_form(
             &format!("/admin/inquiries/{inquiry}/status"),
-            &[("status", "contacted"), ("page", "1")],
+            &[
+                ("status", "contacted"),
+                ("page", "1"),
+                ("provider_id", &business.to_string()),
+            ],
             Some(&admin),
         ),
     )
     .await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
-    assert_eq!(res.headers()[header::LOCATION], "/admin/inquiries");
+    assert_eq!(res.headers()[header::LOCATION], own.as_str());
     assert_eq!(
         one_text(
             &e,

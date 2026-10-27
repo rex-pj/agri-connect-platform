@@ -2,7 +2,7 @@ use application::authz::require_actor;
 use axum::{extract::State, response::IntoResponse, Json};
 use domain::Error;
 
-use crate::{app_state::AppState, extract::ApiPath, middleware::auth::MaybeActor};
+use crate::{app_state::AppState, extract::ApiPath, labels::Worded, middleware::auth::MaybeActor};
 
 pub struct PermissionHandler;
 
@@ -14,7 +14,7 @@ impl PermissionHandler {
     ) -> Result<impl IntoResponse, Error> {
         let actor = require_actor(actor)?;
         let result = state.usecases.permission.list_all(&actor).await?;
-        Ok(Json(result))
+        Ok(Json(result.worded(state.locale())))
     }
 
     /// GET /api/admin/users/{id}/permissions
@@ -29,6 +29,6 @@ impl PermissionHandler {
             .permission
             .list_by_user(&actor, user_id)
             .await?;
-        Ok(Json(result))
+        Ok(Json(result.worded(state.locale())))
     }
 }

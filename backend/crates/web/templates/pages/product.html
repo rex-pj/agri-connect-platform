@@ -1,26 +1,27 @@
 {% extends "layouts/app.html" %}
 {% import "atoms/icon.html" as atoms %}
+{% import "molecules/call_button.html" as call %}
+{% import "atoms/photo_placeholder.html" as placeholder %}
 {% import "molecules/page_hero.html" as hero %}
-{#- Product detail. `page` is web::pages::product::ProductPage. With a photo
-    the page is two columns on a wide screen; without, one narrow column. -#}
+{#- Product detail. `page` is web::pages::product::ProductPage. Photo first
+    (or a "no photo yet" placeholder in its place), two columns on a wide
+    screen. -#}
 {% block title %}{{ page.product.name }} — {{ site.name }}{% endblock title %}
-{% block meta %}<meta name="description" content="{% if page.meta_description %}{{ page.meta_description }}{% else %}Mua {{ page.product.name }} từ {{ page.product.vendor_name }} trên {{ site.name }}. Liên hệ nhà cung cấp để biết giá chính xác.{% endif %}">{% endblock meta %}
+{% block meta %}<meta name="description" content="{% if page.meta_description %}{{ page.meta_description }}{% else %}{{ t(key="product.meta", name=page.product.name, vendor=page.product.vendor_name, site=site.name) }}{% endif %}">{% endblock meta %}
 {% block main %}
 {% set p = page.product %}
 {% set icon = p.category_icon | default(value="fa-tag") %}
-<div class="product-detail{% if p.image_file_id %} product-detail--photo{% endif %}">
-  {% if p.image_file_id %}
+<div class="product-detail">
   <div class="product-detail__photo">
-    <a class="back-link back-link--overlay" href="{{ url_for(name="products") }}">{{ atoms::icon(name="fa-arrow-left") }} Sản phẩm</a>
-    <img src="{{ file_url(id=p.image_file_id) }}" alt="{{ p.name }}">
-  </div>
-  {% endif %}
-  <div class="product-detail__panel">
+    <a class="back-link back-link--overlay" href="{{ url_for(name="products") }}">{{ atoms::icon(name="fa-arrow-left") }} {{ t(key="nav.products") }}</a>
     {% if p.image_file_id %}
-    {{ hero::page_hero(title=p.name, back_href="", back_label="", badge_icon=icon, badge_text=p.category, variant="compact") }}
+    <img src="{{ file_url(id=p.image_file_id) }}" alt="{{ p.name }}">
     {% else %}
-    {{ hero::page_hero(title=p.name, back_href=url_for(name="products"), back_label="Sản phẩm", badge_icon=icon, badge_text=p.category) }}
+    {{ placeholder::photo_placeholder(icon=icon, size="lg") }}
     {% endif %}
+  </div>
+  <div class="product-detail__panel">
+    {{ hero::page_hero(title=p.name, back_href="", back_label="", badge_icon=icon, badge_text=p.category, variant="compact") }}
     <div class="detail-body">
       <section class="detail-card">
         <div class="detail-price">
@@ -28,28 +29,33 @@
           <span class="detail-price__amount">{{ p.price | vnd }}</span>
           {% if p.unit %}<span class="detail-price__unit">/{{ p.unit }}</span>{% endif %}
           {% else %}
-          <span class="detail-price__amount detail-price__amount--contact">Liên hệ giá</span>
+          <span class="detail-price__amount detail-price__amount--contact">{{ t(key="price.ask") }}</span>
           {% endif %}
         </div>
-        <p class="detail-price__note">Giá tham khảo — liên hệ nhà cung cấp để biết giá chính xác</p>
+        <p class="detail-price__note">{{ t(key="product.price_note") }}</p>
       </section>
       {% if p.description %}
       <section class="detail-card">
-        <h2 class="detail-card__title">Mô tả sản phẩm</h2>
+        <h2 class="detail-card__title">{{ t(key="product.description") }}</h2>
         <p class="detail-card__text">{{ p.description }}</p>
       </section>
       {% endif %}
       <section class="detail-card">
-        <h2 class="detail-card__title">Nhà cung cấp</h2>
+        <h2 class="detail-card__title">{{ t(key="footer.providers") }}</h2>
         <div class="vendor-row">
           <span class="vendor-row__icon">{{ atoms::icon(name="fa-shop") }}</span>
           <div class="vendor-row__info">
             <strong>{{ p.vendor_name }}</strong>
-            <span class="vendor-row__phone">{{ p.vendor_phone }}</span>
           </div>
         </div>
-        <a class="btn btn-success btn-lg w-100" href="tel:{{ p.vendor_phone }}">{{ atoms::icon(name="fa-phone") }} Gọi tư vấn ngay</a>
-        <a class="btn btn-outline-success w-100 mt-2" href="{{ page.provider_href }}">{{ atoms::icon(name="fa-store") }} Xem nhà cung cấp &amp; gửi yêu cầu</a>
+        {{ call::call_button(phone=p.vendor_phone, kind="product", id=p.id, class="btn btn-success btn-lg btn-call w-100") }}
+        <a class="btn btn-outline-success w-100 mt-2" href="{{ page.provider_href }}">{{ atoms::icon(name="fa-store") }} {{ t(key="product.see_provider") }}</a>
+        {% if page.provider_services %}
+        <p class="small text-muted mt-3 mb-2">{{ t(key="product.shop_also") }}</p>
+        <div class="d-flex flex-wrap gap-2">
+          {% for s in page.provider_services %}<a class="chip text-decoration-none" href="{{ s.href }}">{{ atoms::icon(name=s.category_icon | default(value="fa-tag")) }} {{ s.name }}</a>{% endfor %}
+        </div>
+        {% endif %}
       </section>
     </div>
   </div>

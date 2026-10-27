@@ -1,41 +1,43 @@
 {% extends "layouts/app.html" %}
 {% import "organisms/category_grid.html" as grid %}
 {% import "organisms/product_card.html" as products %}
-{% import "organisms/provider_card.html" as providers %}
+{% import "organisms/service_card.html" as services %}
 {% import "molecules/section_header.html" as section %}
 {% import "molecules/geo_cta.html" as geo %}
 {% import "molecules/empty_state.html" as empty %}
 {% import "molecules/provider_cta.html" as seller %}
-{#- Home: category shortcuts, featured products, the near-me banner and
-    featured providers. `page` is web::pages::home::HomePage. -#}
-{% block title %}{{ site.name }} — Nền tảng nông nghiệp Đồng bằng sông Cửu Long{% endblock title %}
-{% block meta %}<meta name="description" content="Tìm nhà cung cấp dịch vụ và sản phẩm nông nghiệp uy tín tại Đồng bằng sông Cửu Long. Kết nối nhanh, minh bạch, không qua trung gian.">{% endblock meta %}
+{#- Home: category shortcuts (services first), the near-me banner, featured
+    services (the farmer's main errand: one per verified provider, the
+    provider on each card), then featured products. `page` is
+    web::pages::home::HomePage. -#}
+{% block title %}{{ site.name }} — {{ t(key="home.title") }}{% endblock title %}
+{% block meta %}<meta name="description" content="{{ t(key="home.meta") }}">{% endblock meta %}
 {% block main %}
 <div class="home-categories">{{ grid::category_grid(items=page.categories) }}</div>
 
+<section class="home-section">{{ geo::geo_cta(href=url_for(name="explore")) }}</section>
+
+{% if page.services %}
+<section class="home-section">
+  {{ section::section_header(title=t(key="home.featured_services"), more_href=url_for(name="services")) }}
+  {{ services::service_grid(services=page.services) }}
+</section>
+{% endif %}
+
 {% if page.products %}
 <section class="home-section">
-  {{ section::section_header(title="Nông sản nổi bật", more_href=url_for(name="products")) }}
+  {{ section::section_header(title=t(key="home.featured_products"), more_href=url_for(name="products")) }}
   <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 row-cols-xl-6 g-3">
     {% for p in page.products %}<div class="col">{{ products::product_card(p=p) }}</div>{% endfor %}
   </div>
 </section>
 {% endif %}
 
-<section class="home-section">
-  {{ geo::geo_cta(href=url_for(name="explore")) }}
-  {% if page.providers %}
-  <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
-    {% for p in page.providers %}<div class="col">{{ providers::provider_card(p=p) }}</div>{% endfor %}
-  </div>
-  {% endif %}
-</section>
-
 {% if shell.provider_cta %}
 <section class="home-section">{{ seller::provider_cta(cta=shell.provider_cta) }}</section>
 {% endif %}
 
-{% if not page.products and not page.providers %}
-{{ empty::empty_state(icon="fa-seedling", title="Nền tảng đang khởi động", hint="Chưa có dữ liệu. Hãy thử tìm dịch vụ gần bạn.", action_href=url_for(name="explore"), action_icon="fa-location-dot", action_label="Tìm thợ gần tôi") }}
+{% if not page.products and not page.services %}
+{{ empty::empty_state(icon="fa-seedling", title=t(key="home.empty"), hint=t(key="home.empty_hint"), action_href=url_for(name="explore"), action_icon="fa-location-dot", action_label=t(key="home.empty_action")) }}
 {% endif %}
 {% endblock main %}

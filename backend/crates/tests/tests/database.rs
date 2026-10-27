@@ -121,7 +121,6 @@ async fn a_permission_added_later_reaches_its_default_roles() {
 
     static EXTENDED: &[PermissionSeed] = &[PermissionSeed {
         key: "own.inquiry.read",
-        name: "Xem yêu cầu gửi tới mình",
         default_roles: &["provider"],
     }];
     let later = Catalogue {

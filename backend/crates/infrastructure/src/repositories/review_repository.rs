@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
     sea_query::Expr, ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, JoinType,
-    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait, RelationTrait,
 };
 use std::sync::Arc;
 use tracing::error;
@@ -47,8 +47,11 @@ struct ReviewAdminRow {
 
 #[async_trait]
 impl ReviewRepositoryTrait for ReviewRepository {
-    async fn count_admin(&self) -> Result<i64, Error> {
+    async fn count_admin(&self, provider_id: Option<i32>) -> Result<i64, Error> {
         Review::find()
+            .apply_if(provider_id, |q, id| {
+                q.filter(review::Column::BusinessId.eq(id))
+            })
             .count(self.db.as_ref())
             .await
             .map(|c| c as i64)
@@ -58,8 +61,16 @@ impl ReviewRepositoryTrait for ReviewRepository {
             })
     }
 
-    async fn list_admin(&self, limit: i64, offset: i64) -> Result<Vec<ReviewAdmin>, Error> {
+    async fn list_admin(
+        &self,
+        provider_id: Option<i32>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<ReviewAdmin>, Error> {
         Review::find()
+            .apply_if(provider_id, |q, id| {
+                q.filter(review::Column::BusinessId.eq(id))
+            })
             .select_only()
             .column(review::Column::Id)
             .column(review::Column::BusinessId)

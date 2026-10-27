@@ -1,0 +1,21 @@
+{#- The language switch, on the dark green of the footer, the auth pages and
+    the admin bar. One form, one button per language, each named in itself
+    ("English" stays readable to someone lost in the other language; never a
+    flag: a language is not a country) and marked `lang` so screen readers
+    say it right. The current one is pressed. A plain POST to /language with
+    the page to come back to (`back`, the shell's `here`), so it works without
+    JS. `languages` is the page context's list (macros do not see globals).
+    `compact`: two-letter codes for the narrow admin bar; the names stay as
+    the tooltip and for screen readers. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro language_switch(languages, back, compact=false) -%}
+<form class="lang-switch" method="post" action="{{ url_for(name="language") }}">
+  <input type="hidden" name="back" value="{{ back }}">
+  <span class="lang-switch__options" role="group" aria-label="{{ t(key="language.label") }}">
+    {{ atoms::icon(name="fa-language", class="lang-switch__icon") }}
+    {% for l in languages %}
+    <button type="submit" class="lang-switch__option{% if compact %} text-uppercase{% endif %}" name="lang" value="{{ l.code }}" lang="{{ l.code }}" aria-pressed="{% if l.current %}true{% else %}false{% endif %}"{% if compact %} title="{{ l.name }}" aria-label="{{ l.name }}"{% endif %}>{% if compact %}{{ l.code }}{% else %}{{ l.name }}{% endif %}</button>
+    {% endfor %}
+  </span>
+</form>
+{%- endmacro language_switch %}

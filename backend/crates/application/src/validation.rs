@@ -4,9 +4,18 @@
 use domain::{Error, ErrorCode, Result};
 
 use crate::constants::{
-    EMAIL_MAX, LAT_MAX, LAT_MIN, LNG_MAX, LNG_MIN, PASSWORD_MAX_BYTES, PASSWORD_MIN_CHARS,
-    USERNAME_MAX_LEN, USERNAME_MIN_LEN,
+    AUDIT_REASON_MAX, EMAIL_MAX, LAT_MAX, LAT_MIN, LNG_MAX, LNG_MIN, PASSWORD_MAX_BYTES,
+    PASSWORD_MIN_CHARS, USERNAME_MAX_LEN, USERNAME_MIN_LEN,
 };
+
+/// The optional "why" an admin gives for a change, as the audit log keeps it:
+/// trimmed, blank as none, at most `AUDIT_REASON_MAX` characters. The forms
+/// stop typing at that length, so only a hand-made request is cut.
+pub fn audit_reason(reason: Option<String>) -> Option<String> {
+    let reason = reason?;
+    let reason = reason.trim();
+    (!reason.is_empty()).then(|| reason.chars().take(AUDIT_REASON_MAX).collect())
+}
 
 /// 10-digit Vietnamese mobile number starting with 0. Mirrors the
 /// `chk_*_phone` CHECK constraints in the baseline migration.

@@ -1,13 +1,16 @@
 //! GET /admin → /admin/dashboard, and the dashboard: platform counts, plus a
 //! warning while demo listings are mixed into the real ones (§8.4).
 
-use application::{catalogue::PERM_SYSTEM_DEMO_MANAGE, outputs::AdminStatsDto};
+use application::{
+    catalogue::PERM_SYSTEM_DEMO_MANAGE, constants::CALL_STATS_DAYS, outputs::AdminStatsDto,
+};
 use axum::{extract::State, http::StatusCode, response::Response};
 use domain::Error;
 use serde::Serialize;
 
 use crate::{
     app_state::AppState,
+    locale::Locale,
     middleware::auth::Viewer,
     pages::{
         admin::{render_admin, url},
@@ -17,30 +20,51 @@ use crate::{
 
 #[derive(Serialize)]
 pub struct StatCard {
-    pub label: &'static str,
+    pub label: String,
     pub value: i64,
     pub icon: &'static str,
     /// Colour modifier of the icon tile (`stat-card__icon--<tone>`).
     pub tone: &'static str,
 }
 
-fn cards(s: &AdminStatsDto) -> Vec<StatCard> {
-    let card = |label, value, icon, tone| StatCard {
+fn cards(locale: &Locale, s: &AdminStatsDto) -> Vec<StatCard> {
+    let card = |label: String, value, icon, tone| StatCard {
         label,
         value,
         icon,
         tone,
     };
     vec![
-        card("Tổng nhà cung cấp", s.total_businesses, "fa-store", "green"),
         card(
-            "Đã xác minh",
+            locale.text("admin_stats.providers"),
+            s.total_businesses,
+            "fa-store",
+            "green",
+        ),
+        card(
+            locale.text("admin_stats.verified"),
             s.verified_businesses,
             "fa-circle-check",
             "blue",
         ),
-        card("Sản phẩm đang bán", s.active_products, "fa-box", "amber"),
-        card("Tài khoản hệ thống", s.total_users, "fa-users", "violet"),
+        card(
+            locale.text("admin_stats.products"),
+            s.active_products,
+            "fa-box",
+            "amber",
+        ),
+        card(
+            locale.text("admin_stats.users"),
+            s.total_users,
+            "fa-users",
+            "violet",
+        ),
+        card(
+            locale.text_with("admin_stats.calls", &[("days", &CALL_STATS_DAYS)]),
+            s.recent_calls,
+            "fa-phone",
+            "green",
+        ),
     ]
 }
 
@@ -84,7 +108,7 @@ pub async fn show(
         StatusCode::OK,
         "pages/admin/dashboard.html",
         &DashboardPage {
-            stats: cards(&stats),
+            stats: cards(state.locale(), &stats),
             demo_count,
         },
     )

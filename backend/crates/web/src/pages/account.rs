@@ -13,6 +13,7 @@ use crate::{
     app_state::AppState,
     cookies::{Flash, TakeFlash},
     extract::ApiForm,
+    labels::role_name,
     middleware::auth::Viewer,
     pages::{
         forms::{confirm_password, is_form_error, FormErrors},
@@ -31,6 +32,8 @@ fn url(name: &str) -> Result<String, Error> {
 #[derive(Serialize)]
 pub struct AccountPage {
     pub me: MeResponse,
+    /// The role, worded from its code.
+    pub role_name: String,
     /// The admin panel or provider dashboard, when the visitor has one.
     pub area: Option<Link>,
     pub errors: FormErrors,
@@ -51,9 +54,11 @@ async fn page(
     errors: FormErrors,
     password_changed: bool,
 ) -> Result<AccountPage, Error> {
-    let area = home_area(Some(actor));
+    let area = home_area(state.locale(), Some(actor));
+    let me = state.usecases.auth.me(actor.user_id).await?;
     Ok(AccountPage {
-        me: state.usecases.auth.me(actor.user_id).await?,
+        role_name: role_name(state.locale(), &me.role, &me.role),
+        me,
         area: (area.href != url("account")?).then_some(area),
         errors,
         password_changed,

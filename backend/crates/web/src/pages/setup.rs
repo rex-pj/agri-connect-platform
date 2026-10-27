@@ -60,7 +60,7 @@ pub async fn setup_page(State(state): State<AppState>) -> Result<Response, Error
     };
     render_page(
         &state,
-        &Shell::without_session(&url("setup")?, None),
+        &Shell::without_session(state.locale(), &url("setup")?, None),
         "pages/setup.html",
         &page,
     )
@@ -99,7 +99,7 @@ pub async fn setup(
             };
             return render_page_status(
                 &state,
-                &Shell::without_session(&url("setup")?, None),
+                &Shell::without_session(state.locale(), &url("setup")?, None),
                 err.kind().status(),
                 "pages/setup.html",
                 &page,

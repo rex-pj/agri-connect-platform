@@ -1,32 +1,34 @@
 {#- The contact form for one provider. A normal section of the page that posts
     to /contact; inside an Alpine `dialog` scope it becomes a bottom sheet.
     `provider` is a BusinessDetailDto, `contact` a ContactState, `limits` the
-    field length caps. -#}
+    field length caps. `return_to`: "service" on a service's page, so the visitor
+    lands back there. -#}
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/alert.html" as alerts %}
 {% import "molecules/form_field.html" as field %}
-{% macro contact_sheet(provider, contact, limits) -%}
+{% macro contact_sheet(provider, contact, limits, return_to="") -%}
 <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
 <section class="contact-sheet" id="lien-he" aria-labelledby="contact-title" :class="sheetClass">
   <div class="contact-sheet__header">
-    <h2 class="contact-sheet__title" id="contact-title">{{ atoms::icon(name="fa-comment-dots") }} Yêu cầu liên hệ</h2>
-    <button type="button" class="contact-sheet__close" aria-label="Đóng" x-show="modal" x-cloak x-on:click="hide">{{ atoms::icon(name="fa-xmark") }}</button>
+    <h2 class="contact-sheet__title" id="contact-title">{{ atoms::icon(name="fa-comment-dots") }} {{ t(key="contact.title") }}</h2>
+    <button type="button" class="contact-sheet__close" aria-label="{{ t(key="common.close") }}" x-show="modal" x-cloak x-on:click="hide">{{ atoms::icon(name="fa-xmark") }}</button>
   </div>
-  <p class="contact-sheet__sub">Gửi yêu cầu tới <strong>{{ provider.name }}</strong>. Họ sẽ gọi lại cho bạn.</p>
+  <p class="contact-sheet__sub">{{ t(key="contact.sub_before") }} <strong>{{ provider.name }}</strong>{{ t(key="contact.sub_after") }}</p>
   <form class="contact-sheet__form" method="post" action="{{ url_for(name="contact") }}">
     <input type="hidden" name="business_id" value="{{ provider.id }}">
+    {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
     {% if contact.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=contact.message) }}{% endif %}
-    {{ field::input(id="cs_phone", name="requester_phone", label="Số điện thoại", type="tel", value=contact.values.requester_phone, error=contact.errors.requester_phone | default(value=""), required=true, placeholder="0901234567", pattern="0[0-9]{9}", inputmode="numeric", autocomplete="tel", first=true) }}
+    {{ field::input(id="cs_phone", name="requester_phone", label=t(key="form.phone"), type="tel", value=contact.values.requester_phone, error=contact.errors.requester_phone | default(value=""), required=true, placeholder="0901234567", pattern="0[0-9]{9}", inputmode="numeric", autocomplete="tel", first=true) }}
     {% if provider.services %}
     {#- The service's name becomes the topic on the server; a topic or
         service error is about this one box. -#}
-    {{ field::select(id="cs_topic", name="service_id", label="Dịch vụ cần", options=provider.services, value_key="id", label_key="name", value=contact.values.service_id, error=contact.errors.service_id | default(value=contact.errors.topic | default(value="")), required=true, placeholder="— Chọn dịch vụ —") }}
+    {{ field::select(id="cs_topic", name="service_id", label=t(key="contact.service"), options=provider.services, value_key="id", label_key="name", value=contact.values.service_id, error=contact.errors.service_id | default(value=contact.errors.topic | default(value="")), required=true, placeholder=t(key="contact.choose_service")) }}
     {% else %}
-    {{ field::input(id="cs_topic", name="topic", label="Bạn cần gì?", value=contact.values.topic, error=contact.errors.topic | default(value=""), required=true, maxlength=limits.topic_max) }}
+    {{ field::input(id="cs_topic", name="topic", label=t(key="contact.topic"), value=contact.values.topic, error=contact.errors.topic | default(value=""), required=true, maxlength=limits.topic_max) }}
     {% endif %}
-    {{ field::input(id="cs_name", name="requester_name", label="Họ và tên", value=contact.values.requester_name, error=contact.errors.requester_name | default(value=""), required=true, placeholder="Nguyễn Văn A", autocomplete="name", maxlength=limits.name_max) }}
-    {{ field::textarea(id="cs_note", name="note", label="Ghi chú (không bắt buộc)", value=contact.values.note, error=contact.errors.note | default(value=""), placeholder="Diện tích, thời gian cần làm…", maxlength=limits.note_max) }}
-    <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-paper-plane") }} Gửi yêu cầu</button>
+    {{ field::input(id="cs_name", name="requester_name", label=t(key="form.full_name"), value=contact.values.requester_name, error=contact.errors.requester_name | default(value=""), required=true, placeholder=t(key="contact.name_placeholder"), autocomplete="name", maxlength=limits.name_max) }}
+    {{ field::textarea(id="cs_note", name="note", label=t(key="contact.note"), value=contact.values.note, error=contact.errors.note | default(value=""), placeholder=t(key="contact.note_placeholder"), maxlength=limits.note_max) }}
+    <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-paper-plane") }} {{ t(key="contact.send") }}</button>
   </form>
 </section>
 {%- endmacro contact_sheet %}

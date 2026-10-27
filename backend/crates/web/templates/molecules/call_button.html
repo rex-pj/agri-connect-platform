@@ -1,0 +1,10 @@
+{#- A public call button: a plain tel: link (works without JS); Alpine
+    `callBeacon` counts the tap for the click-to-call figures. `kind` is
+    "service", "product" or "provider", `id` that record's id. The label is
+    always the formatted number: on a desktop, where tel: may do nothing, it
+    is still there to read. The number never breaks across lines: every use
+    gives the button its cell's width, and app.css shrinks the label to fit. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro call_button(phone, kind, id, class) -%}
+<a class="{{ class }}" href="tel:{{ phone }}" x-data="callBeacon" x-on:click="count" data-call-url="{{ url_for(name="call_log") }}" data-call-kind="{{ kind }}" data-call-id="{{ id }}"><span class="btn-call__icon">{{ atoms::icon(name="fa-phone") }}</span><span class="btn-call__num">{{ phone | phone }}</span></a>
+{%- endmacro call_button %}

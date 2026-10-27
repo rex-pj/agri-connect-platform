@@ -1,27 +1,39 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
+
+use chrono::Utc;
 
 use domain::{
+    constants::{CALL_KIND_PRODUCT, CALL_KIND_PROVIDER, CALL_KIND_SERVICE},
     events::{Change, DomainEvent, Entity},
-    models::{business::BusinessBrowse, inquiry::NewInquiry},
+    models::{
+        business::BusinessBrowse,
+        call::NewCallClick,
+        inquiry::NewInquiry,
+        service::{PublicService, PublicServiceFilter},
+    },
     repositories::{
         business_repository_trait::BusinessRepositoryTrait,
+        call_repository_trait::CallRepositoryTrait,
         category_repository_trait::CategoryRepositoryTrait,
         inquiry_repository_trait::InquiryRepositoryTrait,
         location_repository_trait::LocationRepositoryTrait,
         product_repository_trait::ProductRepositoryTrait,
+        service_repository_trait::ServiceRepositoryTrait,
     },
     Error, ErrorCode, Result, Validation,
 };
 
 use crate::{
     constants::{
-        FEATURED_PRODUCTS_COUNT, FEATURED_PROVIDERS_COUNT, NOTE_MAX_LEN, PAGE_SIZE, RADIUS_MAX_M,
-        RADIUS_MIN_M, REQUESTER_NAME_MAX_LEN, TOPIC_MAX_LEN,
+        FEATURED_PRODUCTS_COUNT, FEATURED_PROVIDERS_COUNT, FEATURED_SERVICES_COUNT,
+        GEO_RESULTS_MAX, NOTE_MAX_LEN, PAGE_SIZE, RADIUS_MAX_M, RADIUS_MIN_M,
+        REQUESTER_NAME_MAX_LEN, SERVICES_PER_BUSINESS_MAX, TOPIC_MAX_LEN,
     },
-    inputs::{BrowseParams, ContactInput, GeoSearchParams},
+    inputs::{BrowseParams, CallInput, ContactInput, GeoSearchParams},
     outputs::{
         BrowseResponse, BusinessBrowseDto, BusinessDetailDto, BusinessSearchDto, CategoryDto,
-        ExploreData, InquiryCreatedDto, LocationDto, ProductDto, ServiceDto,
+        ExploreData, InquiryCreatedDto, LocationDto, ProductDto, PublicServiceDto,
+        ServiceBrowseResponse, ServiceDto,
     },
     pagination::{paginate, total_pages},
     ports::EventBus,
@@ -37,26 +49,36 @@ pub struct ExploreUseCase {
     inquiry_repo: Arc<dyn InquiryRepositoryTrait + Send + Sync>,
     location_repo: Arc<dyn LocationRepositoryTrait + Send + Sync>,
     product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
+    service_repo: Arc<dyn ServiceRepositoryTrait + Send + Sync>,
+    call_repo: Arc<dyn CallRepositoryTrait + Send + Sync>,
     /// Announces new inquiries (the provider is emailed).
     events: Arc<dyn EventBus>,
 }
 
+/// Everything `ExploreUseCase` depends on, named so wiring cannot swap two
+/// repos of compatible types by position.
+pub struct ExploreDeps {
+    pub business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
+    pub category_repo: Arc<dyn CategoryRepositoryTrait + Send + Sync>,
+    pub inquiry_repo: Arc<dyn InquiryRepositoryTrait + Send + Sync>,
+    pub location_repo: Arc<dyn LocationRepositoryTrait + Send + Sync>,
+    pub product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
+    pub service_repo: Arc<dyn ServiceRepositoryTrait + Send + Sync>,
+    pub call_repo: Arc<dyn CallRepositoryTrait + Send + Sync>,
+    pub events: Arc<dyn EventBus>,
+}
+
 impl ExploreUseCase {
-    pub fn new(
-        business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
-        category_repo: Arc<dyn CategoryRepositoryTrait + Send + Sync>,
-        inquiry_repo: Arc<dyn InquiryRepositoryTrait + Send + Sync>,
-        location_repo: Arc<dyn LocationRepositoryTrait + Send + Sync>,
-        product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
-        events: Arc<dyn EventBus>,
-    ) -> Self {
+    pub fn new(d: ExploreDeps) -> Self {
         Self {
-            business_repo,
-            category_repo,
-            inquiry_repo,
-            location_repo,
-            product_repo,
-            events,
+            business_repo: d.business_repo,
+            category_repo: d.category_repo,
+            inquiry_repo: d.inquiry_repo,
+            location_repo: d.location_repo,
+            product_repo: d.product_repo,
+            service_repo: d.service_repo,
+            call_repo: d.call_repo,
+            events: d.events,
         }
     }
 
@@ -64,17 +86,15 @@ impl ExploreUseCase {
         &self,
         params: GeoSearchParams,
     ) -> Result<Vec<BusinessSearchDto>> {
-        validate_coordinates(params.lat, params.lng)?;
-        if !(RADIUS_MIN_M..=RADIUS_MAX_M).contains(&params.radius) {
-            return Err(Error::new(ErrorCode::RadiusOutOfRange)
-                .with_param("min", RADIUS_MIN_M)
-                .with_param("max", RADIUS_MAX_M));
-        }
-
-        let point_wkt = point_wkt(params.lat, params.lng);
+        let point_wkt = geo_point(&params)?;
         let results = self
             .business_repo
-            .search_geo(&point_wkt, params.radius, params.service_id)
+            .search_geo(
+                &point_wkt,
+                params.radius,
+                params.service_id,
+                GEO_RESULTS_MAX,
+            )
             .await?;
 
         Ok(results
@@ -115,6 +135,99 @@ impl ExploreUseCase {
         })
     }
 
+    // ── Services as farmers see them ─────────────────────────────────────────
+
+    /// One page of the service listing; `service_id` in the params is the
+    /// category, `name` the typed text (service name, description, business).
+    pub async fn browse_services(&self, params: BrowseParams) -> Result<ServiceBrowseResponse> {
+        let (page, offset) = paginate(params.page, PAGE_SIZE);
+        let filter = PublicServiceFilter {
+            category_id: params.service_id,
+            text: params.name,
+        };
+        let (items, total) = tokio::try_join!(
+            self.service_repo
+                .browse_public(&filter, params.sort, PAGE_SIZE, offset),
+            self.service_repo.count_public(&filter),
+        )?;
+        Ok(ServiceBrowseResponse {
+            items: items.into_iter().map(PublicServiceDto::from).collect(),
+            total,
+            page,
+            per_page: PAGE_SIZE,
+            total_pages: total_pages(total, PAGE_SIZE),
+        })
+    }
+
+    /// Services whose business is within the radius, nearest first.
+    pub async fn search_services(&self, params: GeoSearchParams) -> Result<Vec<PublicServiceDto>> {
+        let point_wkt = geo_point(&params)?;
+        let results = self
+            .service_repo
+            .search_geo_public(
+                &point_wkt,
+                params.radius,
+                params.service_id,
+                GEO_RESULTS_MAX,
+            )
+            .await?;
+        Ok(results.into_iter().map(PublicServiceDto::from).collect())
+    }
+
+    pub async fn get_service(&self, id: i32) -> Result<PublicServiceDto> {
+        self.service_repo
+            .find_public(id)
+            .await?
+            .map(PublicServiceDto::from)
+            .ok_or_else(|| Error::new(ErrorCode::ServiceNotFound))
+    }
+
+    /// Records a tap on a public call button. The business is looked up from
+    /// the service, product or provider the button was on, so a request can
+    /// only count a call for something farmers can actually see.
+    pub async fn record_call(&self, input: CallInput) -> Result<()> {
+        let click = match input.kind.as_str() {
+            CALL_KIND_SERVICE => {
+                let service = self
+                    .service_repo
+                    .find_public(input.id)
+                    .await?
+                    .ok_or_else(|| Error::new(ErrorCode::ServiceNotFound))?;
+                NewCallClick {
+                    business_id: service.business_id,
+                    service_id: Some(service.id),
+                    product_id: None,
+                }
+            }
+            CALL_KIND_PRODUCT => {
+                let product = self
+                    .product_repo
+                    .find_by_id(input.id)
+                    .await?
+                    .ok_or_else(|| Error::new(ErrorCode::ProductNotFound))?;
+                NewCallClick {
+                    business_id: product.business_id,
+                    service_id: None,
+                    product_id: Some(product.id),
+                }
+            }
+            CALL_KIND_PROVIDER => {
+                let provider = self
+                    .business_repo
+                    .find_detail(input.id)
+                    .await?
+                    .ok_or_else(|| Error::new(ErrorCode::ProviderNotFound))?;
+                NewCallClick {
+                    business_id: provider.id,
+                    service_id: None,
+                    product_id: None,
+                }
+            }
+            _ => return Err(Error::new(ErrorCode::InvalidCallTarget)),
+        };
+        self.call_repo.record(click).await
+    }
+
     pub async fn get_provider_detail(&self, id: i32) -> Result<BusinessDetailDto> {
         let detail = self
             .business_repo
@@ -139,18 +252,27 @@ impl ExploreUseCase {
                     price_note: s.price_note,
                     category: s.category,
                     category_icon: s.category_icon,
+                    image_file_id: s.image_file_id,
                 })
                 .collect(),
         })
     }
 
     pub async fn get_explore_data(&self) -> Result<ExploreData> {
-        let (featured_businesses, featured_product_views) = tokio::try_join!(
+        // Enough candidates that even providers listing the most services
+        // cannot crowd out the others before one per provider is kept.
+        let candidates = FEATURED_SERVICES_COUNT as i64 * SERVICES_PER_BUSINESS_MAX as i64;
+        let (featured_businesses, featured_product_views, service_candidates) = tokio::try_join!(
             self.business_repo.featured(FEATURED_PROVIDERS_COUNT),
             self.product_repo.featured(FEATURED_PRODUCTS_COUNT),
+            self.service_repo.featured_candidates(candidates),
         )?;
 
         Ok(ExploreData {
+            featured_services: pick_featured(service_candidates, FEATURED_SERVICES_COUNT, today())
+                .into_iter()
+                .map(PublicServiceDto::from)
+                .collect(),
             featured_providers: featured_businesses
                 .into_iter()
                 .map(map_business_browse)
@@ -160,6 +282,17 @@ impl ExploreUseCase {
                 .map(ProductDto::from)
                 .collect(),
         })
+    }
+
+    /// Live products whose seller is within the radius, nearest first. Products
+    /// have no service category, so `service_id` in the params is not used.
+    pub async fn search_products(&self, params: GeoSearchParams) -> Result<Vec<ProductDto>> {
+        let point_wkt = geo_point(&params)?;
+        let results = self
+            .product_repo
+            .search_geo(&point_wkt, params.radius, GEO_RESULTS_MAX)
+            .await?;
+        Ok(results.into_iter().map(ProductDto::from).collect())
     }
 
     /// The single home of the inquiry rules; every contact form posts here.
@@ -288,5 +421,130 @@ fn map_business_browse(b: BusinessBrowse) -> BusinessBrowseDto {
         is_verified: b.is_verified,
         services: b.services,
         created_on: b.created_on,
+    }
+}
+
+/// The search point of a near-me query, once its coordinates and radius pass.
+fn geo_point(params: &GeoSearchParams) -> Result<String> {
+    validate_coordinates(params.lat, params.lng)?;
+    if !(RADIUS_MIN_M..=RADIUS_MAX_M).contains(&params.radius) {
+        return Err(Error::new(ErrorCode::RadiusOutOfRange)
+            .with_param("min", RADIUS_MIN_M)
+            .with_param("max", RADIUS_MAX_M));
+    }
+    Ok(point_wkt(params.lat, params.lng))
+}
+
+/// The featured services, at most `count`, chosen from `candidates` (photo
+/// first, then newest):
+/// - one per provider (its first candidate): a provider listing many
+///   services takes one place, not all;
+/// - providers take turns: the order is rotated by `day`, so every verified
+///   provider reaches the home page in its turn, not only the newest few;
+///   those with a photo still come before those without;
+/// - every category once before any repeats, so six spraying crews never
+///   hide the only dredger.
+fn pick_featured(candidates: Vec<PublicService>, count: usize, day: i64) -> Vec<PublicService> {
+    let mut seen = HashSet::new();
+    let (mut with_photo, mut without): (Vec<_>, Vec<_>) = candidates
+        .into_iter()
+        .filter(|s| seen.insert(s.business_id))
+        .partition(|s| s.image_file_id.is_some());
+    for group in [&mut with_photo, &mut without] {
+        if !group.is_empty() {
+            let shift = day.rem_euclid(group.len() as i64) as usize;
+            group.rotate_left(shift);
+        }
+    }
+    with_photo.append(&mut without);
+
+    let mut categories = HashSet::new();
+    let (mut picked, repeats): (Vec<_>, Vec<_>) = with_photo
+        .into_iter()
+        .partition(|s| categories.insert(s.category_id));
+    picked.extend(repeats);
+    picked.truncate(count);
+    picked
+}
+
+/// Whole days since the Unix epoch: the turn the featured providers are in.
+fn today() -> i64 {
+    Utc::now().timestamp().div_euclid(SECONDS_PER_DAY)
+}
+
+const SECONDS_PER_DAY: i64 = 24 * 60 * 60;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn service(id: i32, business_id: i32, category_id: i32, photo: bool) -> PublicService {
+        PublicService {
+            id,
+            name: format!("Dịch vụ {id}"),
+            description: None,
+            price_note: None,
+            category_id,
+            category: String::new(),
+            category_slug: String::new(),
+            category_icon: None,
+            image_file_id: photo.then(uuid::Uuid::new_v4),
+            business_id,
+            business_name: String::new(),
+            business_phone: String::new(),
+            business_address: None,
+            business_verified: true,
+            created_on: Utc::now(),
+            distance_m: None,
+        }
+    }
+
+    fn ids(services: &[PublicService]) -> Vec<i32> {
+        services.iter().map(|s| s.id).collect()
+    }
+
+    #[test]
+    fn one_place_per_provider() {
+        let picked = pick_featured(
+            vec![
+                service(1, 10, 1, true),
+                service(2, 10, 2, true),
+                service(3, 20, 3, true),
+            ],
+            6,
+            0,
+        );
+        assert_eq!(ids(&picked), [1, 3]);
+    }
+
+    #[test]
+    fn providers_take_turns_day_by_day_photos_first() {
+        let candidates = || {
+            vec![
+                service(1, 10, 1, true),
+                service(2, 20, 2, true),
+                service(3, 30, 3, true),
+                service(4, 40, 4, false),
+            ]
+        };
+        assert_eq!(ids(&pick_featured(candidates(), 2, 0)), [1, 2]);
+        assert_eq!(ids(&pick_featured(candidates(), 2, 1)), [2, 3]);
+        assert_eq!(ids(&pick_featured(candidates(), 2, 2)), [3, 1]);
+        // Without a photo: after every provider with one.
+        assert_eq!(ids(&pick_featured(candidates(), 6, 1)), [2, 3, 1, 4]);
+    }
+
+    #[test]
+    fn every_category_before_a_repeat() {
+        let picked = pick_featured(
+            vec![
+                service(1, 10, 1, true),
+                service(2, 20, 1, true),
+                service(3, 30, 2, true),
+            ],
+            2,
+            0,
+        );
+        assert_eq!(ids(&picked), [1, 3], "the second spraying crew waits");
     }
 }

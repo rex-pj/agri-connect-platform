@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
     sea_query::{Alias, Expr, Func, Order, Query, SimpleExpr, SubQueryStatement},
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait,
+    ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, DatabaseConnection, EntityTrait,
     FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait,
     RelationTrait, Set, Value,
 };
@@ -23,7 +23,7 @@ use domain::{
 use domain::{Error, ErrorCode};
 
 use crate::repositories::unique_or_internal;
-use crate::search::{text_contains, BUSINESS_SEARCH_COLUMNS};
+use crate::search::{text_contains, BUSINESS_SEARCH_COLUMNS, SERVICE_SEARCH_COLUMNS};
 use crate::{
     db_types::DateTimeWithTimeZone,
     entities::{
@@ -39,9 +39,61 @@ pub struct BusinessRepository {
     db: Arc<DatabaseConnection>,
 }
 
+/// One of a business's on/off switches the admin sets.
+#[derive(Clone, Copy)]
+enum Switch {
+    /// The "verified" badge.
+    Verified,
+    /// Listed on the public pages; records who turned it.
+    Active { actor_id: i32 },
+}
+
 impl BusinessRepository {
     pub fn new(db: Arc<DatabaseConnection>) -> Self {
         Self { db }
+    }
+
+    /// Sets `switch` to `on`: `Some((name, changed))`, or `None` when there
+    /// is no such business. Setting the state it already has writes nothing.
+    async fn set_switch(
+        &self,
+        id: i32,
+        switch: Switch,
+        on: bool,
+    ) -> Result<Option<(String, bool)>, Error> {
+        let db = self.db.as_ref();
+        let failed = |e: sea_orm::DbErr| {
+            error!("business switch update error (id={id}): {e}");
+            Error::internal("Failed to update the business.")
+        };
+        let Some(b) = Business::find()
+            .filter(business::Column::Id.eq(id))
+            .filter(business::Column::DeletedAt.is_null())
+            .one(db)
+            .await
+            .map_err(failed)?
+        else {
+            return Ok(None);
+        };
+        let current = match switch {
+            Switch::Verified => b.is_verified,
+            Switch::Active { .. } => b.is_active,
+        };
+        let name = b.name.clone();
+        if current == on {
+            return Ok(Some((name, false)));
+        }
+        let mut row: business::ActiveModel = b.into();
+        match switch {
+            Switch::Verified => row.is_verified = Set(on),
+            Switch::Active { actor_id } => {
+                row.is_active = Set(on);
+                row.updated_by = Set(Some(actor_id));
+            }
+        }
+        row.updated_on = Set(Utc::now().fixed_offset());
+        row.update(db).await.map_err(failed)?;
+        Ok(Some((name, true)))
     }
 }
 
@@ -94,6 +146,7 @@ struct ServiceDetailRow {
     price_note: Option<String>,
     category: String,
     category_icon: Option<String>,
+    image_file_id: Option<uuid::Uuid>,
 }
 
 #[derive(FromQueryResult)]
@@ -161,6 +214,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
         point_wkt: &str,
         radius: f64,
         service_id: Option<i32>,
+        limit: i64,
     ) -> Result<Vec<BusinessGeoResult>, Error> {
         let db = self.db.as_ref();
 
@@ -184,7 +238,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .filter(business::Column::IsActive.eq(true))
             .filter(business::Column::DeletedAt.is_null())
             .filter(within_filter)
-            .limit(50);
+            .limit(limit as u64);
         if let Some(id) = service_id {
             query = query.filter(offers_service(id));
         }
@@ -248,7 +302,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             query = query.filter(offers_service(id));
         }
         if let Some(q) = name.as_deref().filter(|q| !q.trim().is_empty()) {
-            query = query.filter(text_contains(BUSINESS_SEARCH_COLUMNS, q));
+            query = query.filter(matches_text(q));
         }
 
         let query = match sort {
@@ -307,7 +361,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             query = query.filter(offers_service(id));
         }
         if let Some(q) = name.as_deref().filter(|q| !q.trim().is_empty()) {
-            query = query.filter(text_contains(BUSINESS_SEARCH_COLUMNS, q));
+            query = query.filter(matches_text(q));
         }
 
         query
@@ -320,7 +374,9 @@ impl BusinessRepositoryTrait for BusinessRepository {
     async fn featured(&self, limit: i64) -> Result<Vec<BusinessBrowse>, Error> {
         let db = self.db.as_ref();
 
-        // The home page shows off providers with something to offer.
+        // The home page shows off vetted providers with something to offer:
+        // a self-registered account is listed and searchable at once, but
+        // reaches the home page only once an admin has verified it.
         let svc_subq = ServiceEntity::find()
             .select_only()
             .column(service::Column::Id)
@@ -344,8 +400,8 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .column(business::Column::CreatedOn)
             .filter(business::Column::IsActive.eq(true))
             .filter(business::Column::DeletedAt.is_null())
+            .filter(business::Column::IsVerified.eq(true))
             .filter(Expr::exists(svc_subq))
-            .order_by_desc(business::Column::IsVerified)
             .order_by_desc(business::Column::CreatedOn)
             .order_by_desc(business::Column::Id)
             .limit(limit as u64)
@@ -407,6 +463,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .column(service::Column::PriceNote)
             .column_as(category::Column::Name, "category")
             .column_as(category::Column::Icon, "category_icon")
+            .column(service::Column::ImageFileId)
             .join(JoinType::InnerJoin, service::Relation::Category.def())
             .filter(service::Column::BusinessId.eq(b.id))
             .filter(service::Column::IsActive.eq(true))
@@ -414,6 +471,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .filter(category::Column::IsActive.eq(true))
             .order_by_asc(category::Column::DisplayOrder)
             .order_by_desc(service::Column::CreatedOn)
+            .order_by_desc(service::Column::Id)
             .into_model::<ServiceDetailRow>()
             .all(db)
             .await
@@ -435,6 +493,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
                     price_note: r.price_note,
                     category: r.category,
                     category_icon: r.category_icon,
+                    image_file_id: r.image_file_id,
                 })
                 .collect(),
         }))
@@ -689,34 +748,17 @@ impl BusinessRepositoryTrait for BusinessRepository {
     // ── Toggle verify ─────────────────────────────────────────────────────────
 
     async fn set_verified(&self, id: i32, verified: bool) -> Result<Option<(String, bool)>, Error> {
-        let db = self.db.as_ref();
+        self.set_switch(id, Switch::Verified, verified).await
+    }
 
-        let b = Business::find()
-            .filter(business::Column::Id.eq(id))
-            .filter(business::Column::DeletedAt.is_null())
-            .one(db)
+    async fn set_active(
+        &self,
+        id: i32,
+        active: bool,
+        actor_id: i32,
+    ) -> Result<Option<(String, bool)>, Error> {
+        self.set_switch(id, Switch::Active { actor_id }, active)
             .await
-            .map_err(|e| {
-                error!("business set_verified find error (id={id}): {e}");
-                Error::internal("Failed to update verification status.")
-            })?;
-
-        let Some(b) = b else { return Ok(None) };
-
-        let name = b.name.clone();
-        if b.is_verified == verified {
-            return Ok(Some((name, false)));
-        }
-        let mut active: business::ActiveModel = b.into();
-        active.is_verified = Set(verified);
-        active.updated_on = Set(Utc::now().fixed_offset());
-
-        active.update(db).await.map_err(|e| {
-            error!("business set_verified update error (id={id}): {e}");
-            Error::internal("Failed to update verification status.")
-        })?;
-
-        Ok(Some((name, true)))
     }
 
     // ── Assign user ───────────────────────────────────────────────────────────
@@ -894,6 +936,25 @@ pub(crate) async fn insert_registration_business<C: ConnectionTrait>(
 /// The business offers a live service in the live category `category_id`.
 /// The only service condition on the public lists: a provider with no
 /// services yet (a new sign-up) is still listed, so farmers can find it.
+/// The business's own name or description contains `q`, or one of its live
+/// services does: a provider who only listed "Phun thuốc" is found by it.
+fn matches_text(q: &str) -> Condition {
+    let service_matches = ServiceEntity::find()
+        .select_only()
+        .column(service::Column::Id)
+        .join(JoinType::InnerJoin, service::Relation::Category.def())
+        .filter(
+            Expr::col((service::Entity, service::Column::BusinessId))
+                .equals((business::Entity, business::Column::Id)),
+        )
+        .filter(service::Column::IsActive.eq(true))
+        .filter(service::Column::DeletedAt.is_null())
+        .filter(category::Column::IsActive.eq(true))
+        .filter(text_contains(SERVICE_SEARCH_COLUMNS, q))
+        .into_query();
+    text_contains(BUSINESS_SEARCH_COLUMNS, q).add(Expr::exists(service_matches))
+}
+
 fn offers_service(category_id: i32) -> SimpleExpr {
     Expr::exists(
         ServiceEntity::find()

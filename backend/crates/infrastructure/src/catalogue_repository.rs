@@ -105,9 +105,8 @@ impl CatalogueRepositoryTrait for CatalogueRepository {
             report.roles_inserted += exec(
                 &txn,
                 "role",
-                "INSERT INTO roles (code, name, description) VALUES ($1, $2, $3)
-                 ON CONFLICT (code) DO NOTHING",
-                vec![role.code.into(), role.name.into(), role.description.into()],
+                "INSERT INTO roles (code, name) VALUES ($1, $1) ON CONFLICT (code) DO NOTHING",
+                vec![role.code.into()],
             )
             .await?;
         }
@@ -117,8 +116,8 @@ impl CatalogueRepositoryTrait for CatalogueRepository {
             let inserted = exec(
                 &txn,
                 "permission",
-                "INSERT INTO permissions (code, name) VALUES ($1, $2) ON CONFLICT (code) DO NOTHING",
-                vec![perm.key.into(), perm.name.into()],
+                "INSERT INTO permissions (code, name) VALUES ($1, $1) ON CONFLICT (code) DO NOTHING",
+                vec![perm.key.into()],
             )
             .await?;
             if inserted > 0 {

@@ -13,6 +13,9 @@ mod m20261014_000003_files;
 mod m20261015_000004_refresh_tokens;
 mod m20261016_000005_session_epoch;
 mod m20261017_000006_one_business_per_owner;
+mod m20261017_000007_service_images;
+mod m20261018_000008_service_search;
+mod m20261020_000009_call_clicks;
 pub mod search;
 
 pub struct Migrator;
@@ -27,6 +30,9 @@ impl MigratorTrait for Migrator {
             Box::new(m20261015_000004_refresh_tokens::Migration),
             Box::new(m20261016_000005_session_epoch::Migration),
             Box::new(m20261017_000006_one_business_per_owner::Migration),
+            Box::new(m20261017_000007_service_images::Migration),
+            Box::new(m20261018_000008_service_search::Migration),
+            Box::new(m20261020_000009_call_clicks::Migration),
         ]
     }
 }

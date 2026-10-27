@@ -9,9 +9,9 @@
     </div>
     <h1 class="error-card__code">{{ status }}</h1>
     <p class="error-card__message">{{ message }}</p>
-    <a class="btn-pill" href="{{ url_for(name='home') }}">{{ atoms::icon(name="fa-house") }} Về trang chủ</a>
+    <a class="btn-pill" href="{{ url_for(name='home') }}">{{ atoms::icon(name="fa-house") }} {{ t(key="common.back_home") }}</a>
     {% if request_id and status >= 500 %}
-    <p class="error-card__ref">Mã tham chiếu: {{ request_id }}</p>
+    <p class="error-card__ref">{{ t(key="error_page.reference", id=request_id) }}</p>
     {% endif %}
   </div>
 </section>

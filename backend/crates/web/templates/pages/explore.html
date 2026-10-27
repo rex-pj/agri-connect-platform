@@ -4,12 +4,15 @@
 {% import "molecules/empty_state.html" as empty %}
 {% import "organisms/category_grid.html" as grid %}
 {% import "organisms/provider_card.html" as providers %}
+{% import "organisms/service_card.html" as services %}
 {% import "organisms/product_card.html" as products %}
-{#- Providers near the visitor. `page` is web::pages::explore::ExplorePage.
+{% import "molecules/tab_nav.html" as tabs %}
+{#- Services, providers and products near the visitor, in three tabs (links without JS,
+    switched in place by Alpine `tabs`). `page` is web::pages::explore::ExplorePage.
     The GPS button is the `ac-geolocate` island; the preset form beside it
     works without JS. -#}
-{% block title %}Tìm dịch vụ gần bạn — {{ site.name }}{% endblock title %}
-{% block meta %}<meta name="description" content="Tìm nhà cung cấp dịch vụ nông nghiệp gần bạn nhất: cơ giới, phân bón, thuốc BVTV, máy bay phun thuốc và nhiều hơn nữa. Bật định vị để lọc theo khoảng cách.">{% endblock meta %}
+{% block title %}{{ t(key="explore.title") }} — {{ site.name }}{% endblock title %}
+{% block meta %}<meta name="description" content="{{ t(key="explore.meta") }}">{% endblock meta %}
 {% block scripts %}<script defer src="{{ asset_url(path='js/islands.js') }}"></script>{% endblock scripts %}
 {% block main %}
 {% if not page.located %}
@@ -21,19 +24,19 @@
       <span class="geo-cta__ripple geo-cta__ripple--3"></span>
       <span class="loc-ripple__pin">{{ atoms::icon(name="fa-location-dot") }}</span>
     </div>
-    <h1 class="loc-hero__title">Tìm thợ gần bạn</h1>
-    <p class="loc-hero__sub">Cho phép xác định vị trí để tìm nhà cung cấp trong bán kính <strong>{{ page.radius_km }} km</strong> từ bạn</p>
-    <ac-geolocate href="{{ page.geolocate_href }}" label="XÁC ĐỊNH VỊ TRÍ CỦA TÔI" busy-label="Đang xác định vị trí…" denied="Bạn đã chặn quyền định vị. Vui lòng cho phép trong cài đặt trình duyệt." failed="Không lấy được vị trí. Hãy thử lại hoặc kiểm tra GPS." unsupported="Trình duyệt không hỗ trợ định vị. Vui lòng chọn khu vực bên dưới." button-class="btn btn-warning btn-lg loc-hero__btn"></ac-geolocate>
-    <p class="loc-hero__privacy">{{ atoms::icon(name="fa-shield-halved") }} Vị trí chỉ dùng để tìm thợ, không được lưu lại</p>
+    <h1 class="loc-hero__title">{{ t(key="explore.locate_title") }}</h1>
+    <p class="loc-hero__sub">{{ t(key="explore.locate_sub_before") }} <strong>{{ t(key="explore.km", km=page.radius_km) }}</strong> {{ t(key="explore.locate_sub_after") }}</p>
+    <ac-geolocate href="{{ page.geolocate_href }}" label="{{ t(key="geolocate.locate_me") }}" busy-label="{{ t(key="geolocate.locating") }}" denied="{{ t(key="geolocate.denied_settings") }}" failed="{{ t(key="geolocate.failed_gps") }}" unsupported="{{ t(key="geolocate.unsupported_pick") }}" button-class="btn btn-warning btn-lg loc-hero__btn"></ac-geolocate>
+    <p class="loc-hero__privacy">{{ atoms::icon(name="fa-shield-halved") }} {{ t(key="explore.privacy") }}</p>
     {% if page.locations %}
     <form class="loc-manual" method="get" action="{{ url_for(name="explore") }}">
-      <label class="loc-manual__label" for="location_id">Hoặc chọn khu vực</label>
+      <label class="loc-manual__label" for="location_id">{{ t(key="explore.pick_area") }}</label>
       <div class="loc-manual__row">
         <select class="form-select" id="location_id" name="location_id" required>
-          <option value="">— Chọn tỉnh / huyện —</option>
+          <option value="">{{ t(key="explore.choose_area") }}</option>
           {% for l in page.locations %}<option value="{{ l.id }}">{{ l.label }}</option>{% endfor %}
         </select>
-        <button type="submit" class="btn btn-light" aria-label="Tìm theo khu vực">{{ atoms::icon(name="fa-arrow-right") }}</button>
+        <button type="submit" class="btn btn-light" aria-label="{{ t(key="explore.search_area") }}">{{ atoms::icon(name="fa-arrow-right") }}</button>
       </div>
     </form>
     {% endif %}
@@ -42,13 +45,13 @@
 {% else %}
 <header class="page-hero">
   <div class="explore-hero__row">
-    <h1 class="page-hero__title">{{ atoms::icon(name="fa-location-dot", class="explore-hero__pin") }} Tìm dịch vụ gần tôi</h1>
-    <ac-geolocate href="{{ page.geolocate_href }}" label="Cập nhật" busy-label="Đang định vị…" denied="Bạn đã chặn quyền định vị." failed="Không lấy được vị trí." unsupported="Trình duyệt không hỗ trợ định vị." button-class="btn btn-sm explore-hero__refresh"></ac-geolocate>
+    <h1 class="page-hero__title">{{ atoms::icon(name="fa-location-dot", class="explore-hero__pin") }} {{ t(key="explore.near_title") }}</h1>
+    <ac-geolocate href="{{ page.geolocate_href }}" label="{{ t(key="geolocate.refresh") }}" busy-label="{{ t(key="geolocate.busy") }}" denied="{{ t(key="geolocate.denied") }}" failed="{{ t(key="geolocate.failed_short") }}" unsupported="{{ t(key="geolocate.unsupported") }}" button-class="btn btn-sm explore-hero__refresh"></ac-geolocate>
   </div>
-  <p class="page-hero__sub">{{ atoms::icon(name="fa-circle-check", class="explore-hero__check") }} {% if page.place %}{{ page.place }}{% else %}Đã xác định vị trí{% endif %}</p>
+  <p class="page-hero__sub">{{ atoms::icon(name="fa-circle-check", class="explore-hero__check") }} {% if page.place %}{{ page.place }}{% else %}{{ t(key="explore.located") }}{% endif %}</p>
 </header>
-<nav class="radius-links" aria-label="Bán kính">
-  <span class="radius-links__label">{{ atoms::icon(name="fa-circle-dot") }} Bán kính:</span>
+<nav class="radius-links" aria-label="{{ t(key="explore.radius") }}">
+  <span class="radius-links__label">{{ atoms::icon(name="fa-circle-dot") }} {{ t(key="explore.radius_label") }}</span>
   {% for r in page.radius_links %}
   <a class="chip" href="{{ r.href }}"{% if r.active %} aria-current="true"{% endif %}>{{ r.label }}</a>
   {% endfor %}
@@ -57,50 +60,62 @@
 
 {% if page.service_tiles %}
 <section class="home-categories">
-  <h2 class="cat-section-label">Danh mục dịch vụ</h2>
+  <h2 class="cat-section-label">{{ t(key="explore.service_categories") }}</h2>
   {{ grid::category_grid(items=page.service_tiles) }}
 </section>
 {% endif %}
 
 {% if page.located %}
-<section class="list-results">
-  {% if page.providers %}
-  <p class="small text-muted mb-3"><strong>{{ page.providers | length }}</strong> nhà cung cấp gần bạn</p>
-  <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
-    {% for p in page.providers %}<div class="col">{{ providers::provider_card(p=p) }}</div>{% endfor %}
-  </div>
-  {% else %}
-  {% set none_title = "Không tìm thấy dịch vụ trong bán kính " ~ page.radius_km ~ " km" %}
-  {% if page.wider %}
-  {% set wider_label = "Tìm trong " ~ page.wider.label %}
-  {{ empty::empty_state(icon="fa-magnifying-glass", title=none_title, hint="Hãy thử bỏ bộ lọc hoặc mở rộng phạm vi.", action_href=page.wider.href, action_icon="fa-expand", action_label=wider_label) }}
-  {% else %}
-  {{ empty::empty_state(icon="fa-magnifying-glass", title=none_title, hint="Hãy thử bỏ bộ lọc dịch vụ.") }}
-  {% endif %}
-  {% endif %}
-</section>
-{% elif page.featured_providers %}
-<section class="home-section">
-  {{ section::section_header(title="Nhà cung cấp nổi bật", more_href=url_for(name="services")) }}
-  <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
-    {% for p in page.featured_providers %}<div class="col">{{ providers::provider_card(p=p) }}</div>{% endfor %}
-  </div>
-</section>
-{% endif %}
+<div class="list-results" x-data="tabs" data-tab="{{ page.tab }}">
+  {{ tabs::tab_nav(tabs=page.tabs, label=t(key="explore.results_label")) }}
+  {% set none_title = t(key="explore.no_services", km=page.radius_km) %}
+  {% set no_shop_title = t(key="explore.no_shops", km=page.radius_km) %}
+  {% set no_product_title = t(key="explore.no_products", km=page.radius_km) %}
 
-{% if page.product_tiles %}
-<section class="home-categories">
-  <h2 class="cat-section-label">Danh mục sản phẩm</h2>
-  {{ grid::category_grid(items=page.product_tiles) }}
-</section>
-{% endif %}
+  <section data-panel="services"{% if page.tab != "services" %} hidden{% endif %} :hidden="panelHidden">
+    {% if page.services %}
+    <p class="small text-muted mb-3"><strong>{{ page.services | length }}</strong> {{ t(key="explore.services_near") }}</p>
+    {{ services::service_grid(services=page.services) }}
+    {% elif page.wider %}
+    {% set wider_label = t(key="explore.search_within", area=page.wider.label) %}
+    {{ empty::empty_state(icon="fa-magnifying-glass", title=none_title, hint=t(key="explore.hint_services_wider"), action_href=page.wider.href, action_icon="fa-expand", action_label=wider_label) }}
+    {% else %}
+    {{ empty::empty_state(icon="fa-magnifying-glass", title=none_title, hint=t(key="explore.hint_services")) }}
+    {% endif %}
+  </section>
 
-{% if page.featured_products %}
+  <section data-panel="providers"{% if page.tab != "providers" %} hidden{% endif %} :hidden="panelHidden">
+    {% if page.providers %}
+    <p class="small text-muted mb-3"><strong>{{ page.providers | length }}</strong> {{ t(key="explore.shops_near") }}</p>
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
+      {% for p in page.providers %}<div class="col">{{ providers::provider_card(p=p) }}</div>{% endfor %}
+    </div>
+    {% elif page.wider %}
+    {% set wider_label = t(key="explore.search_within", area=page.wider.label) %}
+    {{ empty::empty_state(icon="fa-magnifying-glass", title=no_shop_title, hint=t(key="explore.hint_shops_wider"), action_href=page.wider.href, action_icon="fa-expand", action_label=wider_label) }}
+    {% else %}
+    {{ empty::empty_state(icon="fa-magnifying-glass", title=no_shop_title, hint=t(key="explore.hint_shops")) }}
+    {% endif %}
+  </section>
+
+  <section data-panel="products"{% if page.tab != "products" %} hidden{% endif %} :hidden="panelHidden">
+    {% if page.products %}
+    <p class="small text-muted mb-3"><strong>{{ page.products | length }}</strong> {{ t(key="explore.products_near") }}</p>
+    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-2 g-md-3">
+      {% for p in page.products %}<div class="col">{{ products::product_card(p=p) }}</div>{% endfor %}
+    </div>
+    {% elif page.wider %}
+    {% set wider_label = t(key="explore.search_within", area=page.wider.label) %}
+    {{ empty::empty_state(icon="fa-magnifying-glass", title=no_product_title, hint=t(key="explore.hint_products_wider"), action_href=page.wider.href, action_icon="fa-expand", action_label=wider_label) }}
+    {% else %}
+    {{ empty::empty_state(icon="fa-magnifying-glass", title=no_product_title, hint=t(key="explore.hint_products"), action_href=url_for(name="products"), action_icon="fa-bag-shopping", action_label=t(key="list.all_products")) }}
+    {% endif %}
+  </section>
+</div>
+{% elif page.featured_services %}
 <section class="home-section">
-  {{ section::section_header(title="Sản phẩm nông nghiệp", more_href=url_for(name="products")) }}
-  <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3">
-    {% for p in page.featured_products %}<div class="col">{{ products::product_card(p=p) }}</div>{% endfor %}
-  </div>
+  {{ section::section_header(title=t(key="home.featured_services"), more_href=url_for(name="services")) }}
+  {{ services::service_grid(services=page.featured_services) }}
 </section>
 {% endif %}
 {% endblock main %}

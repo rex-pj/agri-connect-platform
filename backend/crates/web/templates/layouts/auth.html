@@ -1,5 +1,6 @@
 {% extends "layouts/base.html" %}
 {% import "atoms/icon.html" as atoms %}
+{% import "molecules/language_switch.html" as lang %}
 {#- Sign-in, registration, password and setup pages: one card on the green
     background, no app frame. Never indexed. Pages fill `card`. -#}
 {% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
@@ -12,5 +13,6 @@
     </a>
     {% block card %}{% endblock card %}
   </div>
+  {{ lang::language_switch(languages=languages, back=shell.here) }}
 </main>
 {% endblock body %}

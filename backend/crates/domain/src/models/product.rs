@@ -32,6 +32,8 @@ pub struct ProductView {
     /// The provider selling it, for the link to its page.
     pub business_id: i32,
     pub created_on: DateTime<Utc>,
+    /// Metres from the searched point; only on a near-me search.
+    pub distance_m: Option<f64>,
 }
 
 pub struct ProviderProduct {

@@ -4,15 +4,16 @@
 //! the provider's page); only then does it show a create form, since a
 //! service always belongs to a provider. A service's page edits it, hides it
 //! (confirmation with a reason), shows it again (one button) and deletes it
-//! (confirmation with a reason).
+//! (confirmation with a reason). The list's rows carry the same actions
+//! (`?hide=` / `?delete=` open their confirmation there); sent with
+//! `back=list` and the list position, they land back on that list page.
 
 use application::{
     authz::Actor,
-    constants::{SERVICE_DESCRIPTION_MAX, SERVICE_NAME_MAX, SERVICE_PRICE_NOTE_MAX},
     outputs::{AdminPagedResponse, AdminServiceDto, CategoryDto},
 };
 use axum::{extract::State, http::StatusCode, response::Response};
-use domain::{constants::CATEGORY_TYPE_SERVICE, Error, ErrorCode};
+use domain::{Error, ErrorCode};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -21,67 +22,26 @@ use crate::{
     extract::{ApiForm, ApiPath, ApiQuery},
     middleware::auth::Viewer,
     pages::{
-        admin::{is_refusal, render_admin, url, ListPosition, Outcome},
+        admin::{
+            is_refusal, render_admin, url, Asked, ListPosition, ListReturn, Outcome,
+            ProviderFilter, RowConfirm, BACK_TO_LIST,
+        },
         forms::{reason, FormErrors},
-        listing::{parse_opt, Pagination},
+        listing::Pagination,
         parse_id, see_other,
+        service_form::{service_categories, Limits, ServiceForm, LIMITS},
     },
 };
-
-/// The use case's length limits, for the boxes' `maxlength`.
-#[derive(Serialize)]
-pub struct Limits {
-    pub name: usize,
-    pub description: usize,
-    pub price_note: usize,
-}
-
-const LIMITS: Limits = Limits {
-    name: SERVICE_NAME_MAX,
-    description: SERVICE_DESCRIPTION_MAX,
-    price_note: SERVICE_PRICE_NOTE_MAX,
-};
-
-/// The form as typed.
-#[derive(Debug, Default, Deserialize, Serialize)]
-#[serde(default)]
-pub struct ServiceForm {
-    pub category_id: String,
-    pub name: String,
-    pub description: String,
-    pub price_note: String,
-}
-
-impl ServiceForm {
-    fn from_dto(s: &AdminServiceDto) -> Self {
-        Self {
-            category_id: s.category_id.to_string(),
-            name: s.name.clone(),
-            description: s.description.clone().unwrap_or_default(),
-            price_note: s.price_note.clone().unwrap_or_default(),
-        }
-    }
-
-    /// An unparsable choice becomes 0, which the use case reports as an
-    /// invalid category on that field.
-    fn category_id(&self) -> i32 {
-        parse_opt(&self.category_id).unwrap_or(0)
-    }
-}
-
-async fn service_categories(state: &AppState) -> Result<Vec<CategoryDto>, Error> {
-    state
-        .usecases
-        .explore
-        .get_categories(Some(CATEGORY_TYPE_SERVICE))
-        .await
-}
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct ListQuery {
     pub page: String,
     pub provider_id: String,
+    /// The service whose hide confirmation is open.
+    pub hide: String,
+    /// The service whose delete confirmation is open.
+    pub delete: String,
 }
 
 #[derive(Serialize)]
@@ -89,6 +49,9 @@ pub struct ServiceRow {
     pub service: AdminServiceDto,
     pub href: String,
     pub provider_href: String,
+    pub hide_href: String,
+    pub delete_href: String,
+    pub status_action: String,
 }
 
 /// The create form, shown when the list is one provider's.
@@ -106,11 +69,13 @@ pub struct ServicesPage {
     pub total: i64,
     pub rows: Vec<ServiceRow>,
     pub pagination: Option<Pagination>,
-    pub provider_name: Option<String>,
-    pub provider_href: Option<String>,
-    pub all_href: String,
+    /// Set when the list is one provider's.
+    pub filter: Option<ProviderFilter>,
     pub create: Option<CreateForm>,
     pub limits: &'static Limits,
+    pub confirm: Option<RowConfirm>,
+    /// The hidden fields of every row action: land back here.
+    pub keep: ListReturn,
     pub flash: Option<Flash>,
 }
 
@@ -118,6 +83,7 @@ async fn list_page(
     state: &AppState,
     actor: &Actor,
     position: ListPosition,
+    asked: Asked,
     create_form: Option<(ServiceForm, FormErrors)>,
     flash: Option<Flash>,
     status: StatusCode,
@@ -134,10 +100,34 @@ async fn list_page(
         .admin
         .list_services_admin(actor, position.page(), provider_id)
         .await?;
+    let position = ListPosition {
+        page: page.to_string(),
+        ..position
+    };
+    let mut confirm = None;
     let mut rows = Vec::with_capacity(items.len());
     for service in items {
+        let id = service.id.to_string();
+        let status_action = url("admin_service_status", &[("id", &id)])?;
+        if asked.hide == Some(service.id) && service.is_active {
+            confirm = Some(RowConfirm {
+                kind: "hide",
+                name: service.name.clone(),
+                action: status_action.clone(),
+            });
+        }
+        if asked.delete == Some(service.id) {
+            confirm = Some(RowConfirm {
+                kind: "delete",
+                name: service.name.clone(),
+                action: url("admin_service_delete", &[("id", &id)])?,
+            });
+        }
         rows.push(ServiceRow {
-            href: url("admin_service", &[("id", &service.id.to_string())])?,
+            href: url("admin_service", &[("id", &id)])?,
+            hide_href: position.href("admin_services", &[("hide", &id)])?,
+            delete_href: position.href("admin_services", &[("delete", &id)])?,
+            status_action,
             provider_href: url(
                 "admin_provider",
                 &[("id", &service.business_id.to_string())],
@@ -146,11 +136,6 @@ async fn list_page(
         });
     }
     let path = url("admin_services", &[])?;
-    let provider_text = provider_id.map(|p| p.to_string());
-    let filter: Vec<(&str, &str)> = provider_text
-        .as_deref()
-        .map(|p| vec![("provider_id", p)])
-        .unwrap_or_default();
     let create = match provider_id {
         Some(business_id) => {
             let (form, errors) = create_form.unwrap_or_default();
@@ -164,19 +149,16 @@ async fn list_page(
         }
         None => None,
     };
+    let name = rows.first().map(|r| r.service.business_name.clone());
     let body = ServicesPage {
         total,
-        provider_name: provider_id
-            .and_then(|_| rows.first().map(|r| r.service.business_name.clone())),
-        provider_href: provider_text
-            .as_deref()
-            .map(|p| url("admin_provider", &[("id", p)]))
-            .transpose()?,
-        pagination: Pagination::new(&path, &filter, page, total_pages),
+        filter: position.provider_filter("admin_services", name)?,
+        pagination: position.pagination(&path, page, total_pages),
         rows,
-        all_href: path.clone(),
         create,
         limits: &LIMITS,
+        confirm,
+        keep: ListReturn::new(position),
         flash,
     };
     render_admin(
@@ -203,7 +185,17 @@ pub async fn list(
         page: q.page,
         provider_id: q.provider_id,
     };
-    let mut response = list_page(&state, &actor, position, None, flash.0, StatusCode::OK).await?;
+    let asked = Asked::new(&q.hide, &q.delete);
+    let mut response = list_page(
+        &state,
+        &actor,
+        position,
+        asked,
+        None,
+        flash.0,
+        StatusCode::OK,
+    )
+    .await?;
     flash.clear_on(&mut response);
     Ok(response)
 }
@@ -255,7 +247,16 @@ pub async fn create(
                 ..ListPosition::default()
             };
             let status = err.kind().status();
-            list_page(&state, &actor, position, Some((form, errors)), None, status).await
+            list_page(
+                &state,
+                &actor,
+                position,
+                Asked::default(),
+                Some((form, errors)),
+                None,
+                status,
+            )
+            .await
         }
         Err(err) => Err(err),
     }
@@ -288,9 +289,14 @@ async fn service_page(
     let business = service.business_id.to_string();
     let path = url("admin_service", &[("id", &id_text)])?;
     let body = ServicePage {
-        form: outcome
-            .form
-            .unwrap_or_else(|| ServiceForm::from_dto(&service)),
+        form: outcome.form.unwrap_or_else(|| {
+            ServiceForm::stored(
+                service.category_id,
+                &service.name,
+                service.description.as_deref(),
+                service.price_note.as_deref(),
+            )
+        }),
         categories: service_categories(state).await?,
         errors: outcome.errors,
         limits: &LIMITS,
@@ -381,6 +387,11 @@ pub struct StatusForm {
     /// "true" to show, "false" to hide.
     pub is_active: String,
     pub reason: String,
+    /// `list` when sent from the list's row: land back there, at `page` /
+    /// `provider_id`.
+    pub back: String,
+    pub page: String,
+    pub provider_id: String,
 }
 
 /// POST /admin/services/{id}/status
@@ -405,6 +416,13 @@ pub async fn change_status(
     } else {
         Flash::ServiceHidden
     };
+    if form.back == BACK_TO_LIST {
+        return ListPosition {
+            page: form.page,
+            provider_id: form.provider_id,
+        }
+        .back_to("admin_services", flash);
+    }
     redirect_to(id, flash)
 }
 
@@ -412,9 +430,15 @@ pub async fn change_status(
 #[serde(default)]
 pub struct DeleteForm {
     pub reason: String,
+    /// `list` when sent from the list's row: land back there, at `page` /
+    /// `provider_id`.
+    pub back: String,
+    pub page: String,
+    pub provider_id: String,
 }
 
-/// POST /admin/services/{id}/delete: back to the provider's services.
+/// POST /admin/services/{id}/delete: back to the list it was sent from, else
+/// to the provider's services.
 pub async fn delete(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
@@ -430,9 +454,16 @@ pub async fn delete(
     admin
         .delete_service_admin(&actor, id, reason(&form.reason))
         .await?;
-    ListPosition {
-        provider_id: business_id.to_string(),
-        ..ListPosition::default()
-    }
-    .back_to("admin_services", Flash::ServiceDeleted)
+    let position = if form.back == BACK_TO_LIST {
+        ListPosition {
+            page: form.page,
+            provider_id: form.provider_id,
+        }
+    } else {
+        ListPosition {
+            provider_id: business_id.to_string(),
+            ..ListPosition::default()
+        }
+    };
+    position.back_to("admin_services", Flash::ServiceDeleted)
 }

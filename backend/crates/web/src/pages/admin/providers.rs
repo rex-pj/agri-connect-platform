@@ -5,11 +5,14 @@
 //! JS, the same form on the page without); granting it is one button. Both
 //! set an explicit state, so a form sent twice changes nothing. The account
 //! form links an existing provider account by username, or creates one.
+//! Turning a provider off (gone from every public page with its listings)
+//! also asks for confirmation and a reason; turning it on is one button.
 
 use application::{
     authz::Actor,
     catalogue::{
-        PERM_LISTING_MODERATE, PERM_PROVIDER_ACCOUNT_ASSIGN, PERM_PROVIDER_VERIFY,
+        PERM_INQUIRY_READ, PERM_LISTING_MODERATE, PERM_PROVIDER_ACCOUNT_ASSIGN,
+        PERM_PROVIDER_STATUS_UPDATE, PERM_PROVIDER_VERIFY, PERM_REVIEW_MODERATE,
         PERM_SERVICE_MANAGE,
     },
     outputs::{AdminPagedResponse, AdminProviderDetailDto, AdminProviderDto},
@@ -109,12 +112,17 @@ pub struct ProviderPage {
     pub public_href: String,
     pub can_verify: bool,
     pub can_assign: bool,
+    pub can_change_status: bool,
     pub verification_action: String,
+    pub status_action: String,
     pub account_action: String,
     /// This provider's services and products in their admin lists, when the
     /// visitor may manage them.
     pub services_href: Option<String>,
     pub products_href: Option<String>,
+    /// The farmers' inquiries and reviews about it, likewise.
+    pub inquiries_href: Option<String>,
+    pub reviews_href: Option<String>,
     pub form: AccountForm,
     pub errors: FormErrors,
     /// The unverify dialog re-opens after a refusal.
@@ -150,11 +158,15 @@ async fn provider_page(
     let body = ProviderPage {
         services_href: list_of(PERM_SERVICE_MANAGE, "admin_services")?,
         products_href: list_of(PERM_LISTING_MODERATE, "admin_products")?,
+        inquiries_href: list_of(PERM_INQUIRY_READ, "admin_inquiries")?,
+        reviews_href: list_of(PERM_REVIEW_MODERATE, "admin_reviews")?,
         public_href: canonical_url("provider", id, &provider.name)?,
         provider,
         can_verify: actor.can(PERM_PROVIDER_VERIFY),
         can_assign: actor.can(PERM_PROVIDER_ACCOUNT_ASSIGN),
+        can_change_status: actor.can(PERM_PROVIDER_STATUS_UPDATE),
         verification_action: url("admin_provider_verification", &[("id", &id_text)])?,
+        status_action: url("admin_provider_status", &[("id", &id_text)])?,
         account_action: url("admin_provider_account", &[("id", &id_text)])?,
         form,
         errors: outcome.errors,
@@ -226,6 +238,39 @@ pub async fn set_verification(
         Flash::ProviderVerified
     } else {
         Flash::ProviderUnverified
+    };
+    redirect_to(id, flash)
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct StatusForm {
+    /// "true" to turn the provider on, "false" to turn it off.
+    pub is_active: String,
+    pub reason: String,
+}
+
+/// POST /admin/explore/{id}/status
+pub async fn change_status(
+    Viewer(viewer): Viewer,
+    State(state): State<AppState>,
+    ApiPath(raw_id): ApiPath<String>,
+    ApiForm(form): ApiForm<StatusForm>,
+) -> Result<Response, Error> {
+    let Some(actor) = viewer else {
+        return see_other(&url("login", &[])?);
+    };
+    let id = parse_id(&raw_id, ErrorCode::ProviderNotFound)?;
+    let active = form.is_active == "true";
+    state
+        .usecases
+        .admin
+        .toggle_provider_active(&actor, id, active, reason(&form.reason))
+        .await?;
+    let flash = if active {
+        Flash::ProviderActivated
+    } else {
+        Flash::ProviderDeactivated
     };
     redirect_to(id, flash)
 }

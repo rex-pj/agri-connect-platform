@@ -2,7 +2,7 @@ use application::authz::require_actor;
 use axum::{extract::State, response::IntoResponse, Json};
 use domain::Error;
 
-use crate::{app_state::AppState, extract::ApiPath, middleware::auth::MaybeActor};
+use crate::{app_state::AppState, extract::ApiPath, labels::Worded, middleware::auth::MaybeActor};
 
 pub struct RoleHandler;
 
@@ -14,7 +14,7 @@ impl RoleHandler {
     ) -> Result<impl IntoResponse, Error> {
         let actor = require_actor(actor)?;
         let result = state.usecases.admin.list_roles(&actor).await?;
-        Ok(Json(result))
+        Ok(Json(result.worded(state.locale())))
     }
 
     /// GET /api/admin/roles/{id}
@@ -25,6 +25,6 @@ impl RoleHandler {
     ) -> Result<impl IntoResponse, Error> {
         let actor = require_actor(actor)?;
         let result = state.usecases.admin.get_role_by_id(&actor, id).await?;
-        Ok(Json(result))
+        Ok(Json(result.worded(state.locale())))
     }
 }

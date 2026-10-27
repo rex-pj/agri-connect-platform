@@ -1,31 +1,34 @@
-//! GET /services — the provider directory, searchable and filterable by
-//! service — and GET /services/category/{id}/{slug} — one service's providers.
+//! GET /services — every live service, searchable and filterable by
+//! category — and GET /services/category/{id}/{slug} — one category's
+//! services. Each card is the service itself (photo, name, price) with the
+//! provider who offers it and a call button; the provider directory is
+//! `/providers` (`directory`).
 //!
-//! Plain GET forms and links, like the product lists. Contacting a provider
-//! happens on their page (S7), one tap away from each card.
+//! Plain GET forms and links, like the product lists.
 
 use application::{inputs::BrowseParams, outputs::CategoryDto};
 use axum::{extract::State, response::Response};
-use domain::{models::business::ProviderSort, Error, ErrorCode};
+use domain::{constants::CATEGORY_TYPE_SERVICE, models::business::ProviderSort, Error, ErrorCode};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     app_state::AppState,
     extract::{ApiPath, ApiQuery},
+    locale::Locale,
     pages::{
-        cards::ProviderCard,
+        cards::ServiceCard,
+        explore::TAB_PROVIDERS,
         listing::{
             category_sub, chips, find_category, parse_opt, past_the_end, redirect_to_canonical,
             with_query, FilterForm, Pagination, SortChip,
         },
         parse_id,
+        search::TabLink,
     },
     routes,
     shell::Shell,
     views::render_page,
 };
-
-const SERVICE_CATEGORY_TYPE: &str = "service";
 
 /// Everything as text: a hand-edited URL must give a page, not a 400.
 #[derive(Debug, Default, Deserialize)]
@@ -37,33 +40,172 @@ pub struct ListQuery {
     pub page: String,
 }
 
+/// A list page's search text, service-category filter, sort and page, as
+/// parsed from its query; shared by the service listing and the provider
+/// directory, whose forms are the same.
+pub(super) struct ListState {
+    pub search: String,
+    pub service_id: Option<i32>,
+    pub sort: ProviderSort,
+    pub page: i64,
+}
+
+impl ListState {
+    /// A category that is not among `categories` (hidden, or a product's) is
+    /// no filter at all.
+    pub fn parse(q: &ListQuery, categories: &[CategoryDto]) -> Self {
+        Self {
+            search: q.q.trim().to_owned(),
+            service_id: parse_opt::<i32>(&q.service_id)
+                .filter(|id| categories.iter().any(|c| c.id == *id)),
+            sort: ProviderSort::parse(Some(q.sort.trim())),
+            page: parse_opt(&q.page).unwrap_or(1),
+        }
+    }
+
+    pub fn params(&self) -> BrowseParams {
+        BrowseParams {
+            service_id: self.service_id,
+            name: (!self.search.is_empty()).then(|| self.search.clone()),
+            sort: self.sort,
+            page: self.page,
+        }
+    }
+
+    /// The query parameters that reproduce this list, minus the page.
+    pub fn kept(&self) -> Vec<(&'static str, String)> {
+        let sort = if self.sort == ProviderSort::default() {
+            ""
+        } else {
+            self.sort.as_str()
+        };
+        vec![
+            ("q", self.search.clone()),
+            (
+                "service_id",
+                self.service_id.map(|id| id.to_string()).unwrap_or_default(),
+            ),
+            ("sort", sort.to_owned()),
+        ]
+    }
+
+    fn active(&self) -> usize {
+        usize::from(self.service_id.is_some()) + usize::from(self.sort != ProviderSort::default())
+    }
+
+    pub fn filtered(&self) -> bool {
+        !self.search.is_empty() || self.active() > 0
+    }
+
+    pub fn form(
+        &self,
+        locale: &Locale,
+        path: &str,
+        categories: &[CategoryDto],
+        placeholder_key: &str,
+    ) -> FilterForm {
+        FilterForm {
+            reset_href: with_query(path, &[("q", self.search.as_str())]),
+            action: path.to_owned(),
+            placeholder: locale.text(placeholder_key),
+            q: self.search.clone(),
+            category_param: "service_id",
+            category_label: locale.text("filters.service_type"),
+            category_id: self.service_id,
+            categories: chips(categories),
+            price: None,
+            sort: self.sort.as_str(),
+            sorts: ProviderSort::ALL
+                .into_iter()
+                .map(|s| SortChip {
+                    value: s.as_str(),
+                    label: locale.text(sort_label(s)),
+                })
+                .collect(),
+            active: self.active(),
+        }
+    }
+}
+
+/// The two ways to look for someone to do a job: their services
+/// (`/services`) or their shops (`/providers`). Both lists read the same
+/// query (`ListQuery`), so switching keeps the search, category and sort.
+/// Each tab is named after its route.
+pub(super) const VIEW_SERVICES: &str = "services";
+pub(super) const VIEW_PROVIDERS: &str = "providers";
+
+/// The near-me page on the same view, with the chosen category kept.
+pub(super) fn near_me_href(view: &str, service_id: Option<i32>) -> Result<String, Error> {
+    let id = service_id.map(|id| id.to_string()).unwrap_or_default();
+    let tab = if view == VIEW_PROVIDERS {
+        TAB_PROVIDERS
+    } else {
+        ""
+    };
+    Ok(with_query(
+        &url("explore", &[])?,
+        &[("service_id", id.as_str()), ("tab", tab)],
+    ))
+}
+
+pub(super) fn view_tabs(
+    locale: &Locale,
+    active: &str,
+    kept: &[(&str, &str)],
+) -> Result<Vec<TabLink>, Error> {
+    [
+        (VIEW_SERVICES, "nav.services"),
+        (VIEW_PROVIDERS, "nav.shops"),
+    ]
+    .into_iter()
+    .map(|(tab, label)| {
+        Ok(TabLink {
+            tab,
+            label: locale.text(label),
+            href: with_query(&url(tab, &[])?, kept),
+            count: None,
+            active: tab == active,
+        })
+    })
+    .collect()
+}
+
+/// Borrowed pairs for `with_query` and friends.
+pub(super) fn borrowed<'a>(pairs: &'a [(&'static str, String)]) -> Vec<(&'static str, &'a str)> {
+    pairs.iter().map(|(k, v)| (*k, v.as_str())).collect()
+}
+
+fn sort_label(sort: ProviderSort) -> &'static str {
+    match sort {
+        ProviderSort::VerifiedFirst => "sort.verified_first",
+        ProviderSort::Newest => "sort.newest",
+        ProviderSort::NameAsc => "sort.name_asc",
+    }
+}
+
 #[derive(Serialize)]
 pub struct ServicesPage {
     pub title: String,
     pub icon: String,
     pub sub: String,
     pub back_href: String,
-    pub back_label: &'static str,
+    pub back_label: String,
     /// The near-me banner's second line.
-    pub geo_sub: &'static str,
+    pub geo_sub: String,
     pub category: Option<CategoryDto>,
     pub filters: Option<FilterForm>,
-    pub providers: Vec<ProviderCard>,
+    pub services: Vec<ServiceCard>,
     pub total: i64,
     pub pagination: Option<Pagination>,
     pub filtered: bool,
+    /// Services or shops: the same search as either list.
+    pub tabs: Vec<TabLink>,
+    /// The near-me banner's link (`near_me_href`).
+    pub near_href: String,
 }
 
-fn url(name: &str, params: &[(&str, &str)]) -> Result<String, Error> {
+pub(super) fn url(name: &str, params: &[(&str, &str)]) -> Result<String, Error> {
     routes::url(name, params).map_err(|e| Error::internal(format!("services links: {e}")))
-}
-
-fn sort_label(sort: ProviderSort) -> &'static str {
-    match sort {
-        ProviderSort::VerifiedFirst => "Ưu tiên xác minh",
-        ProviderSort::Newest => "Mới nhất",
-        ProviderSort::NameAsc => "A → Z",
-    }
 }
 
 /// GET /services
@@ -73,70 +215,35 @@ pub async fn list(
     ApiQuery(q): ApiQuery<ListQuery>,
 ) -> Result<Response, Error> {
     let explore = &state.usecases.explore;
-    let categories = explore.get_categories(Some(SERVICE_CATEGORY_TYPE)).await?;
-    let service_id =
-        parse_opt::<i32>(&q.service_id).filter(|id| categories.iter().any(|c| c.id == *id));
-    let sort = ProviderSort::parse(Some(q.sort.trim()));
-    let search = q.q.trim().to_owned();
-
-    let result = explore
-        .browse_providers(BrowseParams {
-            service_id,
-            name: (!search.is_empty()).then(|| search.clone()),
-            sort,
-            page: parse_opt(&q.page).unwrap_or(1),
-        })
-        .await?;
+    let categories = explore.get_categories(Some(CATEGORY_TYPE_SERVICE)).await?;
+    let list = ListState::parse(&q, &categories);
+    let result = explore.browse_services(list.params()).await?;
 
     let path = url("services", &[])?;
-    let service_text = service_id.map(|id| id.to_string()).unwrap_or_default();
-    let sort_param = if sort == ProviderSort::default() {
-        ""
-    } else {
-        sort.as_str()
-    };
-    let kept = [
-        ("q", search.as_str()),
-        ("service_id", service_text.as_str()),
-        ("sort", sort_param),
-    ];
-    let active = usize::from(service_id.is_some()) + usize::from(sort != ProviderSort::default());
-
-    if let Some(redirect) = past_the_end(&path, &kept, result.page, result.total_pages) {
+    let kept = list.kept();
+    if let Some(redirect) = past_the_end(&path, &borrowed(&kept), result.page, result.total_pages) {
         return redirect;
     }
     let page = ServicesPage {
-        title: "Danh mục dịch vụ".to_owned(),
+        title: state.locale().text("services.title"),
         icon: "fa-border-all".to_owned(),
-        sub: "Tất cả nhà cung cấp — không cần bật định vị".to_owned(),
+        sub: state.locale().text("services.sub"),
         back_href: url("home", &[])?,
-        back_label: "Trang chủ",
-        geo_sub: "Cơ khí · Phun thuốc · Múc bùn — trong 10 km",
+        back_label: state.locale().text("nav.home"),
+        geo_sub: state.locale().text("geo.sub_services"),
         category: None,
-        pagination: Pagination::new(&path, &kept, result.page, result.total_pages),
-        filtered: !search.is_empty() || active > 0,
-        filters: Some(FilterForm {
-            reset_href: with_query(&path, &[("q", search.as_str())]),
-            action: path,
-            placeholder: "Tìm nhà cung cấp...",
-            q: search,
-            category_param: "service_id",
-            category_label: "Loại dịch vụ",
-            category_id: service_id,
-            categories: chips(&categories),
-            price: None,
-            sort: sort.as_str(),
-            sorts: ProviderSort::ALL
-                .into_iter()
-                .map(|s| SortChip {
-                    value: s.as_str(),
-                    label: sort_label(s),
-                })
-                .collect(),
-            active,
-        }),
+        pagination: Pagination::new(&path, &borrowed(&kept), result.page, result.total_pages),
+        filtered: list.filtered(),
+        filters: Some(list.form(
+            state.locale(),
+            &path,
+            &categories,
+            "services.search_placeholder",
+        )),
         total: result.total,
-        providers: result.items.into_iter().map(ProviderCard::from).collect(),
+        services: ServiceCard::all(result.items)?,
+        tabs: view_tabs(state.locale(), VIEW_SERVICES, &borrowed(&kept))?,
+        near_href: near_me_href(VIEW_SERVICES, list.service_id)?,
     };
     render_page(&state, &shell, "pages/services.html", &page)
 }
@@ -150,7 +257,7 @@ pub async fn category(
 ) -> Result<Response, Error> {
     let id = parse_id(&raw_id, ErrorCode::CategoryNotFound)?;
     let explore = &state.usecases.explore;
-    let categories = explore.get_categories(Some(SERVICE_CATEGORY_TYPE)).await?;
+    let categories = explore.get_categories(Some(CATEGORY_TYPE_SERVICE)).await?;
     let category = find_category(&categories, id)?;
     let canonical = url(
         "service_category",
@@ -162,7 +269,7 @@ pub async fn category(
     }
 
     let result = explore
-        .browse_providers(BrowseParams {
+        .browse_services(BrowseParams {
             service_id: Some(id),
             name: None,
             sort: ProviderSort::default(),
@@ -176,16 +283,22 @@ pub async fn category(
     let page = ServicesPage {
         title: category.name.clone(),
         icon: category.icon.clone().unwrap_or_else(|| "fa-tag".to_owned()),
-        sub: category_sub(&category, result.total, "nhà cung cấp"),
+        sub: category_sub(state.locale(), &category, result.total, "services.count"),
         back_href: url("services", &[])?,
-        back_label: "Dịch vụ",
-        geo_sub: "Trong 10 km — bật định vị để lọc theo khoảng cách",
+        back_label: state.locale().text("nav.services"),
+        geo_sub: state.locale().text("geo.sub_category"),
         pagination: Pagination::new(&canonical, &[], result.page, result.total_pages),
         filtered: false,
         filters: None,
         category: Some(category),
         total: result.total,
-        providers: result.items.into_iter().map(ProviderCard::from).collect(),
+        services: ServiceCard::all(result.items)?,
+        tabs: view_tabs(
+            state.locale(),
+            VIEW_SERVICES,
+            &[("service_id", &id.to_string())],
+        )?,
+        near_href: near_me_href(VIEW_SERVICES, Some(id))?,
     };
     render_page(&state, &shell, "pages/services.html", &page)
 }

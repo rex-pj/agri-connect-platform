@@ -52,6 +52,25 @@ impl MediaHandler {
             .await?;
         Ok(Json(product))
     }
+
+    /// PUT /api/provider/services/{id}/image — multipart, the file in `image`.
+    pub async fn put_service_image(
+        MaybeActor(actor): MaybeActor,
+        State(state): State<AppState>,
+        ApiPath(id): ApiPath<i32>,
+        form: ApiMultipart,
+    ) -> Result<impl IntoResponse, Error> {
+        // Before reading the body: an anonymous caller never gets to upload.
+        let actor = require_actor(actor)?;
+        let max = state.usecases.media.max_upload_bytes();
+        let image = form.into_field(IMAGE_FIELD, max).await?;
+        let service = state
+            .usecases
+            .media
+            .store_service_image(&actor, id, image)
+            .await?;
+        Ok(Json(service))
+    }
 }
 
 async fn serve(state: &AppState, id: Uuid, variant: FileVariant) -> Result<Response, Error> {

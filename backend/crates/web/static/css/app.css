@@ -186,8 +186,12 @@ html {
   scrollbar-gutter: stable;
 }
 .app-main {
+  /* One reading width for every page; phones never reach it. */
+  max-width: 1320px;
+  margin-inline: auto;
   padding-top: var(--app-nav-h);
-  padding-bottom: calc(var(--nav-h) + 12px);
+  /* The footer below keeps clear of the bottom tab bar. */
+  padding-bottom: 24px;
   transition: padding-top 0.22s ease;
 }
 /* The open search row makes the fixed bar taller; push the content down too. */
@@ -228,7 +232,8 @@ body:has(.app-nav__search-row.open) .app-main {
   outline-offset: 3px;
   border-radius: 4px;
 }
-.app-nav__logo {
+.app-nav__logo,
+.app-footer__mark {
   width: 32px;
   height: 32px;
   display: inline-flex;
@@ -410,6 +415,245 @@ body:has(.app-nav__search-row.open) .app-main {
   font-size: 0.78rem;
 }
 
+/* ── Footer (organisms/app_footer) ───────────────────────────────────────── */
+/* Phone: one column, sections split by a hairline, links two per row and
+   the help buttons full width (thumb targets). Tablet (768px): brand beside
+   help, the link columns under them. Wide (1200px): four columns in a row. */
+.app-footer {
+  margin-top: 16px;
+  /* Below 1200px the fixed tab bar covers the last 64px: stay above it. */
+  padding: 28px 16px calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 16px);
+  background: linear-gradient(160deg, var(--p900) 0%, var(--p800) 100%);
+  color: rgba(255, 255, 255, 0.82);
+}
+.app-footer__inner {
+  max-width: 1320px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "brand" "explore" "account" "help";
+  gap: 20px;
+}
+.app-footer__brand {
+  grid-area: brand;
+}
+.app-footer__col--explore {
+  grid-area: explore;
+}
+.app-footer__col--account {
+  grid-area: account;
+}
+.app-footer__col--help {
+  grid-area: help;
+}
+.app-footer__col {
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+.app-footer__logo,
+.app-footer__logo:hover {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #fff;
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+.app-footer__promise {
+  margin: 10px 0 12px;
+  max-width: 34ch;
+  line-height: 1.5;
+}
+.app-footer__values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.app-footer__values li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 100px;
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.app-footer__values .fa-solid {
+  color: var(--p300);
+}
+.app-footer__title {
+  margin: 0 0 6px;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.app-footer__links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.app-footer__links a,
+.app-footer__email {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  max-width: 100%;
+  color: rgba(255, 255, 255, 0.86);
+  text-decoration: none;
+}
+.app-footer__links a:hover,
+.app-footer__email:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+.app-footer__links .fa-solid,
+.app-footer__email .fa-solid {
+  width: 1.1em;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+.app-footer__email {
+  overflow-wrap: anywhere;
+}
+.app-footer__help {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.app-footer__call {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+.app-footer__legal {
+  max-width: 1320px;
+  margin: 24px auto 0;
+  padding-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.82rem;
+}
+
+/* ── Language switch (molecules/language_switch) ─────────────────────────────
+   Always on dark green (footer, auth background, admin bar): a pill with the
+   current language filled white. 44 px taps, like every control here. */
+.lang-switch {
+  margin: 0;
+}
+.lang-switch__options {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.lang-switch__icon {
+  padding: 0 4px 0 8px;
+  color: rgba(255, 255, 255, 0.75);
+}
+.lang-switch__option {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.lang-switch__option:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+.lang-switch__option:focus-visible {
+  outline: 2px solid var(--a500);
+  outline-offset: 2px;
+}
+.lang-switch__option[aria-pressed="true"] {
+  background: #fff;
+  color: var(--p800);
+  cursor: default;
+}
+
+/* A large phone held sideways: the help buttons sit side by side. */
+@media (min-width: 576px) {
+  .app-footer__help {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+}
+@media (min-width: 768px) {
+  .app-footer {
+    padding-top: 36px;
+  }
+  .app-footer__inner {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    grid-template-areas:
+      "brand help"
+      "explore account";
+    gap: 28px 40px;
+  }
+  .app-footer__col--help {
+    padding-top: 0;
+    border-top: none;
+  }
+  .app-footer__help {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .app-footer__links {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .app-footer__col--account .app-footer__links {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (min-width: 1200px) {
+  /* No tab bar down here on a wide screen. */
+  .app-footer {
+    padding-bottom: 24px;
+  }
+  .app-footer__inner {
+    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr);
+    grid-template-areas: "brand explore account help";
+    gap: 40px;
+  }
+  .app-footer__col {
+    padding-top: 0;
+    border-top: none;
+  }
+  .app-footer__links {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* A mouse needs less room than a thumb. */
+  .app-footer__links a,
+  .app-footer__email {
+    min-height: 36px;
+  }
+}
+
 /* ── Bottom tab bar (organisms/bottom_nav) ───────────────────────────────── */
 .bottom-nav {
   position: fixed;
@@ -461,6 +705,49 @@ body:has(.app-nav__search-row.open) .app-main {
 }
 .bottom-nav__tab--active .bottom-nav__label {
   font-weight: 700;
+}
+/* Desktop: no thumb to reach with, so the same tabs sit in the top bar. */
+@media (min-width: 1200px) {
+  .bottom-nav {
+    top: 0;
+    bottom: auto;
+    left: 50%;
+    right: auto;
+    z-index: 1031;
+    height: var(--app-nav-h);
+    align-items: center;
+    gap: 4px;
+    transform: translateX(-50%);
+    background: transparent;
+    border-top: none;
+    box-shadow: none;
+    padding-bottom: 0;
+  }
+  .bottom-nav__tab {
+    flex: none;
+    flex-direction: row;
+    gap: 6px;
+    min-height: 44px;
+    padding: 0 14px;
+    border-radius: 100px;
+    color: rgba(255, 255, 255, 0.78);
+  }
+  .bottom-nav__tab:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+  }
+  .bottom-nav__pill {
+    width: auto;
+    height: auto;
+    background: none !important;
+  }
+  .bottom-nav__icon {
+    font-size: 1rem;
+  }
+  .bottom-nav__tab--active {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.16);
+  }
 }
 
 /* ── Atoms: badge, tag ───────────────────────────────────────────────────── */
@@ -747,7 +1034,10 @@ body:has(.app-nav__search-row.open) .app-main {
   border-bottom: 1px solid var(--border);
   text-decoration: none;
 }
-.product-card__placeholder {
+/* ── Atom: photo placeholder (atoms/photo_placeholder) ───────────────────── */
+.photo-placeholder {
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -755,18 +1045,33 @@ body:has(.app-nav__search-row.open) .app-main {
   gap: 4px;
   background: linear-gradient(135deg, var(--p50) 0%, var(--p100) 100%);
 }
-.product-card__placeholder-icon {
+.photo-placeholder__icon {
   color: var(--p600);
   font-size: 2rem;
-  opacity: 0.7;
 }
-.product-card__placeholder-cat {
-  color: var(--p700);
+.photo-placeholder__cat {
+  color: var(--p800);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  opacity: 0.8;
+}
+.photo-placeholder__note {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.photo-placeholder--lg {
+  gap: 10px;
+}
+.photo-placeholder--lg .photo-placeholder__icon {
+  font-size: 3.5rem;
+}
+.photo-placeholder--lg .photo-placeholder__note {
+  font-size: 0.95rem;
+  font-weight: 600;
 }
 .product-card__name {
   display: -webkit-box;
@@ -791,12 +1096,61 @@ body:has(.app-nav__search-row.open) .app-main {
 .provider-card__loc {
   min-width: 0;
 }
-.provider-card__phone {
-  color: var(--p700);
+/* ── Molecule: call button (molecules/call_button) ───────────────────────── */
+/* The phone number is the label and always stays on one line. Every use sits
+   in a grid cell or is w-100, so the button is its own size container and
+   the number steps down on a narrow card instead of wrapping. */
+.btn-call {
+  container-type: inline-size;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+  padding-inline: 12px;
+  white-space: nowrap;
+  box-shadow: var(--shadow-btn);
 }
-.provider-card__phone:hover {
-  color: var(--p800);
-  text-decoration: underline !important;
+.btn-call__icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  font-size: 0.85rem;
+}
+.btn-call:hover .btn-call__icon {
+  background: rgba(255, 255, 255, 0.28);
+}
+.btn-call__num {
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+@container (max-width: 190px) {
+  .btn-call__icon {
+    width: 26px;
+    height: 26px;
+    font-size: 0.75rem;
+  }
+  .btn-call__num {
+    font-size: 0.95rem;
+    letter-spacing: 0;
+  }
+}
+@container (max-width: 160px) {
+  .btn-call__icon {
+    width: auto;
+    height: auto;
+    background: none;
+  }
+  .btn-call__num {
+    font-size: 0.88rem;
+  }
 }
 
 /* ── Home (pages/home) ───────────────────────────────────────────────────── */
@@ -923,7 +1277,8 @@ body:has(.app-nav__search-row.open) .app-main {
   object-fit: cover;
 }
 @media (min-width: 768px) {
-  .product-detail--photo {
+  /* Photo (or its placeholder) beside the details, with or without one. */
+  .product-detail {
     display: grid;
     grid-template-columns: 55% 45%;
     align-items: stretch;
@@ -931,18 +1286,14 @@ body:has(.app-nav__search-row.open) .app-main {
     min-height: 520px;
     margin: 0 auto;
   }
-  .product-detail--photo .product-detail__photo {
+  .product-detail__photo {
     aspect-ratio: auto;
     max-height: none;
     height: 100%;
   }
-  .product-detail--photo .page-hero {
+  .product-detail .page-hero {
     border-radius: 0;
     padding-top: 28px;
-  }
-  .product-detail:not(.product-detail--photo) .product-detail__panel {
-    max-width: 720px;
-    margin: 0 auto;
   }
 }
 .detail-body {
@@ -958,7 +1309,8 @@ body:has(.app-nav__search-row.open) .app-main {
   background: var(--surface);
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.07);
 }
-.detail-card__title {
+.detail-card__title,
+.admin-section__title {
   margin-bottom: 10px;
   color: var(--muted);
   font-size: 0.75rem;
@@ -1021,10 +1373,6 @@ body:has(.app-nav__search-row.open) .app-main {
   display: flex;
   flex-direction: column;
   gap: 3px;
-}
-.vendor-row__phone {
-  color: var(--muted);
-  font-size: 0.9rem;
 }
 
 /* ── Provider detail (pages/provider) ────────────────────────────────────── */
@@ -1094,18 +1442,14 @@ body:has(.app-nav__search-row.open) .app-main {
   font-size: 0.8rem;
   white-space: nowrap;
 }
-.provider-phone {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 12px;
-  color: var(--p700);
-  font-size: 1.15rem;
-}
-.provider-cta {
+.provider-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+@media (min-width: 480px) {
+  .provider-actions {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 .service-list {
   display: flex;
@@ -1239,6 +1583,17 @@ body:has(.app-nav__search-row.open) .app-main {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+/* What a confirmation will do (organisms/confirm_sheet); red when it cannot
+   be undone. */
+.confirm-note {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+.confirm-note--danger {
+  color: var(--bs-danger-text-emphasis);
+  font-weight: 600;
 }
 
 /* ── Page hero additions (list pages) ────────────────────────────────────── */
@@ -1424,6 +1779,32 @@ body:has(.app-nav__search-row.open) .app-main {
   grid-template-columns: 1fr 1fr;
   gap: 10px;
   padding-bottom: 4px;
+}
+/* The keypad comes from inputmode; spinners only add tiny targets. */
+.price-row input::-webkit-outer-spin-button,
+.price-row input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.price-row input {
+  -moz-appearance: textfield;
+}
+/* Desktop: the sections side by side, so results start near the top. */
+@media (min-width: 992px) {
+  .filter-panel__inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    column-gap: 32px;
+  }
+  .price-row input {
+    width: 150px;
+  }
+  .filter-actions {
+    grid-template-columns: auto auto;
+    margin-bottom: 14px;
+    margin-left: auto;
+  }
 }
 .list-results {
   padding: 12px 8px;
@@ -1679,6 +2060,8 @@ a.chip {
 .auth-shell {
   min-height: 100dvh;
   display: flex;
+  flex-direction: column;
+  gap: 20px;
   align-items: center;
   justify-content: center;
   padding: 32px 16px;
@@ -1728,7 +2111,8 @@ a.chip {
   font-size: 0.9rem;
   text-align: center;
 }
-.auth-form {
+.auth-form,
+.form-stack {
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -1882,15 +2266,18 @@ a.chip {
 
 /* ── Admin frame (layouts/admin) ─────────────────────────────────────────── */
 .ash-layout {
+  --ash-header-h: 56px;
   min-height: 100dvh;
   display: grid;
-  grid-template-rows: auto 1fr;
-  grid-template-columns: 1fr;
+  /* Phone: header, menu (in the flow only without JS), content. */
+  grid-template-rows: auto auto 1fr;
+  grid-template-columns: minmax(0, 1fr);
   background: #f0f4f2;
 }
 @media (min-width: 768px) {
   .ash-layout {
-    grid-template-columns: 230px 1fr;
+    grid-template-rows: auto 1fr;
+    grid-template-columns: 230px minmax(0, 1fr);
   }
 }
 .ash-header {
@@ -1902,7 +2289,7 @@ a.chip {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  min-height: 56px;
+  min-height: var(--ash-header-h);
   padding: 0 12px;
   background: var(--p900);
   color: #fff;
@@ -1948,21 +2335,48 @@ a.chip {
   border-right: 1px solid #e5e7eb;
   background: #f4f7f5;
 }
-/* Phone: with JS the menu folds behind the header button. */
+/* Phone: with JS the menu is a drawer that slides in under the sticky
+   header, wherever the page is scrolled to, over a dimmed page. */
 @media (max-width: 767.98px) {
-  .ash-sidebar.is-collapsible:not(.open) {
-    display: none;
-  }
   .ash-sidebar {
     border-right: none;
     border-bottom: 1px solid #e5e7eb;
   }
+  .ash-sidebar.is-collapsible {
+    position: fixed;
+    top: var(--ash-header-h);
+    bottom: 0;
+    left: 0;
+    z-index: 1019;
+    width: min(280px, 85vw);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-bottom: none;
+    border-right: 1px solid #e5e7eb;
+    box-shadow: 8px 0 24px rgba(2, 44, 34, 0.18);
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform 0.2s ease, visibility 0s linear 0.2s;
+  }
+  .ash-sidebar.is-collapsible.open {
+    transform: none;
+    visibility: visible;
+    transition: transform 0.2s ease;
+  }
+}
+.ash-backdrop {
+  position: fixed;
+  inset: var(--ash-header-h) 0 0 0;
+  z-index: 1018;
+  border: none;
+  background: rgba(2, 44, 34, 0.4);
+  cursor: default;
 }
 @media (min-width: 768px) {
   .ash-sidebar {
     position: sticky;
-    top: 56px;
-    height: calc(100dvh - 56px);
+    top: var(--ash-header-h);
+    height: calc(100dvh - var(--ash-header-h));
     overflow-y: auto;
   }
 }
@@ -2015,6 +2429,15 @@ a.chip {
     padding: 24px 24px 4px;
   }
 }
+/* Title on the left, the page's one action (molecules/admin_header) on the
+   right; on a phone the action wraps under the title. */
+.admin-header__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
 .admin-header__back {
   display: inline-flex;
   align-items: center;
@@ -2046,11 +2469,157 @@ a.chip {
     padding: 16px 24px 32px;
   }
 }
-.admin-card {
+.admin-card,
+.admin-section {
   border: 1px solid #e5e7eb;
   border-radius: 14px;
   background: var(--surface);
+}
+.admin-card {
   overflow: hidden;
+}
+/* A titled card of an admin page: its parts stacked at one gap, so no part
+   carries its own margin. */
+.admin-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  scroll-margin-top: 72px;
+}
+@media (min-width: 768px) {
+  .admin-section {
+    padding: 20px;
+  }
+}
+.admin-section > * {
+  margin: 0;
+}
+.admin-section__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.admin-section__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+/* The state of a record: its badge, then one line on what that means. */
+.admin-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+/* Every button row of an admin page: one height (a 44 px tap target), one
+   gap, whatever mix of links and forms it holds. */
+.admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.admin-actions .btn,
+.admin-header__action {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+/* The one provider a list is narrowed to (molecules/admin_filter). */
+.admin-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 12px;
+  margin: 0;
+  padding: 0 12px;
+  border: 1px solid var(--p200);
+  border-radius: 12px;
+  background: var(--p50);
+  font-size: 0.9rem;
+}
+.admin-filter a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.admin-filter__clear {
+  margin-left: auto;
+}
+/* Tables in an admin card: room for the rounded edge, and taller rows. */
+.admin-table > :not(caption) > * > * {
+  padding: 10px 8px;
+}
+.admin-table > :not(caption) > * > :first-child {
+  padding-left: 16px;
+}
+.admin-table > :not(caption) > * > :last-child {
+  padding-right: 16px;
+}
+.admin-thumb {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  object-fit: cover;
+}
+.admin-thumb--empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--p50);
+  color: var(--p300);
+}
+/* A row's buttons (molecules/row_action): icon-only squares of one size on a
+   narrow screen, icon and a short word from 992 px (a tooltip never shows on
+   touch); right-aligned, the way into the record always last. */
+.row-actions {
+  display: inline-flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.row-btn {
+  min-width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0;
+  white-space: nowrap;
+}
+.row-btn__label {
+  display: none;
+}
+@media (min-width: 992px) {
+  .row-btn {
+    padding: 0 12px;
+  }
+  .row-btn__label {
+    display: inline;
+  }
+}
+.row-select,
+.admin-actions .form-select {
+  min-height: 44px;
+}
+/* The body's gap already spaces the page links. */
+.admin-body > .pagination-row {
+  margin-top: 0;
 }
 .admin-table-head th {
   background: #f8faf9;
@@ -2109,7 +2678,7 @@ a.chip {
   font-weight: 800;
 }
 .grant-group {
-  padding: 14px 16px 6px;
+  padding: 16px 16px 8px;
 }
 .grant-group__label {
   float: none;
@@ -2138,9 +2707,6 @@ a.chip {
   color: var(--muted);
   font-size: 0.75rem;
 }
-.grant-save {
-  padding: 16px;
-}
 .perm-matrix th[scope="row"] {
   min-width: 220px;
 }
@@ -2168,13 +2734,166 @@ a.chip {
   color: var(--bs-secondary-color);
 }
 
-/* The current or chosen photo above the file box. */
 
-.dash-photo__img {
+/* A service's category on the provider's form: large cards, two a row, each
+   a radio button (works without JS). */
+.choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.choice-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 88px;
+  padding: 10px 8px;
+  border: 2px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text2);
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.25;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.choice-card__icon {
+  font-size: 1.5rem;
+  color: var(--p700);
+}
+.choice-card:has(input:checked) {
+  border-color: var(--p700);
+  background: var(--p50);
+  color: var(--p700);
+}
+.choice-card:has(input:focus-visible) {
+  outline: 3px solid var(--p400);
+  outline-offset: 2px;
+}
+
+/* A service's photo on the provider page: a tappable thumbnail in place of
+   the category icon, opening the full image. */
+.service-list__photo {
   display: block;
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+}
+.service-list__photo img {
   width: 100%;
-  max-width: 240px;
-  aspect-ratio: 1;
+  height: 100%;
   object-fit: cover;
-  border-radius: var(--bs-border-radius);
+  border-radius: 12px;
+}
+
+/* A row that is one link (a provider's other services): a full-size tap
+   target on a phone. */
+.link-row {
+  min-height: 44px;
+}
+
+
+/* A flex child that may shrink below its content, so long names truncate
+   instead of widening the card. */
+.min-w-0 {
+  min-width: 0;
+}
+
+/* A service card's photo: a fixed square beside the text, so a card is the
+   same height at every width (and when fewer than three stretch across a
+   row). Without a photo, the category icon on a tint. */
+.service-card__photo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 104px;
+  height: 104px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--p50);
+  color: var(--p700);
+  font-size: 2rem;
+  text-decoration: none;
+}
+.service-card__photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+@media (min-width: 768px) {
+  .service-card__photo {
+    width: 120px;
+    height: 120px;
+  }
+}
+
+/* ── Molecule: photo picker (molecules/photo_picker) ───────────────────── */
+/* One square tile is the button: a label for the (with JS, hidden) file
+   box. Large enough to tap with a thumb; dashed while empty. */
+.photo-picker__tile {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 180px;
+  height: 180px;
+  overflow: hidden;
+  border: 2px dashed var(--p400);
+  border-radius: 14px;
+  background: var(--p50);
+  color: var(--p700);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.photo-picker__tile--filled {
+  border-style: solid;
+  border-color: var(--border);
+}
+.photo-picker__tile--invalid {
+  border-color: var(--bs-danger);
+}
+.photo-picker:has(.photo-picker__input:focus-visible) .photo-picker__tile {
+  outline: 3px solid var(--p400);
+  outline-offset: 2px;
+}
+.photo-picker__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.photo-picker__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px;
+  text-align: center;
+  line-height: 1.3;
+}
+.photo-picker__icon {
+  font-size: 2rem;
+  margin-bottom: 4px;
+}
+.photo-picker__tag {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 12px;
+  border-radius: 100px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+/* Without JS the native box shows below the tile. */
+.photo-picker__input {
+  margin-top: 8px;
 }

@@ -1,53 +1,63 @@
 {% extends "layouts/admin.html" %}
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/alert.html" as alerts %}
+{% import "atoms/status_badge.html" as status %}
 {% import "molecules/admin_header.html" as header %}
 {% import "organisms/service_fields.html" as fields %}
 {% import "organisms/confirm_sheet.html" as confirm %}
 {#- One service: edit, hide (confirmation with a reason) / show, delete
     (confirmation with a reason). `page.body` is
     web::pages::admin::services::ServicePage. Each confirmation has its own
-    `dialog` scope. -#}
+    `dialog` scope: its section. -#}
 {% block title %}{{ page.body.service.name }} — {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
 {% set s = b.service %}
-{{ header::admin_header(title=s.name, icon="fa-screwdriver-wrench", sub=s.business_name, back_href=b.provider_services_href, back_label="Dịch vụ của nhà cung cấp") }}
+{{ header::admin_header(title=s.name, icon="fa-screwdriver-wrench", sub=s.business_name, back_href=b.provider_services_href, back_label=t(key="admin.provider_services")) }}
 <div class="admin-body">
-  {% if b.flash == "service_created" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã thêm dịch vụ.") }}{% endif %}
-  {% if b.flash == "service_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã lưu thay đổi.") }}{% endif %}
-  {% if b.flash == "service_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã ẩn dịch vụ.") }}{% endif %}
-  {% if b.flash == "service_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Dịch vụ đã hiển thị lại.") }}{% endif %}
+  {% if b.flash == "service_created" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="dashboard.service_created")) }}{% endif %}
+  {% if b.flash == "service_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.saved")) }}{% endif %}
+  {% if b.flash == "service_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.service_hidden")) }}{% endif %}
+  {% if b.flash == "service_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.service_shown")) }}{% endif %}
   {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
 
-  <section class="admin-card p-3" aria-labelledby="edit-title">
-    <h2 class="detail-card__title" id="edit-title">Thông tin</h2>
-    <form method="post" action="{{ b.update_action }}" novalidate>
+  <section class="admin-section" aria-labelledby="edit-title">
+    <h2 class="admin-section__title" id="edit-title">{{ t(key="admin.info") }}</h2>
+    {% if s.image_file_id or s.added_by_owner %}
+    <div class="d-flex align-items-center gap-3">
+      {% if s.image_file_id %}<a href="{{ file_url(id=s.image_file_id) }}" aria-label="{{ t(key="admin.view_photo", name=s.name) }}"><img class="rounded object-fit-cover" width="96" height="96" src="{{ file_url(id=s.image_file_id, variant="thumb") }}" alt=""></a>{% endif %}
+      {% if s.added_by_owner %}<span class="badge text-bg-info">{{ t(key="admin.added_by_owner") }}</span>{% endif %}
+    </div>
+    {% endif %}
+    <form class="form-stack" method="post" action="{{ b.update_action }}" novalidate>
       {{ fields::service_fields(form=b.form, errors=b.errors, categories=b.categories, limits=b.limits, prefix="edit") }}
-      <button type="submit" class="btn btn-success btn-lg">{{ atoms::icon(name="fa-floppy-disk") }} Lưu</button>
+      <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button></div>
     </form>
   </section>
 
-  <section class="admin-card p-3">
-    <h2 class="detail-card__title">Hiển thị</h2>
-    <p class="small text-muted"><a href="{{ b.provider_href }}">{{ s.business_name }}</a> · {% if s.is_active %}Đang hiển thị.{% else %}Đang ẩn khỏi trang công khai.{% endif %}</p>
-    <div class="d-flex flex-wrap gap-2">
+  <section class="admin-section" aria-labelledby="status-title" x-data="dialog" x-on:keydown.escape.window="hide">
+    <h2 class="admin-section__title" id="status-title">{{ t(key="admin.visibility") }}</h2>
+    <p class="admin-status">{{ status::visibility(on=s.is_active) }}<span><a href="{{ b.provider_href }}">{{ s.business_name }}</a> · {% if s.is_active %}{{ t(key="admin.public_on") }}{% else %}{{ t(key="admin.public_off") }}{% endif %}</span></p>
+    <div class="admin-actions">
       {% if s.is_active %}
-      <div x-data="dialog" x-on:keydown.escape.window="hide">
-        <a class="btn btn-outline-warning" href="#an-dich-vu" x-on:click.prevent="show">{{ atoms::icon(name="fa-eye-slash") }} Ẩn</a>
-        {{ confirm::confirm_sheet(id="an-dich-vu", title="Ẩn dịch vụ " ~ s.name ~ "?", icon="fa-eye-slash", action=b.status_action, button="Xác nhận ẩn", hidden_name="is_active", hidden_value="false") }}
-      </div>
+      <a class="btn btn-outline-warning" href="#an-dich-vu" x-on:click.prevent="show">{{ atoms::icon(name="fa-eye-slash") }} {{ t(key="admin.hide_service") }}</a>
       {% else %}
       <form method="post" action="{{ b.status_action }}">
         <input type="hidden" name="is_active" value="true">
-        <button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-eye") }} Hiển thị lại</button>
+        <button type="submit" class="btn btn-outline-success">{{ atoms::icon(name="fa-eye") }} {{ t(key="admin.show_again") }}</button>
       </form>
       {% endif %}
-      <div x-data="dialog" x-on:keydown.escape.window="hide">
-        <a class="btn btn-outline-danger" href="#xoa-dich-vu" x-on:click.prevent="show">{{ atoms::icon(name="fa-trash") }} Xoá</a>
-        {{ confirm::confirm_sheet(id="xoa-dich-vu", title="Xoá dịch vụ " ~ s.name ~ "?", icon="fa-trash", action=b.delete_action, button="Xác nhận xoá", button_class="btn-danger") }}
-      </div>
     </div>
+    {% if s.is_active %}
+    {{ confirm::confirm_sheet(id="an-dich-vu", title=t(key="admin.hide_service_title", name=s.name), icon="fa-eye-slash", action=b.status_action, button=t(key="admin.confirm_hide"), reason_max=limits.audit_reason_max, effect="hide", what=t(key="admin.service_what"), hidden_name="is_active", hidden_value="false") }}
+    {% endif %}
+  </section>
+
+  <section class="admin-section" aria-labelledby="delete-title" x-data="dialog" x-on:keydown.escape.window="hide">
+    <h2 class="admin-section__title" id="delete-title">{{ t(key="admin.delete") }}</h2>
+    <p class="small text-muted">{{ t(key="admin.delete_service_note") }}</p>
+    <div class="admin-actions"><a class="btn btn-outline-danger" href="#xoa-dich-vu" x-on:click.prevent="show">{{ atoms::icon(name="fa-trash") }} {{ t(key="dashboard.delete_service") }}</a></div>
+    {{ confirm::confirm_sheet(id="xoa-dich-vu", title=t(key="admin.delete_service_title", name=s.name), icon="fa-trash", action=b.delete_action, button=t(key="common.confirm_delete"), reason_max=limits.audit_reason_max, effect="delete", what=t(key="dashboard.delete_service_what"), button_class="btn-danger") }}
   </section>
 </div>
 {% endblock content %}

@@ -3,7 +3,8 @@ use chrono::Utc;
 use sea_orm::sea_query::{Expr, NullOrdering, Order};
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, FromQueryResult, JoinType,
-    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set, Statement,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait, RelationTrait, Set,
+    Statement, Value,
 };
 use std::sync::Arc;
 use tracing::error;
@@ -53,6 +54,13 @@ struct ProductViewRow {
     business_id: i32,
     created_on: DateTimeWithTimeZone,
     image_file_id: Option<Uuid>,
+}
+
+#[derive(FromQueryResult)]
+struct GeoProductRow {
+    #[sea_orm(nested)]
+    product: ProductViewRow,
+    distance_m: f64,
 }
 
 #[derive(FromQueryResult)]
@@ -268,7 +276,7 @@ impl ProductRepositoryTrait for ProductRepository {
             .into_model::<ProductViewRow>()
             .all(self.db.as_ref())
             .await
-            .map(|rows| rows.into_iter().map(map_view_row).collect())
+            .map(|rows| rows.into_iter().map(|r| map_view_row(r, None)).collect())
             .map_err(|e| {
                 error!("product browse error: {e}");
                 Error::internal("Failed to load products.")
@@ -308,7 +316,7 @@ impl ProductRepositoryTrait for ProductRepository {
             .into_model::<ProductViewRow>()
             .all(self.db.as_ref())
             .await
-            .map(|rows| rows.into_iter().map(map_view_row).collect())
+            .map(|rows| rows.into_iter().map(|r| map_view_row(r, None)).collect())
             .map_err(|e| {
                 error!("product featured error: {e}");
                 Error::internal("Failed to load products.")
@@ -323,11 +331,47 @@ impl ProductRepositoryTrait for ProductRepository {
             .into_model::<ProductViewRow>()
             .one(self.db.as_ref())
             .await
-            .map(|opt| opt.map(map_view_row))
+            .map(|opt| opt.map(|r| map_view_row(r, None)))
             .map_err(|e| {
                 error!("product find_by_id error: {e}");
                 Error::internal("Failed to load product details.")
             })
+    }
+
+    // PostGIS expressions via Expr::cust_with_values, the one thing the
+    // builder cannot express; placeholders are `$1`, `$2`.
+    async fn search_geo(
+        &self,
+        point_wkt: &str,
+        radius: f64,
+        limit: i64,
+    ) -> Result<Vec<ProductView>, Error> {
+        let distance = Expr::cust_with_values(
+            r#"ST_Distance("businesses".location, ST_GeographyFromText($1))"#,
+            [Value::from(point_wkt.to_owned())],
+        );
+        let within = Expr::cust_with_values(
+            r#"ST_DWithin("businesses".location, ST_GeographyFromText($1), $2)"#,
+            [Value::from(point_wkt.to_owned()), Value::from(radius)],
+        );
+        let mut query = base_product_view_query()
+            .filter(product::Column::IsActive.eq(true))
+            .filter(product::Column::DeletedAt.is_null())
+            .expr_as(distance, "distance_m")
+            .filter(within)
+            .limit(limit as u64);
+        QueryTrait::query(&mut query).order_by_expr(Expr::cust("distance_m"), Order::Asc);
+        query
+            .order_by_asc(product::Column::Id)
+            .into_model::<GeoProductRow>()
+            .all(self.db.as_ref())
+            .await
+            .map(|rows| {
+                rows.into_iter()
+                    .map(|r| map_view_row(r.product, Some(r.distance_m)))
+                    .collect()
+            })
+            .map_err(|e| Error::internal(format!("product search_geo: {e}")))
     }
 
     async fn list_by_user(&self, user_id: i32) -> Result<Vec<ProviderProduct>, Error> {
@@ -557,7 +601,7 @@ fn map_admin_row(r: AdminProductRow) -> AdminProduct {
     }
 }
 
-fn map_view_row(r: ProductViewRow) -> ProductView {
+fn map_view_row(r: ProductViewRow, distance_m: Option<f64>) -> ProductView {
     ProductView {
         id: r.id,
         name: r.name,
@@ -571,6 +615,7 @@ fn map_view_row(r: ProductViewRow) -> ProductView {
         business_id: r.business_id,
         created_on: r.created_on.with_timezone(&Utc),
         image_file_id: r.image_file_id,
+        distance_m,
     }
 }
 

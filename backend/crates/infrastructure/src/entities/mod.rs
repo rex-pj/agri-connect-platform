@@ -1,5 +1,6 @@
 pub mod audit_log;
 pub mod business;
+pub mod call_click;
 pub mod category;
 pub mod file;
 pub mod inquiry;

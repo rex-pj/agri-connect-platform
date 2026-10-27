@@ -179,6 +179,26 @@ async fn a_category_is_created_edited_and_hidden_from_the_public_pages() {
     let html = page(&e, &detail, &admin).await;
     assert!(html.contains("Bơm nước tưới"));
     assert!(html.contains("Hiển thị lại"));
+
+    // The same switch from the list's row lands back on the list.
+    let id = detail.rsplit('/').next().unwrap();
+    let res = send(
+        &e.router,
+        post_form(
+            &format!("{detail}/status"),
+            &[("is_active", "true"), ("back", "list")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(location_of(&res), "/admin/categories");
+    let html = page(&e, &format!("/admin/categories?hide={id}"), &admin).await;
+    assert!(html.contains(r#"data-open="true""#));
+    assert!(html.contains("Ẩn danh mục Bơm nước tưới?"));
+    assert!(
+        html.contains(r#"name="back" value="list""#),
+        "the confirmation lands back on the list"
+    );
     e.cleanup().await;
 }
 
@@ -251,16 +271,30 @@ async fn a_location_is_validated_created_hidden_and_deleted() {
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     assert!(body_text(res).await.contains("Đã có khu vực với tên này."));
 
+    // Hiding asks first, on the page and from the list's row, like every
+    // other hide; the reason is audited.
+    assert!(page(&e, &detail, &admin)
+        .await
+        .contains(r##"href="#an-khu-vuc""##));
+    let id = detail.rsplit('/').next().unwrap();
+    let html = page(&e, &format!("/admin/locations?hide={id}"), &admin).await;
+    assert!(html.contains(r#"data-open="true""#));
+    assert!(html.contains("Ẩn khu vực Mỹ Phong?"));
     let res = send(
         &e.router,
         post_form(
             &format!("{detail}/status"),
-            &[("is_active", "false")],
+            &[
+                ("is_active", "false"),
+                ("reason", "trùng"),
+                ("back", "list"),
+            ],
             Some(&admin),
         ),
     )
     .await;
-    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(location_of(&res), "/admin/locations");
+    assert_eq!(last_audit(&e, "location").await, "hide_location: trùng");
     let public = body_text(
         send(
             &e.router,

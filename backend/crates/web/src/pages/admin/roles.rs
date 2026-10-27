@@ -19,6 +19,8 @@ use crate::{
     app_state::AppState,
     cookies::{Flash, TakeFlash},
     extract::{ApiForm, ApiPath},
+    labels::Worded,
+    locale::Locale,
     middleware::auth::Viewer,
     pages::{
         admin::{render_admin, url},
@@ -30,35 +32,39 @@ use crate::{
 /// The checkbox name prefix of the grid.
 const FIELD_PREFIX: &str = "perm.";
 
-/// The group heading of a permission, from the first part of its key.
-fn group_label(key: &str) -> &'static str {
+/// The text key of a permission's group heading, from the first part of its
+/// key.
+fn group_key(key: &str) -> &'static str {
     match key.split('.').next().unwrap_or_default() {
-        "admin" | "system" => "Hệ thống",
-        "user" | "role" => "Người dùng và vai trò",
-        "provider" => "Nhà cung cấp",
-        "listing" | "service" => "Sản phẩm và dịch vụ",
-        "category" | "location" => "Danh mục và khu vực",
-        "inquiry" | "review" => "Yêu cầu và đánh giá",
-        "own" => "Nhà cung cấp: hồ sơ của mình",
-        _ => "Khác",
+        "admin" | "system" => "permission_group.system",
+        "user" | "role" => "permission_group.users",
+        "provider" => "permission_group.providers",
+        "listing" | "service" => "permission_group.listings",
+        "category" | "location" => "permission_group.catalogue",
+        "inquiry" | "review" => "permission_group.feedback",
+        "own" => "permission_group.own",
+        _ => "permission_group.other",
     }
 }
 
 #[derive(Debug, Serialize)]
 pub struct GrantGroup {
-    pub label: &'static str,
+    #[serde(skip)]
+    key: &'static str,
+    pub label: String,
     pub permissions: Vec<GrantDto>,
 }
 
 /// Consecutive permissions with the same heading, in catalogue order.
-fn grouped(permissions: Vec<GrantDto>) -> Vec<GrantGroup> {
+fn grouped(locale: &Locale, permissions: Vec<GrantDto>) -> Vec<GrantGroup> {
     let mut groups: Vec<GrantGroup> = Vec::new();
     for p in permissions {
-        let label = group_label(&p.code);
-        match groups.iter_mut().find(|g| g.label == label) {
+        let key = group_key(&p.code);
+        match groups.iter_mut().find(|g| g.key == key) {
             Some(g) => g.permissions.push(p),
             None => groups.push(GrantGroup {
-                label,
+                key,
+                label: locale.text(key),
                 permissions: vec![p],
             }),
         }
@@ -94,7 +100,12 @@ pub async fn list(
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
-    let matrix = state.usecases.permission.matrix(&actor).await?;
+    let matrix = state
+        .usecases
+        .permission
+        .matrix(&actor)
+        .await?
+        .worded(state.locale());
     let mut roles = Vec::with_capacity(matrix.roles.len());
     for (i, role) in matrix.roles.into_iter().enumerate() {
         let granted = matrix
@@ -143,10 +154,11 @@ async fn role_page(
         .usecases
         .permission
         .role_grants(actor, role_id)
-        .await?;
+        .await?
+        .worded(state.locale());
     let id = role_id.to_string();
     let page = RolePage {
-        groups: grouped(permissions),
+        groups: grouped(state.locale(), permissions),
         field_prefix: FIELD_PREFIX,
         editable: actor.can(PERM_ROLE_PERMISSION_MANAGE),
         action: url("admin_role_permissions", &[("id", &id)])?,
@@ -239,7 +251,12 @@ pub async fn matrix(
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
-    let matrix = state.usecases.permission.matrix(&actor).await?;
+    let matrix = state
+        .usecases
+        .permission
+        .matrix(&actor)
+        .await?
+        .worded(state.locale());
     let role_hrefs = matrix
         .roles
         .iter()
@@ -268,25 +285,31 @@ mod tests {
     }
 
     #[test]
-    fn permissions_are_grouped_by_key_prefix_in_order() {
-        let groups = grouped(vec![
-            grant("admin.dashboard.view"),
-            grant("user.read"),
-            grant("role.read"),
-            grant("own.listing.create"),
-        ]);
+    fn permissions_are_grouped_by_key_prefix_in_order() -> Result<(), toml::de::Error> {
+        let vi = Locale::vi()?;
+        let groups = grouped(
+            &vi,
+            vec![
+                grant("admin.dashboard.view"),
+                grant("user.read"),
+                grant("role.read"),
+                grant("own.listing.create"),
+            ],
+        );
         let shape: Vec<(&str, usize)> = groups
             .iter()
-            .map(|g| (g.label, g.permissions.len()))
+            .map(|g| (g.key, g.permissions.len()))
             .collect();
         assert_eq!(
             shape,
             [
-                ("Hệ thống", 1),
-                ("Người dùng và vai trò", 2),
-                ("Nhà cung cấp: hồ sơ của mình", 1)
+                ("permission_group.system", 1),
+                ("permission_group.users", 2),
+                ("permission_group.own", 1)
             ]
         );
+        assert!(groups.iter().all(|g| g.label == vi.text(g.key)));
+        Ok(())
     }
 
     #[test]

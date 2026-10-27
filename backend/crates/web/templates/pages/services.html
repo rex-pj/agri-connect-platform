@@ -3,34 +3,39 @@
 {% import "molecules/geo_cta.html" as geo %}
 {% import "molecules/empty_state.html" as empty %}
 {% import "molecules/pagination_nav.html" as paging %}
-{% import "organisms/provider_card.html" as cards %}
+{% import "molecules/tab_nav.html" as tabs %}
+{% import "organisms/service_card.html" as cards %}
 {% import "organisms/list_filters.html" as filters %}
-{#- The provider directory, or one service's providers. `page` is
+{#- Every live service, or one category's. Each card is the service (photo,
+    name, price) with the provider offering it; tabs switch the same search
+    to the shops (`/providers`). `page` is
     web::pages::services::ServicesPage. -#}
-{% block title %}{% if page.category %}{{ page.category.name }}{% else %}Dịch vụ nông nghiệp{% endif %} — {{ site.name }}{% endblock title %}
-{% block meta %}<meta name="description" content="Tìm nhà cung cấp dịch vụ {% if page.category %}{{ page.category.name }}{% else %}nông nghiệp{% endif %} uy tín tại Đồng bằng sông Cửu Long. Kết nối trực tiếp, không qua trung gian.">{% endblock meta %}
+{% block title %}{% if page.category %}{{ page.category.name }}{% else %}{{ t(key="services.title") }}{% endif %} — {{ site.name }}{% endblock title %}
+{% block meta %}<meta name="description" content="{% if page.category %}{{ t(key="services.meta_category", category=page.category.name) }}{% else %}{{ t(key="services.meta") }}{% endif %}">{% endblock meta %}
 {% block main %}
 {{ hero::page_hero(title=page.title, back_href=page.back_href, back_label=page.back_label, variant="", icon=page.icon, sub=page.sub) }}
+
+{{ tabs::tab_nav(tabs=page.tabs, label="Xem theo") }}
 
 {% if page.filters %}
 <div class="list-tools">{{ filters::list_filters(f=page.filters) }}</div>
 {% endif %}
 
-<div class="list-tools">{{ geo::geo_cta(href=url_for(name="explore"), title="Tìm nhà cung cấp gần bạn", sub=page.geo_sub) }}</div>
-
 <section class="list-results">
-  {% if page.providers %}
-  <p class="small text-muted mb-2"><strong>{{ page.total }}</strong> nhà cung cấp{% if page.filters and page.filters.q %} cho “{{ page.filters.q }}”{% endif %}</p>
-  <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
-    {% for p in page.providers %}<div class="col">{{ cards::provider_card(p=p) }}</div>{% endfor %}
-  </div>
+  {% if page.services %}
+  <p class="small text-muted mb-2"><strong>{{ page.total }}</strong> {{ t(key="services.unit") }}{% if page.filters and page.filters.q %} {{ t(key="list.for_query", q=page.filters.q) }}{% endif %}</p>
+  {#- The near-me banner after the first three cards: the results come first,
+      the other way to look comes before the rest. -#}
+  {{ cards::service_grid(services=page.services | slice(end=3)) }}
+  <div class="my-3">{{ geo::geo_cta(href=page.near_href, title=t(key="geo.title_services"), sub=page.geo_sub) }}</div>
+  {% if page.services | length > 3 %}{{ cards::service_grid(services=page.services | slice(start=3)) }}{% endif %}
   {% if page.pagination %}{{ paging::pagination_nav(p=page.pagination) }}{% endif %}
   {% elif page.filtered %}
-  {{ empty::empty_state(icon="fa-store", title="Không tìm thấy nhà cung cấp nào", hint="Thử từ khóa khác hoặc xóa bộ lọc để xem tất cả nhà cung cấp.", action_href=page.filters.reset_href, action_icon="fa-xmark", action_label="Xóa bộ lọc") }}
+  {{ empty::empty_state(icon="fa-magnifying-glass", title=t(key="services.none_found"), hint=t(key="services.none_found_hint"), action_href=page.filters.reset_href, action_icon="fa-xmark", action_label=t(key="filters.reset"), second_href=page.tabs[1].href, second_icon="fa-store", second_label=t(key="services.search_shops")) }}
   {% elif page.category %}
-  {{ empty::empty_state(icon="fa-inbox", title="Chưa có nhà cung cấp nào trong danh mục này", hint="Hãy thử dịch vụ khác hoặc tìm thợ gần bạn.", action_href=url_for(name="services"), action_icon="fa-border-all", action_label="Tất cả dịch vụ") }}
+  {{ empty::empty_state(icon="fa-inbox", title=t(key="services.none_in_category"), hint=t(key="services.none_in_category_hint"), action_href=url_for(name="services"), action_icon="fa-border-all", action_label=t(key="list.all_services"), second_href=page.near_href, second_icon="fa-location-dot", second_label=t(key="services.search_near")) }}
   {% else %}
-  {{ empty::empty_state(icon="fa-inbox", title="Chưa có nhà cung cấp nào", hint="Hãy quay lại sau.") }}
+  {{ empty::empty_state(icon="fa-inbox", title=t(key="services.none_yet"), hint=t(key="list.come_back")) }}
   {% endif %}
 </section>
 {% endblock main %}

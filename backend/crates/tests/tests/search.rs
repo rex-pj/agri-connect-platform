@@ -13,7 +13,7 @@ use domain::{
 };
 use infrastructure::{catalogue_repository::CatalogueRepository, search::contains_sql};
 use integration_tests::{state, TestDb};
-use migration::search::SEARCH_INDEXES;
+use migration::search::{SEARCH_INDEXES, SERVICE_SEARCH_INDEXES};
 use sea_orm::{ConnectionTrait, Statement, TransactionTrait};
 
 async fn seeded() -> TestDb {
@@ -107,7 +107,9 @@ async fn typing_without_diacritics_finds_vietnamese_listings() {
         providers(&t, "dong thap").await,
         ["Đại lý Phân bón Đồng Tháp"]
     );
-    assert_eq!(providers(&t, "DICH VU").await, ["Dịch vụ Múc bùn Cái Lậy"]);
+    assert_eq!(providers(&t, "MUC BUN").await, ["Dịch vụ Múc bùn Cái Lậy"]);
+    // A provider is found by its services too: every one offers "Dịch vụ".
+    assert_eq!(providers(&t, "DICH VU").await.len(), 3);
     // Description matches count too.
     assert_eq!(providers(&t, "nao vet").await, ["Dịch vụ Múc bùn Cái Lậy"]);
     assert_eq!(products(&t, "phan ure").await, ["Phân Urê Phú Mỹ"]);
@@ -143,7 +145,7 @@ async fn the_search_query_uses_each_folded_index() {
     // for character, Postgres silently falls back to a full scan; this is the
     // test that notices.
     let t = seeded().await;
-    for (index, table, column) in SEARCH_INDEXES {
+    for (index, table, column) in SEARCH_INDEXES.iter().chain(SERVICE_SEARCH_INDEXES) {
         let txn = t.db.begin().await.unwrap();
         // Tiny test tables would make a seq scan cheaper; we are asking whether
         // the index CAN be used, not whether it is worth it here.

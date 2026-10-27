@@ -95,6 +95,69 @@ async fn verification_is_an_explicit_state_and_withdrawal_is_audited() {
 
 #[tokio::test]
 #[ignore = "needs TEST_DATABASE_URL"]
+async fn turning_a_provider_off_hides_it_from_the_public_and_is_audited() {
+    let e = env_with_origin().await;
+    let admin = install_admin(&e).await;
+    let id = unclaimed_business(&e).await;
+    let detail = format!("/admin/explore/{id}");
+    let action = format!("{detail}/status");
+    let public = || async { body_text(send(&e.router, get_page("/providers", None)).await).await };
+    assert!(public().await.contains("Máy cày Út Hiền"));
+
+    let page = body_text(send(&e.router, get_page(&detail, Some(&admin))).await).await;
+    assert!(
+        page.contains(r##"href="#tat-nha-cung-cap""##),
+        "turning off is confirmed"
+    );
+    let res = send(
+        &e.router,
+        post_form(
+            &action,
+            &[("is_active", "false"), ("reason", "ngừng hoạt động")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res.headers()[header::LOCATION], detail.as_str());
+    assert_eq!(
+        scalar(
+            &e,
+            "SELECT action || ': ' || reason AS line FROM audit_logs \
+             WHERE action = 'deactivate_provider'",
+            "line",
+        )
+        .await,
+        "deactivate_provider: ngừng hoạt động"
+    );
+    assert!(
+        !public().await.contains("Máy cày Út Hiền"),
+        "gone from the public"
+    );
+    let page = body_text(send(&e.router, get_page(&detail, Some(&admin))).await).await;
+    assert!(page.contains("Bật lại nhà cung cấp"));
+
+    let res = send(
+        &e.router,
+        post_form(&action, &[("is_active", "true")], Some(&admin)),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert!(public().await.contains("Máy cày Út Hiền"), "listed again");
+    assert_eq!(
+        scalar(
+            &e,
+            "SELECT count(*)::text AS n FROM audit_logs WHERE action = 'activate_provider'",
+            "n",
+        )
+        .await,
+        "1"
+    );
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
 async fn a_new_account_needs_a_valid_email_and_password_and_can_then_sign_in() {
     let e = env_with_origin().await;
     let admin = install_admin(&e).await;

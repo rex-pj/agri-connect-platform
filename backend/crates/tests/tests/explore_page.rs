@@ -212,3 +212,125 @@ async fn a_provider_saving_coordinates_appears_in_the_geo_api() {
     assert!(found[0]["distance_m"].as_f64().unwrap() < 1.0);
     e.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn near_me_shows_services_and_shops_in_two_tabs() {
+    let e = Env::new().await;
+    seeded(&e).await;
+    let id = can_tho_id(&e).await;
+
+    // Services first: the two within 10 km, each with its distance.
+    let page = html(&e, &format!("/explore?location_id={id}")).await;
+    assert_eq!(page.matches("service-card hover-lift").count(), 2);
+    assert!(page.contains("<strong>2</strong> dịch vụ gần bạn"));
+    assert!(page.contains(r#"data-panel="providers" hidden"#));
+    assert!(!page.contains(r#"data-panel="services" hidden"#));
+    let shops = format!(r#"href="/explore?location_id={id}&amp;tab=providers""#);
+    assert!(page.contains(&shops), "the shops tab is a link");
+
+    // The shops tab, and its links keep it.
+    let page = html(&e, &format!("/explore?location_id={id}&tab=providers")).await;
+    assert!(page.contains(r#"data-panel="services" hidden"#));
+    assert!(page.contains(r#"data-tab="providers" aria-current="page""#));
+    assert!(page.contains(&format!(
+        r#"href="/explore?location_id={id}&amp;radius=25000&amp;tab=providers""#
+    )));
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn near_me_finds_products_and_features_services_before_a_position() {
+    use infrastructure::entities::{business, category, product};
+    use sea_orm::{sea_query::Expr, ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
+
+    let e = Env::new().await;
+    seeded(&e).await;
+    let id = can_tho_id(&e).await;
+    let near = business::Entity::find()
+        .filter(business::Column::Name.eq("Gần 1 km"))
+        .one(&e.t.db)
+        .await
+        .unwrap()
+        .unwrap();
+    let product_category = category::Entity::find()
+        .filter(category::Column::Type.eq("product"))
+        .one(&e.t.db)
+        .await
+        .unwrap()
+        .unwrap();
+    product::ActiveModel {
+        business_id: Set(near.id),
+        category_id: Set(product_category.id),
+        name: Set("Phân Urê".to_owned()),
+        ..Default::default()
+    }
+    .insert(&e.t.db)
+    .await
+    .unwrap();
+
+    let page = html(&e, &format!("/explore?location_id={id}&tab=products")).await;
+    assert!(page.contains("<strong>1</strong> sản phẩm gần bạn"));
+    assert!(page.contains("Cách bạn <strong>995 m</strong>"));
+    assert!(page.contains(r#"data-tab="products" aria-current="page""#));
+    assert!(page.contains(r#"data-panel="services" hidden"#));
+
+    // Before a position: the home page's featured services, verified only.
+    let before = html(&e, "/explore").await;
+    assert!(
+        !before.contains("Dịch vụ nổi bật"),
+        "nobody is verified yet"
+    );
+    business::Entity::update_many()
+        .col_expr(business::Column::IsVerified, Expr::value(true))
+        .filter(business::Column::Id.eq(near.id))
+        .exec(&e.t.db)
+        .await
+        .unwrap();
+    let before = html(&e, "/explore").await;
+    assert!(before.contains("Dịch vụ nổi bật"));
+    assert_eq!(before.matches("service-card hover-lift").count(), 1);
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn near_me_services_take_turns_nearest_first() {
+    use infrastructure::entities::{business, service};
+    use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
+
+    let e = Env::new().await;
+    let category = seeded(&e).await;
+    let id = can_tho_id(&e).await;
+    let near = business::Entity::find()
+        .filter(business::Column::Name.eq("Gần 1 km"))
+        .one(&e.t.db)
+        .await
+        .unwrap()
+        .unwrap();
+    service::ActiveModel {
+        business_id: Set(near.id),
+        category_id: Set(category),
+        name: Set("Thứ hai của Gần".to_owned()),
+        ..Default::default()
+    }
+    .insert(&e.t.db)
+    .await
+    .unwrap();
+
+    let page = html(&e, &format!("/explore?location_id={id}")).await;
+    // The provider on each service card, in order.
+    let providers: Vec<&str> = page
+        .split(r#"service-card__provider"#)
+        .skip(1)
+        .filter_map(|card| card.split(r#"<span class="text-truncate">"#).nth(1))
+        .filter_map(|rest| rest.split("</span>").next())
+        .collect();
+    assert_eq!(
+        providers,
+        ["Gần 1 km", "Vừa 8 km", "Gần 1 km"],
+        "each provider once, nearest first, before anyone.s second"
+    );
+    e.cleanup().await;
+}

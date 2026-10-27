@@ -66,6 +66,8 @@ pub struct Service {
     pub category: String,
     /// Font Awesome class of the category.
     pub category_icon: Option<String>,
+    /// Its photo, if the provider added one.
+    pub image_file_id: Option<uuid::Uuid>,
 }
 
 pub struct BusinessDetail {

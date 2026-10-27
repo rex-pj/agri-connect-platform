@@ -23,31 +23,53 @@ fn reset_url(app_url: &str, token: &str) -> String {
     site_url(app_url, &format!("/reset-password?token={token}"))
 }
 
-const INQUIRY_SUBJECT: &str = "Có nông dân cần bạn gọi lại – Agri-Connect";
+/// The wording of every email, from the locale file (`[text.email]`), with
+/// `{name}` placeholders; `startup.rs` reads it there and passes it in.
+#[derive(Debug, Clone)]
+pub struct EmailTexts {
+    /// Signs every email and ends every subject.
+    pub site_name: String,
+    /// `{site}`.
+    pub reset_subject: String,
+    /// `{url}`, `{hours}`, `{site}`.
+    pub reset_body: String,
+    /// `{site}`.
+    pub inquiry_subject: String,
+    /// `{business}`, `{name}`, `{phone}`, `{topic}`, `{note}`, `{inbox}`,
+    /// `{site}`.
+    pub inquiry_body: String,
+    /// `{note}`: the line `{note}` becomes when the farmer left one.
+    pub inquiry_note: String,
+}
+
+/// `template` with each `{name}` replaced by its value.
+fn fill(template: &str, params: &[(&str, &str)]) -> String {
+    params
+        .iter()
+        .fold(template.to_owned(), |text, (name, value)| {
+            text.replace(&format!("{{{name}}}"), value)
+        })
+}
 
 /// The provider's "new inquiry" email. Plain text: the farmer's name, topic
 /// and note are shown as typed, never interpreted.
-fn inquiry_body(app_url: &str, n: &InquiryNotice) -> String {
+fn inquiry_body(texts: &EmailTexts, app_url: &str, n: &InquiryNotice) -> String {
     let note = n
         .note
         .as_deref()
-        .map(|note| format!("Ghi chú: {note}\n"))
+        .map(|note| fill(&texts.inquiry_note, &[("note", note)]))
         .unwrap_or_default();
-    format!(
-        "Xin chào {business},\n\n\
-         Một nông dân vừa gửi yêu cầu liên hệ tới cửa hàng của bạn:\n\n\
-         Họ tên: {name}\n\
-         Số điện thoại: {phone}\n\
-         Cần: {topic}\n\
-         {note}\n\
-         Hãy gọi lại sớm. Xem và đánh dấu đã gọi tại:\n\
-         {inbox}\n\n\
-         Agri-Connect",
-        business = n.business_name,
-        name = n.requester_name,
-        phone = n.requester_phone,
-        topic = n.topic,
-        inbox = site_url(app_url, &n.inbox_path),
+    fill(
+        &texts.inquiry_body,
+        &[
+            ("business", &n.business_name),
+            ("name", &n.requester_name),
+            ("phone", &n.requester_phone),
+            ("topic", &n.topic),
+            ("note", &note),
+            ("inbox", &site_url(app_url, &n.inbox_path)),
+            ("site", &texts.site_name),
+        ],
     )
 }
 
@@ -58,12 +80,14 @@ pub struct SmtpConfig {
     pub credentials: Option<(String, String)>,
     pub from: String,
     pub app_url: String,
+    pub texts: EmailTexts,
 }
 
 pub struct SmtpEmailService {
     transport: AsyncSmtpTransport<Tokio1Executor>,
     from: Mailbox,
     app_url: String,
+    texts: EmailTexts,
 }
 
 impl SmtpEmailService {
@@ -82,6 +106,7 @@ impl SmtpEmailService {
             transport: builder.build(),
             from,
             app_url: config.app_url,
+            texts: config.texts,
         })
     }
 
@@ -106,28 +131,31 @@ impl SmtpEmailService {
 impl EmailService for SmtpEmailService {
     async fn send_password_reset(&self, to_email: &str, token: &str) {
         let url = reset_url(&self.app_url, token);
+        let site = self.texts.site_name.as_str();
         // Plain text with no user-supplied content: nothing here can be used to
         // inject markup into the message.
-        let body = format!(
-            "Xin chào,\n\n\
-             Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn.\n\
-             Mở liên kết sau để đặt mật khẩu mới (hiệu lực {PASSWORD_RESET_EXPIRY_HOURS} giờ):\n\n\
-             {url}\n\n\
-             Nếu bạn không yêu cầu, hãy bỏ qua email này.\n\n\
-             Agri-Connect"
+        let body = fill(
+            &self.texts.reset_body,
+            &[
+                ("url", &url),
+                ("hours", &PASSWORD_RESET_EXPIRY_HOURS.to_string()),
+                ("site", site),
+            ],
         );
-        match self
-            .send(to_email, "Đặt lại mật khẩu – Agri-Connect", body)
-            .await
-        {
+        let subject = fill(&self.texts.reset_subject, &[("site", site)]);
+        match self.send(to_email, &subject, body).await {
             Ok(()) => info!(to = to_email, "password-reset email sent"),
             Err(e) => error!(to = to_email, error = %e, "password-reset email failed"),
         }
     }
 
     async fn send_new_inquiry(&self, to_email: &str, notice: &InquiryNotice) {
-        let body = inquiry_body(&self.app_url, notice);
-        match self.send(to_email, INQUIRY_SUBJECT, body).await {
+        let body = inquiry_body(&self.texts, &self.app_url, notice);
+        let subject = fill(
+            &self.texts.inquiry_subject,
+            &[("site", &self.texts.site_name)],
+        );
+        match self.send(to_email, &subject, body).await {
             Ok(()) => info!(to = to_email, "new-inquiry email sent"),
             Err(e) => error!(to = to_email, error = %e, "new-inquiry email failed"),
         }
@@ -165,23 +193,43 @@ impl EmailService for LogEmailService {
 
 #[cfg(test)]
 mod tests {
-    use super::{inquiry_body, reset_url, InquiryNotice};
+    use super::{inquiry_body, reset_url, EmailTexts, InquiryNotice};
 
-    #[test]
-    fn the_inquiry_email_has_who_to_call_and_the_inbox_link() {
-        let notice = InquiryNotice {
+    fn texts() -> EmailTexts {
+        EmailTexts {
+            site_name: "Site".into(),
+            reset_subject: "Reset - {site}".into(),
+            reset_body: "{url} ({hours} h) {site}".into(),
+            inquiry_subject: "Call back - {site}".into(),
+            inquiry_body:
+                "Hi {business}\nName: {name}\nPhone: {phone}\nNeeds: {topic}\n{note}{inbox}\n{site}"
+                    .into(),
+            inquiry_note: "Note: {note}\n".into(),
+        }
+    }
+
+    fn notice(note: Option<&str>) -> InquiryNotice {
+        InquiryNotice {
             business_name: "Vườn Út Hiền".into(),
             requester_name: "Nguyễn Văn A".into(),
             requester_phone: "0912345678".into(),
             topic: "Múc bùn ao".into(),
-            note: None,
+            note: note.map(str::to_owned),
             inbox_path: "/provider/inquiries".into(),
-        };
-        let body = inquiry_body("https://agri.vn/", &notice);
+        }
+    }
+
+    #[test]
+    fn the_inquiry_email_has_who_to_call_and_the_inbox_link() {
+        let body = inquiry_body(&texts(), "https://agri.vn/", &notice(None));
         assert!(body.contains("Nguyễn Văn A") && body.contains("0912345678"));
-        assert!(body.contains("Cần: Múc bùn ao"));
+        assert!(body.contains("Needs: Múc bùn ao"));
         assert!(body.contains("https://agri.vn/provider/inquiries"));
-        assert!(!body.contains("Ghi chú"), "no empty note line");
+        assert!(!body.contains("Note:"), "no empty note line");
+        assert!(!body.contains('{'), "every placeholder filled: {body}");
+
+        let noted = inquiry_body(&texts(), "https://agri.vn", &notice(Some("2 công")));
+        assert!(noted.contains("Note: 2 công\n"));
     }
 
     #[test]

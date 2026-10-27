@@ -6,7 +6,10 @@ use application::outputs::CategoryDto;
 use domain::{Error, ErrorCode};
 use serde::Serialize;
 
-use crate::pages::{moved_permanently, see_other};
+use crate::{
+    locale::Locale,
+    pages::{moved_permanently, see_other},
+};
 
 /// Pages shown either side of the current one before an ellipsis.
 const PAGE_WINDOW: i64 = 2;
@@ -77,7 +80,7 @@ pub fn chips(categories: &[CategoryDto]) -> Vec<CategoryChip> {
 #[derive(Debug, Serialize)]
 pub struct SortChip {
     pub value: &'static str,
-    pub label: &'static str,
+    pub label: String,
 }
 
 /// The price inputs, as typed (only lists that have prices).
@@ -92,11 +95,11 @@ pub struct PriceRange {
 #[derive(Debug, Serialize)]
 pub struct FilterForm {
     pub action: String,
-    pub placeholder: &'static str,
+    pub placeholder: String,
     pub q: String,
     /// Query name of the category radio group (`category_id`, `service_id`).
     pub category_param: &'static str,
-    pub category_label: &'static str,
+    pub category_label: String,
     pub category_id: Option<i32>,
     pub categories: Vec<CategoryChip>,
     pub price: Option<PriceRange>,
@@ -153,9 +156,15 @@ pub fn past_the_end(
     Some(see_other(&with_query(path, &all)))
 }
 
-/// The hero line of a category page: its description and how many results.
-pub fn category_sub(category: &CategoryDto, total: i64, noun: &str) -> String {
-    let count = (total > 0).then(|| format!("{total} {noun}"));
+/// The hero line of a category page: its description and how many results,
+/// worded by `count_key` (a text with a `{count}`).
+pub fn category_sub(
+    locale: &Locale,
+    category: &CategoryDto,
+    total: i64,
+    count_key: &str,
+) -> String {
+    let count = (total > 0).then(|| locale.text_with(count_key, &[("count", &total)]));
     [category.description.clone(), count]
         .into_iter()
         .flatten()

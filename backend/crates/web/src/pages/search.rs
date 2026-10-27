@@ -1,9 +1,13 @@
-//! GET /search?q=…&tab=… — one box, two result kinds: providers and products.
+//! GET /search?q=…&tab=… — one box, three result kinds: services, products
+//! and providers (shops, found by their name or by what they offer).
 //!
 //! Tabs are links (`tab=services`), so they work without JS; the server marks
 //! the other sections `hidden`. Alpine `tabs` switches them in place.
 
-use application::{inputs::BrowseParams, outputs::ProductDto};
+use application::{
+    inputs::BrowseParams,
+    outputs::{BrowseResponse, ProductDto, ServiceBrowseResponse},
+};
 use axum::{extract::State, response::Response};
 use domain::{
     models::{
@@ -18,7 +22,10 @@ use crate::{
     app_state::AppState,
     constants::SEARCH_PREVIEW_COUNT,
     extract::ApiQuery,
-    pages::{cards::ProviderCard, listing::with_query},
+    pages::{
+        cards::{ProviderCard, ServiceCard},
+        listing::with_query,
+    },
     routes,
     shell::Shell,
     views::render_page,
@@ -37,16 +44,27 @@ pub enum Tab {
     All,
     Services,
     Products,
+    Providers,
 }
 
 impl Tab {
-    const ALL: [Tab; 3] = [Tab::All, Tab::Services, Tab::Products];
+    const ALL: [Tab; 4] = [Tab::All, Tab::Services, Tab::Products, Tab::Providers];
 
     const fn as_str(self) -> &'static str {
         match self {
             Tab::All => "all",
             Tab::Services => "services",
             Tab::Products => "products",
+            Tab::Providers => "providers",
+        }
+    }
+
+    const fn label(self) -> &'static str {
+        match self {
+            Tab::All => "search.tab_all",
+            Tab::Services => "nav.services",
+            Tab::Products => "nav.products",
+            Tab::Providers => "nav.shops",
         }
     }
 
@@ -58,10 +76,11 @@ impl Tab {
     }
 }
 
+/// One link of `molecules/tab_nav.html`; `tab` names the panel it shows.
 #[derive(Debug, Serialize)]
 pub struct TabLink {
     pub tab: &'static str,
-    pub label: &'static str,
+    pub label: String,
     pub href: String,
     pub count: Option<i64>,
     pub active: bool,
@@ -72,17 +91,54 @@ pub struct SearchPage {
     pub q: String,
     pub tab: &'static str,
     pub tabs: Vec<TabLink>,
-    pub providers: Vec<ProviderCard>,
-    pub provider_total: i64,
-    /// "Xem thêm": the full directory with this search, when there is more.
-    pub providers_more: Option<String>,
+    pub services: Vec<ServiceCard>,
+    pub service_total: i64,
+    /// "Xem thêm": the full listing with this search, when there is more.
+    pub services_more: Option<String>,
     pub products: Vec<ProductDto>,
     pub product_total: i64,
     pub products_more: Option<String>,
+    pub providers: Vec<ProviderCard>,
+    pub provider_total: i64,
+    pub providers_more: Option<String>,
 }
 
 fn url(name: &str) -> Result<String, Error> {
     routes::url(name, &[]).map_err(|e| Error::internal(format!("search links: {e}")))
+}
+
+/// The results of one search, each kind's first page.
+struct Found {
+    services: ServiceBrowseResponse,
+    products: application::outputs::ProductBrowseResponse,
+    providers: BrowseResponse,
+}
+
+async fn find(state: &AppState, q: &str) -> Result<Found, Error> {
+    let explore = &state.usecases.explore;
+    let text = || BrowseParams {
+        service_id: None,
+        name: Some(q.to_owned()),
+        sort: ProviderSort::default(),
+        page: 1,
+    };
+    let (services, products, providers) = tokio::try_join!(
+        explore.browse_services(text()),
+        state.usecases.product.browse_products(
+            ProductFilter {
+                name: Some(q.to_owned()),
+                ..ProductFilter::default()
+            },
+            ProductSort::default(),
+            1,
+        ),
+        explore.browse_providers(text()),
+    )?;
+    Ok(Found {
+        services,
+        products,
+        providers,
+    })
 }
 
 pub async fn show(
@@ -94,29 +150,14 @@ pub async fn show(
     let tab = Tab::parse(&query.tab);
     let search_url = url("search")?;
 
-    let (providers, products) = if q.is_empty() {
-        (None, None)
+    let found = if q.is_empty() {
+        None
     } else {
-        let (p, r) = tokio::try_join!(
-            state.usecases.explore.browse_providers(BrowseParams {
-                service_id: None,
-                name: Some(q.clone()),
-                sort: ProviderSort::default(),
-                page: 1,
-            }),
-            state.usecases.product.browse_products(
-                ProductFilter {
-                    name: Some(q.clone()),
-                    ..ProductFilter::default()
-                },
-                ProductSort::default(),
-                1,
-            ),
-        )?;
-        (Some(p), Some(r))
+        Some(find(&state, &q).await?)
     };
-    let provider_total = providers.as_ref().map_or(0, |p| p.total);
-    let product_total = products.as_ref().map_or(0, |p| p.total);
+    let service_total = found.as_ref().map_or(0, |f| f.services.total);
+    let product_total = found.as_ref().map_or(0, |f| f.products.total);
+    let provider_total = found.as_ref().map_or(0, |f| f.providers.total);
     let more = |route: &str, total: i64| -> Result<Option<String>, Error> {
         (total > SEARCH_PREVIEW_COUNT as i64)
             .then(|| url(route).map(|path| with_query(&path, &[("q", q.as_str())])))
@@ -127,11 +168,7 @@ pub async fn show(
         .into_iter()
         .map(|t| TabLink {
             tab: t.as_str(),
-            label: match t {
-                Tab::All => "Tất cả",
-                Tab::Services => "Dịch vụ",
-                Tab::Products => "Sản phẩm",
-            },
+            label: state.locale().text(t.label()),
             href: with_query(
                 &search_url,
                 &[
@@ -141,33 +178,51 @@ pub async fn show(
             ),
             count: match t {
                 Tab::All => None,
-                Tab::Services => Some(provider_total),
+                Tab::Services => Some(service_total),
                 Tab::Products => Some(product_total),
+                Tab::Providers => Some(provider_total),
             },
             active: t == tab,
         })
         .collect();
 
+    let (services, products, providers) = match found {
+        Some(f) => (
+            ServiceCard::all(
+                f.services
+                    .items
+                    .into_iter()
+                    .take(SEARCH_PREVIEW_COUNT)
+                    .collect(),
+            )?,
+            f.products
+                .items
+                .into_iter()
+                .take(SEARCH_PREVIEW_COUNT)
+                .collect(),
+            f.providers
+                .items
+                .into_iter()
+                .take(SEARCH_PREVIEW_COUNT)
+                .map(ProviderCard::from)
+                .collect(),
+        ),
+        None => (Vec::new(), Vec::new(), Vec::new()),
+    };
+
     let page = SearchPage {
-        providers_more: more("services", provider_total)?,
+        services_more: more("services", service_total)?,
         products_more: more("products", product_total)?,
+        providers_more: more("providers", provider_total)?,
         q,
         tab: tab.as_str(),
         tabs,
-        providers: providers
-            .map(|p| {
-                p.items
-                    .into_iter()
-                    .take(SEARCH_PREVIEW_COUNT)
-                    .map(ProviderCard::from)
-                    .collect()
-            })
-            .unwrap_or_default(),
-        provider_total,
-        products: products
-            .map(|p| p.items.into_iter().take(SEARCH_PREVIEW_COUNT).collect())
-            .unwrap_or_default(),
+        services,
+        service_total,
+        products,
         product_total,
+        providers,
+        provider_total,
     };
     render_page(&state, &shell, "pages/search.html", &page)
 }
@@ -180,6 +235,7 @@ mod tests {
     fn unknown_tabs_show_everything() {
         assert_eq!(Tab::parse("services"), Tab::Services);
         assert_eq!(Tab::parse(" products "), Tab::Products);
+        assert_eq!(Tab::parse("providers"), Tab::Providers);
         assert_eq!(Tab::parse("ads"), Tab::All);
         assert_eq!(Tab::parse(""), Tab::All);
     }

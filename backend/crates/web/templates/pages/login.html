@@ -3,33 +3,33 @@
 {% import "atoms/alert.html" as alerts %}
 {% import "molecules/form_field.html" as field %}
 {#- `page` is web::pages::auth::LoginPage. -#}
-{% block title %}Đăng nhập — {{ site.name }}{% endblock title %}
+{% block title %}{{ t(key="account_menu.login") }} — {{ site.name }}{% endblock title %}
 {% block card %}
-{% if page.reset %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Mật khẩu đã được đặt lại. Vui lòng đăng nhập lại.") }}{% endif %}
-<h1 class="auth-title">Đăng nhập</h1>
-<p class="auth-sub">Dành cho nhà cung cấp và quản trị viên.</p>
+{% if page.reset %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="auth.reset_done")) }}{% endif %}
+<h1 class="auth-title">{{ t(key="account_menu.login") }}</h1>
+<p class="auth-sub">{{ t(key="auth.login_sub") }}</p>
 
 {% if page.locked %}
 <div class="lockout-banner" role="alert">
   <span class="lockout-banner__icon">{{ atoms::icon(name="fa-lock") }}</span>
-  <p class="lockout-banner__title">Tài khoản tạm thời bị khoá</p>
+  <p class="lockout-banner__title">{{ t(key="auth.locked_title") }}</p>
   <p class="lockout-banner__body">{{ page.errors.message }}</p>
-  <p class="lockout-banner__body">Hoặc đặt lại mật khẩu để mở khoá ngay:</p>
-  <a class="btn btn-success btn-lg w-100" href="{{ url_for(name="forgot_password") }}">{{ atoms::icon(name="fa-key") }} Đặt lại mật khẩu</a>
+  <p class="lockout-banner__body">{{ t(key="auth.locked_reset") }}</p>
+  <a class="btn btn-success btn-lg w-100" href="{{ url_for(name="forgot_password") }}">{{ atoms::icon(name="fa-key") }} {{ t(key="auth.reset_password") }}</a>
 </div>
 {% else %}
 <form class="auth-form" method="post" action="{{ url_for(name="login") }}">
   {% if page.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=page.errors.message) }}{% endif %}
-  {{ field::input(id="lg_user", name="username", label="Tên đăng nhập", value=page.username, required=true, autocomplete="username") }}
-  {{ field::input(id="lg_pw", name="password", label="Mật khẩu", type="password", required=true, autocomplete="current-password") }}
-  <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-right-to-bracket") }} Đăng nhập</button>
-  <p class="text-center mb-0"><a class="text-muted small" href="{{ url_for(name="forgot_password") }}">Quên mật khẩu?</a></p>
+  {{ field::input(id="lg_user", name="username", label=t(key="form.username"), value=page.username, required=true, autocomplete="username") }}
+  {{ field::input(id="lg_pw", name="password", label=t(key="form.password"), type="password", required=true, autocomplete="current-password") }}
+  <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-right-to-bracket") }} {{ t(key="account_menu.login") }}</button>
+  <p class="text-center mb-0"><a class="text-muted small" href="{{ url_for(name="forgot_password") }}">{{ t(key="auth.forgot_link") }}</a></p>
 </form>
 {% endif %}
 
 <p class="auth-footer">
-  <a class="text-muted small" href="{{ url_for(name="home") }}">{{ atoms::icon(name="fa-arrow-left", class="me-1") }}Về trang chủ</a>
+  <a class="text-muted small" href="{{ url_for(name="home") }}">{{ atoms::icon(name="fa-arrow-left", class="me-1") }}{{ t(key="common.back_home") }}</a>
   <span class="text-muted small mx-2" aria-hidden="true">·</span>
-  <a class="text-muted small" href="{{ url_for(name="register") }}">Đăng ký nhà cung cấp</a>
+  <a class="text-muted small" href="{{ url_for(name="register") }}">{{ t(key="account_menu.register_provider") }}</a>
 </p>
 {% endblock card %}

@@ -1,7 +1,7 @@
 //! Uploaded images: the pipeline from untrusted bytes to stored objects, and
 //! reading them back for `/files/{id}`.
 
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 
 use domain::{
     events::{Change, DomainEvent, Entity},
@@ -9,6 +9,7 @@ use domain::{
     repositories::{
         file_repository_trait::FileRepositoryTrait,
         product_repository_trait::ProductRepositoryTrait,
+        service_repository_trait::ServiceRepositoryTrait,
     },
     Error, ErrorCode, Result,
 };
@@ -17,8 +18,8 @@ use uuid::Uuid;
 
 use crate::{
     authz::Actor,
-    catalogue::PERM_OWN_LISTING_UPDATE,
-    outputs::ProviderProductDto,
+    catalogue::{PERM_OWN_LISTING_UPDATE, PERM_OWN_SERVICE_UPDATE},
+    outputs::{ProviderProductDto, ProviderServiceDto},
     ports::{EventBus, FileStorage, ImageProcessor, ProcessedImage},
 };
 
@@ -32,6 +33,7 @@ pub struct FileContent {
 /// compatible types by position.
 pub struct MediaDeps {
     pub products: Arc<dyn ProductRepositoryTrait + Send + Sync>,
+    pub services: Arc<dyn ServiceRepositoryTrait + Send + Sync>,
     pub files: Arc<dyn FileRepositoryTrait + Send + Sync>,
     pub storage: Arc<dyn FileStorage>,
     pub images: Arc<dyn ImageProcessor>,
@@ -44,6 +46,7 @@ pub struct MediaDeps {
 #[derive(Clone)]
 pub struct MediaUseCase {
     products: Arc<dyn ProductRepositoryTrait + Send + Sync>,
+    services: Arc<dyn ServiceRepositoryTrait + Send + Sync>,
     files: Arc<dyn FileRepositoryTrait + Send + Sync>,
     storage: Arc<dyn FileStorage>,
     images: Arc<dyn ImageProcessor>,
@@ -68,6 +71,7 @@ impl MediaUseCase {
     pub fn new(d: MediaDeps) -> Self {
         Self {
             products: d.products,
+            services: d.services,
             files: d.files,
             storage: d.storage,
             images: d.images,
@@ -129,35 +133,114 @@ impl MediaUseCase {
         image: ProcessedImage,
     ) -> Result<ProviderProductDto> {
         actor.require(PERM_OWN_LISTING_UPDATE)?;
-        let id = self.store(actor, image).await?;
-
-        let previous = match self.products.set_image(product_id, actor.user_id, id).await {
-            Ok(Some(previous)) => previous,
-            // Deleted between the ownership check and now.
-            Ok(None) => {
-                self.discard(id).await;
-                return Err(Error::new(ErrorCode::ProductNotFound));
-            }
-            Err(e) => {
-                self.discard(id).await;
-                return Err(e);
-            }
-        };
-        self.events
-            .publish(DomainEvent {
-                actor_id: Some(actor.user_id),
-                entity: Entity::Product,
-                entity_id: product_id,
-                change: Change::ImageReplaced { previous },
-                reason: None,
-            })
-            .await;
+        self.swap_image(
+            actor,
+            Entity::Product,
+            product_id,
+            image,
+            ErrorCode::ProductNotFound,
+            |file| self.products.set_image(product_id, actor.user_id, file),
+        )
+        .await?;
 
         self.products
             .find_provider_product_by_id(product_id)
             .await?
             .map(ProviderProductDto::from)
             .ok_or_else(|| Error::internal("product image set but product could not be reloaded"))
+    }
+
+    /// Replaces the image of one of the actor's own services. The old image
+    /// is removed by the cleanup subscriber.
+    pub async fn store_service_image(
+        &self,
+        actor: &Actor,
+        service_id: i32,
+        upload: Vec<u8>,
+    ) -> Result<ProviderServiceDto> {
+        actor.require(PERM_OWN_SERVICE_UPDATE)?;
+        // Ownership before the CPU work, as for products.
+        if self
+            .services
+            .find_owned(service_id, actor.user_id)
+            .await?
+            .is_none()
+        {
+            return Err(Error::new(ErrorCode::ServiceNotFound));
+        }
+
+        let image = self.prepare_image(upload).await?;
+        self.attach_service_image(actor, service_id, image).await
+    }
+
+    /// Stores a prepared image and makes it the image of one of the actor's
+    /// own services.
+    pub async fn attach_service_image(
+        &self,
+        actor: &Actor,
+        service_id: i32,
+        image: ProcessedImage,
+    ) -> Result<ProviderServiceDto> {
+        actor.require(PERM_OWN_SERVICE_UPDATE)?;
+        self.swap_image(
+            actor,
+            Entity::Service,
+            service_id,
+            image,
+            ErrorCode::ServiceNotFound,
+            |file| {
+                self.services
+                    .set_image_owned(service_id, actor.user_id, file)
+            },
+        )
+        .await?;
+
+        self.services
+            .find_owned(service_id, actor.user_id)
+            .await?
+            .map(ProviderServiceDto::from)
+            .ok_or_else(|| Error::internal("service image set but service could not be reloaded"))
+    }
+
+    /// Stores the image, points the record at it with `set` (which answers
+    /// `None` when the record is not the actor's, e.g. deleted since the
+    /// ownership check), and announces the replaced one for cleanup. A
+    /// refused or failed `set` discards what was stored.
+    async fn swap_image<F, Fut>(
+        &self,
+        actor: &Actor,
+        entity: Entity,
+        entity_id: i32,
+        image: ProcessedImage,
+        missing: ErrorCode,
+        set: F,
+    ) -> Result<()>
+    where
+        F: FnOnce(Uuid) -> Fut,
+        Fut: Future<Output = Result<Option<Option<Uuid>>>>,
+    {
+        let file = self.store(actor, image).await?;
+        let previous = match set(file).await {
+            Ok(Some(previous)) => previous,
+            Ok(None) => {
+                self.discard(file).await;
+                return Err(Error::new(missing));
+            }
+            Err(e) => {
+                self.discard(file).await;
+                return Err(e);
+            }
+        };
+        self.events
+            .publish(DomainEvent {
+                actor_id: Some(actor.user_id),
+                entity,
+                entity_id,
+                change: Change::ImageReplaced { previous },
+                reason: None,
+            })
+            .await;
+        Ok(())
     }
 
     /// Stores both objects, then the row. A failure after an object was
@@ -208,7 +291,8 @@ impl MediaUseCase {
         }
     }
 
-    /// Public: product images are shown to everyone, and ids are unguessable.
+    /// Public: product and service images are shown to everyone, and ids are
+    /// unguessable.
     pub async fn file(&self, id: Uuid, variant: FileVariant) -> Result<FileContent> {
         let file = self
             .files

@@ -6,5 +6,6 @@ pub mod media_usecase;
 pub mod permission_usecase;
 pub mod product_usecase;
 pub mod provider_dashboard_usecase;
+pub mod service_rules;
 pub mod setup_usecase;
 pub mod stats_usecase;

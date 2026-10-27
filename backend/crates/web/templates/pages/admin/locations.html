@@ -1,51 +1,76 @@
 {% extends "layouts/admin.html" %}
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/alert.html" as alerts %}
+{% import "atoms/status_badge.html" as status %}
 {% import "molecules/admin_header.html" as header %}
+{% import "molecules/row_action.html" as row %}
 {% import "organisms/location_fields.html" as fields %}
+{% import "organisms/confirm_sheet.html" as confirm %}
 {#- `page.body` is web::pages::admin::locations::LocationsPage: every
     location preset (hidden ones too) and the create form, which comes back
-    here with its messages when a rule is broken. -#}
-{% block title %}Khu vực — {{ site.name }} Admin{% endblock title %}
+    here with its messages when a rule is broken. "Ẩn" and "Xoá"
+    reload the list with that row's confirmation open (`b.confirm`).
+    Row actions send `back=list` (`b.keep`) so they land here again. -#}
+{% block title %}{{ t(key="admin_menu.locations") }} — {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
 {% set n = b.rows | length %}
-{{ header::admin_header(title="Khu vực", icon="fa-map-location-dot", sub=n ~ " khu vực gợi ý ở trang Gần tôi") }}
-<div class="admin-body">
-  {% if b.flash == "location_deleted" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã xoá khu vực.") }}{% endif %}
+{{ header::admin_header(title=t(key="admin_menu.locations"), icon="fa-map-location-dot", sub=t(key="admin.locations_sub", count=n), action_href="#them-khu-vuc", action_icon="fa-plus", action_label=t(key="admin.add_location")) }}
+<div class="admin-body" x-data="dialog" data-open="{% if b.confirm %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+  {% if b.flash == "location_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.location_hidden")) }}{% endif %}
+  {% if b.flash == "location_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.location_shown")) }}{% endif %}
+  {% if b.flash == "location_deleted" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.location_deleted")) }}{% endif %}
   {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
-  <p class="mb-0"><a class="btn btn-success" href="#them-khu-vuc">{{ atoms::icon(name="fa-plus") }} Thêm khu vực</a></p>
 
   <div class="admin-card">
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
+      <table class="table table-hover align-middle mb-0 admin-table">
         <thead class="admin-table-head">
-          <tr><th>Khu vực</th><th>Toạ độ</th><th class="text-center">Thứ tự</th><th class="text-center">Trạng thái</th><th></th></tr>
+          <tr><th>{{ t(key="admin_menu.locations") }}</th><th>{{ t(key="location_form.coordinates") }}</th><th class="text-center">{{ t(key="form.display_order") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
         </thead>
         <tbody>
           {% for r in b.rows %}
           {% set l = r.location %}
-          <tr{% if not l.is_active %} class="table-warning"{% endif %}>
+          <tr{% if not l.is_active %} class="table-light text-body-secondary"{% endif %}>
             <td><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ l.label }}</a></td>
             <td class="small text-muted font-monospace">{{ l.lat }}, {{ l.lng }}</td>
             <td class="text-center">{{ l.display_order }}</td>
-            <td class="text-center">{% if l.is_active %}<span class="badge text-bg-success">Hiển thị</span>{% else %}<span class="badge text-bg-secondary">Đã ẩn</span>{% endif %}</td>
-            <td class="text-end"><a class="btn btn-sm btn-outline-success" href="{{ r.href }}" aria-label="Sửa {{ l.label }}">{{ atoms::icon(name="fa-pen") }}</a></td>
+            <td class="text-center">{{ status::visibility(on=l.is_active) }}</td>
+            <td class="text-end">
+              <div class="row-actions">
+                {% if l.is_active %}
+                {{ row::hide(href=r.hide_href ~ "#xac-nhan", name=l.label) }}
+                {% else %}
+                {{ row::show(action=r.status_action, name=l.label, field="is_active", keep=b.keep) }}
+                {% endif %}
+                {{ row::delete(href=r.delete_href ~ "#xac-nhan", name=l.label) }}
+                {{ row::open(href=r.href, name=l.label) }}
+              </div>
+            </td>
           </tr>
           {% else %}
-          <tr><td colspan="5" class="text-center text-muted py-4">Chưa có khu vực nào.</td></tr>
+          <tr><td colspan="5" class="text-center text-muted py-4">{{ t(key="admin.no_locations") }}</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
 
-  <section class="admin-card p-3" id="them-khu-vuc" aria-labelledby="them-khu-vuc-title">
-    <h2 class="detail-card__title" id="them-khu-vuc-title">{{ atoms::icon(name="fa-plus") }} Thêm khu vực</h2>
-    <form method="post" action="{{ b.create_action }}" novalidate>
+  <section class="admin-section" id="them-khu-vuc" aria-labelledby="them-khu-vuc-title">
+    <h2 class="admin-section__title" id="them-khu-vuc-title">{{ t(key="admin.add_location") }}</h2>
+    <form class="form-stack" method="post" action="{{ b.create_action }}" novalidate>
       {{ fields::location_fields(form=b.form, errors=b.errors, label_max=b.label_max, prefix="new") }}
-      <button type="submit" class="btn btn-success btn-lg">{{ atoms::icon(name="fa-plus") }} Thêm</button>
+      <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-plus") }} {{ t(key="admin.add_location") }}</button></div>
     </form>
   </section>
+
+  {% if b.confirm %}
+  {% set c = b.confirm %}
+  {% if c.kind == "hide" %}
+  {{ confirm::confirm_sheet(id="xac-nhan", title=t(key="admin.hide_location_title", name=c.name), icon="fa-eye-slash", action=c.action, button=t(key="admin.confirm_hide"), reason_max=limits.audit_reason_max, note=t(key="admin.hide_location_note"), hidden_name="is_active", hidden_value="false", keep=b.keep) }}
+  {% else %}
+  {{ confirm::confirm_sheet(id="xac-nhan", title=t(key="admin.delete_location_title", name=c.name), icon="fa-trash", action=c.action, button=t(key="common.confirm_delete"), reason_max=limits.audit_reason_max, effect="delete", what=t(key="admin.location_what"), button_class="btn-danger") }}
+  {% endif %}
+  {% endif %}
 </div>
 {% endblock content %}

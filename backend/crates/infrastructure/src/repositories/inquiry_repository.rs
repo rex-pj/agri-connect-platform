@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
     sea_query::Expr, ColumnTrait, ConnectionTrait, DatabaseConnection, DbErr, EntityTrait,
-    FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait,
-    Set, Statement,
+    FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait,
+    RelationTrait, Set, Statement,
 };
 use std::sync::Arc;
 use tracing::error;
@@ -70,8 +70,11 @@ impl InquiryRepositoryTrait for InquiryRepository {
             })
     }
 
-    async fn count_admin(&self) -> Result<i64, Error> {
+    async fn count_admin(&self, provider_id: Option<i32>) -> Result<i64, Error> {
         Inquiry::find()
+            .apply_if(provider_id, |q, id| {
+                q.filter(inquiry::Column::BusinessId.eq(id))
+            })
             .count(self.db.as_ref())
             .await
             .map(|c| c as i64)
@@ -81,8 +84,16 @@ impl InquiryRepositoryTrait for InquiryRepository {
             })
     }
 
-    async fn list_admin(&self, limit: i64, offset: i64) -> Result<Vec<InquiryAdmin>, Error> {
+    async fn list_admin(
+        &self,
+        provider_id: Option<i32>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<InquiryAdmin>, Error> {
         Inquiry::find()
+            .apply_if(provider_id, |q, id| {
+                q.filter(inquiry::Column::BusinessId.eq(id))
+            })
             .select_only()
             .column(inquiry::Column::Id)
             .column(inquiry::Column::BusinessId)

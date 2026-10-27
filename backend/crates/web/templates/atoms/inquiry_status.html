@@ -1,5 +1,10 @@
-{#- The Vietnamese name of an inquiry status code
-    (domain::constants::INQUIRY_STATUSES). -#}
-{% macro label(status) -%}
-{% if status == "new" %}Mới{% elif status == "contacted" %}Đã liên hệ{% elif status == "closed" %}Đã xong{% elif status == "spam" %}Rác{% else %}{{ status }}{% endif %}
+{#- The worded name of an inquiry status code
+    (domain::constants::INQUIRY_STATUSES). `badge=true` wraps it in its
+    badge: "new" stands out (it needs a call back), the rest are quiet, and
+    none uses the green that means "shown" or "active" elsewhere. One macro
+    for both: Tera resolves `self::` against the page rendering it. -#}
+{% macro label(status, badge=false) -%}
+{% if badge %}<span class="badge {% if status == "new" %}text-bg-info{% elif status == "spam" %}text-bg-secondary{% else %}text-bg-light border{% endif %}">{% endif -%}
+{% if status == "new" %}{{ t(key="inquiry_status.new") }}{% elif status == "contacted" %}{{ t(key="inquiry_status.contacted") }}{% elif status == "closed" %}{{ t(key="inquiry_status.closed") }}{% elif status == "spam" %}{{ t(key="inquiry_status.spam") }}{% else %}{{ status }}{% endif %}
+{%- if badge %}</span>{% endif %}
 {%- endmacro label %}

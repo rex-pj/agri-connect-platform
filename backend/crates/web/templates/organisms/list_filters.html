@@ -11,11 +11,11 @@
       <span class="visually-hidden">{{ f.placeholder }}</span>
       <input type="search" name="q" value="{{ f.q }}" placeholder="{{ f.placeholder }}" enterkeyhint="search">
     </label>
-    <button type="button" class="list-search__toggle" aria-label="Bộ lọc" aria-controls="list-filters" x-cloak x-on:click="toggle" :class="buttonClass" :aria-expanded="expanded">
+    <button type="button" class="list-search__toggle" aria-label="{{ t(key="filters.label") }}" aria-controls="list-filters" x-cloak x-on:click="toggle" :class="buttonClass" :aria-expanded="expanded">
       {{ atoms::icon(name="fa-sliders") }}
       {% if f.active %}<span class="list-search__badge">{{ f.active }}</span>{% endif %}
     </button>
-    <button type="submit" class="list-search__submit" aria-label="Tìm kiếm">{{ atoms::icon(name="fa-arrow-right") }}</button>
+    <button type="submit" class="list-search__submit" aria-label="{{ t(key="common.search") }}">{{ atoms::icon(name="fa-arrow-right") }}</button>
   </div>
 
   <div class="filter-panel" id="list-filters" :class="panelClass">
@@ -23,7 +23,7 @@
       <fieldset class="filter-section">
         <legend class="filter-label">{{ f.category_label }}</legend>
         <div class="chip-row">
-          <label class="chip"><input class="visually-hidden" type="radio" name="{{ f.category_param }}" value=""{% if not f.category_id %} checked{% endif %}> Tất cả</label>
+          <label class="chip"><input class="visually-hidden" type="radio" name="{{ f.category_param }}" value=""{% if not f.category_id %} checked{% endif %}> {{ t(key="filters.all") }}</label>
           {% for c in f.categories %}
           <label class="chip"><input class="visually-hidden" type="radio" name="{{ f.category_param }}" value="{{ c.id }}"{% if f.category_id == c.id %} checked{% endif %}> {{ atoms::icon(name=c.icon) }} {{ c.name }}</label>
           {% endfor %}
@@ -31,16 +31,16 @@
       </fieldset>
       {% if f.price %}
       <fieldset class="filter-section">
-        <legend class="filter-label">Khoảng giá (đồng)</legend>
+        <legend class="filter-label">{{ t(key="filters.price") }}</legend>
         <div class="price-row">
-          <input class="form-control" type="number" name="min_price" min="0" inputmode="numeric" placeholder="Từ" aria-label="Giá tối thiểu" value="{{ f.price.min }}">
+          <input class="form-control" type="number" name="min_price" min="0" inputmode="numeric" placeholder="{{ t(key="filters.price_from") }}" aria-label="{{ t(key="filters.price_min") }}" value="{{ f.price.min }}">
           <span class="price-row__sep" aria-hidden="true">—</span>
-          <input class="form-control" type="number" name="max_price" min="0" inputmode="numeric" placeholder="Đến" aria-label="Giá tối đa" value="{{ f.price.max }}">
+          <input class="form-control" type="number" name="max_price" min="0" inputmode="numeric" placeholder="{{ t(key="filters.price_to") }}" aria-label="{{ t(key="filters.price_max") }}" value="{{ f.price.max }}">
         </div>
       </fieldset>
       {% endif %}
       <fieldset class="filter-section">
-        <legend class="filter-label">Sắp xếp</legend>
+        <legend class="filter-label">{{ t(key="filters.sort") }}</legend>
         <div class="chip-row">
           {% for s in f.sorts %}
           <label class="chip"><input class="visually-hidden" type="radio" name="sort" value="{{ s.value }}"{% if f.sort == s.value %} checked{% endif %}> {{ s.label }}</label>
@@ -48,8 +48,8 @@
         </div>
       </fieldset>
       <div class="filter-actions">
-        <a class="btn btn-outline-secondary" href="{{ f.reset_href }}">Xóa bộ lọc</a>
-        <button type="submit" class="btn btn-success">Áp dụng</button>
+        <a class="btn btn-outline-secondary" href="{{ f.reset_href }}">{{ t(key="filters.reset") }}</a>
+        <button type="submit" class="btn btn-success">{{ t(key="filters.apply") }}</button>
       </div>
     </div>
   </div>

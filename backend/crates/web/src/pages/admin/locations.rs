@@ -2,8 +2,10 @@
 //! explore page offers ("Cai Lậy", "Long Xuyên"), with a create form, and one
 //! preset's edit form, visibility and deletion.
 //!
-//! Hiding is reversible and one button; deleting asks for confirmation and a
-//! reason (a dialog with JS, the same form on the page without).
+//! Hiding and deleting ask for confirmation and a reason (a dialog with JS,
+//! the same form on the page without); showing again is one button. The
+//! list's rows carry them all (`?hide={id}` / `?delete={id}` open the
+//! confirmation there); sent with `back=list`, they land back on the list.
 
 use application::{authz::Actor, constants::LOCATION_LABEL_MAX, outputs::AdminLocationDto};
 use axum::{extract::State, http::StatusCode, response::Response};
@@ -13,10 +15,13 @@ use serde::{Deserialize, Serialize};
 use crate::{
     app_state::AppState,
     cookies::{Flash, TakeFlash},
-    extract::{ApiForm, ApiPath},
+    extract::{ApiForm, ApiPath, ApiQuery},
     middleware::auth::Viewer,
     pages::{
-        admin::{is_refusal, render_admin, url, Outcome},
+        admin::{
+            is_refusal, render_admin, url, Asked, ListPosition, ListReturn, Outcome, RowConfirm,
+            BACK_TO_LIST,
+        },
         forms::{coordinate, reason, whole_number, FormErrors},
         parse_id, see_other,
     },
@@ -65,6 +70,10 @@ impl LocationForm {
 pub struct LocationRow {
     pub location: AdminLocationDto,
     pub href: String,
+    pub status_action: String,
+    /// The list again with this row's hide / delete confirmation open.
+    pub hide_href: String,
+    pub delete_href: String,
 }
 
 #[derive(Serialize)]
@@ -75,22 +84,58 @@ pub struct LocationsPage {
     pub form: LocationForm,
     pub errors: FormErrors,
     pub create_action: String,
+    pub confirm: Option<RowConfirm>,
+    /// The hidden fields of every row action: land back here.
+    pub keep: ListReturn,
     pub flash: Option<Flash>,
 }
 
-async fn list_page(
-    state: &AppState,
-    actor: &Actor,
+/// The list page around the create form; `asked`: the row whose hide or
+/// delete confirmation is open.
+struct ListView {
     form: LocationForm,
     errors: FormErrors,
+    asked: Asked,
     flash: Option<Flash>,
     status: StatusCode,
-) -> Result<Response, Error> {
+}
+
+async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Response, Error> {
+    let ListView {
+        form,
+        errors,
+        asked,
+        flash,
+        status,
+    } = view;
     let locations = state.usecases.admin.list_locations_admin(actor).await?;
+    let position = ListPosition::default();
+    let mut confirm = None;
     let mut rows = Vec::with_capacity(locations.len());
     for location in locations {
-        let href = url("admin_location", &[("id", &location.id.to_string())])?;
-        rows.push(LocationRow { location, href });
+        let id = location.id.to_string();
+        let status_action = url("admin_location_status", &[("id", &id)])?;
+        if asked.hide == Some(location.id) && location.is_active {
+            confirm = Some(RowConfirm {
+                kind: "hide",
+                name: location.label.clone(),
+                action: status_action.clone(),
+            });
+        }
+        if asked.delete == Some(location.id) {
+            confirm = Some(RowConfirm {
+                kind: "delete",
+                name: location.label.clone(),
+                action: url("admin_location_delete", &[("id", &id)])?,
+            });
+        }
+        rows.push(LocationRow {
+            href: url("admin_location", &[("id", &id)])?,
+            status_action,
+            hide_href: position.href("admin_locations", &[("hide", &id)])?,
+            delete_href: position.href("admin_locations", &[("delete", &id)])?,
+            location,
+        });
     }
     let path = url("admin_locations", &[])?;
     let body = LocationsPage {
@@ -99,6 +144,8 @@ async fn list_page(
         form,
         errors,
         create_action: path.clone(),
+        confirm,
+        keep: ListReturn::new(position),
         flash,
     };
     render_admin(
@@ -111,24 +158,32 @@ async fn list_page(
     )
 }
 
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct ListQuery {
+    /// The location whose hide / delete confirmation is open.
+    pub hide: String,
+    pub delete: String,
+}
+
 /// GET /admin/locations
 pub async fn list(
     Viewer(viewer): Viewer,
     flash: TakeFlash,
     State(state): State<AppState>,
+    ApiQuery(q): ApiQuery<ListQuery>,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
-    let mut response = list_page(
-        &state,
-        &actor,
-        LocationForm::default(),
-        FormErrors::default(),
-        flash.0,
-        StatusCode::OK,
-    )
-    .await?;
+    let view = ListView {
+        form: LocationForm::default(),
+        errors: FormErrors::default(),
+        asked: Asked::new(&q.hide, &q.delete),
+        flash: flash.0,
+        status: StatusCode::OK,
+    };
+    let mut response = list_page(&state, &actor, view).await?;
     flash.clear_on(&mut response);
     Ok(response)
 }
@@ -154,8 +209,14 @@ pub async fn create(
     match result {
         Ok(created) => redirect_to(created.id, Flash::LocationCreated),
         Err(err) if is_refusal(&err) => {
-            let errors = FormErrors::from_error(&state, &err);
-            list_page(&state, &actor, form, errors, None, err.kind().status()).await
+            let view = ListView {
+                errors: FormErrors::from_error(&state, &err),
+                form,
+                asked: Asked::default(),
+                flash: None,
+                status: err.kind().status(),
+            };
+            list_page(&state, &actor, view).await
         }
         Err(err) => Err(err),
     }
@@ -269,6 +330,8 @@ pub struct StatusForm {
     /// "true" to show, "false" to hide.
     pub is_active: String,
     pub reason: String,
+    /// `list` when sent from the list's row: land back there.
+    pub back: String,
 }
 
 /// POST /admin/locations/{id}/status
@@ -293,6 +356,9 @@ pub async fn change_status(
     } else {
         Flash::LocationHidden
     };
+    if form.back == BACK_TO_LIST {
+        return ListPosition::default().back_to("admin_locations", flash);
+    }
     redirect_to(id, flash)
 }
 

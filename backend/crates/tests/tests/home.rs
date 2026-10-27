@@ -38,29 +38,46 @@ async fn provider_token(state: &AppState) -> String {
 
 #[tokio::test]
 #[ignore = "needs TEST_DATABASE_URL"]
-async fn the_home_page_lists_featured_products_and_providers_with_working_links() {
+async fn the_home_page_features_services_then_products_with_working_links() {
     let e = Env::new().await;
     let admin = first_admin(&e.state).await;
     e.state.usecases.setup.load_demo(&admin).await.unwrap();
     let featured = e.state.usecases.explore.get_explore_data().await.unwrap();
     let product = featured.featured_products.first().expect("demo products");
-    let provider = featured.featured_providers.first().expect("demo providers");
+    let service = featured.featured_services.first().expect("demo services");
+    // One place per provider, and only verified ones.
+    let mut providers: Vec<i32> = featured
+        .featured_services
+        .iter()
+        .map(|s| s.business_id)
+        .collect();
+    let featured_count = providers.len();
+    providers.sort_unstable();
+    providers.dedup();
+    assert_eq!(providers.len(), featured_count, "one service per provider");
+    assert!(featured
+        .featured_services
+        .iter()
+        .all(|s| s.business_verified));
 
     let html = html(&e.router, page(None)).await;
     assert!(html.contains("<title>Agri-Connect — Nền tảng nông nghiệp"));
-    assert!(html.contains(r#"<meta name="description" content="Tìm nhà cung cấp"#));
+    assert!(html.contains(r#"<meta name="description" content="Tìm dịch vụ nông nghiệp"#));
+    assert!(html.contains("Dịch vụ nổi bật"));
+    // Two verified providers in the demo: two cards stretched across the row.
+    assert!(html.contains("service-grid--2"));
+    assert!(!html.contains("provider-card hover-lift"), "no shop block");
+    let service_href = format!("/services/{}/{}", service.id, slugify(&service.name));
+    assert!(html.contains(&service_href), "missing {service_href}");
+    assert!(html.contains(&format!("tel:{}", service.business_phone)));
     // Canonical detail links with the same slug SvelteKit builds.
     let product_href = format!("/products/{}/{}", product.id, slugify(&product.name));
     assert!(html.contains(&product_href), "missing {product_href}");
-    assert!(html.contains(&format!("tel:{}", product.vendor_phone)));
-    let provider_href = format!("/providers/{}/{}", provider.id, slugify(&provider.name));
-    assert!(html.contains(&provider_href), "missing {provider_href}");
-    // Category tiles from the catalogue, then the two shortcuts.
-    assert!(
-        html.contains("/products/category/"),
-        "product category tiles"
-    );
-    assert!(html.contains(r#"href="/services""#) && html.contains(r#"href="/explore""#));
+    // Service category tiles first, then product ones, then the shortcuts.
+    let service_tile = html.find("/services/category/").expect("service tiles");
+    let product_tile = html.find("/products/category/").expect("product tiles");
+    assert!(service_tile < product_tile, "services lead");
+    assert!(html.contains(r#"href="/explore""#) && html.contains(r#"href="/providers""#));
     assert!(!html.contains("Nền tảng đang khởi động"));
     e.t.cleanup().await;
 }
@@ -132,4 +149,12 @@ async fn error_pages_sit_in_the_app_frame_without_an_account_menu() {
     assert!(html.contains(r#"class="bottom-nav""#), "bottom tabs");
     assert!(html.contains(r#"class="app-nav""#), "top bar");
     assert!(!html.contains("app-nav__dropdown"), "no session, no menu");
+    // The footer is part of the frame, with the shop directory and this year.
+    assert!(html.contains(r#"class="app-footer""#), "footer");
+    assert!(html.contains(r#"href="/providers""#));
+    let year = web::views::vn_year(chrono::Utc::now());
+    assert!(html.contains(&format!("© {year} Agri-Connect")));
+    // No session: no account links; no SITE_SUPPORT_* set: no help lines.
+    assert!(!html.contains("footer-account"));
+    assert!(!html.contains("Cần giúp đỡ?"));
 }

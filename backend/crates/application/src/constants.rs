@@ -6,6 +6,9 @@ pub const MAX_PAGE: i64 = 10_000;
 // ── Featured counts ────────────────────────────────────────────────────────────
 pub const FEATURED_PROVIDERS_COUNT: i64 = 6;
 pub const FEATURED_PRODUCTS_COUNT: i64 = 8;
+/// Services on the home page and the near-me page before a position is
+/// known: one per verified provider.
+pub const FEATURED_SERVICES_COUNT: usize = 6;
 
 // ── Authentication ─────────────────────────────────────────────────────────────
 pub const JWT_EXPIRY_HOURS: i64 = 1;
@@ -42,6 +45,11 @@ pub const RADIUS_MIN_M: f64 = 100.0;
 pub const RADIUS_MAX_M: f64 = 50_000.0;
 /// A farm visit by motorbike; the near-me page and the JSON API share it.
 pub const RADIUS_DEFAULT_M: f64 = 10_000.0;
+/// Most results one near-me search returns (providers or services), nearest
+/// first: enough for a district without a page that never ends.
+pub const GEO_RESULTS_MAX: i64 = 50;
+/// The window the call counts cover (admin dashboard, provider dashboard).
+pub const CALL_STATS_DAYS: i64 = 30;
 
 // ── Uploads ───────────────────────────────────────────────────────────────────
 /// Used when UPLOAD_MAX_BYTES is unset. A phone photo is 2–4 MB.
@@ -74,12 +82,17 @@ pub const SERVICE_NAME_MAX: usize = 300;
 pub const SERVICE_PRICE_NOTE_MAX: usize = 300;
 /// `services.description` is TEXT; this keeps a listing readable on a phone.
 pub const SERVICE_DESCRIPTION_MAX: usize = 2000;
+/// How many services one business may list (hidden ones count), so deleting
+/// and re-adding cannot flood the directory.
+pub const SERVICES_PER_BUSINESS_MAX: u64 = 20;
 pub const PRODUCT_NAME_MAX: usize = 300;
 pub const PRODUCT_UNIT_MAX: usize = 50;
 pub const PRODUCT_DESCRIPTION_MAX: usize = 2000;
 pub const BUSINESS_NAME_MAX: usize = 200;
 pub const BUSINESS_ADDRESS_MAX: usize = 500;
 pub const BUSINESS_DESCRIPTION_MAX: usize = 2000;
+/// `audit_log.reason` is TEXT; an admin's "why" is a sentence, not an essay.
+pub const AUDIT_REASON_MAX: usize = 500;
 
 // Every service name must fit as a contact topic.
 const _: () = assert!(TOPIC_MAX_LEN >= SERVICE_NAME_MAX);

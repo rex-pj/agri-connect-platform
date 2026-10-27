@@ -104,6 +104,7 @@ error_codes! {
     InvalidInquiryStatus      => (BadRequest,      "invalid_inquiry_status"),
     InvalidProductCategory    => (BadRequest,      "invalid_product_category"),
     InvalidServiceCategory    => (BadRequest,      "invalid_service_category"),
+    InvalidCallTarget         => (BadRequest,      "invalid_call_target"),
 
     // ── Uploads ──────────────────────────────────────────────────────────────
     FileTooLarge              => (PayloadTooLarge, "file_too_large"),
@@ -120,6 +121,7 @@ error_codes! {
     SlugTaken                 => (Conflict,        "slug_taken"),
     LocationLabelTaken        => (Conflict,        "location_label_taken"),
     DemoAlreadyLoaded         => (Conflict,        "demo_already_loaded"),
+    ServiceLimitReached       => (Conflict,        "service_limit_reached"),
 
     // ── Not found ────────────────────────────────────────────────────────────
     AccountNotFound           => (NotFound,        "account_not_found"),

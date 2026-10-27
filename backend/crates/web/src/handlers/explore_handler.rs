@@ -1,7 +1,7 @@
 use application::{
     constants::RADIUS_DEFAULT_M,
-    inputs::{BrowseParams, ContactInput, GeoSearchParams},
-    outputs::{BrowseResponse, BusinessSearchDto},
+    inputs::{BrowseParams, CallInput, ContactInput, GeoSearchParams},
+    outputs::{BrowseResponse, BusinessSearchDto, PublicServiceDto, ServiceBrowseResponse},
 };
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use domain::{models::business::ProviderSort, Error};
@@ -10,7 +10,7 @@ use serde::Serialize;
 use crate::{
     app_state::AppState,
     extract::{ApiJson, ApiPath, ApiQuery},
-    requests::{CategoriesQuery, InquiryRequest, ProvidersQuery},
+    requests::{CallRequest, CategoriesQuery, InquiryRequest, ProvidersQuery},
 };
 
 /// `/api/explore/providers` answers in two shapes depending on whether a
@@ -22,6 +22,36 @@ enum ProvidersResponse {
     Browse(BrowseResponse),
 }
 
+/// `/api/explore/services`: the same two shapes as the providers endpoint.
+#[derive(Serialize)]
+#[serde(untagged)]
+enum ServicesResponse {
+    Nearby(Vec<PublicServiceDto>),
+    Browse(ServiceBrowseResponse),
+}
+
+/// The near-me search, when both coordinates were given.
+fn geo_params(q: &ProvidersQuery) -> Option<GeoSearchParams> {
+    let (Some(lat), Some(lng)) = (q.lat, q.lng) else {
+        return None;
+    };
+    Some(GeoSearchParams {
+        lat,
+        lng,
+        radius: q.radius.unwrap_or(RADIUS_DEFAULT_M),
+        service_id: q.service_id,
+    })
+}
+
+fn browse_params(q: ProvidersQuery) -> BrowseParams {
+    BrowseParams {
+        service_id: q.service_id,
+        name: q.name,
+        sort: ProviderSort::parse(q.sort.as_deref()),
+        page: q.page.unwrap_or(1),
+    }
+}
+
 pub struct ExploreHandler;
 
 impl ExploreHandler {
@@ -31,31 +61,33 @@ impl ExploreHandler {
         State(state): State<AppState>,
         ApiQuery(q): ApiQuery<ProvidersQuery>,
     ) -> Result<impl IntoResponse, Error> {
-        if let (Some(lat), Some(lng)) = (q.lat, q.lng) {
-            let result = state
-                .usecases
-                .explore
-                .search_providers(GeoSearchParams {
-                    lat,
-                    lng,
-                    radius: q.radius.unwrap_or(RADIUS_DEFAULT_M),
-                    service_id: q.service_id,
-                })
-                .await?;
-            Ok(Json(ProvidersResponse::Nearby(result)))
-        } else {
-            let result = state
-                .usecases
-                .explore
-                .browse_providers(BrowseParams {
-                    service_id: q.service_id,
-                    name: q.name,
-                    sort: ProviderSort::parse(q.sort.as_deref()),
-                    page: q.page.unwrap_or(1),
-                })
-                .await?;
-            Ok(Json(ProvidersResponse::Browse(result)))
-        }
+        let explore = &state.usecases.explore;
+        Ok(Json(match geo_params(&q) {
+            Some(geo) => ProvidersResponse::Nearby(explore.search_providers(geo).await?),
+            None => ProvidersResponse::Browse(explore.browse_providers(browse_params(q)).await?),
+        }))
+    }
+
+    /// GET /api/explore/services
+    /// Near-me mode when `lat` + `lng` are present; paginated browse otherwise
+    /// (`category_id`, `name` as the typed text, `sort`, `page`).
+    pub async fn list_services(
+        State(state): State<AppState>,
+        ApiQuery(q): ApiQuery<ProvidersQuery>,
+    ) -> Result<impl IntoResponse, Error> {
+        let explore = &state.usecases.explore;
+        Ok(Json(match geo_params(&q) {
+            Some(geo) => ServicesResponse::Nearby(explore.search_services(geo).await?),
+            None => ServicesResponse::Browse(explore.browse_services(browse_params(q)).await?),
+        }))
+    }
+
+    /// GET /api/explore/services/{id}
+    pub async fn get_service_by_id(
+        State(state): State<AppState>,
+        ApiPath(id): ApiPath<i32>,
+    ) -> Result<impl IntoResponse, Error> {
+        Ok(Json(state.usecases.explore.get_service(id).await?))
     }
 
     /// GET /api/explore/providers/:id
@@ -96,6 +128,23 @@ impl ExploreHandler {
         let result = state.usecases.explore.get_locations().await?;
 
         Ok(Json(result))
+    }
+
+    /// POST /api/explore/calls — `{ kind, id }` of the card or page whose
+    /// call button was tapped; 204. Rate-limited like the contact form.
+    pub async fn record_call(
+        State(state): State<AppState>,
+        ApiJson(req): ApiJson<CallRequest>,
+    ) -> Result<impl IntoResponse, Error> {
+        state
+            .usecases
+            .explore
+            .record_call(CallInput {
+                kind: req.kind,
+                id: req.id,
+            })
+            .await?;
+        Ok(StatusCode::NO_CONTENT)
     }
 
     /// POST /api/explore/contact

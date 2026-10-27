@@ -7,7 +7,9 @@ use crate::{
     app_state::AppState,
     extract::{ApiJson, ApiPath},
     middleware::auth::MaybeActor,
-    requests::{CreateProductRequest, UpdateProductRequest, UpdateProfileRequest},
+    requests::{
+        CreateProductRequest, OwnServiceRequest, UpdateProductRequest, UpdateProfileRequest,
+    },
 };
 
 pub struct ProviderDashboardHandler;
@@ -134,6 +136,71 @@ impl ProviderDashboardHandler {
             .usecases
             .provider_dashboard
             .delete_product(&actor, id)
+            .await?;
+
+        Ok(StatusCode::NO_CONTENT)
+    }
+
+    /// GET /api/provider/services
+    pub async fn list_services(
+        MaybeActor(actor): MaybeActor,
+        State(state): State<AppState>,
+    ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
+        let result = state
+            .usecases
+            .provider_dashboard
+            .list_services(&actor)
+            .await?;
+
+        Ok(Json(result))
+    }
+
+    /// POST /api/provider/services
+    pub async fn create_service(
+        MaybeActor(actor): MaybeActor,
+        State(state): State<AppState>,
+        ApiJson(req): ApiJson<OwnServiceRequest>,
+    ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
+        let result = state
+            .usecases
+            .provider_dashboard
+            // The JSON API sends the photo separately (PUT …/image).
+            .create_service(&actor, req.into_input(), None)
+            .await?;
+
+        Ok((StatusCode::CREATED, Json(result)))
+    }
+
+    /// PUT /api/provider/services/{id}
+    pub async fn update_service(
+        MaybeActor(actor): MaybeActor,
+        State(state): State<AppState>,
+        ApiPath(id): ApiPath<i32>,
+        ApiJson(req): ApiJson<OwnServiceRequest>,
+    ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
+        let result = state
+            .usecases
+            .provider_dashboard
+            .update_service(&actor, id, req.into_input())
+            .await?;
+
+        Ok(Json(result))
+    }
+
+    /// DELETE /api/provider/services/{id}
+    pub async fn delete_service(
+        MaybeActor(actor): MaybeActor,
+        State(state): State<AppState>,
+        ApiPath(id): ApiPath<i32>,
+    ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
+        state
+            .usecases
+            .provider_dashboard
+            .delete_service(&actor, id)
             .await?;
 
         Ok(StatusCode::NO_CONTENT)

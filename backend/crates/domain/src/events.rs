@@ -38,15 +38,19 @@ impl Entity {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Change {
-    /// Shown/hidden, verified/unverified, activated/deactivated.
+    /// Shown/hidden, activated/deactivated.
     Visibility {
         visible: bool,
+    },
+    /// A provider's "verified" badge was granted or withdrawn.
+    Verification {
+        verified: bool,
     },
     Deleted,
     RoleChanged {
         role: String,
     },
-    /// A product got a new image. `previous` is no longer referenced by it and
+    /// A product or service got a new image. `previous` is no longer referenced by it and
     /// can be removed from storage.
     ImageReplaced {
         previous: Option<Uuid>,

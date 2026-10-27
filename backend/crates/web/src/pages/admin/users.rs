@@ -18,6 +18,7 @@ use crate::{
     app_state::AppState,
     cookies::{Flash, TakeFlash},
     extract::{ApiForm, ApiPath, ApiQuery},
+    labels::Worded,
     middleware::auth::Viewer,
     pages::{
         admin::{is_refusal, render_admin, url},
@@ -65,7 +66,8 @@ pub async fn list(
         .usecases
         .admin
         .list_users(&actor, parse_opt(&q.page).unwrap_or(1))
-        .await?;
+        .await?
+        .worded(state.locale());
     let path = url("admin_users", &[])?;
     let mut rows = Vec::with_capacity(items.len());
     for user in items {
@@ -114,15 +116,19 @@ async fn user_page(
     status: StatusCode,
 ) -> Result<Response, Error> {
     let admin = &state.usecases.admin;
-    let user = admin.get_user_detail(actor, id).await?;
+    let user = admin
+        .get_user_detail(actor, id)
+        .await?
+        .worded(state.locale());
     let permissions = state
         .usecases
         .permission
         .list_by_user(actor, id)
         .await?
+        .worded(state.locale())
         .permissions;
     let roles = if actor.can(PERM_USER_ROLE_UPDATE) {
-        Some(admin.assignable_roles(actor).await?)
+        Some(admin.assignable_roles(actor).await?.worded(state.locale()))
     } else {
         None
     };

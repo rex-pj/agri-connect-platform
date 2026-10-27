@@ -6,8 +6,8 @@
 {% import "organisms/list_filters.html" as filters %}
 {#- All products (with the filter form) or one category's. `page` is
     web::pages::products::ProductsPage. -#}
-{% block title %}{% if page.category %}{{ page.category.name }}{% else %}Sản phẩm nông nghiệp{% endif %} — {{ site.name }}{% endblock title %}
-{% block meta %}{% if page.category %}<meta name="description" content="Xem các sản phẩm nông nghiệp trong danh mục {{ page.category.name }} từ các nhà cung cấp uy tín tại Đồng bằng sông Cửu Long.">{% else %}<meta name="description" content="Khám phá các sản phẩm nông nghiệp từ nhà cung cấp uy tín tại Đồng bằng sông Cửu Long: gạo, trái cây, phân bón, thuốc bảo vệ thực vật và nhiều hơn nữa.">{% endif %}{% endblock meta %}
+{% block title %}{% if page.category %}{{ page.category.name }}{% else %}{{ t(key="products.title") }}{% endif %} — {{ site.name }}{% endblock title %}
+{% block meta %}{% if page.category %}<meta name="description" content="{{ t(key="products.meta_category", category=page.category.name) }}">{% else %}<meta name="description" content="{{ t(key="products.meta") }}">{% endif %}{% endblock meta %}
 {% block main %}
 {{ hero::page_hero(title=page.title, back_href=page.back_href, back_label=page.back_label, variant="", icon=page.icon, sub=page.sub) }}
 
@@ -17,17 +17,17 @@
 
 <section class="list-results">
   {% if page.result.items %}
-  <p class="small text-muted mb-2"><strong>{{ page.result.total }}</strong> sản phẩm{% if page.filters and page.filters.q %} cho “{{ page.filters.q }}”{% endif %}</p>
+  <p class="small text-muted mb-2"><strong>{{ page.result.total }}</strong> {{ t(key="products.unit") }}{% if page.filters and page.filters.q %} {{ t(key="list.for_query", q=page.filters.q) }}{% endif %}</p>
   <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 row-cols-xl-6 g-2 g-md-3">
     {% for p in page.result.items %}<div class="col">{{ cards::product_card(p=p) }}</div>{% endfor %}
   </div>
   {% if page.pagination %}{{ paging::pagination_nav(p=page.pagination) }}{% endif %}
   {% elif page.filtered %}
-  {{ empty::empty_state(icon="fa-bag-shopping", title="Không tìm thấy sản phẩm nào", hint="Thử từ khóa khác hoặc xóa bộ lọc để xem tất cả sản phẩm.", action_href=page.filters.reset_href, action_icon="fa-xmark", action_label="Xóa bộ lọc") }}
+  {{ empty::empty_state(icon="fa-bag-shopping", title=t(key="products.none_found"), hint=t(key="products.none_found_hint"), action_href=page.filters.reset_href, action_icon="fa-xmark", action_label=t(key="filters.reset")) }}
   {% elif page.category %}
-  {{ empty::empty_state(icon="fa-inbox", title="Chưa có sản phẩm nào trong danh mục này", hint="Hãy thử chọn danh mục khác hoặc xem tất cả sản phẩm.", action_href=url_for(name="products"), action_icon="fa-bag-shopping", action_label="Tất cả sản phẩm") }}
+  {{ empty::empty_state(icon="fa-inbox", title=t(key="products.none_in_category"), hint=t(key="products.none_in_category_hint"), action_href=url_for(name="products"), action_icon="fa-bag-shopping", action_label=t(key="list.all_products")) }}
   {% else %}
-  {{ empty::empty_state(icon="fa-inbox", title="Chưa có sản phẩm nào", hint="Hãy quay lại sau.") }}
+  {{ empty::empty_state(icon="fa-inbox", title=t(key="products.none_yet"), hint=t(key="list.come_back")) }}
   {% endif %}
 </section>
 {% endblock main %}

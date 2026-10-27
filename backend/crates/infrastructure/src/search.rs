@@ -8,9 +8,21 @@ use sea_orm::{
     Condition,
 };
 
-/// Searched by the provider directory (/services, /search).
+/// Searched by the provider directory (/providers, /search) and, for the
+/// provider's name, by the service listing.
 pub const BUSINESS_SEARCH_COLUMNS: &[(&str, &str)] =
     &[("businesses", "name"), ("businesses", "description")];
+/// A service's own text: matched by the service listing, and by the provider
+/// directory through the provider's live services.
+pub const SERVICE_SEARCH_COLUMNS: &[(&str, &str)] =
+    &[("services", "name"), ("services", "description")];
+/// Searched by the service listing (/services, /search): the service's text and
+/// the name of the business offering it.
+pub const SERVICE_LISTING_SEARCH_COLUMNS: &[(&str, &str)] = &[
+    ("services", "name"),
+    ("services", "description"),
+    ("businesses", "name"),
+];
 /// Searched by the product listing (/products, /search).
 pub const PRODUCT_SEARCH_COLUMNS: &[(&str, &str)] =
     &[("products", "name"), ("products", "description")];
@@ -68,10 +80,16 @@ mod tests {
     #[test]
     fn every_searched_column_has_a_folded_index() {
         // Without one, every search scans the whole table.
-        for (table, column) in BUSINESS_SEARCH_COLUMNS.iter().chain(PRODUCT_SEARCH_COLUMNS) {
+        let searched = BUSINESS_SEARCH_COLUMNS
+            .iter()
+            .chain(PRODUCT_SEARCH_COLUMNS)
+            .chain(SERVICE_SEARCH_COLUMNS)
+            .chain(SERVICE_LISTING_SEARCH_COLUMNS);
+        for (table, column) in searched {
             assert!(
                 migration::search::SEARCH_INDEXES
                     .iter()
+                    .chain(migration::search::SERVICE_SEARCH_INDEXES)
                     .any(|(_, t, c)| t == table && c == column),
                 "{table}.{column} is searched but has no folded index"
             );

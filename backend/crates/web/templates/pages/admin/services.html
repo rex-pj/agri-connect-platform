@@ -1,48 +1,72 @@
 {% extends "layouts/admin.html" %}
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/alert.html" as alerts %}
+{% import "atoms/admin_thumb.html" as thumb %}
+{% import "atoms/status_badge.html" as status %}
 {% import "molecules/admin_header.html" as header %}
+{% import "molecules/admin_filter.html" as filter %}
 {% import "molecules/pagination_nav.html" as paging %}
+{% import "molecules/row_action.html" as row %}
 {% import "organisms/service_fields.html" as fields %}
+{% import "organisms/confirm_sheet.html" as confirm %}
 {#- `page.body` is web::pages::admin::services::ServicesPage. The create form
     (`b.create`) appears only when the list is one provider's: a service
-    always belongs to a provider. -#}
-{% block title %}Dịch vụ — {{ site.name }} Admin{% endblock title %}
+    always belongs to a provider. "Ẩn" and "Xoá" reload the list with that
+    row's confirmation open (`b.confirm`); row actions send `back=list` and
+    the list position (`b.keep`) so they land here again. -#}
+{% block title %}{{ t(key="admin_menu.services") }} — {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
-{% if b.provider_name %}{% set sub = b.provider_name ~ " · " ~ b.total ~ " dịch vụ" %}{% else %}{% set sub = b.total ~ " dịch vụ" %}{% endif %}
-{{ header::admin_header(title="Dịch vụ", icon="fa-screwdriver-wrench", sub=sub) }}
-<div class="admin-body">
-  {% if b.flash == "service_deleted" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text="Đã xoá dịch vụ.") }}{% endif %}
+{% if b.filter and b.filter.name %}{% set sub = b.filter.name ~ " · " ~ t(key="services.count", count=b.total) %}{% else %}{% set sub = t(key="services.count", count=b.total) %}{% endif %}
+{% if b.create %}
+{{ header::admin_header(title=t(key="admin_menu.services"), icon="fa-screwdriver-wrench", sub=sub, action_href="#them-dich-vu", action_icon="fa-plus", action_label=t(key="dashboard.add_service")) }}
+{% else %}
+{{ header::admin_header(title=t(key="admin_menu.services"), icon="fa-screwdriver-wrench", sub=sub) }}
+{% endif %}
+<div class="admin-body" x-data="dialog" data-open="{% if b.confirm %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+  {% if b.flash == "service_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.service_hidden")) }}{% endif %}
+  {% if b.flash == "service_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.service_shown")) }}{% endif %}
+  {% if b.flash == "service_deleted" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="dashboard.service_deleted")) }}{% endif %}
   {% if b.create and b.create.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.create.errors.message) }}{% endif %}
-  {% if b.provider_href %}
-  <p class="mb-0 d-flex flex-wrap gap-3">
-    <a href="{{ b.provider_href }}">{{ atoms::icon(name="fa-store", class="me-1") }}Trang nhà cung cấp</a>
-    <a href="#them-dich-vu">{{ atoms::icon(name="fa-plus", class="me-1") }}Thêm dịch vụ</a>
-    <a href="{{ b.all_href }}">{{ atoms::icon(name="fa-xmark", class="me-1") }}Xem tất cả</a>
-  </p>
+  {% if b.filter %}
+  {{ filter::admin_filter(f=b.filter) }}
   {% else %}
-  <p class="small text-muted mb-0">Để thêm dịch vụ, mở trang một nhà cung cấp và chọn "Quản lý dịch vụ".</p>
+  <p class="small text-muted mb-0">{{ t(key="admin.services_add_hint", action=t(key="admin.manage_services")) }}</p>
   {% endif %}
 
   <div class="admin-card">
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
+      <table class="table table-hover align-middle mb-0 admin-table">
         <thead class="admin-table-head">
-          <tr><th>Dịch vụ</th><th>Nhà cung cấp</th><th>Giá</th><th class="text-center">Trạng thái</th><th></th></tr>
+          <tr><th>{{ t(key="admin_menu.services") }}</th><th>{{ t(key="common.provider") }}</th><th>{{ t(key="service_form.price") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
         </thead>
         <tbody>
           {% for r in b.rows %}
           {% set s = r.service %}
-          <tr{% if not s.is_active %} class="table-warning"{% endif %}>
-            <td><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ s.name }}</a><span class="d-block small text-muted">{{ s.category }}</span></td>
+          <tr{% if not s.is_active %} class="table-light text-body-secondary"{% endif %}>
+            <td>
+              <div class="d-flex align-items-center gap-2">
+                {{ thumb::admin_thumb(file_id=s.image_file_id) }}
+                <div><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ s.name }}</a><span class="d-block small text-muted">{{ s.category }}{% if s.added_by_owner %} · {{ t(key="admin.added_by_owner") }}{% endif %}</span></div>
+              </div>
+            </td>
             <td><a class="text-decoration-none" href="{{ r.provider_href }}">{{ s.business_name }}</a></td>
-            <td class="small">{% if s.price_note %}{{ s.price_note }}{% endif %}</td>
-            <td class="text-center">{% if s.is_active %}<span class="badge text-bg-success">Hiển thị</span>{% else %}<span class="badge text-bg-secondary">Đã ẩn</span>{% endif %}</td>
-            <td class="text-end"><a class="btn btn-sm btn-outline-success" href="{{ r.href }}" aria-label="Sửa {{ s.name }}">{{ atoms::icon(name="fa-pen") }}</a></td>
+            <td>{% if s.price_note %}{{ s.price_note }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+            <td class="text-center">{{ status::visibility(on=s.is_active) }}</td>
+            <td class="text-end">
+              <div class="row-actions">
+                {% if s.is_active %}
+                {{ row::hide(href=r.hide_href ~ "#xac-nhan", name=s.name) }}
+                {% else %}
+                {{ row::show(action=r.status_action, name=s.name, field="is_active", keep=b.keep) }}
+                {% endif %}
+                {{ row::delete(href=r.delete_href ~ "#xac-nhan", name=s.name) }}
+                {{ row::open(href=r.href, name=s.name) }}
+              </div>
+            </td>
           </tr>
           {% else %}
-          <tr><td colspan="5" class="text-center text-muted py-4">Chưa có dịch vụ nào.</td></tr>
+          <tr><td colspan="5" class="text-center text-muted py-4">{{ t(key="admin.no_services") }}</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -50,14 +74,23 @@
   </div>
   {% if b.pagination %}{{ paging::pagination_nav(p=b.pagination) }}{% endif %}
 
+  {% if b.confirm %}
+  {% set c = b.confirm %}
+  {% if c.kind == "hide" %}
+  {{ confirm::confirm_sheet(id="xac-nhan", title=t(key="admin.hide_service_title", name=c.name), icon="fa-eye-slash", action=c.action, button=t(key="admin.confirm_hide"), reason_max=limits.audit_reason_max, effect="hide", what=t(key="admin.service_what"), hidden_name="is_active", hidden_value="false", keep=b.keep) }}
+  {% else %}
+  {{ confirm::confirm_sheet(id="xac-nhan", title=t(key="admin.delete_service_title", name=c.name), icon="fa-trash", action=c.action, button=t(key="common.confirm_delete"), reason_max=limits.audit_reason_max, effect="delete", what=t(key="dashboard.delete_service_what"), button_class="btn-danger", keep=b.keep) }}
+  {% endif %}
+  {% endif %}
+
   {% if b.create %}
   {% set c = b.create %}
-  <section class="admin-card p-3" id="them-dich-vu" aria-labelledby="them-dich-vu-title">
-    <h2 class="detail-card__title" id="them-dich-vu-title">{{ atoms::icon(name="fa-plus") }} Thêm dịch vụ</h2>
-    <form method="post" action="{{ c.action }}" novalidate>
+  <section class="admin-section" id="them-dich-vu" aria-labelledby="them-dich-vu-title">
+    <h2 class="admin-section__title" id="them-dich-vu-title">{{ t(key="dashboard.add_service") }}</h2>
+    <form class="form-stack" method="post" action="{{ c.action }}" novalidate>
       <input type="hidden" name="business_id" value="{{ c.business_id }}">
       {{ fields::service_fields(form=c.form, errors=c.errors, categories=c.categories, limits=b.limits, prefix="new") }}
-      <button type="submit" class="btn btn-success btn-lg">{{ atoms::icon(name="fa-plus") }} Thêm</button>
+      <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-plus") }} {{ t(key="dashboard.add_service") }}</button></div>
     </form>
   </section>
   {% endif %}

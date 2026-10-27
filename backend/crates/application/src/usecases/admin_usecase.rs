@@ -7,7 +7,7 @@ use domain::{
         category::{CategoryAdmin, NewCategory, UpdateCategory},
         location::Location,
         role::UserRole,
-        service::{AdminService, NewService, UpdateService},
+        service::{NewService, UpdateService},
         user::NewUser,
     },
     repositories::{
@@ -28,25 +28,25 @@ use crate::{
     catalogue::{
         PERM_CATEGORY_MANAGE, PERM_INQUIRY_MANAGE, PERM_INQUIRY_READ, PERM_LISTING_MODERATE,
         PERM_LOCATION_MANAGE, PERM_PROVIDER_ACCOUNT_ASSIGN, PERM_PROVIDER_READ,
-        PERM_PROVIDER_VERIFY, PERM_REVIEW_MODERATE, PERM_ROLE_READ, PERM_SERVICE_MANAGE,
-        PERM_USER_READ, PERM_USER_ROLE_UPDATE, PERM_USER_STATUS_UPDATE,
+        PERM_PROVIDER_STATUS_UPDATE, PERM_PROVIDER_VERIFY, PERM_REVIEW_MODERATE, PERM_ROLE_READ,
+        PERM_SERVICE_MANAGE, PERM_USER_READ, PERM_USER_ROLE_UPDATE, PERM_USER_STATUS_UPDATE,
     },
     constants::{
         ADMIN_PAGE_SIZE, CATEGORY_COLOR_MAX, CATEGORY_DESCRIPTION_MAX, CATEGORY_ICON_MAX,
-        CATEGORY_NAME_MAX, CATEGORY_SLUG_MAX, LOCATION_LABEL_MAX, SERVICE_DESCRIPTION_MAX,
-        SERVICE_NAME_MAX, SERVICE_PRICE_NOTE_MAX,
+        CATEGORY_NAME_MAX, CATEGORY_SLUG_MAX, LOCATION_LABEL_MAX,
     },
     inputs::CategoryInput,
     outputs::{
         AdminCategoryDto, AdminInquiryDto, AdminLocationDto, AdminPagedResponse, AdminProductDto,
         AdminProductItemDto, AdminProviderDetailDto, AdminProviderDto, AdminReviewDto,
         AdminServiceDto, AdminServiceItemDto, AdminUserDetailDto, AdminUserDto, AssignUserDto,
-        RoleDto, VerificationDto,
+        ProviderStatusDto, RoleDto, VerificationDto,
     },
     pagination::{paginate, total_pages},
     ports::{EventBus, PasswordHasher},
+    usecases::service_rules::{validate_service, ServiceFields},
     validation::{
-        max_chars, max_chars_opt, non_blank, validate_coordinates, validate_email,
+        audit_reason, max_chars, max_chars_opt, non_blank, validate_coordinates, validate_email,
         validate_password, validate_slug, validate_username,
     },
 };
@@ -118,7 +118,7 @@ impl AdminUseCase {
                 entity,
                 entity_id,
                 change,
-                reason,
+                reason: audit_reason(reason),
             })
             .await;
     }
@@ -233,8 +233,8 @@ impl AdminUseCase {
                 actor,
                 Entity::Provider,
                 id,
-                Change::Visibility {
-                    visible: is_verified,
+                Change::Verification {
+                    verified: is_verified,
                 },
                 reason,
             )
@@ -244,6 +244,39 @@ impl AdminUseCase {
             id,
             name,
             is_verified,
+        })
+    }
+
+    /// Turns a provider off (gone from every public page with its services
+    /// and products; its account can still sign in) or on again. Setting the
+    /// state it already has changes nothing and is not audited.
+    pub async fn toggle_provider_active(
+        &self,
+        actor: &Actor,
+        id: i32,
+        is_active: bool,
+        reason: Option<String>,
+    ) -> Result<ProviderStatusDto> {
+        actor.require(PERM_PROVIDER_STATUS_UPDATE)?;
+        let (name, changed) = self
+            .business_repo
+            .set_active(id, is_active, actor.user_id)
+            .await?
+            .ok_or_else(|| Error::new(ErrorCode::ProviderNotFound))?;
+        if changed {
+            self.publish(
+                actor,
+                Entity::Provider,
+                id,
+                Change::Visibility { visible: is_active },
+                reason,
+            )
+            .await;
+        }
+        Ok(ProviderStatusDto {
+            id,
+            name,
+            is_active,
         })
     }
 
@@ -542,17 +575,19 @@ impl AdminUseCase {
 
     // ── Inquiries ─────────────────────────────────────────────────────────────
 
+    /// `provider_id`: only that provider's inquiries.
     pub async fn list_inquiries(
         &self,
         actor: &Actor,
         page: i64,
+        provider_id: Option<i32>,
     ) -> Result<AdminPagedResponse<AdminInquiryDto>> {
         actor.require(PERM_INQUIRY_READ)?;
         let (page, offset) = paginate(page, ADMIN_PAGE_SIZE);
-        let total = self.inquiry_repo.count_admin().await?;
+        let total = self.inquiry_repo.count_admin(provider_id).await?;
         let items = self
             .inquiry_repo
-            .list_admin(ADMIN_PAGE_SIZE, offset)
+            .list_admin(provider_id, ADMIN_PAGE_SIZE, offset)
             .await?;
 
         Ok(AdminPagedResponse {
@@ -622,15 +657,20 @@ impl AdminUseCase {
 
     // ── Reviews ───────────────────────────────────────────────────────────────
 
+    /// `provider_id`: only that provider's reviews.
     pub async fn list_reviews(
         &self,
         actor: &Actor,
         page: i64,
+        provider_id: Option<i32>,
     ) -> Result<AdminPagedResponse<AdminReviewDto>> {
         actor.require(PERM_REVIEW_MODERATE)?;
         let (page, offset) = paginate(page, ADMIN_PAGE_SIZE);
-        let total = self.review_repo.count_admin().await?;
-        let items = self.review_repo.list_admin(ADMIN_PAGE_SIZE, offset).await?;
+        let total = self.review_repo.count_admin(provider_id).await?;
+        let items = self
+            .review_repo
+            .list_admin(provider_id, ADMIN_PAGE_SIZE, offset)
+            .await?;
 
         Ok(AdminPagedResponse {
             items: items
@@ -880,7 +920,7 @@ impl AdminUseCase {
             .list_admin(provider_id, ADMIN_PAGE_SIZE, offset)
             .await?;
         Ok(AdminPagedResponse {
-            items: items.into_iter().map(to_service_dto).collect(),
+            items: items.into_iter().map(AdminServiceDto::from).collect(),
             total,
             page,
             per_page: ADMIN_PAGE_SIZE,
@@ -897,7 +937,7 @@ impl AdminUseCase {
         self.service_repo
             .find_by_id_admin(id)
             .await?
-            .map(to_service_dto)
+            .map(AdminServiceDto::from)
             .ok_or_else(|| Error::new(ErrorCode::ServiceNotFound))
     }
 
@@ -922,9 +962,14 @@ impl AdminUseCase {
             name,
             description,
             price_note,
-        } = self
-            .validate_service(category_id, name, description, price_note)
-            .await?;
+        } = validate_service(
+            self.service_repo.as_ref(),
+            category_id,
+            name,
+            description,
+            price_note,
+        )
+        .await?;
         let id = self
             .service_repo
             .create(NewService {
@@ -933,9 +978,12 @@ impl AdminUseCase {
                 name,
                 description,
                 price_note,
+                image_file_id: None,
                 created_by: actor.user_id,
             })
             .await?;
+        self.publish(actor, Entity::Service, id, Change::Created, None)
+            .await;
         self.load_service_admin(id).await
     }
 
@@ -953,9 +1001,14 @@ impl AdminUseCase {
             name,
             description,
             price_note,
-        } = self
-            .validate_service(category_id, name, description, price_note)
-            .await?;
+        } = validate_service(
+            self.service_repo.as_ref(),
+            category_id,
+            name,
+            description,
+            price_note,
+        )
+        .await?;
         let updated = self
             .service_repo
             .update(UpdateService {
@@ -970,47 +1023,9 @@ impl AdminUseCase {
         if !updated {
             return Err(Error::new(ErrorCode::ServiceNotFound));
         }
+        self.publish(actor, Entity::Service, id, Change::Updated, None)
+            .await;
         self.load_service_admin(id).await
-    }
-
-    /// Every rule of a service's boxes, reported together; the category must
-    /// be an active service category.
-    async fn validate_service(
-        &self,
-        category_id: i32,
-        name: String,
-        description: Option<String>,
-        price_note: Option<String>,
-    ) -> Result<ServiceFields> {
-        let name = name.trim().to_owned();
-        let description = non_blank(description);
-        let price_note = non_blank(price_note);
-        let category_ok = self
-            .service_repo
-            .check_category_is_service(category_id)
-            .await?;
-        Validation::new()
-            .check(name.is_empty(), "name", ErrorCode::NameRequired)
-            .rule("name", max_chars(&name, SERVICE_NAME_MAX))
-            .check(
-                !category_ok,
-                "category_id",
-                ErrorCode::InvalidServiceCategory,
-            )
-            .rule(
-                "description",
-                max_chars_opt(&description, SERVICE_DESCRIPTION_MAX),
-            )
-            .rule(
-                "price_note",
-                max_chars_opt(&price_note, SERVICE_PRICE_NOTE_MAX),
-            )
-            .finish()?;
-        Ok(ServiceFields {
-            name,
-            description,
-            price_note,
-        })
     }
 
     pub async fn toggle_service_active(
@@ -1099,22 +1114,6 @@ fn to_location_dto(l: Location) -> AdminLocationDto {
     }
 }
 
-fn to_service_dto(s: AdminService) -> AdminServiceDto {
-    AdminServiceDto {
-        id: s.id,
-        name: s.name,
-        description: s.description,
-        price_note: s.price_note,
-        category: s.category,
-        category_id: s.category_id,
-        business_id: s.business_id,
-        business_name: s.business_name,
-        is_active: s.is_active,
-        created_on: s.created_on,
-        updated_on: s.updated_on,
-    }
-}
-
 fn to_category_dto(c: CategoryAdmin) -> AdminCategoryDto {
     AdminCategoryDto {
         id: c.id,
@@ -1187,11 +1186,4 @@ fn refuse_self(actor: &Actor, target_user_id: i32) -> Result<()> {
         return Err(Error::new(ErrorCode::CannotChangeOwnAccount));
     }
     Ok(())
-}
-
-/// A service's boxes once its rules pass: trimmed, blanks as `None`.
-struct ServiceFields {
-    name: String,
-    description: Option<String>,
-    price_note: Option<String>,
 }

@@ -4,20 +4,20 @@
     pair once, on `lat`; it is shown under both boxes' row. -#}
 {% import "molecules/form_field.html" as field %}
 {% macro location_fields(form, errors, label_max, prefix) -%}
-{{ field::input(id=prefix ~ "-label", name="label", label="Tên khu vực", value=form.label, error=errors.fields.label | default(value=""), required=true, maxlength=label_max, placeholder="Cai Lậy, Tiền Giang") }}
+{{ field::input(id=prefix ~ "-label", name="label", label=t(key="location_form.label"), value=form.label, error=errors.fields.label | default(value=""), required=true, maxlength=label_max, placeholder=t(key="location_form.label_placeholder")) }}
 <fieldset class="form-field">
-  <legend class="form-label fw-semibold fs-6">Toạ độ <span class="text-danger" aria-hidden="true">*</span></legend>
+  <legend class="form-label fw-semibold fs-6">{{ t(key="location_form.coordinates") }} <span class="text-danger" aria-hidden="true">*</span></legend>
   <div class="row g-2">
     <div class="col-6">
-      <label class="form-label small" for="{{ prefix }}-lat">Vĩ độ</label>
+      <label class="form-label small" for="{{ prefix }}-lat">{{ t(key="form.lat") }}</label>
       <input class="form-control{% if errors.fields.lat %} is-invalid{% endif %}" id="{{ prefix }}-lat" name="lat" value="{{ form.lat }}" inputmode="decimal" required placeholder="10.4048"{% if errors.fields.lat %} aria-invalid="true" aria-describedby="{{ prefix }}-coord-error"{% endif %}>
     </div>
     <div class="col-6">
-      <label class="form-label small" for="{{ prefix }}-lng">Kinh độ</label>
+      <label class="form-label small" for="{{ prefix }}-lng">{{ t(key="form.lng") }}</label>
       <input class="form-control{% if errors.fields.lat %} is-invalid{% endif %}" id="{{ prefix }}-lng" name="lng" value="{{ form.lng }}" inputmode="decimal" required placeholder="106.1180"{% if errors.fields.lat %} aria-invalid="true" aria-describedby="{{ prefix }}-coord-error"{% endif %}>
     </div>
   </div>
   {% if errors.fields.lat %}<div class="invalid-feedback d-block" id="{{ prefix }}-coord-error">{{ errors.fields.lat }}</div>{% endif %}
 </fieldset>
-{{ field::input(id=prefix ~ "-order", name="display_order", label="Thứ tự", value=form.display_order, type="number", inputmode="numeric", error=errors.fields.display_order | default(value="")) }}
+{{ field::input(id=prefix ~ "-order", name="display_order", label=t(key="form.display_order"), value=form.display_order, type="number", inputmode="numeric", error=errors.fields.display_order | default(value="")) }}
 {%- endmacro location_fields %}

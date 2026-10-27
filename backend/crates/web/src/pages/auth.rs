@@ -23,7 +23,7 @@ use crate::{
     },
     routes,
     session::CookiePolicy,
-    shell::{home_area, Shell},
+    shell::{home_area_href, Shell},
     views::{render_page, render_page_status},
 };
 
@@ -32,13 +32,13 @@ fn url(name: &str) -> Result<String, Error> {
 }
 
 /// Auth pages have no app frame; the shell only carries the path.
-fn bare_shell(path: &str) -> Shell {
-    Shell::without_session(path, None)
+fn bare_shell(state: &AppState, path: &str) -> Shell {
+    Shell::without_session(state.locale(), path, None)
 }
 
 /// Where a signed-in visitor belongs: the same "my area" as the last tab.
 pub fn landing(actor: Option<&Actor>) -> String {
-    home_area(actor).href
+    home_area_href(actor)
 }
 
 /// 303 to the visitor's area with a fresh session in the cookies.
@@ -73,7 +73,7 @@ fn reshow<T: Serialize>(
     let errors = FormErrors::from_error(state, &err);
     render_page_status(
         state,
-        &bare_shell(path),
+        &bare_shell(state, path),
         err.kind().status(),
         template,
         &page(errors),
@@ -118,7 +118,7 @@ pub async fn login_page(
     };
     let mut response = render_page(
         &state,
-        &bare_shell(&url("login")?),
+        &bare_shell(&state, &url("login")?),
         "pages/login.html",
         &page,
     )?;
@@ -187,7 +187,7 @@ pub async fn register_page(
     };
     render_page(
         &state,
-        &bare_shell(&url("register")?),
+        &bare_shell(&state, &url("register")?),
         "pages/register.html",
         &page,
     )
@@ -249,7 +249,7 @@ pub struct ForgotPage {
 pub async fn forgot_page(State(state): State<AppState>) -> Result<Response, Error> {
     render_page(
         &state,
-        &bare_shell(&url("forgot_password")?),
+        &bare_shell(&state, &url("forgot_password")?),
         "pages/forgot_password.html",
         &ForgotPage { sent: false },
     )
@@ -262,7 +262,7 @@ pub async fn forgot(
     state.usecases.auth.forgot_password(form.email).await?;
     render_page(
         &state,
-        &bare_shell(&url("forgot_password")?),
+        &bare_shell(&state, &url("forgot_password")?),
         "pages/forgot_password.html",
         &ForgotPage { sent: true },
     )
@@ -304,7 +304,7 @@ pub async fn reset_page(
     };
     render_page(
         &state,
-        &bare_shell(&url("reset_password")?),
+        &bare_shell(&state, &url("reset_password")?),
         "pages/reset_password.html",
         &page,
     )

@@ -1,6 +1,7 @@
 //! HTTP request shapes. Field rules live in the use cases, not here, so the
 //! JSON API and the server-rendered forms enforce exactly the same ones.
 
+use application::inputs::ServiceInput;
 use serde::Deserialize;
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -161,6 +162,28 @@ pub struct UpdateProductRequest {
     pub unit: Option<String>,
 }
 
+/// POST and PUT /api/provider/services: one of the caller's own services.
+#[derive(Deserialize)]
+pub struct OwnServiceRequest {
+    pub category_id: i32,
+    /// Missing or blank takes the category's name.
+    #[serde(default)]
+    pub name: String,
+    pub description: Option<String>,
+    pub price_note: Option<String>,
+}
+
+impl OwnServiceRequest {
+    pub fn into_input(self) -> ServiceInput {
+        ServiceInput {
+            category_id: self.category_id,
+            name: self.name,
+            description: self.description,
+            price_note: self.price_note,
+        }
+    }
+}
+
 // ── Admin products & services ─────────────────────────────────────────────────
 
 #[derive(Deserialize)]
@@ -201,7 +224,7 @@ pub struct ProductBrowseQuery {
 
 // ── Explore ───────────────────────────────────────────────────────────────────
 
-/// Combined query for GET /api/explore/providers.
+/// Combined query for GET /api/explore/providers and /api/explore/services.
 /// When `lat` and `lng` are present the handler runs a geo-search;
 /// otherwise it runs a paginated browse.
 #[derive(Deserialize)]
@@ -211,7 +234,8 @@ pub struct ProvidersQuery {
     pub lng: Option<f64>,
     pub radius: Option<f64>,
     // ── shared ────────────────────────────────────────────────────────────
-    /// A service *category* id: providers offering a live service in it.
+    /// A service *category* id: providers offering a live service in it, or
+    /// the services in it.
     /// `category_id` is the clear name; `service_id` is kept for existing
     /// clients (it is not a `services.id`, unlike the inquiry's).
     #[serde(alias = "category_id")]
@@ -237,4 +261,12 @@ pub struct InquiryRequest {
     pub requester_phone: String,
     pub note: Option<String>,
     pub service_id: Option<i32>,
+}
+
+/// POST /api/explore/calls: a tap on a public call button (sent by the
+/// `callBeacon` Alpine component).
+#[derive(Deserialize)]
+pub struct CallRequest {
+    pub kind: String,
+    pub id: i32,
 }

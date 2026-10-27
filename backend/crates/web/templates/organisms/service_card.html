@@ -1,0 +1,44 @@
+{#- Services as compact row cards: a fixed square photo (or the category
+    icon) beside the name, price, the provider offering it (verified badge)
+    and the area or distance, with one full-width call button below. About
+    200 px tall at every width, so a phone shows three and a wide screen a
+    whole block. One column on a phone, two from 768 px, three from 1200 px.
+    Fewer than three cards keep the two-column width (`service-grid--1`,
+    `--2`), so one card never stretches its call button across a wide screen;
+    their height is fixed by the photo. `services` are ServiceCard
+    views (web::pages::cards); the category label is left out when the name
+    already says it. One macro, not a card macro called from the grid: Tera
+    resolves `self::` against the page rendering it, not this file. -#}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/badge.html" as badge %}
+{% import "molecules/call_button.html" as call %}
+{% macro service_grid(services) -%}
+{% set n = services | length %}
+<div class="row row-cols-1 row-cols-md-2 g-3{% if n == 1 %} service-grid--1{% elif n == 2 %} service-grid--2{% else %} row-cols-xl-3{% endif %}">
+  {% for s in services %}
+  <div class="col">
+    <article class="card h-100 product-card service-card hover-lift">
+      <div class="card-body p-3 d-flex flex-column gap-3">
+        <div class="d-flex gap-3 min-w-0">
+          <a class="service-card__photo" href="{{ s.href }}" tabindex="-1" aria-hidden="true">
+            {% if s.image_file_id %}<img src="{{ file_url(id=s.image_file_id, variant="thumb") }}" alt="" loading="lazy" decoding="async">{% else %}{{ atoms::icon(name=s.category_icon | default(value="fa-tag")) }}{% endif %}
+          </a>
+          <div class="d-flex flex-column gap-1 min-w-0 flex-grow-1">
+            <h3 class="card-title fs-6 fw-bold mb-0 product-card__name"><a class="text-decoration-none text-dark" href="{{ s.href }}">{{ s.name }}</a></h3>
+            <span class="fw-bold product-card__price{% if not s.price_note %}-contact{% endif %}">{% if s.price_note %}{{ s.price_note | price_note }}{% else %}{{ t(key="price.ask") }}{% endif %}</span>
+            {% if s.show_category %}<span class="text-muted small text-truncate">{{ atoms::icon(name=s.category_icon | default(value="fa-tag"), class="me-1") }}{{ s.category }}</span>{% endif %}
+            <p class="small mb-0 d-flex align-items-center gap-1 min-w-0 service-card__provider">{{ atoms::icon(name="fa-shop", class="text-muted") }} <span class="text-truncate">{{ s.provider_name }}</span>{% if s.provider_verified %}{{ badge::badge(text=t(key="status.verified"), icon="fa-circle-check", class="flex-shrink-0", compact=true) }}{% endif %}</p>
+            {% if s.distance_m or s.district %}
+            <p class="text-muted small mb-0 d-flex align-items-center gap-1 min-w-0">{{ atoms::icon(name="fa-location-dot") }} <span class="text-truncate">{% if s.distance_m %}{{ t(key="distance.away") }} <strong>{{ s.distance_m | distance }}</strong>{% else %}{{ s.district }}{% endif %}</span></p>
+            {% endif %}
+          </div>
+        </div>
+        <div class="mt-auto d-grid">
+          {{ call::call_button(phone=s.phone, kind="service", id=s.id, class="btn btn-success btn-call") }}
+        </div>
+      </div>
+    </article>
+  </div>
+  {% endfor %}
+</div>
+{%- endmacro service_grid %}

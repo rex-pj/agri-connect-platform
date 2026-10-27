@@ -56,6 +56,15 @@ pub struct UpdateProductInput {
     pub unit: Option<String>,
 }
 
+/// A provider's own service, for create and update alike.
+pub struct ServiceInput {
+    pub category_id: i32,
+    /// Blank takes the category's name.
+    pub name: String,
+    pub description: Option<String>,
+    pub price_note: Option<String>,
+}
+
 // ── Admin catalogue ───────────────────────────────────────────────────────────
 
 /// Editable category fields, shared by create and update.
@@ -66,4 +75,12 @@ pub struct CategoryInput {
     pub color: Option<String>,
     pub description: Option<String>,
     pub display_order: i16,
+}
+
+/// A tap on a public call button: which kind of card or page (`service`,
+/// `product`, `provider`) and that record's id. The business it rings is
+/// looked up from the record, never taken from the request.
+pub struct CallInput {
+    pub kind: String,
+    pub id: i32,
 }

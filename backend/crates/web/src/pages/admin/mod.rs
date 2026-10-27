@@ -28,9 +28,10 @@ use serde::{Deserialize, Serialize};
 use crate::{
     app_state::AppState,
     cookies::Flash,
+    locale::Locale,
     pages::{
         forms::{is_form_error, FormErrors},
-        listing::{parse_opt, with_query},
+        listing::{parse_opt, with_query, Pagination},
         see_other,
     },
     routes,
@@ -42,14 +43,14 @@ use crate::{
 pub struct NavItem {
     pub href: String,
     pub icon: &'static str,
-    pub label: &'static str,
+    pub label: String,
     pub active: bool,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct NavGroup {
     /// `None` for top-level entries (the dashboard).
-    pub label: Option<&'static str>,
+    pub label: Option<String>,
     pub items: Vec<NavItem>,
 }
 
@@ -60,7 +61,7 @@ pub struct AdminNav {
     pub groups: Vec<NavGroup>,
 }
 
-/// (route, icon, label, permission that opens it).
+/// (route, icon, label text key, permission that opens it).
 type Entry = (&'static str, &'static str, &'static str, &'static str);
 
 const MENU: &[(Option<&str>, &[Entry])] = &[
@@ -69,62 +70,82 @@ const MENU: &[(Option<&str>, &[Entry])] = &[
         &[(
             "admin_dashboard",
             "fa-gauge",
-            "Dashboard",
+            "admin_menu.dashboard",
             PERM_ADMIN_DASHBOARD_VIEW,
         )],
     ),
     (
-        Some("Nội dung"),
+        Some("admin_menu.content"),
         &[
             (
                 "admin_explore",
                 "fa-store",
-                "Nhà cung cấp",
+                "admin_menu.providers",
                 PERM_PROVIDER_READ,
             ),
             (
                 "admin_products",
                 "fa-box-open",
-                "Sản phẩm",
+                "admin_menu.products",
                 PERM_LISTING_MODERATE,
             ),
             (
                 "admin_services",
                 "fa-screwdriver-wrench",
-                "Dịch vụ",
+                "admin_menu.services",
                 PERM_SERVICE_MANAGE,
             ),
             (
                 "admin_categories",
                 "fa-tags",
-                "Danh mục",
+                "admin_menu.categories",
                 PERM_CATEGORY_MANAGE,
             ),
             (
                 "admin_inquiries",
                 "fa-envelope-open-text",
-                "Yêu cầu",
+                "admin_menu.inquiries",
                 PERM_INQUIRY_READ,
             ),
-            ("admin_reviews", "fa-star", "Đánh giá", PERM_REVIEW_MODERATE),
+            (
+                "admin_reviews",
+                "fa-star",
+                "admin_menu.reviews",
+                PERM_REVIEW_MODERATE,
+            ),
             (
                 "admin_locations",
                 "fa-map-location-dot",
-                "Khu vực",
+                "admin_menu.locations",
                 PERM_LOCATION_MANAGE,
             ),
         ],
     ),
     (
-        Some("Hệ thống"),
+        Some("admin_menu.system"),
         &[
-            ("admin_users", "fa-users", "Người dùng", PERM_USER_READ),
-            ("admin_roles", "fa-shield-halved", "Vai trò", PERM_ROLE_READ),
-            ("admin_permissions", "fa-key", "Quyền hạn", PERM_ROLE_READ),
+            (
+                "admin_users",
+                "fa-users",
+                "admin_menu.users",
+                PERM_USER_READ,
+            ),
+            (
+                "admin_roles",
+                "fa-shield-halved",
+                "admin_menu.roles",
+                PERM_ROLE_READ,
+            ),
+            (
+                "admin_permissions",
+                "fa-key",
+                "admin_menu.permissions",
+                PERM_ROLE_READ,
+            ),
             (
                 "setup_seed",
                 "fa-database",
-                "Dữ liệu mẫu",
+                "admin_menu.demo_data",
                 PERM_SYSTEM_DEMO_MANAGE,
             ),
         ],
@@ -132,11 +153,11 @@ const MENU: &[(Option<&str>, &[Entry])] = &[
 ];
 
 impl AdminNav {
-    pub fn new(actor: &Actor, path: &str) -> Self {
+    pub fn new(locale: &Locale, actor: &Actor, path: &str) -> Self {
         let groups = MENU
             .iter()
             .map(|(label, entries)| NavGroup {
-                label: *label,
+                label: label.map(|key| locale.text(key)),
                 items: entries
                     .iter()
                     .filter(|(_, _, _, perm)| actor.can(perm))
@@ -146,7 +167,7 @@ impl AdminNav {
                             active: path == href || path.starts_with(&format!("{href}/")),
                             href,
                             icon,
-                            label,
+                            label: locale.text(label),
                         })
                     })
                     .collect(),
@@ -177,12 +198,12 @@ pub fn render_admin<T: Serialize>(
     body: &T,
 ) -> Result<Response, Error> {
     let page = AdminPage {
-        admin: AdminNav::new(actor, path),
+        admin: AdminNav::new(state.locale(), actor, path),
         body,
     };
     render_page_status(
         state,
-        &Shell::without_session(path, None),
+        &Shell::without_session(state.locale(), path, None),
         status,
         template,
         &page,
@@ -236,6 +257,56 @@ impl<F> Outcome<F> {
     }
 }
 
+/// The value of the `back` field a row action on a list sends, for a record
+/// that also has its own page: land back on the list, not on that page.
+pub const BACK_TO_LIST: &str = "list";
+
+/// The hidden fields of a row action on a list whose records have their own
+/// page: `back` plus the list position (`keep` in the templates).
+#[derive(Debug, Serialize)]
+pub struct ListReturn {
+    pub back: &'static str,
+    #[serde(flatten)]
+    pub position: ListPosition,
+}
+
+impl ListReturn {
+    pub fn new(position: ListPosition) -> Self {
+        Self {
+            back: BACK_TO_LIST,
+            position,
+        }
+    }
+}
+
+/// The row confirmation a list's query asks for (`?hide={id}` /
+/// `?delete={id}`); anything not a number asks for none.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Asked {
+    pub hide: Option<i32>,
+    pub delete: Option<i32>,
+}
+
+impl Asked {
+    pub fn new(hide: &str, delete: &str) -> Self {
+        Self {
+            hide: parse_opt(hide),
+            delete: parse_opt(delete),
+        }
+    }
+}
+
+/// The row confirmation open on this render of a list (`?hide=` or
+/// `?delete=`): which kind, the record's name for the title, and where its
+/// form posts.
+#[derive(Debug, Serialize)]
+pub struct RowConfirm {
+    /// "hide" or "delete".
+    pub kind: &'static str,
+    pub name: String,
+    pub action: String,
+}
+
 /// Which page of an admin list a row action came from, so the redirect lands
 /// back there. Sent as hidden fields and rebuilt from the numbers in them,
 /// never from a posted URL, so a form cannot redirect anywhere else.
@@ -279,9 +350,47 @@ impl ListPosition {
         parse_opt::<i32>(&self.provider_id).filter(|p| *p > 0)
     }
 
+    /// The page links of the list at `path`, keeping its provider filter.
+    pub fn pagination(&self, path: &str, current: i64, total: i64) -> Option<Pagination> {
+        let provider = self.provider_id().map(|p| p.to_string());
+        let params: Vec<(&str, &str)> = provider
+            .as_deref()
+            .map(|p| vec![("provider_id", p)])
+            .unwrap_or_default();
+        Pagination::new(path, &params, current, total)
+    }
+
+    /// The bar above the list at `route` when it is narrowed to one provider
+    /// (`molecules/admin_filter`); `name` comes from the rows, so it is
+    /// `None` when there are none.
+    pub fn provider_filter(
+        &self,
+        route: &str,
+        name: Option<String>,
+    ) -> Result<Option<ProviderFilter>, Error> {
+        self.provider_id()
+            .map(|id| {
+                Ok(ProviderFilter {
+                    name,
+                    href: url("admin_provider", &[("id", &id.to_string())])?,
+                    clear_href: url(route, &[])?,
+                })
+            })
+            .transpose()
+    }
+
     pub fn page(&self) -> i64 {
         parse_opt(&self.page).unwrap_or(1)
     }
+}
+
+/// The one provider an admin list is narrowed to: its name, its admin page,
+/// and the whole list.
+#[derive(Debug, Serialize)]
+pub struct ProviderFilter {
+    pub name: Option<String>,
+    pub href: String,
+    pub clear_href: String,
 }
 
 #[cfg(test)]
@@ -322,22 +431,37 @@ mod tests {
 
     #[test]
     fn the_menu_shows_only_what_the_permissions_open() {
+        let vi = Locale::vi().expect("vi.toml parses");
         let nav = AdminNav::new(
+            &vi,
             &actor(&[PERM_ADMIN_DASHBOARD_VIEW, PERM_ROLE_READ]),
             "/admin/roles/2",
         );
         let labels: Vec<&str> = nav
             .groups
             .iter()
-            .flat_map(|g| g.items.iter().map(|i| i.label))
+            .flat_map(|g| g.items.iter().map(|i| i.label.as_str()))
             .collect();
-        assert_eq!(labels, ["Dashboard", "Vai trò", "Quyền hạn"]);
+        let roles = vi.text("admin_menu.roles");
+        assert_eq!(
+            labels,
+            [
+                vi.text("admin_menu.dashboard"),
+                roles.clone(),
+                vi.text("admin_menu.permissions")
+            ]
+        );
         assert_eq!(nav.groups.len(), 2, "the empty content group is hidden");
         let active: Vec<&str> = nav
             .groups
             .iter()
-            .flat_map(|g| g.items.iter().filter(|i| i.active).map(|i| i.label))
+            .flat_map(|g| {
+                g.items
+                    .iter()
+                    .filter(|i| i.active)
+                    .map(|i| i.label.as_str())
+            })
             .collect();
-        assert_eq!(active, ["Vai trò"], "a sub-page keeps its section active");
+        assert_eq!(active, [roles], "a sub-page keeps its section active");
     }
 }

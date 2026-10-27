@@ -3,9 +3,10 @@
 use std::{
     net::SocketAddr,
     sync::{
-        atomic::{AtomicU32, Ordering},
+        atomic::{AtomicBool, AtomicU32, Ordering},
         Arc,
     },
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use application::{
@@ -25,7 +26,7 @@ use infrastructure::{
     file_storage::ObjectFileStorage, jwt_token_service::JwtTokenService,
 };
 use migration::{Migrator, MigratorTrait};
-use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
+use sea_orm::{ConnectionTrait, Database, DatabaseConnection, Statement};
 use tower::ServiceExt;
 use web::{
     app_state::AppState,
@@ -151,21 +152,109 @@ pub struct TestDb {
     pub db: DatabaseConnection,
     admin: DatabaseConnection,
     name: String,
+    guard: DropGuard,
 }
 
 static COUNTER: AtomicU32 = AtomicU32::new(0);
+static SWEPT: AtomicBool = AtomicBool::new(false);
+
+const TEST_DB_PREFIX: &str = "agri_test_";
+/// A test database older than this belongs to a run that was killed (Ctrl+C)
+/// before it could drop it; no test runs this long.
+const STALE_TEST_DB_SECS: u64 = 60 * 60;
+
+fn unix_now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+}
+
+/// Drops the database when a test panics before `cleanup`. Drop cannot await,
+/// so the drop runs on its own thread with its own runtime and connection.
+struct DropGuard {
+    url: String,
+    name: String,
+    armed: bool,
+}
+
+impl Drop for DropGuard {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        let (url, name) = (self.url.clone(), self.name.clone());
+        let dropped = std::thread::spawn(move || {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(async {
+                    let admin = Database::connect(&url).await?;
+                    admin.execute_unprepared(&drop_sql(&name)).await?;
+                    admin.close().await
+                })
+        })
+        .join();
+        if !matches!(dropped, Ok(Ok(()))) {
+            eprintln!("could not drop test database {}", self.name);
+        }
+    }
+}
+
+/// FORCE: a pooled connection can still be closing when the drop runs;
+/// without it the drop fails now and then with "being accessed by other users".
+fn drop_sql(name: &str) -> String {
+    format!("DROP DATABASE IF EXISTS {name} WITH (FORCE)")
+}
+
+/// Once per test process: drops test databases left by killed runs. Names
+/// carry their creation time (`agri_test_{secs}_{pid}_{n}`), so a database a
+/// concurrent run is still using is never touched. Names from before the time
+/// was added (`agri_test_{pid}_{n}`) read as ancient and are dropped too.
+async fn sweep_stale(admin: &DatabaseConnection) {
+    if SWEPT.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let rows = admin
+        .query_all(Statement::from_string(
+            admin.get_database_backend(),
+            format!("SELECT datname FROM pg_database WHERE datname LIKE '{TEST_DB_PREFIX}%'"),
+        ))
+        .await
+        .unwrap();
+    let cutoff = unix_now().saturating_sub(STALE_TEST_DB_SECS);
+    for row in rows {
+        let name: String = row.try_get("", "datname").unwrap();
+        let created = name
+            .strip_prefix(TEST_DB_PREFIX)
+            .and_then(|rest| rest.split('_').next())
+            .and_then(|secs| secs.parse::<u64>().ok());
+        if created.is_some_and(|secs| secs < cutoff) {
+            admin.execute_unprepared(&drop_sql(&name)).await.unwrap();
+        }
+    }
+}
 
 impl TestDb {
     pub async fn create() -> TestDb {
         let url = std::env::var("TEST_DATABASE_URL")
             .expect("TEST_DATABASE_URL must point at a Postgres server with PostGIS");
         let name = format!(
-            "agri_test_{}_{}",
+            "{TEST_DB_PREFIX}{}_{}_{}",
+            unix_now(),
             std::process::id(),
             COUNTER.fetch_add(1, Ordering::SeqCst)
         );
 
         let admin = Database::connect(&url).await.unwrap();
+        sweep_stale(&admin).await;
+        // Armed before CREATE: a panic from here on still drops the database.
+        let guard = DropGuard {
+            url: url.clone(),
+            name: name.clone(),
+            armed: true,
+        };
         admin
             .execute_unprepared(&format!("DROP DATABASE IF EXISTS {name} WITH (FORCE)"))
             .await
@@ -185,20 +274,24 @@ impl TestDb {
             .unwrap();
         Migrator::up(&db, None).await.unwrap();
 
-        TestDb { db, admin, name }
+        TestDb {
+            db,
+            admin,
+            name,
+            guard,
+        }
     }
 
-    /// FORCE: a pooled connection can still be closing when the drop runs;
-    /// without it the drop fails now and then with "being accessed by other users".
     pub async fn cleanup(self) {
-        self.db.close().await.unwrap();
-        self.admin
-            .execute_unprepared(&format!(
-                "DROP DATABASE IF EXISTS {} WITH (FORCE)",
-                self.name
-            ))
-            .await
-            .unwrap();
+        let TestDb {
+            db,
+            admin,
+            name,
+            mut guard,
+        } = self;
+        db.close().await.unwrap();
+        admin.execute_unprepared(&drop_sql(&name)).await.unwrap();
+        guard.armed = false;
     }
 }
 

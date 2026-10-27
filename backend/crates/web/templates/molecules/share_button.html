@@ -1,9 +1,9 @@
 {#- Share this page: the phone's share sheet (Zalo, Messenger…), or copy the
     link where there is none. Needs JS, so it stays hidden without it. -#}
 {% import "atoms/icon.html" as atoms %}
-{% macro share_button(title, text, copied="Đã sao chép đường dẫn") -%}
-<span class="share" x-data="shareButton" x-cloak data-title="{{ title }}" data-text="{{ text }}" data-copied="{{ copied }}">
-  <button type="button" class="hero-icon-btn" aria-label="Chia sẻ" x-on:click="share">{{ atoms::icon(name="fa-share-nodes") }}</button>
+{% macro share_button(title, text) -%}
+<span class="share" x-data="shareButton" x-cloak data-title="{{ title }}" data-text="{{ text }}" data-copied="{{ t(key="share.copied") }}">
+  <button type="button" class="hero-icon-btn" aria-label="{{ t(key="share.label") }}" x-on:click="share">{{ atoms::icon(name="fa-share-nodes") }}</button>
   <span class="share__status" role="status" x-text="status"></span>
 </span>
 {%- endmacro share_button %}

@@ -15,6 +15,7 @@ pub trait BusinessRepositoryTrait {
         point_wkt: &str,
         radius: f64,
         service_id: Option<i32>,
+        limit: i64,
     ) -> Result<Vec<BusinessGeoResult>, Error>;
 
     async fn browse(
@@ -45,6 +46,15 @@ pub trait BusinessRepositoryTrait {
     /// Sets the badge; `Some((name, changed))`, or `None` when there is no
     /// such business.
     async fn set_verified(&self, id: i32, verified: bool) -> Result<Option<(String, bool)>, Error>;
+
+    /// Turns the business on or off (off: gone from every public page);
+    /// `Some((name, changed))`, or `None` when there is no such business.
+    async fn set_active(
+        &self,
+        id: i32,
+        active: bool,
+        actor_id: i32,
+    ) -> Result<Option<(String, bool)>, Error>;
 
     async fn check_exists_for_admin(&self, id: i32) -> Result<bool, Error>;
 

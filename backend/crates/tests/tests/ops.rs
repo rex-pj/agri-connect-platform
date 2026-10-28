@@ -25,13 +25,6 @@ async fn ready_is_503_when_the_database_is_down() {
 }
 
 #[tokio::test]
-async fn the_old_health_path_is_gone() {
-    // Nothing was ever deployed, so no probe depends on it (plan §8.10).
-    let res = send(&router_without_db(), get("/health")).await;
-    assert_eq!(res.status(), StatusCode::NOT_FOUND);
-}
-
-#[tokio::test]
 async fn every_response_carries_a_request_id() {
     let res = send(&router_without_db(), get("/health/live")).await;
     let id = res

@@ -1,5 +1,5 @@
 //! GET /admin → /admin/dashboard, and the dashboard: platform counts, plus a
-//! warning while demo listings are mixed into the real ones (§8.4).
+//! warning while demo listings are mixed into the real ones.
 
 use application::{
     catalogue::PERM_SYSTEM_DEMO_MANAGE, constants::CALL_STATS_DAYS, outputs::AdminStatsDto,

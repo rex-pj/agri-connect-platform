@@ -25,8 +25,7 @@ agri-connect-platform/
 │   │   └── tests/              # Integration + convention tests (no workspace lints)
 │   ├── islands/                # Svelte custom elements → static/js/islands.js (Node only here)
 │   └── migration/              # Sea-ORM migrations: DDL only, append-only
-├── deploy/                     # compose, Caddy, VM deploy script, backups (see deploy/README.md)
-└── docs/migration-plan.md      # How the SvelteKit app was replaced, slice by slice (done)
+└── deploy/                     # compose, Caddy, VM deploy script, backups (see deploy/README.md)
 ```
 
 ---
@@ -441,13 +440,13 @@ middleware / handlers  →  application (use cases, ports)  →  domain  ←  in
 
 **Domain types**
 
-- `UserRole` lives in `domain/models/role.rs`. No other layer redefines role semantics. Handlers and use cases both import `UserRole` from the domain — never from middleware.
+- `UserRole` lives in `domain/src/models/role.rs`. No other layer redefines role semantics. Handlers and use cases both import `UserRole` from the domain — never from middleware.
 - A domain model struct that is used as input to a use case must carry every field that the use case needs to enforce a business rule. Never rely on a silent SQL `WHERE` filter to enforce a domain invariant that belongs in the use case (e.g. `is_active` on `UserCredentials`).
 
 **Application layer (`application/`)**
 
-- Use cases depend only on domain models, repository traits, and the port traits in `application/ports.rs`. Never import from `middleware::`, `handlers::`, or concrete infrastructure types (e.g. `jsonwebtoken`, `bcrypt`).
-- Infrastructure concerns that a use case needs (password hashing, token minting) must be abstracted behind a port trait in `application/ports.rs` and injected via `Arc<dyn PortTrait>` in the constructor — same pattern as repository traits.
+- Use cases depend only on domain models, repository traits, and the port traits in `application/src/ports.rs`. Never import from `middleware::`, `handlers::`, or concrete infrastructure types (e.g. `jsonwebtoken`, `bcrypt`).
+- Infrastructure concerns that a use case needs (password hashing, token minting) must be abstracted behind a port trait in `application/src/ports.rs` and injected via `Arc<dyn PortTrait>` in the constructor — same pattern as repository traits.
 - Shared validation rules live in `application/src/validation.rs` and return coded errors; forms collect them with `domain::Validation` so every bad field is reported at once. Never scatter the same rule as a private function in multiple use case files.
 - Before any `user_repo.update_role()` call, check the code against an active row in `roles`, so arbitrary strings never reach the role column.
 
@@ -462,10 +461,10 @@ middleware / handlers  →  application (use cases, ports)  →  domain  ←  in
 
 **Infrastructure layer (`infrastructure/`)**
 
-- Concrete library types (`jsonwebtoken`, `bcrypt`, Sea-ORM) are confined to `infrastructure/`. Implement the port traits from `application/ports.rs` here.
+- Concrete library types (`jsonwebtoken`, `bcrypt`, Sea-ORM) are confined to `infrastructure/`. Implement the port traits from `application/src/ports.rs` here.
 - Uploads never reach storage as sent: `MediaUseCase` passes them through the `ImageProcessor` port (type sniffed from bytes, pixel cap checked before decoding, re-encoded as JPEG, EXIF dropped). Storage is the `FileStorage` port (`GCS_BUCKET`, else `UPLOAD_DIR`). Templates link images only with `file_url(id=…, variant="thumb")`. Old images are deleted by the file-cleanup event subscriber, never inline. Products and services each have one optional image, replaced through `MediaUseCase::swap_image`.
 - A write that can hit a UNIQUE constraint maps the failure with `repositories::unique_or_internal` to a field error (e.g. `slug_taken`), never a 500.
-- `JwtTokenService` (in `infrastructure/jwt_token_service.rs`) is the only file that calls `jsonwebtoken::encode`. `BcryptPasswordHasher` (in `infrastructure/bcrypt_password_hasher.rs`) is the only file that calls `bcrypt::hash` / `bcrypt::verify`.
+- `JwtTokenService` (in `infrastructure/src/jwt_token_service.rs`) is the only file that calls `jsonwebtoken::encode`. `BcryptPasswordHasher` (in `infrastructure/src/bcrypt_password_hasher.rs`) is the only file that calls `bcrypt::hash` / `bcrypt::verify`.
 
 **Errors (`domain/src/error.rs`, `web/src/error_response.rs`)**
 

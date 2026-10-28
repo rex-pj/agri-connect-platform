@@ -1,5 +1,6 @@
 # Rust
 target/
+target-*/
 *.pdb
 
 # Node (backend/islands only)

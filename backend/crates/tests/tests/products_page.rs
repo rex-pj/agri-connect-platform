@@ -70,7 +70,7 @@ async fn the_list_filters_by_text_category_and_price_and_sorts() {
     assert!(all.contains("<strong>4</strong> sản phẩm"));
     assert!(all.contains(r#"<form class="list-search" method="get" action="/products""#));
 
-    // Accent-insensitive search (S3) through the page.
+    // Accent-insensitive search through the page.
     let rice = html(&e, "/products?q=gao").await;
     assert_eq!(names(&rice).len(), 2, "{:?}", names(&rice));
     assert!(

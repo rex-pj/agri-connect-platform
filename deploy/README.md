@@ -192,7 +192,7 @@ The first deploy: *Actions → Deploy → Run workflow*.
 ## Restore
 
 Practise this once before launch; a backup nobody has restored is a guess. The
-steps below were rehearsed against a local PostgreSQL + PostGIS (S1): the
+steps below were rehearsed against a local PostgreSQL + PostGIS: the
 restored database had the same roles, grants, rows and indexes, and the
 server started on it without re-seeding anything.
 

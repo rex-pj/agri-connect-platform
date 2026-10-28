@@ -35,7 +35,7 @@ pub fn slugify(text: &str) -> String {
 mod tests {
     use super::slugify;
 
-    /// The slugs URLs already use (the SvelteKit app produced the same ones).
+    /// The slugs published URLs already use.
     const FIXTURES: &str = include_str!("slugify.fixtures.json");
 
     #[test]

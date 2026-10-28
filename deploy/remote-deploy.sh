@@ -98,8 +98,7 @@ wait_ready() {
 gcloud auth configure-docker "$REGISTRY_HOST" --quiet >/dev/null
 sudo gcloud auth configure-docker "$REGISTRY_HOST" --quiet >/dev/null
 compose pull --quiet
-# --remove-orphans also stops services a release dropped (the SvelteKit
-# `legacy` container, removed in S20).
+# --remove-orphans also stops services a release dropped.
 compose up -d --remove-orphans
 
 if wait_ready; then

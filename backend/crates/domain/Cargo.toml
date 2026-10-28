@@ -17,7 +17,6 @@ axum = ["dep:axum"]
 async-trait.workspace = true
 chrono.workspace      = true
 serde.workspace       = true
-thiserror.workspace   = true
 uuid.workspace        = true
 axum = { workspace = true, optional = true }
 

@@ -70,7 +70,7 @@ async fn the_home_page_features_services_then_products_with_working_links() {
     let service_href = format!("/services/{}/{}", service.id, slugify(&service.name));
     assert!(html.contains(&service_href), "missing {service_href}");
     assert!(html.contains(&format!("tel:{}", service.business_phone)));
-    // Canonical detail links with the same slug SvelteKit builds.
+    // Canonical detail links end in the slug.
     let product_href = format!("/products/{}/{}", product.id, slugify(&product.name));
     assert!(html.contains(&product_href), "missing {product_href}");
     // Service category tiles first, then product ones, then the shortcuts.

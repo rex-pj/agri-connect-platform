@@ -1,9 +1,5 @@
 /* Agri-Connect styles, loaded after Bootstrap.
  *
- * Tokens and Bootstrap overrides were taken from the SvelteKit app. Component
- * styles move here from the Svelte <style> blocks in the slice that migrates
- * each page, so nothing ships before a page uses it.
- *
  * Templates may not use style="" (the page CSP is style-src 'self'); every
  * visual rule lives in this file.
  */
@@ -858,10 +854,6 @@ body:has(.app-nav__search-row.open) .app-main {
 .ac-badge--primary {
   background: var(--p100);
   color: var(--p800);
-}
-.ac-badge--danger {
-  background: #fee2e2;
-  color: #991b1b;
 }
 /* On a green page hero. */
 .ac-badge--hero {

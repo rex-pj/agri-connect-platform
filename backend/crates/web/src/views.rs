@@ -493,7 +493,7 @@ fn page_headers(headers: &mut HeaderMap) {
         header::CONTENT_SECURITY_POLICY,
         HeaderValue::from_static(PAGE_CSP),
     );
-    // Pages show per-user state from S2 on; a shared cache must never keep one.
+    // Pages show per-user state; a shared cache must never keep one.
     headers.insert(
         header::CACHE_CONTROL,
         HeaderValue::from_static("private, no-cache"),

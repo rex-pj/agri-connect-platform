@@ -680,7 +680,6 @@ dependencies = [
  "axum",
  "chrono",
  "serde",
- "thiserror",
  "uuid",
 ]
 
@@ -1496,7 +1495,6 @@ dependencies = [
  "serde_json",
  "tokio",
  "tower",
- "uuid",
  "web",
 ]
 
@@ -3849,7 +3847,6 @@ dependencies = [
  "chrono",
  "domain",
  "dotenvy",
- "governor",
  "hyper-util",
  "infrastructure",
  "rust-embed",

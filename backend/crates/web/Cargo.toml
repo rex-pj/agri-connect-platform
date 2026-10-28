@@ -16,7 +16,6 @@ migration.workspace          = true
 axum.workspace               = true
 chrono.workspace             = true
 dotenvy.workspace            = true
-governor.workspace           = true
 sea-orm.workspace            = true
 serde.workspace              = true
 serde_json.workspace         = true

@@ -20,6 +20,5 @@ tokio.workspace          = true
 async-trait.workspace    = true
 tower.workspace          = true
 regex.workspace          = true
-uuid.workspace           = true
 chrono.workspace         = true
 image.workspace          = true

@@ -254,9 +254,12 @@ async fn an_account_manages_one_business_and_admins_cannot_be_linked() {
     )
     .await;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
-    assert!(body_text(res)
-        .await
-        .contains("Tài khoản này đang quản lý một nhà cung cấp khác."));
+    let html = body_text(res).await;
+    assert!(html.contains("Tài khoản này đang quản lý một nhà cung cấp khác."));
+    assert!(
+        html.contains(r#"data-open="true""#),
+        "the account sheet comes back open"
+    );
 
     let res = send(
         &e.router,

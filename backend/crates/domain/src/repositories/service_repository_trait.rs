@@ -24,7 +24,11 @@ pub trait ServiceRepositoryTrait {
         offset: i64,
     ) -> Result<Vec<AdminService>, Error>;
 
-    async fn count_admin(&self, provider_id: Option<i32>, search: Option<&str>) -> Result<i64, Error>;
+    async fn count_admin(
+        &self,
+        provider_id: Option<i32>,
+        search: Option<&str>,
+    ) -> Result<i64, Error>;
 
     async fn find_by_id_admin(&self, id: i32) -> Result<Option<AdminService>, Error>;
 

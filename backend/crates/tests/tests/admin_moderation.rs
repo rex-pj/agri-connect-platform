@@ -364,7 +364,10 @@ async fn a_product_is_edited_hidden_and_deleted_on_its_own_admin_page() {
     let own = format!("/admin/products/{id}");
 
     let list = page(&e, "/admin/products", &admin).await;
-    assert!(list.contains(&format!(r#"href="{own}""#)), "rows open the page");
+    assert!(
+        list.contains(&format!(r#"href="{own}""#)),
+        "rows open the page"
+    );
     let html = page(&e, &own, &admin).await;
     assert!(html.contains(r#"value="Sầu riêng Ri6""#));
     assert!(html.contains(r#"value="85000""#));
@@ -452,10 +455,18 @@ async fn admin_lists_find_records_by_name_without_diacritics() {
 
     let html = page(&e, "/admin/products?q=sau+rieng", &admin).await;
     assert!(html.contains("Sầu riêng Ri6") && !html.contains("Phân bón NPK"));
-    assert!(html.contains(r#"name="q" value="sau rieng""#), "the box keeps it");
+    assert!(
+        html.contains(r#"name="q" value="sau rieng""#),
+        "the box keeps it"
+    );
     // A row's confirmation keeps the search, so the redirect lands on it.
     let id = one_i32(&e, "SELECT id FROM products WHERE name = 'Sầu riêng Ri6'").await;
-    let html = page(&e, &format!("/admin/products?q=sau+rieng&hide={id}"), &admin).await;
+    let html = page(
+        &e,
+        &format!("/admin/products?q=sau+rieng&hide={id}"),
+        &admin,
+    )
+    .await;
     assert!(html.contains(r#"name="q" value="sau rieng""#));
     let res = send(
         &e.router,
@@ -466,7 +477,10 @@ async fn admin_lists_find_records_by_name_without_diacritics() {
         ),
     )
     .await;
-    assert_eq!(res.headers()[header::LOCATION], "/admin/products?q=sau+rieng");
+    assert_eq!(
+        res.headers()[header::LOCATION],
+        "/admin/products?q=sau+rieng"
+    );
 
     // The shop's products by the shop's name; nothing found says so.
     assert!(page(&e, "/admin/products?q=vuon+nongdan", &admin)

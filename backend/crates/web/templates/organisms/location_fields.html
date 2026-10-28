@@ -1,10 +1,11 @@
 {#- The boxes of a location preset, shared by the create and edit forms.
     `form` is web::pages::admin::locations::LocationForm (the values as
     typed), `errors` its FormErrors. The use case reports a bad coordinate
-    pair once, on `lat`; it is shown under both boxes' row. -#}
+    pair once, on `lat`; it is shown under both boxes' row. `first`: its
+    first box takes the focus when its sheet opens. -#}
 {% import "molecules/form_field.html" as field %}
-{% macro location_fields(form, errors, label_max, prefix) -%}
-{{ field::input(id=prefix ~ "-label", name="label", label=t(key="location_form.label"), value=form.label, error=errors.fields.label | default(value=""), required=true, maxlength=label_max, placeholder=t(key="location_form.label_placeholder")) }}
+{% macro location_fields(form, errors, label_max, prefix, first=false) -%}
+{{ field::input(id=prefix ~ "-label", name="label", label=t(key="location_form.label"), value=form.label, error=errors.fields.label | default(value=""), required=true, maxlength=label_max, placeholder=t(key="location_form.label_placeholder"), first=first) }}
 <fieldset class="form-field">
   <legend class="form-label fw-semibold fs-6">{{ t(key="location_form.coordinates") }} <span class="text-danger" aria-hidden="true">*</span></legend>
   <div class="row g-2">

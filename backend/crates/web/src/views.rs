@@ -543,11 +543,27 @@ pub async fn static_file(
     ApiPath(path): ApiPath<String>,
     axum::extract::RawQuery(query): axum::extract::RawQuery,
 ) -> Result<Response, Error> {
+    serve_static(&path, query.as_deref())
+}
+
+/// GET /favicon.ico: the address browsers and crawlers try without reading
+/// the page's `<link rel="icon">`. Unversioned, so cached briefly.
+pub async fn favicon() -> Result<Response, Error> {
+    serve_static(FAVICON, None)
+}
+
+/// The static file the root `/favicon.ico` serves.
+pub const FAVICON: &str = "favicon.ico";
+
+/// The root address of the favicon; never a page, never needs a session.
+pub const FAVICON_PATH: &str = "/favicon.ico";
+
+fn serve_static(path: &str, query: Option<&str>) -> Result<Response, Error> {
     // Licence and provenance files are for the repository, not the web.
     if path.ends_with("VERSIONS") || path.contains("LICENSE") || path.ends_with("OFL.txt") {
         return Err(Error::new(ErrorCode::RouteNotFound));
     }
-    let file = StaticFiles::get(&path).ok_or_else(|| Error::new(ErrorCode::RouteNotFound))?;
+    let file = StaticFiles::get(path).ok_or_else(|| Error::new(ErrorCode::RouteNotFound))?;
     let hash: String = file
         .metadata
         .sha256_hash()
@@ -555,13 +571,13 @@ pub async fn static_file(
         .take(6)
         .map(|b| format!("{b:02x}"))
         .collect();
-    let versioned = query.as_deref() == Some(&format!("v={hash}"));
+    let versioned = query == Some(&format!("v={hash}"));
 
     let mut response = file.data.into_owned().into_response();
     let headers = response.headers_mut();
     headers.insert(
         header::CONTENT_TYPE,
-        HeaderValue::from_static(content_type(&path)),
+        HeaderValue::from_static(content_type(path)),
     );
     headers.insert(
         header::CACHE_CONTROL,
@@ -672,6 +688,7 @@ mod tests {
         let views = views(SiteConfig::default())?;
         assert!(views.vi.get_template_names().count() > 0);
         assert!(asset_versions().contains_key("css/app.css"));
+        assert!(asset_versions().contains_key(FAVICON));
         Ok(())
     }
 

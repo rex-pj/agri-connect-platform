@@ -35,7 +35,7 @@ use crate::{
         see_other,
     },
     routes,
-    shell::Shell,
+    shell::{Link, ProfileMenu, Shell},
     views::render_page_status,
 };
 
@@ -58,8 +58,15 @@ pub struct NavGroup {
 #[derive(Debug, Clone, Serialize)]
 pub struct AdminNav {
     pub username: String,
+    /// The bar's account menu (the same molecule as the app's): the profile,
+    /// then logout back to the login page.
+    pub account: ProfileMenu,
     pub groups: Vec<NavGroup>,
 }
+
+/// (route, icon, label text key) of the account menu's links. The public
+/// site is not one: it is its own button in the bar.
+const ACCOUNT_LINKS: &[(&str, &str, &str)] = &[("account", "fa-id-card", "account_menu.profile")];
 
 /// (route, icon, label text key, permission that opens it).
 type Entry = (&'static str, &'static str, &'static str, &'static str);
@@ -174,8 +181,23 @@ impl AdminNav {
             })
             .filter(|g| !g.items.is_empty())
             .collect();
+        let account = ProfileMenu {
+            signed_in: true,
+            items: ACCOUNT_LINKS
+                .iter()
+                .filter_map(|(route, icon, label)| {
+                    Some(Link {
+                        href: routes::url(route, &[]).ok()?,
+                        icon,
+                        label: locale.text(label),
+                    })
+                })
+                .collect(),
+            logout: routes::url("admin_logout", &[]).ok(),
+        };
         Self {
             username: actor.username.clone(),
+            account,
             groups,
         }
     }
@@ -372,7 +394,10 @@ impl ListPosition {
     /// The search box above the list at `route` (`molecules/admin_search`):
     /// it keeps the provider filter, and its way out clears only the search.
     pub fn search_box(&self, route: &str) -> Result<SearchBox, Error> {
-        let provider_id = self.provider_id().map(|p| p.to_string()).unwrap_or_default();
+        let provider_id = self
+            .provider_id()
+            .map(|p| p.to_string())
+            .unwrap_or_default();
         let without_search = ListPosition {
             provider_id: provider_id.clone(),
             ..ListPosition::default()
@@ -511,5 +536,15 @@ mod tests {
             })
             .collect();
         assert_eq!(active, [roles], "a sub-page keeps its section active");
+        assert_eq!(
+            nav.account.logout.as_deref(),
+            Some("/admin/logout"),
+            "the account menu signs out to the login page"
+        );
+        assert_eq!(
+            nav.account.items.len(),
+            1,
+            "the profile; the public site is its own bar button"
+        );
     }
 }

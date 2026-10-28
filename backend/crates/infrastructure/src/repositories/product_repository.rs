@@ -167,7 +167,8 @@ impl ProductRepositoryTrait for ProductRepository {
         limit: i64,
         offset: i64,
     ) -> Result<Vec<AdminProduct>, Error> {
-        let mut query = base_admin_product_query().filter(search_condition(ADMIN_PRODUCT_SEARCH_COLUMNS, search));
+        let mut query = base_admin_product_query()
+            .filter(search_condition(ADMIN_PRODUCT_SEARCH_COLUMNS, search));
         if let Some(bid) = provider_id {
             query = query.filter(product::Column::BusinessId.eq(bid));
         }
@@ -186,7 +187,11 @@ impl ProductRepositoryTrait for ProductRepository {
             })
     }
 
-    async fn count_admin(&self, provider_id: Option<i32>, search: Option<&str>) -> Result<i64, Error> {
+    async fn count_admin(
+        &self,
+        provider_id: Option<i32>,
+        search: Option<&str>,
+    ) -> Result<i64, Error> {
         let mut query = ProductEntity::find()
             .join(JoinType::InnerJoin, product::Relation::Business.def())
             .filter(product::Column::DeletedAt.is_null())

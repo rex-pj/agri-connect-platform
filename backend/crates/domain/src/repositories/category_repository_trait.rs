@@ -17,5 +17,12 @@ pub trait CategoryRepositoryTrait {
 
     async fn update(&self, id: i32, category: UpdateCategory) -> Result<(), Error>;
 
+    /// Which of `slugs` a category other than `exclude_id` already uses.
+    async fn taken_slugs(
+        &self,
+        slugs: &[String],
+        exclude_id: Option<i32>,
+    ) -> Result<Vec<String>, Error>;
+
     async fn toggle_active(&self, id: i32, is_active: bool, admin_id: i32) -> Result<(), Error>;
 }

@@ -11,13 +11,11 @@
     `limits.audit_reason_max` (macros do not see the page's globals);
     `with_reason=false` leaves out the reason box (nothing is audited). -#}
 {% import "atoms/icon.html" as atoms %}
+{% import "molecules/sheet_header.html" as sheet_head %}
 {% macro confirm_sheet(id, title, icon, action, button, reason_max, effect="", what="", note="", hidden_name="", hidden_value="", button_class="btn-warning", keep="", with_reason=true) -%}
 <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
 <section class="contact-sheet" id="{{ id }}" aria-labelledby="{{ id }}-title" aria-describedby="{{ id }}-note" :class="sheetClass">
-  <div class="contact-sheet__header">
-    <h2 class="contact-sheet__title" id="{{ id }}-title">{{ atoms::icon(name=icon) }} {{ title }}</h2>
-    <button type="button" class="contact-sheet__close" aria-label="{{ t(key="common.close") }}" x-show="modal" x-cloak x-on:click="hide">{{ atoms::icon(name="fa-xmark") }}</button>
-  </div>
+  {{ sheet_head::sheet_header(id=id, title=title, icon=icon) }}
   <p class="confirm-note{% if effect == "delete" %} confirm-note--danger{% endif %}" id="{{ id }}-note">
     {%- if effect == "hide" %}{{ t(key="confirm.hide_effect", what=what) }}
     {%- elif effect == "delete" %}{{ atoms::icon(name="fa-triangle-exclamation") }} {{ t(key="confirm.delete_effect", what=what) }}

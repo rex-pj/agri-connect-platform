@@ -148,6 +148,13 @@ pub struct CategoryTile {
     pub icon: String,
     pub href: String,
     pub active: bool,
+    /// Shown from 992 px only, where the row has room for one more tile.
+    pub wide_only: bool,
+    /// `service` or `product` (a category's type: its shape and colour), or
+    /// blank.
+    pub kind: &'static str,
+    /// The "all" tile ending a kind's run: outlined, not filled.
+    pub more: bool,
 }
 
 pub fn tile(name: &str, icon: &str, href: String) -> CategoryTile {
@@ -156,5 +163,8 @@ pub fn tile(name: &str, icon: &str, href: String) -> CategoryTile {
         icon: icon.to_owned(),
         href,
         active: false,
+        wide_only: false,
+        kind: "",
+        more: false,
     }
 }

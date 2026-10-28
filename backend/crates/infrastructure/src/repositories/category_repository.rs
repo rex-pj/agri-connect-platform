@@ -227,6 +227,28 @@ impl CategoryRepositoryTrait for CategoryRepository {
         Ok(())
     }
 
+    async fn taken_slugs(
+        &self,
+        slugs: &[String],
+        exclude_id: Option<i32>,
+    ) -> Result<Vec<String>, Error> {
+        let mut query = CategoryEntity::find()
+            .select_only()
+            .column(category::Column::Slug)
+            .filter(category::Column::Slug.is_in(slugs.iter().cloned()));
+        if let Some(id) = exclude_id {
+            query = query.filter(category::Column::Id.ne(id));
+        }
+        query
+            .into_tuple::<String>()
+            .all(self.db.as_ref())
+            .await
+            .map_err(|e| {
+                error!("category taken_slugs error: {e}");
+                Error::internal("Failed to load categories.")
+            })
+    }
+
     async fn toggle_active(&self, id: i32, is_active: bool, admin_id: i32) -> Result<(), Error> {
         let result = CategoryEntity::update_many()
             .col_expr(category::Column::IsActive, Expr::value(is_active))

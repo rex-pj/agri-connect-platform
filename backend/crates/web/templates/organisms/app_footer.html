@@ -10,12 +10,13 @@
     Phone: one column, links two per row, help buttons full width. Tablet:
     brand beside help, links below. Wide: four columns. -#}
 {% import "atoms/icon.html" as atoms %}
+{% import "atoms/logo.html" as brand %}
 {% macro app_footer(shell, site, year) -%}
 <footer class="app-footer">
   <div class="app-footer__inner">
     <div class="app-footer__brand">
       <a class="app-footer__logo" href="{{ url_for(name='home') }}">
-        <span class="app-footer__mark">{{ atoms::icon(name="fa-seedling") }}</span>
+        {{ brand::logo(class="app-footer__mark") }}
         {{ site.name }}
       </a>
       <p class="app-footer__promise">{{ t(key="footer.promise") }}</p>

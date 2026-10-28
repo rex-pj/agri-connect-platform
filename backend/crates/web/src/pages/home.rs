@@ -1,6 +1,7 @@
-//! GET / — the home page: category shortcuts (services first, the farmer's
-//! main errand, then products), the near-me banner, featured services (one
-//! per verified provider) and featured products.
+//! GET / — the home page: one strip of category shortcuts (services first,
+//! the farmer's main errand, then products, told apart by tile shape and
+//! colour), the near-me banner, featured services (one per verified
+//! provider) and featured products.
 
 use application::outputs::{CategoryDto, ProductDto};
 use axum::{extract::State, response::Response};
@@ -12,7 +13,7 @@ use serde::Serialize;
 
 use crate::{
     app_state::AppState,
-    constants::HOME_PRODUCT_COUNT,
+    constants::{HOME_CATEGORY_TILES, HOME_PRODUCT_COUNT},
     pages::cards::{tile, CategoryTile, ServiceCard},
     routes,
     shell::Shell,
@@ -30,15 +31,44 @@ fn url(name: &str, params: &[(&str, &str)]) -> Result<String, Error> {
     routes::url(name, params).map_err(|e| Error::internal(format!("home links: {e}")))
 }
 
-/// One tile per category, linking to its listing (`route`).
-fn category_tiles(categories: &[CategoryDto], route: &str) -> Result<Vec<CategoryTile>, Error> {
-    categories
+/// The first `HOME_CATEGORY_TILES` categories of `kind`, each linking to its
+/// listing (`route`), then an "all" tile to the kind's whole list
+/// (`all_route`). A phone row holds one tile fewer, so the last category is
+/// wide-only: either way a kind fills exactly one row. No categories, no
+/// tiles.
+fn category_tiles(
+    state: &AppState,
+    categories: &[CategoryDto],
+    kind: &'static str,
+    route: &str,
+    all_route: &str,
+) -> Result<Vec<CategoryTile>, Error> {
+    if categories.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut tiles = categories
         .iter()
-        .map(|c| {
+        .take(HOME_CATEGORY_TILES)
+        .enumerate()
+        .map(|(i, c)| {
             let href = url(route, &[("id", &c.id.to_string()), ("slug", &c.slug)])?;
-            Ok(tile(&c.name, c.icon.as_deref().unwrap_or("fa-tag"), href))
+            Ok(CategoryTile {
+                kind,
+                wide_only: i + 1 == HOME_CATEGORY_TILES,
+                ..tile(&c.name, c.icon.as_deref().unwrap_or("fa-tag"), href)
+            })
         })
-        .collect()
+        .collect::<Result<Vec<_>, Error>>()?;
+    tiles.push(CategoryTile {
+        kind,
+        more: true,
+        ..tile(
+            &state.locale().text("home.all_categories"),
+            "fa-grip",
+            url(all_route, &[])?,
+        )
+    });
+    Ok(tiles)
 }
 
 pub async fn show(shell: Shell, State(state): State<AppState>) -> Result<Response, Error> {
@@ -49,19 +79,21 @@ pub async fn show(shell: Shell, State(state): State<AppState>) -> Result<Respons
         explore.get_categories(Some(CATEGORY_TYPE_PRODUCT)),
     )?;
 
-    let mut tiles = category_tiles(&service_categories, "service_category")?;
-    tiles.extend(category_tiles(&product_categories, "product_category")?);
-    tiles.push(tile(
-        &state.locale().text("nav.near_me"),
-        "fa-location-dot",
-        url("explore", &[])?,
-    ));
-    // The provider directory has no tab on a phone's bar; it is here.
-    tiles.push(tile(
-        &state.locale().text("nav.shops"),
-        "fa-store",
-        url("providers", &[])?,
-    ));
+    // Near-me needs no tile: it has a tab and the banner under the strip.
+    let mut tiles = category_tiles(
+        &state,
+        &service_categories,
+        CATEGORY_TYPE_SERVICE,
+        "service_category",
+        "services",
+    )?;
+    tiles.extend(category_tiles(
+        &state,
+        &product_categories,
+        CATEGORY_TYPE_PRODUCT,
+        "product_category",
+        "products",
+    )?);
 
     let page = HomePage {
         categories: tiles,

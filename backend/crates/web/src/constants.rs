@@ -46,6 +46,9 @@ pub const DEFAULT_UPLOAD_DIR: &str = "./data/uploads";
 // ── Home page ─────────────────────────────────────────────────────────────────
 /// Featured products shown: one row on a wide screen, three on a phone.
 pub const HOME_PRODUCT_COUNT: usize = 6;
+/// Category tiles of each kind before its "all" tile on a wide screen; a
+/// phone shows one fewer, so each kind is one row of four there.
+pub const HOME_CATEGORY_TILES: usize = 4;
 
 // ── Pages ─────────────────────────────────────────────────────────────────────
 /// Search engines show about this much of a meta description.

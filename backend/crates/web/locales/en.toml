@@ -36,7 +36,7 @@ invalid_phone                  = "Phone number is not valid (for example: 090123
 invalid_coordinates            = "The coordinates are not valid."
 radius_out_of_range            = "The radius must be between {min} and {max} metres."
 name_required                  = "Please enter a name."
-slug_required                  = "Please enter a slug."
+slug_required                  = "This name gives no slug; please type one."
 invalid_slug                   = "Use lowercase letters without accents, digits and hyphens only (for example: phan-bon)."
 field_too_long                 = "At most {max} characters."
 invalid_number                 = "Enter a whole number."
@@ -229,7 +229,8 @@ lat                = "Latitude"
 lng                = "Longitude"
 
 [text.admin_layout]
-menu = "Menu"
+menu        = "Menu"
+public_site = "View the site"
 
 [text.admin_filter]
 selected_provider = "Selected provider"
@@ -293,10 +294,16 @@ copied = "Link copied"
 label  = "Share"
 
 [text.category_form]
-type  = "Type"
-slug  = "Slug"
-icon  = "Icon"
-color = "Colour"
+type          = "Type"
+slug          = "Slug"
+slug_hint     = "Leave blank to make it from the name."
+slug_free     = "This slug is free."
+slug_numbered = "Another category has this slug, so a number was added."
+slug_taken    = "Another category already uses this slug."
+slug_fix      = "Use lowercase letters without accents, digits and hyphens only."
+slug_use      = "Use"
+icon          = "Icon"
+color         = "Colour"
 
 [text.category_type]
 service = "Service"
@@ -446,6 +453,7 @@ no_shops_hint    = "Try other words or see all shops."
 [text.home]
 title             = "The farming platform of the Mekong Delta"
 meta              = "Find farm services (mud dredging, crop spraying, machine repair) and trusted products in the Mekong Delta: see photos and guide prices, call directly with no middleman."
+all_categories    = "All"
 featured_services = "Featured services"
 featured_products = "Featured products"
 empty             = "The platform is getting started"

@@ -97,6 +97,15 @@ pub struct CreateCategoryRequest {
     pub display_order: i16,
 }
 
+/// `text`: the category form's name or slug as typed; `id`: the category being
+/// edited, absent on create.
+#[derive(Deserialize)]
+pub struct SlugSuggestionQuery {
+    #[serde(default)]
+    pub text: String,
+    pub id: Option<i32>,
+}
+
 #[derive(Deserialize)]
 pub struct UpdateCategoryRequest {
     pub name: String,

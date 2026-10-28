@@ -7,8 +7,8 @@ use axum::{
     http::{header, Request, StatusCode},
 };
 use integration_tests::{
-    body_text, env_with_origin, get_page, install_admin, post_form, register_provider, send,
-    sign_in, Env,
+    body_text, env_with_origin, get_page, install_admin, json_body, post_form, register_provider,
+    send, sign_in, Env,
 };
 use sea_orm::{ConnectionTrait, Statement};
 
@@ -76,6 +76,16 @@ async fn a_category_form_reports_every_broken_rule_and_keeps_what_was_typed() {
         html.contains(">Tưới tiêu</textarea>"),
         "typed description kept"
     );
+    assert!(
+        html.contains(r#"data-open="true""#),
+        "the create sheet comes back open"
+    );
+    assert!(
+        page(&e, "/admin/categories", &admin)
+            .await
+            .contains(r#"data-open="false""#),
+        "and starts closed"
+    );
 
     let res = send(
         &e.router,
@@ -94,7 +104,7 @@ async fn a_category_form_reports_every_broken_rule_and_keeps_what_was_typed() {
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     assert!(body_text(res).await.contains("Nhập một số nguyên hợp lệ."));
 
-    // A slug already in use loses to the UNIQUE constraint, on its field.
+    // A slug already in use is refused before the insert, on its field.
     let res = send(
         &e.router,
         post_form(
@@ -115,6 +125,88 @@ async fn a_category_form_reports_every_broken_rule_and_keeps_what_was_typed() {
         html.contains(r#"id="new-slug-error""#),
         "shown under the slug"
     );
+    e.cleanup().await;
+}
+
+async fn slug_of(e: &Env, detail: &str) -> String {
+    let id = detail.rsplit('/').next().unwrap();
+    e.t.db
+        .query_one(Statement::from_string(
+            e.t.db.get_database_backend(),
+            format!("SELECT slug FROM categories WHERE id = {id}"),
+        ))
+        .await
+        .unwrap()
+        .unwrap()
+        .try_get("", "slug")
+        .unwrap()
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_blank_slug_is_made_from_the_name_and_never_repeats_one() {
+    let e = env_with_origin().await;
+    let admin = install_admin(&e).await;
+    let suggest = |query: &str| {
+        send(
+            &e.router,
+            get_page(&format!("/api/admin/categories/slug?{query}"), Some(&admin)),
+        )
+    };
+
+    // The catalogue has "muc-bun": the name's slug is numbered.
+    let res = suggest("text=M%C3%BAc%20b%C3%B9n").await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = json_body(res).await;
+    assert_eq!(body["slug"], "muc-bun-2");
+    assert_eq!(body["taken"], true);
+    let body = json_body(suggest("text=bom-nuoc").await).await;
+    assert_eq!(body["slug"], "bom-nuoc");
+    assert_eq!(body["taken"], false);
+
+    // Saved blank, the slug is made the same way, one number up each time.
+    let blank = [
+        ("category_type", "service"),
+        ("name", "Múc bùn"),
+        ("slug", ""),
+    ];
+    let res = send(
+        &e.router,
+        post_form("/admin/categories", &blank, Some(&admin)),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let second = location_of(&res);
+    assert_eq!(slug_of(&e, &second).await, "muc-bun-2");
+    let res = send(
+        &e.router,
+        post_form("/admin/categories", &blank, Some(&admin)),
+    )
+    .await;
+    let third = location_of(&res);
+    assert_eq!(slug_of(&e, &third).await, "muc-bun-3");
+
+    // A category's own slug is free to it while it is edited.
+    let id = second.rsplit('/').next().unwrap();
+    let body = json_body(suggest(&format!("text=muc-bun-2&id={id}")).await).await;
+    assert_eq!(body["slug"], "muc-bun-2");
+    assert_eq!(body["taken"], false);
+
+    // Typed onto another category's slug, an edit is refused on the field.
+    let res = send(
+        &e.router,
+        post_form(
+            &third,
+            &[("name", "Múc bùn"), ("slug", "muc-bun-2")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    let html = body_text(res).await;
+    assert!(html.contains("Đường dẫn này đã được dùng cho danh mục khác."));
+    assert!(html.contains(r#"id="edit-slug-error""#));
+    assert_eq!(slug_of(&e, &third).await, "muc-bun-3", "nothing saved");
     e.cleanup().await;
 }
 
@@ -245,6 +337,10 @@ async fn a_location_is_validated_created_hidden_and_deleted() {
     assert!(html.contains("Vui lòng nhập tên khu vực."));
     assert!(html.contains("Toạ độ không hợp lệ."));
     assert!(html.contains(r#"value="mười""#), "typed value kept");
+    assert!(
+        html.contains(r#"data-open="true""#),
+        "the create sheet comes back open"
+    );
 
     let fields = [
         ("label", "Mỹ Phong"),

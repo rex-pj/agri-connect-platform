@@ -36,6 +36,7 @@ pub fn is_machine_path(path: &str) -> bool {
         || path.starts_with("/static/")
         || path.starts_with("/health/")
         || path.starts_with("/files/")
+        || path == crate::views::FAVICON_PATH
 }
 
 /// A browser navigation (not an API call, not an asset) gets an HTML page;
@@ -178,6 +179,7 @@ mod tests {
         assert!(is_machine_path(
             "/files/00000000-0000-0000-0000-000000000000/thumb"
         ));
+        assert!(is_machine_path("/favicon.ico"));
         assert!(!is_machine_path("/products/1/gao"));
         assert!(!is_machine_path("/"));
     }

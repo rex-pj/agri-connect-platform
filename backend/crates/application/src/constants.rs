@@ -77,6 +77,9 @@ pub const CATEGORY_SLUG_MAX: usize = 100;
 pub const CATEGORY_ICON_MAX: usize = 100;
 pub const CATEGORY_COLOR_MAX: usize = 20;
 pub const CATEGORY_DESCRIPTION_MAX: usize = 300;
+/// Numbered slug candidates (`base`, `base-2`, …) checked per query while
+/// looking for a free one.
+pub const SLUG_CANDIDATES_PER_QUERY: u32 = 10;
 pub const LOCATION_LABEL_MAX: usize = 150;
 pub const SERVICE_NAME_MAX: usize = 300;
 pub const SERVICE_PRICE_NOTE_MAX: usize = 300;

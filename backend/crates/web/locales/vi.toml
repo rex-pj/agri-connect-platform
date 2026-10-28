@@ -38,7 +38,7 @@ invalid_phone                  = "Số điện thoại không hợp lệ (ví d�
 invalid_coordinates            = "Toạ độ không hợp lệ."
 radius_out_of_range            = "Bán kính phải từ {min} đến {max} mét."
 name_required                  = "Vui lòng nhập tên."
-slug_required                  = "Vui lòng nhập slug."
+slug_required                  = "Tên này không tạo được đường dẫn, vui lòng tự nhập."
 invalid_slug                   = "Đường dẫn chỉ gồm chữ thường không dấu, số và dấu gạch ngang (ví dụ: phan-bon)."
 field_too_long                 = "Tối đa {max} ký tự."
 invalid_number                 = "Nhập một số nguyên hợp lệ."
@@ -240,7 +240,8 @@ lat                = "Vĩ độ"
 lng                = "Kinh độ"
 
 [text.admin_layout]
-menu = "Menu"
+menu        = "Menu"
+public_site = "Xem trang chủ"
 
 [text.admin_filter]
 selected_provider = "Nhà cung cấp đang chọn"
@@ -304,10 +305,16 @@ copied = "Đã sao chép đường dẫn"
 label  = "Chia sẻ"
 
 [text.category_form]
-type  = "Loại"
-slug  = "Đường dẫn (slug)"
-icon  = "Biểu tượng"
-color = "Màu"
+type          = "Loại"
+slug          = "Đường dẫn (slug)"
+slug_hint     = "Để trống thì tự tạo từ tên."
+slug_free     = "Đường dẫn này dùng được."
+slug_numbered = "Đã có danh mục cùng đường dẫn nên được thêm số ở cuối."
+slug_taken    = "Đường dẫn này đã có danh mục khác dùng."
+slug_fix      = "Chỉ dùng chữ thường không dấu, số và dấu gạch ngang."
+slug_use      = "Dùng"
+icon          = "Biểu tượng"
+color         = "Màu"
 
 [text.category_type]
 service = "Dịch vụ"
@@ -457,6 +464,7 @@ no_shops_hint    = "Thử từ khoá khác hoặc xem toàn bộ cửa hàng."
 [text.home]
 title             = "Nền tảng nông nghiệp Đồng bằng sông Cửu Long"
 meta              = "Tìm dịch vụ nông nghiệp (múc bùn, phun thuốc, sửa máy) và sản phẩm uy tín tại Đồng bằng sông Cửu Long: xem ảnh, giá tham khảo, gọi thẳng không qua trung gian."
+all_categories    = "Tất cả"
 featured_services = "Dịch vụ nổi bật"
 featured_products = "Sản phẩm nổi bật"
 empty             = "Nền tảng đang khởi động"
@@ -663,7 +671,7 @@ Hãy gọi lại sớm. Xem và đánh dấu đã gọi tại:
 inquiry_note    = "Ghi chú: {note}\n"
 
 [text.admin_menu]
-dashboard   = "Dashboard"
+dashboard   = "Tổng quan"
 content     = "Nội dung"
 providers   = "Nhà cung cấp"
 products    = "Sản phẩm"

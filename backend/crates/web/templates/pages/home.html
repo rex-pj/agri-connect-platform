@@ -6,14 +6,15 @@
 {% import "molecules/geo_cta.html" as geo %}
 {% import "molecules/empty_state.html" as empty %}
 {% import "molecules/provider_cta.html" as seller %}
-{#- Home: category shortcuts (services first), the near-me banner, featured
-    services (the farmer's main errand: one per verified provider, the
-    provider on each card), then featured products. `page` is
-    web::pages::home::HomePage. -#}
+{#- Home: one strip of category shortcuts (services first, then products,
+    told apart by tile shape and colour, each kind ending in an "all" tile),
+    the near-me banner, featured services (the farmer's main errand: one per
+    verified provider, the provider on each card), then featured products.
+    `page` is web::pages::home::HomePage. -#}
 {% block title %}{{ site.name }} — {{ t(key="home.title") }}{% endblock title %}
 {% block meta %}<meta name="description" content="{{ t(key="home.meta") }}">{% endblock meta %}
 {% block main %}
-<div class="home-categories">{{ grid::category_grid(items=page.categories) }}</div>
+<div class="home-categories home-categories--strip">{{ grid::category_grid(items=page.categories, class="cat-strip") }}</div>
 
 <section class="home-section">{{ geo::geo_cta(href=url_for(name="explore"), sub=t(key="geo.sub_services", km=limits.near_me_km)) }}</section>
 

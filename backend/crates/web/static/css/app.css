@@ -17,8 +17,11 @@
   --p100: #d1fae5;
   --p50: #ecfdf5;
 
+  --a800: #92400e;
   --a600: #d97706;
   --a500: #f59e0b;
+  --a200: #fde68a;
+  --a100: #fef3c7;
   --a50: #fffbeb;
 
   --bg: #f5f8f6;
@@ -230,15 +233,19 @@ body:has(.app-nav__search-row.open) .app-main {
   outline-offset: 3px;
   border-radius: 4px;
 }
+/* The brand mark (atoms/logo.html): the pin is the text colour. */
+.brand-logo {
+  flex: none;
+  width: 1.5em;
+  height: 1.5em;
+}
+.brand-logo__sun {
+  fill: var(--a500);
+}
 .app-nav__logo,
 .app-footer__mark {
-  width: 32px;
-  height: 32px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.12);
+  width: 34px;
+  height: 34px;
 }
 .app-nav__actions {
   display: flex;
@@ -322,6 +329,12 @@ body:has(.app-nav__search-row.open) .app-main {
   background: rgba(255, 255, 255, 0.24);
   border-color: rgba(255, 255, 255, 0.45);
   color: #fff;
+}
+/* A long username stays one short line in the bar. */
+.app-nav__login-label {
+  max-width: 14ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .app-nav__chevron {
   font-size: 0.65rem;
@@ -898,9 +911,11 @@ body:has(.app-nav__search-row.open) .app-main {
   color: var(--p600);
   text-decoration: none;
 }
+/* Three big tiles a row on a phone; from 480 px fixed-width tiles that wrap,
+   so a wide screen never spreads a few tiles across its whole width. */
 .cat-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 4px;
   margin: 0;
   padding: 0;
@@ -908,13 +923,36 @@ body:has(.app-nav__search-row.open) .app-main {
 }
 @media (min-width: 480px) {
   .cat-grid {
-    grid-template-columns: repeat(5, 1fr);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .cat-grid > li {
+    width: 96px;
   }
 }
-@media (min-width: 768px) {
-  .cat-grid {
+/* The home strip: equal cells, four a row below 992 px (one row per kind),
+   one row spanning the page from there, lining up with the banner below;
+   a hairline where services end and products begin sits midway between
+   the two tiles. */
+.cat-grid.cat-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px 0;
+}
+.cat-strip > li {
+  width: auto;
+}
+.cat-strip .cat-item {
+  max-width: 120px;
+  margin-inline: auto;
+}
+@media (min-width: 992px) {
+  .cat-grid.cat-strip {
     grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
-    gap: 6px;
+  }
+  .cat-grid__item--service + .cat-grid__item--product {
+    border-left: 1px solid var(--border);
   }
 }
 .cat-item {
@@ -939,16 +977,13 @@ body:has(.app-nav__search-row.open) .app-main {
   align-items: center;
   justify-content: center;
   border-radius: 16px;
-  border: 2px solid var(--p300);
   background: var(--p100);
   color: var(--p700);
   font-size: 1.5rem;
-  box-shadow: 0 1px 4px rgba(4, 120, 87, 0.15);
   transition: transform 0.15s ease, background 0.15s ease;
 }
 .cat-item:hover .cat-item__icon {
   background: var(--p200);
-  border-color: var(--p400);
   transform: translateY(-2px);
 }
 .cat-item:active .cat-item__icon {
@@ -957,9 +992,40 @@ body:has(.app-nav__search-row.open) .app-main {
 .cat-item:focus-visible .cat-item__icon {
   box-shadow: 0 0 0 3px var(--p400);
 }
+/* A product category: round and amber, beside the green square services. */
+.cat-item--product .cat-item__icon {
+  border-radius: 50%;
+  background: var(--a100);
+  color: var(--a800);
+}
+.cat-item--product:hover {
+  background: var(--a50);
+}
+.cat-item--product:hover .cat-item__icon {
+  background: var(--a200);
+}
+.cat-item--product:hover .cat-item__label {
+  color: var(--a800);
+}
+/* A kind's "all" tile: the same shape and colour, outlined, not filled. */
+.cat-item--more .cat-item__icon {
+  border: 2px solid var(--p200);
+  background: transparent;
+}
+.cat-item--more.cat-item--product .cat-item__icon {
+  border-color: var(--a200);
+  background: transparent;
+}
+.cat-item--more:hover .cat-item__icon {
+  border-color: var(--p300);
+  background: var(--p50);
+}
+.cat-item--more.cat-item--product:hover .cat-item__icon {
+  border-color: var(--a500);
+  background: var(--a50);
+}
 .cat-item--active .cat-item__icon {
   background: var(--p700);
-  border-color: var(--p700);
   color: #fff;
 }
 .cat-item__label {
@@ -1252,6 +1318,14 @@ body:has(.app-nav__search-row.open) .app-main {
 /* ── Home (pages/home) ───────────────────────────────────────────────────── */
 .home-categories {
   padding: 16px 12px;
+}
+/* The same air above the strip and below it, before the banner: 16 px plus
+   the tiles' own 8 px padding each way. */
+.home-categories--strip {
+  padding-bottom: 0;
+}
+.home-categories--strip + .home-section {
+  padding-top: 16px;
 }
 .home-section {
   display: flex;
@@ -1596,7 +1670,8 @@ body:has(.app-nav__search-row.open) .app-main {
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.07);
   scroll-margin-top: calc(var(--app-nav-h) + 12px);
 }
-/* With JS (Alpine `dialog`): a bottom sheet over the page. */
+/* With JS (Alpine `dialog`): a bottom sheet over the page on a phone, a
+   centred dialog from 768 px (below). */
 .contact-sheet.is-modal {
   position: fixed;
   left: 0;
@@ -1611,16 +1686,57 @@ body:has(.app-nav__search-row.open) .app-main {
   padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
   transform: translateY(105%);
   visibility: hidden;
-  transition: transform 0.25s ease, visibility 0s linear 0.25s;
 }
 .contact-sheet.is-modal.is-open {
   transform: translateY(0);
   visibility: visible;
+}
+/* Only a show or hide the visitor asked for moves (`is-animated`, set by
+   `dialog` on the first one). Without it, the sheet's first state at load
+   (the in-page card turned closed, or a form re-shown open) would play as
+   a sheet flashing past on every page. */
+.contact-sheet.is-modal.is-animated {
+  transition: transform 0.25s ease, visibility 0s linear 0.25s;
+}
+.contact-sheet.is-modal.is-animated.is-open {
   transition: transform 0.25s ease;
 }
-@media (prefers-reduced-motion: reduce) {
-  .contact-sheet.is-modal,
+/* With scripting on, the in-page card waits hidden for Alpine to make it a
+   sheet, rather than showing in the flow until then and jumping away. */
+@media (scripting: enabled) {
+  .contact-sheet:not(.is-modal) {
+    display: none;
+  }
+}
+/* A wide screen has no thumb at the bottom edge: the same sheet is a dialog
+   in the middle of the screen, near what opened it, rising a little as it
+   fades in. Every inset at 0 with auto margins centres it, once its height
+   is its content's (capped by max-height, then it scrolls). */
+@media (min-width: 768px) {
+  .contact-sheet.is-modal {
+    top: 0;
+    width: calc(100% - 48px);
+    height: fit-content;
+    margin: auto;
+    border-radius: 20px;
+    padding: 24px;
+    opacity: 0;
+    transform: translateY(16px);
+  }
   .contact-sheet.is-modal.is-open {
+    opacity: 1;
+    transform: none;
+  }
+  .contact-sheet.is-modal.is-animated {
+    transition: opacity 0.2s ease, transform 0.2s ease, visibility 0s linear 0.2s;
+  }
+  .contact-sheet.is-modal.is-animated.is-open {
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .contact-sheet.is-modal.is-animated,
+  .contact-sheet.is-modal.is-animated.is-open {
     transition: none;
   }
 }
@@ -2178,8 +2294,9 @@ a.chip {
   text-decoration: none;
 }
 .auth-brand__icon {
+  width: 44px;
+  height: 44px;
   color: var(--p600);
-  font-size: 1.8rem;
 }
 .auth-brand__name {
   color: var(--p900);
@@ -2205,6 +2322,16 @@ a.chip {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+/* The category form's live slug note: what is wrong, then the free slug to
+   take with one tap; wraps under it on a narrow screen. */
+.slug-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-top: 6px;
+  font-size: 0.9rem;
 }
 .auth-fieldset {
   display: flex;
@@ -2268,6 +2395,12 @@ a.chip {
   margin: 0;
   color: #7f1d1d;
   font-size: 0.9rem;
+}
+/* Bootstrap squares the box's right side only when an error message follows
+   (has-validation counts it), and our .form-control rounds every corner. */
+.password-group--joined > .form-control {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
 }
 .password-toggle {
   min-width: 52px;
@@ -2396,11 +2529,8 @@ a.chip {
   opacity: 0.85;
 }
 .ash-logo__icon {
-  color: var(--p300);
-}
-.ash-user {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 0.85rem;
+  width: 28px;
+  height: 28px;
 }
 .ash-menu-btn {
   width: 44px;

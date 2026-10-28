@@ -265,7 +265,7 @@ fn tabs(locale: &Locale, path: &str, area: Dest) -> Vec<Tab> {
         dest("explore", "fa-location-dot", "nav.near_me"),
         dest("services", "fa-border-all", "nav.services"),
         dest("products", "fa-bag-shopping", "nav.products"),
-        // The provider directory; on a phone it is a home page tile.
+        // The provider directory; on a phone it is the second tab of /services.
         dest("providers", "fa-store", "nav.shops"),
         area,
     ]

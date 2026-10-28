@@ -8,27 +8,31 @@
 {% import "molecules/admin_filter.html" as filter %}
 {% import "molecules/pagination_nav.html" as paging %}
 {% import "molecules/row_action.html" as row %}
+{% import "molecules/sheet_header.html" as sheet_head %}
 {% import "organisms/service_fields.html" as fields %}
 {% import "organisms/confirm_sheet.html" as confirm %}
 {#- `page.body` is web::pages::admin::services::ServicesPage. The create form
     (`b.create`) appears only when the list is one provider's: a service
-    always belongs to a provider. "Ẩn" and "Xoá" reload the list with that
-    row's confirmation open (`b.confirm`); row actions send `back=list` and
-    the list position (`b.keep`) so they land here again. -#}
+    always belongs to a provider; it is a sheet opened by the header's "add"
+    (an anchored section without JS), which comes back open with its
+    messages when a rule is broken. "Ẩn" and "Xoá" reload the list with that
+    row's confirmation open (`b.confirm`, in its own `dialog` scope); row
+    actions send `back=list` and the list position (`b.keep`) so they land
+    here again. -#}
 {% block title %}{{ t(key="admin_menu.services") }} — {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
 {% if b.filter and b.filter.name %}{% set sub = b.filter.name ~ " · " ~ t(key="services.count", count=b.total) %}{% else %}{% set sub = t(key="services.count", count=b.total) %}{% endif %}
+<div x-data="dialog" data-open="{% if b.create and (b.create.errors.message or b.create.errors.fields) %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
 {% if b.create %}
-{{ header::admin_header(title=t(key="admin_menu.services"), icon="fa-screwdriver-wrench", sub=sub, action_href="#them-dich-vu", action_icon="fa-plus", action_label=t(key="dashboard.add_service")) }}
+{{ header::admin_header(title=t(key="admin_menu.services"), icon="fa-screwdriver-wrench", sub=sub, action_href="#them-dich-vu", action_icon="fa-plus", action_label=t(key="dashboard.add_service"), action_opens=true) }}
 {% else %}
 {{ header::admin_header(title=t(key="admin_menu.services"), icon="fa-screwdriver-wrench", sub=sub) }}
 {% endif %}
-<div class="admin-body" x-data="dialog" data-open="{% if b.confirm %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+<div class="admin-body">
   {% if b.flash == "service_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.service_hidden")) }}{% endif %}
   {% if b.flash == "service_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.service_shown")) }}{% endif %}
   {% if b.flash == "service_deleted" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="dashboard.service_deleted")) }}{% endif %}
-  {% if b.create and b.create.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.create.errors.message) }}{% endif %}
   {% if b.filter %}
   {{ filter::admin_filter(f=b.filter) }}
   {% else %}
@@ -78,23 +82,28 @@
 
   {% if b.confirm %}
   {% set c = b.confirm %}
-  {% if c.kind == "hide" %}
-  {{ confirm::confirm_sheet(id="xac-nhan", title=t(key="admin.hide_service_title", name=c.name), icon="fa-eye-slash", action=c.action, button=t(key="admin.confirm_hide"), reason_max=limits.audit_reason_max, effect="hide", what=t(key="admin.service_what"), hidden_name="is_active", hidden_value="false", keep=b.keep) }}
-  {% else %}
-  {{ confirm::confirm_sheet(id="xac-nhan", title=t(key="admin.delete_service_title", name=c.name), icon="fa-trash", action=c.action, button=t(key="common.confirm_delete"), reason_max=limits.audit_reason_max, effect="delete", what=t(key="dashboard.delete_service_what"), button_class="btn-danger", keep=b.keep) }}
-  {% endif %}
+  <div x-data="dialog" data-open="true" x-on:keydown.escape.window="hide">
+    {% if c.kind == "hide" %}
+    {{ confirm::confirm_sheet(id="xac-nhan", title=t(key="admin.hide_service_title", name=c.name), icon="fa-eye-slash", action=c.action, button=t(key="admin.confirm_hide"), reason_max=limits.audit_reason_max, effect="hide", what=t(key="admin.service_what"), hidden_name="is_active", hidden_value="false", keep=b.keep) }}
+    {% else %}
+    {{ confirm::confirm_sheet(id="xac-nhan", title=t(key="admin.delete_service_title", name=c.name), icon="fa-trash", action=c.action, button=t(key="common.confirm_delete"), reason_max=limits.audit_reason_max, effect="delete", what=t(key="dashboard.delete_service_what"), button_class="btn-danger", keep=b.keep) }}
+    {% endif %}
+  </div>
   {% endif %}
 
   {% if b.create %}
   {% set c = b.create %}
-  <section class="admin-section" id="them-dich-vu" aria-labelledby="them-dich-vu-title">
-    <h2 class="admin-section__title" id="them-dich-vu-title">{{ t(key="dashboard.add_service") }}</h2>
-    <form class="form-stack" method="post" action="{{ c.action }}" novalidate>
+  <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
+  <section class="contact-sheet" id="them-dich-vu" aria-labelledby="them-dich-vu-title" :class="sheetClass">
+    {{ sheet_head::sheet_header(id="them-dich-vu", title=t(key="dashboard.add_service"), icon="fa-screwdriver-wrench") }}
+    <form class="contact-sheet__form" method="post" action="{{ c.action }}" novalidate>
       <input type="hidden" name="business_id" value="{{ c.business_id }}">
-      {{ fields::service_fields(form=c.form, errors=c.errors, categories=c.categories, limits=b.limits, prefix="new") }}
-      <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-plus") }} {{ t(key="dashboard.add_service") }}</button></div>
+      {% if c.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=c.errors.message) }}{% endif %}
+      {{ fields::service_fields(form=c.form, errors=c.errors, categories=c.categories, limits=b.limits, prefix="new", first=true) }}
+      <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-plus") }} {{ t(key="dashboard.add_service") }}</button>
     </form>
   </section>
   {% endif %}
+</div>
 </div>
 {% endblock content %}

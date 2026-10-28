@@ -5,8 +5,8 @@
 {% macro admin_search(s, placeholder) -%}
 <form class="mb-3" method="get" action="{{ s.action }}" role="search">
   {% if s.provider_id %}<input type="hidden" name="provider_id" value="{{ s.provider_id }}">{% endif %}
+  <label class="visually-hidden" for="admin-q">{{ t(key="admin_search.label") }}</label>
   <div class="input-group">
-    <label class="visually-hidden" for="admin-q">{{ t(key="admin_search.label") }}</label>
     <input class="form-control" id="admin-q" type="search" name="q" value="{{ s.q }}" placeholder="{{ placeholder }}" enterkeyhint="search">
     <button class="btn btn-success" type="submit" aria-label="{{ t(key="common.search") }}">{{ atoms::icon(name="fa-magnifying-glass") }}</button>
   </div>

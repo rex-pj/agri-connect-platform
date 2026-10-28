@@ -67,7 +67,10 @@ async fn every_asset_the_layout_links_is_served_and_cached_for_a_year() {
     let router = router_without_db();
     let html = text(send(&router, page("/khong-co")).await).await;
     let urls = asset_urls(&html);
-    assert!(urls.len() >= 5, "expected css + js links, got {urls:?}");
+    assert!(
+        urls.len() >= 5,
+        "expected css, js and icon links, got {urls:?}"
+    );
     for url in urls {
         let res = send(&router, Request::get(&url).body(Body::empty()).unwrap()).await;
         assert_eq!(res.status(), StatusCode::OK, "{url}");
@@ -81,10 +84,27 @@ async fn every_asset_the_layout_links_is_served_and_cached_for_a_year() {
             .unwrap()
             .to_owned();
         assert!(
-            ct.starts_with("text/css") || ct.starts_with("text/javascript"),
+            [
+                "text/css",
+                "text/javascript",
+                "image/svg+xml",
+                "image/x-icon",
+                "image/png"
+            ]
+            .iter()
+            .any(|t| ct.starts_with(t)),
             "{url}: {ct}"
         );
     }
+}
+
+#[tokio::test]
+async fn the_root_favicon_is_an_icon_not_a_page() {
+    let router = router_without_db();
+    let res = send(&router, page("/favicon.ico")).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(res.headers()[header::CONTENT_TYPE], "image/x-icon");
+    assert!(res.headers().get(header::SET_COOKIE).is_none());
 }
 
 #[tokio::test]

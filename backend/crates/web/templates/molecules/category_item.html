@@ -1,8 +1,11 @@
-{#- One tile of the category grid: a big icon over a short label. -#}
+{#- One tile of the category grid: a big icon over a short label. A
+    `product` kind is a round amber tile (a `service` one keeps the green
+    square); screen readers hear the kind before the name. `more`: the
+    outlined tile to the kind's whole list. -#}
 {% import "atoms/icon.html" as atoms %}
-{% macro category_item(name, icon, href, active=false) -%}
-<a class="cat-item{% if active %} cat-item--active{% endif %}" href="{{ href }}"{% if active %} aria-current="page"{% endif %}>
+{% macro category_item(name, icon, href, active=false, kind="", more=false) -%}
+<a class="cat-item{% if kind == "product" %} cat-item--product{% endif %}{% if more %} cat-item--more{% endif %}{% if active %} cat-item--active{% endif %}" href="{{ href }}"{% if active %} aria-current="page"{% endif %}>
   <span class="cat-item__icon">{{ atoms::icon(name=icon) }}</span>
-  <span class="cat-item__label">{{ name }}</span>
+  <span class="cat-item__label">{% if kind == "service" %}<span class="visually-hidden">{{ t(key="category_type.service") }}: </span>{% elif kind == "product" %}<span class="visually-hidden">{{ t(key="category_type.product") }}: </span>{% endif %}{{ name }}</span>
 </a>
 {%- endmacro category_item %}

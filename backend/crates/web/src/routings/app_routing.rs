@@ -444,6 +444,10 @@ impl AppRouting {
             .route("/api/admin/categories", get(AdminHandler::list_categories))
             .route("/api/admin/categories", post(AdminHandler::create_category))
             .route(
+                "/api/admin/categories/slug",
+                get(AdminHandler::suggest_category_slug),
+            )
+            .route(
                 "/api/admin/categories/{id}",
                 get(AdminHandler::get_category_detail),
             )
@@ -574,6 +578,7 @@ impl AppRouting {
             .merge(admin_routes.layer(limiter(&config.limiters.member_write, Scope::WritesOnly)))
             .merge(provider_routes.layer(limiter(&config.limiters.member_write, Scope::WritesOnly)))
             .route("/static/{*path}", get(views::static_file))
+            .route(views::FAVICON_PATH, get(views::favicon))
             .fallback(fallback)
             .layer(cors)
             .layer(SetResponseHeaderLayer::if_not_present(

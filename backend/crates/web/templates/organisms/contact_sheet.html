@@ -8,13 +8,11 @@
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/alert.html" as alerts %}
 {% import "molecules/form_field.html" as field %}
+{% import "molecules/sheet_header.html" as sheet_head %}
 {% macro contact_sheet(provider, contact, limits, return_to="", product_id="") -%}
 <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
-<section class="contact-sheet" id="lien-he" aria-labelledby="contact-title" :class="sheetClass">
-  <div class="contact-sheet__header">
-    <h2 class="contact-sheet__title" id="contact-title">{{ atoms::icon(name="fa-comment-dots") }} {{ t(key="contact.title") }}</h2>
-    <button type="button" class="contact-sheet__close" aria-label="{{ t(key="common.close") }}" x-show="modal" x-cloak x-on:click="hide">{{ atoms::icon(name="fa-xmark") }}</button>
-  </div>
+<section class="contact-sheet" id="lien-he" aria-labelledby="lien-he-title" :class="sheetClass">
+  {{ sheet_head::sheet_header(id="lien-he", title=t(key="contact.title"), icon="fa-comment-dots") }}
   <p class="contact-sheet__sub">{{ t(key="contact.sub_before") }} <strong>{{ provider.name }}</strong>{{ t(key="contact.sub_after") }}</p>
   <form class="contact-sheet__form" method="post" action="{{ url_for(name="contact") }}">
     <input type="hidden" name="business_id" value="{{ provider.id }}">

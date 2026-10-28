@@ -34,8 +34,9 @@ use crate::{
         admin::is_refusal,
         canonical_url,
         forms::{optional_coordinate, FormErrors},
+        parse_id,
         product_form::{product_categories, ProductForm},
-        parse_id, see_other,
+        see_other,
     },
     routes,
     shell::Shell,
@@ -477,7 +478,9 @@ pub async fn update_product(
         }
     };
     let updated = async {
-        dashboard.update_product(&actor, form.update_input(id)?).await
+        dashboard
+            .update_product(&actor, form.update_input(id)?)
+            .await
     }
     .await;
     if let Err(err) = updated {

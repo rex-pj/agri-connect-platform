@@ -4,18 +4,22 @@
 {% import "atoms/status_badge.html" as status %}
 {% import "molecules/admin_header.html" as header %}
 {% import "molecules/form_field.html" as field %}
+{% import "molecules/sheet_header.html" as sheet_head %}
 {% import "organisms/confirm_sheet.html" as confirm %}
 {#- One provider: details, whether it is on, its verification badge,
     managing account, and what it offers. `page.body` is
     web::pages::admin::providers::ProviderPage. Turning it off and
     withdrawing the badge each go through a confirmation with a reason (each
     in its own `dialog` scope: its section); turning on and granting are one
-    button. Its services open their admin page, its products their public
+    button. Assigning the account is a sheet in its section, open again
+    with its messages after a refusal. Its services open their admin page, its products their public
     one; the list links show only what the visitor may open. -#}
 {% block title %}{{ page.body.provider.name }} — {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
 {% set p = b.provider %}
+{#- A refusal is the account form's unless the unverify dialog re-opened. -#}
+{% set account_failed = false %}{% if b.errors.message or b.errors.fields %}{% if not b.confirm_open %}{% set account_failed = true %}{% endif %}{% endif %}
 {{ header::admin_header(title=p.name, icon="fa-store", sub=p.phone, back_href=url_for(name="admin_explore"), back_label=t(key="admin_menu.providers"), action_href=b.public_href, action_icon="fa-arrow-up-right-from-square", action_label=t(key="admin.public_page"), action_class="btn-outline-secondary") }}
 <div class="admin-body">
   {% if b.flash == "provider_verified" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.provider_verified")) }}{% endif %}
@@ -23,7 +27,7 @@
   {% if b.flash == "provider_activated" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.provider_activated")) }}{% endif %}
   {% if b.flash == "provider_deactivated" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.provider_deactivated")) }}{% endif %}
   {% if b.flash == "provider_account_assigned" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.provider_account_assigned")) }}{% endif %}
-  {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
+  {% if b.errors.message and not account_failed %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
 
   <section class="admin-section" aria-labelledby="info-title">
     <h2 class="admin-section__title" id="info-title">{{ t(key="admin.info") }}</h2>
@@ -82,18 +86,24 @@
     {% endif %}
   </section>
 
-  <section class="admin-section" id="tai-khoan" aria-labelledby="tai-khoan-title">
+  <section class="admin-section" aria-labelledby="tai-khoan-title" x-data="dialog" data-open="{% if account_failed %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
     <h2 class="admin-section__title" id="tai-khoan-title">{{ t(key="admin.managing_account") }}</h2>
     <p class="small text-muted">{% if p.linked_username %}{{ t(key="admin.linked_before") }} <strong>{{ p.linked_username }}</strong>{{ t(key="admin.linked_after") }}{% else %}{{ t(key="admin.no_account") }}{% endif %}</p>
     {% if b.can_assign %}
     {% set e = b.errors.fields %}
-    <form class="form-stack" method="post" action="{{ b.account_action }}" novalidate>
-      {{ field::input(id="acc-username", name="username", label=t(key="form.username"), value=b.form.username, error=e.username | default(value=""), required=true, autocomplete="off", minlength=limits.username_min_len) }}
-      <p class="small text-muted mb-0">{{ t(key="admin.assign_hint") }}</p>
-      {{ field::input(id="acc-email", name="email", label=t(key="form.email"), type="email", value=b.form.email, error=e.email | default(value=""), autocomplete="off", inputmode="email") }}
-      {{ field::input(id="acc-password", name="password", label=t(key="form.password"), type="password", error=e.password | default(value=""), autocomplete="new-password", minlength=limits.password_min_chars) }}
-      <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-user-plus") }} {{ t(key="admin.assign") }}</button></div>
-    </form>
+    <div class="admin-actions"><a class="btn btn-outline-success" href="#gan-tai-khoan" x-on:click.prevent="show">{{ atoms::icon(name="fa-user-plus") }} {{ t(key="admin.assign") }}</a></div>
+    <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
+    <section class="contact-sheet" id="gan-tai-khoan" aria-labelledby="gan-tai-khoan-title" :class="sheetClass">
+      {{ sheet_head::sheet_header(id="gan-tai-khoan", title=t(key="admin.assign"), icon="fa-user-plus") }}
+      <form class="contact-sheet__form" method="post" action="{{ b.account_action }}" novalidate>
+        {% if account_failed and b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
+        {{ field::input(id="acc-username", name="username", label=t(key="form.username"), value=b.form.username, error=e.username | default(value=""), required=true, autocomplete="off", minlength=limits.username_min_len, first=true) }}
+        <p class="small text-muted mb-0">{{ t(key="admin.assign_hint") }}</p>
+        {{ field::input(id="acc-email", name="email", label=t(key="form.email"), type="email", value=b.form.email, error=e.email | default(value=""), autocomplete="off", inputmode="email") }}
+        {{ field::input(id="acc-password", name="password", label=t(key="form.password"), type="password", error=e.password | default(value=""), autocomplete="new-password", minlength=limits.password_min_chars) }}
+        <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-user-plus") }} {{ t(key="admin.assign") }}</button>
+      </form>
+    </section>
     {% endif %}
   </section>
 

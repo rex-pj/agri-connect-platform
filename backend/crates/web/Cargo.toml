@@ -29,7 +29,6 @@ tera.workspace               = true
 rust-embed.workspace         = true
 hyper-util.workspace         = true
 uuid.workspace               = true
-unicode-normalization.workspace = true
 
 [lints]
 workspace = true

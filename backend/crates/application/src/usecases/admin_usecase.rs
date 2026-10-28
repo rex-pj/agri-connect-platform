@@ -34,17 +34,18 @@ use crate::{
     },
     constants::{
         ADMIN_PAGE_SIZE, CATEGORY_COLOR_MAX, CATEGORY_DESCRIPTION_MAX, CATEGORY_ICON_MAX,
-        CATEGORY_NAME_MAX, CATEGORY_SLUG_MAX, LOCATION_LABEL_MAX,
+        CATEGORY_NAME_MAX, CATEGORY_SLUG_MAX, LOCATION_LABEL_MAX, SLUG_CANDIDATES_PER_QUERY,
     },
     inputs::{CategoryInput, UpdateProductInput},
     outputs::{
         AdminCategoryDto, AdminInquiryDto, AdminLocationDto, AdminPagedResponse, AdminProductDto,
         AdminProductItemDto, AdminProviderDetailDto, AdminProviderDto, AdminReviewDto,
         AdminServiceDto, AdminServiceItemDto, AdminUserDetailDto, AdminUserDto, AssignUserDto,
-        ProviderStatusDto, RoleDto, VerificationDto,
+        ProviderStatusDto, RoleDto, SlugSuggestionDto, VerificationDto,
     },
     pagination::{paginate, total_pages},
     ports::{EventBus, PasswordHasher},
+    slug::{numbered, slugify},
     usecases::{
         product_rules::{validate_product, ProductFields},
         service_rules::{validate_service, ServiceFields},
@@ -514,11 +515,12 @@ impl AdminUseCase {
     ) -> Result<AdminCategoryDto> {
         actor.require(PERM_CATEGORY_MANAGE)?;
         let input = validate_category(input, Some(&category_type))?;
+        let slug = self.settle_category_slug(&input, None).await?;
         let id = self
             .category_repo
             .create(NewCategory {
                 name: input.name,
-                slug: input.slug,
+                slug,
                 category_type,
                 icon: input.icon,
                 color: input.color,
@@ -538,12 +540,13 @@ impl AdminUseCase {
     ) -> Result<AdminCategoryDto> {
         actor.require(PERM_CATEGORY_MANAGE)?;
         let input = validate_category(input, None)?;
+        let slug = self.settle_category_slug(&input, Some(id)).await?;
         self.category_repo
             .update(
                 id,
                 UpdateCategory {
                     name: input.name,
-                    slug: input.slug,
+                    slug,
                     icon: input.icon,
                     color: input.color,
                     description: input.description,
@@ -555,6 +558,72 @@ impl AdminUseCase {
         self.publish(actor, Entity::Category, id, Change::Updated, None)
             .await;
         self.load_category_detail(id).await
+    }
+
+    /// What the category form's slug box offers for `text` (the name as
+    /// typed, or a slug): its slug, numbered while another category has it.
+    /// `exclude_id`: the category being edited, whose own slug is free to it.
+    pub async fn suggest_category_slug(
+        &self,
+        actor: &Actor,
+        text: &str,
+        exclude_id: Option<i32>,
+    ) -> Result<SlugSuggestionDto> {
+        actor.require(PERM_CATEGORY_MANAGE)?;
+        let base = numbered(&slugify(text), 1, CATEGORY_SLUG_MAX);
+        if base.is_empty() {
+            return Ok(SlugSuggestionDto {
+                slug: base,
+                taken: false,
+            });
+        }
+        let slug = self.free_category_slug(&base, exclude_id).await?;
+        Ok(SlugSuggestionDto {
+            taken: slug != base,
+            slug,
+        })
+    }
+
+    /// The slug a save stores: the typed one unless another category has it
+    /// (`slug_taken`), else one made from the name, numbered until free. The
+    /// UNIQUE constraint still decides a race between two saves.
+    async fn settle_category_slug(
+        &self,
+        input: &CategoryInput,
+        exclude_id: Option<i32>,
+    ) -> Result<String> {
+        if input.slug.is_empty() {
+            let base = numbered(&slugify(&input.name), 1, CATEGORY_SLUG_MAX);
+            return self.free_category_slug(&base, exclude_id).await;
+        }
+        let taken = self
+            .category_repo
+            .taken_slugs(std::slice::from_ref(&input.slug), exclude_id)
+            .await?;
+        if taken.is_empty() {
+            Ok(input.slug.clone())
+        } else {
+            Err(Error::field("slug", ErrorCode::SlugTaken))
+        }
+    }
+
+    /// `base` when no other category has it, else the first free of
+    /// `base-2`, `base-3`, …, asked for a few at a time.
+    async fn free_category_slug(&self, base: &str, exclude_id: Option<i32>) -> Result<String> {
+        let mut first = 1;
+        loop {
+            let candidates: Vec<String> = (first..first + SLUG_CANDIDATES_PER_QUERY)
+                .map(|n| numbered(base, n, CATEGORY_SLUG_MAX))
+                .collect();
+            let taken = self
+                .category_repo
+                .taken_slugs(&candidates, exclude_id)
+                .await?;
+            if let Some(free) = candidates.into_iter().find(|c| !taken.contains(c)) {
+                return Ok(free);
+            }
+            first += SLUG_CANDIDATES_PER_QUERY;
+        }
     }
 
     pub async fn toggle_category_active(
@@ -1189,7 +1258,6 @@ fn to_category_dto(c: CategoryAdmin) -> AdminCategoryDto {
     }
 }
 
-/// Trims every field and rejects a blank name or slug, reporting both at once.
 /// The trimmed label of a valid location preset; every bad field reported.
 fn validate_location(label: &str, lat: f64, lng: f64) -> Result<String> {
     let label = label.trim().to_owned();
@@ -1201,6 +1269,8 @@ fn validate_location(label: &str, lat: f64, lng: f64) -> Result<String> {
     Ok(label)
 }
 
+/// Trims every field and reports every bad one at once. A blank slug is made
+/// from the name on save, so it is refused only when the name gives none.
 /// `category_type` is checked on create only: a category never changes type.
 fn validate_category(input: CategoryInput, category_type: Option<&str>) -> Result<CategoryInput> {
     let name = input.name.trim().to_owned();
@@ -1211,8 +1281,19 @@ fn validate_category(input: CategoryInput, category_type: Option<&str>) -> Resul
     Validation::new()
         .check(name.is_empty(), "name", ErrorCode::NameRequired)
         .rule("name", max_chars(&name, CATEGORY_NAME_MAX))
-        .check(slug.is_empty(), "slug", ErrorCode::SlugRequired)
-        .rule("slug", validate_slug(&slug))
+        .check(
+            slug.is_empty() && slugify(&name).is_empty(),
+            "slug",
+            ErrorCode::SlugRequired,
+        )
+        .rule(
+            "slug",
+            if slug.is_empty() {
+                Ok(())
+            } else {
+                validate_slug(&slug)
+            },
+        )
         .rule("slug", max_chars(&slug, CATEGORY_SLUG_MAX))
         .rule("icon", max_chars_opt(&icon, CATEGORY_ICON_MAX))
         .rule("color", max_chars_opt(&color, CATEGORY_COLOR_MAX))

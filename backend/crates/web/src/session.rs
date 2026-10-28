@@ -78,10 +78,13 @@ impl CookiePolicy {
     }
 }
 
-/// Requests that never need a session: assets and probes. Skipping them keeps
+/// Requests that never need a session: assets (the favicon too) and probes. Skipping them keeps
 /// a page's dozen asset requests from racing to rotate the same token.
 fn needs_session(path: &str) -> bool {
-    !(path.starts_with("/static/") || path.starts_with("/files/") || path.starts_with("/health/"))
+    !(path.starts_with("/static/")
+        || path.starts_with("/files/")
+        || path.starts_with("/health/")
+        || path == crate::views::FAVICON_PATH)
 }
 
 /// `Cookie` with `auth_token` and `refresh_token` replaced by the new pair,
@@ -250,6 +253,7 @@ mod tests {
     fn assets_never_trigger_a_renewal() {
         assert!(!needs_session("/static/css/app.css"));
         assert!(!needs_session("/files/abc/thumb"));
+        assert!(!needs_session("/favicon.ico"));
         assert!(needs_session("/admin/dashboard"));
         assert!(needs_session("/api/users/me"));
     }

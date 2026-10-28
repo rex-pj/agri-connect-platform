@@ -471,7 +471,7 @@ fn user_facing_text_lives_in_the_locale_files() {
     .unwrap();
     // Category and location seeds (rows an admin edits afterwards, so they are
     // data, not wording), and the slug rule that folds `đ` to `d`.
-    const ALLOWED: &[&str] = &["application/src/catalogue.rs", "web/src/slug.rs"];
+    const ALLOWED: &[&str] = &["application/src/catalogue.rs", "application/src/slug.rs"];
     let mut found = Vec::new();
     for name in ["domain", "application", "infrastructure", "web"] {
         for (file, src) in sources(name) {

@@ -10,10 +10,10 @@ use crate::{
     middleware::auth::MaybeActor,
     requests::{
         AdminCreateServiceRequest, AdminListQuery, AdminPageQuery, AdminUpdateProductRequest,
-        AdminUpdateServiceRequest,
-        AssignUserRequest, CreateCategoryRequest, CreateLocationRequest, DeleteWithReasonBody,
-        SetVerificationRequest, ToggleActiveRequest, ToggleVisibleRequest, UpdateCategoryRequest,
-        UpdateInquiryStatusRequest, UpdateLocationRequest, UpdateUserRoleRequest,
+        AdminUpdateServiceRequest, AssignUserRequest, CreateCategoryRequest, CreateLocationRequest,
+        DeleteWithReasonBody, SetVerificationRequest, SlugSuggestionQuery, ToggleActiveRequest,
+        ToggleVisibleRequest, UpdateCategoryRequest, UpdateInquiryStatusRequest,
+        UpdateLocationRequest, UpdateUserRoleRequest,
     },
 };
 
@@ -222,6 +222,21 @@ impl AdminHandler {
                     display_order: req.display_order,
                 },
             )
+            .await?;
+        Ok(Json(result))
+    }
+
+    /// GET /api/admin/categories/slug: a free slug for the category form.
+    pub async fn suggest_category_slug(
+        MaybeActor(actor): MaybeActor,
+        State(state): State<AppState>,
+        ApiQuery(q): ApiQuery<SlugSuggestionQuery>,
+    ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
+        let result = state
+            .usecases
+            .admin
+            .suggest_category_slug(&actor, &q.text, q.id)
             .await?;
         Ok(Json(result))
     }

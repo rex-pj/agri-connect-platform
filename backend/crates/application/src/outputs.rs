@@ -449,6 +449,15 @@ pub struct AdminCategoryDto {
     pub updated_by_name: Option<String>,
 }
 
+/// A free slug for what was typed in a category form (its name or its slug).
+#[derive(Serialize)]
+pub struct SlugSuggestionDto {
+    /// Empty when the text has nothing a slug can keep.
+    pub slug: String,
+    /// The text's own slug belongs to another category: `slug` is numbered.
+    pub taken: bool,
+}
+
 #[derive(Serialize)]
 pub struct AdminInquiryDto {
     pub id: i32,

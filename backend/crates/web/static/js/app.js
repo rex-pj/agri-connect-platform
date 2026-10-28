@@ -79,12 +79,15 @@ document.addEventListener("alpine:init", () => {
   // Language dropdown. Without JS the button is a link to the picker page.
   Alpine.data("languageMenu", () => topBarMenu("language-menu-opened"));
 
-  // Turns an in-page section into a bottom sheet. Without JS the section is
-  // part of the page and its trigger is an anchor link to it. The server sets
-  // data-open="true" when it re-shows a form with errors.
+  // Turns an in-page section into a bottom sheet (a centred dialog on a wide
+  // screen, by CSS). Without JS the section is part of the page and its
+  // trigger is an anchor link to it. The server sets data-open="true" when
+  // it re-shows a form with errors. The sheet takes its first state still;
+  // only the visitor's show or hide animates (`animated`).
   Alpine.data("dialog", () => ({
     modal: false,
     isOpen: false,
+    animated: false,
 
     init() {
       this.modal = true;
@@ -92,17 +95,19 @@ document.addEventListener("alpine:init", () => {
       if (this.isOpen) this.focusFirst();
     },
     show() {
+      this.animated = true;
       this.isOpen = true;
       this.focusFirst();
     },
     hide() {
+      this.animated = true;
       this.isOpen = false;
     },
     focusFirst() {
       this.$nextTick(() => this.$refs.first?.focus());
     },
     get sheetClass() {
-      return this.isOpen ? "is-modal is-open" : "is-modal";
+      return ["is-modal", this.animated && "is-animated", this.isOpen && "is-open"].filter(Boolean).join(" ");
     },
   }));
 
@@ -211,6 +216,92 @@ document.addEventListener("alpine:init", () => {
     },
     get pressed() {
       return this.shown ? "true" : "false";
+    },
+    // The button shows only with JS, so only then the box joins it.
+    get groupClass() {
+      return "password-group--joined";
+    },
+  }));
+
+  // The category form's name and slug boxes. While the slug box is blank (or
+  // was filled from here), typing a name fills it with the server's free slug
+  // for that name; typing a slug checks it against the other categories and
+  // offers a free one. Emptying the box hands it back to the name. Without JS
+  // a blank slug is made on save, and the server checks every save anyway.
+  // Attributes: data-url (the suggestion endpoint), data-id (the category
+  // being edited), data-{free,numbered,taken,fix}-text (the notes).
+  Alpine.data("slugField", () => ({
+    // "", "free", "numbered" (filled, with a number added), "taken", "fix".
+    state: "",
+    suggestion: "",
+    auto: false,
+    timer: null,
+    asked: 0,
+
+    init() {
+      this.auto = this.box("slug").value.trim() === "";
+    },
+    box(name) {
+      return this.$root.querySelector(`[name="${name}"]`);
+    },
+    // Input events of both boxes bubble here.
+    changed(event) {
+      const { name, value } = event.target;
+      if (name === "slug") {
+        this.auto = value.trim() === "";
+        if (this.auto) this.ask(this.box("name").value, "name");
+        else this.ask(value, "slug");
+      } else if (name === "name" && this.auto) {
+        this.ask(value, "name");
+      }
+    },
+    ask(text, from) {
+      clearTimeout(this.timer);
+      this.timer = setTimeout(() => this.suggest(text.trim(), from), 300);
+    },
+    async suggest(text, from) {
+      const ticket = ++this.asked;
+      const { url, id } = this.$root.dataset;
+      const params = new URLSearchParams({ text });
+      if (id) params.set("id", id);
+      let answer;
+      try {
+        const response = await fetch(`${url}?${params}`, { headers: { Accept: "application/json" } });
+        if (!response.ok) return;
+        answer = await response.json();
+      } catch {
+        // Offline or signed out: the save still checks.
+        return;
+      }
+      // A later keystroke has asked again; its answer wins.
+      if (ticket !== this.asked) return;
+      this.suggestion = answer.slug;
+      if (from === "name") {
+        if (!this.auto) return;
+        this.box("slug").value = answer.slug;
+        this.state = !answer.slug ? "" : answer.taken ? "numbered" : "free";
+      } else if (answer.slug === text) {
+        this.state = "free";
+      } else {
+        this.state = answer.taken ? "taken" : "fix";
+      }
+    },
+    apply() {
+      this.box("slug").value = this.suggestion;
+      this.auto = false;
+      this.state = "free";
+    },
+    get hasNote() {
+      return this.state !== "";
+    },
+    get note() {
+      return this.state ? this.$root.dataset[`${this.state}Text`] : "";
+    },
+    get noteClass() {
+      return this.state === "free" || this.state === "numbered" ? "text-body-secondary" : "text-danger";
+    },
+    get offers() {
+      return (this.state === "taken" || this.state === "fix") && this.suggestion !== "";
     },
   }));
 

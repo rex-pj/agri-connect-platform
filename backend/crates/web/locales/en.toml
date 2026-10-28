@@ -93,6 +93,9 @@ region      = "Mekong Delta"
 label = "Language"
 vi    = "Tiếng Việt"
 en    = "English"
+choose        = "Choose language"
+offer         = "This site is in Vietnamese. Read it in English?"
+stay          = "Keep Vietnamese"
 
 [text.common]
 add            = "Add"

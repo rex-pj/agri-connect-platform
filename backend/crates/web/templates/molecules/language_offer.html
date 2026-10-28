@@ -1,0 +1,18 @@
+{#- A thin strip under the top bar, once, for a visitor who never chose a
+    language and whose browser prefers one of ours other than Vietnamese:
+    "This site is in Vietnamese. Read it in English?". The offer and its
+    answer are in the visitor's language, the way out in Vietnamese, since
+    either may be the only one they read; each is marked `lang`. Both answers
+    post to /language, which sets the cookie, so the strip never comes back.
+    `o` is web::shell::LanguageOffer. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro language_offer(o, back) -%}
+<form class="lang-offer" method="post" action="{{ url_for(name="language") }}">
+  <input type="hidden" name="back" value="{{ back }}">
+  <p class="lang-offer__text" lang="{{ o.accept_code }}">{{ atoms::icon(name="fa-language", class="me-1") }}{{ o.text }}</p>
+  <div class="lang-offer__actions">
+    <button type="submit" class="btn btn-warning lang-offer__btn" name="lang" value="{{ o.accept_code }}" lang="{{ o.accept_code }}">{{ o.accept_label }}</button>
+    <button type="submit" class="btn btn-outline-light lang-offer__btn" name="lang" value="{{ o.stay_code }}" lang="{{ o.stay_code }}">{{ o.stay_label }}</button>
+  </div>
+</form>
+{%- endmacro language_offer %}

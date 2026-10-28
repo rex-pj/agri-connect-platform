@@ -148,7 +148,10 @@ async fn error_pages_sit_in_the_app_frame_without_an_account_menu() {
     let html = String::from_utf8(bytes.to_vec()).unwrap();
     assert!(html.contains(r#"class="bottom-nav""#), "bottom tabs");
     assert!(html.contains(r#"class="app-nav""#), "top bar");
-    assert!(!html.contains("app-nav__dropdown"), "no session, no menu");
+    assert!(
+        !html.contains(r#"x-data="profileMenu""#),
+        "no session, no account menu"
+    );
     // The footer is part of the frame, with the shop directory and this year.
     assert!(html.contains(r#"class="app-footer""#), "footer");
     assert!(html.contains(r#"href="/providers""#));

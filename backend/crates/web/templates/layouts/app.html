@@ -2,13 +2,16 @@
 {% import "organisms/app_nav.html" as nav %}
 {% import "organisms/bottom_nav.html" as bottom %}
 {% import "organisms/app_footer.html" as footer %}
+{% import "molecules/language_offer.html" as offer %}
 {#- Public and signed-in app pages: top bar, content, footer, bottom tabs.
     Pages fill `main`; the frame comes from `shell` (web::shell). -#}
 {% block body %}
-{{ nav::app_nav(shell=shell, site_name=site.name) }}
+{{ nav::app_nav(shell=shell, site_name=site.name, languages=languages) }}
 <main class="app-main" id="main">
+{#- The one-time language offer: the first thing under the fixed top bar. -#}
+{% if shell.language_offer %}{{ offer::language_offer(o=shell.language_offer, back=shell.here) }}{% endif %}
 {% block main %}{% endblock main %}
 </main>
-{{ footer::app_footer(shell=shell, site=site, year=year, languages=languages) }}
+{{ footer::app_footer(shell=shell, site=site, year=year) }}
 {{ bottom::bottom_nav(tabs=shell.tabs) }}
 {% endblock body %}

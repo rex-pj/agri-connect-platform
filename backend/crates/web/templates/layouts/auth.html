@@ -2,7 +2,10 @@
 {% import "atoms/icon.html" as atoms %}
 {% import "molecules/language_switch.html" as lang %}
 {#- Sign-in, registration, password and setup pages: one card on the green
-    background, no app frame. Never indexed. Pages fill `card`. -#}
+    background, no app frame. Never indexed. Pages fill `card`. The language
+    switch sits under the card at its right edge: out of the form's way,
+    still where the eye is (a corner of the screen is far from the card on a
+    wide one and under the keyboard on a phone). -#}
 {% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
 {% block body %}
 <main class="auth-shell">
@@ -13,6 +16,6 @@
     </a>
     {% block card %}{% endblock card %}
   </div>
-  {{ lang::language_switch(languages=languages, back=shell.here) }}
+  <div class="auth-bottombar">{{ lang::language_switch(languages=languages, back=shell.here, up=true) }}</div>
 </main>
 {% endblock body %}

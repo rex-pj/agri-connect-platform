@@ -15,7 +15,12 @@ use axum::{
 use domain::{Error, ErrorKind};
 use serde::Serialize;
 
-use crate::{app_state::AppState, routings::app_routing::REQUEST_ID_HEADER, shell::Shell, views};
+use crate::{
+    app_state::AppState,
+    routings::app_routing::REQUEST_ID_HEADER,
+    shell::{self, Shell},
+    views,
+};
 
 #[derive(Serialize)]
 struct ErrorPage {
@@ -71,6 +76,11 @@ pub async fn render_errors(State(state): State<AppState>, req: Request, next: Ne
     let path = req.uri().path().to_owned();
     let query = req.uri().query().map(str::to_owned);
     let html = wants_html(&req);
+    // A visitor landing on an error page from a link is offered a language
+    // like on any other page.
+    let language_offer = html
+        .then(|| shell::language_offer(req.headers(), &state.locales))
+        .flatten();
     let request_id = req
         .headers()
         .get(REQUEST_ID_HEADER)
@@ -105,7 +115,8 @@ pub async fn render_errors(State(state): State<AppState>, req: Request, next: Ne
         request_id,
     };
     let mut rendered = match html.then(|| {
-        let shell = Shell::without_session(state.locale(), &path, query.as_deref());
+        let mut shell = Shell::without_session(state.locale(), &path, query.as_deref());
+        shell.language_offer = language_offer;
         views::render_page_status(&state, &shell, status, "pages/error.html", &page)
     }) {
         Some(Ok(page)) => page,

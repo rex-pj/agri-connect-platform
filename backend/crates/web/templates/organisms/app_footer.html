@@ -4,15 +4,13 @@
     sign up for visitors, the provider dashboard or the admin panel (which is
     not a tab) and the profile for signed-in users; error pages, which do not
     know the session, leave it out. Help lines come from `site.support_*` and
-    each one left unset is not shown. The bottom bar carries the language
-    switch (`languages`, the page context's list): out of the way of the
-    Vietnamese-first pages, and where visitors look for it on a phone.
+    each one left unset is not shown. The language switch is the top
+    bar's, not repeated here.
 
     Phone: one column, links two per row, help buttons full width. Tablet:
     brand beside help, links below. Wide: four columns. -#}
 {% import "atoms/icon.html" as atoms %}
-{% import "molecules/language_switch.html" as lang %}
-{% macro app_footer(shell, site, year, languages="") -%}
+{% macro app_footer(shell, site, year) -%}
 <footer class="app-footer">
   <div class="app-footer__inner">
     <div class="app-footer__brand">
@@ -61,7 +59,6 @@
   </div>
   <div class="app-footer__legal">
     <span>© {{ year }} {{ site.name }}</span>
-    {% if languages %}{{ lang::language_switch(languages=languages, back=shell.here) }}{% endif %}
     <span>{{ atoms::icon(name="fa-location-dot") }} {{ t(key="site.region") }}</span>
   </div>
 </footer>

@@ -87,9 +87,29 @@ async fn pages_are_vietnamese_until_english_is_chosen() {
     assert!(en.contains(r#"<html lang="en">"#));
     assert!(en.contains("This page does not exist."));
     assert!(en.contains("Back to home"), "the frame is English too");
-    // The switch shows English as the current choice and comes back here.
+    // One place to switch: the top bar's menu, a `<details>` that opens
+    // without JS, marking English and posting back here. No language link
+    // anywhere, so the address bar only ever shows the page itself.
+    assert!(en.contains(r#"<details class="lang-menu""#));
+    assert!(en.contains(r#"<span class="lang-menu__code text-uppercase">en</span>"#));
     assert!(en.contains(r#"value="en" lang="en" aria-pressed="true""#));
     assert!(en.contains(r#"name="back" value="/no-such-page""#));
+    assert_eq!(en.matches(r#"action="/language""#).count(), 1);
+    assert!(!en.contains(r#"href="/language"#));
+}
+
+#[tokio::test]
+async fn the_auth_pages_switch_under_the_card_with_the_same_menu() {
+    let page = body_text(send(&router(), get_page("/forgot-password", None)).await).await;
+    // The same switch as the top bar, once, after the card; its menu opens
+    // upwards there.
+    assert_eq!(page.matches(r#"action="/language""#).count(), 1);
+    let card = page.find(r#"class="auth-card""#).unwrap();
+    let switch = page
+        .find(r#"<div class="auth-bottombar"><details class="lang-menu lang-menu--up""#)
+        .unwrap();
+    assert!(switch > card, "under the card, not above it");
+    assert!(page.contains(r#"name="back" value="/forgot-password""#));
 }
 
 #[tokio::test]
@@ -107,4 +127,42 @@ async fn the_json_api_answers_in_the_chosen_language() {
 async fn a_cookie_naming_no_known_language_means_vietnamese() {
     let page = body_text(send(&router(), get_page("/no-such-page", Some("lang=xx"))).await).await;
     assert!(page.contains(r#"<html lang="vi">"#));
+}
+
+fn english_browser(cookie: Option<&str>) -> Request<Body> {
+    let mut req = Request::get("/no-such-page")
+        .header(header::ACCEPT, "text/html")
+        .header(header::ACCEPT_LANGUAGE, "en-US,en;q=0.9");
+    if let Some(c) = cookie {
+        req = req.header(header::COOKIE, c);
+    }
+    req.body(Body::empty()).unwrap()
+}
+
+#[tokio::test]
+async fn an_english_browser_is_offered_english_once_and_never_switched() {
+    let page = body_text(send(&router(), english_browser(None)).await).await;
+    assert!(page.contains(r#"<html lang="vi">"#), "offered, not applied");
+    assert!(page.contains("This site is in Vietnamese. Read it in English?"));
+    assert!(
+        page.contains(r#"name="lang" value="vi" lang="vi">"#),
+        "a way out in Vietnamese"
+    );
+
+    // Either answer sets the cookie; from then on there is no offer.
+    for chosen in ["lang=vi", "lang=en"] {
+        let page = body_text(send(&router(), english_browser(Some(chosen))).await).await;
+        assert!(!page.contains("lang-offer"), "{chosen}");
+    }
+}
+
+#[tokio::test]
+async fn a_vietnamese_browser_gets_no_offer() {
+    let req = Request::get("/no-such-page")
+        .header(header::ACCEPT, "text/html")
+        .header(header::ACCEPT_LANGUAGE, "vi-VN,vi;q=0.9,en;q=0.8")
+        .body(Body::empty())
+        .unwrap();
+    let page = body_text(send(&router(), req).await).await;
+    assert!(!page.contains("lang-offer"));
 }

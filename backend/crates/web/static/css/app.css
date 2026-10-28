@@ -277,6 +277,35 @@ body:has(.app-nav__search-row.open) .app-main {
 .app-nav__profile {
   position: relative;
 }
+.app-nav__dropdown > .app-nav__dropdown-item:last-child {
+  border-bottom: none;
+}
+
+/* The one-time "read it in English?" strip, first thing under the top bar. */
+.lang-offer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 16px;
+  margin: 0;
+  padding: 8px 16px;
+  background: var(--p900);
+  color: #fff;
+}
+.lang-offer__text {
+  margin: 0;
+  font-size: 0.9rem;
+}
+.lang-offer__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.lang-offer__btn {
+  min-height: 44px;
+  font-weight: 600;
+}
 .app-nav__login {
   display: flex;
   align-items: center;
@@ -554,47 +583,109 @@ body:has(.app-nav__search-row.open) .app-main {
 }
 
 /* ── Language switch (molecules/language_switch) ─────────────────────────────
-   Always on dark green (footer, auth background, admin bar): a pill with the
+   On dark green (above the auth card, in the admin bar): a pill with the
    current language filled white. 44 px taps, like every control here. */
-.lang-switch {
-  margin: 0;
+/* The language switch (molecules/language_switch): the same pill button and
+   menu on every dark green frame (top bar, auth background, admin bar). */
+.lang-menu {
+  position: relative;
 }
-.lang-switch__options {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 3px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-}
-.lang-switch__icon {
-  padding: 0 4px 0 8px;
-  color: rgba(255, 255, 255, 0.75);
-}
-.lang-switch__option {
+.lang-menu__btn {
   min-width: 44px;
-  min-height: 44px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.88);
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-.lang-switch__option:hover {
-  background: rgba(255, 255, 255, 0.14);
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.1);
   color: #fff;
+  list-style: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
-.lang-switch__option:focus-visible {
-  outline: 2px solid var(--a500);
+.lang-menu__btn::-webkit-details-marker {
+  display: none;
+}
+.lang-menu__btn:hover,
+.lang-menu__btn.active,
+.lang-menu[open] > .lang-menu__btn {
+  background: rgba(255, 255, 255, 0.2);
+}
+.lang-menu__btn:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.6);
   outline-offset: 2px;
 }
-.lang-switch__option[aria-pressed="true"] {
-  background: #fff;
-  color: var(--p800);
+.lang-menu__code {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+.lang-menu__chevron {
+  font-size: 0.65rem;
+  opacity: 0.75;
+  transition: transform 0.15s ease;
+}
+.lang-menu[open] .lang-menu__chevron {
+  transform: rotate(180deg);
+}
+.lang-menu__list {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 1040;
+  min-width: 180px;
+  margin: 0;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+/* Under the auth card the menu opens above its button. */
+.lang-menu--up .lang-menu__list {
+  top: auto;
+  bottom: calc(100% + 8px);
+}
+.lang-menu--up .lang-menu__chevron {
+  transform: rotate(180deg);
+}
+.lang-menu--up[open] .lang-menu__chevron {
+  transform: none;
+}
+.lang-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 16px;
+  border: none;
+  border-bottom: 1px solid #e7ede9;
+  background: none;
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.lang-menu__item:last-of-type {
+  border-bottom: none;
+}
+.lang-menu__item:hover,
+.lang-menu__item:focus-visible {
+  background: var(--p50);
+}
+.lang-menu__item[aria-pressed="true"] {
+  font-weight: 700;
+  cursor: default;
+}
+.lang-menu__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1039;
+  border: none;
+  background: transparent;
   cursor: default;
 }
 
@@ -2066,6 +2157,12 @@ a.chip {
   justify-content: center;
   padding: 32px 16px;
   background: linear-gradient(135deg, var(--p900) 0%, var(--p800) 60%, var(--p700) 100%);
+}
+.auth-bottombar {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  justify-content: flex-end;
 }
 .auth-card {
   width: 100%;

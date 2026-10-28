@@ -15,7 +15,7 @@
       <a class="ash-logo" href="{{ url_for(name="admin_dashboard") }}">{{ atoms::icon(name="fa-seedling", class="ash-logo__icon") }} <span>{{ site.name }} Admin</span></a>
     </div>
     <div class="d-flex align-items-center gap-2">
-      {{ lang::language_switch(languages=languages, back=shell.here, compact=true) }}
+      {{ lang::language_switch(languages=languages, back=shell.here) }}
       <span class="ash-user d-none d-md-inline">{{ atoms::icon(name="fa-circle-user", class="me-1") }}{{ page.admin.username }}</span>
       <a class="btn btn-sm btn-outline-light" href="{{ url_for(name="home") }}">{{ atoms::icon(name="fa-house") }}<span class="d-none d-sm-inline ms-1">{{ t(key="nav.home") }}</span></a>
       <form method="post" action="{{ url_for(name="admin_logout") }}">

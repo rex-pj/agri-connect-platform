@@ -47,15 +47,16 @@ document.addEventListener("alpine:init", () => {
     },
   }));
 
-  // Account dropdown. Without JS the button is a link to /account.
-  Alpine.data("profileMenu", () => ({
+  // A top-bar dropdown. Opening it announces `openedEvent`, which bubbles to
+  // the top bar (closing the search row) and reaches the other dropdown
+  // (closing it), so one thing is open at a time.
+  const topBarMenu = (openedEvent) => ({
     open: false,
 
     toggle() {
       this.open = !this.open;
       if (this.open) {
-        // Bubbles to the top bar, which closes the search row.
-        this.$dispatch("profile-menu-opened");
+        this.$dispatch(openedEvent);
       }
     },
     close() {
@@ -70,7 +71,13 @@ document.addEventListener("alpine:init", () => {
     get chevronClass() {
       return this.open ? "rotated" : "";
     },
-  }));
+  });
+
+  // Account dropdown. Without JS the button is a link to /account.
+  Alpine.data("profileMenu", () => topBarMenu("profile-menu-opened"));
+
+  // Language dropdown. Without JS the button is a link to the picker page.
+  Alpine.data("languageMenu", () => topBarMenu("language-menu-opened"));
 
   // Turns an in-page section into a bottom sheet. Without JS the section is
   // part of the page and its trigger is an anchor link to it. The server sets

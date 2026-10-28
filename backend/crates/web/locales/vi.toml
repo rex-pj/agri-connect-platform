@@ -100,6 +100,11 @@ region      = "Đồng bằng sông Cửu Long"
 label = "Ngôn ngữ"
 vi    = "Tiếng Việt"
 en    = "English"
+choose        = "Chọn ngôn ngữ"
+# The one-time offer is shown from the language it offers, its way out
+# (`stay`) from the default one: see web::shell::LanguageOffer.
+offer         = "Đọc trang này bằng tiếng Việt?"
+stay          = "Ở lại tiếng Việt"
 
 [text.common]
 add            = "Thêm"

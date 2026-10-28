@@ -9,11 +9,23 @@ use application::{
     authz::Actor,
     catalogue::{PERM_ADMIN_DASHBOARD_VIEW, PERM_OWN_LISTING_CREATE},
 };
-use axum::{extract::FromRequestParts, http::request::Parts};
+use axum::{
+    extract::FromRequestParts,
+    http::{request::Parts, HeaderMap},
+};
 use domain::Error;
 use serde::Serialize;
 
-use crate::{app_state::AppState, locale::Locale, middleware::auth::Viewer, routes};
+use crate::{
+    app_state::AppState,
+    cookies::request_cookie,
+    locale::{Lang, Locale, Locales},
+    middleware::{
+        auth::Viewer,
+        language::{preferred_language, LANG_COOKIE},
+    },
+    routes,
+};
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct Link {
@@ -63,6 +75,37 @@ pub struct Shell {
     pub search_url: String,
     /// This page with its query, where the language switch comes back to.
     pub here: String,
+    /// Offered once to a browser that prefers another language we have.
+    pub language_offer: Option<LanguageOffer>,
+}
+
+/// "This site is in Vietnamese. Read it in English?" with its two answers,
+/// each worded in its own language, since the visitor may read only one.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct LanguageOffer {
+    pub text: String,
+    pub accept_code: &'static str,
+    pub accept_label: String,
+    pub stay_code: &'static str,
+    pub stay_label: String,
+}
+
+/// The offer for a visitor who has not chosen a language and whose browser
+/// prefers one of ours other than the default. Either answer sets the
+/// cookie, so it shows once.
+pub fn language_offer(headers: &HeaderMap, locales: &Locales) -> Option<LanguageOffer> {
+    if request_cookie(headers, LANG_COOKIE).is_some() {
+        return None;
+    }
+    let lang = preferred_language(headers).filter(|l| *l != Lang::DEFAULT)?;
+    let theirs = locales.get(lang);
+    Some(LanguageOffer {
+        text: theirs.text("language.offer"),
+        accept_code: lang.code(),
+        accept_label: theirs.text(&format!("language.{}", lang.code())),
+        stay_code: Lang::DEFAULT.code(),
+        stay_label: locales.get(Lang::DEFAULT).text("language.stay"),
+    })
 }
 
 fn url(name: &str) -> String {
@@ -206,6 +249,7 @@ impl Shell {
         Self {
             path: path.to_owned(),
             here,
+            language_offer: None,
             tabs: tabs(locale, path, area_of(None)),
             profile: None,
             provider_cta: None,
@@ -279,12 +323,14 @@ impl FromRequestParts<AppState> for Shell {
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
         let Viewer(actor) = Viewer::from_request_parts(parts, state).await?;
-        Ok(Self::new(
+        let mut shell = Self::new(
             state.locale(),
             parts.uri.path(),
             parts.uri.query(),
             actor.as_ref(),
-        ))
+        );
+        shell.language_offer = language_offer(&parts.headers, &state.locales);
+        Ok(shell)
     }
 }
 

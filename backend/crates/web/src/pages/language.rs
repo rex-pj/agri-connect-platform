@@ -1,6 +1,8 @@
-//! POST /language — the language switch (`molecules/language_switch.html`).
-//! A plain form, so it works without JS: it keeps the choice in the `lang`
-//! cookie for a year and goes back to the page it was sent from.
+//! POST /language — the language choice, from the top bar's menu, the
+//! one-time offer and `molecules/language_switch.html`. A plain form, so it
+//! works without JS: it keeps the choice in the `lang` cookie for a year and
+//! goes back to the page it was sent from, so the address bar never shows
+//! anything but that page.
 
 use axum::{
     http::{header, HeaderValue},
@@ -37,15 +39,23 @@ fn local_path(back: &str) -> Option<&str> {
     local.then_some(back)
 }
 
+/// `back` when it is a path on this site, else home.
+fn back_to(back: &str) -> Result<String, Error> {
+    match local_path(back) {
+        Some(path) => Ok(path.to_owned()),
+        None => {
+            routes::url("home", &[]).map_err(|e| Error::internal(format!("language links: {e}")))
+        }
+    }
+}
+
 pub async fn switch(
     Extension(policy): Extension<CookiePolicy>,
     ApiForm(form): ApiForm<LanguageForm>,
 ) -> Result<Response, Error> {
     let lang =
         Lang::parse(form.lang.trim()).ok_or_else(|| Error::new(ErrorCode::InvalidRequestBody))?;
-    let home =
-        routes::url("home", &[]).map_err(|e| Error::internal(format!("language links: {e}")))?;
-    let mut response = see_other(local_path(&form.back).unwrap_or(&home))?;
+    let mut response = see_other(&back_to(&form.back)?)?;
     let secure = if policy.secure { "; Secure" } else { "" };
     let cookie = format!(
         "{LANG_COOKIE}={}; Path=/; Max-Age={LANG_COOKIE_MAX_AGE_SECS}; HttpOnly; SameSite=Lax{secure}",

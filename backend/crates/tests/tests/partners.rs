@@ -237,6 +237,7 @@ async fn a_partner_pays_for_an_area_reads_its_report_and_sponsors_a_shop() {
     assert_eq!(res.headers()[header::LOCATION], "/partner", "its own area");
     let own = body_text(send(&e.router, get_page("/partner", Some(&partner))).await).await;
     assert!(own.contains("Dai ly Drone"));
+    assert!(!own.contains("bottom-nav"), "its own frame: no farmer tabs");
     assert!(own.contains("Đồng Tháp — Cai Lậy"));
     assert!(
         !own.contains("An Giang — Long Xuyên"),

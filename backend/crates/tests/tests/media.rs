@@ -8,7 +8,7 @@ use axum::{
 };
 use integration_tests::{
     create_product, json_body, multipart, photo, put_photo, register_provider, router_without_db,
-    send, upload_request, Env,
+    send, upload_request, with_product_category, Env,
 };
 use sea_orm::{ConnectionTrait, Statement};
 use web::routings::app_routing::RouterConfig;
@@ -26,7 +26,8 @@ async fn env_with(max_bytes: Option<usize>) -> Env {
 }
 
 async fn product(e: &Env, token: &str) -> i32 {
-    create_product(e, token, r#"{"category_id":4,"name":"Sầu riêng Ri6"}"#).await
+    let body = with_product_category(e, r#"{"name":"Sầu riêng Ri6"}"#).await;
+    create_product(e, token, &body).await
 }
 
 async fn file_rows(e: &Env) -> i64 {

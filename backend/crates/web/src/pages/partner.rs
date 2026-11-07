@@ -24,7 +24,7 @@ use crate::{
 };
 
 /// The file name the partner's CSV downloads as.
-pub const PARTNER_CSV_NAME: &str = "partner-report.csv";
+pub const PARTNER_CSV_NAME: &str = "bao-cao-doi-tac.csv";
 
 fn url(name: &str, params: &[(&str, &str)]) -> Result<String, Error> {
     routes::url(name, params).map_err(|e| Error::internal(format!("partner links: {e}")))

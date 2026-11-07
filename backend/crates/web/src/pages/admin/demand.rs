@@ -30,7 +30,7 @@ use crate::{
 };
 
 /// The file name the CSV downloads as.
-pub const DEMAND_CSV_NAME: &str = "demand-report.csv";
+pub const DEMAND_CSV_NAME: &str = "bao-cao-nhu-cau.csv";
 
 #[derive(Serialize)]
 pub struct AreaOption {

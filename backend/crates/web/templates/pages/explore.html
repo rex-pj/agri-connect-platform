@@ -77,7 +77,7 @@
     {% if page.sponsored or page.services %}
     {% if page.sponsored %}
     <div class="mb-3" aria-label="{{ t(key="partner_area.tag") }}">
-      <p class="small fw-semibold mb-2"><span class="badge text-bg-warning">{{ t(key="partner_area.tag") }}</span></p>
+      <p class="small mb-2"><span class="badge rounded-pill border text-body-secondary bg-body">{{ t(key="partner_area.tag") }}</span></p>
       {{ services::service_grid(services=page.sponsored) }}
     </div>
     {% endif %}

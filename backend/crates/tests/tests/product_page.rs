@@ -7,7 +7,8 @@ use axum::{
 };
 use infrastructure::entities::{business, inquiry};
 use integration_tests::{
-    create_product, env_with_origin, post_form, put_photo, register_provider, send, Env,
+    create_product, env_with_origin, post_form, put_photo, register_provider, send,
+    with_product_category, Env,
 };
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 use web::views::PAGE_CSP;
@@ -32,13 +33,13 @@ async fn text(res: Response<Body>) -> String {
 /// A provider with one product; returns (token, product id).
 async fn seeded(e: &Env, body: &str) -> (String, i32) {
     let token = register_provider(&e.state, "nongdan", "0901234567").await;
-    let id = create_product(e, &token, body).await;
+    let id = create_product(e, &token, &with_product_category(e, body).await).await;
     (token, id)
 }
 
 fn rice() -> String {
     format!(
-        r#"{{"category_id":4,"name":"{NAME}","price":28000,"unit":"kg",
+        r#"{{"name":"{NAME}","price":28000,"unit":"kg",
             "description":"Gạo thơm dẻo.\nĐóng bao 5 kg."}}"#
     )
 }
@@ -111,7 +112,7 @@ async fn a_product_with_a_photo_shows_the_full_size_image() {
 #[ignore = "needs TEST_DATABASE_URL"]
 async fn without_a_description_the_meta_tag_says_who_sells_it() {
     let e = Env::new().await;
-    let (_, id) = seeded(&e, r#"{"category_id":4,"name":"Sầu riêng"}"#).await;
+    let (_, id) = seeded(&e, r#"{"name":"Sầu riêng"}"#).await;
     let html = text(send(&e.router, page(&format!("/products/{id}/sau-rieng"))).await).await;
     assert!(html.contains("Mua Sầu riêng từ Vườn nongdan trên Agri-Connect."));
     assert!(html.contains("Liên hệ giá"));

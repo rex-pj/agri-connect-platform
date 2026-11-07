@@ -479,6 +479,20 @@ pub async fn categories_of(env: &Env, kind: &str) -> Vec<(i32, String)> {
         .collect()
 }
 
+/// The first product category's id: what a test product is filed under,
+/// without counting on seed ids.
+pub async fn first_product_category(env: &Env) -> i32 {
+    categories_of(env, "product").await[0].0
+}
+
+/// `json` (a product body without its category) filed under the first
+/// product category.
+pub async fn with_product_category(env: &Env, json: &str) -> String {
+    let mut body: serde_json::Value = serde_json::from_str(json).unwrap();
+    body["category_id"] = first_product_category(env).await.into();
+    body.to_string()
+}
+
 /// Only the hash of a reset token is stored, and the email that carries the
 /// raw one goes to the log. Re-keys the newest reset token to `raw`, so a
 /// test can follow "the link in the latest email"; returns `raw`.

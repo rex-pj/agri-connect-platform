@@ -2,7 +2,8 @@
     with no category last), a column per week, then the total and its split
     by channel, the sums, and the searches made in the same areas. `r` is
     application::outputs::DemandReportDto; shared by the admin page and the
-    partner's. -#}
+    partner's. On a phone only the last four weeks show (the totals still
+    cover all of them). -#}
 {% import "atoms/figure.html" as fig %}
 {% macro demand_table(r) -%}
 {% set week_count = r.weeks | length %}{% set columns = week_count + 6 %}
@@ -11,7 +12,7 @@
     <thead class="admin-table-head">
       <tr>
         <th scope="col">{{ t(key="demand.category") }}</th>
-        {% for w in r.weeks %}<th scope="col" class="text-end"><time datetime="{{ w.starts_on }}">{{ w.starts_on | day_month }}</time></th>{% endfor %}
+        {% for w in r.weeks %}<th scope="col" class="text-end{% if loop.index <= week_count - 4 %} d-none d-md-table-cell{% endif %}"><time datetime="{{ w.starts_on }}">{{ w.starts_on | day_month }}</time></th>{% endfor %}
         <th scope="col" class="text-end">{{ t(key="demand.total") }}</th>
         <th scope="col" class="text-end">{{ t(key="demand.calls") }}</th>
         <th scope="col" class="text-end">{{ t(key="demand.zalo") }}</th>
@@ -23,7 +24,7 @@
       {% for row in r.rows %}
       <tr>
         <th scope="row" class="fw-semibold">{% if row.category %}{{ row.category }}{% else %}<span class="text-muted">{{ t(key="demand.general") }}</span>{% endif %}</th>
-        {% for f in row.weeks %}<td class="text-end">{{ fig::figure(f=f, min=r.min_count) }}</td>{% endfor %}
+        {% for f in row.weeks %}<td class="text-end{% if loop.index <= week_count - 4 %} d-none d-md-table-cell{% endif %}">{{ fig::figure(f=f, min=r.min_count) }}</td>{% endfor %}
         <td class="text-end fw-bold">{{ fig::figure(f=row.total, min=r.min_count) }}</td>
         <td class="text-end">{{ fig::figure(f=row.calls, min=r.min_count) }}</td>
         <td class="text-end">{{ fig::figure(f=row.zalo, min=r.min_count) }}</td>
@@ -37,7 +38,7 @@
     <tfoot>
       <tr class="fw-bold">
         <th scope="row">{{ t(key="demand.all") }}</th>
-        {% for f in r.all.weeks %}<td class="text-end">{{ fig::figure(f=f, min=r.min_count) }}</td>{% endfor %}
+        {% for f in r.all.weeks %}<td class="text-end{% if loop.index <= week_count - 4 %} d-none d-md-table-cell{% endif %}">{{ fig::figure(f=f, min=r.min_count) }}</td>{% endfor %}
         <td class="text-end">{{ fig::figure(f=r.all.total, min=r.min_count) }}</td>
         <td class="text-end">{{ fig::figure(f=r.all.calls, min=r.min_count) }}</td>
         <td class="text-end">{{ fig::figure(f=r.all.zalo, min=r.min_count) }}</td>
@@ -46,7 +47,7 @@
       </tr>
       <tr class="text-body-secondary">
         <th scope="row" class="fw-normal">{{ t(key="demand.searches") }}</th>
-        {% for f in r.searches %}<td class="text-end">{{ fig::figure(f=f, min=r.min_count) }}</td>{% endfor %}
+        {% for f in r.searches %}<td class="text-end{% if loop.index <= week_count - 4 %} d-none d-md-table-cell{% endif %}">{{ fig::figure(f=f, min=r.min_count) }}</td>{% endfor %}
         <td colspan="5"></td>
       </tr>
     </tfoot>

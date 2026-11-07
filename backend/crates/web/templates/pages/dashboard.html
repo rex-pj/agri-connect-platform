@@ -62,6 +62,7 @@
       <strong class="d-block text-body">{{ t(key="review.title") }}</strong>
       <span class="small text-muted">{{ t(key="reviews.count", count=page.reviews.total) }}</span>
     </span>
+    {% if page.reviews.waiting > 0 %}<span class="badge text-bg-info fs-6" aria-label="{{ t(key="review.waiting_count", count=page.reviews.waiting) }}">{{ page.reviews.waiting }}</span>{% endif %}
     {{ atoms::icon(name="fa-chevron-right", class="text-muted") }}
   </a>
   {% endif %}

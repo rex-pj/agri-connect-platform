@@ -88,6 +88,8 @@ pub struct ServicesSection {
 pub struct ReviewsLink {
     pub href: String,
     pub total: usize,
+    /// Waiting for an admin to show them.
+    pub waiting: usize,
 }
 
 #[derive(Serialize)]
@@ -200,10 +202,14 @@ async fn dashboard_page(
         _ => None,
     };
     let reviews = match &profile {
-        Some(_) => Some(ReviewsLink {
-            href: url("provider_reviews", &[])?,
-            total: state.usecases.review.list_own_reviews(actor).await?.len(),
-        }),
+        Some(_) => {
+            let own = state.usecases.review.list_own_reviews(actor).await?;
+            Some(ReviewsLink {
+                href: url("provider_reviews", &[])?,
+                total: own.len(),
+                waiting: own.iter().filter(|r| !r.is_visible).count(),
+            })
+        }
         None => None,
     };
     let body = DashboardPage {

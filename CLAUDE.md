@@ -97,7 +97,7 @@ Templates live under `backend/crates/web/templates/` and are organized by atomic
 | Atoms     | `atoms/`     | `icon`, `logo`, `alert`, `inquiry_status`, `photo_placeholder`                                 |
 | Molecules | `molecules/` | `form_field`, `page_hero`, `section_header`, `pagination_nav`, `empty_state`, `admin_header`   |
 | Organisms | `organisms/` | `product_card`, `provider_card`, `category_grid`, `contact_sheet`, `confirm_sheet`, `*_fields` |
-| Layouts   | `layouts/`   | `app.html` (public + provider), `admin.html` (admin panel)                                     |
+| Layouts   | `layouts/`   | `app.html` (public + provider), `admin.html` (admin panel), `partner.html` (partner report)   |
 
 **Rules:**
 
@@ -297,7 +297,7 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 
 ## Page Route Map
 
-Every page is a handler in `backend/crates/web/src/pages/`, routed in `web/src/routings/app_routing.rs`. Public and provider pages use `layouts/app.html`; admin pages use `layouts/admin.html`.
+Every page is a handler in `backend/crates/web/src/pages/`, routed in `web/src/routings/app_routing.rs`. Public and provider pages use `layouts/app.html`; admin pages use `layouts/admin.html`; the partner's report uses `layouts/partner.html` (brand, language, logout: no farmer tabs, search or footer).
 
 ### Auth
 

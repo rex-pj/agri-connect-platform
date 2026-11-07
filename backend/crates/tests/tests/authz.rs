@@ -5,7 +5,9 @@ use axum::{
     body::Body,
     http::{header, Method, Request, StatusCode},
 };
-use integration_tests::{first_admin, json_body, register_provider, send, Env};
+use integration_tests::{
+    first_admin, json_body, register_provider, send, with_product_category, Env,
+};
 use sea_orm::ConnectionTrait;
 use web::{app_state::AppState, routings::app_routing::RouterConfig};
 
@@ -256,7 +258,7 @@ async fn a_provider_with_a_revoked_write_permission_can_still_read() {
             Method::POST,
             "/api/provider/products",
             &token,
-            r#"{"category_id":4,"name":"Gạo"}"#,
+            &with_product_category(&e, r#"{"name":"Gạo"}"#).await,
         ),
     )
     .await;

@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use application::{
     authz::Actor,
     inputs::{ContractInput, PartnerInput},
-    outputs::{NamedDto, PartnerDetailDto, PartnerDto, PartnerKpiDto},
+    outputs::{NamedDto, PartnerDetailDto, PartnerDto, PartnerKpiDto, SponsorCandidateDto},
 };
 use axum::{extract::State, http::StatusCode, response::Response};
 use chrono::NaiveDate;
@@ -30,7 +30,7 @@ use crate::{
         admin::{is_refusal, render_admin, url, Outcome},
         forms::{reason, FormErrors},
         listing::parse_opt,
-        see_other,
+        parse_id, see_other,
     },
 };
 
@@ -82,6 +82,18 @@ pub struct ContractForm {
 }
 
 impl ContractForm {
+    /// A contract as stored, for its edit form.
+    fn from_dto(c: &application::outputs::ContractDto) -> Self {
+        Self {
+            location_id: c.location_id.to_string(),
+            starts_on: c.starts_on.to_string(),
+            ends_on: c.ends_on.to_string(),
+            monthly_fee: c.monthly_fee.to_string(),
+            note: c.note.clone().unwrap_or_default(),
+            category_ids: c.categories.iter().map(|cat| cat.id).collect(),
+        }
+    }
+
     fn from_map(form: &HashMap<String, String>) -> Self {
         let get = |k: &str| form.get(k).cloned().unwrap_or_default();
         let mut category_ids: Vec<i32> = form
@@ -247,6 +259,8 @@ pub enum Typed {
     Profile(PartnerForm),
     Account(AccountForm),
     Contract(ContractForm),
+    /// The edit form of the contract with this id.
+    ContractEdit(i32, ContractForm),
 }
 
 #[derive(Serialize)]
@@ -255,13 +269,18 @@ pub struct SponsoredRow {
     pub remove_action: String,
 }
 
-/// One contract on the page: its actions and the providers it may sponsor.
+/// One contract on the page: its edit form (open again after a refusal),
+/// its actions and the providers it may sponsor.
 #[derive(Serialize)]
 pub struct ContractRow {
     pub contract: application::outputs::ContractDto,
+    pub edit_action: String,
+    pub form: ContractForm,
+    pub errors: FormErrors,
+    pub edit_open: bool,
     pub delete_action: String,
     pub sponsor_action: String,
-    pub candidates: Vec<NamedDto>,
+    pub candidates: Vec<SponsorCandidateDto>,
     /// Its sponsored providers, each with its "remove" action.
     pub sponsored: Vec<SponsoredRow>,
 }
@@ -316,8 +335,31 @@ async fn partner_page(
         state.usecases.explore.get_categories(None),
     )?;
     let id_text = id.to_string();
+    // The messages go with the form that was refused.
+    let refused = |typed: bool| {
+        if typed {
+            FormErrors {
+                fields: outcome.errors.fields.clone(),
+                message: outcome.errors.message.clone(),
+            }
+        } else {
+            FormErrors::default()
+        }
+    };
+    let (mut profile, mut account, mut contract, mut edited) = (None, None, None, None);
+    match outcome.form {
+        Some(Typed::Profile(f)) => profile = Some(f),
+        Some(Typed::Account(f)) => account = Some(f),
+        Some(Typed::Contract(f)) => contract = Some(f),
+        Some(Typed::ContractEdit(cid, f)) => edited = Some((cid, f)),
+        None => {}
+    }
     let mut rows = Vec::with_capacity(contracts.len());
     for contract in contracts {
+        let (form, edit_open) = match edited.take_if(|(cid, _)| *cid == contract.id) {
+            Some((_, f)) => (f, true),
+            None => (ContractForm::from_dto(&contract), false),
+        };
         let cid = contract.id.to_string();
         let mut sponsored = Vec::with_capacity(contract.sponsored.len());
         for s in &contract.sponsored {
@@ -331,6 +373,10 @@ async fn partner_page(
             });
         }
         rows.push(ContractRow {
+            edit_action: url("admin_partner_contract", &[("id", &id_text), ("cid", &cid)])?,
+            errors: refused(edit_open),
+            edit_open,
+            form,
             candidates: partners.sponsor_candidates(actor, id, contract.id).await?,
             delete_action: url(
                 "admin_partner_contract_delete",
@@ -344,31 +390,14 @@ async fn partner_page(
             contract,
         });
     }
-    let (mut profile, mut account, mut contract) = (None, None, None);
-    match outcome.form {
-        Some(Typed::Profile(f)) => profile = Some(f),
-        Some(Typed::Account(f)) => account = Some(f),
-        Some(Typed::Contract(f)) => contract = Some(f),
-        None => {}
-    }
-    // The messages go with the form that was refused.
-    let errors_for = |typed: bool| {
-        if typed {
-            FormErrors {
-                fields: outcome.errors.fields.clone(),
-                message: outcome.errors.message.clone(),
-            }
-        } else {
-            FormErrors::default()
-        }
-    };
-    let refused_form = profile.is_some() || account.is_some() || contract.is_some();
+    let any_edit = rows.iter().any(|r| r.edit_open);
+    let refused_form = profile.is_some() || account.is_some() || contract.is_some() || any_edit;
     let path = url("admin_partner", &[("id", &id_text)])?;
     let body = PartnerPage {
-        profile_errors: errors_for(profile.is_some()),
-        account_errors: errors_for(account.is_some()),
-        contract_errors: errors_for(contract.is_some()),
-        errors: errors_for(!refused_form),
+        profile_errors: refused(profile.is_some()),
+        account_errors: refused(account.is_some()),
+        contract_errors: refused(contract.is_some()),
+        errors: refused(!refused_form),
         profile: profile.unwrap_or_else(|| PartnerForm::from_dto(&partner)),
         account: account.unwrap_or_else(|| AccountForm {
             username: partner.account_username.clone().unwrap_or_default(),
@@ -450,7 +479,7 @@ pub async fn show(
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
-    let id = crate::pages::parse_id(&raw_id, ErrorCode::PartnerNotFound)?;
+    let id = parse_id(&raw_id, ErrorCode::PartnerNotFound)?;
     let outcome = Outcome {
         flash: flash.0,
         ..Outcome::default()
@@ -470,7 +499,7 @@ pub async fn update(
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
-    let id = crate::pages::parse_id(&raw_id, ErrorCode::PartnerNotFound)?;
+    let id = parse_id(&raw_id, ErrorCode::PartnerNotFound)?;
     let result = state
         .usecases
         .partner
@@ -505,7 +534,7 @@ pub async fn change_status(
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
-    let id = crate::pages::parse_id(&raw_id, ErrorCode::PartnerNotFound)?;
+    let id = parse_id(&raw_id, ErrorCode::PartnerNotFound)?;
     let active = form.is_active == "true";
     let result = state
         .usecases
@@ -530,7 +559,7 @@ pub async fn assign_account(
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
-    let id = crate::pages::parse_id(&raw_id, ErrorCode::PartnerNotFound)?;
+    let id = parse_id(&raw_id, ErrorCode::PartnerNotFound)?;
     let result = state
         .usecases
         .partner
@@ -564,7 +593,7 @@ pub async fn create_contract(
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
-    let id = crate::pages::parse_id(&raw_id, ErrorCode::PartnerNotFound)?;
+    let id = parse_id(&raw_id, ErrorCode::PartnerNotFound)?;
     let form = ContractForm::from_map(&raw);
     let result = state
         .usecases
@@ -589,6 +618,35 @@ pub struct ReasonForm {
     pub reason: String,
 }
 
+/// POST /admin/partners/{id}/contracts/{cid}: the contract's edit form.
+pub async fn update_contract(
+    Viewer(viewer): Viewer,
+    State(state): State<AppState>,
+    ApiPath((raw_id, raw_cid)): ApiPath<(String, String)>,
+    ApiForm(raw): ApiForm<HashMap<String, String>>,
+) -> Result<Response, Error> {
+    let Some(actor) = viewer else {
+        return see_other(&url("login", &[])?);
+    };
+    let id = parse_id(&raw_id, ErrorCode::PartnerNotFound)?;
+    let cid = parse_id(&raw_cid, ErrorCode::ContractNotFound)?;
+    let form = ContractForm::from_map(&raw);
+    let result = state
+        .usecases
+        .partner
+        .update_contract(&actor, id, cid, form.input())
+        .await;
+    after(
+        &state,
+        &actor,
+        id,
+        result,
+        Flash::ContractSaved,
+        Some(Typed::ContractEdit(cid, form)),
+    )
+    .await
+}
+
 /// POST /admin/partners/{id}/contracts/{cid}/delete
 pub async fn delete_contract(
     Viewer(viewer): Viewer,
@@ -599,8 +657,8 @@ pub async fn delete_contract(
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
-    let id = crate::pages::parse_id(&raw_id, ErrorCode::PartnerNotFound)?;
-    let cid = crate::pages::parse_id(&raw_cid, ErrorCode::ContractNotFound)?;
+    let id = parse_id(&raw_id, ErrorCode::PartnerNotFound)?;
+    let cid = parse_id(&raw_cid, ErrorCode::ContractNotFound)?;
     let result = state
         .usecases
         .partner
@@ -625,9 +683,9 @@ pub async fn add_sponsored(
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
-    let id = crate::pages::parse_id(&raw_id, ErrorCode::PartnerNotFound)?;
-    let cid = crate::pages::parse_id(&raw_cid, ErrorCode::ContractNotFound)?;
-    let business = crate::pages::parse_id(&form.business_id, ErrorCode::ProviderNotFound)?;
+    let id = parse_id(&raw_id, ErrorCode::PartnerNotFound)?;
+    let cid = parse_id(&raw_cid, ErrorCode::ContractNotFound)?;
+    let business = parse_id(&form.business_id, ErrorCode::ProviderNotFound)?;
     let result = state
         .usecases
         .partner
@@ -641,17 +699,18 @@ pub async fn remove_sponsored(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
     ApiPath((raw_id, raw_cid, raw_bid)): ApiPath<(String, String, String)>,
+    ApiForm(form): ApiForm<ReasonForm>,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
-    let id = crate::pages::parse_id(&raw_id, ErrorCode::PartnerNotFound)?;
-    let cid = crate::pages::parse_id(&raw_cid, ErrorCode::ContractNotFound)?;
-    let bid = crate::pages::parse_id(&raw_bid, ErrorCode::ProviderNotFound)?;
+    let id = parse_id(&raw_id, ErrorCode::PartnerNotFound)?;
+    let cid = parse_id(&raw_cid, ErrorCode::ContractNotFound)?;
+    let bid = parse_id(&raw_bid, ErrorCode::ProviderNotFound)?;
     let result = state
         .usecases
         .partner
-        .remove_sponsored(&actor, id, cid, bid)
+        .remove_sponsored(&actor, id, cid, bid, reason(&form.reason))
         .await;
     after(&state, &actor, id, result, Flash::SponsoredRemoved, None).await
 }

@@ -315,6 +315,50 @@ impl PartnerRepositoryTrait for PartnerRepository {
         Ok(self.assemble(rows).await?.into_iter().next())
     }
 
+    async fn update_contract(
+        &self,
+        partner_id: i32,
+        contract_id: i32,
+        c: &NewContract,
+    ) -> Result<bool, Error> {
+        let fail = Self::fail("update_contract");
+        let txn = self.db.begin().await.map_err(&fail)?;
+        let updated = ContractEntity::update_many()
+            .col_expr(partner_contract::Column::StartsOn, Expr::value(c.starts_on))
+            .col_expr(partner_contract::Column::EndsOn, Expr::value(c.ends_on))
+            .col_expr(
+                partner_contract::Column::MonthlyFee,
+                Expr::value(c.monthly_fee),
+            )
+            .col_expr(partner_contract::Column::Note, Expr::value(c.note.clone()))
+            .filter(partner_contract::Column::PartnerId.eq(partner_id))
+            .filter(partner_contract::Column::Id.eq(contract_id))
+            .exec(&txn)
+            .await
+            .map_err(&fail)?
+            .rows_affected
+            > 0;
+        if !updated {
+            return Ok(false);
+        }
+        ContractCategory::delete_many()
+            .filter(partner_contract_category::Column::ContractId.eq(contract_id))
+            .exec(&txn)
+            .await
+            .map_err(&fail)?;
+        ContractCategory::insert_many(c.category_ids.iter().map(|category_id| {
+            partner_contract_category::ActiveModel {
+                contract_id: Set(contract_id),
+                category_id: Set(*category_id),
+            }
+        }))
+        .exec(&txn)
+        .await
+        .map_err(&fail)?;
+        txn.commit().await.map_err(&fail)?;
+        Ok(true)
+    }
+
     async fn delete_contract(&self, partner_id: i32, contract_id: i32) -> Result<bool, Error> {
         ContractEntity::delete_many()
             .filter(partner_contract::Column::PartnerId.eq(partner_id))

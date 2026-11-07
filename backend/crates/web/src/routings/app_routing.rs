@@ -392,6 +392,10 @@ impl AppRouting {
                 post(pages::admin::partners::create_contract),
             )
             .route(
+                "/admin/partners/{id}/contracts/{cid}",
+                post(pages::admin::partners::update_contract),
+            )
+            .route(
                 "/admin/partners/{id}/contracts/{cid}/delete",
                 post(pages::admin::partners::delete_contract),
             )
@@ -549,7 +553,7 @@ impl AppRouting {
             )
             .route(
                 "/api/admin/partners/{id}/contracts/{cid}",
-                delete(PartnerHandler::delete_contract),
+                delete(PartnerHandler::delete_contract).put(PartnerHandler::update_contract),
             )
             .route(
                 "/api/admin/partners/{id}/contracts/{cid}/sponsored",

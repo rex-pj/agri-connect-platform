@@ -193,6 +193,30 @@ async fn a_partner_pays_for_an_area_reads_its_report_and_sponsors_a_shop() {
     assert!(tag < first && first < other, "sponsored first");
     assert_eq!(near.matches("Phun drone taitro").count(), 1, "never twice");
 
+    // Renewed at a new price: edited in place, the area stays.
+    let res = send(
+        &e.router,
+        post_form(
+            &format!("{page}/contracts/{contract}"),
+            &[
+                ("starts_on", "2020-01-01"),
+                ("ends_on", "2099-12-31"),
+                ("monthly_fee", "3.000.000"),
+                (&category_box, "on"),
+            ],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let list = body_text(send(&e.router, get_page("/admin/partners", Some(&admin))).await).await;
+    assert!(list.contains("3.000.000"), "the new price counts");
+    let detail = body_text(send(&e.router, get_page(&page, Some(&admin))).await).await;
+    assert!(
+        detail.contains(&format!(r##"href="#bo-tai-tro-{contract}-{sponsored}""##)),
+        "stopping a sponsorship asks first"
+    );
+
     // The partner account reads its own report, nothing else.
     let res = send(
         &e.router,
@@ -226,6 +250,18 @@ async fn a_partner_pays_for_an_area_reads_its_report_and_sponsors_a_shop() {
         "text/csv; charset=utf-8"
     );
 
+    // Stopping the sponsorship, with a reason, is audited.
+    let res = send(
+        &e.router,
+        post_form(
+            &format!("{page}/contracts/{contract}/sponsored/{sponsored}/delete"),
+            &[("reason", "het han")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+
     // Turned off: no report, no sponsored place.
     let res = send(
         &e.router,
@@ -257,7 +293,7 @@ async fn a_partner_pays_for_an_area_reads_its_report_and_sponsors_a_shop() {
             ),
         )
         .await,
-        "create_partner,create_contract,update_contract,assign_partner_account,hide_partner"
+        "create_partner,create_contract,update_contract,update_contract,assign_partner_account,update_contract,hide_partner"
     );
     e.cleanup().await;
 }

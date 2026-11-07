@@ -941,3 +941,12 @@ pub struct PartnerAccountDto {
     pub partner_id: i32,
     pub username: String,
 }
+
+/// A shop a contract may sponsor: enough to tell two of the same name apart.
+#[derive(Debug, Clone, Serialize)]
+pub struct SponsorCandidateDto {
+    pub id: i32,
+    pub name: String,
+    pub phone: String,
+    pub address: Option<String>,
+}

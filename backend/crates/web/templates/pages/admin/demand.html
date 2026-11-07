@@ -5,7 +5,8 @@
 {% import "organisms/demand_table.html" as demand %}
 {% import "organisms/unmet_searches.html" as unmet %}
 {#- The demand report. `page.body` is web::pages::admin::demand::DemandPage.
-    The area filter is a GET form (works without JS); the header's action
+    The area filter is a GET form that sends itself on change (`autoSubmit`;
+    its button shows without JS); the header's action
     downloads the same table as CSV. The area list says which areas are
     steady: every week at `steady_weekly_leads` or more. -#}
 {% block title %}{{ t(key="admin_menu.demand") }} — {{ site.name }} Admin{% endblock title %}
@@ -15,7 +16,7 @@
 {{ header::admin_header(title=t(key="admin_menu.demand"), icon="fa-chart-column", sub=t(key="demand.sub", count=r.steady_areas), action_href=b.csv_href, action_icon="fa-file-arrow-down", action_label=t(key="demand.download"), action_class="btn-outline-secondary") }}
 <div class="admin-body">
   <p class="small text-muted">{{ t(key="demand.hint", min=r.min_count) }}</p>
-  <form class="d-flex flex-wrap gap-2 align-items-end mb-3" method="get" action="{{ b.action }}">
+  <form class="d-flex flex-wrap gap-2 align-items-end mb-3" method="get" action="{{ b.action }}" x-data="autoSubmit" x-on:change="submit">
     <div>
       <label class="form-label small fw-semibold" for="demand-area">{{ t(key="demand.area") }}</label>
       <select class="form-select" id="demand-area" name="area">
@@ -23,7 +24,7 @@
         {% for o in b.areas %}<option value="{{ o.value }}"{% if o.value == b.area %} selected{% endif %}>{{ o.label }}</option>{% endfor %}
       </select>
     </div>
-    <button type="submit" class="btn btn-outline-success">{{ atoms::icon(name="fa-filter") }} {{ t(key="demand.apply") }}</button>
+    <button type="submit" class="btn btn-outline-success" x-show="withoutScript">{{ atoms::icon(name="fa-filter") }} {{ t(key="demand.apply") }}</button>
   </form>
 
   <section class="admin-card mb-4" aria-label="{{ t(key="demand.title") }}">

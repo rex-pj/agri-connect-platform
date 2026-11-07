@@ -80,6 +80,10 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("admin_partner_account", "/admin/partners/{id}/account"),
     ("admin_partner_contracts", "/admin/partners/{id}/contracts"),
     (
+        "admin_partner_contract",
+        "/admin/partners/{id}/contracts/{cid}",
+    ),
+    (
         "admin_partner_contract_delete",
         "/admin/partners/{id}/contracts/{cid}/delete",
     ),

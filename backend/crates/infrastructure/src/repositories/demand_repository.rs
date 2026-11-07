@@ -76,6 +76,8 @@ struct AreaRow {
     business_id: i32,
     location_id: Option<i32>,
     name: String,
+    phone: String,
+    address: Option<String>,
 }
 
 #[derive(FromQueryResult)]
@@ -197,6 +199,8 @@ impl DemandRepositoryTrait for DemandRepository {
             .select_only()
             .column_as(business::Column::Id, "business_id")
             .column(business::Column::Name)
+            .column(business::Column::Phone)
+            .column(business::Column::Address)
             .expr_as(nearest, "location_id")
             .filter(Expr::cust(r#""businesses".location IS NOT NULL"#))
             .filter(business::Column::IsDemo.eq(false))
@@ -211,9 +215,11 @@ impl DemandRepositoryTrait for DemandRepository {
         Ok(rows
             .into_iter()
             .filter_map(|r| {
-                let name = r.name;
+                let (name, phone, address) = (r.name, r.phone, r.address);
                 r.location_id.map(|location_id| BusinessArea {
                     name,
+                    phone,
+                    address,
                     business_id: r.business_id,
                     location_id,
                 })

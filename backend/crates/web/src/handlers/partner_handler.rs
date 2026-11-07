@@ -155,19 +155,38 @@ impl PartnerHandler {
         Ok(StatusCode::NO_CONTENT)
     }
 
-    /// DELETE /api/admin/partners/{id}/contracts/{cid}/sponsored/{bid} — 204.
+    /// DELETE /api/admin/partners/{id}/contracts/{cid}/sponsored/{bid} —
+    /// `{reason?}`; 204.
     pub async fn remove_sponsored(
         MaybeActor(actor): MaybeActor,
         State(state): State<AppState>,
         ApiPath((id, cid, bid)): ApiPath<(i32, i32, i32)>,
+        body: Option<ApiJson<DeleteWithReasonBody>>,
     ) -> Result<impl IntoResponse, Error> {
         let actor = require_actor(actor)?;
+        let reason = body.and_then(|b| b.0.reason);
         state
             .usecases
             .partner
-            .remove_sponsored(&actor, id, cid, bid)
+            .remove_sponsored(&actor, id, cid, bid, reason)
             .await?;
         Ok(StatusCode::NO_CONTENT)
+    }
+
+    /// PUT /api/admin/partners/{id}/contracts/{cid} — dates, fee, note,
+    /// categories (the area stays); the partner's details.
+    pub async fn update_contract(
+        MaybeActor(actor): MaybeActor,
+        State(state): State<AppState>,
+        ApiPath((id, cid)): ApiPath<(i32, i32)>,
+        ApiJson(req): ApiJson<ContractRequest>,
+    ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
+        let partners = &state.usecases.partner;
+        partners
+            .update_contract(&actor, id, cid, req.into())
+            .await?;
+        Ok(Json(partners.get_partner(&actor, id).await?))
     }
 
     /// GET /api/partner/report — `area?`; the partner account's own report.

@@ -46,6 +46,15 @@ pub trait PartnerRepositoryTrait {
         contract_id: i32,
     ) -> Result<Option<Contract>, Error>;
 
+    /// Replaces a contract's dates, fee, note and categories (not its area),
+    /// in one transaction; false when the partner has no such contract.
+    async fn update_contract(
+        &self,
+        partner_id: i32,
+        contract_id: i32,
+        contract: &NewContract,
+    ) -> Result<bool, Error>;
+
     /// False when the partner has no such contract.
     async fn delete_contract(&self, partner_id: i32, contract_id: i32) -> Result<bool, Error>;
 

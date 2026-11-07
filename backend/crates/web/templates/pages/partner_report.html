@@ -22,7 +22,7 @@
 <div class="detail-body">
   <section class="detail-card">
     <p class="small text-muted">{{ t(key="demand.hint", min=r.min_count) }}</p>
-    <form class="d-flex flex-wrap gap-2 align-items-end mb-3" method="get" action="{{ page.action }}">
+    <form class="d-flex flex-wrap gap-2 align-items-end mb-3" method="get" action="{{ page.action }}" x-data="autoSubmit" x-on:change="submit">
       <div>
         <label class="form-label small fw-semibold" for="partner-area">{{ t(key="demand.area") }}</label>
         <select class="form-select" id="partner-area" name="area">
@@ -30,7 +30,7 @@
           {% for a in page.areas %}<option value="{{ a.value }}"{% if a.value == page.area %} selected{% endif %}>{{ a.label }}</option>{% endfor %}
         </select>
       </div>
-      <button type="submit" class="btn btn-outline-success">{{ atoms::icon(name="fa-filter") }} {{ t(key="demand.apply") }}</button>
+      <button type="submit" class="btn btn-outline-success" x-show="withoutScript">{{ atoms::icon(name="fa-filter") }} {{ t(key="demand.apply") }}</button>
       <a class="btn btn-outline-secondary" href="{{ page.csv_href }}">{{ atoms::icon(name="fa-file-arrow-down") }} {{ t(key="demand.download") }}</a>
     </form>
     {{ demand::demand_table(r=r) }}

@@ -63,6 +63,7 @@ pub enum Flash {
     SponsoredAdded,
     ContractDeleted,
     ContractCreated,
+    ContractSaved,
     PartnerAccountAssigned,
     PartnerDeactivated,
     PartnerActivated,
@@ -85,7 +86,7 @@ pub enum Flash {
 }
 
 impl Flash {
-    const ALL: [Flash; 50] = [
+    const ALL: [Flash; 51] = [
         Flash::ContactSent,
         Flash::PasswordReset,
         Flash::DemoLoaded,
@@ -117,6 +118,7 @@ impl Flash {
         Flash::SponsoredAdded,
         Flash::ContractDeleted,
         Flash::ContractCreated,
+        Flash::ContractSaved,
         Flash::PartnerAccountAssigned,
         Flash::PartnerDeactivated,
         Flash::PartnerActivated,
@@ -171,6 +173,7 @@ impl Flash {
             Flash::SponsoredAdded => "sponsored_added",
             Flash::ContractDeleted => "contract_deleted",
             Flash::ContractCreated => "contract_created",
+            Flash::ContractSaved => "contract_saved",
             Flash::PartnerAccountAssigned => "partner_account_assigned",
             Flash::PartnerDeactivated => "partner_deactivated",
             Flash::PartnerActivated => "partner_activated",

@@ -7,12 +7,15 @@
 {% import "molecules/sheet_header.html" as sheet_head %}
 {% import "organisms/confirm_sheet.html" as confirm %}
 {% import "organisms/partner_fields.html" as fields %}
+{% import "organisms/contract_fields.html" as contract %}
 {#- One partner. `page.body` is web::pages::admin::partners::PartnerPage:
     its profile form, whether it is on (off: its contracts stop, no report,
-    no sponsored places), its account (a sheet), its contracts (each with its
-    sponsored providers, chosen among those counting under the contract's
-    area, and a delete confirmation) and the "add contract" sheet. Each form
-    comes back with its own messages (`*_errors`). -#}
+    no sponsored places), its account (a sheet), its contracts and the
+    "add contract" form below them (long forms stay on the page). Each
+    contract has its edit form in a <details> (open again after a refusal;
+    its area stays), its sponsored shops (chosen among those of its area,
+    each removed after a confirmation with a reason) and a delete
+    confirmation. Each form comes back with its own messages. -#}
 {% block title %}{{ page.body.partner.name }} — {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
@@ -70,28 +73,36 @@
     </section>
   </section>
 
-  {% set contract_open = b.contract_errors.message or b.contract_errors.fields %}
-  <section class="admin-section" id="hop-dong" aria-labelledby="hd-title" x-data="dialog" data-open="{% if contract_open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
-    <div class="admin-section__head">
-      <h2 class="admin-section__title mb-0" id="hd-title">{{ t(key="partner.contracts") }}</h2>
-      <a class="admin-section__link" href="#them-hop-dong" x-on:click.prevent="show">{{ atoms::icon(name="fa-plus") }} {{ t(key="partner.add_contract") }}</a>
-    </div>
+  <section class="admin-section" id="hop-dong" aria-labelledby="hd-title">
+    <h2 class="admin-section__title" id="hd-title">{{ t(key="partner.contracts") }}</h2>
     {% for r in b.contracts %}
     {% set c = r.contract %}
-    <article class="py-3 border-bottom" x-data="dialog" x-on:keydown.escape.window="hide" aria-labelledby="hd-{{ c.id }}">
+    <article class="py-3 border-bottom" id="hd-{{ c.id }}" aria-labelledby="hd-{{ c.id }}-title">
       <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
-        <h3 class="fs-6 fw-bold mb-1" id="hd-{{ c.id }}">{{ c.location_label }}</h3>
+        <h3 class="fs-6 fw-bold mb-1" id="hd-{{ c.id }}-title">{{ c.location_label }}</h3>
         {% if c.in_force %}<span class="badge text-bg-success">{{ t(key="partner.in_force_badge") }}</span>{% else %}<span class="badge text-bg-secondary">{{ t(key="partner.not_in_force") }}</span>{% endif %}
       </div>
       <p class="small mb-1"><time datetime="{{ c.starts_on }}">{{ c.starts_on | full_date }}</time> – <time datetime="{{ c.ends_on }}">{{ c.ends_on | full_date }}</time> · <strong>{{ c.monthly_fee | vnd }}</strong> {{ t(key="partner.per_month") }}</p>
       <p class="mb-1">{% for cat in c.categories %}<span class="ac-tag">{{ cat.name }}</span> {% endfor %}</p>
       {% if c.note %}<p class="small text-muted mb-1">{{ c.note }}</p>{% endif %}
+
+      <details class="my-2"{% if r.edit_open %} open{% endif %}>
+        <summary class="btn btn-sm btn-outline-secondary">{{ atoms::icon(name="fa-pen") }} {{ t(key="partner.edit_contract") }}</summary>
+        <form class="form-stack mt-2" method="post" action="{{ r.edit_action }}#hd-{{ c.id }}" novalidate>
+          {% if r.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=r.errors.message) }}{% endif %}
+          <p class="small text-muted mb-0">{{ t(key="partner.area_fixed") }}</p>
+          {{ contract::contract_fields(form=r.form, errors=r.errors, areas=b.areas, categories=b.categories, prefix="hd" ~ c.id, with_area=false) }}
+          <button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="common.save") }}</button>
+        </form>
+      </details>
+
       <p class="small fw-semibold mb-1">{{ t(key="partner.sponsored") }}</p>
       <ul class="list-unstyled mb-2">
         {% for s in r.sponsored %}
-        <li class="d-flex justify-content-between align-items-center gap-2 py-1">
+        <li class="d-flex justify-content-between align-items-center gap-2 py-1" x-data="dialog" x-on:keydown.escape.window="hide">
           <span>{{ s.provider.name }}</span>
-          <form method="post" action="{{ s.remove_action }}"><button type="submit" class="btn btn-sm btn-outline-danger" aria-label="{{ t(key="partner.unsponsor", name=s.provider.name) }}">{{ atoms::icon(name="fa-xmark") }}</button></form>
+          <a class="btn btn-sm btn-outline-warning" href="#bo-tai-tro-{{ c.id }}-{{ s.provider.id }}" x-on:click.prevent="show">{{ atoms::icon(name="fa-xmark") }} {{ t(key="partner.unsponsor_short") }}</a>
+          {{ confirm::confirm_sheet(id="bo-tai-tro-" ~ c.id ~ "-" ~ s.provider.id, title=t(key="partner.unsponsor", name=s.provider.name), icon="fa-xmark", action=s.remove_action, button=t(key="partner.unsponsor_confirm"), reason_max=limits.audit_reason_max, note=t(key="partner.unsponsor_note")) }}
         </li>
         {% else %}
         <li class="small text-muted">{{ t(key="partner.no_sponsored") }}</li>
@@ -102,46 +113,29 @@
         <div class="flex-grow-1">
           <label class="form-label small" for="sp-{{ c.id }}">{{ t(key="partner.sponsor") }}</label>
           <select class="form-select" id="sp-{{ c.id }}" name="business_id">
-            {% for o in r.candidates %}<option value="{{ o.id }}">{{ o.name }}</option>{% endfor %}
+            {% for o in r.candidates %}<option value="{{ o.id }}">{{ o.name }} · {{ o.phone | phone }}{% if o.address %} · {{ o.address }}{% endif %}</option>{% endfor %}
           </select>
         </div>
         <button type="submit" class="btn btn-outline-success">{{ atoms::icon(name="fa-plus") }} {{ t(key="partner.add_sponsored") }}</button>
       </form>
       {% endif %}
-      <a class="btn btn-sm btn-outline-danger" href="#xoa-hd-{{ c.id }}" x-on:click.prevent="show">{{ atoms::icon(name="fa-trash") }} {{ t(key="partner.delete_contract") }}</a>
-      {{ confirm::confirm_sheet(id="xoa-hd-" ~ c.id, title=t(key="partner.delete_contract_title", name=c.location_label), icon="fa-trash", action=r.delete_action, button=t(key="common.confirm_delete"), reason_max=limits.audit_reason_max, effect="delete", what=t(key="partner.contract_what"), button_class="btn-danger") }}
+      <div x-data="dialog" x-on:keydown.escape.window="hide">
+        <a class="btn btn-sm btn-outline-danger" href="#xoa-hd-{{ c.id }}" x-on:click.prevent="show">{{ atoms::icon(name="fa-trash") }} {{ t(key="partner.delete_contract") }}</a>
+        {{ confirm::confirm_sheet(id="xoa-hd-" ~ c.id, title=t(key="partner.delete_contract_title", name=c.location_label), icon="fa-trash", action=r.delete_action, button=t(key="common.confirm_delete"), reason_max=limits.audit_reason_max, effect="delete", what=t(key="partner.contract_what"), button_class="btn-danger") }}
+      </div>
     </article>
     {% else %}
     <p class="small text-muted">{{ t(key="partner.no_contracts") }}</p>
     {% endfor %}
+  </section>
 
-    <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
-    <section class="contact-sheet" id="them-hop-dong" aria-labelledby="them-hop-dong-title" :class="sheetClass">
-      {{ sheet_head::sheet_header(id="them-hop-dong", title=t(key="partner.add_contract"), icon="fa-file-signature") }}
-      {% set e = b.contract_errors.fields %}
-      {% set f = b.contract %}
-      <form class="contact-sheet__form" method="post" action="{{ b.contract_action }}" novalidate>
-        {% if b.contract_errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.contract_errors.message) }}{% endif %}
-        {{ field::select(id="hd-area", name="location_id", label=t(key="demand.area"), options=b.areas, value_key="id", label_key="label", value=f.location_id, error=e.location_id | default(value=""), required=true, placeholder=t(key="partner.choose_area")) }}
-        <fieldset class="form-field">
-          <legend class="form-label fw-semibold fs-6">{{ t(key="partner.categories") }} <span class="text-danger" aria-hidden="true">*</span></legend>
-          {% for cat in b.categories %}
-          <div class="form-check">
-            <input class="form-check-input" type="checkbox" id="hd-cat-{{ cat.id }}" name="{{ cat.field }}"{% if cat.id in f.category_ids %} checked{% endif %}>
-            <label class="form-check-label" for="hd-cat-{{ cat.id }}">{{ cat.name }}</label>
-          </div>
-          {% endfor %}
-          {% if e.category_ids %}<div class="invalid-feedback d-block">{{ e.category_ids }}</div>{% endif %}
-        </fieldset>
-        <div class="row g-2">
-          <div class="col-6">{{ field::input(id="hd-start", name="starts_on", label=t(key="partner.starts_on"), type="date", value=f.starts_on, required=true) }}</div>
-          <div class="col-6">{{ field::input(id="hd-end", name="ends_on", label=t(key="partner.ends_on"), type="date", value=f.ends_on, error=e.ends_on | default(value=""), required=true) }}</div>
-        </div>
-        {{ field::input(id="hd-fee", name="monthly_fee", label=t(key="partner.monthly_fee"), value=f.monthly_fee, error=e.monthly_fee | default(value=""), required=true, inputmode="numeric", placeholder="2000000") }}
-        {{ field::textarea(id="hd-note", name="note", label=t(key="partner.note"), value=f.note, error=e.note | default(value=""), rows=2) }}
-        <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-file-signature") }} {{ t(key="partner.add_contract") }}</button>
-      </form>
-    </section>
+  <section class="admin-section" id="them-hop-dong" aria-labelledby="them-hop-dong-title">
+    <h2 class="admin-section__title" id="them-hop-dong-title">{{ t(key="partner.add_contract") }}</h2>
+    <form class="form-stack" method="post" action="{{ b.contract_action }}#them-hop-dong" novalidate>
+      {% if b.contract_errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.contract_errors.message) }}{% endif %}
+      {{ contract::contract_fields(form=b.contract, errors=b.contract_errors, areas=b.areas, categories=b.categories, prefix="new") }}
+      <button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-file-signature") }} {{ t(key="partner.add_contract") }}</button>
+    </form>
   </section>
 </div>
 {% endblock content %}

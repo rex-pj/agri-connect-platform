@@ -36,7 +36,7 @@ use crate::{
     inputs::{ContractInput, PartnerInput},
     outputs::{
         AreaRevenueDto, ContractDto, NamedDto, PartnerAccountDto, PartnerDetailDto, PartnerDto,
-        PartnerKpiDto, PartnerReportDto, PublicServiceDto,
+        PartnerKpiDto, PartnerReportDto, PublicServiceDto, SponsorCandidateDto,
     },
     ports::{EventBus, PasswordHasher},
     usecases::{
@@ -262,6 +262,51 @@ impl PartnerUseCase {
         if self.partner_repo.find(partner_id).await?.is_none() {
             return Err(Error::new(ErrorCode::PartnerNotFound));
         }
+        let contract = self.checked_contract(partner_id, input, None).await?;
+        let id = self
+            .partner_repo
+            .create_contract(&contract, actor.user_id)
+            .await?;
+        self.publish(actor, Entity::Contract, id, Change::Created, None)
+            .await;
+        Ok(id)
+    }
+
+    /// Changes a contract's dates, fee, note and categories (renewing it, a
+    /// new price). Its area stays: its sponsored shops belong to it.
+    pub async fn update_contract(
+        &self,
+        actor: &Actor,
+        partner_id: i32,
+        contract_id: i32,
+        input: ContractInput,
+    ) -> Result<()> {
+        actor.require(PERM_PARTNER_MANAGE)?;
+        let current = self.contract_of(partner_id, contract_id).await?;
+        let contract = self
+            .checked_contract(partner_id, input, Some(current.location_id))
+            .await?;
+        if !self
+            .partner_repo
+            .update_contract(partner_id, contract_id, &contract)
+            .await?
+        {
+            return Err(Error::new(ErrorCode::ContractNotFound));
+        }
+        self.publish(actor, Entity::Contract, contract_id, Change::Updated, None)
+            .await;
+        Ok(())
+    }
+
+    /// Every rule of a contract's boxes, reported together. `area` is the
+    /// area of the contract being edited (it cannot change); a new contract
+    /// takes the one sent, which must be an active preset.
+    async fn checked_contract(
+        &self,
+        partner_id: i32,
+        input: ContractInput,
+        area: Option<i32>,
+    ) -> Result<NewContract> {
         let (locations, categories) = tokio::try_join!(
             self.location_repo.list_all(),
             self.category_repo.list_admin()
@@ -275,9 +320,11 @@ impl PartnerUseCase {
             .collect();
         category_ids.sort_unstable();
         category_ids.dedup();
-        let location = input
-            .location_id
-            .filter(|id| locations.iter().any(|l| l.id == *id && l.is_active));
+        let location = area.or_else(|| {
+            input
+                .location_id
+                .filter(|id| locations.iter().any(|l| l.id == *id && l.is_active))
+        });
         let dates = match (input.starts_on, input.ends_on) {
             (Some(s), Some(e)) if e >= s => Some((s, e)),
             _ => None,
@@ -303,24 +350,15 @@ impl PartnerUseCase {
         else {
             return Err(Error::new(ErrorCode::ValidationFailed));
         };
-        let id = self
-            .partner_repo
-            .create_contract(
-                &NewContract {
-                    partner_id,
-                    location_id,
-                    starts_on,
-                    ends_on,
-                    monthly_fee,
-                    note,
-                    category_ids,
-                },
-                actor.user_id,
-            )
-            .await?;
-        self.publish(actor, Entity::Contract, id, Change::Created, None)
-            .await;
-        Ok(id)
+        Ok(NewContract {
+            partner_id,
+            location_id,
+            starts_on,
+            ends_on,
+            monthly_fee,
+            note,
+            category_ids,
+        })
     }
 
     pub async fn delete_contract(
@@ -363,19 +401,21 @@ impl PartnerUseCase {
         actor: &Actor,
         partner_id: i32,
         contract_id: i32,
-    ) -> Result<Vec<NamedDto>> {
+    ) -> Result<Vec<SponsorCandidateDto>> {
         actor.require(PERM_PARTNER_MANAGE)?;
         let contract = self.contract_of(partner_id, contract_id).await?;
         let taken: HashSet<i32> = contract.sponsored.iter().map(|s| s.business_id).collect();
-        let mut candidates: Vec<NamedDto> = self
+        let mut candidates: Vec<SponsorCandidateDto> = self
             .demand_repo
             .business_areas(DEMAND_AREA_RADIUS_M)
             .await?
             .into_iter()
             .filter(|a| a.location_id == contract.location_id && !taken.contains(&a.business_id))
-            .map(|a| NamedDto {
+            .map(|a| SponsorCandidateDto {
                 id: a.business_id,
                 name: a.name,
+                phone: a.phone,
+                address: a.address,
             })
             .collect();
         candidates.sort_by(|a, b| a.name.cmp(&b.name).then(a.id.cmp(&b.id)));
@@ -409,12 +449,15 @@ impl PartnerUseCase {
         Ok(())
     }
 
+    /// Stops sponsoring a shop (asked to confirm, with a reason: it changes
+    /// what a paying partner gets).
     pub async fn remove_sponsored(
         &self,
         actor: &Actor,
         partner_id: i32,
         contract_id: i32,
         business_id: i32,
+        reason: Option<String>,
     ) -> Result<()> {
         actor.require(PERM_PARTNER_MANAGE)?;
         self.contract_of(partner_id, contract_id).await?;
@@ -423,8 +466,14 @@ impl PartnerUseCase {
             .remove_sponsored(contract_id, business_id)
             .await?
         {
-            self.publish(actor, Entity::Contract, contract_id, Change::Updated, None)
-                .await;
+            self.publish(
+                actor,
+                Entity::Contract,
+                contract_id,
+                Change::Updated,
+                reason,
+            )
+            .await;
         }
         Ok(())
     }

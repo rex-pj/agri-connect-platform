@@ -200,8 +200,8 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 | PATCH  | `/api/admin/partners/{id}/status`        | Turn on / off (`is_active`, `reason?`; off: its contracts stop)   |
 | POST   | `/api/admin/partners/{id}/account`       | Link or create its report account (role `partner`)                |
 | POST   | `/api/admin/partners/{id}/contracts`     | Add a contract (`location_id`, `category_ids`, `starts_on`, `ends_on`, `monthly_fee`, `note?`) |
-| DELETE | `/api/admin/partners/{id}/contracts/{cid}` | Delete a contract (`reason?`)                                   |
-| POST / DELETE | `/api/admin/partners/{id}/contracts/{cid}/sponsored[/{bid}]` | Sponsor a shop of the contract's area / stop |
+| PUT / DELETE | `/api/admin/partners/{id}/contracts/{cid}` | Edit a contract (dates, fee, note, categories; not its area) / delete it (`reason?`) |
+| POST / DELETE | `/api/admin/partners/{id}/contracts/{cid}/sponsored[/{bid}]` | Sponsor a shop of the area of the contract / stop (`reason?`, audited) |
 | GET    | `/api/admin/users`                       | User list (paginated)                                             |
 | GET    | `/api/admin/users/{id}`                  | User detail                                                       |
 | PATCH  | `/api/admin/users/{id}/role`             | Update user role                                                  |
@@ -362,7 +362,7 @@ Every page is a handler in `backend/crates/web/src/pages/`, routed in `web/src/r
 | `/admin/reviews`         | Hide (confirm + reason) / show; filter `provider_id`                                                                                               |
 | `/admin/demand`          | Demand report: category × week for one area (`?area=` id or `none`) or all, by channel, searches, unmet searches, steady areas; `/admin/demand.csv` (`report.demand.read`) (`web/src/pages/admin/demand.rs`) |
 | `/admin/partners`        | Partners, paying ones and monthly revenue by area + create sheet (`partner.manage`) (`web/src/pages/admin/partners.rs`)      |
-| `/admin/partners/[id]`   | Edit, turn off (confirm + reason) / on, report account (sheet), contracts (area, categories, dates, fee; add sheet, delete confirm + reason) with sponsored shops of the area |
+| `/admin/partners/[id]`   | Edit, turn off (confirm + reason) / on, report account (sheet), contracts (edit in place: dates, fee, categories, the area stays; delete confirm + reason) with the sponsored shops of their area (remove: confirm + reason), the add-contract form at the end (on the page, not a sheet: long form) |
 | `/admin/logout`          | POST: same as `/logout`, lands on `/login`                                                                                     |
 
 ---

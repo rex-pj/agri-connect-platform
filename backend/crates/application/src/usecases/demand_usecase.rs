@@ -615,6 +615,8 @@ mod tests {
                 business_id: 1,
                 location_id: 10,
                 name: "shop".into(),
+                phone: "0912345678".into(),
+                address: None,
             }],
             sole: vec![SoleCategory {
                 business_id: 1,

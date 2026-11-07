@@ -9,7 +9,9 @@ use std::sync::Arc;
 use tracing::error;
 
 use domain::{
-    models::review::{NewReview, OwnReview, PublicReview, RatingSummary, ReviewAdmin},
+    models::review::{
+        BusinessRating, NewReview, OwnReview, PublicReview, RatingSummary, ReviewAdmin,
+    },
     repositories::review_repository_trait::ReviewRepositoryTrait,
 };
 
@@ -71,6 +73,19 @@ impl From<ReviewAdminRow> for ReviewAdmin {
 struct SummaryRow {
     count: i64,
     average: Option<f64>,
+}
+
+#[derive(FromQueryResult)]
+struct RatingRow {
+    business_id: i32,
+    count: i64,
+    average: f64,
+}
+
+/// The average rating: AVG of a SMALLINT is NUMERIC; as float8 it decodes
+/// to f64.
+fn average_rating() -> SimpleExpr {
+    SimpleExpr::from(Func::avg(Expr::col(review::Column::Rating))).cast_as(Alias::new("float8"))
 }
 
 /// The columns of the admin list and detail, with the business's name.
@@ -235,9 +250,7 @@ impl ReviewRepositoryTrait for ReviewRepository {
     }
 
     async fn summary_public(&self, business_id: i32) -> Result<RatingSummary, Error> {
-        // AVG of a SMALLINT is NUMERIC; as float8 it decodes to f64.
-        let average = SimpleExpr::from(Func::avg(Expr::col(review::Column::Rating)))
-            .cast_as(Alias::new("float8"));
+        let average = average_rating();
         shown_of(business_id)
             .select_only()
             .column_as(review::Column::Id.count(), "count")
@@ -259,6 +272,36 @@ impl ReviewRepositoryTrait for ReviewRepository {
             })
             .map_err(|e| {
                 error!("review summary_public error: {e}");
+                Error::internal("Failed to load reviews.")
+            })
+    }
+
+    async fn ratings_public(&self, business_ids: &[i32]) -> Result<Vec<BusinessRating>, Error> {
+        if business_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        Review::find()
+            .filter(review::Column::BusinessId.is_in(business_ids.iter().copied()))
+            .filter(review::Column::IsVisible.eq(true))
+            .select_only()
+            .column(review::Column::BusinessId)
+            .column_as(review::Column::Id.count(), "count")
+            .column_as(average_rating(), "average")
+            .group_by(review::Column::BusinessId)
+            .into_model::<RatingRow>()
+            .all(self.db.as_ref())
+            .await
+            .map(|rows| {
+                rows.into_iter()
+                    .map(|r| BusinessRating {
+                        business_id: r.business_id,
+                        count: r.count,
+                        average: r.average,
+                    })
+                    .collect()
+            })
+            .map_err(|e| {
+                error!("review ratings_public error: {e}");
                 Error::internal("Failed to load reviews.")
             })
     }

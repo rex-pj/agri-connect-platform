@@ -1,12 +1,12 @@
 //! View models shared by the list pages. Templates get display-ready values;
 //! the formatting rules live here, where they can be tested.
 
-use application::outputs::{BusinessBrowseDto, BusinessSearchDto, PublicServiceDto};
+use application::outputs::{BusinessBrowseDto, BusinessSearchDto, PublicServiceDto, RatingDto};
 use domain::Error;
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::pages::canonical_url;
+use crate::{app_state::AppState, pages::canonical_url};
 
 /// What `organisms/provider_card.html` shows.
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -24,6 +24,8 @@ pub struct ProviderCard {
     /// Metres away, only on the near-me results; the template words it
     /// (`distance` filter).
     pub distance_m: Option<f64>,
+    /// Its shown reviews, once any; set by `rated_providers`.
+    pub rating: Option<RatingDto>,
 }
 
 impl From<BusinessBrowseDto> for ProviderCard {
@@ -35,6 +37,7 @@ impl From<BusinessBrowseDto> for ProviderCard {
             phone: b.phone,
             is_verified: b.is_verified,
             services: b.services,
+            rating: None,
             distance_m: None,
         }
     }
@@ -50,6 +53,7 @@ impl From<BusinessSearchDto> for ProviderCard {
             phone: b.phone,
             is_verified: b.is_verified,
             services: b.services,
+            rating: None,
         }
     }
 }
@@ -75,6 +79,10 @@ pub struct ServiceCard {
     pub locality: Option<String>,
     /// Only on the near-me results.
     pub distance_m: Option<f64>,
+    /// The provider's shown reviews, once any; set by `rated_services`.
+    pub rating: Option<RatingDto>,
+    #[serde(skip)]
+    pub business_id: i32,
 }
 
 impl ServiceCard {
@@ -93,12 +101,41 @@ impl ServiceCard {
             provider_name: s.business_name,
             provider_verified: s.business_verified,
             phone: s.business_phone,
+            business_id: s.business_id,
+            rating: None,
         })
     }
 
     pub fn all(services: Vec<PublicServiceDto>) -> Result<Vec<Self>, Error> {
         services.into_iter().map(Self::new).collect()
     }
+}
+
+/// Service cards with their providers' ratings, read in one query.
+pub async fn rated_services(
+    state: &AppState,
+    services: Vec<PublicServiceDto>,
+) -> Result<Vec<ServiceCard>, Error> {
+    let mut cards = ServiceCard::all(services)?;
+    let ids: Vec<i32> = cards.iter().map(|c| c.business_id).collect();
+    let ratings = state.usecases.review.ratings(&ids).await?;
+    for card in &mut cards {
+        card.rating = ratings.get(&card.business_id).copied();
+    }
+    Ok(cards)
+}
+
+/// Provider cards with their ratings, read in one query.
+pub async fn rated_providers(
+    state: &AppState,
+    mut cards: Vec<ProviderCard>,
+) -> Result<Vec<ProviderCard>, Error> {
+    let ids: Vec<i32> = cards.iter().map(|c| c.id).collect();
+    let ratings = state.usecases.review.ratings(&ids).await?;
+    for card in &mut cards {
+        card.rating = ratings.get(&card.id).copied();
+    }
+    Ok(cards)
 }
 
 /// True when a service's name is just its category's ("Phun thuốc" in

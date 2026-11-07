@@ -24,7 +24,7 @@ use crate::{
     constants::SEARCH_PREVIEW_COUNT,
     extract::ApiQuery,
     pages::{
-        cards::{ProviderCard, ServiceCard},
+        cards::{rated_providers, rated_services, ProviderCard, ServiceCard},
         listing::with_query,
     },
     routes,
@@ -200,24 +200,30 @@ pub async fn show(
 
     let (services, products, providers) = match found {
         Some(f) => (
-            ServiceCard::all(
+            rated_services(
+                &state,
                 f.services
                     .items
                     .into_iter()
                     .take(SEARCH_PREVIEW_COUNT)
                     .collect(),
-            )?,
+            )
+            .await?,
             f.products
                 .items
                 .into_iter()
                 .take(SEARCH_PREVIEW_COUNT)
                 .collect(),
-            f.providers
-                .items
-                .into_iter()
-                .take(SEARCH_PREVIEW_COUNT)
-                .map(ProviderCard::from)
-                .collect(),
+            rated_providers(
+                &state,
+                f.providers
+                    .items
+                    .into_iter()
+                    .take(SEARCH_PREVIEW_COUNT)
+                    .map(ProviderCard::from)
+                    .collect(),
+            )
+            .await?,
         ),
         None => (Vec::new(), Vec::new(), Vec::new()),
     };

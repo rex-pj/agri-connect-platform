@@ -7,7 +7,10 @@
 
 use application::outputs::OwnInquiryDto;
 use axum::{extract::State, response::Response};
-use domain::{constants::INQUIRY_STATUSES, Error, ErrorCode};
+use domain::{
+    constants::{INQUIRY_STATUSES, INQUIRY_STATUSES_REVIEWABLE},
+    Error, ErrorCode,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -16,8 +19,11 @@ use crate::{
     extract::{ApiForm, ApiPath, ApiQuery},
     middleware::auth::Viewer,
     pages::{
+        canonical_url,
         listing::{parse_opt, past_the_end, with_query, Pagination},
-        parse_id, see_other,
+        parse_id,
+        provider::REVIEWS_ANCHOR,
+        see_other,
     },
     routes,
     shell::Shell,
@@ -38,6 +44,9 @@ pub struct ListQuery {
 pub struct InquiryRow {
     pub inquiry: OwnInquiryDto,
     pub action: String,
+    /// The link to review this business, offered once the farmer was
+    /// called back (`contacted`, `closed`): the provider sends it on Zalo.
+    pub review_href: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -51,6 +60,8 @@ pub struct InboxPage {
     /// Sent back with a row's form, so saving returns to the same page.
     pub page: i64,
     pub dashboard_href: String,
+    /// For the review link's message.
+    pub business_name: String,
     pub flash: Option<Flash>,
 }
 
@@ -74,6 +85,17 @@ pub async fn list(
     if let Some(redirect) = past_the_end(&path, &[], inbox.page, inbox.total_pages) {
         return redirect;
     }
+    // The review link: the provider's page at its reviews.
+    let profile = state
+        .usecases
+        .provider_dashboard
+        .get_profile(&actor)
+        .await?;
+    let review_href = format!(
+        "{}#{REVIEWS_ANCHOR}",
+        canonical_url("provider", profile.id, &profile.name)?
+    );
+    let business_name = profile.name;
     let mut rows = Vec::with_capacity(inbox.items.len());
     for inquiry in inbox.items {
         rows.push(InquiryRow {
@@ -81,6 +103,9 @@ pub async fn list(
                 "provider_inquiry_status",
                 &[("id", &inquiry.id.to_string())],
             )?,
+            review_href: INQUIRY_STATUSES_REVIEWABLE
+                .contains(&inquiry.status.as_str())
+                .then(|| review_href.clone()),
             inquiry,
         });
     }
@@ -92,6 +117,7 @@ pub async fn list(
         statuses: INQUIRY_STATUSES,
         page: inbox.page,
         dashboard_href: url("provider_dashboard", &[])?,
+        business_name,
         flash: flash.0,
     };
     let mut response = render_page(&state, &shell, "pages/inbox.html", &page)?;

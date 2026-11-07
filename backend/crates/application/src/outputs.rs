@@ -950,3 +950,11 @@ pub struct SponsorCandidateDto {
     pub phone: String,
     pub address: Option<String>,
 }
+
+/// A provider's shown reviews on a card or a detail page: the average to one
+/// decimal and how many.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct RatingDto {
+    pub average: f64,
+    pub count: i64,
+}

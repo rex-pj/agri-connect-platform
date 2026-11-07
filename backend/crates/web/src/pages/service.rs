@@ -21,7 +21,10 @@ use crate::{
         canonical_url,
         cards::same_label,
         moved_permanently, parse_id,
-        provider::{area_of, ContactLimits, ContactState, LIMITS, RETURN_TO_SERVICE},
+        provider::{
+            area_of, rating_line, ContactLimits, ContactState, RatingLine, LIMITS,
+            RETURN_TO_SERVICE,
+        },
         summary,
     },
     routes,
@@ -41,6 +44,8 @@ pub struct OtherService {
 
 #[derive(Serialize)]
 pub struct ServicePage {
+    /// The provider's rating and the way to its reviews.
+    pub rating: RatingLine,
     pub service: PublicServiceDto,
     /// The category badge is left out when the name already says it.
     pub show_category: bool,
@@ -90,7 +95,7 @@ pub(super) fn service_links(
 
 /// The page around `service`, with the contact form as `contact` left it
 /// (fresh, or re-shown after a refusal). `provider` is the service's own.
-pub(super) fn render(
+pub(super) async fn render(
     state: &AppState,
     shell: &Shell,
     service: PublicServiceDto,
@@ -105,7 +110,9 @@ pub(super) fn render(
     }
     let others = service_links(&provider.services, Some(service.id))?;
     let area = area_of(state.locale(), service.business_address.as_deref());
+    let rating = rating_line(state, &provider).await?;
     let page = ServicePage {
+        rating,
         show_category: !same_label(&service.name, &service.category),
         provider_href: canonical_url("provider", provider.id, &provider.name)?,
         category_href: routes::url(
@@ -175,7 +182,8 @@ pub async fn show(
         ContactState::default(),
         sent,
         StatusCode::OK,
-    )?;
+    )
+    .await?;
     flash.clear_on(&mut response);
     Ok(response)
 }

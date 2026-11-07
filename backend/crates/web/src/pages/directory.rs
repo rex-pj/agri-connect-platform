@@ -12,7 +12,7 @@ use crate::{
     app_state::AppState,
     extract::ApiQuery,
     pages::{
-        cards::ProviderCard,
+        cards::{rated_providers, ProviderCard},
         listing::{past_the_end, FilterForm, Pagination},
         search::TabLink,
         services::{
@@ -69,7 +69,11 @@ pub async fn list(
             "directory.search_placeholder",
         ),
         total: result.total,
-        providers: result.items.into_iter().map(ProviderCard::from).collect(),
+        providers: rated_providers(
+            &state,
+            result.items.into_iter().map(ProviderCard::from).collect(),
+        )
+        .await?,
         back_href: url("home", &[])?,
         tabs: view_tabs(state.locale(), VIEW_PROVIDERS, &borrowed(&kept))?,
         geo_sub: near_me_sub(state.locale(), "geo.sub_shops"),

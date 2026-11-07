@@ -21,7 +21,7 @@ use crate::{
     extract::{ApiPath, ApiQuery},
     locale::Locale,
     pages::{
-        cards::ServiceCard,
+        cards::{rated_services, ServiceCard},
         explore::TAB_PROVIDERS,
         listing::{
             category_sub, chips, find_category, parse_opt, past_the_end, redirect_to_canonical,
@@ -269,7 +269,7 @@ pub async fn list(
             "services.search_placeholder",
         )),
         total: result.total,
-        services: ServiceCard::all(result.items)?,
+        services: rated_services(&state, result.items).await?,
         tabs: view_tabs(state.locale(), VIEW_SERVICES, &borrowed(&kept))?,
         near_href: near_me_href(VIEW_SERVICES, list.service_id)?,
     };
@@ -330,7 +330,7 @@ pub async fn category(
         filters: None,
         category: Some(category),
         total: result.total,
-        services: ServiceCard::all(result.items)?,
+        services: rated_services(&state, result.items).await?,
         tabs: view_tabs(
             state.locale(),
             VIEW_SERVICES,

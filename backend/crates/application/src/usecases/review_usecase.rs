@@ -9,7 +9,7 @@
 //! everyone, so the rules keep a review tied to a real job and give the
 //! provider a voice.
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use domain::{
     events::{Change, DomainEvent, Entity},
@@ -31,7 +31,7 @@ use crate::{
     },
     hashing::sha256_hex,
     inputs::ReviewInput,
-    outputs::{OwnReviewDto, ProviderReviewsDto, PublicReviewDto, ReviewSentDto},
+    outputs::{OwnReviewDto, ProviderReviewsDto, PublicReviewDto, RatingDto, ReviewSentDto},
     ports::EventBus,
     validation::{max_chars, max_chars_opt, non_blank, validate_phone},
 };
@@ -144,9 +144,33 @@ impl ReviewUseCase {
         )?;
         Ok(ProviderReviewsDto {
             count: summary.count,
-            average: summary.average.map(|a| (a * 10.0).round() / 10.0),
+            average: summary.average.map(one_decimal),
             items: items.into_iter().map(PublicReviewDto::from).collect(),
         })
+    }
+
+    /// The shown reviews of these businesses in figures, for the cards that
+    /// list them; one query whatever the count. A business with no shown
+    /// review is absent.
+    pub async fn ratings(&self, business_ids: &[i32]) -> Result<HashMap<i32, RatingDto>> {
+        let mut ids = business_ids.to_vec();
+        ids.sort_unstable();
+        ids.dedup();
+        Ok(self
+            .review_repo
+            .ratings_public(&ids)
+            .await?
+            .into_iter()
+            .map(|r| {
+                (
+                    r.business_id,
+                    RatingDto {
+                        average: one_decimal(r.average),
+                        count: r.count,
+                    },
+                )
+            })
+            .collect())
     }
 
     /// Every review of the actor's business, shown or waiting. A session is
@@ -192,4 +216,9 @@ impl ReviewUseCase {
             .await;
         Ok(())
     }
+}
+
+/// An average as shown: one decimal.
+fn one_decimal(average: f64) -> f64 {
+    (average * 10.0).round() / 10.0
 }

@@ -55,3 +55,10 @@ pub struct OwnReview {
     pub is_visible: bool,
     pub created_on: DateTime<Utc>,
 }
+
+/// A business's shown reviews in figures, for the cards that list it.
+pub struct BusinessRating {
+    pub business_id: i32,
+    pub count: i64,
+    pub average: f64,
+}

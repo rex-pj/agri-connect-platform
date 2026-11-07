@@ -2,7 +2,9 @@ use async_trait::async_trait;
 
 use crate::{
     error::Error,
-    models::review::{NewReview, OwnReview, PublicReview, RatingSummary, ReviewAdmin},
+    models::review::{
+        BusinessRating, NewReview, OwnReview, PublicReview, RatingSummary, ReviewAdmin,
+    },
 };
 
 #[async_trait]
@@ -27,6 +29,10 @@ pub trait ReviewRepositoryTrait {
     async fn list_public(&self, business_id: i32, limit: i64) -> Result<Vec<PublicReview>, Error>;
 
     async fn summary_public(&self, business_id: i32) -> Result<RatingSummary, Error>;
+
+    /// The shown reviews of each of these businesses, in one query; a
+    /// business with none is absent.
+    async fn ratings_public(&self, business_ids: &[i32]) -> Result<Vec<BusinessRating>, Error>;
 
     /// Every review of the business `owner_user` manages, newest first.
     async fn list_for_owner(&self, owner_user: i32) -> Result<Vec<OwnReview>, Error>;

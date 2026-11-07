@@ -14,7 +14,7 @@ use serde::Serialize;
 use crate::{
     app_state::AppState,
     constants::{HOME_CATEGORY_TILES, HOME_PRODUCT_COUNT},
-    pages::cards::{tile, CategoryTile, ServiceCard},
+    pages::cards::{rated_services, tile, CategoryTile, ServiceCard},
     routes,
     shell::Shell,
     views::render_page,
@@ -97,7 +97,7 @@ pub async fn show(shell: Shell, State(state): State<AppState>) -> Result<Respons
 
     let page = HomePage {
         categories: tiles,
-        services: ServiceCard::all(featured.featured_services)?,
+        services: rated_services(&state, featured.featured_services).await?,
         products: featured
             .featured_products
             .into_iter()

@@ -11,6 +11,7 @@
     resolves `self::` against the page rendering it, not this file. -#}
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/badge.html" as badge %}
+{% import "molecules/rating_line.html" as rating %}
 {% import "molecules/call_button.html" as call %}
 {% macro service_grid(services) -%}
 {% set n = services | length %}
@@ -28,6 +29,7 @@
             <span class="fw-bold product-card__price{% if not s.price_note %}-contact{% endif %}">{% if s.price_note %}{{ s.price_note | price_note }}{% else %}{{ t(key="price.ask") }}{% endif %}</span>
             {% if s.show_category %}<span class="text-muted small text-truncate">{{ atoms::icon(name=s.category_icon | default(value="fa-tag"), class="me-1") }}{{ s.category }}</span>{% endif %}
             <p class="small mb-0 d-flex align-items-center gap-1 min-w-0 service-card__provider">{{ atoms::icon(name="fa-shop", class="text-muted") }} <span class="text-truncate">{{ s.provider_name }}</span>{% if s.provider_verified %}{{ badge::badge(text=t(key="status.verified"), icon="fa-circle-check", class="flex-shrink-0", compact=true) }}{% endif %}</p>
+            {% if s.rating %}<p class="small mb-0">{{ rating::rating_line(r=s.rating, compact=true) }}</p>{% endif %}
             {% if s.distance_m or s.locality %}
             <p class="text-muted small mb-0 d-flex align-items-center gap-1 min-w-0">{{ atoms::icon(name="fa-location-dot") }} <span class="text-truncate">{% if s.distance_m %}{{ t(key="distance.away") }} <strong>{{ s.distance_m | distance }}</strong>{% else %}{{ s.locality }}{% endif %}</span></p>
             {% endif %}

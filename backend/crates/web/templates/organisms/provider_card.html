@@ -3,6 +3,7 @@
 {% import "atoms/icon.html" as atoms %}
 {% import "molecules/call_button.html" as call %}
 {% import "atoms/badge.html" as badge %}
+{% import "molecules/rating_line.html" as rating %}
 {% import "atoms/tag.html" as tag %}
 {% macro provider_card(p) -%}
 <article class="card h-100 provider-card hover-lift{% if p.is_verified %} provider-card--verified{% endif %}">
@@ -11,6 +12,7 @@
       <h3 class="card-title fs-6 fw-bold mb-0 flex-grow-1">{{ p.name }}</h3>
       {% if p.is_verified %}{{ badge::badge(text=t(key="status.verified"), icon="fa-circle-check", class="flex-shrink-0") }}{% endif %}
     </div>
+    {% if p.rating %}<p class="small mb-0">{{ rating::rating_line(r=p.rating, compact=true) }}</p>{% endif %}
     {% if p.distance_m or p.locality %}
     <p class="text-muted small mb-0 d-flex align-items-center gap-1 provider-card__loc">
       {{ atoms::icon(name="fa-location-dot") }}

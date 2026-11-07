@@ -169,6 +169,8 @@ pub struct ProviderPage {
     pub reviews: ProviderReviewsDto,
     pub review: ReviewState,
     pub review_comment_max: usize,
+    /// The id of the reviews section, which other pages link to.
+    pub reviews_anchor: &'static str,
     /// The stars a rating can have, for the form's radio buttons.
     pub stars: Vec<i16>,
     /// A review was just sent (flash from the redirect): it waits for an admin.
@@ -251,6 +253,7 @@ fn page(locale: &Locale, provider: BusinessDetailDto, a: Around) -> ProviderPage
         reviews,
         review,
         review_comment_max: REVIEW_COMMENT_MAX,
+        reviews_anchor: REVIEWS_ANCHOR,
         stars: (RATING_MIN..=RATING_MAX).rev().collect(),
         review_sent: flash == Some(Flash::ReviewSent),
         sent: flash == Some(Flash::ContactSent),
@@ -393,12 +396,14 @@ pub async fn submit_contact(
                 Some(Origin::Service(service)) => {
                     return service_page::render(
                         &state, &shell, service, provider, contact, false, status,
-                    );
+                    )
+                    .await;
                 }
                 Some(Origin::Product(product)) => {
                     return product_page::render(
                         &state, &shell, product, provider, contact, false, status,
-                    );
+                    )
+                    .await;
                 }
                 None => {}
             }
@@ -475,3 +480,30 @@ pub async fn submit_review(
         Err(err) => Err(err),
     }
 }
+
+/// A provider's rating on the pages that name it (a service's, a
+/// product's), and where its reviews are, to read them or write one.
+#[derive(Serialize)]
+pub struct RatingLine {
+    pub rating: Option<application::outputs::RatingDto>,
+    pub href: String,
+}
+
+pub(super) async fn rating_line(
+    state: &AppState,
+    provider: &BusinessDetailDto,
+) -> Result<RatingLine, Error> {
+    let rating = state
+        .usecases
+        .review
+        .ratings(&[provider.id])
+        .await?
+        .remove(&provider.id);
+    Ok(RatingLine {
+        rating,
+        href: format!("{}#{REVIEWS_ANCHOR}", canonical(provider)?),
+    })
+}
+
+/// The id of the reviews section on a provider's page.
+pub(super) const REVIEWS_ANCHOR: &str = "danh-gia-list";

@@ -4,10 +4,12 @@
 {% import "atoms/inquiry_status.html" as inquiry %}
 {% import "molecules/empty_state.html" as empty %}
 {% import "molecules/pagination_nav.html" as paging %}
+{% import "molecules/share_button.html" as share %}
 {#- The provider's inbox: farmers who asked to be called back. `page` is
     web::pages::inbox::InboxPage. Each card's status is a small form; with JS
     a change saves it (`autoSubmit`, which hides the button), without JS the
-    button does. -#}
+    button does. Once a farmer was called back, the card offers the review
+    link to send them (the share sheet: Zalo). -#}
 {% block title %}{{ t(key="contact.title") }} — {{ site.name }}{% endblock title %}
 {% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
 {% block main %}
@@ -33,6 +35,7 @@
     {% if q.note %}<p class="detail-card__text mb-1">{{ q.note }}</p>{% endif %}
     <p class="small text-muted mb-2"><time datetime="{{ q.created_on | utc_iso }}">{{ q.created_on | vn_datetime }}</time></p>
     <a class="btn btn-success btn-lg w-100 mb-2" href="tel:{{ q.requester_phone }}">{{ atoms::icon(name="fa-phone") }} {{ t(key="inbox.call", phone=q.requester_phone | phone) }}</a>
+    {% if r.review_href %}<div class="mb-2">{{ share::share_button(title=page.business_name, text=t(key="review.ask_text", name=page.business_name), url=r.review_href, label=t(key="review.ask")) }}</div>{% endif %}
     <form class="d-flex gap-2" method="post" action="{{ r.action }}" x-data="autoSubmit" x-on:change="submit">
       <input type="hidden" name="page" value="{{ page.page }}">
       <label class="visually-hidden" for="status-{{ q.id }}">{{ t(key="inbox.status_of", name=q.requester_name) }}</label>

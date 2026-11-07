@@ -310,8 +310,9 @@ document.addEventListener("alpine:init", () => {
     status: "",
 
     async share() {
-      const { title, text, copied } = this.$el.closest("[data-title]").dataset;
-      const url = window.location.href;
+      const { title, text, copied, url: given } = this.$el.closest("[data-title]").dataset;
+      // `data-url` shares another page (a review link); none is this one.
+      const url = given ? new URL(given, window.location.href).href : window.location.href;
       if (navigator.share) {
         // Cancelling the share sheet rejects; that is not an error.
         await navigator.share({ title, text, url }).catch(() => {});

@@ -19,7 +19,10 @@ use crate::{
     extract::ApiPath,
     pages::{
         canonical_url, moved_permanently, parse_id,
-        provider::{area_of, ContactLimits, ContactState, LIMITS, RETURN_TO_PRODUCT},
+        provider::{
+            area_of, rating_line, ContactLimits, ContactState, RatingLine, LIMITS,
+            RETURN_TO_PRODUCT,
+        },
         service::{service_links, OtherService},
         summary,
     },
@@ -29,6 +32,8 @@ use crate::{
 
 #[derive(Serialize)]
 pub struct ProductPage {
+    /// The provider's rating and the way to its reviews.
+    pub rating: RatingLine,
     pub product: ProductDto,
     /// The seller, with the services the contact form could offer.
     pub provider: BusinessDetailDto,
@@ -61,7 +66,7 @@ pub(super) fn canonical(product: &ProductDto) -> Result<String, Error> {
 
 /// The page around `product`, with the contact form as `contact` left it
 /// (fresh, or re-shown after a refusal). `provider` is the seller.
-pub(super) fn render(
+pub(super) async fn render(
     state: &AppState,
     shell: &Shell,
     product: ProductDto,
@@ -75,7 +80,9 @@ pub(super) fn render(
         contact.values.topic = product.name.clone();
     }
     let area = area_of(state.locale(), provider.address.as_deref());
+    let rating = rating_line(state, &provider).await?;
     let page = ProductPage {
+        rating,
         provider_services: service_links(&provider.services, None)?,
         provider_href: canonical_url("provider", provider.id, &provider.name)?,
         meta_description: product
@@ -136,7 +143,8 @@ pub async fn show(
         ContactState::default(),
         sent,
         StatusCode::OK,
-    )?;
+    )
+    .await?;
     flash.clear_on(&mut response);
     Ok(response)
 }

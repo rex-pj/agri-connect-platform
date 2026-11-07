@@ -85,7 +85,7 @@ async fn the_detail_page_shows_price_description_and_a_call_button() {
     let link = html
         .split(r#"href="/providers/"#)
         .nth(1)
-        .and_then(|rest| rest.split('"').next())
+        .and_then(|rest| rest.split(['"', '#']).next())
         .unwrap_or_default();
     assert!(link.ends_with("/vuon-nongdan"), "provider link: {link:?}");
     assert!(html.contains("Chưa có ảnh"), "says there is no photo yet");

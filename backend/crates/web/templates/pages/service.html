@@ -4,6 +4,7 @@
 {% import "molecules/zalo_button.html" as zalo %}
 {% import "atoms/alert.html" as alerts %}
 {% import "atoms/badge.html" as badge %}
+{% import "molecules/rating_line.html" as rating %}
 {% import "atoms/photo_placeholder.html" as placeholder %}
 {% import "molecules/page_hero.html" as hero %}
 {% import "molecules/share_button.html" as share %}
@@ -33,7 +34,7 @@
     {{ hero::page_hero(title=s.name, variant="compact") }}
     {% endif %}
     <div class="detail-body" x-data="dialog" data-open="{% if page.contact.open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
-      {% if page.sent %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="contact.sent")) }}{% endif %}
+      {% if page.sent %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="contact.sent")) }}<p class="small mb-3">{{ t(key="review.after_contact") }} <a href="{{ page.rating.href }}">{{ t(key="review.write") }}</a></p>{% endif %}
 
       <section class="detail-card">
         <div class="detail-price">
@@ -68,6 +69,7 @@
           <div class="vendor-row__info">
             <strong>{{ s.business_name }}</strong>{% if s.business_verified %} {{ badge::badge(text=t(key="status.verified"), icon="fa-circle-check") }}{% endif %}
             <span class="d-block small text-muted">{{ atoms::icon(name="fa-location-dot", class="me-1") }}{{ page.area }}</span>
+            <span class="d-block small">{% if page.rating.rating %}{{ rating::rating_line(r=page.rating.rating, href=page.rating.href) }}{% else %}<a class="text-decoration-none" href="{{ page.rating.href }}">{{ t(key="review.none_yet") }}</a>{% endif %}</span>
           </div>
         </div>
         <a class="btn btn-outline-success w-100" href="{{ page.provider_href }}">{{ atoms::icon(name="fa-store") }} {{ t(key="shop.see") }}</a>

@@ -126,6 +126,11 @@ async fn only_an_answered_farmer_reviews_and_an_admin_approves_it() {
     )
     .await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    // Called back: the inbox offers the review link to send on Zalo.
+    let inbox =
+        body_text(send(&e.router, get_page("/provider/inquiries", Some(&provider))).await).await;
+    assert!(inbox.contains("Gửi link đánh giá"));
+    assert!(inbox.contains("#danh-gia-list\""));
 
     // Every box is checked at once.
     let res = send(
@@ -188,6 +193,12 @@ async fn only_an_answered_farmer_reviews_and_an_admin_approves_it() {
     assert!(page.contains("Phun kỹ, đúng hẹn"));
     assert!(page.contains("<strong>4</strong>"), "the average");
     assert!(page.contains("1 đánh giá"));
+    // The rating follows the shop: its cards in the directory too.
+    let directory = body_text(send(&e.router, get_page("/providers", None)).await).await;
+    assert!(
+        directory.contains("<strong>4</strong>"),
+        "rated on its card"
+    );
     assert!(
         !page.contains(FARMER),
         "the reviewer's phone is never shown"

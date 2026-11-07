@@ -1,9 +1,11 @@
-{#- Share this page: the phone's share sheet (Zalo, Messenger…), or copy the
-    link where there is none. Needs JS, so it stays hidden without it. -#}
+{#- Share a page: the phone's share sheet (Zalo, Messenger…), or copy the
+    link where there is none. Needs JS, so it stays hidden without it.
+    `url` shares another page than this one (the review link from the
+    inbox); `label` makes it a worded button instead of the hero's icon. -#}
 {% import "atoms/icon.html" as atoms %}
-{% macro share_button(title, text) -%}
-<span class="share" x-data="shareButton" x-cloak data-title="{{ title }}" data-text="{{ text }}" data-copied="{{ t(key="share.copied") }}">
-  <button type="button" class="hero-icon-btn" aria-label="{{ t(key="share.label") }}" x-on:click="share">{{ atoms::icon(name="fa-share-nodes") }}</button>
+{% macro share_button(title, text, url="", label="") -%}
+<span class="share" x-data="shareButton" x-cloak data-title="{{ title }}" data-text="{{ text }}" data-copied="{{ t(key="share.copied") }}"{% if url %} data-url="{{ url }}"{% endif %}>
+  {% if label %}<button type="button" class="btn btn-outline-warning w-100" x-on:click="share">{{ atoms::icon(name="fa-star") }} {{ label }}</button>{% else %}<button type="button" class="hero-icon-btn" aria-label="{{ t(key="share.label") }}" x-on:click="share">{{ atoms::icon(name="fa-share-nodes") }}</button>{% endif %}
   <span class="share__status" role="status" x-text="status"></span>
 </span>
 {%- endmacro share_button %}

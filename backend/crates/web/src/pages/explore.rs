@@ -23,7 +23,7 @@ use crate::{
     constants::{EXPLORE_DEFAULT_RADIUS_M, EXPLORE_RADII_M},
     extract::ApiQuery,
     pages::{
-        cards::{tile, CategoryTile, ProviderCard, ServiceCard},
+        cards::{rated_providers, rated_services, tile, CategoryTile, ProviderCard, ServiceCard},
         listing::{parse_opt, with_query},
         search::TabLink,
     },
@@ -201,7 +201,7 @@ pub async fn show(
             Vec::new(),
             Vec::new(),
             Vec::new(),
-            ServiceCard::all(explore.get_explore_data().await?.featured_services)?,
+            rated_services(&state, explore.get_explore_data().await?.featured_services).await?,
         ),
         Some(p) => {
             let (lat, lng) = p.coordinates();
@@ -244,9 +244,13 @@ pub async fn show(
                 .feature_sponsored(area, service_id, services)
                 .await?;
             (
-                ServiceCard::all(sponsored)?,
-                ServiceCard::all(services)?,
-                providers.into_iter().map(ProviderCard::from).collect(),
+                rated_services(&state, sponsored).await?,
+                rated_services(&state, services).await?,
+                rated_providers(
+                    &state,
+                    providers.into_iter().map(ProviderCard::from).collect(),
+                )
+                .await?,
                 products,
                 Vec::new(),
             )

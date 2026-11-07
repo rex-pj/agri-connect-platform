@@ -8,6 +8,7 @@ pub mod health_usecase;
 pub mod media_usecase;
 pub mod partner_usecase;
 pub mod permission_usecase;
+pub mod price_usecase;
 pub mod product_rules;
 pub mod product_usecase;
 pub mod provider_dashboard_usecase;

@@ -1,0 +1,14 @@
+{#- The boxes of a crop, shared by the create sheet and the edit form.
+    `form` is web::pages::admin::crops::CropForm (as typed), `errors` its
+    FormErrors, `kinds` the kind options (code and word). `first`: the name
+    box takes the focus when its sheet opens. -#}
+{% import "molecules/form_field.html" as field %}
+{% macro crop_fields(form, errors, kinds, name_max, unit_max, prefix, first=false) -%}
+{% set e = errors.fields %}
+{{ field::input(id=prefix ~ "-name", name="name", label=t(key="crop_form.name"), value=form.name, error=e.name | default(value=""), required=true, maxlength=name_max, placeholder=t(key="crop_form.name_placeholder"), first=first) }}
+<div class="row g-2">
+  <div class="col-7">{{ field::select(id=prefix ~ "-kind", name="kind", label=t(key="crop_form.kind"), options=kinds, value_key="value", label_key="label", value=form.kind, error=e.kind | default(value=""), required=true) }}</div>
+  <div class="col-5">{{ field::input(id=prefix ~ "-unit", name="unit", label=t(key="crop_form.unit"), value=form.unit, error=e.unit | default(value=""), required=true, maxlength=unit_max) }}</div>
+</div>
+{{ field::input(id=prefix ~ "-order", name="display_order", label=t(key="form.display_order"), value=form.display_order, type="number", inputmode="numeric", error=e.display_order | default(value="")) }}
+{%- endmacro crop_fields %}

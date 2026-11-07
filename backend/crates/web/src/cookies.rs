@@ -83,10 +83,16 @@ pub enum Flash {
     ProfileSaved,
     ProductCreated,
     ProductSaved,
+    PriceRecorded,
+    PriceDeleted,
+    CropCreated,
+    CropSaved,
+    CropHidden,
+    CropShown,
 }
 
 impl Flash {
-    const ALL: [Flash; 51] = [
+    const ALL: [Flash; 57] = [
         Flash::ContactSent,
         Flash::PasswordReset,
         Flash::DemoLoaded,
@@ -138,6 +144,12 @@ impl Flash {
         Flash::ProfileSaved,
         Flash::ProductCreated,
         Flash::ProductSaved,
+        Flash::PriceRecorded,
+        Flash::PriceDeleted,
+        Flash::CropCreated,
+        Flash::CropSaved,
+        Flash::CropHidden,
+        Flash::CropShown,
     ];
 
     pub const fn as_str(self) -> &'static str {
@@ -193,6 +205,12 @@ impl Flash {
             Flash::ProfileSaved => "profile_saved",
             Flash::ProductCreated => "product_created",
             Flash::ProductSaved => "product_saved",
+            Flash::PriceRecorded => "price_recorded",
+            Flash::PriceDeleted => "price_deleted",
+            Flash::CropCreated => "crop_created",
+            Flash::CropSaved => "crop_saved",
+            Flash::CropHidden => "crop_hidden",
+            Flash::CropShown => "crop_shown",
         }
     }
 

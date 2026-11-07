@@ -958,3 +958,79 @@ pub struct RatingDto {
     pub average: f64,
     pub count: i64,
 }
+
+// ── Crop prices ───────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CropDto {
+    pub id: i32,
+    pub name: String,
+    pub kind: String,
+    pub unit: String,
+    pub display_order: i32,
+    pub is_active: bool,
+}
+
+/// A stored price (the admin's list).
+#[derive(Debug, Clone, Serialize)]
+pub struct CropPriceDto {
+    pub id: i32,
+    pub crop_id: i32,
+    pub crop_name: String,
+    pub unit: String,
+    pub location_id: i32,
+    pub location_label: String,
+    pub observed_on: chrono::NaiveDate,
+    pub price_low: i64,
+    pub price_high: i64,
+    pub note: Option<String>,
+}
+
+/// The latest price of a crop in one area, and how its middle moved since
+/// the price before (`None` when there is none to compare with).
+#[derive(Debug, Clone, Serialize)]
+pub struct PriceQuoteDto {
+    pub crop_id: i32,
+    pub crop_name: String,
+    pub unit: String,
+    pub location_id: i32,
+    pub location_label: String,
+    pub observed_on: chrono::NaiveDate,
+    pub price_low: i64,
+    pub price_high: i64,
+    pub note: Option<String>,
+    pub change: Option<i64>,
+}
+
+/// One crop on the price page: its latest price in each area.
+#[derive(Debug, Clone, Serialize)]
+pub struct CropBoardDto {
+    pub crop_id: i32,
+    pub name: String,
+    pub kind: String,
+    pub unit: String,
+    pub quotes: Vec<PriceQuoteDto>,
+}
+
+/// The price page: the crops with a fresh price (of one area, or of every
+/// area), the areas that have one, and the day it was put together.
+#[derive(Debug, Clone, Serialize)]
+pub struct PriceBoardDto {
+    pub crops: Vec<CropBoardDto>,
+    pub areas: Vec<NamedDto>,
+    pub today: chrono::NaiveDate,
+    pub fresh_days: i64,
+}
+
+/// What the price form offers: the shown crops and the shown areas.
+#[derive(Debug, Clone, Serialize)]
+pub struct PriceChoicesDto {
+    pub crops: Vec<NamedDto>,
+    pub areas: Vec<NamedDto>,
+}
+
+/// The id of a record just stored, when the record itself is not returned.
+#[derive(Debug, Clone, Serialize)]
+pub struct IdDto {
+    pub id: i32,
+}

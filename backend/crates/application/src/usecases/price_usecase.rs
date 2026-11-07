@@ -1,0 +1,572 @@
+//! Crop prices: the farm-gate price of a rice variety or a fruit in one area
+//! (a location preset) on one day, as a low–high range in đồng per unit.
+//!
+//! Admins keep the crops and enter the prices (`price.manage`); entering the
+//! same crop, area and day again replaces that day's price. The public board
+//! shows each crop's latest price per area, only when it is at most
+//! `PRICE_FRESH_DAYS` old (a stale price misleads more than none), with how
+//! its middle moved since the price before.
+
+use std::{collections::HashMap, sync::Arc};
+
+use chrono::{Duration, NaiveDate, Utc};
+use domain::{
+    constants::CROP_KINDS,
+    events::{Change, DomainEvent, Entity},
+    models::price::{Crop, CropFields, CropPrice, NewCropPrice},
+    repositories::{
+        location_repository_trait::LocationRepositoryTrait,
+        price_repository_trait::PriceRepositoryTrait,
+    },
+    Error, ErrorCode, Result, Validation,
+};
+
+use crate::{
+    authz::Actor,
+    catalogue::PERM_PRICE_MANAGE,
+    constants::{
+        ADMIN_PAGE_SIZE, CROP_NAME_MAX, CROP_UNIT_MAX, PRICE_FRESH_DAYS, PRICE_HISTORY_DAYS,
+        PRICE_NOTE_MAX, PRICE_PER_UNIT_MAX,
+    },
+    inputs::{CropInput, PriceInput},
+    outputs::{
+        AdminPagedResponse, CropBoardDto, CropDto, CropPriceDto, NamedDto, PriceBoardDto,
+        PriceChoicesDto, PriceQuoteDto,
+    },
+    pagination::{paginate, total_pages},
+    ports::EventBus,
+    usecases::demand_usecase::vn_today,
+    validation::{audit_reason, max_chars, max_chars_opt, non_blank},
+};
+
+#[derive(Clone)]
+pub struct PriceUseCase {
+    price_repo: Arc<dyn PriceRepositoryTrait + Send + Sync>,
+    location_repo: Arc<dyn LocationRepositoryTrait + Send + Sync>,
+    events: Arc<dyn EventBus>,
+}
+
+impl PriceUseCase {
+    pub fn new(
+        price_repo: Arc<dyn PriceRepositoryTrait + Send + Sync>,
+        location_repo: Arc<dyn LocationRepositoryTrait + Send + Sync>,
+        events: Arc<dyn EventBus>,
+    ) -> Self {
+        Self {
+            price_repo,
+            location_repo,
+            events,
+        }
+    }
+
+    async fn publish(
+        &self,
+        actor: &Actor,
+        entity: Entity,
+        id: i32,
+        change: Change,
+        reason: Option<String>,
+    ) {
+        self.events
+            .publish(DomainEvent {
+                actor_id: Some(actor.user_id),
+                entity,
+                entity_id: id,
+                change,
+                reason: audit_reason(reason),
+            })
+            .await;
+    }
+
+    // ── Crops (admin) ──────────────────────────────────────────────────────────
+
+    /// Every crop, hidden ones too.
+    pub async fn list_crops(&self, actor: &Actor) -> Result<Vec<CropDto>> {
+        actor.require(PERM_PRICE_MANAGE)?;
+        Ok(self
+            .price_repo
+            .list_crops()
+            .await?
+            .into_iter()
+            .map(crop_dto)
+            .collect())
+    }
+
+    pub async fn get_crop(&self, actor: &Actor, id: i32) -> Result<CropDto> {
+        actor.require(PERM_PRICE_MANAGE)?;
+        self.price_repo
+            .find_crop(id)
+            .await?
+            .map(crop_dto)
+            .ok_or_else(|| Error::new(ErrorCode::CropNotFound))
+    }
+
+    pub async fn create_crop(&self, actor: &Actor, input: CropInput) -> Result<i32> {
+        actor.require(PERM_PRICE_MANAGE)?;
+        let fields = validate_crop(input)?;
+        let id = self.price_repo.create_crop(&fields).await?;
+        self.publish(actor, Entity::Crop, id, Change::Created, None)
+            .await;
+        Ok(id)
+    }
+
+    pub async fn update_crop(&self, actor: &Actor, id: i32, input: CropInput) -> Result<()> {
+        actor.require(PERM_PRICE_MANAGE)?;
+        let fields = validate_crop(input)?;
+        if !self.price_repo.update_crop(id, &fields).await? {
+            return Err(Error::new(ErrorCode::CropNotFound));
+        }
+        self.publish(actor, Entity::Crop, id, Change::Updated, None)
+            .await;
+        Ok(())
+    }
+
+    /// Hides a crop (its prices leave the public board, they are kept) or
+    /// shows it again. The same state again changes nothing.
+    pub async fn set_crop_active(
+        &self,
+        actor: &Actor,
+        id: i32,
+        active: bool,
+        reason: Option<String>,
+    ) -> Result<()> {
+        actor.require(PERM_PRICE_MANAGE)?;
+        let (_, changed) = self
+            .price_repo
+            .set_crop_active(id, active)
+            .await?
+            .ok_or_else(|| Error::new(ErrorCode::CropNotFound))?;
+        if changed {
+            self.publish(
+                actor,
+                Entity::Crop,
+                id,
+                Change::Visibility { visible: active },
+                reason,
+            )
+            .await;
+        }
+        Ok(())
+    }
+
+    // ── Prices (admin) ─────────────────────────────────────────────────────────
+
+    /// Every price entered, the newest day first.
+    pub async fn list_prices(
+        &self,
+        actor: &Actor,
+        page: i64,
+    ) -> Result<AdminPagedResponse<CropPriceDto>> {
+        actor.require(PERM_PRICE_MANAGE)?;
+        let (page, offset) = paginate(page, ADMIN_PAGE_SIZE);
+        let (rows, total) = self
+            .price_repo
+            .list_prices(
+                u64::try_from(ADMIN_PAGE_SIZE).unwrap_or(0),
+                u64::try_from(offset).unwrap_or(0),
+            )
+            .await?;
+        Ok(AdminPagedResponse {
+            items: rows.into_iter().map(price_dto).collect(),
+            total,
+            page,
+            per_page: ADMIN_PAGE_SIZE,
+            total_pages: total_pages(total, ADMIN_PAGE_SIZE),
+        })
+    }
+
+    /// The shown crops and areas the price form offers.
+    pub async fn price_choices(&self, actor: &Actor) -> Result<PriceChoicesDto> {
+        actor.require(PERM_PRICE_MANAGE)?;
+        let (crops, areas) = tokio::try_join!(
+            self.price_repo.list_crops(),
+            self.location_repo.list_active()
+        )?;
+        Ok(PriceChoicesDto {
+            crops: crops
+                .into_iter()
+                .filter(|c| c.is_active)
+                .map(|c| NamedDto {
+                    id: c.id,
+                    name: c.name,
+                })
+                .collect(),
+            areas: areas
+                .into_iter()
+                .map(|l| NamedDto {
+                    id: l.id,
+                    name: l.label,
+                })
+                .collect(),
+        })
+    }
+
+    /// Stores a price of a shown crop in a shown area, on a day that is not
+    /// after today (Vietnam); the same crop, area and day again replaces it.
+    /// Its id.
+    pub async fn record_price(&self, actor: &Actor, input: PriceInput) -> Result<i32> {
+        actor.require(PERM_PRICE_MANAGE)?;
+        let (crops, locations) =
+            tokio::try_join!(self.price_repo.list_crops(), self.location_repo.list_all())?;
+        let today = vn_today(Utc::now())?;
+        let crop = input
+            .crop_id
+            .filter(|id| crops.iter().any(|c| c.id == *id && c.is_active));
+        let location = input
+            .location_id
+            .filter(|id| locations.iter().any(|l| l.id == *id && l.is_active));
+        let observed_on = input.observed_on.filter(|d| *d <= today);
+        let in_range = |p: &i64| (1..=PRICE_PER_UNIT_MAX).contains(p);
+        let low = input.price_low.filter(in_range);
+        let high = input.price_high.filter(in_range);
+        let note = non_blank(input.note);
+        Validation::new()
+            .check(crop.is_none(), "crop_id", ErrorCode::CropNotFound)
+            .check(
+                location.is_none(),
+                "location_id",
+                ErrorCode::LocationNotFound,
+            )
+            .check(
+                observed_on.is_none(),
+                "observed_on",
+                ErrorCode::InvalidPriceDate,
+            )
+            .check(low.is_none(), "price_low", ErrorCode::InvalidPrice)
+            .check(
+                high.is_none() || matches!((low, high), (Some(l), Some(h)) if h < l),
+                "price_high",
+                ErrorCode::InvalidPriceRange,
+            )
+            .rule("note", max_chars_opt(&note, PRICE_NOTE_MAX))
+            .finish()?;
+        let (
+            Some(crop_id),
+            Some(location_id),
+            Some(observed_on),
+            Some(price_low),
+            Some(price_high),
+        ) = (crop, location, observed_on, low, high)
+        else {
+            return Err(Error::new(ErrorCode::ValidationFailed));
+        };
+        let id = self
+            .price_repo
+            .record_price(
+                &NewCropPrice {
+                    crop_id,
+                    location_id,
+                    observed_on,
+                    price_low,
+                    price_high,
+                    note,
+                },
+                actor.user_id,
+            )
+            .await?;
+        self.publish(actor, Entity::CropPrice, id, Change::Created, None)
+            .await;
+        Ok(id)
+    }
+
+    pub async fn delete_price(&self, actor: &Actor, id: i32, reason: Option<String>) -> Result<()> {
+        actor.require(PERM_PRICE_MANAGE)?;
+        if !self.price_repo.delete_price(id).await? {
+            return Err(Error::new(ErrorCode::PriceNotFound));
+        }
+        self.publish(actor, Entity::CropPrice, id, Change::Deleted, reason)
+            .await;
+        Ok(())
+    }
+
+    // ── Public ─────────────────────────────────────────────────────────────────
+
+    /// The price page: each shown crop's latest fresh price in `area`, or in
+    /// every area, with the areas that have one.
+    pub async fn board(&self, area: Option<i32>) -> Result<PriceBoardDto> {
+        let today = vn_today(Utc::now())?;
+        let (prices, crops) = tokio::try_join!(
+            self.price_repo
+                .public_prices_since(today - Duration::days(PRICE_HISTORY_DAYS)),
+            self.price_repo.list_crops(),
+        )?;
+        let (crops, areas) = build_board(&prices, &crops, today, area);
+        Ok(PriceBoardDto {
+            crops,
+            areas,
+            today,
+            fresh_days: PRICE_FRESH_DAYS,
+        })
+    }
+
+    /// The home page's few prices: each crop's newest fresh price (whatever
+    /// the area), the most recent first, at most `limit`.
+    pub async fn highlights(&self, limit: usize) -> Result<Vec<PriceQuoteDto>> {
+        Ok(highlights_of(self.board(None).await?.crops, limit))
+    }
+}
+
+/// The middle of a range, what the move between two prices compares.
+fn middle(p: &CropPrice) -> i64 {
+    (p.price_low + p.price_high) / 2
+}
+
+/// The board from prices newest first: per crop (in the crops' order, shown
+/// ones only) the latest price of each area if it is fresh, compared with
+/// the one before; `area` keeps one area. Also the areas with a fresh price,
+/// by label.
+fn build_board(
+    prices: &[CropPrice],
+    crops: &[Crop],
+    today: NaiveDate,
+    area: Option<i32>,
+) -> (Vec<CropBoardDto>, Vec<NamedDto>) {
+    let fresh_from = today - Duration::days(PRICE_FRESH_DAYS);
+    // (crop, area) → [latest, previous], in the newest-first order given.
+    let mut pairs: HashMap<(i32, i32), Vec<&CropPrice>> = HashMap::new();
+    for p in prices {
+        let seen = pairs.entry((p.crop_id, p.location_id)).or_default();
+        if seen.len() < 2 {
+            seen.push(p);
+        }
+    }
+    let mut quotes: HashMap<i32, Vec<PriceQuoteDto>> = HashMap::new();
+    let mut areas: HashMap<i32, String> = HashMap::new();
+    for seen in pairs.values() {
+        let Some(latest) = seen.first().filter(|p| p.observed_on >= fresh_from) else {
+            continue;
+        };
+        areas.insert(latest.location_id, latest.location_label.clone());
+        if area.is_some_and(|a| a != latest.location_id) {
+            continue;
+        }
+        quotes
+            .entry(latest.crop_id)
+            .or_default()
+            .push(PriceQuoteDto {
+                crop_id: latest.crop_id,
+                crop_name: latest.crop_name.clone(),
+                unit: latest.unit.clone(),
+                location_id: latest.location_id,
+                location_label: latest.location_label.clone(),
+                observed_on: latest.observed_on,
+                price_low: latest.price_low,
+                price_high: latest.price_high,
+                note: latest.note.clone(),
+                change: seen.get(1).map(|before| middle(latest) - middle(before)),
+            });
+    }
+    let board = crops
+        .iter()
+        .filter(|c| c.is_active)
+        .filter_map(|c| {
+            let mut quotes = quotes.remove(&c.id)?;
+            quotes.sort_by(|a, b| {
+                a.location_label
+                    .cmp(&b.location_label)
+                    .then(a.location_id.cmp(&b.location_id))
+            });
+            Some(CropBoardDto {
+                crop_id: c.id,
+                name: c.name.clone(),
+                kind: c.kind.clone(),
+                unit: c.unit.clone(),
+                quotes,
+            })
+        })
+        .collect();
+    let mut areas: Vec<NamedDto> = areas
+        .into_iter()
+        .map(|(id, name)| NamedDto { id, name })
+        .collect();
+    areas.sort_by(|a, b| a.name.cmp(&b.name).then(a.id.cmp(&b.id)));
+    (board, areas)
+}
+
+/// Each crop's newest quote (the first area by label on a tie), the most
+/// recent first, then in the crops' order; at most `limit`.
+fn highlights_of(crops: Vec<CropBoardDto>, limit: usize) -> Vec<PriceQuoteDto> {
+    let mut newest: Vec<(usize, PriceQuoteDto)> = crops
+        .into_iter()
+        .enumerate()
+        .filter_map(|(order, c)| {
+            let mut best: Option<PriceQuoteDto> = None;
+            for q in c.quotes {
+                if best.as_ref().is_none_or(|b| q.observed_on > b.observed_on) {
+                    best = Some(q);
+                }
+            }
+            best.map(|q| (order, q))
+        })
+        .collect();
+    newest.sort_by(|(oa, a), (ob, b)| b.observed_on.cmp(&a.observed_on).then(oa.cmp(ob)));
+    newest.into_iter().take(limit).map(|(_, q)| q).collect()
+}
+
+fn validate_crop(input: CropInput) -> Result<CropFields> {
+    let name = input.name.trim().to_owned();
+    let kind = input.kind.trim().to_owned();
+    let unit = input.unit.trim().to_owned();
+    Validation::new()
+        .check(name.is_empty(), "name", ErrorCode::NameRequired)
+        .rule("name", max_chars(&name, CROP_NAME_MAX))
+        .check(
+            !CROP_KINDS.contains(&kind.as_str()),
+            "kind",
+            ErrorCode::InvalidCropKind,
+        )
+        .check(unit.is_empty(), "unit", ErrorCode::UnitRequired)
+        .rule("unit", max_chars(&unit, CROP_UNIT_MAX))
+        .finish()?;
+    Ok(CropFields {
+        name,
+        kind,
+        unit,
+        display_order: input.display_order,
+    })
+}
+
+fn crop_dto(c: Crop) -> CropDto {
+    CropDto {
+        id: c.id,
+        name: c.name,
+        kind: c.kind,
+        unit: c.unit,
+        display_order: c.display_order,
+        is_active: c.is_active,
+    }
+}
+
+fn price_dto(p: CropPrice) -> CropPriceDto {
+    CropPriceDto {
+        id: p.id,
+        crop_id: p.crop_id,
+        crop_name: p.crop_name,
+        unit: p.unit,
+        location_id: p.location_id,
+        location_label: p.location_label,
+        observed_on: p.observed_on,
+        price_low: p.price_low,
+        price_high: p.price_high,
+        note: p.note,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn day(d: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(2026, 11, d).unwrap_or_default()
+    }
+
+    fn crop(id: i32, active: bool) -> Crop {
+        Crop {
+            id,
+            name: format!("crop {id}"),
+            kind: "rice".into(),
+            unit: "kg".into(),
+            display_order: id,
+            is_active: active,
+        }
+    }
+
+    fn price(id: i32, crop_id: i32, location_id: i32, on: u32, low: i64, high: i64) -> CropPrice {
+        CropPrice {
+            id,
+            crop_id,
+            crop_name: format!("crop {crop_id}"),
+            crop_kind: "rice".into(),
+            unit: "kg".into(),
+            location_id,
+            location_label: format!("area {location_id}"),
+            observed_on: day(on),
+            price_low: low,
+            price_high: high,
+            note: None,
+        }
+    }
+
+    #[test]
+    fn the_board_shows_the_latest_fresh_price_and_its_move() {
+        let today = day(20);
+        // Newest first, as the repository gives them.
+        let prices = vec![
+            price(5, 1, 10, 20, 6_200, 6_400),
+            price(4, 1, 11, 19, 6_000, 6_000),
+            price(3, 1, 10, 18, 6_000, 6_200),
+            price(2, 1, 10, 15, 5_000, 5_000),
+            // Crop 2's only price is older than PRICE_FRESH_DAYS.
+            price(1, 2, 10, 1, 90_000, 95_000),
+        ];
+        let (board, areas) = build_board(&prices, &[crop(1, true), crop(2, true)], today, None);
+        assert_eq!(board.len(), 1, "a stale price is not shown");
+        let quotes = &board.first().map(|c| c.quotes.clone()).unwrap_or_default();
+        assert_eq!(quotes.len(), 2);
+        let area10 = quotes.iter().find(|q| q.location_id == 10);
+        assert_eq!(area10.map(|q| q.observed_on), Some(day(20)));
+        assert_eq!(
+            area10.and_then(|q| q.change),
+            Some(200),
+            "6 300 against 6 100"
+        );
+        let area11 = quotes.iter().find(|q| q.location_id == 11);
+        assert_eq!(
+            area11.and_then(|q| q.change),
+            None,
+            "nothing to compare with"
+        );
+        assert_eq!(
+            areas.iter().map(|a| a.id).collect::<Vec<_>>(),
+            vec![10, 11],
+            "only areas with a fresh price"
+        );
+
+        let (one, areas) = build_board(&prices, &[crop(1, true)], today, Some(11));
+        assert_eq!(one.first().map(|c| c.quotes.len()), Some(1));
+        assert_eq!(
+            areas.len(),
+            2,
+            "the area list does not shrink with the filter"
+        );
+
+        let (hidden, _) = build_board(&prices, &[crop(1, false)], today, None);
+        assert!(hidden.is_empty(), "a hidden crop is not shown");
+    }
+
+    #[test]
+    fn highlights_take_each_crops_newest_price_most_recent_first() {
+        let today = day(20);
+        let prices = vec![
+            price(4, 2, 10, 20, 80_000, 85_000),
+            price(3, 1, 11, 19, 6_000, 6_000),
+            price(2, 1, 10, 17, 6_100, 6_100),
+            price(1, 3, 10, 18, 30_000, 30_000),
+        ];
+        let crops = [crop(1, true), crop(2, true), crop(3, true)];
+        let (board, _) = build_board(&prices, &crops, today, None);
+        let top = highlights_of(board, 2);
+        assert_eq!(
+            top.iter()
+                .map(|q| (q.crop_id, q.location_id))
+                .collect::<Vec<_>>(),
+            vec![(2, 10), (1, 11)]
+        );
+    }
+
+    #[test]
+    fn a_crop_needs_a_name_a_known_kind_and_a_unit() {
+        let err = validate_crop(CropInput {
+            name: " ".into(),
+            kind: "vegetable".into(),
+            unit: "".into(),
+            display_order: 0,
+        })
+        .err();
+        let fields: Vec<&str> = err
+            .as_ref()
+            .map(|e| e.fields().iter().map(|f| f.field).collect())
+            .unwrap_or_default();
+        assert_eq!(fields, vec!["name", "kind", "unit"]);
+    }
+}

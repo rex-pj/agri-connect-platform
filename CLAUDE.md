@@ -128,6 +128,8 @@ Templates live under `backend/crates/web/templates/` and are organized by atomic
 | `search_events`         | id, query, category_id, location_id, results, created_on                                               | What was searched; never who                   |
 | `partners`              | id, name, kind, contact_name, phone, email, account_id, is_active                                      | Kinds: `brand`, `dealer`, `cooperative`, `exporter` |
 | `partner_contracts`     | id, partner_id, location_id, starts_on, ends_on, monthly_fee (+ `partner_contract_categories`, `partner_sponsored`) | In force between its dates while the partner is on |
+| `crops`                 | id, name (UNIQUE), kind, unit, display_order, is_active                                                | Kinds: `rice`, `fruit`; seeded when empty, hidden never deleted |
+| `crop_prices`           | id, crop_id, location_id, observed_on, price_low, price_high, note                                     | One per crop × area × day (again replaces it)  |
 
 ### Geo Query Pattern
 
@@ -159,6 +161,7 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 | GET    | `/api/explore/featured`            | Home featured data: services (one per verified provider), providers, products                          |
 | GET    | `/api/explore/categories`          | Category listing (filter by `type=service\|product`)                                                   |
 | GET    | `/api/explore/locations`           | Location presets listing                                                                               |
+| GET    | `/api/explore/prices`              | Crop prices: each shown crop's latest price per area within `PRICE_FRESH_DAYS`, its move (`location_id?`)  |
 | GET    | `/api/explore/products`            | Browse products (paginated, filter by `category_id?`)                                                  |
 | GET    | `/api/explore/products/{id}`       | Product detail                                                                                         |
 | POST   | `/api/explore/contact`             | Submit contact/inquiry (rate-limited: 30/min)                                                          |
@@ -227,6 +230,11 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 | PATCH  | `/api/admin/inquiries/{id}/status`       | Update inquiry status                                             |
 | GET    | `/api/admin/reviews`                     | Review list (paginated, `provider_id?`)                           |
 | PATCH  | `/api/admin/reviews/{id}/visibility`     | Toggle review visibility                                          |
+| GET / POST | `/api/admin/crops`                   | Crops (hidden too) / add one (201) (`price.manage`)               |
+| GET / PUT | `/api/admin/crops/{id}`               | Crop detail / edit                                                |
+| PATCH  | `/api/admin/crops/{id}/status`           | Show / hide a crop (`is_active`, `reason?`)                       |
+| GET / POST | `/api/admin/prices`                  | Prices entered, newest day first (`page?`) / enter one (`crop_id`, `location_id`, `observed_on`, `price_low`, `price_high?`, `note?`; 201 `{id}`) |
+| DELETE | `/api/admin/prices/{id}`                 | Delete a price (`reason?`)                                        |
 | GET    | `/api/admin/locations`                   | Location preset list                                              |
 | POST   | `/api/admin/locations`                   | Create location preset                                            |
 | GET    | `/api/admin/locations/{id}`              | Location preset detail                                            |
@@ -327,6 +335,7 @@ Every page is a handler in `backend/crates/web/src/pages/`, routed in `web/src/r
 | `/services/[id]/[slug]`                                  | Service detail + the provider's other services + contact form with it chosen (`return_to=service`) (`web/src/pages/service.rs`)          |
 | `/search`                                                | Services + products + shops for `q`; link tabs (`tab=`) work without JS (`web/src/pages/search.rs`)                                      |
 | `/explore`                                               | Services, products and shops near a position (`ac-geolocate`) or preset, tabs in that order (as `/search`); featured services before one (`explore.rs`)     |
+| `/prices`                                                | Crop prices, rice then fruit, latest per area with its move; GET area filter (`autoSubmit`) (`web/src/pages/prices.rs`); home shows `HOME_PRICES_SHOWN` |
 | `/providers`                                             | Provider directory (new sign-ups without a service too); found by name or by their services (`web/src/pages/directory.rs`)               |
 | `/providers/[id]`                                        | 301 → `/providers/[id]/[slug]`                                                                                                           |
 | `/providers/[id]/[slug]`                                 | Provider detail: services, products, shown reviews with replies + "write a review" sheet, contact form (`web/src/pages/provider.rs`)                       |
@@ -362,6 +371,8 @@ Every page is a handler in `backend/crates/web/src/pages/`, routed in `web/src/r
 | `/admin/reviews`         | Hide (confirm + reason) / show; filter `provider_id`                                                                                               |
 | `/admin/demand`          | Demand report: category × week for one area (`?area=` id or `none`) or all, by channel, searches, unmet searches, steady areas; `/admin/demand.csv` (`report.demand.read`) (`web/src/pages/admin/demand.rs`) |
 | `/admin/partners`        | Partners, paying ones and monthly revenue by area + create sheet (`partner.manage`) (`web/src/pages/admin/partners.rs`)      |
+| `/admin/prices`          | Prices entered, paged (row: delete, confirm + reason) + "enter a price" sheet (`price.manage`) (`web/src/pages/admin/prices.rs`) |
+| `/admin/crops`, `/admin/crops/[id]` | Crops (row: hide (confirm + reason) / show, open) + create sheet; edit, hide / show (`web/src/pages/admin/crops.rs`) |
 | `/admin/partners/[id]`   | Edit, turn off (confirm + reason) / on, report account (sheet), contracts (edit in place: dates, fee, categories, the area stays; delete confirm + reason) with the sponsored shops of their area (remove: confirm + reason), the add-contract form at the end (on the page, not a sheet: long form) |
 | `/admin/logout`          | POST: same as `/logout`, lands on `/login`                                                                                     |
 
@@ -411,7 +422,7 @@ Grow the rest only once one area sustains real leads week after week (the admin 
 - [x] Partners: brand, dealer, cooperative or exporter; contracts by area × categories × dates × monthly fee; a `partner` account that reads only its report; paying partners and revenue by area
 - [x] Sponsored placement: a contract's providers of its area shown first on that area's near-me page, labelled "Tài trợ", moved up, never hiding the others, counted like any lead
 - [x] Compliance directory: export-compliance service categories (growing-area codes, residue testing, traceability), sponsored like any other
-- [ ] Crop price feed: daily price tracking for rice and fruit
+- [x] Crop price feed: the admin enters the day's farm-gate price of a crop per area; `/prices` and the home page show the fresh ones
 - [ ] Zalo Mini App: deep integration into Zalo ecosystem for fastest user acquisition
 
 ---
@@ -478,6 +489,7 @@ The weekly leads table is the sales argument: "last week in Cai Lậy, X farmers
 - Reviews (`ReviewUseCase`): a farmer reviews a provider only from the phone of a contact request that provider answered (`review_needs_contact` otherwise), once (`review_already_sent`, from the UNIQUE on `reviewer_phone_hash`); the phone is kept only as `hashing::sha256_hex` (the one SHA-256 helper) and never shown. A new review is hidden; the admin's "show" on `/admin/reviews` is the approval ("Chờ duyệt" until then). The owner's answer (`reply_own_review`, owner-scoped in one statement) shows under the review once it is shown; a blank answer removes it. Stars render through `atoms/stars.html` everywhere. A provider's rating follows it: service and provider cards (`cards::rated_services` / `rated_providers`, one `ratings` query per list) and the service and product pages (`molecules/rating_line.html`, linking to its reviews, `REVIEWS_ANCHOR`). After a contact request the page says a review comes once the provider called back, and the inbox offers each answered request the review link to send (`share_button` with `url`).
 - The demand report (`DemandReportUseCase`) counts leads (call and Zalo taps, inquiries without spam) of non-demo businesses over the `DEMAND_WEEKS` whole weeks before this one, Monday to Sunday in Vietnam (`VN_UTC_OFFSET_SECS`, the one offset). A lead counts under its business's area: the nearest active location preset within `DEMAND_AREA_RADIUS_M` (else "no area"); a tap on a shop with one live service takes that service's category. Any figure above zero and under `DEMAND_REPORT_MIN_COUNT` is hidden, and so is a total that would give exactly one hidden figure away; every view of the figures (page, CSV, JSON, a partner's) goes through the same `aggregate`. Steady areas: every report week at `STEADY_WEEKLY_LEADS`. Searches (`record_search`) are stored in the background with no identity: words (lowercased, `SEARCH_QUERY_MAX`), category, area, result count; a page never waits for them. A signed-in visitor's are skipped, and the same search by the same visitor within `SEARCH_REPEAT_SECS` counts once (`pages::visitor`: the address is hashed in memory only, never stored).
 - Partners (`PartnerUseCase`): a contract is in force between its dates (both included, Vietnam days) while its partner is on; the revenue figures are the monthly fees of contracts in force today. A partner account (role `partner`) reads only `ReportScope { areas, categories }` of its contracts in force. Sponsored shops must count under the contract's area; on `/explore` they are moved up under "Tài trợ" (`feature_sponsored`: one service per shop, at most `SPONSORED_SHOWN`), never hidden, never shown twice, counted by the same call beacon. "Assign an account" forms (provider, partner) share `account_rules::account_for_role`.
+- Crop prices (`PriceUseCase`): the admin (`price.manage`) enters a low–high price in đồng per unit for a shown crop in a shown area on a day not after today (Vietnam), at most `PRICE_PER_UNIT_MAX`; the same crop, area and day again replaces it (UNIQUE, upsert). The board (`build_board`, one place) shows each shown crop's latest price per area only within `PRICE_FRESH_DAYS`, with the move of its middle since the price before (`PRICE_HISTORY_DAYS` back); a hidden crop or area leaves it. The tab is `wide_only`; on a phone the home strip (`molecules/price_line.html`) leads there.
 - Repository queries use Sea-ORM's query builder (`find`, `update_many`, `Query::select` subqueries, `lock_exclusive` in a transaction), not raw SQL strings; `Expr::cust_with_values` only for a PostGIS fragment the builder cannot express.
 - Every list sort ends with an `id` tiebreaker, and price sorts put unpriced products last, so pages never repeat or skip rows.
 
@@ -553,6 +565,7 @@ Public content pages fill `{% block title %}` and `{% block meta %}` (a `<meta n
 | `/services`, `/services/category/[id]/[slug]`                | Yes          | Category name in title                                  |
 | `/services/[id]/[slug]`                                      | Yes          | Service + provider name in title, description in meta   |
 | `/providers`                                                 | Yes          | Static title + description                              |
+| `/prices`                                                    | Yes          | Area name in title when filtered                        |
 | `/explore`                                                   | Yes          | Near-me page                                            |
 | `/providers/[id]/[slug]`                                     | Yes          | Provider name & description in meta                     |
 | `/account`, `/provider/**`                                   | No           | Authenticated; `<meta name="robots" content="noindex">` |

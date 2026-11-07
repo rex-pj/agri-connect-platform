@@ -25,8 +25,9 @@ use crate::{
         admin_handler::AdminHandler, auth_handler::AuthHandler, explore_handler::ExploreHandler,
         health_handler::HealthHandler, media_handler::MediaHandler,
         partner_handler::PartnerHandler, permission_handler::PermissionHandler,
-        products_handler::ProductsHandler, provider_dashboard_handler::ProviderDashboardHandler,
-        role_handler::RoleHandler, setup_handler::SetupHandler, stats_handler::StatsHandler,
+        price_handler::PriceHandler, products_handler::ProductsHandler,
+        provider_dashboard_handler::ProviderDashboardHandler, role_handler::RoleHandler,
+        setup_handler::SetupHandler, stats_handler::StatsHandler,
     },
     middleware::{
         client_ip, language, origin,
@@ -114,6 +115,7 @@ impl AppRouting {
             .route("/explore", get(pages::explore::show))
             .route("/search", get(pages::search::show))
             .route("/services", get(pages::services::list))
+            .route("/prices", get(pages::prices::show))
             .route(
                 "/services/category/{id}/{slug}",
                 get(pages::services::category),
@@ -154,6 +156,7 @@ impl AppRouting {
                 get(ExploreHandler::get_categories),
             )
             .route("/api/explore/locations", get(ExploreHandler::get_locations))
+            .route("/api/explore/prices", get(PriceHandler::board))
             // GET /api/explore/products — replaces the old /products/browse verb path
             .route(
                 "/api/explore/products",
@@ -298,6 +301,26 @@ impl AppRouting {
             .route(
                 "/admin/categories/{id}/status",
                 post(pages::admin::categories::change_status),
+            )
+            .route(
+                "/admin/prices",
+                get(pages::admin::prices::list).post(pages::admin::prices::create),
+            )
+            .route(
+                "/admin/prices/{id}/delete",
+                post(pages::admin::prices::delete),
+            )
+            .route(
+                "/admin/crops",
+                get(pages::admin::crops::list).post(pages::admin::crops::create),
+            )
+            .route(
+                "/admin/crops/{id}",
+                get(pages::admin::crops::show).post(pages::admin::crops::update),
+            )
+            .route(
+                "/admin/crops/{id}/status",
+                post(pages::admin::crops::change_status),
             )
             .route(
                 "/admin/locations",
@@ -575,6 +598,24 @@ impl AppRouting {
                 "/api/admin/users/{id}/permissions",
                 get(PermissionHandler::list_by_user),
             )
+            // Crop prices
+            .route(
+                "/api/admin/crops",
+                get(PriceHandler::list_crops).post(PriceHandler::create_crop),
+            )
+            .route(
+                "/api/admin/crops/{id}",
+                get(PriceHandler::get_crop).put(PriceHandler::update_crop),
+            )
+            .route(
+                "/api/admin/crops/{id}/status",
+                patch(PriceHandler::set_crop_status),
+            )
+            .route(
+                "/api/admin/prices",
+                get(PriceHandler::list_prices).post(PriceHandler::record_price),
+            )
+            .route("/api/admin/prices/{id}", delete(PriceHandler::delete_price))
             // Locations
             .route("/api/admin/locations", get(AdminHandler::list_locations))
             .route("/api/admin/locations", post(AdminHandler::create_location))

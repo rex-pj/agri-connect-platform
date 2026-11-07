@@ -143,3 +143,22 @@ pub struct ContractInput {
     pub note: Option<String>,
     pub category_ids: Vec<i32>,
 }
+
+/// A crop's boxes (admin create and edit).
+pub struct CropInput {
+    pub name: String,
+    pub kind: String,
+    pub unit: String,
+    pub display_order: i32,
+}
+
+/// A price as entered: a date that did not parse is `None` and refused like
+/// a missing one; the same crop, area and day again replaces the price.
+pub struct PriceInput {
+    pub crop_id: Option<i32>,
+    pub location_id: Option<i32>,
+    pub observed_on: Option<chrono::NaiveDate>,
+    pub price_low: Option<i64>,
+    pub price_high: Option<i64>,
+    pub note: Option<String>,
+}

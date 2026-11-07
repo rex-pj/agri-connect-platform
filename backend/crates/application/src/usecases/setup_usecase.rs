@@ -57,6 +57,7 @@ impl SetupUseCase {
             bootstrapped_grants = report.bootstrapped_grants,
             categories = report.categories_inserted,
             locations = report.locations_inserted,
+            crops = report.crops_inserted,
             "reference catalogue applied"
         );
         if !report.unknown_permissions.is_empty() {

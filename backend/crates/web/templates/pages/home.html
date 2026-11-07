@@ -6,10 +6,12 @@
 {% import "molecules/geo_cta.html" as geo %}
 {% import "molecules/empty_state.html" as empty %}
 {% import "molecules/provider_cta.html" as seller %}
+{% import "molecules/price_line.html" as price %}
 {#- Home: one strip of category shortcuts (services first, then products,
     told apart by tile shape and colour, each kind ending in an "all" tile),
     the near-me banner, featured services (the farmer's main errand: one per
-    verified provider, the provider on each card), then featured products.
+    verified provider, the provider on each card), today's few crop prices
+    (each crop's newest, linking to /prices), then featured products.
     `page` is web::pages::home::HomePage. -#}
 {% block title %}{{ site.name }} — {{ t(key="home.title") }}{% endblock title %}
 {% block meta %}<meta name="description" content="{{ t(key="home.meta") }}">{% endblock meta %}
@@ -22,6 +24,15 @@
 <section class="home-section">
   {{ section::section_header(title=t(key="home.featured_services"), more_href=url_for(name="services")) }}
   {{ services::service_grid(services=page.services) }}
+</section>
+{% endif %}
+
+{% if page.prices %}
+<section class="home-section">
+  {{ section::section_header(title=t(key="home.prices"), more_href=url_for(name="prices")) }}
+  <ul class="detail-card list-unstyled mb-0 price-strip">
+    {% for l in page.prices %}{{ price::price_line(l=l, show_crop=true) }}{% endfor %}
+  </ul>
 </section>
 {% endif %}
 

@@ -270,13 +270,15 @@ fn tabs(locale: &Locale, path: &str, area: Dest) -> Vec<Tab> {
         dest("products", "fa-bag-shopping", "nav.products"),
         // The provider directory; on a phone it is the second tab of /services.
         dest("providers", "fa-store", "nav.shops"),
+        // Crop prices; on a phone the home page's price strip leads there.
+        dest("prices", "fa-chart-line", "nav.prices"),
         area,
     ]
     .into_iter()
     .map(|d| d.link(locale))
     .map(|link| Tab {
         active: is_active(path, &link.href),
-        wide_only: link.href == url("providers"),
+        wide_only: link.href == url("providers") || link.href == url("prices"),
         phone_only: link.href == url("account"),
         link,
     })

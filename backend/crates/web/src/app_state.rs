@@ -7,8 +7,9 @@ use application::{
         demand_usecase::DemandReportUseCase, explore_usecase::ExploreUseCase,
         health_usecase::HealthUseCase, media_usecase::MediaUseCase,
         partner_usecase::PartnerUseCase, permission_usecase::PermissionUseCase,
-        product_usecase::ProductUseCase, provider_dashboard_usecase::ProviderDashboardUseCase,
-        review_usecase::ReviewUseCase, setup_usecase::SetupUseCase, stats_usecase::StatsUseCase,
+        price_usecase::PriceUseCase, product_usecase::ProductUseCase,
+        provider_dashboard_usecase::ProviderDashboardUseCase, review_usecase::ReviewUseCase,
+        setup_usecase::SetupUseCase, stats_usecase::StatsUseCase,
     },
 };
 
@@ -27,6 +28,7 @@ pub struct UseCases {
     pub demand: DemandReportUseCase,
     pub partner: PartnerUseCase,
     pub permission: PermissionUseCase,
+    pub price: PriceUseCase,
     pub provider_dashboard: ProviderDashboardUseCase,
     pub review: ReviewUseCase,
     pub setup: SetupUseCase,

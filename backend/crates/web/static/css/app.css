@@ -3156,3 +3156,42 @@ a.chip {
 .photo-picker__input {
   margin-top: 8px;
 }
+
+/* A price line: where and when on the left, the range and its move on the
+   right; lines are split by a hairline, the last one by nothing. */
+.price-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--bs-border-color-translucent);
+}
+.price-line:last-child {
+  border-bottom: 0;
+}
+.price-line__where {
+  min-width: 0;
+}
+.price-line__value {
+  text-align: end;
+  flex-shrink: 0;
+}
+.price-move {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+/* The home page's prices: one column on a phone, two from a tablet (the
+   last row then has no hairline under either line). */
+@media (min-width: 768px) {
+  .price-strip {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 24px;
+  }
+  .price-strip .price-line:nth-last-child(2):nth-child(odd) {
+    border-bottom: 0;
+  }
+}

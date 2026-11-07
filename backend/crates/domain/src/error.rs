@@ -112,6 +112,10 @@ error_codes! {
     ContractCategoriesRequired=> (BadRequest,      "contract_categories_required"),
     SponsoredOutsideArea      => (BadRequest,      "sponsored_outside_area"),
     ReviewNeedsContact        => (BadRequest,      "review_needs_contact"),
+    InvalidCropKind           => (BadRequest,      "invalid_crop_kind"),
+    UnitRequired              => (BadRequest,      "unit_required"),
+    InvalidPriceRange         => (BadRequest,      "invalid_price_range"),
+    InvalidPriceDate          => (BadRequest,      "invalid_price_date"),
 
     // ── Uploads ──────────────────────────────────────────────────────────────
     FileTooLarge              => (PayloadTooLarge, "file_too_large"),
@@ -131,6 +135,7 @@ error_codes! {
     ServiceLimitReached       => (Conflict,        "service_limit_reached"),
     ReviewAlreadySent         => (Conflict,        "review_already_sent"),
     PartnerAccountInUse       => (Conflict,        "partner_account_in_use"),
+    CropNameTaken             => (Conflict,        "crop_name_taken"),
 
     // ── Not found ────────────────────────────────────────────────────────────
     AccountNotFound           => (NotFound,        "account_not_found"),
@@ -146,6 +151,8 @@ error_codes! {
     ReviewNotFound            => (NotFound,        "review_not_found"),
     PartnerNotFound           => (NotFound,        "partner_not_found"),
     ContractNotFound          => (NotFound,        "contract_not_found"),
+    CropNotFound              => (NotFound,        "crop_not_found"),
+    PriceNotFound             => (NotFound,        "price_not_found"),
     FileNotFound              => (NotFound,        "file_not_found"),
 }
 

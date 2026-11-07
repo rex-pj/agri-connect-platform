@@ -217,13 +217,13 @@ fn vn() -> Result<FixedOffset> {
         .ok_or_else(|| Error::internal("Vietnam offset out of range."))
 }
 
-/// The `DEMAND_WEEKS` whole weeks before the one `now` falls in, oldest
-/// first, as Vietnam dates.
 /// Today in Vietnam.
 pub fn vn_today(now: DateTime<Utc>) -> Result<NaiveDate> {
     Ok(now.with_timezone(&vn()?).date_naive())
 }
 
+/// The `DEMAND_WEEKS` whole weeks before the one `now` falls in, oldest
+/// first, as Vietnam dates.
 pub fn report_weeks(now: DateTime<Utc>) -> Result<Vec<DemandWeekDto>> {
     let today = vn_today(now)?;
     let this_monday = today - Duration::days(i64::from(today.weekday().num_days_from_monday()));

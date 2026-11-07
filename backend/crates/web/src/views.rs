@@ -7,8 +7,9 @@ use std::{collections::HashMap, sync::Arc};
 
 use application::constants::{
     AUDIT_REASON_MAX, BUSINESS_ADDRESS_MAX, BUSINESS_DESCRIPTION_MAX, BUSINESS_NAME_MAX,
-    FULL_NAME_MAX, PASSWORD_MIN_CHARS, PASSWORD_RESET_EXPIRY_HOURS, PRODUCT_DESCRIPTION_MAX,
-    PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX, USERNAME_MAX_LEN, USERNAME_MIN_LEN, VN_UTC_OFFSET_SECS,
+    CROP_NAME_MAX, CROP_UNIT_MAX, FULL_NAME_MAX, PASSWORD_MIN_CHARS, PASSWORD_RESET_EXPIRY_HOURS,
+    PRICE_NOTE_MAX, PRODUCT_DESCRIPTION_MAX, PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX, USERNAME_MAX_LEN,
+    USERNAME_MIN_LEN, VN_UTC_OFFSET_SECS,
 };
 use axum::{
     http::{header, HeaderMap, HeaderValue, StatusCode},
@@ -105,6 +106,9 @@ struct FieldLimits {
     product_unit_max: usize,
     product_description_max: usize,
     audit_reason_max: usize,
+    crop_name_max: usize,
+    crop_unit_max: usize,
+    price_note_max: usize,
     /// The near-me radius before the visitor picks one.
     near_me_km: i64,
 }
@@ -122,6 +126,9 @@ const FIELD_LIMITS: FieldLimits = FieldLimits {
     product_unit_max: PRODUCT_UNIT_MAX,
     product_description_max: PRODUCT_DESCRIPTION_MAX,
     audit_reason_max: AUDIT_REASON_MAX,
+    crop_name_max: CROP_NAME_MAX,
+    crop_unit_max: CROP_UNIT_MAX,
+    price_note_max: PRICE_NOTE_MAX,
     near_me_km: EXPLORE_DEFAULT_RADIUS_M / 1000,
 };
 

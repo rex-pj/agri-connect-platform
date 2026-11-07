@@ -79,6 +79,19 @@ pub const CONTRACT_NOTE_MAX: usize = 500;
 /// How many sponsored services a near-me page shows above its results.
 pub const SPONSORED_SHOWN: usize = 2;
 
+// ── Crop prices ───────────────────────────────────────────────────────────────
+pub const CROP_NAME_MAX: usize = 100;
+pub const CROP_UNIT_MAX: usize = 20;
+pub const PRICE_NOTE_MAX: usize = 200;
+/// The highest price per unit an admin can enter, in đồng: a typo with an
+/// extra zero or two is refused rather than published.
+pub const PRICE_PER_UNIT_MAX: i64 = 10_000_000;
+/// A price older than this many days is not shown: a stale price misleads
+/// more than none.
+pub const PRICE_FRESH_DAYS: i64 = 14;
+/// How far back the price before the latest is looked for, to show the move.
+pub const PRICE_HISTORY_DAYS: i64 = 60;
+
 // ── Reviews ───────────────────────────────────────────────────────────────────
 pub const RATING_MIN: i16 = 1;
 pub const RATING_MAX: i16 = 5;

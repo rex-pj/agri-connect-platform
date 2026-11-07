@@ -418,3 +418,57 @@ impl From<ContractRequest> for application::inputs::ContractInput {
 pub struct SponsorRequest {
     pub business_id: i32,
 }
+
+/// GET /api/explore/prices: one area, or every area.
+#[derive(Deserialize)]
+pub struct PriceBoardQuery {
+    pub location_id: Option<i32>,
+}
+
+/// POST /api/admin/crops, PUT /api/admin/crops/{id}.
+#[derive(Deserialize)]
+pub struct CropRequest {
+    pub name: String,
+    pub kind: String,
+    pub unit: String,
+    #[serde(default)]
+    pub display_order: i32,
+}
+
+impl From<CropRequest> for application::inputs::CropInput {
+    fn from(r: CropRequest) -> Self {
+        Self {
+            name: r.name,
+            kind: r.kind,
+            unit: r.unit,
+            display_order: r.display_order,
+        }
+    }
+}
+
+/// POST /api/admin/prices. The day is `YYYY-MM-DD`; one that does not parse
+/// is refused like a missing one. No `price_high`: one price (high = low).
+#[derive(Deserialize)]
+pub struct PriceRequest {
+    pub crop_id: Option<i32>,
+    pub location_id: Option<i32>,
+    pub observed_on: Option<String>,
+    pub price_low: Option<i64>,
+    pub price_high: Option<i64>,
+    pub note: Option<String>,
+}
+
+impl From<PriceRequest> for application::inputs::PriceInput {
+    fn from(r: PriceRequest) -> Self {
+        Self {
+            crop_id: r.crop_id,
+            location_id: r.location_id,
+            observed_on: r
+                .observed_on
+                .and_then(|s| chrono::NaiveDate::parse_from_str(s.trim(), "%Y-%m-%d").ok()),
+            price_low: r.price_low,
+            price_high: r.price_high.or(r.price_low),
+            note: r.note,
+        }
+    }
+}

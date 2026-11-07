@@ -11,6 +11,7 @@ pub mod inquiry_repository_trait;
 pub mod location_repository_trait;
 pub mod partner_repository_trait;
 pub mod permission_repository_trait;
+pub mod price_repository_trait;
 pub mod product_repository_trait;
 pub mod refresh_token_repository_trait;
 pub mod review_repository_trait;

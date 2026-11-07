@@ -54,6 +54,8 @@ pub const HOME_PRODUCT_COUNT: usize = 6;
 /// Category tiles of each kind before its "all" tile on a wide screen; a
 /// phone shows one fewer, so each kind is one row of four there.
 pub const HOME_CATEGORY_TILES: usize = 4;
+/// How many crop prices the home page shows (each crop's newest).
+pub const HOME_PRICES_SHOWN: usize = 4;
 
 // ── Pages ─────────────────────────────────────────────────────────────────────
 /// Search engines show about this much of a meta description.

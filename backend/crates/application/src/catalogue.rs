@@ -7,8 +7,10 @@
 //! default roles.
 
 use domain::{
-    constants::{ROLE_ADMIN, ROLE_PARTNER, ROLE_PROVIDER},
-    models::catalogue::{Catalogue, CategorySeed, LocationSeed, PermissionSeed, RoleSeed},
+    constants::{CROP_KIND_FRUIT, CROP_KIND_RICE, ROLE_ADMIN, ROLE_PARTNER, ROLE_PROVIDER},
+    models::catalogue::{
+        Catalogue, CategorySeed, CropSeed, LocationSeed, PermissionSeed, RoleSeed,
+    },
 };
 
 // ── Permission keys ───────────────────────────────────────────────────────────
@@ -34,6 +36,7 @@ pub const PERM_REVIEW_MODERATE: &str = "review.moderate";
 pub const PERM_REPORT_DEMAND_READ: &str = "report.demand.read";
 pub const PERM_PARTNER_MANAGE: &str = "partner.manage";
 pub const PERM_PARTNER_REPORT_READ: &str = "partner.report.read";
+pub const PERM_PRICE_MANAGE: &str = "price.manage";
 pub const PERM_SYSTEM_DEMO_MANAGE: &str = "system.demo.manage";
 pub const PERM_OWN_PROFILE_UPDATE: &str = "own.profile.update";
 pub const PERM_OWN_LISTING_CREATE: &str = "own.listing.create";
@@ -141,6 +144,10 @@ pub static PERMISSIONS: &[PermissionSeed] = &[
     PermissionSeed {
         key: PERM_PARTNER_REPORT_READ,
         default_roles: PARTNER,
+    },
+    PermissionSeed {
+        key: PERM_PRICE_MANAGE,
+        default_roles: ADMIN,
     },
     PermissionSeed {
         key: PERM_SYSTEM_DEMO_MANAGE,
@@ -422,18 +429,96 @@ pub static LOCATIONS: &[LocationSeed] = &[
     },
 ];
 
+/// The crops the price page starts with: the rice varieties and fruits of
+/// the Mekong Delta whose farm-gate price farmers ask about, per kilogram.
+pub static CROPS: &[CropSeed] = &[
+    CropSeed {
+        name: "Lúa IR 50404",
+        kind: CROP_KIND_RICE,
+        unit: "kg",
+        display_order: 1,
+    },
+    CropSeed {
+        name: "Lúa OM 5451",
+        kind: CROP_KIND_RICE,
+        unit: "kg",
+        display_order: 2,
+    },
+    CropSeed {
+        name: "Lúa OM 18",
+        kind: CROP_KIND_RICE,
+        unit: "kg",
+        display_order: 3,
+    },
+    CropSeed {
+        name: "Lúa Đài Thơm 8",
+        kind: CROP_KIND_RICE,
+        unit: "kg",
+        display_order: 4,
+    },
+    CropSeed {
+        name: "Lúa ST25",
+        kind: CROP_KIND_RICE,
+        unit: "kg",
+        display_order: 5,
+    },
+    CropSeed {
+        name: "Sầu riêng Ri6",
+        kind: CROP_KIND_FRUIT,
+        unit: "kg",
+        display_order: 10,
+    },
+    CropSeed {
+        name: "Sầu riêng Monthong",
+        kind: CROP_KIND_FRUIT,
+        unit: "kg",
+        display_order: 11,
+    },
+    CropSeed {
+        name: "Xoài cát Hòa Lộc",
+        kind: CROP_KIND_FRUIT,
+        unit: "kg",
+        display_order: 12,
+    },
+    CropSeed {
+        name: "Bưởi da xanh",
+        kind: CROP_KIND_FRUIT,
+        unit: "kg",
+        display_order: 13,
+    },
+    CropSeed {
+        name: "Thanh long ruột đỏ",
+        kind: CROP_KIND_FRUIT,
+        unit: "kg",
+        display_order: 14,
+    },
+    CropSeed {
+        name: "Chanh không hạt",
+        kind: CROP_KIND_FRUIT,
+        unit: "kg",
+        display_order: 15,
+    },
+    CropSeed {
+        name: "Mít Thái",
+        kind: CROP_KIND_FRUIT,
+        unit: "kg",
+        display_order: 16,
+    },
+];
+
 pub static CATALOGUE: Catalogue = Catalogue {
     roles: ROLES,
     permissions: PERMISSIONS,
     categories: CATEGORIES,
     locations: LOCATIONS,
+    crops: CROPS,
 };
 
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
 
-    use domain::constants::CATEGORY_TYPES;
+    use domain::constants::{CATEGORY_TYPES, CROP_KINDS};
 
     use super::*;
 
@@ -489,6 +574,20 @@ mod tests {
         let mut labels = HashSet::new();
         for l in LOCATIONS {
             assert!(labels.insert(l.label), "duplicate location {}", l.label);
+        }
+    }
+
+    #[test]
+    fn crops_use_known_kinds_and_unique_names() {
+        let mut names = HashSet::new();
+        for c in CROPS {
+            assert!(
+                CROP_KINDS.contains(&c.kind),
+                "{} has unknown kind {}",
+                c.name,
+                c.kind
+            );
+            assert!(names.insert(c.name), "duplicate crop {}", c.name);
         }
     }
 }

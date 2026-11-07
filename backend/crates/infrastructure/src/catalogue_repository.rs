@@ -1,5 +1,5 @@
 //! Applies the reference catalogue (roles, permissions, default grants,
-//! categories, location presets) in one transaction.
+//! categories, location presets, crops) in one transaction.
 
 use std::{collections::HashSet, sync::Arc};
 
@@ -210,6 +210,31 @@ impl CatalogueRepositoryTrait for CatalogueRepository {
                     "location",
                     "INSERT INTO locations (label, lat, lng, display_order) VALUES ($1, $2, $3, $4)",
                     vec![l.label.into(), l.lat.into(), l.lng.into(), l.display_order.into()],
+                )
+                .await?;
+            }
+        }
+
+        if count(
+            &txn,
+            "crop count",
+            "SELECT COUNT(*) AS n FROM crops",
+            vec![],
+        )
+        .await?
+            == 0
+        {
+            for c in catalogue.crops {
+                report.crops_inserted += exec(
+                    &txn,
+                    "crop",
+                    "INSERT INTO crops (name, kind, unit, display_order) VALUES ($1, $2, $3, $4)",
+                    vec![
+                        c.name.into(),
+                        c.kind.into(),
+                        c.unit.into(),
+                        c.display_order.into(),
+                    ],
                 )
                 .await?;
             }

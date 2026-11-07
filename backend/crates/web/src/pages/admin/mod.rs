@@ -3,11 +3,13 @@
 //! check access themselves through the use cases.
 
 pub mod categories;
+pub mod crops;
 pub mod dashboard;
 pub mod demand;
 pub mod inquiries;
 pub mod locations;
 pub mod partners;
+pub mod prices;
 pub mod products;
 pub mod providers;
 pub mod reviews;
@@ -19,9 +21,9 @@ use application::{
     authz::Actor,
     catalogue::{
         PERM_ADMIN_DASHBOARD_VIEW, PERM_CATEGORY_MANAGE, PERM_INQUIRY_READ, PERM_LISTING_MODERATE,
-        PERM_LOCATION_MANAGE, PERM_PARTNER_MANAGE, PERM_PROVIDER_READ, PERM_REPORT_DEMAND_READ,
-        PERM_REVIEW_MODERATE, PERM_ROLE_READ, PERM_SERVICE_MANAGE, PERM_SYSTEM_DEMO_MANAGE,
-        PERM_USER_READ,
+        PERM_LOCATION_MANAGE, PERM_PARTNER_MANAGE, PERM_PRICE_MANAGE, PERM_PROVIDER_READ,
+        PERM_REPORT_DEMAND_READ, PERM_REVIEW_MODERATE, PERM_ROLE_READ, PERM_SERVICE_MANAGE,
+        PERM_SYSTEM_DEMO_MANAGE, PERM_USER_READ,
     },
 };
 use axum::{http::StatusCode, response::Response};
@@ -128,6 +130,12 @@ const MENU: &[(Option<&str>, &[Entry])] = &[
                 "fa-map-location-dot",
                 "admin_menu.locations",
                 PERM_LOCATION_MANAGE,
+            ),
+            (
+                "admin_prices",
+                "fa-chart-line",
+                "admin_menu.prices",
+                PERM_PRICE_MANAGE,
             ),
         ],
     ),

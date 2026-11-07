@@ -1,0 +1,54 @@
+{% extends "layouts/app.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "molecules/page_hero.html" as hero %}
+{% import "molecules/empty_state.html" as empty %}
+{% import "molecules/price_line.html" as prices %}
+{#- Farm-gate prices: rice, then fruit; a card per crop with its latest
+    price in each area. The area filter is a GET form that sends itself on
+    change (`autoSubmit`); without JS its button sends it. `page` is
+    web::pages::prices::PricesPage. -#}
+{% block title %}{% if page.area_name %}{{ t(key="prices.title_in", area=page.area_name) }}{% else %}{{ t(key="prices.title") }}{% endif %} — {{ site.name }}{% endblock title %}
+{% block meta %}<meta name="description" content="{% if page.area_name %}{{ t(key="prices.meta_in", area=page.area_name) }}{% else %}{{ t(key="prices.meta") }}{% endif %}">{% endblock meta %}
+{% block main %}
+{{ hero::page_hero(title=t(key="prices.title"), back_href=page.back_href, back_label=t(key="nav.home"), variant="", icon="fa-chart-line", sub=t(key="prices.sub", days=page.fresh_days)) }}
+
+{% if page.areas %}
+<div class="list-tools">
+  <form class="d-flex flex-wrap gap-2 align-items-end" method="get" action="{{ page.action }}" x-data="autoSubmit" x-on:change="submit">
+    <div class="flex-grow-1">
+      <label class="form-label small fw-semibold" for="price-area">{{ t(key="prices.area") }}</label>
+      <select class="form-select form-select-lg" id="price-area" name="area">
+        <option value="">{{ t(key="prices.all_areas") }}</option>
+        {% for a in page.areas %}<option value="{{ a.id }}"{% if a.id == page.area_id %} selected{% endif %}>{{ a.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-outline-success btn-lg" x-show="withoutScript">{{ atoms::icon(name="fa-filter") }} {{ t(key="prices.apply") }}</button>
+  </form>
+</div>
+{% endif %}
+
+<section class="list-results">
+  {% for s in page.sections %}
+  <h2 class="section-title mt-2 mb-2">{{ atoms::icon(name=s.icon, class="me-1") }} {{ s.title }}</h2>
+  <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3 mb-4">
+    {% for c in s.crops %}
+    <div class="col">
+      <article class="detail-card h-100 mb-0">
+        <h3 class="detail-card__title">{{ c.name }}</h3>
+        <ul class="list-unstyled mb-0">
+          {% for l in c.lines %}{{ prices::price_line(l=l, show_area=page.show_area) }}{% endfor %}
+        </ul>
+      </article>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  {% if page.area_name %}
+  {{ empty::empty_state(icon="fa-chart-line", title=t(key="prices.none_in", area=page.area_name), hint=t(key="prices.none_hint"), action_href=page.action, action_icon="fa-xmark", action_label=t(key="prices.all_areas")) }}
+  {% else %}
+  {{ empty::empty_state(icon="fa-chart-line", title=t(key="prices.none"), hint=t(key="prices.none_hint")) }}
+  {% endif %}
+  {% endfor %}
+  <p class="small text-muted">{{ atoms::icon(name="fa-circle-info", class="me-1") }}{{ t(key="prices.disclaimer") }}</p>
+</section>
+{% endblock main %}

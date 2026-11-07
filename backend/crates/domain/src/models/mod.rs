@@ -8,6 +8,7 @@ pub mod inquiry;
 pub mod location;
 pub mod partner;
 pub mod permission;
+pub mod price;
 pub mod product;
 pub mod review;
 pub mod role;

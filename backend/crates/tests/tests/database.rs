@@ -66,6 +66,7 @@ async fn fresh_database_gets_the_catalogue_once() {
     );
     assert_eq!(first.categories_inserted, CATALOGUE.categories.len() as u64);
     assert_eq!(first.locations_inserted, CATALOGUE.locations.len() as u64);
+    assert_eq!(first.crops_inserted, CATALOGUE.crops.len() as u64);
     let grants: usize = CATALOGUE
         .permissions
         .iter()
@@ -84,8 +85,12 @@ async fn fresh_database_gets_the_catalogue_once() {
         (0, 0, 0)
     );
     assert_eq!(
-        (second.categories_inserted, second.locations_inserted),
-        (0, 0)
+        (
+            second.categories_inserted,
+            second.locations_inserted,
+            second.crops_inserted
+        ),
+        (0, 0, 0)
     );
     assert!(second.unknown_permissions.is_empty());
 
@@ -128,6 +133,7 @@ async fn a_permission_added_later_reaches_its_default_roles() {
         permissions: EXTENDED,
         categories: &[],
         locations: &[],
+        crops: &[],
     };
     let report = repo.apply(&later).await.unwrap();
     assert_eq!(

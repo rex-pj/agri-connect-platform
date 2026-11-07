@@ -33,6 +33,14 @@ pub struct LocationSeed {
     pub display_order: i32,
 }
 
+/// A crop whose price the price page follows ("Lúa OM 18", "Sầu riêng Ri6").
+pub struct CropSeed {
+    pub name: &'static str,
+    pub kind: &'static str,
+    pub unit: &'static str,
+    pub display_order: i32,
+}
+
 pub struct Catalogue {
     pub roles: &'static [RoleSeed],
     pub permissions: &'static [PermissionSeed],
@@ -40,6 +48,8 @@ pub struct Catalogue {
     pub categories: &'static [CategorySeed],
     /// Inserted only into an empty table, so admin edits are never undone.
     pub locations: &'static [LocationSeed],
+    /// Inserted only into an empty table, so admin edits are never undone.
+    pub crops: &'static [CropSeed],
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -51,6 +61,7 @@ pub struct SeedReport {
     pub bootstrapped_grants: bool,
     pub categories_inserted: u64,
     pub locations_inserted: u64,
+    pub crops_inserted: u64,
     /// Permission keys present in the database but no longer in the catalogue.
     pub unknown_permissions: Vec<String>,
 }

@@ -4,6 +4,7 @@
 
 pub mod categories;
 pub mod dashboard;
+pub mod demand;
 pub mod inquiries;
 pub mod locations;
 pub mod products;
@@ -17,8 +18,8 @@ use application::{
     authz::Actor,
     catalogue::{
         PERM_ADMIN_DASHBOARD_VIEW, PERM_CATEGORY_MANAGE, PERM_INQUIRY_READ, PERM_LISTING_MODERATE,
-        PERM_LOCATION_MANAGE, PERM_PROVIDER_READ, PERM_REVIEW_MODERATE, PERM_ROLE_READ,
-        PERM_SERVICE_MANAGE, PERM_SYSTEM_DEMO_MANAGE, PERM_USER_READ,
+        PERM_LOCATION_MANAGE, PERM_PROVIDER_READ, PERM_REPORT_DEMAND_READ, PERM_REVIEW_MODERATE,
+        PERM_ROLE_READ, PERM_SERVICE_MANAGE, PERM_SYSTEM_DEMO_MANAGE, PERM_USER_READ,
     },
 };
 use axum::{http::StatusCode, response::Response};
@@ -127,6 +128,15 @@ const MENU: &[(Option<&str>, &[Entry])] = &[
                 PERM_LOCATION_MANAGE,
             ),
         ],
+    ),
+    (
+        Some("admin_menu.business"),
+        &[(
+            "admin_demand",
+            "fa-chart-column",
+            "admin_menu.demand",
+            PERM_REPORT_DEMAND_READ,
+        )],
     ),
     (
         Some("admin_menu.system"),

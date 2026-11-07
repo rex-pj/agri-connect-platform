@@ -1,6 +1,7 @@
 pub mod admin_usecase;
 pub mod auth_usecase;
 pub mod business_rules;
+pub mod demand_usecase;
 pub mod explore_usecase;
 pub mod health_usecase;
 pub mod media_usecase;

@@ -3,7 +3,8 @@ use std::sync::Arc;
 use application::{
     ports::TokenService,
     usecases::{
-        admin_usecase::AdminUseCase, auth_usecase::AuthUseCase, explore_usecase::ExploreUseCase,
+        admin_usecase::AdminUseCase, auth_usecase::AuthUseCase,
+        demand_usecase::DemandReportUseCase, explore_usecase::ExploreUseCase,
         health_usecase::HealthUseCase, media_usecase::MediaUseCase,
         permission_usecase::PermissionUseCase, product_usecase::ProductUseCase,
         provider_dashboard_usecase::ProviderDashboardUseCase, review_usecase::ReviewUseCase,
@@ -23,6 +24,7 @@ pub struct UseCases {
     pub product: ProductUseCase,
     pub admin: AdminUseCase,
     pub auth: AuthUseCase,
+    pub demand: DemandReportUseCase,
     pub permission: PermissionUseCase,
     pub provider_dashboard: ProviderDashboardUseCase,
     pub review: ReviewUseCase,

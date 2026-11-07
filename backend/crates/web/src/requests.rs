@@ -339,3 +339,25 @@ pub struct CallRequest {
     #[serde(default)]
     pub channel: Option<String>,
 }
+
+/// `?area=` of the demand report: a location id, `none` (businesses with no
+/// area), or empty for every area.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct DemandQuery {
+    pub area: String,
+}
+
+/// `?area=` value of the businesses with no area.
+pub const UNPLACED_AREA: &str = "none";
+
+impl DemandQuery {
+    /// The area in focus; anything unknown is all of them.
+    pub fn focus(&self) -> Option<application::usecases::demand_usecase::AreaKey> {
+        use application::usecases::demand_usecase::AreaKey;
+        match self.area.trim() {
+            UNPLACED_AREA => Some(AreaKey::Unplaced),
+            other => other.parse::<i32>().ok().map(AreaKey::Location),
+        }
+    }
+}

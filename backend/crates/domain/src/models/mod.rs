@@ -2,6 +2,7 @@ pub mod business;
 pub mod call;
 pub mod catalogue;
 pub mod category;
+pub mod demand;
 pub mod file;
 pub mod inquiry;
 pub mod location;

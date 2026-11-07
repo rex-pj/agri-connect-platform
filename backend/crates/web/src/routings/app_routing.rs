@@ -369,6 +369,8 @@ impl AppRouting {
                 "/admin/inquiries/{id}/status",
                 post(pages::admin::inquiries::change_status),
             )
+            .route("/admin/demand", get(pages::admin::demand::show))
+            .route("/admin/demand.csv", get(pages::admin::demand::csv))
             .route("/admin/reviews", get(pages::admin::reviews::list))
             .route(
                 "/admin/reviews/{id}/visibility",
@@ -486,6 +488,10 @@ impl AppRouting {
                 patch(AdminHandler::update_inquiry_status),
             )
             // Reviews
+            .route(
+                "/api/admin/reports/demand",
+                get(StatsHandler::demand_report),
+            )
             .route("/api/admin/reviews", get(AdminHandler::list_reviews))
             .route(
                 "/api/admin/reviews/{id}/visibility",

@@ -8,13 +8,13 @@ use std::{collections::HashMap, sync::Arc};
 use application::constants::{
     AUDIT_REASON_MAX, BUSINESS_ADDRESS_MAX, BUSINESS_DESCRIPTION_MAX, BUSINESS_NAME_MAX,
     FULL_NAME_MAX, PASSWORD_MIN_CHARS, PASSWORD_RESET_EXPIRY_HOURS, PRODUCT_DESCRIPTION_MAX,
-    PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX, USERNAME_MAX_LEN, USERNAME_MIN_LEN,
+    PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX, USERNAME_MAX_LEN, USERNAME_MIN_LEN, VN_UTC_OFFSET_SECS,
 };
 use axum::{
     http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
 };
-use chrono::{DateTime, Datelike, FixedOffset, Utc};
+use chrono::{DateTime, Datelike, FixedOffset, NaiveDate, Utc};
 use domain::{Error, ErrorCode};
 use rust_embed::RustEmbed;
 use serde::Serialize;
@@ -46,10 +46,6 @@ pub struct StaticFiles;
 pub const PAGE_CSP: &str = "default-src 'self'; script-src 'self'; style-src 'self'; \
      img-src 'self' blob:; font-src 'self'; connect-src 'self'; form-action 'self'; \
      frame-ancestors 'none'; base-uri 'none'; object-src 'none'";
-
-/// Vietnam has had no daylight-saving time since 1975, so a fixed offset is
-/// exact. Used only for the no-JS fallback text; `<time datetime>` stays UTC.
-const VN_OFFSET_SECS: i32 = 7 * 3600;
 
 /// Site identity, from `SITE_NAME` / `SITE_DESCRIPTION` (unset: the locale's
 /// `site.description`), and the platform's own help lines for the footer
@@ -312,6 +308,14 @@ impl Views {
                 .ok_or_else(|| tera::Error::msg("phone: expects a string"))
         });
 
+        tera.register_filter("day_month", |value: &Value, _: &HashMap<String, Value>| {
+            value
+                .as_str()
+                .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
+                .map(|d| Value::String(d.format("%d/%m").to_string()))
+                .ok_or_else(|| tera::Error::msg("day_month: expects a YYYY-MM-DD date"))
+        });
+
         tera.register_filter("zalo", |value: &Value, _: &HashMap<String, Value>| {
             value
                 .as_str()
@@ -474,7 +478,7 @@ pub fn format_phone(phone: &str) -> String {
 
 /// The day and month in Vietnam at `instant`: `07/11`.
 pub fn format_vn_day(instant: DateTime<Utc>) -> String {
-    match FixedOffset::east_opt(VN_OFFSET_SECS) {
+    match FixedOffset::east_opt(VN_UTC_OFFSET_SECS) {
         Some(offset) => instant.with_timezone(&offset).format("%d/%m").to_string(),
         None => instant.format("%d/%m").to_string(),
     }
@@ -487,14 +491,14 @@ pub fn zalo_chat_url(phone: &str) -> String {
 
 /// The calendar year in Vietnam at `instant`.
 pub fn vn_year(instant: DateTime<Utc>) -> i32 {
-    match FixedOffset::east_opt(VN_OFFSET_SECS) {
+    match FixedOffset::east_opt(VN_UTC_OFFSET_SECS) {
         Some(offset) => instant.with_timezone(&offset).year(),
         None => instant.year(),
     }
 }
 
 pub fn format_vn_datetime(instant: DateTime<Utc>) -> String {
-    match FixedOffset::east_opt(VN_OFFSET_SECS) {
+    match FixedOffset::east_opt(VN_UTC_OFFSET_SECS) {
         Some(offset) => instant
             .with_timezone(&offset)
             .format("%d/%m/%Y %H:%M")

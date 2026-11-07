@@ -813,3 +813,60 @@ pub struct UserPermissionsDto {
     pub user_id: i32,
     pub permissions: Vec<PermissionDto>,
 }
+
+// ── Demand report ─────────────────────────────────────────────────────────────
+
+/// A figure of the demand report: its value, or `None` when it is above zero
+/// but under `DEMAND_REPORT_MIN_COUNT` (or would give such a one away), shown
+/// as "fewer than".
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct Figure {
+    pub value: Option<i64>,
+}
+
+/// A week of the report: Monday to Sunday, Vietnam dates.
+#[derive(Debug, Clone, Serialize)]
+pub struct DemandWeekDto {
+    pub starts_on: chrono::NaiveDate,
+    pub ends_on: chrono::NaiveDate,
+}
+
+/// One row of the report: a category (`None`: leads with no category, a tap
+/// on a shop with several services), its leads by week and in all, by
+/// channel, and how many people sent its requests.
+#[derive(Debug, Clone, Serialize)]
+pub struct DemandRowDto {
+    pub category_id: Option<i32>,
+    pub category: Option<String>,
+    pub weeks: Vec<Figure>,
+    pub total: Figure,
+    pub calls: Figure,
+    pub zalo: Figure,
+    pub inquiries: Figure,
+    pub people: Figure,
+}
+
+/// An area of the report: a location preset (`location_id`), or businesses
+/// with no position or no preset in reach (`None`).
+#[derive(Debug, Clone, Serialize)]
+pub struct DemandAreaDto {
+    pub location_id: Option<i32>,
+    pub label: Option<String>,
+    pub total: Figure,
+    /// Every week reached `STEADY_WEEKLY_LEADS`.
+    pub steady: bool,
+}
+
+/// The demand report: leads by category × week for one area or all of them,
+/// every area's total, and how many areas are steady.
+#[derive(Debug, Clone, Serialize)]
+pub struct DemandReportDto {
+    pub weeks: Vec<DemandWeekDto>,
+    pub areas: Vec<DemandAreaDto>,
+    pub rows: Vec<DemandRowDto>,
+    /// The sums over `rows`.
+    pub all: DemandRowDto,
+    pub steady_areas: usize,
+    pub min_count: i64,
+    pub steady_weekly_leads: i64,
+}

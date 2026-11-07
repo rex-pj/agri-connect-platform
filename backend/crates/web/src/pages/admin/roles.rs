@@ -42,6 +42,7 @@ fn group_key(key: &str) -> &'static str {
         "listing" | "service" => "permission_group.listings",
         "category" | "location" => "permission_group.catalogue",
         "inquiry" | "review" => "permission_group.feedback",
+        "report" | "partner" => "permission_group.business",
         "own" => "permission_group.own",
         _ => "permission_group.other",
     }

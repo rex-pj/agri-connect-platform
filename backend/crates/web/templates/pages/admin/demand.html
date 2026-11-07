@@ -1,0 +1,45 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/figure.html" as fig %}
+{% import "molecules/admin_header.html" as header %}
+{% import "organisms/demand_table.html" as demand %}
+{#- The demand report. `page.body` is web::pages::admin::demand::DemandPage.
+    The area filter is a GET form (works without JS); the header's action
+    downloads the same table as CSV. The area list says which areas are
+    steady: every week at `steady_weekly_leads` or more. -#}
+{% block title %}{{ t(key="admin_menu.demand") }} — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+{% set r = b.report %}
+{{ header::admin_header(title=t(key="admin_menu.demand"), icon="fa-chart-column", sub=t(key="demand.sub", count=r.steady_areas), action_href=b.csv_href, action_icon="fa-file-arrow-down", action_label=t(key="demand.download"), action_class="btn-outline-secondary") }}
+<div class="admin-body">
+  <p class="small text-muted">{{ t(key="demand.hint", min=r.min_count) }}</p>
+  <form class="d-flex flex-wrap gap-2 align-items-end mb-3" method="get" action="{{ b.action }}">
+    <div>
+      <label class="form-label small fw-semibold" for="demand-area">{{ t(key="demand.area") }}</label>
+      <select class="form-select" id="demand-area" name="area">
+        <option value="">{{ t(key="demand.all_areas") }}</option>
+        {% for o in b.areas %}<option value="{{ o.value }}"{% if o.value == b.area %} selected{% endif %}>{{ o.label }}</option>{% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-outline-success">{{ atoms::icon(name="fa-filter") }} {{ t(key="demand.apply") }}</button>
+  </form>
+
+  <section class="admin-card mb-4" aria-label="{{ t(key="demand.title") }}">
+    {{ demand::demand_table(r=r) }}
+  </section>
+
+  <section class="admin-section" aria-labelledby="areas-title">
+    <h2 class="admin-section__title" id="areas-title">{{ t(key="demand.areas") }}</h2>
+    <p class="small text-muted">{{ t(key="demand.steady_hint", count=r.steady_weekly_leads, weeks=r.weeks | length) }}</p>
+    <ul class="list-unstyled mb-0">
+      {% for a in r.areas %}
+      <li class="py-2 border-bottom d-flex justify-content-between gap-2">
+        <span>{% if a.label %}{{ a.label }}{% else %}<span class="text-muted">{{ t(key="demand.unplaced") }}</span>{% endif %}{% if a.steady %} <span class="badge text-bg-success">{{ t(key="demand.steady") }}</span>{% endif %}</span>
+        <span class="fw-semibold">{{ fig::figure(f=a.total, min=r.min_count) }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+</div>
+{% endblock content %}

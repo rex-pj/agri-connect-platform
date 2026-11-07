@@ -1,0 +1,5 @@
+{#- One figure of the demand report: its number, or "< min" when it is too
+    small to show (`f` is application::outputs::Figure). -#}
+{% macro figure(f, min) -%}
+{% if f.value is number %}{{ f.value | number }}{% else %}<span class="text-muted" title="{{ t(key="demand.hidden_hint", min=min) }}">{{ t(key="demand.fewer_than", min=min) }}</span>{% endif %}
+{%- endmacro figure %}

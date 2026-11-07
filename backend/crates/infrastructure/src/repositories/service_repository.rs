@@ -193,7 +193,7 @@ struct GeoServiceRow {
 
 /// The joins and conditions that make a service public: shown and not
 /// deleted, in a shown category, offered by a live business.
-fn live_public(query: Select<ServiceEntity>) -> Select<ServiceEntity> {
+pub(crate) fn live_public(query: Select<ServiceEntity>) -> Select<ServiceEntity> {
     query
         .join(JoinType::InnerJoin, service::Relation::Business.def())
         .join(JoinType::InnerJoin, service::Relation::Category.def())

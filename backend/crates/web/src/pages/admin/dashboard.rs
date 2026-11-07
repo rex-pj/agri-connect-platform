@@ -3,7 +3,7 @@
 //! warning while demo listings are mixed into the real ones.
 
 use application::{
-    catalogue::PERM_SYSTEM_DEMO_MANAGE,
+    catalogue::{PERM_REPORT_DEMAND_READ, PERM_SYSTEM_DEMO_MANAGE},
     constants::CALL_STATS_DAYS,
     outputs::{AdminStatsDto, WeekLeadsDto},
 };
@@ -30,10 +30,13 @@ pub struct StatCard {
     pub icon: &'static str,
     /// Colour modifier of the icon tile (`stat-card__icon--<tone>`).
     pub tone: &'static str,
+    /// The page behind the figure, when it has one.
+    pub href: Option<String>,
 }
 
 fn cards(locale: &Locale, s: &AdminStatsDto) -> Vec<StatCard> {
     let card = |label: String, value, icon, tone| StatCard {
+        href: None,
         label,
         value,
         icon,
@@ -129,6 +132,21 @@ pub async fn show(
         return see_other(&url("login", &[])?);
     };
     let stats = state.usecases.stats.get_stats(&actor).await?;
+    let mut stats_cards = cards(state.locale(), &stats);
+    // Areas ready to show partners: every report week at the bar.
+    if actor.can(PERM_REPORT_DEMAND_READ) {
+        let report = state.usecases.demand.report(&actor, None).await?;
+        stats_cards.push(StatCard {
+            label: state.locale().text_with(
+                "admin_stats.steady_areas",
+                &[("weeks", &report.weeks.len())],
+            ),
+            value: report.steady_areas as i64,
+            icon: "fa-chart-column",
+            tone: "blue",
+            href: Some(url("admin_demand", &[])?),
+        });
+    }
     // Asking only when allowed: the banner's button leads to that page.
     let demo_count = if actor.can(PERM_SYSTEM_DEMO_MANAGE) {
         let status = state.usecases.setup.demo_status(&actor).await?;
@@ -143,7 +161,7 @@ pub async fn show(
         StatusCode::OK,
         "pages/admin/dashboard.html",
         &DashboardPage {
-            stats: cards(state.locale(), &stats),
+            stats: stats_cards,
             weeks: week_rows(&stats.weeks),
             demo_count,
         },

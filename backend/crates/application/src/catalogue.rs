@@ -31,6 +31,7 @@ pub const PERM_SERVICE_MANAGE: &str = "service.manage";
 pub const PERM_INQUIRY_READ: &str = "inquiry.read";
 pub const PERM_INQUIRY_MANAGE: &str = "inquiry.manage";
 pub const PERM_REVIEW_MODERATE: &str = "review.moderate";
+pub const PERM_REPORT_DEMAND_READ: &str = "report.demand.read";
 pub const PERM_SYSTEM_DEMO_MANAGE: &str = "system.demo.manage";
 pub const PERM_OWN_PROFILE_UPDATE: &str = "own.profile.update";
 pub const PERM_OWN_LISTING_CREATE: &str = "own.listing.create";
@@ -123,6 +124,10 @@ pub static PERMISSIONS: &[PermissionSeed] = &[
     },
     PermissionSeed {
         key: PERM_REVIEW_MODERATE,
+        default_roles: ADMIN,
+    },
+    PermissionSeed {
+        key: PERM_REPORT_DEMAND_READ,
         default_roles: ADMIN,
     },
     PermissionSeed {

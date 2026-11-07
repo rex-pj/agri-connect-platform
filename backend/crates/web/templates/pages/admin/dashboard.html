@@ -17,13 +17,13 @@
   <div class="row g-3 g-md-4">
     {% for s in b.stats %}
     <div class="col-6 col-lg-3">
-      <div class="stat-card">
+      {% if s.href %}<a class="stat-card text-decoration-none" href="{{ s.href }}">{% else %}<div class="stat-card">{% endif %}
         <span class="stat-card__icon stat-card__icon--{{ s.tone }}">{{ atoms::icon(name=s.icon) }}</span>
         <div>
           <p class="stat-card__label">{{ s.label }}</p>
           <p class="stat-card__value">{{ s.value | number }}</p>
         </div>
-      </div>
+      {% if s.href %}</a>{% else %}</div>{% endif %}
     </div>
     {% endfor %}
   </div>

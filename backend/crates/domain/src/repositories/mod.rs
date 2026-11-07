@@ -3,6 +3,7 @@ pub mod business_repository_trait;
 pub mod call_repository_trait;
 pub mod catalogue_repository_trait;
 pub mod category_repository_trait;
+pub mod demand_repository_trait;
 pub mod demo_data_repository_trait;
 pub mod file_repository_trait;
 pub mod health_repository_trait;

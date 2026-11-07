@@ -54,6 +54,21 @@ pub const CALL_STATS_DAYS: i64 = 30;
 /// shows, newest first: enough to see whether a field visit took hold.
 pub const LEAD_WEEKS: i64 = 8;
 
+// ── Demand report ─────────────────────────────────────────────────────────────
+/// Vietnam is UTC+7 all year (no daylight saving since 1975), so a fixed
+/// offset is exact: report weeks, dates shown on pages.
+pub const VN_UTC_OFFSET_SECS: i32 = 7 * 3600;
+/// How many whole weeks the demand report covers, ending last Sunday.
+pub const DEMAND_WEEKS: usize = 8;
+/// A figure under this (and above zero) is shown as "fewer than": it could
+/// point at one household.
+pub const DEMAND_REPORT_MIN_COUNT: i64 = 5;
+/// A business counts under the nearest location preset within this reach.
+pub const DEMAND_AREA_RADIUS_M: f64 = RADIUS_DEFAULT_M;
+/// An area is steady when every one of the report's weeks has at least this
+/// many leads: ready to show partners.
+pub const STEADY_WEEKLY_LEADS: i64 = 20;
+
 // ── Reviews ───────────────────────────────────────────────────────────────────
 pub const RATING_MIN: i16 = 1;
 pub const RATING_MAX: i16 = 5;

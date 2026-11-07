@@ -16,6 +16,7 @@ use application::{
     usecases::{
         admin_usecase::{AdminDeps, AdminUseCase},
         auth_usecase::{AuthDeps, AuthUseCase},
+        demand_usecase::{DemandDeps, DemandReportUseCase},
         explore_usecase::{ExploreDeps, ExploreUseCase},
         health_usecase::HealthUseCase,
         media_usecase::{MediaDeps, MediaUseCase},
@@ -38,12 +39,12 @@ use infrastructure::{
     repositories::{
         audit_log_repository::AuditLogRepository, business_repository::BusinessRepository,
         call_repository::CallRepository, category_repository::CategoryRepository,
-        file_repository::FileRepository, health_repository::HealthRepository,
-        inquiry_repository::InquiryRepository, location_repository::LocationRepository,
-        permission_repository::PermissionRepository, product_repository::ProductRepository,
-        refresh_token_repository::RefreshTokenRepository, review_repository::ReviewRepository,
-        role_repository::RoleRepository, service_repository::ServiceRepository,
-        user_repository::UserRepository,
+        demand_repository::DemandRepository, file_repository::FileRepository,
+        health_repository::HealthRepository, inquiry_repository::InquiryRepository,
+        location_repository::LocationRepository, permission_repository::PermissionRepository,
+        product_repository::ProductRepository, refresh_token_repository::RefreshTokenRepository,
+        review_repository::ReviewRepository, role_repository::RoleRepository,
+        service_repository::ServiceRepository, user_repository::UserRepository,
     },
 };
 use migration::{Migrator, MigratorTrait};
@@ -417,9 +418,9 @@ pub fn build_state(
         admin: AdminUseCase::new(AdminDeps {
             business_repo: business_repo.clone(),
             user_repo: user_repo.clone(),
-            category_repo,
+            category_repo: category_repo.clone(),
             inquiry_repo: inquiry_repo.clone(),
-            location_repo,
+            location_repo: location_repo.clone(),
             review_repo: review_repo.clone(),
             product_repo: product_repo.clone(),
             role_repo: role_repo.clone(),
@@ -444,6 +445,11 @@ pub fn build_state(
             role_repo: role_repo.clone(),
             grants_repo: role_repo.clone(),
             events: events.clone(),
+        }),
+        demand: DemandReportUseCase::new(DemandDeps {
+            demand_repo: Arc::new(DemandRepository::new(Arc::clone(&db))),
+            category_repo,
+            location_repo,
         }),
         review: ReviewUseCase::new(ReviewDeps {
             review_repo,

@@ -6,6 +6,7 @@ pub mod demand_repository;
 pub mod file_repository;
 pub mod health_repository;
 pub mod inquiry_repository;
+pub mod job_repository;
 pub mod location_repository;
 pub mod partner_repository;
 pub mod permission_repository;

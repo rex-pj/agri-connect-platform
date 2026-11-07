@@ -130,6 +130,7 @@ Templates live under `backend/crates/web/templates/` and are organized by atomic
 | `partner_contracts`     | id, partner_id, location_id, starts_on, ends_on, monthly_fee (+ `partner_contract_categories`, `partner_sponsored`) | In force between its dates while the partner is on |
 | `crops`                 | id, name (UNIQUE), kind, unit, display_order, is_active                                                | Kinds: `rice`, `fruit`; seeded when empty, hidden never deleted |
 | `crop_prices`           | id, crop_id, location_id, observed_on, price_low, price_high, note                                     | One per crop × area × day (again replaces it)  |
+| `job_posts`             | id, category_id, location_id, location, description, requester_name, requester_phone, status         | Statuses: `open`, `closed`, `spam`; never public |
 
 ### Geo Query Pattern
 
@@ -161,6 +162,7 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 | GET    | `/api/explore/featured`            | Home featured data: services (one per verified provider), providers, products                          |
 | GET    | `/api/explore/categories`          | Category listing (filter by `type=service\|product`)                                                   |
 | GET    | `/api/explore/locations`           | Location presets listing                                                                               |
+| POST   | `/api/explore/jobs`                | A job post (`category_id`, `lat`+`lng` or `location_id`, description, name, phone; 201 `{id}`; 30/min) |
 | GET    | `/api/explore/prices`              | Crop prices: each shown crop's latest price per area within `PRICE_FRESH_DAYS`, its move (`location_id?`)  |
 | GET    | `/api/explore/products`            | Browse products (paginated, filter by `category_id?`)                                                  |
 | GET    | `/api/explore/products/{id}`       | Product detail                                                                                         |
@@ -230,6 +232,8 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 | PATCH  | `/api/admin/inquiries/{id}/status`       | Update inquiry status                                             |
 | GET    | `/api/admin/reviews`                     | Review list (paginated, `provider_id?`)                           |
 | PATCH  | `/api/admin/reviews/{id}/visibility`     | Toggle review visibility                                          |
+| GET    | `/api/admin/jobs`                        | Job posts, newest first (`page?`; `job.moderate`)                 |
+| PATCH  | `/api/admin/jobs/{id}/status`            | `open` / `closed` / `spam` (`reason?`)                            |
 | GET / POST | `/api/admin/crops`                   | Crops (hidden too) / add one (201) (`price.manage`)               |
 | GET / PUT | `/api/admin/crops/{id}`               | Crop detail / edit                                                |
 | PATCH  | `/api/admin/crops/{id}/status`           | Show / hide a crop (`is_active`, `reason?`)                       |
@@ -269,6 +273,7 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 | DELETE | `/api/provider/services/{id}`       | Delete service                                          |
 | PUT    | `/api/provider/services/{id}/image` | Replace service image (multipart field `image`; 20/min) |
 | GET    | `/api/provider/reviews`             | Reviews of the own business (waiting ones too)          |
+| GET    | `/api/provider/jobs`                | Open job posts near the own business in its services' categories (`own.job.read`) |
 | PUT    | `/api/provider/reviews/{id}/reply`  | Public answer (`{reply}`; blank removes it; 204; `own.review.reply`) |
 
 ### Partner (`partner.report.read`)
@@ -335,6 +340,7 @@ Every page is a handler in `backend/crates/web/src/pages/`, routed in `web/src/r
 | `/services/[id]/[slug]`                                  | Service detail + the provider's other services + contact form with it chosen (`return_to=service`) (`web/src/pages/service.rs`)          |
 | `/search`                                                | Services + products + shops for `q`; link tabs (`tab=`) work without JS (`web/src/pages/search.rs`)                                      |
 | `/explore`                                               | Services, products and shops near a position (`ac-geolocate`) or preset, tabs in that order (as `/search`); featured services before one (`explore.rs`)     |
+| `/jobs/new`                                              | Post a job (`POST /jobs`): service, where (`ac-geolocate` fills hidden boxes, else an area), what, name, phone; the home page's "Chưa tìm được thợ?" card leads here (`web/src/pages/jobs.rs`) |
 | `/prices`                                                | Crop prices, rice then fruit, latest per area with its move; GET area filter (`autoSubmit`) (`web/src/pages/prices.rs`); home shows `HOME_PRICES_SHOWN` |
 | `/providers`                                             | Provider directory (new sign-ups without a service too); found by name or by their services (`web/src/pages/directory.rs`)               |
 | `/providers/[id]`                                        | 301 → `/providers/[id]/[slug]`                                                                                                           |
@@ -344,6 +350,7 @@ Every page is a handler in `backend/crates/web/src/pages/`, routed in `web/src/r
 | `/provider/products/new`, `/provider/products/[id]/edit` | Multipart product form with photo (checked before anything is saved), delete (confirm)                                                   |
 | `/provider/services/new`, `/provider/services/[id]/edit` | Multipart service form: category cards, optional photo, delete (confirm) (`own.service.*`) (`web/src/pages/own_services.rs`)             |
 | `/provider/inquiries`                                    | Farmers' contact requests to this business: call button, status per card (`own.inquiry.manage`) (`web/src/pages/inbox.rs`)              |
+| `/provider/jobs`                                         | Job posts near the business in its services' categories, distance and call button (`own.job.read`) (`web/src/pages/own_jobs.rs`) |
 | `/provider/reviews`                                      | Reviews of this business (shown or waiting), a public answer per card (`own.review.reply`) (`web/src/pages/own_reviews.rs`)              |
 | `/partner`                                               | A partner account's home: the demand report of its contracts in force (areas × categories), its contracts; `/partner/report.csv` (`partner.report.read`) (`web/src/pages/partner.rs`) |
 
@@ -371,6 +378,7 @@ Every page is a handler in `backend/crates/web/src/pages/`, routed in `web/src/r
 | `/admin/reviews`         | Hide (confirm + reason) / show; filter `provider_id`                                                                                               |
 | `/admin/demand`          | Demand report: category × week for one area (`?area=` id or `none`) or all, by channel, searches, unmet searches, steady areas; `/admin/demand.csv` (`report.demand.read`) (`web/src/pages/admin/demand.rs`) |
 | `/admin/partners`        | Partners, paying ones and monthly revenue by area + create sheet (`partner.manage`) (`web/src/pages/admin/partners.rs`)      |
+| `/admin/jobs`            | Job posts, state per row (select + button; `autoSubmit`) (`job.moderate`) (`web/src/pages/admin/jobs.rs`) |
 | `/admin/prices`          | Prices entered, paged (row: delete, confirm + reason) + "enter a price" sheet (`price.manage`) (`web/src/pages/admin/prices.rs`) |
 | `/admin/crops`, `/admin/crops/[id]` | Crops (row: hide (confirm + reason) / show, open) + create sheet; edit, hide / show (`web/src/pages/admin/crops.rs`) |
 | `/admin/partners/[id]`   | Edit, turn off (confirm + reason) / on, report account (sheet), contracts (edit in place: dates, fee, categories, the area stays; delete confirm + reason) with the sponsored shops of their area (remove: confirm + reason), the add-contract form at the end (on the page, not a sheet: long form) |
@@ -414,7 +422,7 @@ Grow the rest only once one area sustains real leads week after week (the admin 
 
 - [x] Review system: only from a phone whose contact request the provider answered (`contacted` / `closed`: `INQUIRY_STATUSES_REVIEWABLE`, linked by `reviews.inquiry_id`), one per phone and provider (`reviewer_phone_hash`, SHA-256), hidden until an admin shows it, with the provider's public reply (`ReviewUseCase`)
 - [ ] Verification badges ("blue tick") for vetted providers
-- [ ] Demand posts: farmers post a job, system pushes notifications to nearby providers
+- [x] Demand posts: farmers post a job, the providers nearby that offer it are emailed and see it on their jobs page
 
 ### Phase 3 — Ecosystem & Monetization (B2B)
 
@@ -490,6 +498,7 @@ The weekly leads table is the sales argument: "last week in Cai Lậy, X farmers
 - The demand report (`DemandReportUseCase`) counts leads (call and Zalo taps, inquiries without spam) of non-demo businesses over the `DEMAND_WEEKS` whole weeks before this one, Monday to Sunday in Vietnam (`VN_UTC_OFFSET_SECS`, the one offset). A lead counts under its business's area: the nearest active location preset within `DEMAND_AREA_RADIUS_M` (else "no area"); a tap on a shop with one live service takes that service's category. Any figure above zero and under `DEMAND_REPORT_MIN_COUNT` is hidden, and so is a total that would give exactly one hidden figure away; every view of the figures (page, CSV, JSON, a partner's) goes through the same `aggregate`. Steady areas: every report week at `STEADY_WEEKLY_LEADS`. Searches (`record_search`) are stored in the background with no identity: words (lowercased, `SEARCH_QUERY_MAX`), category, area, result count; a page never waits for them. A signed-in visitor's are skipped, and the same search by the same visitor within `SEARCH_REPEAT_SECS` counts once (`pages::visitor`: the address is hashed in memory only, never stored).
 - Partners (`PartnerUseCase`): a contract is in force between its dates (both included, Vietnam days) while its partner is on; the revenue figures are the monthly fees of contracts in force today. A partner account (role `partner`) reads only `ReportScope { areas, categories }` of its contracts in force. Sponsored shops must count under the contract's area; on `/explore` they are moved up under "Tài trợ" (`feature_sponsored`: one service per shop, at most `SPONSORED_SHOWN`), never hidden, never shown twice, counted by the same call beacon. "Assign an account" forms (provider, partner) share `account_rules::account_for_role`.
 - Crop prices (`PriceUseCase`): the admin (`price.manage`) enters a low–high price in đồng per unit for a shown crop in a shown area on a day not after today (Vietnam), at most `PRICE_PER_UNIT_MAX`; the same crop, area and day again replaces it (UNIQUE, upsert). The board (`build_board`, one place) shows each shown crop's latest price per area only within `PRICE_FRESH_DAYS`, with the move of its middle since the price before (`PRICE_HISTORY_DAYS` back); a hidden crop or area leaves it. The tab is `wide_only`; on a phone the home strip (`molecules/price_line.html`) leads there.
+- Job posts (`JobUseCase`): a farmer posts a job (a shown service category, the phone's position or else a location preset, a description, a name and a phone); one phone has at most `JOB_POSTS_OPEN_PER_PHONE` open posts within `JOB_POST_DAYS`. A post is never public: `JobNotificationSubscriber` emails the nearest `JOB_NOTIFY_MAX` providers within `JOB_NOTIFY_RADIUS_M` with a live service in its category (live, not demo, the managing account's address else the business's) in a background task, and those providers see it with the phone on `/provider/jobs` while it is open and at most `JOB_POST_DAYS` old (`OFFERS_THE_JOB` in the job repository, the one place that says so). The admin closes a post or marks it spam.
 - Repository queries use Sea-ORM's query builder (`find`, `update_many`, `Query::select` subqueries, `lock_exclusive` in a transaction), not raw SQL strings; `Expr::cust_with_values` only for a PostGIS fragment the builder cannot express.
 - Every list sort ends with an `id` tiebreaker, and price sorts put unpriced products last, so pages never repeat or skip rows.
 

@@ -7,6 +7,7 @@ pub mod crops;
 pub mod dashboard;
 pub mod demand;
 pub mod inquiries;
+pub mod jobs;
 pub mod locations;
 pub mod partners;
 pub mod prices;
@@ -20,10 +21,10 @@ pub mod users;
 use application::{
     authz::Actor,
     catalogue::{
-        PERM_ADMIN_DASHBOARD_VIEW, PERM_CATEGORY_MANAGE, PERM_INQUIRY_READ, PERM_LISTING_MODERATE,
-        PERM_LOCATION_MANAGE, PERM_PARTNER_MANAGE, PERM_PRICE_MANAGE, PERM_PROVIDER_READ,
-        PERM_REPORT_DEMAND_READ, PERM_REVIEW_MODERATE, PERM_ROLE_READ, PERM_SERVICE_MANAGE,
-        PERM_SYSTEM_DEMO_MANAGE, PERM_USER_READ,
+        PERM_ADMIN_DASHBOARD_VIEW, PERM_CATEGORY_MANAGE, PERM_INQUIRY_READ, PERM_JOB_MODERATE,
+        PERM_LISTING_MODERATE, PERM_LOCATION_MANAGE, PERM_PARTNER_MANAGE, PERM_PRICE_MANAGE,
+        PERM_PROVIDER_READ, PERM_REPORT_DEMAND_READ, PERM_REVIEW_MODERATE, PERM_ROLE_READ,
+        PERM_SERVICE_MANAGE, PERM_SYSTEM_DEMO_MANAGE, PERM_USER_READ,
     },
 };
 use axum::{http::StatusCode, response::Response};
@@ -118,6 +119,12 @@ const MENU: &[(Option<&str>, &[Entry])] = &[
                 "fa-envelope-open-text",
                 "admin_menu.inquiries",
                 PERM_INQUIRY_READ,
+            ),
+            (
+                "admin_jobs",
+                "fa-bullhorn",
+                "admin_menu.jobs",
+                PERM_JOB_MODERATE,
             ),
             (
                 "admin_reviews",

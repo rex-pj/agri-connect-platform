@@ -55,6 +55,17 @@
     {{ atoms::icon(name="fa-chevron-right", class="text-muted") }}
   </a>
   {% endif %}
+  {% if page.jobs %}
+  <a class="detail-card d-flex align-items-center gap-3 text-decoration-none" href="{{ page.jobs.href }}">
+    <span class="provider-cta__icon">{{ atoms::icon(name="fa-bullhorn") }}</span>
+    <span class="flex-grow-1">
+      <strong class="d-block text-body">{{ t(key="own_jobs.title") }}</strong>
+      <span class="small text-muted">{{ t(key="own_jobs.count", count=page.jobs.open) }}</span>
+    </span>
+    {% if page.jobs.open > 0 %}<span class="badge text-bg-info fs-6">{{ page.jobs.open }}</span>{% endif %}
+    {{ atoms::icon(name="fa-chevron-right", class="text-muted") }}
+  </a>
+  {% endif %}
   {% if page.reviews %}
   <a class="detail-card d-flex align-items-center gap-3 text-decoration-none" href="{{ page.reviews.href }}">
     <span class="provider-cta__icon">{{ atoms::icon(name="fa-star") }}</span>

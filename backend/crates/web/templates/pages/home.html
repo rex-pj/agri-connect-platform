@@ -10,7 +10,8 @@
 {#- Home: one strip of category shortcuts (services first, then products,
     told apart by tile shape and colour, each kind ending in an "all" tile),
     the near-me banner, featured services (the farmer's main errand: one per
-    verified provider, the provider on each card), today's few crop prices
+    verified provider, the provider on each card), the "post a job" card,
+    today's few crop prices
     (each crop's newest, linking to /prices), then featured products.
     `page` is web::pages::home::HomePage. -#}
 {% block title %}{{ site.name }} — {{ t(key="home.title") }}{% endblock title %}
@@ -26,6 +27,8 @@
   {{ services::service_grid(services=page.services) }}
 </section>
 {% endif %}
+
+<section class="home-section">{{ seller::provider_cta(cta=page.job_cta) }}</section>
 
 {% if page.prices %}
 <section class="home-section">

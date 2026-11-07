@@ -11,9 +11,9 @@
 use application::{
     authz::Actor,
     catalogue::{
-        PERM_OWN_INQUIRY_MANAGE, PERM_OWN_LISTING_CREATE, PERM_OWN_LISTING_DELETE,
-        PERM_OWN_PROFILE_UPDATE, PERM_OWN_SERVICE_CREATE, PERM_OWN_SERVICE_DELETE,
-        PERM_OWN_SERVICE_UPDATE,
+        PERM_OWN_INQUIRY_MANAGE, PERM_OWN_JOB_READ, PERM_OWN_LISTING_CREATE,
+        PERM_OWN_LISTING_DELETE, PERM_OWN_PROFILE_UPDATE, PERM_OWN_SERVICE_CREATE,
+        PERM_OWN_SERVICE_DELETE, PERM_OWN_SERVICE_UPDATE,
     },
     constants::{CALL_STATS_DAYS, SERVICES_PER_BUSINESS_MAX},
     outputs::{CategoryDto, ProviderProductDto, ProviderProfileDto, ProviderServiceDto},
@@ -85,6 +85,13 @@ pub struct ServicesSection {
 }
 
 #[derive(Serialize)]
+pub struct JobsLink {
+    pub href: String,
+    /// Open posts near the business in its categories.
+    pub open: usize,
+}
+
+#[derive(Serialize)]
 pub struct ReviewsLink {
     pub href: String,
     pub total: usize,
@@ -121,6 +128,9 @@ pub struct DashboardPage {
     /// The link to the reviews of the business, with how many there are;
     /// `None` without a business.
     pub reviews: Option<ReviewsLink>,
+    /// The link to the jobs posted nearby, when the actor may read them and
+    /// has a business.
+    pub jobs: Option<JobsLink>,
     /// Taps on this business's call buttons in the last `call_days` days;
     /// `None` without a business.
     pub calls: Option<i64>,
@@ -212,6 +222,13 @@ async fn dashboard_page(
         }
         None => None,
     };
+    let jobs = match (&profile, actor.can(PERM_OWN_JOB_READ)) {
+        (Some(_), true) => Some(JobsLink {
+            href: url("provider_jobs", &[])?,
+            open: state.usecases.job.list_own(actor).await?.len(),
+        }),
+        _ => None,
+    };
     let body = DashboardPage {
         public_href: profile
             .as_ref()
@@ -229,6 +246,7 @@ async fn dashboard_page(
         can_create: actor.can(PERM_OWN_LISTING_CREATE),
         inbox,
         reviews,
+        jobs,
         calls: usecase.count_own_calls(actor).await?,
         call_days: CALL_STATS_DAYS,
         flash,

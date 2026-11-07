@@ -1,0 +1,205 @@
+//! Job posts: a farmer posts a job, the providers nearby that offer its
+//! category are emailed and see it (with the phone) on their jobs page, one
+//! far away does not; a phone has only so many open posts; the admin marks
+//! one spam and it leaves the providers' pages. Database tests need
+//! TEST_DATABASE_URL and `--include-ignored`.
+
+use axum::{
+    body::Body,
+    http::{header, Request, StatusCode},
+};
+use integration_tests::{
+    body_text, categories_of, env_with_origin, get_page, install_admin, json_body, post_form,
+    register_provider, send, Env, TEST_ORIGIN,
+};
+use sea_orm::{ConnectionTrait, Statement};
+
+async fn scalar(e: &Env, sql: &str) -> String {
+    e.t.db
+        .query_one(Statement::from_string(
+            e.t.db.get_database_backend(),
+            sql.to_owned(),
+        ))
+        .await
+        .unwrap()
+        .unwrap()
+        .try_get("", "v")
+        .unwrap()
+}
+
+/// A provider with one service in `category`, placed at (lng, lat); its
+/// session token.
+async fn provider_at(
+    e: &Env,
+    username: &str,
+    phone: &str,
+    category: i32,
+    lng: f64,
+    lat: f64,
+) -> String {
+    let token = register_provider(&e.state, username, phone).await;
+    let req = Request::post("/api/provider/services")
+        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .header(header::CONTENT_TYPE, "application/json")
+        .header(header::ORIGIN, TEST_ORIGIN)
+        .body(Body::from(format!(r#"{{"category_id":{category}}}"#)))
+        .unwrap();
+    assert_eq!(send(&e.router, req).await.status(), StatusCode::CREATED);
+    e.t.db
+        .execute_unprepared(&format!(
+            "UPDATE businesses SET location = \
+             ST_GeographyFromText('SRID=4326;POINT({lng} {lat})') WHERE name = 'Vườn {username}'"
+        ))
+        .await
+        .unwrap();
+    token
+}
+
+async fn own_jobs(e: &Env, token: &str) -> serde_json::Value {
+    json_body(
+        send(
+            &e.router,
+            Request::get("/api/provider/jobs")
+                .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await,
+    )
+    .await
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_job_reaches_the_providers_nearby_that_offer_it() {
+    let e = env_with_origin().await;
+    let admin = install_admin(&e).await;
+    let category = categories_of(&e, "service").await[0].0.to_string();
+    let near = provider_at(
+        &e,
+        "phundrone",
+        "0901111111",
+        category.parse().unwrap(),
+        106.090,
+        10.420,
+    )
+    .await;
+    let far = provider_at(
+        &e,
+        "longxuyen",
+        "0903333333",
+        category.parse().unwrap(),
+        105.446,
+        10.374,
+    )
+    .await;
+    let cai_lay = scalar(
+        &e,
+        "SELECT id::text AS v FROM locations WHERE label = 'Đồng Tháp — Cai Lậy'",
+    )
+    .await;
+
+    // No place, no description: refused, both boxes at once.
+    let res = send(
+        &e.router,
+        post_form(
+            "/jobs",
+            &[
+                ("category_id", &category),
+                ("requester_name", "Chu Ba"),
+                ("requester_phone", "0912345678"),
+            ],
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    let html = body_text(res).await;
+    assert!(html.contains("chọn khu vực") && html.contains("ghi việc cần làm"));
+
+    // A job by Cai Lậy: back to the form with the flash.
+    let job = [
+        ("category_id", category.as_str()),
+        ("location_id", cai_lay.as_str()),
+        ("description", "Phun thuoc 3 cong lua"),
+        ("requester_name", "Chu Ba"),
+        ("requester_phone", "0912345678"),
+    ];
+    let res = send(&e.router, post_form("/jobs", &job, None)).await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res.headers()[header::LOCATION], "/jobs/new");
+
+    // Only the provider nearby is emailed, with the farmer's phone.
+    let sent = e.mail.jobs(1).await;
+    assert_eq!(sent.len(), 1, "one provider within the radius");
+    assert_eq!(sent[0].0, "phundrone@example.vn");
+    assert_eq!(sent[0].1.requester_phone, "0912345678");
+    assert_eq!(sent[0].1.jobs_path, "/provider/jobs");
+
+    // The jobs pages: the near one has it, the far one does not.
+    let mine = own_jobs(&e, &near).await;
+    assert_eq!(mine.as_array().map(Vec::len), Some(1));
+    assert_eq!(mine[0]["requester_phone"], "0912345678");
+    assert!(mine[0]["distance_m"].as_f64().is_some());
+    assert_eq!(own_jobs(&e, &far).await.as_array().map(Vec::len), Some(0));
+    for page in ["/provider/jobs", "/provider/dashboard"] {
+        let res = send(
+            &e.router,
+            Request::get(page)
+                .header(header::ACCEPT, "text/html")
+                .header(header::AUTHORIZATION, format!("Bearer {near}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::OK, "{page}");
+        let html = body_text(res).await;
+        assert!(
+            html.contains("Phun thuoc 3 cong lua") || html.contains("1 việc đang tìm thợ"),
+            "{page}"
+        );
+    }
+
+    // A phone has at most JOB_POSTS_OPEN_PER_PHONE open posts.
+    for _ in 0..2 {
+        let res = send(&e.router, post_form("/jobs", &job, None)).await;
+        assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    }
+    let res = send(&e.router, post_form("/jobs", &job, None)).await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert!(body_text(res).await.contains("nhiều việc chưa xong"));
+
+    // The admin marks the first spam: it leaves the provider's page.
+    let first = scalar(&e, "SELECT MIN(id)::text AS v FROM job_posts").await;
+    let res = send(
+        &e.router,
+        post_form(
+            &format!("/admin/jobs/{first}/status"),
+            &[("status", "spam")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(own_jobs(&e, &near).await.as_array().map(Vec::len), Some(2));
+    let res = send(&e.router, get_page("/admin/jobs", Some(&admin))).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    // A provider cannot moderate.
+    let res = send(
+        &e.router,
+        Request::patch(format!("/api/admin/jobs/{first}/status"))
+            .header(header::AUTHORIZATION, format!("Bearer {near}"))
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(header::ORIGIN, TEST_ORIGIN)
+            .body(Body::from(r#"{"status":"open"}"#))
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+
+    // The way in: the home page's card, the form itself.
+    let html = body_text(send(&e.router, get_page("/", None)).await).await;
+    assert!(html.contains("Chưa tìm được thợ?"));
+    let res = send(&e.router, get_page("/jobs/new", None)).await;
+    assert_eq!(res.status(), StatusCode::OK);
+}

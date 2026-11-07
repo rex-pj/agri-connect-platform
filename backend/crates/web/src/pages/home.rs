@@ -23,7 +23,7 @@ use crate::{
         prices::PriceLine,
     },
     routes,
-    shell::Shell,
+    shell::{Link, ProviderCta, Shell},
     views::render_page,
 };
 
@@ -32,6 +32,8 @@ pub struct HomePage {
     pub categories: Vec<CategoryTile>,
     pub services: Vec<ServiceCard>,
     pub products: Vec<ProductDto>,
+    /// "Found no one? Post the job": the way to the job form.
+    pub job_cta: ProviderCta,
     /// Today's few prices (each crop's newest), under the near-me banner.
     pub prices: Vec<PriceLine>,
 }
@@ -107,6 +109,15 @@ pub async fn show(shell: Shell, State(state): State<AppState>) -> Result<Respons
 
     let page = HomePage {
         categories: tiles,
+        job_cta: ProviderCta {
+            link: Link {
+                href: url("job_new", &[])?,
+                icon: "fa-bullhorn",
+                label: state.locale().text("job.cta_button"),
+            },
+            title: state.locale().text("job.cta_title"),
+            sub: state.locale().text("job.cta_sub"),
+        },
         prices: {
             let today = vn_today(Utc::now())?;
             prices

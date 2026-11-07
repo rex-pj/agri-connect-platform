@@ -148,3 +148,16 @@ pub const AUDIT_REASON_MAX: usize = 500;
 
 // Every service name must fit as a contact topic.
 const _: () = assert!(TOPIC_MAX_LEN >= SERVICE_NAME_MAX);
+
+// ── Job posts ─────────────────────────────────────────────────────────────────
+pub const JOB_DESCRIPTION_MAX: usize = 500;
+/// How long a job post stays open to providers, in days.
+pub const JOB_POST_DAYS: i64 = 7;
+/// Open posts one phone may have within `JOB_POST_DAYS`.
+pub const JOB_POSTS_OPEN_PER_PHONE: u64 = 3;
+/// How far from a job a provider is told about it, in metres.
+pub const JOB_NOTIFY_RADIUS_M: f64 = RADIUS_DEFAULT_M;
+/// At most this many providers (the nearest) are emailed about one job.
+pub const JOB_NOTIFY_MAX: i64 = 20;
+/// At most this many posts on a provider's jobs page.
+pub const JOBS_SHOWN: i64 = 50;

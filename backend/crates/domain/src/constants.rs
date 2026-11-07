@@ -43,3 +43,9 @@ pub const CALL_KIND_PROVIDER: &str = "provider";
 pub const CALL_CHANNEL_PHONE: &str = "call";
 pub const CALL_CHANNEL_ZALO: &str = "zalo";
 pub const CALL_CHANNELS: &[&str] = &[CALL_CHANNEL_PHONE, CALL_CHANNEL_ZALO];
+
+/// A job post's state: open (providers see it), closed (done or no longer
+/// needed), spam (junk; never shown). Keep in sync with the `job_posts`
+/// CHECK.
+pub const JOB_STATUS_OPEN: &str = "open";
+pub const JOB_STATUSES: &[&str] = &[JOB_STATUS_OPEN, "closed", "spam"];

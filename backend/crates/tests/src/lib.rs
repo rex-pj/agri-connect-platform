@@ -12,7 +12,7 @@ use std::{
 use application::{
     catalogue::CATALOGUE,
     constants::{DEFAULT_UPLOAD_MAX_BYTES, REFRESH_TOKEN_DEFAULT_DAYS},
-    ports::{EmailService, InquiryNotice, TokenService},
+    ports::{EmailService, InquiryNotice, JobNotice, TokenService},
 };
 use axum::{
     body::Body,
@@ -49,6 +49,7 @@ pub fn email_service() -> Arc<dyn EmailService> {
 #[derive(Default)]
 pub struct RecordingEmail {
     inquiries: std::sync::Mutex<Vec<(String, InquiryNotice)>>,
+    jobs: std::sync::Mutex<Vec<(String, JobNotice)>>,
 }
 
 impl RecordingEmail {
@@ -64,6 +65,19 @@ impl RecordingEmail {
         }
         self.inquiries.lock().unwrap().clone()
     }
+
+    /// (recipient, notice) of every "a job near you" email so far, waiting
+    /// (up to 2 s) until `at_least` arrived.
+    pub async fn jobs(&self, at_least: usize) -> Vec<(String, JobNotice)> {
+        for _ in 0..100 {
+            let sent = self.jobs.lock().unwrap().clone();
+            if sent.len() >= at_least {
+                return sent;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        self.jobs.lock().unwrap().clone()
+    }
 }
 
 #[async_trait::async_trait]
@@ -72,6 +86,13 @@ impl EmailService for RecordingEmail {
 
     async fn send_new_inquiry(&self, to_email: &str, notice: &InquiryNotice) {
         self.inquiries
+            .lock()
+            .unwrap()
+            .push((to_email.to_owned(), notice.clone()));
+    }
+
+    async fn send_new_job(&self, to_email: &str, notice: &JobNotice) {
+        self.jobs
             .lock()
             .unwrap()
             .push((to_email.to_owned(), notice.clone()));

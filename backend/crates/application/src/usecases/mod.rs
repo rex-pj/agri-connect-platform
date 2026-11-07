@@ -5,6 +5,7 @@ pub mod business_rules;
 pub mod demand_usecase;
 pub mod explore_usecase;
 pub mod health_usecase;
+pub mod job_usecase;
 pub mod media_usecase;
 pub mod partner_usecase;
 pub mod permission_usecase;

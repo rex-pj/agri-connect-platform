@@ -23,7 +23,7 @@ use crate::{
     error_response::render_errors,
     handlers::{
         admin_handler::AdminHandler, auth_handler::AuthHandler, explore_handler::ExploreHandler,
-        health_handler::HealthHandler, media_handler::MediaHandler,
+        health_handler::HealthHandler, job_handler::JobHandler, media_handler::MediaHandler,
         partner_handler::PartnerHandler, permission_handler::PermissionHandler,
         price_handler::PriceHandler, products_handler::ProductsHandler,
         provider_dashboard_handler::ProviderDashboardHandler, role_handler::RoleHandler,
@@ -116,6 +116,7 @@ impl AppRouting {
             .route("/search", get(pages::search::show))
             .route("/services", get(pages::services::list))
             .route("/prices", get(pages::prices::show))
+            .route("/jobs/new", get(pages::jobs::new))
             .route(
                 "/services/category/{id}/{slug}",
                 get(pages::services::category),
@@ -179,6 +180,9 @@ impl AppRouting {
             .route("/contact", post(pages::provider::submit_contact))
             .route("/api/explore/reviews", post(ExploreHandler::submit_review))
             .route("/reviews", post(pages::provider::submit_review))
+            .route("/api/explore/jobs", post(JobHandler::post))
+            // The job form: same rules and budget as the JSON endpoint.
+            .route("/jobs", post(pages::jobs::create))
             .route("/language", post(pages::language::switch))
             // Call-button taps: the click-to-call count, same budget.
             .route("/api/explore/calls", post(ExploreHandler::record_call))
@@ -392,6 +396,11 @@ impl AppRouting {
                 "/admin/inquiries/{id}/status",
                 post(pages::admin::inquiries::change_status),
             )
+            .route("/admin/jobs", get(pages::admin::jobs::list))
+            .route(
+                "/admin/jobs/{id}/status",
+                post(pages::admin::jobs::change_status),
+            )
             .route("/admin/demand", get(pages::admin::demand::show))
             .route("/admin/demand.csv", get(pages::admin::demand::csv))
             .route(
@@ -465,6 +474,7 @@ impl AppRouting {
                 "/provider/reviews/{id}/reply",
                 post(pages::own_reviews::reply),
             )
+            .route("/provider/jobs", get(pages::own_jobs::list))
             .route("/provider/inquiries", get(pages::inbox::list))
             .route(
                 "/provider/inquiries/{id}/status",
@@ -598,6 +608,10 @@ impl AppRouting {
                 "/api/admin/users/{id}/permissions",
                 get(PermissionHandler::list_by_user),
             )
+            // Job posts
+            .route("/api/provider/jobs", get(JobHandler::list_own))
+            .route("/api/admin/jobs", get(JobHandler::list_admin))
+            .route("/api/admin/jobs/{id}/status", patch(JobHandler::set_status))
             // Crop prices
             .route(
                 "/api/admin/crops",

@@ -7,9 +7,9 @@ use std::{collections::HashMap, sync::Arc};
 
 use application::constants::{
     AUDIT_REASON_MAX, BUSINESS_ADDRESS_MAX, BUSINESS_DESCRIPTION_MAX, BUSINESS_NAME_MAX,
-    CROP_NAME_MAX, CROP_UNIT_MAX, FULL_NAME_MAX, PASSWORD_MIN_CHARS, PASSWORD_RESET_EXPIRY_HOURS,
-    PRICE_NOTE_MAX, PRODUCT_DESCRIPTION_MAX, PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX, USERNAME_MAX_LEN,
-    USERNAME_MIN_LEN, VN_UTC_OFFSET_SECS,
+    CROP_NAME_MAX, CROP_UNIT_MAX, FULL_NAME_MAX, JOB_DESCRIPTION_MAX, PASSWORD_MIN_CHARS,
+    PASSWORD_RESET_EXPIRY_HOURS, PRICE_NOTE_MAX, PRODUCT_DESCRIPTION_MAX, PRODUCT_NAME_MAX,
+    PRODUCT_UNIT_MAX, USERNAME_MAX_LEN, USERNAME_MIN_LEN, VN_UTC_OFFSET_SECS,
 };
 use axum::{
     http::{header, HeaderMap, HeaderValue, StatusCode},
@@ -109,6 +109,7 @@ struct FieldLimits {
     crop_name_max: usize,
     crop_unit_max: usize,
     price_note_max: usize,
+    job_description_max: usize,
     /// The near-me radius before the visitor picks one.
     near_me_km: i64,
 }
@@ -129,6 +130,7 @@ const FIELD_LIMITS: FieldLimits = FieldLimits {
     crop_name_max: CROP_NAME_MAX,
     crop_unit_max: CROP_UNIT_MAX,
     price_note_max: PRICE_NOTE_MAX,
+    job_description_max: JOB_DESCRIPTION_MAX,
     near_me_km: EXPLORE_DEFAULT_RADIUS_M / 1000,
 };
 

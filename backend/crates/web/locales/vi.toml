@@ -68,6 +68,10 @@ partner_account_in_use         = "Tài khoản này đang xem báo cáo của m�
 partner_not_found              = "Không tìm thấy đối tác."
 contract_not_found             = "Không tìm thấy hợp đồng."
 invalid_crop_kind              = "Vui lòng chọn lúa hoặc trái cây."
+job_description_required       = "Vui lòng ghi việc cần làm."
+invalid_job_status             = "Trạng thái việc không hợp lệ."
+job_place_required             = "Vui lòng bấm \"Dùng vị trí của tôi\" hoặc chọn khu vực."
+job_post_limit                 = "Số này đang có nhiều việc chưa xong. Hãy chờ thợ gọi, hoặc thử lại sau vài ngày."
 unit_required                  = "Vui lòng nhập đơn vị tính (ví dụ: kg)."
 invalid_price_range            = "Giá cao phải lớn hơn hoặc bằng giá thấp."
 invalid_price_date             = "Vui lòng chọn ngày, không sau hôm nay."
@@ -103,6 +107,7 @@ inquiry_not_found              = "Không tìm thấy yêu cầu."
 review_not_found               = "Không tìm thấy đánh giá."
 crop_not_found                 = "Không tìm thấy loại cây."
 price_not_found                = "Không tìm thấy giá này."
+job_not_found                  = "Không tìm thấy việc này."
 file_not_found                 = "Không tìm thấy ảnh."
 
 # Every other word the app shows, by area. Templates: t(key="nav.home",
@@ -212,6 +217,8 @@ partner  = "Đại lý, hãng, hợp tác xã xem báo cáo nhu cầu của vùn
 "partner.manage"          = "Quản lý đối tác và hợp đồng"
 "partner.report.read"     = "Xem báo cáo của đối tác mình"
 "price.manage"            = "Nhập giá nông sản và quản lý loại cây"
+"job.moderate"            = "Đóng việc đăng, đánh dấu spam"
+"own.job.read"            = "Xem việc bà con đăng gần cửa hàng mình"
 "system.demo.manage"      = "Nạp / xoá dữ liệu mẫu"
 "own.profile.update"      = "Cập nhật hồ sơ doanh nghiệp của mình"
 "own.listing.create"      = "Thêm sản phẩm của mình"
@@ -826,6 +833,21 @@ Hãy gọi lại sớm. Xem và đánh dấu đã gọi tại:
 
 {site}"""
 inquiry_note    = "Ghi chú: {note}\n"
+job_subject     = "Có việc gần bạn – {site}"
+job_body        = """
+Xin chào {business},
+
+Bà con gần cửa hàng của bạn vừa đăng việc cần làm:
+
+Dịch vụ: {category} {area}
+Việc: {description}
+Họ tên: {name}
+Số điện thoại: {phone}
+
+Gọi ngay nếu bạn nhận được. Xem các việc gần bạn tại:
+{jobs}
+
+{site}"""
 
 [text.admin_menu]
 dashboard   = "Tổng quan"
@@ -847,6 +869,7 @@ demand      = "Báo cáo nhu cầu"
 partners    = "Đối tác"
 prices      = "Giá nông sản"
 crops       = "Loại cây"
+jobs        = "Việc cần làm"
 
 [text.admin_stats]
 providers = "Tổng nhà cung cấp"
@@ -1089,3 +1112,42 @@ hide_title = "Ẩn {name}?"
 what       = "loại cây này và giá của nó"
 on         = "Đang hiện trên trang giá."
 off        = "Đang ẩn: không hiện trên trang giá, giá cũ vẫn được giữ."
+
+[text.job]
+title                   = "Đăng việc cần làm"
+meta                    = "Đăng việc nông nghiệp cần làm (phun thuốc, múc bùn, sửa máy): thợ gần bạn sẽ gọi lại, không qua trung gian."
+sub                     = "Chưa tìm được thợ? Ghi việc cần làm, thợ gần bạn sẽ gọi."
+posted                  = "Đã đăng việc! Thợ gần bạn có dịch vụ này sẽ gọi lại cho bạn."
+category                = "Dịch vụ cần"
+choose_category         = "— Chọn dịch vụ —"
+where                   = "Ở đâu?"
+use_position            = "Dùng vị trí của tôi"
+position_done           = "Đã lấy vị trí của bạn."
+position_denied         = "Không lấy được vị trí. Hãy chọn khu vực bên dưới."
+or_area                 = "Hoặc chọn khu vực"
+choose_area             = "— Chọn khu vực —"
+description             = "Việc cần làm"
+description_placeholder = "Ví dụ: phun thuốc 3 công lúa, cần trong tuần này"
+phone_hint              = "Chỉ thợ có dịch vụ này ở gần bạn mới thấy số này."
+submit                  = "Đăng việc"
+cta_title               = "Chưa tìm được thợ?"
+cta_sub                 = "Đăng việc cần làm, thợ gần bạn sẽ gọi lại."
+cta_button              = "Đăng việc"
+
+[text.job_status]
+open   = "Đang tìm thợ"
+closed = "Đã xong"
+spam   = "Spam"
+
+[text.own_jobs]
+title      = "Việc gần bạn"
+sub        = "Bà con đăng trong {days} ngày qua, đúng dịch vụ của bạn"
+count      = "{count} việc đang tìm thợ"
+empty      = "Chưa có việc nào gần bạn"
+empty_hint = "Khi bà con gần cửa hàng đăng việc đúng dịch vụ của bạn, việc sẽ hiện ở đây và bạn nhận được email."
+
+[text.admin_jobs]
+sub       = "{count} việc bà con đã đăng"
+saved     = "Đã lưu trạng thái."
+none      = "Chưa có việc nào được đăng."
+status_of = "Trạng thái việc của {name}"

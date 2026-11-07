@@ -2,6 +2,7 @@ pub mod admin_handler;
 pub mod auth_handler;
 pub mod explore_handler;
 pub mod health_handler;
+pub mod job_handler;
 pub mod media_handler;
 pub mod partner_handler;
 pub mod permission_handler;

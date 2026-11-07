@@ -1034,3 +1034,21 @@ pub struct PriceChoicesDto {
 pub struct IdDto {
     pub id: i32,
 }
+
+// ── Job posts ─────────────────────────────────────────────────────────────────
+
+/// A job post (the admin's list, a provider's jobs page). `distance_m`: from
+/// the provider's business.
+#[derive(Debug, Clone, Serialize)]
+pub struct JobPostDto {
+    pub id: i32,
+    pub category_id: i32,
+    pub category: String,
+    pub area: Option<String>,
+    pub description: String,
+    pub requester_name: String,
+    pub requester_phone: String,
+    pub status: String,
+    pub created_on: chrono::DateTime<chrono::Utc>,
+    pub distance_m: Option<f64>,
+}

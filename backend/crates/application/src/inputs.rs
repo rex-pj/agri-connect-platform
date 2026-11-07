@@ -162,3 +162,15 @@ pub struct PriceInput {
     pub price_high: Option<i64>,
     pub note: Option<String>,
 }
+
+/// A farmer's job post: where is a position (`lat`/`lng`, from the phone)
+/// or else a location preset.
+pub struct JobInput {
+    pub category_id: Option<i32>,
+    pub location_id: Option<i32>,
+    pub lat: Option<f64>,
+    pub lng: Option<f64>,
+    pub description: String,
+    pub requester_name: String,
+    pub requester_phone: String,
+}

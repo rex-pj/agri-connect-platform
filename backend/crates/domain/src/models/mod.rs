@@ -5,6 +5,7 @@ pub mod category;
 pub mod demand;
 pub mod file;
 pub mod inquiry;
+pub mod job;
 pub mod location;
 pub mod partner;
 pub mod permission;

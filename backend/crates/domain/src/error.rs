@@ -116,6 +116,10 @@ error_codes! {
     UnitRequired              => (BadRequest,      "unit_required"),
     InvalidPriceRange         => (BadRequest,      "invalid_price_range"),
     InvalidPriceDate          => (BadRequest,      "invalid_price_date"),
+    JobDescriptionRequired    => (BadRequest,      "job_description_required"),
+    InvalidJobStatus          => (BadRequest,      "invalid_job_status"),
+    JobPlaceRequired          => (BadRequest,      "job_place_required"),
+    JobPostLimit              => (BadRequest,      "job_post_limit"),
 
     // ── Uploads ──────────────────────────────────────────────────────────────
     FileTooLarge              => (PayloadTooLarge, "file_too_large"),
@@ -153,6 +157,7 @@ error_codes! {
     ContractNotFound          => (NotFound,        "contract_not_found"),
     CropNotFound              => (NotFound,        "crop_not_found"),
     PriceNotFound             => (NotFound,        "price_not_found"),
+    JobNotFound               => (NotFound,        "job_not_found"),
     FileNotFound              => (NotFound,        "file_not_found"),
 }
 

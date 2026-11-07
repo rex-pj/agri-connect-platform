@@ -5,7 +5,7 @@ use application::{
     usecases::{
         admin_usecase::AdminUseCase, auth_usecase::AuthUseCase,
         demand_usecase::DemandReportUseCase, explore_usecase::ExploreUseCase,
-        health_usecase::HealthUseCase, media_usecase::MediaUseCase,
+        health_usecase::HealthUseCase, job_usecase::JobUseCase, media_usecase::MediaUseCase,
         partner_usecase::PartnerUseCase, permission_usecase::PermissionUseCase,
         price_usecase::PriceUseCase, product_usecase::ProductUseCase,
         provider_dashboard_usecase::ProviderDashboardUseCase, review_usecase::ReviewUseCase,
@@ -21,6 +21,7 @@ use crate::{
 pub struct UseCases {
     pub explore: ExploreUseCase,
     pub health: HealthUseCase,
+    pub job: JobUseCase,
     pub media: MediaUseCase,
     pub product: ProductUseCase,
     pub admin: AdminUseCase,

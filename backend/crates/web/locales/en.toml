@@ -66,6 +66,10 @@ partner_account_in_use         = "This account already reads the report of anoth
 partner_not_found              = "Partner not found."
 contract_not_found             = "Contract not found."
 invalid_crop_kind              = "Please choose rice or fruit."
+job_description_required       = "Please say what needs doing."
+invalid_job_status             = "Invalid job state."
+job_place_required             = "Please tap \"Use my position\" or choose an area."
+job_post_limit                 = "This number has several open jobs already. Wait for a call, or try again in a few days."
 unit_required                  = "Please enter a unit (for example: kg)."
 invalid_price_range            = "The high price must be at least the low price."
 invalid_price_date             = "Please choose a day, not after today."
@@ -101,6 +105,7 @@ inquiry_not_found              = "Request not found."
 review_not_found               = "Review not found."
 crop_not_found                 = "Crop not found."
 price_not_found                = "Price not found."
+job_not_found                  = "Job not found."
 file_not_found                 = "Photo not found."
 
 [text.site]
@@ -201,6 +206,8 @@ partner  = "Dealer, brand or cooperative reading the demand report of the areas 
 "partner.manage"          = "Manage partners and contracts"
 "partner.report.read"     = "Read the own partner report"
 "price.manage"            = "Enter crop prices and manage crops"
+"job.moderate"            = "Close job posts, mark spam"
+"own.job.read"            = "See jobs posted near the own shop"
 "system.demo.manage"      = "Load / remove demo data"
 "own.profile.update"      = "Update own business profile"
 "own.listing.create"      = "Add own products"
@@ -815,6 +822,21 @@ Please call back soon. See it and mark it as called at:
 
 {site}"""
 inquiry_note    = "Note: {note}\n"
+job_subject     = "A job near you – {site}"
+job_body        = """
+Hello {business},
+
+A farmer near your shop just posted a job:
+
+Service: {category} {area}
+Job: {description}
+Name: {name}
+Phone: {phone}
+
+Call now if you can take it. See the jobs near you at:
+{jobs}
+
+{site}"""
 
 [text.admin_menu]
 dashboard   = "Dashboard"
@@ -836,6 +858,7 @@ demand      = "Demand report"
 partners    = "Partners"
 prices      = "Crop prices"
 crops       = "Crops"
+jobs        = "Job posts"
 
 [text.admin_stats]
 providers = "Providers in all"
@@ -1078,3 +1101,42 @@ hide_title = "Hide {name}?"
 what       = "this crop and its prices"
 on         = "Shown on the price page."
 off        = "Hidden: not on the price page; its prices are kept."
+
+[text.job]
+title                   = "Post a job"
+meta                    = "Post a farm job (crop spraying, mud dredging, machine repair): providers near you call back, no middleman."
+sub                     = "Found no one yet? Say what needs doing and providers near you will call."
+posted                  = "Job posted! Providers near you offering this service will call you back."
+category                = "Service needed"
+choose_category         = "— Choose a service —"
+where                   = "Where?"
+use_position            = "Use my position"
+position_done           = "Your position is set."
+position_denied         = "Could not get your position. Please choose an area below."
+or_area                 = "Or choose an area"
+choose_area             = "— Choose an area —"
+description             = "What needs doing"
+description_placeholder = "For example: spray 3 công of rice, needed this week"
+phone_hint              = "Only providers of this service near you see this number."
+submit                  = "Post the job"
+cta_title               = "Found no one yet?"
+cta_sub                 = "Post the job and providers near you will call back."
+cta_button              = "Post a job"
+
+[text.job_status]
+open   = "Looking"
+closed = "Done"
+spam   = "Spam"
+
+[text.own_jobs]
+title      = "Jobs near you"
+sub        = "Posted in the last {days} days, for your services"
+count      = "{count} open jobs"
+empty      = "No jobs near you yet"
+empty_hint = "When a farmer near your shop posts a job for one of your services, it shows here and you get an email."
+
+[text.admin_jobs]
+sub       = "{count} jobs posted by farmers"
+saved     = "State saved."
+none      = "No jobs posted yet."
+status_of = "Job state of {name}"

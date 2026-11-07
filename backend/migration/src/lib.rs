@@ -22,6 +22,7 @@ mod m20261108_000012_review_replies;
 mod m20261109_000013_search_events;
 mod m20261110_000014_partners;
 mod m20261111_000015_crop_prices;
+mod m20261112_000016_job_posts;
 pub mod search;
 
 pub struct Migrator;
@@ -45,6 +46,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20261109_000013_search_events::Migration),
             Box::new(m20261110_000014_partners::Migration),
             Box::new(m20261111_000015_crop_prices::Migration),
+            Box::new(m20261112_000016_job_posts::Migration),
         ]
     }
 }

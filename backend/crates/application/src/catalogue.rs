@@ -37,6 +37,7 @@ pub const PERM_REPORT_DEMAND_READ: &str = "report.demand.read";
 pub const PERM_PARTNER_MANAGE: &str = "partner.manage";
 pub const PERM_PARTNER_REPORT_READ: &str = "partner.report.read";
 pub const PERM_PRICE_MANAGE: &str = "price.manage";
+pub const PERM_JOB_MODERATE: &str = "job.moderate";
 pub const PERM_SYSTEM_DEMO_MANAGE: &str = "system.demo.manage";
 pub const PERM_OWN_PROFILE_UPDATE: &str = "own.profile.update";
 pub const PERM_OWN_LISTING_CREATE: &str = "own.listing.create";
@@ -47,6 +48,7 @@ pub const PERM_OWN_SERVICE_UPDATE: &str = "own.service.update";
 pub const PERM_OWN_SERVICE_DELETE: &str = "own.service.delete";
 pub const PERM_OWN_INQUIRY_MANAGE: &str = "own.inquiry.manage";
 pub const PERM_OWN_REVIEW_REPLY: &str = "own.review.reply";
+pub const PERM_OWN_JOB_READ: &str = "own.job.read";
 
 const ADMIN: &[&str] = &[ROLE_ADMIN];
 const PROVIDER: &[&str] = &[ROLE_PROVIDER];
@@ -150,6 +152,10 @@ pub static PERMISSIONS: &[PermissionSeed] = &[
         default_roles: ADMIN,
     },
     PermissionSeed {
+        key: PERM_JOB_MODERATE,
+        default_roles: ADMIN,
+    },
+    PermissionSeed {
         key: PERM_SYSTEM_DEMO_MANAGE,
         default_roles: ADMIN,
     },
@@ -187,6 +193,10 @@ pub static PERMISSIONS: &[PermissionSeed] = &[
     },
     PermissionSeed {
         key: PERM_OWN_REVIEW_REPLY,
+        default_roles: PROVIDER,
+    },
+    PermissionSeed {
+        key: PERM_OWN_JOB_READ,
         default_roles: PROVIDER,
     },
 ];

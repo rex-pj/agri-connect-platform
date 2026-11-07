@@ -10,7 +10,8 @@ use application::{
         IMAGE_THUMB_MAX_SIDE, REFRESH_TOKEN_DEFAULT_DAYS,
     },
     events::{
-        AuditLogSubscriber, FileCleanupSubscriber, InProcessEventBus, InquiryNotificationSubscriber,
+        AuditLogSubscriber, FileCleanupSubscriber, InProcessEventBus,
+        InquiryNotificationSubscriber, JobNotificationSubscriber,
     },
     ports::{EmailService, EventBus, FileStorage, PasswordHasher, TokenService},
     usecases::{
@@ -19,6 +20,7 @@ use application::{
         demand_usecase::{DemandDeps, DemandReportUseCase},
         explore_usecase::{ExploreDeps, ExploreUseCase},
         health_usecase::HealthUseCase,
+        job_usecase::JobUseCase,
         media_usecase::{MediaDeps, MediaUseCase},
         partner_usecase::{PartnerDeps, PartnerUseCase},
         permission_usecase::{PermissionDeps, PermissionUseCase},
@@ -43,11 +45,12 @@ use infrastructure::{
         call_repository::CallRepository, category_repository::CategoryRepository,
         demand_repository::DemandRepository, file_repository::FileRepository,
         health_repository::HealthRepository, inquiry_repository::InquiryRepository,
-        location_repository::LocationRepository, partner_repository::PartnerRepository,
-        permission_repository::PermissionRepository, price_repository::PriceRepository,
-        product_repository::ProductRepository, refresh_token_repository::RefreshTokenRepository,
-        review_repository::ReviewRepository, role_repository::RoleRepository,
-        service_repository::ServiceRepository, user_repository::UserRepository,
+        job_repository::JobRepository, location_repository::LocationRepository,
+        partner_repository::PartnerRepository, permission_repository::PermissionRepository,
+        price_repository::PriceRepository, product_repository::ProductRepository,
+        refresh_token_repository::RefreshTokenRepository, review_repository::ReviewRepository,
+        role_repository::RoleRepository, service_repository::ServiceRepository,
+        user_repository::UserRepository,
     },
 };
 use migration::{Migrator, MigratorTrait};
@@ -152,6 +155,8 @@ fn email_texts(locale: &Locale, site_name: &str) -> EmailTexts {
         inquiry_subject: locale.text("email.inquiry_subject"),
         inquiry_body: locale.text("email.inquiry_body"),
         inquiry_note: locale.text("email.inquiry_note"),
+        job_subject: locale.text("email.job_subject"),
+        job_body: locale.text("email.job_body"),
     }
 }
 
@@ -371,6 +376,10 @@ pub fn build_state(
     // The inbox the "new inquiry" email links to, from the route table.
     let inbox_path = routes::url("provider_inquiries", &[])
         .map_err(|e| domain::Error::internal(format!("route provider_inquiries: {e}")))?;
+    // The jobs page the "a job near you" email links to.
+    let jobs_path = routes::url("provider_jobs", &[])
+        .map_err(|e| domain::Error::internal(format!("route provider_jobs: {e}")))?;
+    let job_repo = Arc::new(JobRepository::new(Arc::clone(&db)));
     // Subscribers run in this order for every event. Webhooks would be added
     // here.
     let events: Arc<dyn EventBus> = Arc::new(InProcessEventBus::new(vec![
@@ -385,6 +394,11 @@ pub fn build_state(
             inquiry_repo.clone(),
             email.clone(),
             inbox_path,
+        )),
+        Arc::new(JobNotificationSubscriber::new(
+            job_repo.clone(),
+            email.clone(),
+            jobs_path,
         )),
     ]));
     let images = Arc::new(RasterImageProcessor::new(ImageRules {
@@ -459,13 +473,19 @@ pub fn build_state(
         partner: PartnerUseCase::new(PartnerDeps {
             partner_repo: Arc::new(PartnerRepository::new(Arc::clone(&db))),
             user_repo: user_repo.clone(),
-            category_repo,
+            category_repo: category_repo.clone(),
             location_repo: location_repo.clone(),
             demand_repo,
             demand: demand.clone(),
             password_hasher,
             events: events.clone(),
         }),
+        job: JobUseCase::new(
+            job_repo,
+            category_repo.clone(),
+            location_repo.clone(),
+            events.clone(),
+        ),
         price: PriceUseCase::new(
             Arc::new(PriceRepository::new(Arc::clone(&db))),
             location_repo,

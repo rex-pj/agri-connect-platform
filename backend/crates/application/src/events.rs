@@ -10,7 +10,7 @@ use domain::{
     repositories::{
         audit_log_repository_trait::AuditLogRepositoryTrait,
         file_repository_trait::FileRepositoryTrait,
-        inquiry_repository_trait::InquiryRepositoryTrait,
+        inquiry_repository_trait::InquiryRepositoryTrait, job_repository_trait::JobRepositoryTrait,
         product_repository_trait::ProductRepositoryTrait,
         service_repository_trait::ServiceRepositoryTrait,
     },
@@ -19,7 +19,8 @@ use domain::{
 use tracing::{info, warn};
 
 use crate::{
-    ports::{EmailService, EventBus, FileStorage, InquiryNotice},
+    constants::{JOB_NOTIFY_MAX, JOB_NOTIFY_RADIUS_M},
+    ports::{EmailService, EventBus, FileStorage, InquiryNotice, JobNotice},
     usecases::media_usecase::release_file,
 };
 
@@ -235,6 +236,72 @@ impl EventSubscriber for InquiryNotificationSubscriber {
         };
         let email = Arc::clone(&self.email);
         tokio::spawn(async move { email.send_new_inquiry(&to, &notice).await });
+        Ok(())
+    }
+}
+
+/// Emails the providers near a new job post that offer its category (the
+/// nearest `JOB_NOTIFY_MAX` within `JOB_NOTIFY_RADIUS_M`), in a background
+/// task: the farmer's page never waits for the mail server.
+pub struct JobNotificationSubscriber {
+    jobs: Arc<dyn JobRepositoryTrait + Send + Sync>,
+    email: Arc<dyn EmailService>,
+    /// The provider's jobs page, from the web layer's route table.
+    jobs_path: String,
+}
+
+impl JobNotificationSubscriber {
+    pub fn new(
+        jobs: Arc<dyn JobRepositoryTrait + Send + Sync>,
+        email: Arc<dyn EmailService>,
+        jobs_path: String,
+    ) -> Self {
+        Self {
+            jobs,
+            email,
+            jobs_path,
+        }
+    }
+}
+
+#[async_trait]
+impl EventSubscriber for JobNotificationSubscriber {
+    fn name(&self) -> &'static str {
+        "job_notification"
+    }
+
+    async fn handle(&self, event: &DomainEvent) -> Result<()> {
+        if !(event.entity == Entity::JobPost && event.change == Change::Created) {
+            return Ok(());
+        }
+        let Some(job) = self
+            .jobs
+            .find_for_notice(event.entity_id, JOB_NOTIFY_RADIUS_M, JOB_NOTIFY_MAX)
+            .await?
+        else {
+            return Ok(());
+        };
+        info!(
+            job = event.entity_id,
+            providers = job.recipients.len(),
+            "telling nearby providers about a new job"
+        );
+        let email = Arc::clone(&self.email);
+        let jobs_path = self.jobs_path.clone();
+        tokio::spawn(async move {
+            for to in job.recipients {
+                let notice = JobNotice {
+                    business_name: to.business_name,
+                    category: job.category.clone(),
+                    area: job.area.clone(),
+                    description: job.description.clone(),
+                    requester_name: job.requester_name.clone(),
+                    requester_phone: job.requester_phone.clone(),
+                    jobs_path: jobs_path.clone(),
+                };
+                email.send_new_job(&to.email, &notice).await;
+            }
+        });
         Ok(())
     }
 }

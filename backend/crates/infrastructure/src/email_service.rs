@@ -3,7 +3,7 @@
 
 use application::{
     constants::PASSWORD_RESET_EXPIRY_HOURS,
-    ports::{EmailService, InquiryNotice},
+    ports::{EmailService, InquiryNotice, JobNotice},
 };
 use async_trait::async_trait;
 use domain::{Error, Result};
@@ -38,6 +38,11 @@ pub struct EmailTexts {
     /// `{business}`, `{name}`, `{phone}`, `{topic}`, `{note}`, `{inbox}`,
     /// `{site}`.
     pub inquiry_body: String,
+    /// `{site}`.
+    pub job_subject: String,
+    /// `{business}`, `{category}`, `{area}`, `{description}`, `{name}`,
+    /// `{phone}`, `{jobs}`, `{site}`.
+    pub job_body: String,
     /// `{note}`: the line `{note}` becomes when the farmer left one.
     pub inquiry_note: String,
 }
@@ -68,6 +73,24 @@ fn inquiry_body(texts: &EmailTexts, app_url: &str, n: &InquiryNotice) -> String 
             ("topic", &n.topic),
             ("note", &note),
             ("inbox", &site_url(app_url, &n.inbox_path)),
+            ("site", &texts.site_name),
+        ],
+    )
+}
+
+/// The provider's "a job near you" email. Plain text: the farmer's name and
+/// description are shown as typed, never interpreted. No area: blank.
+fn job_body(texts: &EmailTexts, app_url: &str, n: &JobNotice) -> String {
+    fill(
+        &texts.job_body,
+        &[
+            ("business", &n.business_name),
+            ("category", &n.category),
+            ("area", n.area.as_deref().unwrap_or_default()),
+            ("description", &n.description),
+            ("name", &n.requester_name),
+            ("phone", &n.requester_phone),
+            ("jobs", &site_url(app_url, &n.jobs_path)),
             ("site", &texts.site_name),
         ],
     )
@@ -160,6 +183,15 @@ impl EmailService for SmtpEmailService {
             Err(e) => error!(to = to_email, error = %e, "new-inquiry email failed"),
         }
     }
+
+    async fn send_new_job(&self, to_email: &str, notice: &JobNotice) {
+        let body = job_body(&self.texts, &self.app_url, notice);
+        let subject = fill(&self.texts.job_subject, &[("site", &self.texts.site_name)]);
+        match self.send(to_email, &subject, body).await {
+            Ok(()) => info!(to = to_email, "new-job email sent"),
+            Err(e) => error!(to = to_email, error = %e, "new-job email failed"),
+        }
+    }
 }
 
 /// Development fallback: writes the reset link to the log instead of sending
@@ -189,11 +221,20 @@ impl EmailService for LogEmailService {
             "SMTP not configured; new-inquiry email not sent"
         );
     }
+
+    async fn send_new_job(&self, to_email: &str, notice: &JobNotice) {
+        // The farmer's phone number stays out of the log.
+        warn!(
+            to = to_email,
+            jobs = %site_url(&self.app_url, &notice.jobs_path),
+            "SMTP not configured; new-job email not sent"
+        );
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{inquiry_body, reset_url, EmailTexts, InquiryNotice};
+    use super::{inquiry_body, job_body, reset_url, EmailTexts, InquiryNotice, JobNotice};
 
     fn texts() -> EmailTexts {
         EmailTexts {
@@ -205,7 +246,28 @@ mod tests {
                 "Hi {business}\nName: {name}\nPhone: {phone}\nNeeds: {topic}\n{note}{inbox}\n{site}"
                     .into(),
             inquiry_note: "Note: {note}\n".into(),
+            job_subject: "Job - {site}".into(),
+            job_body:
+                "Hi {business}\n{category} in {area}: {description}\n{name} {phone}\n{jobs}\n{site}"
+                    .into(),
         }
+    }
+
+    #[test]
+    fn the_job_email_has_the_job_who_to_call_and_the_jobs_link() {
+        let notice = JobNotice {
+            business_name: "Drone Út".into(),
+            category: "Phun thuốc".into(),
+            area: None,
+            description: "3 công lúa".into(),
+            requester_name: "Chú Ba".into(),
+            requester_phone: "0912345678".into(),
+            jobs_path: "/provider/jobs".into(),
+        };
+        let body = job_body(&texts(), "https://agri.vn", &notice);
+        assert!(body.contains("Phun thuốc in : 3 công lúa"), "{body}");
+        assert!(body.contains("0912345678") && body.contains("https://agri.vn/provider/jobs"));
+        assert!(!body.contains('{'), "every placeholder filled: {body}");
     }
 
     fn notice(note: Option<&str>) -> InquiryNotice {

@@ -22,6 +22,7 @@ pub enum Entity {
     Contract,
     Crop,
     CropPrice,
+    JobPost,
 }
 
 impl Entity {
@@ -40,6 +41,7 @@ impl Entity {
             Entity::Contract => "contract",
             Entity::Crop => "crop",
             Entity::CropPrice => "crop_price",
+            Entity::JobPost => "job_post",
         }
     }
 }

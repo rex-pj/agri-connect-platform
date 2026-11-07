@@ -89,10 +89,12 @@ pub enum Flash {
     CropSaved,
     CropHidden,
     CropShown,
+    JobPosted,
+    JobStatusSaved,
 }
 
 impl Flash {
-    const ALL: [Flash; 57] = [
+    const ALL: [Flash; 59] = [
         Flash::ContactSent,
         Flash::PasswordReset,
         Flash::DemoLoaded,
@@ -150,6 +152,8 @@ impl Flash {
         Flash::CropSaved,
         Flash::CropHidden,
         Flash::CropShown,
+        Flash::JobPosted,
+        Flash::JobStatusSaved,
     ];
 
     pub const fn as_str(self) -> &'static str {
@@ -211,6 +215,8 @@ impl Flash {
             Flash::CropSaved => "crop_saved",
             Flash::CropHidden => "crop_hidden",
             Flash::CropShown => "crop_shown",
+            Flash::JobPosted => "job_posted",
+            Flash::JobStatusSaved => "job_status_saved",
         }
     }
 

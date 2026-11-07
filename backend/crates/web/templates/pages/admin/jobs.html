@@ -1,0 +1,50 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "molecules/admin_header.html" as header %}
+{% import "molecules/pagination_nav.html" as paging %}
+{#- `page.body` is web::pages::admin::jobs::JobsPage: every job post,
+    newest first. Each row's state is a small form; with JS a change saves
+    it (`autoSubmit`, which hides the button), without JS its button does.
+    Every form sends the list page back (`b.position`). -#}
+{% block title %}{{ t(key="admin_menu.jobs") }} — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+{{ header::admin_header(title=t(key="admin_menu.jobs"), icon="fa-bullhorn", sub=t(key="admin_jobs.sub", count=b.total)) }}
+<div class="admin-body">
+  {% if b.flash == "job_status_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin_jobs.saved")) }}{% endif %}
+
+  <div class="admin-card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 admin-table">
+        <thead class="admin-table-head">
+          <tr><th>{{ t(key="admin.col_sender") }}</th><th>{{ t(key="job.category") }}</th><th>{{ t(key="job.description") }}</th><th>{{ t(key="admin.col_status") }}</th></tr>
+        </thead>
+        <tbody>
+          {% for r in b.rows %}
+          {% set j = r.job %}
+          <tr{% if j.status != "open" %} class="table-light text-body-secondary"{% endif %}>
+            <td class="fw-semibold">{{ j.requester_name }}<a class="d-block small text-decoration-none" href="tel:{{ j.requester_phone }}">{{ atoms::icon(name="fa-phone", class="me-1") }}{{ j.requester_phone | phone }}</a><span class="d-block small text-muted"><time datetime="{{ j.created_on | utc_iso }}">{{ j.created_on | vn_datetime }}</time></span></td>
+            <td>{{ j.category }}{% if j.area %}<span class="d-block small text-muted">{{ j.area }}</span>{% endif %}</td>
+            <td>{{ j.description }}</td>
+            <td>
+              <form class="row-actions" method="post" action="{{ r.action }}" x-data="autoSubmit" x-on:change="submit">
+                {% for k, v in b.position %}{% if v %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+                <label class="visually-hidden" for="status-{{ j.id }}">{{ t(key="admin_jobs.status_of", name=j.requester_name) }}</label>
+                <select class="form-select w-auto row-select" id="status-{{ j.id }}" name="status">
+                  {% for s in b.statuses %}<option value="{{ s.value }}"{% if s.value == j.status %} selected{% endif %}>{{ s.label }}</option>{% endfor %}
+                </select>
+                <button type="submit" class="btn btn-outline-success row-btn" aria-label="{{ t(key="inbox.save_status") }}" title="{{ t(key="inbox.save_status") }}" x-show="withoutScript">{{ atoms::icon(name="fa-check") }}</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="text-center text-muted py-4">{{ t(key="admin_jobs.none") }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% if b.pagination %}{{ paging::pagination_nav(p=b.pagination) }}{% endif %}
+</div>
+{% endblock content %}

@@ -13,6 +13,9 @@ pub trait EmailService: Send + Sync {
 
     /// Tells a provider a farmer asked to be called back.
     async fn send_new_inquiry(&self, to_email: &str, notice: &InquiryNotice);
+
+    /// Tells a provider nearby that a farmer posted a job it can do.
+    async fn send_new_job(&self, to_email: &str, notice: &JobNotice);
 }
 
 /// What the provider's "new inquiry" email says. The farmer typed the name,
@@ -27,6 +30,22 @@ pub struct InquiryNotice {
     /// The path of the provider's inbox page; the adapter puts its own
     /// origin (APP_URL) in front, as for reset links.
     pub inbox_path: String,
+}
+
+/// What the "a job near you" email says. The farmer typed the name and the
+/// description: adapters must send them as plain text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JobNotice {
+    pub business_name: String,
+    pub category: String,
+    /// The area the farmer chose, if any.
+    pub area: Option<String>,
+    pub description: String,
+    pub requester_name: String,
+    pub requester_phone: String,
+    /// The path of the provider's jobs page; the adapter puts its origin in
+    /// front.
+    pub jobs_path: String,
 }
 
 /// What a verified session token says about its holder. No role: what the

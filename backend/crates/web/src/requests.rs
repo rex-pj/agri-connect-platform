@@ -472,3 +472,40 @@ impl From<PriceRequest> for application::inputs::PriceInput {
         }
     }
 }
+
+/// POST /api/explore/jobs. Where: `lat`/`lng` (the phone's position) or a
+/// `location_id` preset.
+#[derive(Deserialize)]
+pub struct JobRequest {
+    pub category_id: Option<i32>,
+    pub location_id: Option<i32>,
+    pub lat: Option<f64>,
+    pub lng: Option<f64>,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub requester_name: String,
+    #[serde(default)]
+    pub requester_phone: String,
+}
+
+impl From<JobRequest> for application::inputs::JobInput {
+    fn from(r: JobRequest) -> Self {
+        Self {
+            category_id: r.category_id,
+            location_id: r.location_id,
+            lat: r.lat,
+            lng: r.lng,
+            description: r.description,
+            requester_name: r.requester_name,
+            requester_phone: r.requester_phone,
+        }
+    }
+}
+
+/// PATCH /api/admin/jobs/{id}/status.
+#[derive(Deserialize)]
+pub struct JobStatusRequest {
+    pub status: String,
+    pub reason: Option<String>,
+}

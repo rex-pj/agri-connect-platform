@@ -1,10 +1,14 @@
-//! GET /admin → /admin/dashboard, and the dashboard: platform counts, plus a
+//! GET /admin → /admin/dashboard, and the dashboard: platform counts, the
+//! leads of the last weeks (calls, Zalo chats, inquiries), plus a
 //! warning while demo listings are mixed into the real ones.
 
 use application::{
-    catalogue::PERM_SYSTEM_DEMO_MANAGE, constants::CALL_STATS_DAYS, outputs::AdminStatsDto,
+    catalogue::PERM_SYSTEM_DEMO_MANAGE,
+    constants::CALL_STATS_DAYS,
+    outputs::{AdminStatsDto, WeekLeadsDto},
 };
 use axum::{extract::State, http::StatusCode, response::Response};
+use chrono::Duration;
 use domain::Error;
 use serde::Serialize;
 
@@ -16,6 +20,7 @@ use crate::{
         admin::{render_admin, url},
         see_other,
     },
+    views::format_vn_day,
 };
 
 #[derive(Serialize)]
@@ -68,9 +73,39 @@ fn cards(locale: &Locale, s: &AdminStatsDto) -> Vec<StatCard> {
     ]
 }
 
+/// One week of leads, worded for the table: "01/11 – 07/11".
+#[derive(Serialize)]
+pub struct WeekRow {
+    pub label: String,
+    pub calls: i64,
+    pub zalo: i64,
+    pub inquiries: i64,
+    pub total: i64,
+}
+
+fn week_rows(weeks: &[WeekLeadsDto]) -> Vec<WeekRow> {
+    weeks
+        .iter()
+        .map(|w| WeekRow {
+            // `to` is the first instant after the week: its last day is before it.
+            label: format!(
+                "{} – {}",
+                format_vn_day(w.from),
+                format_vn_day(w.to - Duration::seconds(1))
+            ),
+            calls: w.calls,
+            zalo: w.zalo,
+            inquiries: w.inquiries,
+            total: w.total(),
+        })
+        .collect()
+}
+
 #[derive(Serialize)]
 pub struct DashboardPage {
     pub stats: Vec<StatCard>,
+    /// The last `LEAD_WEEKS` weeks of leads, newest first.
+    pub weeks: Vec<WeekRow>,
     /// Demo businesses still listed; only for those who may remove them.
     pub demo_count: Option<i64>,
 }
@@ -109,6 +144,7 @@ pub async fn show(
         "pages/admin/dashboard.html",
         &DashboardPage {
             stats: cards(state.locale(), &stats),
+            weeks: week_rows(&stats.weeks),
             demo_count,
         },
     )

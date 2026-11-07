@@ -26,6 +26,7 @@ impl CallRepositoryTrait for CallRepository {
             business_id: Set(click.business_id),
             service_id: Set(click.service_id),
             product_id: Set(click.product_id),
+            channel: Set(click.channel),
             ..Default::default()
         })
         .exec(self.db.as_ref())
@@ -48,5 +49,21 @@ impl CallRepositoryTrait for CallRepository {
             .await
             .map(|c| c as i64)
             .map_err(|e| Error::internal(format!("call count_since: {e}")))
+    }
+
+    async fn count_window(
+        &self,
+        channel: &str,
+        from: DateTime<Utc>,
+        to: DateTime<Utc>,
+    ) -> Result<i64, Error> {
+        CallClick::find()
+            .filter(call_click::Column::Channel.eq(channel))
+            .filter(call_click::Column::CreatedOn.gte(from))
+            .filter(call_click::Column::CreatedOn.lt(to))
+            .count(self.db.as_ref())
+            .await
+            .map(|c| c as i64)
+            .map_err(|e| Error::internal(format!("call count_window: {e}")))
     }
 }

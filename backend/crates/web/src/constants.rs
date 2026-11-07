@@ -18,6 +18,11 @@ pub const PUBLIC_WRITE_RATE_LIMIT_PER_MIN: NonZeroU32 = per_minute(30);
 /// stop a stolen session or a runaway script, not a person.
 pub const MEMBER_WRITE_RATE_LIMIT_PER_MIN: NonZeroU32 = per_minute(120);
 
+// ── Contact ───────────────────────────────────────────────────────────────────
+/// A Zalo chat with a Vietnamese phone number is this followed by the number
+/// (the `zalo` template filter): every provider is reachable there by phone.
+pub const ZALO_CHAT_URL: &str = "https://zalo.me/";
+
 // ── Database ──────────────────────────────────────────────────────────────────
 pub const DB_MAX_CONNECTIONS: u32 = 20;
 

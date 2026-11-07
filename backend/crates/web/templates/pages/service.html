@@ -1,6 +1,7 @@
 {% extends "layouts/app.html" %}
 {% import "atoms/icon.html" as atoms %}
 {% import "molecules/call_button.html" as call %}
+{% import "molecules/zalo_button.html" as zalo %}
 {% import "atoms/alert.html" as alerts %}
 {% import "atoms/badge.html" as badge %}
 {% import "atoms/photo_placeholder.html" as placeholder %}
@@ -45,6 +46,7 @@
         <p class="detail-price__note">{{ t(key="service.price_note") }}</p>
         <div class="provider-actions mt-3">
           {{ call::call_button(phone=s.business_phone, kind="service", id=s.id, class="btn btn-success btn-lg btn-call") }}
+          {{ zalo::zalo_button(phone=s.business_phone, kind="service", id=s.id, class="btn btn-outline-primary btn-lg") }}
           <a class="btn btn-outline-success btn-lg" href="#lien-he" x-on:click.prevent="show">{{ atoms::icon(name="fa-comment-dots") }} {{ t(key="contact.send") }}</a>
         </div>
       </section>

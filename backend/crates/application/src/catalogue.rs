@@ -25,6 +25,7 @@ pub const PERM_PROVIDER_READ: &str = "provider.read";
 pub const PERM_PROVIDER_VERIFY: &str = "provider.verify";
 pub const PERM_PROVIDER_STATUS_UPDATE: &str = "provider.status.update";
 pub const PERM_PROVIDER_ACCOUNT_ASSIGN: &str = "provider.account.assign";
+pub const PERM_PROVIDER_MANAGE: &str = "provider.manage";
 pub const PERM_LISTING_MODERATE: &str = "listing.moderate";
 pub const PERM_SERVICE_MANAGE: &str = "service.manage";
 pub const PERM_INQUIRY_READ: &str = "inquiry.read";
@@ -39,6 +40,7 @@ pub const PERM_OWN_SERVICE_CREATE: &str = "own.service.create";
 pub const PERM_OWN_SERVICE_UPDATE: &str = "own.service.update";
 pub const PERM_OWN_SERVICE_DELETE: &str = "own.service.delete";
 pub const PERM_OWN_INQUIRY_MANAGE: &str = "own.inquiry.manage";
+pub const PERM_OWN_REVIEW_REPLY: &str = "own.review.reply";
 
 const ADMIN: &[&str] = &[ROLE_ADMIN];
 const PROVIDER: &[&str] = &[ROLE_PROVIDER];
@@ -100,6 +102,10 @@ pub static PERMISSIONS: &[PermissionSeed] = &[
         default_roles: ADMIN,
     },
     PermissionSeed {
+        key: PERM_PROVIDER_MANAGE,
+        default_roles: ADMIN,
+    },
+    PermissionSeed {
         key: PERM_LISTING_MODERATE,
         default_roles: ADMIN,
     },
@@ -153,6 +159,10 @@ pub static PERMISSIONS: &[PermissionSeed] = &[
     },
     PermissionSeed {
         key: PERM_OWN_INQUIRY_MANAGE,
+        default_roles: PROVIDER,
+    },
+    PermissionSeed {
+        key: PERM_OWN_REVIEW_REPLY,
         default_roles: PROVIDER,
     },
 ];

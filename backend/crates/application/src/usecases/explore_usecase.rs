@@ -3,7 +3,9 @@ use std::{collections::HashSet, sync::Arc};
 use chrono::Utc;
 
 use domain::{
-    constants::{CALL_KIND_PRODUCT, CALL_KIND_PROVIDER, CALL_KIND_SERVICE},
+    constants::{
+        CALL_CHANNELS, CALL_CHANNEL_PHONE, CALL_KIND_PRODUCT, CALL_KIND_PROVIDER, CALL_KIND_SERVICE,
+    },
     events::{Change, DomainEvent, Entity},
     models::{
         business::BusinessBrowse,
@@ -186,18 +188,20 @@ impl ExploreUseCase {
     /// the service, product or provider the button was on, so a request can
     /// only count a call for something farmers can actually see.
     pub async fn record_call(&self, input: CallInput) -> Result<()> {
-        let click = match input.kind.as_str() {
+        let channel = input
+            .channel
+            .unwrap_or_else(|| CALL_CHANNEL_PHONE.to_owned());
+        if !CALL_CHANNELS.contains(&channel.as_str()) {
+            return Err(Error::new(ErrorCode::InvalidCallTarget));
+        }
+        let (business_id, service_id, product_id) = match input.kind.as_str() {
             CALL_KIND_SERVICE => {
                 let service = self
                     .service_repo
                     .find_public(input.id)
                     .await?
                     .ok_or_else(|| Error::new(ErrorCode::ServiceNotFound))?;
-                NewCallClick {
-                    business_id: service.business_id,
-                    service_id: Some(service.id),
-                    product_id: None,
-                }
+                (service.business_id, Some(service.id), None)
             }
             CALL_KIND_PRODUCT => {
                 let product = self
@@ -205,11 +209,7 @@ impl ExploreUseCase {
                     .find_by_id(input.id)
                     .await?
                     .ok_or_else(|| Error::new(ErrorCode::ProductNotFound))?;
-                NewCallClick {
-                    business_id: product.business_id,
-                    service_id: None,
-                    product_id: Some(product.id),
-                }
+                (product.business_id, None, Some(product.id))
             }
             CALL_KIND_PROVIDER => {
                 let provider = self
@@ -217,15 +217,18 @@ impl ExploreUseCase {
                     .find_detail(input.id)
                     .await?
                     .ok_or_else(|| Error::new(ErrorCode::ProviderNotFound))?;
-                NewCallClick {
-                    business_id: provider.id,
-                    service_id: None,
-                    product_id: None,
-                }
+                (provider.id, None, None)
             }
             _ => return Err(Error::new(ErrorCode::InvalidCallTarget)),
         };
-        self.call_repo.record(click).await
+        self.call_repo
+            .record(NewCallClick {
+                business_id,
+                service_id,
+                product_id,
+                channel,
+            })
+            .await
     }
 
     pub async fn get_provider_detail(&self, id: i32) -> Result<BusinessDetailDto> {

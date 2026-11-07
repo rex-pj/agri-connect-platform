@@ -122,8 +122,8 @@ Templates live under `backend/crates/web/templates/` and are organized by atomic
 | `services`              | id, business_id, category_id, name, description, price_note, is_active, image_file_id                  | Offered by a business; `is_active` is admin's  |
 | `products`              | id, business_id, category_id, name, description, price, unit, is_active                                | Products sold by a business                    |
 | `inquiries`             | id, business_id, service_id, topic, requester_name, requester_phone, note, status                      | Statuses: `new`, `contacted`, `closed`, `spam` |
-| `reviews`               | id, business_id, reviewer_name, rating (1–5), comment, is_visible                                      | Moderated by admin                             |
-| `call_clicks`           | id, business_id, service_id, product_id, created_on                                                    | Click-to-call taps; never who called           |
+| `reviews`               | id, business_id, inquiry_id, reviewer_name, reviewer_phone_hash, rating (1–5), comment, reply, replied_at, is_visible | Hidden until an admin shows it |
+| `call_clicks`           | id, business_id, service_id, product_id, channel, created_on                                           | Call / Zalo taps (`call`, `zalo`); never who   |
 | `password_reset_tokens` | id, user_id, token, expires_at, consumed_at                                                            | Single-use, 1-hour TTL                         |
 
 ### Geo Query Pattern
@@ -159,7 +159,10 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 | GET    | `/api/explore/products`            | Browse products (paginated, filter by `category_id?`)                                                  |
 | GET    | `/api/explore/products/{id}`       | Product detail                                                                                         |
 | POST   | `/api/explore/contact`             | Submit contact/inquiry (rate-limited: 30/min)                                                          |
-| POST   | `/api/explore/calls`               | A tap on a public call button (`{kind, id}`, 204; 30/min); the business is looked up from the record    |
+| GET    | `/api/explore/providers/{id}/reviews` | Shown reviews: `count`, `average`, the newest `PUBLIC_REVIEWS_SHOWN` with the provider's replies   |
+| POST   | `/api/explore/reviews`             | A review (`business_id`, name, phone, `rating` 1–5, comment; 201, hidden until approved; 30/min)       |
+| POST   | `/reviews`                         | Same review as a page form (urlencoded); 303 + flash, or the page re-shown with the sheet open          |
+| POST   | `/api/explore/calls`               | A tap on a public call or Zalo button (`{kind, id, channel?}`: `call` default, `zalo`; 204; 30/min); the business is looked up from the record |
 | POST   | `/contact`                         | Same inquiry as a page form (urlencoded); 303 + one-time flash, or the page re-shown with field errors |
 | GET    | `/files/{id}`, `/files/{id}/thumb` | Uploaded image (JPEG, cached forever; ids are never reused)                                            |
 
@@ -200,7 +203,9 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 | GET    | `/api/admin/categories/slug`             | Free slug for `text` (name or slug; `id?` = the one edited): `{slug, taken}` |
 | PATCH  | `/api/admin/categories/{id}/status`      | Toggle category active state                                      |
 | GET    | `/api/admin/providers`                   | Provider list (paginated)                                         |
+| POST   | `/api/admin/providers`                   | Create a provider with no account (profile boxes; 201 + detail; `provider.manage`) |
 | GET    | `/api/admin/providers/{id}`              | Provider detail                                                   |
+| PUT    | `/api/admin/providers/{id}`              | Replace its profile (the owner's rules; detail; `provider.manage`) |
 | PATCH  | `/api/admin/providers/{id}/verification` | Set verification badge (`is_verified`, `reason?`)                 |
 | PATCH  | `/api/admin/providers/{id}/status`       | Turn a provider on / off (`is_active`, `reason?`; off: gone from public pages) |
 | POST   | `/api/admin/providers/{id}/users`        | Link a provider account (or create one); one business per account |
@@ -241,6 +246,8 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 | PUT    | `/api/provider/services/{id}`       | Update service (never changes admin visibility)         |
 | DELETE | `/api/provider/services/{id}`       | Delete service                                          |
 | PUT    | `/api/provider/services/{id}/image` | Replace service image (multipart field `image`; 20/min) |
+| GET    | `/api/provider/reviews`             | Reviews of the own business (waiting ones too)          |
+| PUT    | `/api/provider/reviews/{id}/reply`  | Public answer (`{reply}`; blank removes it; 204; `own.review.reply`) |
 
 ### Setup (first-run / development only)
 
@@ -302,12 +309,13 @@ Every page is a handler in `backend/crates/web/src/pages/`, routed in `web/src/r
 | `/explore`                                               | Services, products and shops near a position (`ac-geolocate`) or preset, tabs in that order (as `/search`); featured services before one (`explore.rs`)     |
 | `/providers`                                             | Provider directory (new sign-ups without a service too); found by name or by their services (`web/src/pages/directory.rs`)               |
 | `/providers/[id]`                                        | 301 → `/providers/[id]/[slug]`                                                                                                           |
-| `/providers/[id]/[slug]`                                 | Provider detail: services, products, contact form (`web/src/pages/provider.rs`)                                                                           |
+| `/providers/[id]/[slug]`                                 | Provider detail: services, products, shown reviews with replies + "write a review" sheet, contact form (`web/src/pages/provider.rs`)                       |
 | `/account`                                               | Profile, password change (signs out other devices), logout (`web/src/pages/account.rs`)                                                  |
 | `/provider/dashboard`                                    | Services + products (photo thumbs) + business profile with GPS fill (`ac-geolocate` fill mode) (`web/src/pages/dashboard.rs`)            |
 | `/provider/products/new`, `/provider/products/[id]/edit` | Multipart product form with photo (checked before anything is saved), delete (confirm)                                                   |
 | `/provider/services/new`, `/provider/services/[id]/edit` | Multipart service form: category cards, optional photo, delete (confirm) (`own.service.*`) (`web/src/pages/own_services.rs`)             |
 | `/provider/inquiries`                                    | Farmers' contact requests to this business: call button, status per card (`own.inquiry.manage`) (`web/src/pages/inbox.rs`)              |
+| `/provider/reviews`                                      | Reviews of this business (shown or waiting), a public answer per card (`own.review.reply`) (`web/src/pages/own_reviews.rs`)              |
 
 ### Admin
 
@@ -324,8 +332,8 @@ Every page is a handler in `backend/crates/web/src/pages/`, routed in `web/src/r
 | `/admin/categories/[id]` | Edit; hide (confirm + reason) / show                                                                                           |
 | `/admin/locations`       | Location presets (row: hide (confirm + reason) / show, delete (confirm), open) + create sheet (`web/src/pages/admin/locations.rs`) |
 | `/admin/locations/[id]`  | Edit, hide (confirm + reason) / show, delete (confirm + reason) → list                                                                         |
-| `/admin/explore`         | Provider list, paged (`web/src/pages/admin/providers.rs`)                                                                      |
-| `/admin/explore/[id]`    | Details, turn off (confirm + reason) / on, verify / unverify (confirm + reason), assign the managing account; links to its services, products, inquiries, reviews                                                   |
+| `/admin/explore`         | Provider list, paged + create sheet (`provider.manage`: a listing from name + phone, no account; GPS fill) (`web/src/pages/admin/providers.rs`) |
+| `/admin/explore/[id]`    | Details, profile form (the owner's rules: `business_rules::validate_profile`; `organisms/business_fields.html`), turn off (confirm + reason) / on, verify / unverify (confirm + reason), assign the managing account; links to its services, products, inquiries, reviews |
 | `/admin/products`        | Products (filter `provider_id`): hide (confirm + reason) / show, delete (confirm + reason) (`web/src/pages/admin/products.rs`) |
 | `/admin/services`        | Services (filter `provider_id`; row: hide / show, delete, open; create sheet only for one provider) |
 | `/admin/services/[id]`   | Edit, hide / show, delete (confirm + reason)                                                                                   |
@@ -357,14 +365,19 @@ Canonical product, provider and category URLs end in a slug from the `slugify` f
 - [x] Geo-search: filter providers within configurable radius
 - [x] Provider profile: real photos, capabilities, phone number
 - [x] Click-to-call: direct connection, no middleman
+- [x] Zalo chat button on detail pages, counted as a lead like a call
 - [x] Contact/inquiry form → stored in DB with status tracking
 - [x] Admin panel: users, providers, categories, inquiries, reviews
+- [x] Field onboarding: an admin lists a provider from its phone number (no account needed), edits its profile, assigns an account later
+- [x] Weekly leads (calls, Zalo, inquiries) on the admin dashboard: the go / no-go figure for a district
 - [x] Provider self-service dashboard: profile + product management
 - [x] Auth: JWT login, registration, password reset, account lockout
 
 ### Phase 2 — Trust & Growth
 
-- [ ] Review system: real feedback from local farmers
+Grow the rest only once one district sustains real leads week after week (the admin dashboard's weekly table).
+
+- [x] Review system: only from a phone whose contact request the provider answered (`contacted` / `closed`: `INQUIRY_STATUSES_REVIEWABLE`, linked by `reviews.inquiry_id`), one per phone and provider (`reviewer_phone_hash`, SHA-256), hidden until an admin shows it, with the provider's public reply (`ReviewUseCase`)
 - [ ] Verification badges ("blue tick") for vetted providers
 - [ ] Demand posts: farmers post a job, system pushes notifications to nearby providers
 
@@ -396,6 +409,7 @@ Canonical product, provider and category URLs end in a slug from the `slugify` f
 ## KPIs
 
 - New provider registrations per month
+- Leads per week (call taps + Zalo taps + inquiries, spam left out; admin dashboard)
 - Click-to-call conversion rate
 - User retention rate (return visits for crop prices / weather)
 
@@ -425,7 +439,8 @@ Canonical product, provider and category URLs end in a slug from the `slugify` f
 - Radius validation bounds: 100 m minimum, 50 000 m maximum.
 - `/services` lists services, not providers; a service is public when it is shown, not deleted, in a shown category and its business is live (`live_public` in the service repository, the one place that says so). Searching a service matches its name, description and the business's name; searching a provider matches its name, description and its live services' text.
 - Public provider lists (`/providers`, near-me shops tab, search's shops tab) include providers with no service yet, so a new sign-up can be found; a service filter (`category_id`) matches only a live service in a live category. Featured services (home, near-me before a position): one per verified provider, those with a photo first, providers rotated by day, every category once before a repeat (`pick_featured`). Service cards are compact rows at every width (a fixed 104/120 px square photo beside the text, one call button), and fewer than three keep the two-column width (`service-grid--1/--2`), never one card across a wide screen. The default service order and the near-me services take turns by provider (`with_provider_turn`: each provider's first service before anyone's second); an explicit sort is kept as chosen. The wide top bar has a "Cửa hàng" tab (`wide_only`); on a phone the directory is the second of the `/services` tabs. The home page opens with one strip of category tiles: services (green squares) then products (amber circles), `HOME_CATEGORY_TILES` of each (one fewer on a phone, so each kind is one row of four), each kind ending in an outlined "Tất cả" tile to its whole list; near-me has no tile (its tab and the banner cover it). The "Tài khoản" tab is `phone_only`: on a wide screen the top bar's account button covers it. `/services` and `/providers` open with "Dịch vụ | Cửa hàng" tabs (`services::view_tabs`: both read `ListQuery`, so a switch keeps the search, category and sort); their near-me banner comes after the third card (`near_me_href`, category and tab kept), and an empty search offers the other list as its second action.
-- Providers manage their own services (`own.service.create` / `update` / `delete`). Every owner-scoped query matches the owner in the same statement (an `in_subquery` on the business), the business comes from the session, never the request, and someone else's service answers `service_not_found`. `is_active` is the admin's moderation switch: an owner's edit never changes it. A business lists at most `SERVICES_PER_BUSINESS_MAX` services (hidden ones count; the business row is locked while counting). Admin and owner forms share `usecases::service_rules::validate_service` (a blank name takes the category's).
+- Providers manage their own services (`own.service.create` / `update` / `delete`). Every owner-scoped query matches the owner in the same statement (an `in_subquery` on the business), the business comes from the session, never the request, and someone else's service answers `service_not_found`. `is_active` is the admin's moderation switch: an owner's edit never changes it. A business lists at most `SERVICES_PER_BUSINESS_MAX` services (hidden ones count; the business row is locked while counting). Admin and owner forms share `usecases::service_rules::validate_service` (a blank name takes the category's); likewise the business profile: `usecases::business_rules::validate_profile` (owner dashboard, admin create / edit), one form `organisms/business_fields.html`.
+- Reviews (`ReviewUseCase`): a farmer reviews a provider only from the phone of a contact request that provider answered (`review_needs_contact` otherwise), once (`review_already_sent`, from the UNIQUE on `reviewer_phone_hash`); the phone is kept only as `hashing::sha256_hex` (the one SHA-256 helper) and never shown. A new review is hidden; the admin's "show" on `/admin/reviews` is the approval ("Chờ duyệt" until then). The owner's answer (`reply_own_review`, owner-scoped in one statement) shows under the review once it is shown; a blank answer removes it. Stars render through `atoms/stars.html` everywhere.
 - Repository queries use Sea-ORM's query builder (`find`, `update_many`, `Query::select` subqueries, `lock_exclusive` in a transaction), not raw SQL strings; `Expr::cust_with_values` only for a PostGIS fragment the builder cannot express.
 - Every list sort ends with an `id` tiebreaker, and price sorts put unpriced products last, so pages never repeat or skip rows.
 
@@ -457,7 +472,7 @@ middleware / handlers  →  application (use cases, ports)  →  domain  ←  in
 - Every state-changing use case, and every admin read, starts with `actor.require(PERM_...)?`. Permission keys live in `application/src/catalogue.rs`. Never compare role names: a convention test rejects it, and another fails when a use case taking an `Actor` checks nothing.
 - Permissions are loaded from the database on every request, so a revocation or a deactivated account takes effect on the next request, not when the token expires.
 - Non-GET requests with a foreign `Origin` are refused (`cross_origin_request`); `APP_URL` and `CORS_ORIGINS` are the allowed origins.
-- Public call buttons are `molecules/call_button.html`: a plain `tel:` link that Alpine `callBeacon` counts with `sendBeacon` to `/api/explore/calls` (uncounted without JS); its label is always the phone number. Counts cover `CALL_STATS_DAYS` (admin dashboard total, the provider's own on their dashboard); nothing about the caller is stored.
+- Public call buttons are `molecules/call_button.html`: a plain `tel:` link that Alpine `callBeacon` counts with `sendBeacon` to `/api/explore/calls` (uncounted without JS); its label is always the phone number. Detail pages (provider, service, product) add `molecules/zalo_button.html` beside it: a link to the Zalo chat with the same number (`zalo` filter, `ZALO_CHAT_URL`), counted by the same beacon with `data-call-channel="zalo"`; cards keep the one call button. Counts cover `CALL_STATS_DAYS` across both channels (admin dashboard total, the provider's own on their dashboard), and the admin dashboard shows `LEAD_WEEKS` weeks of leads (calls, Zalo, inquiries without spam); nothing about the caller is stored.
 - Domain events (`domain/src/events.rs`) are published after a change is stored; the audit log is a subscriber. New side effects (notifications, webhooks) subscribe; use cases do not call them. A visitor's event (a farmer's inquiry) has no `actor_id` and is not audited; the inquiry subscriber emails the provider (the managing account, else the business's address) in a background task, linking to `/provider/inquiries`.
 
 **Infrastructure layer (`infrastructure/`)**

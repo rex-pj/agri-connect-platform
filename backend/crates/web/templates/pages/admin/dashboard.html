@@ -27,5 +27,22 @@
     </div>
     {% endfor %}
   </div>
+
+  <section class="admin-section mt-4" aria-labelledby="leads-title">
+    <h2 class="admin-section__title" id="leads-title">{{ t(key="admin_leads.title") }}</h2>
+    <p class="small text-muted">{{ t(key="admin_leads.hint") }}</p>
+    <div class="table-responsive">
+      <table class="table align-middle mb-0 admin-table">
+        <thead class="admin-table-head">
+          <tr><th>{{ t(key="admin_leads.week") }}</th><th class="text-end">{{ t(key="admin_leads.calls") }}</th><th class="text-end">{{ t(key="admin_leads.zalo") }}</th><th class="text-end">{{ t(key="admin_leads.inquiries") }}</th><th class="text-end">{{ t(key="admin_leads.total") }}</th></tr>
+        </thead>
+        <tbody>
+          {% for w in b.weeks %}
+          <tr><td>{{ w.label }}</td><td class="text-end">{{ w.calls | number }}</td><td class="text-end">{{ w.zalo | number }}</td><td class="text-end">{{ w.inquiries | number }}</td><td class="text-end fw-bold">{{ w.total | number }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
 </div>
 {% endblock content %}

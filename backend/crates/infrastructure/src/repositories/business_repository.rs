@@ -6,9 +6,9 @@ use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
     sea_query::{Alias, Expr, Func, Order, Query, SimpleExpr, SubQueryStatement},
-    ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, DatabaseConnection, EntityTrait,
-    FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait,
-    RelationTrait, Set, Value,
+    ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, DatabaseConnection, DbErr,
+    EntityTrait, FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
+    QueryTrait, RelationTrait, Set, TransactionTrait, UpdateMany, Value,
 };
 use tracing::error;
 
@@ -185,6 +185,8 @@ struct BusinessAdminDetailRow {
     is_active: bool,
     created_on: DateTimeWithTimeZone,
     linked_username: Option<String>,
+    lat: Option<f64>,
+    lng: Option<f64>,
 }
 
 #[derive(FromQueryResult)]
@@ -663,6 +665,14 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .column(business::Column::IsActive)
             .column(business::Column::CreatedOn)
             .column_as(user::Column::Username, "linked_username")
+            .expr_as(
+                Expr::cust(r#"ST_Y("businesses".location::geometry)"#),
+                "lat",
+            )
+            .expr_as(
+                Expr::cust(r#"ST_X("businesses".location::geometry)"#),
+                "lng",
+            )
             .join(JoinType::LeftJoin, business::Relation::Owner.def())
             .filter(business::Column::Id.eq(id))
             .filter(business::Column::DeletedAt.is_null())
@@ -726,6 +736,8 @@ impl BusinessRepositoryTrait for BusinessRepository {
             is_active: core.is_active,
             created_on: core.created_on.with_timezone(&Utc),
             linked_username: core.linked_username,
+            lat: core.lat,
+            lng: core.lng,
             services: svc_rows
                 .into_iter()
                 .map(|r| ServiceAdminItem {
@@ -833,32 +845,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
     // ── Profile update (location via ST_GeographyFromText in the same UPDATE) ─
 
     async fn update_profile(&self, user_id: i32, profile: &ProfileUpdate) -> Result<bool, Error> {
-        let mut update = Business::update_many()
-            .col_expr(business::Column::Name, Expr::value(profile.name.clone()))
-            .col_expr(business::Column::Phone, Expr::value(profile.phone.clone()))
-            .col_expr(
-                business::Column::Description,
-                Expr::value(profile.description.clone()),
-            )
-            .col_expr(
-                business::Column::Address,
-                Expr::value(profile.address.clone()),
-            )
-            .col_expr(
-                business::Column::UpdatedOn,
-                Expr::current_timestamp().into(),
-            )
-            .filter(business::Column::OwnerId.eq(user_id))
-            .filter(business::Column::DeletedAt.is_null());
-
-        // The location column is not in the entity (PostGIS type).
-        let location = match &profile.location_wkt {
-            Some(wkt) => Expr::cust_with_values("ST_GeographyFromText($1)", [wkt.clone()]),
-            None => Expr::cust("NULL"),
-        };
-        QueryTrait::query(&mut update).value(Alias::new("location"), location);
-
-        update
+        profile_update(profile, business::Column::OwnerId.eq(user_id))
             .exec(self.db.as_ref())
             .await
             .map(|r| r.rows_affected > 0)
@@ -866,6 +853,52 @@ impl BusinessRepositoryTrait for BusinessRepository {
                 error!("business update_profile error (user_id={user_id}): {e}");
                 Error::internal("Failed to update profile.")
             })
+    }
+
+    async fn update_profile_by_id(
+        &self,
+        id: i32,
+        profile: &ProfileUpdate,
+        actor_id: i32,
+    ) -> Result<bool, Error> {
+        profile_update(profile, business::Column::Id.eq(id))
+            .col_expr(business::Column::UpdatedBy, Expr::value(actor_id))
+            .exec(self.db.as_ref())
+            .await
+            .map(|r| r.rows_affected > 0)
+            .map_err(|e| {
+                error!("business update_profile_by_id error (id={id}): {e}");
+                Error::internal("Failed to update profile.")
+            })
+    }
+
+    async fn create(&self, profile: &ProfileUpdate, actor_id: i32) -> Result<i32, Error> {
+        let fail = |e: DbErr| {
+            error!("business create error: {e}");
+            Error::internal("Failed to create business profile.")
+        };
+        // The row and its location in one transaction: the location column
+        // is not in the entity, so it is set by the same update the edit uses.
+        let txn = self.db.begin().await.map_err(fail)?;
+        let id = Business::insert(business::ActiveModel {
+            name: Set(profile.name.clone()),
+            phone: Set(profile.phone.clone()),
+            is_verified: Set(false),
+            is_active: Set(true),
+            created_by: Set(Some(actor_id)),
+            updated_by: Set(Some(actor_id)),
+            ..Default::default()
+        })
+        .exec(&txn)
+        .await
+        .map_err(fail)?
+        .last_insert_id;
+        profile_update(profile, business::Column::Id.eq(id))
+            .exec(&txn)
+            .await
+            .map_err(fail)?;
+        txn.commit().await.map_err(fail)?;
+        Ok(id)
     }
 
     // ── Entity API helpers ────────────────────────────────────────────────────
@@ -947,6 +980,36 @@ pub(crate) async fn insert_registration_business<C: ConnectionTrait>(
             error!("business create_for_registration error: {e}");
             Error::internal("Failed to create business profile.")
         })
+}
+
+/// The update that writes a profile's boxes, location included, to the live
+/// business `which` selects (its owner, or its id for an admin).
+fn profile_update(profile: &ProfileUpdate, which: SimpleExpr) -> UpdateMany<Business> {
+    let mut update = Business::update_many()
+        .col_expr(business::Column::Name, Expr::value(profile.name.clone()))
+        .col_expr(business::Column::Phone, Expr::value(profile.phone.clone()))
+        .col_expr(
+            business::Column::Description,
+            Expr::value(profile.description.clone()),
+        )
+        .col_expr(
+            business::Column::Address,
+            Expr::value(profile.address.clone()),
+        )
+        .col_expr(
+            business::Column::UpdatedOn,
+            Expr::current_timestamp().into(),
+        )
+        .filter(which)
+        .filter(business::Column::DeletedAt.is_null());
+
+    // The location column is not in the entity (PostGIS type).
+    let location = match &profile.location_wkt {
+        Some(wkt) => Expr::cust_with_values("ST_GeographyFromText($1)", [wkt.clone()]),
+        None => Expr::cust("NULL"),
+    };
+    QueryTrait::query(&mut update).value(Alias::new("location"), location);
+    update
 }
 
 // ── Shared helper: the "offers this kind of service" filter ───────────────────

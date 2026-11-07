@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use domain::models::{
     inquiry::InquiryForOwner,
     product::{AdminProduct, ProductView, ProviderProduct},
+    review::{OwnReview, PublicReview, ReviewAdmin},
     service::{AdminService, ProviderService, PublicService},
 };
 use serde::Serialize;
@@ -330,6 +331,27 @@ pub struct AdminStatsDto {
     pub total_users: i64,
     /// Taps on public call buttons in the last `CALL_STATS_DAYS` days.
     pub recent_calls: i64,
+    /// The last `LEAD_WEEKS` weeks, newest first.
+    pub weeks: Vec<WeekLeadsDto>,
+}
+
+/// The leads of one week: `[from, to)`, seven days ending at `to`.
+#[derive(Serialize)]
+pub struct WeekLeadsDto {
+    pub from: DateTime<Utc>,
+    pub to: DateTime<Utc>,
+    /// Taps on call buttons.
+    pub calls: i64,
+    /// Taps on Zalo buttons.
+    pub zalo: i64,
+    /// Contact requests sent, spam left out.
+    pub inquiries: i64,
+}
+
+impl WeekLeadsDto {
+    pub fn total(&self) -> i64 {
+        self.calls + self.zalo + self.inquiries
+    }
 }
 
 #[derive(Serialize)]
@@ -380,6 +402,8 @@ pub struct AdminProviderDetailDto {
     pub is_active: bool,
     pub created_on: DateTime<Utc>,
     pub linked_username: Option<String>,
+    pub lat: Option<f64>,
+    pub lng: Option<f64>,
     pub services: Vec<AdminServiceItemDto>,
     pub products: Vec<AdminProductItemDto>,
 }
@@ -480,10 +504,96 @@ pub struct AdminReviewDto {
     pub reviewer_name: String,
     pub rating: i16,
     pub comment: Option<String>,
+    pub reply: Option<String>,
     pub is_visible: bool,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
     pub updated_by_name: Option<String>,
+}
+
+impl From<ReviewAdmin> for AdminReviewDto {
+    fn from(r: ReviewAdmin) -> Self {
+        Self {
+            id: r.id,
+            business_id: r.business_id,
+            business_name: r.business_name,
+            reviewer_name: r.reviewer_name,
+            rating: r.rating,
+            comment: r.comment,
+            reply: r.reply,
+            is_visible: r.is_visible,
+            created_on: r.created_on,
+            updated_on: r.updated_on,
+            updated_by_name: r.updated_by_name,
+        }
+    }
+}
+
+/// A shown review on a provider's public page.
+#[derive(Serialize)]
+pub struct PublicReviewDto {
+    pub id: i32,
+    pub reviewer_name: String,
+    pub rating: i16,
+    pub comment: Option<String>,
+    /// The provider's answer.
+    pub reply: Option<String>,
+    pub created_on: DateTime<Utc>,
+}
+
+impl From<PublicReview> for PublicReviewDto {
+    fn from(r: PublicReview) -> Self {
+        Self {
+            id: r.id,
+            reviewer_name: r.reviewer_name,
+            rating: r.rating,
+            comment: r.comment,
+            reply: r.reply,
+            created_on: r.created_on,
+        }
+    }
+}
+
+/// A provider's shown reviews: how many, their average (one decimal), and the
+/// newest `PUBLIC_REVIEWS_SHOWN`.
+#[derive(Serialize)]
+pub struct ProviderReviewsDto {
+    pub count: i64,
+    pub average: Option<f64>,
+    pub items: Vec<PublicReviewDto>,
+}
+
+/// The answer to a farmer who sent a review: it waits for an admin.
+#[derive(Serialize)]
+pub struct ReviewSentDto {
+    pub id: i32,
+    pub is_visible: bool,
+}
+
+/// A review of the provider's own business, shown or still waiting.
+#[derive(Serialize)]
+pub struct OwnReviewDto {
+    pub id: i32,
+    pub reviewer_name: String,
+    pub rating: i16,
+    pub comment: Option<String>,
+    pub reply: Option<String>,
+    pub is_visible: bool,
+    pub created_on: DateTime<Utc>,
+}
+
+impl From<OwnReview> for OwnReviewDto {
+    fn from(r: OwnReview) -> Self {
+        Self {
+            id: r.id,
+            reviewer_name: r.reviewer_name,
+            rating: r.rating,
+            comment: r.comment,
+            reply: r.reply,
+            is_visible: r.is_visible,
+            created_on: r.created_on,
+        }
+    }
 }
 
 #[derive(Serialize)]

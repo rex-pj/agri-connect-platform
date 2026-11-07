@@ -28,15 +28,16 @@ use crate::{
     authz::Actor,
     catalogue::{
         PERM_CATEGORY_MANAGE, PERM_INQUIRY_MANAGE, PERM_INQUIRY_READ, PERM_LISTING_MODERATE,
-        PERM_LOCATION_MANAGE, PERM_PROVIDER_ACCOUNT_ASSIGN, PERM_PROVIDER_READ,
-        PERM_PROVIDER_STATUS_UPDATE, PERM_PROVIDER_VERIFY, PERM_REVIEW_MODERATE, PERM_ROLE_READ,
-        PERM_SERVICE_MANAGE, PERM_USER_READ, PERM_USER_ROLE_UPDATE, PERM_USER_STATUS_UPDATE,
+        PERM_LOCATION_MANAGE, PERM_PROVIDER_ACCOUNT_ASSIGN, PERM_PROVIDER_MANAGE,
+        PERM_PROVIDER_READ, PERM_PROVIDER_STATUS_UPDATE, PERM_PROVIDER_VERIFY,
+        PERM_REVIEW_MODERATE, PERM_ROLE_READ, PERM_SERVICE_MANAGE, PERM_USER_READ,
+        PERM_USER_ROLE_UPDATE, PERM_USER_STATUS_UPDATE,
     },
     constants::{
         ADMIN_PAGE_SIZE, CATEGORY_COLOR_MAX, CATEGORY_DESCRIPTION_MAX, CATEGORY_ICON_MAX,
         CATEGORY_NAME_MAX, CATEGORY_SLUG_MAX, LOCATION_LABEL_MAX, SLUG_CANDIDATES_PER_QUERY,
     },
-    inputs::{CategoryInput, UpdateProductInput},
+    inputs::{CategoryInput, UpdateProductInput, UpdateProfileInput},
     outputs::{
         AdminCategoryDto, AdminInquiryDto, AdminLocationDto, AdminPagedResponse, AdminProductDto,
         AdminProductItemDto, AdminProviderDetailDto, AdminProviderDto, AdminReviewDto,
@@ -47,6 +48,7 @@ use crate::{
     ports::{EventBus, PasswordHasher},
     slug::{numbered, slugify},
     usecases::{
+        business_rules::validate_profile,
         product_rules::{validate_product, ProductFields},
         service_rules::{validate_service, ServiceFields},
     },
@@ -153,6 +155,8 @@ impl AdminUseCase {
             is_active: b.is_active,
             created_on: b.created_on,
             linked_username: b.linked_username,
+            lat: b.lat,
+            lng: b.lng,
             services: b
                 .services
                 .into_iter()
@@ -284,6 +288,39 @@ impl AdminUseCase {
             name,
             is_active,
         })
+    }
+
+    /// Lists a business with no account yet: the admin on a field visit sets
+    /// it up from the owner's phone number, and an account can be assigned
+    /// later. Its id.
+    pub async fn create_provider(&self, actor: &Actor, input: UpdateProfileInput) -> Result<i32> {
+        actor.require(PERM_PROVIDER_MANAGE)?;
+        let profile = validate_profile(input)?;
+        let id = self.business_repo.create(&profile, actor.user_id).await?;
+        self.publish(actor, Entity::Provider, id, Change::Created, None)
+            .await;
+        Ok(id)
+    }
+
+    /// Replaces a business's profile, as its owner's own form would.
+    pub async fn update_provider(
+        &self,
+        actor: &Actor,
+        id: i32,
+        input: UpdateProfileInput,
+    ) -> Result<()> {
+        actor.require(PERM_PROVIDER_MANAGE)?;
+        let profile = validate_profile(input)?;
+        if !self
+            .business_repo
+            .update_profile_by_id(id, &profile, actor.user_id)
+            .await?
+        {
+            return Err(Error::new(ErrorCode::ProviderNotFound));
+        }
+        self.publish(actor, Entity::Provider, id, Change::Updated, None)
+            .await;
+        Ok(())
     }
 
     /// Gives a business an account to manage it from the provider dashboard.
@@ -748,21 +785,7 @@ impl AdminUseCase {
             .await?;
 
         Ok(AdminPagedResponse {
-            items: items
-                .into_iter()
-                .map(|r| AdminReviewDto {
-                    id: r.id,
-                    business_id: r.business_id,
-                    business_name: r.business_name,
-                    reviewer_name: r.reviewer_name,
-                    rating: r.rating,
-                    comment: r.comment,
-                    is_visible: r.is_visible,
-                    created_on: r.created_on,
-                    updated_on: r.updated_on,
-                    updated_by_name: r.updated_by_name,
-                })
-                .collect(),
+            items: items.into_iter().map(AdminReviewDto::from).collect(),
             total,
             page,
             per_page: ADMIN_PAGE_SIZE,
@@ -791,23 +814,11 @@ impl AdminUseCase {
             reason,
         )
         .await;
-        let review = self
-            .review_repo
+        self.review_repo
             .find_by_id_admin(id)
             .await?
-            .ok_or_else(|| Error::new(ErrorCode::ReviewNotFound))?;
-        Ok(AdminReviewDto {
-            id: review.id,
-            business_id: review.business_id,
-            business_name: review.business_name,
-            reviewer_name: review.reviewer_name,
-            rating: review.rating,
-            comment: review.comment,
-            is_visible: review.is_visible,
-            created_on: review.created_on,
-            updated_on: review.updated_on,
-            updated_by_name: review.updated_by_name,
-        })
+            .map(AdminReviewDto::from)
+            .ok_or_else(|| Error::new(ErrorCode::ReviewNotFound))
     }
 
     // ── Locations ─────────────────────────────────────────────────────────────

@@ -1607,6 +1607,46 @@ body:has(.app-nav__search-row.open) .app-main {
   .provider-actions {
     grid-template-columns: 1fr 1fr;
   }
+  /* The call button leads on its own row; Zalo and the contact form share
+     the next. */
+  .provider-actions > :first-child {
+    grid-column: 1 / -1;
+  }
+}
+/* Reviews: stars as one row of icons, the unlit ones faint. */
+.stars {
+  color: var(--bs-warning);
+  white-space: nowrap;
+}
+.stars__off {
+  color: var(--bs-border-color);
+}
+/* The rating picker: five large radio buttons, 5 first, that wrap on a
+   narrow phone instead of shrinking under the 44 px tap size. */
+.star-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.star-picker .btn {
+  min-width: 56px;
+  min-height: 44px;
+}
+.review-list {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+}
+.review-list__item {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--bs-border-color);
+}
+.review-list__reply {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--bs-success);
+  background: var(--bs-tertiary-bg);
+  font-size: 0.95rem;
 }
 .service-list {
   display: flex;

@@ -50,6 +50,17 @@ pub const RADIUS_DEFAULT_M: f64 = 10_000.0;
 pub const GEO_RESULTS_MAX: i64 = 50;
 /// The window the call counts cover (admin dashboard, provider dashboard).
 pub const CALL_STATS_DAYS: i64 = 30;
+/// How many weeks of leads (calls, Zalo chats, inquiries) the admin dashboard
+/// shows, newest first: enough to see whether a field visit took hold.
+pub const LEAD_WEEKS: i64 = 8;
+
+// ── Reviews ───────────────────────────────────────────────────────────────────
+pub const RATING_MIN: i16 = 1;
+pub const RATING_MAX: i16 = 5;
+pub const REVIEW_COMMENT_MAX: usize = 500;
+pub const REVIEW_REPLY_MAX: usize = 500;
+/// How many shown reviews a provider's page lists, newest first.
+pub const PUBLIC_REVIEWS_SHOWN: i64 = 20;
 
 // ── Uploads ───────────────────────────────────────────────────────────────────
 /// Used when UPLOAD_MAX_BYTES is unset. A phone photo is 2–4 MB.

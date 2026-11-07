@@ -1,14 +1,19 @@
 {% extends "layouts/app.html" %}
 {% import "atoms/icon.html" as atoms %}
 {% import "molecules/call_button.html" as call %}
+{% import "molecules/zalo_button.html" as zalo %}
 {% import "atoms/alert.html" as alerts %}
 {% import "atoms/badge.html" as badge %}
 {% import "molecules/share_button.html" as share %}
 {% import "organisms/contact_sheet.html" as sheet %}
 {% import "organisms/product_card.html" as cards %}
+{% import "organisms/review_sheet.html" as review %}
+{% import "atoms/stars.html" as stars %}
 {#- Provider detail. `page` is web::pages::provider::ProviderPage. The call
     button is the main action; the contact form is the fallback for when
-    nobody answers. Then what they do and what they sell. -#}
+    nobody answers. Then what they do, what they sell, and the reviews of
+    farmers who reached them here (shown once an admin approved them), with
+    the "write a review" sheet in its own `dialog` scope. -#}
 {% block title %}{{ page.provider.name }} — {{ site.name }}{% endblock title %}
 {% block meta %}<meta name="description" content="{% if page.meta_description %}{{ page.meta_description }}{% else %}{{ t(key="provider.meta", name=page.provider.name, area=page.area) }}{% endif %}">{% endblock meta %}
 {% block main %}
@@ -31,6 +36,7 @@
   <section class="detail-card">
     <div class="provider-actions">
       {{ call::call_button(phone=p.phone, kind="provider", id=p.id, class="btn btn-success btn-lg btn-call") }}
+      {{ zalo::zalo_button(phone=p.phone, kind="provider", id=p.id, class="btn btn-outline-primary btn-lg") }}
       <a class="btn btn-outline-success btn-lg" href="#lien-he" x-on:click.prevent="show">{{ atoms::icon(name="fa-comment-dots") }} {{ t(key="contact.send") }}</a>
     </div>
   </section>
@@ -69,6 +75,31 @@
     </div>
   </section>
   {% endif %}
+
+  {% set r = page.reviews %}
+  <section class="detail-card" id="danh-gia-list" aria-labelledby="reviews-title" x-data="dialog" data-open="{% if page.review.open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+      <h2 class="detail-card__title mb-0" id="reviews-title">{{ t(key="review.title") }}</h2>
+      {% if r.count > 0 %}<p class="mb-0"><strong>{{ r.average }}</strong> {{ atoms::icon(name="fa-star", class="text-warning") }} <span class="text-muted">· {{ t(key="reviews.count", count=r.count) }}</span></p>{% endif %}
+    </div>
+    {% if page.review_sent %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="review.sent")) }}{% endif %}
+    {% if r.items %}
+    <ul class="review-list">
+      {% for x in r.items %}
+      <li class="review-list__item">
+        <div class="d-flex justify-content-between align-items-center gap-2"><span class="fw-bold">{{ x.reviewer_name }}</span>{{ stars::stars(rating=x.rating) }}</div>
+        {% if x.comment %}<p class="mb-1">{{ x.comment }}</p>{% endif %}
+        <p class="small text-muted mb-0"><time datetime="{{ x.created_on | utc_iso }}">{{ x.created_on | vn_datetime }}</time></p>
+        {% if x.reply %}<blockquote class="review-list__reply"><span class="fw-semibold">{{ t(key="review.reply_from", name=p.name) }}</span> {{ x.reply }}</blockquote>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="small text-muted">{{ t(key="review.none") }}</p>
+    {% endif %}
+    <a class="btn btn-outline-warning btn-lg w-100" href="#danh-gia" x-on:click.prevent="show">{{ atoms::icon(name="fa-star") }} {{ t(key="review.write") }}</a>
+    {{ review::review_sheet(provider=p, review=page.review, stars=page.stars, name_max=page.limits.name_max, comment_max=page.review_comment_max) }}
+  </section>
 
   {{ sheet::contact_sheet(provider=p, contact=page.contact, limits=page.limits) }}
 </div>

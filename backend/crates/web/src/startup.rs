@@ -22,8 +22,9 @@ use application::{
         permission_usecase::{PermissionDeps, PermissionUseCase},
         product_usecase::ProductUseCase,
         provider_dashboard_usecase::{ProviderDashboardDeps, ProviderDashboardUseCase},
+        review_usecase::{ReviewDeps, ReviewUseCase},
         setup_usecase::SetupUseCase,
-        stats_usecase::StatsUseCase,
+        stats_usecase::{StatsDeps, StatsUseCase},
     },
 };
 use infrastructure::{
@@ -419,7 +420,7 @@ pub fn build_state(
             category_repo,
             inquiry_repo: inquiry_repo.clone(),
             location_repo,
-            review_repo,
+            review_repo: review_repo.clone(),
             product_repo: product_repo.clone(),
             role_repo: role_repo.clone(),
             service_repo: service_repo.clone(),
@@ -444,6 +445,12 @@ pub fn build_state(
             grants_repo: role_repo.clone(),
             events: events.clone(),
         }),
+        review: ReviewUseCase::new(ReviewDeps {
+            review_repo,
+            inquiry_repo: inquiry_repo.clone(),
+            business_repo: business_repo.clone(),
+            events: events.clone(),
+        }),
         provider_dashboard: ProviderDashboardUseCase::new(ProviderDashboardDeps {
             business_repo: business_repo.clone(),
             product_repo: product_repo.clone(),
@@ -460,7 +467,13 @@ pub fn build_state(
             user_repo.clone(),
             media,
         ),
-        stats: StatsUseCase::new(business_repo, product_repo, user_repo, call_repo.clone()),
+        stats: StatsUseCase::new(StatsDeps {
+            business_repo,
+            product_repo,
+            user_repo,
+            call_repo: call_repo.clone(),
+            inquiry_repo,
+        }),
     };
 
     let locales = Arc::new(Locales::load()?);

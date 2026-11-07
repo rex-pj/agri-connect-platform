@@ -1,4 +1,5 @@
-//! /admin/explore: the provider list, verification and account assignment.
+//! /admin/explore: the provider list, creating and editing a provider,
+//! verification and account assignment.
 //! Database tests need TEST_DATABASE_URL and `--include-ignored`.
 
 use axum::http::{header, StatusCode};
@@ -300,5 +301,109 @@ async fn the_json_api_sets_verification_explicitly() {
         .unwrap();
     let body = body_text(send(&e.router, req).await).await;
     assert!(body.contains(r#""is_verified":true"#), "{body}");
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn an_admin_lists_a_provider_in_the_field_and_edits_its_profile() {
+    let e = env_with_origin().await;
+    let admin = install_admin(&e).await;
+    let list = body_text(send(&e.router, get_page("/admin/explore", Some(&admin))).await).await;
+    assert!(
+        list.contains(r##"href="#them-nha-cung-cap""##),
+        "the create sheet is offered"
+    );
+
+    // A broken rule: the sheet comes back open with the values as typed.
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/explore",
+            &[("name", "Drone Ba Tu"), ("phone", "12345")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert!(res.status().is_client_error());
+    let html = body_text(res).await;
+    assert!(html.contains(r#"data-open="true""#));
+    assert!(html.contains(r#"value="Drone Ba Tu""#));
+
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/explore",
+            &[
+                ("name", "Drone Ba Tu"),
+                ("phone", "0912345678"),
+                ("address", "Cai Lay, Tien Giang"),
+                ("lat", "10.4048"),
+                ("lng", "106.118"),
+            ],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let detail = res.headers()[header::LOCATION].to_str().unwrap().to_owned();
+    let id = scalar(&e, "SELECT id::text AS id FROM businesses", "id").await;
+    assert_eq!(detail, format!("/admin/explore/{id}"));
+    assert_eq!(
+        scalar(
+            &e,
+            "SELECT round(ST_Y(location::geometry)::numeric, 4)::text AS lat FROM businesses",
+            "lat",
+        )
+        .await,
+        "10.4048"
+    );
+    let public = body_text(send(&e.router, get_page("/providers", None)).await).await;
+    assert!(public.contains("Drone Ba Tu"), "listed with no account");
+
+    let res = send(
+        &e.router,
+        post_form(
+            &detail,
+            &[("name", "Drone Ba Tu Cai Lay"), ("phone", "0912345678")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        scalar(
+            &e,
+            "SELECT name || ' ' || (location IS NULL)::text AS line FROM businesses",
+            "line",
+        )
+        .await,
+        "Drone Ba Tu Cai Lay true",
+        "renamed, and the blank coordinates took the pin off"
+    );
+    assert_eq!(
+        scalar(
+            &e,
+            "SELECT string_agg(action, ',' ORDER BY id) AS a FROM audit_logs \
+             WHERE action LIKE '%_provider'",
+            "a",
+        )
+        .await,
+        "create_provider,update_provider"
+    );
+
+    // Someone else's profile form is the owner's dashboard, never this page.
+    register_provider(&e.state, "nongdan", "0901234567").await;
+    let provider = sign_in(&e, "nongdan", "matkhau123").await;
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/explore",
+            &[("name", "X"), ("phone", "0912345678")],
+            Some(&provider),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
     e.cleanup().await;
 }

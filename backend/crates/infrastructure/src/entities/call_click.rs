@@ -8,6 +8,7 @@ pub struct Model {
     pub business_id: i32,
     pub service_id: Option<i32>,
     pub product_id: Option<i32>,
+    pub channel: String,
     pub created_on: DateTimeWithTimeZone,
 }
 

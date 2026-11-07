@@ -13,7 +13,7 @@ use crate::{
         AdminUpdateServiceRequest, AssignUserRequest, CreateCategoryRequest, CreateLocationRequest,
         DeleteWithReasonBody, SetVerificationRequest, SlugSuggestionQuery, ToggleActiveRequest,
         ToggleVisibleRequest, UpdateCategoryRequest, UpdateInquiryStatusRequest,
-        UpdateLocationRequest, UpdateUserRoleRequest,
+        UpdateLocationRequest, UpdateProfileRequest, UpdateUserRoleRequest,
     },
 };
 
@@ -43,6 +43,34 @@ impl AdminHandler {
             .admin
             .list_providers(&actor, q.page.unwrap_or(1), q.name.as_deref())
             .await?;
+        Ok(Json(result))
+    }
+
+    /// POST /api/admin/providers — a listing with no account yet (the same
+    /// boxes as the owner's profile); 201 with its details.
+    pub async fn create_provider(
+        MaybeActor(actor): MaybeActor,
+        State(state): State<AppState>,
+        ApiJson(req): ApiJson<UpdateProfileRequest>,
+    ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
+        let admin = &state.usecases.admin;
+        let id = admin.create_provider(&actor, req.into()).await?;
+        let result = admin.get_provider_detail(&actor, id).await?;
+        Ok((StatusCode::CREATED, Json(result)))
+    }
+
+    /// PUT /api/admin/providers/{id} — replaces the profile; its details.
+    pub async fn update_provider(
+        MaybeActor(actor): MaybeActor,
+        State(state): State<AppState>,
+        ApiPath(id): ApiPath<i32>,
+        ApiJson(req): ApiJson<UpdateProfileRequest>,
+    ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
+        let admin = &state.usecases.admin;
+        admin.update_provider(&actor, id, req.into()).await?;
+        let result = admin.get_provider_detail(&actor, id).await?;
         Ok(Json(result))
     }
 

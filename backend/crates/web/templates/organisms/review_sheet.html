@@ -1,0 +1,37 @@
+{#- The "write a review" sheet on a provider's page, in its own `dialog`
+    scope (the page puts it there). `provider` is the BusinessDetailDto,
+    `review` web::pages::provider::ReviewState, `stars` the ratings offered
+    (5 down to 1), `name_max` / `comment_max` the use case's lengths. Only a
+    farmer the provider answered through the platform can review it: the
+    phone must be the one their contact request came from. The stars are
+    radio buttons styled as large buttons: they work without JS. -#}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "molecules/form_field.html" as field %}
+{% import "molecules/sheet_header.html" as sheet_head %}
+{% macro review_sheet(provider, review, stars, name_max, comment_max) -%}
+{% set e = review.errors.fields %}
+<div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
+<section class="contact-sheet" id="danh-gia" aria-labelledby="danh-gia-title" :class="sheetClass">
+  {{ sheet_head::sheet_header(id="danh-gia", title=t(key="review.write"), icon="fa-star") }}
+  <p class="contact-sheet__sub">{{ t(key="review.who") }}</p>
+  <form class="contact-sheet__form" method="post" action="{{ url_for(name="review_submit") }}" novalidate>
+    <input type="hidden" name="business_id" value="{{ provider.id }}">
+    {% if review.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=review.errors.message) }}{% endif %}
+    <fieldset class="form-field">
+      <legend class="form-label fw-semibold fs-6">{{ t(key="review.rating") }} <span class="text-danger" aria-hidden="true">*</span></legend>
+      <div class="star-picker"{% if e.rating %} aria-describedby="rv-rating-error"{% endif %}>
+        {% for s in stars %}
+        <input type="radio" class="btn-check" name="rating" id="rv-star-{{ s }}" value="{{ s }}"{% if review.values.rating == s ~ "" %} checked{% endif %}>
+        <label class="btn btn-outline-warning" for="rv-star-{{ s }}">{{ s }} {{ atoms::icon(name="fa-star") }}</label>
+        {% endfor %}
+      </div>
+      {% if e.rating %}<div class="invalid-feedback d-block" id="rv-rating-error">{{ e.rating }}</div>{% endif %}
+    </fieldset>
+    {{ field::input(id="rv-phone", name="reviewer_phone", label=t(key="review.phone"), type="tel", value=review.values.reviewer_phone, error=e.reviewer_phone | default(value=""), required=true, placeholder="0901234567", pattern="0[0-9]{9}", inputmode="numeric", autocomplete="tel", hint=t(key="review.phone_hint"), first=true) }}
+    {{ field::input(id="rv-name", name="reviewer_name", label=t(key="form.full_name"), value=review.values.reviewer_name, error=e.reviewer_name | default(value=""), required=true, autocomplete="name", maxlength=name_max) }}
+    {{ field::textarea(id="rv-comment", name="comment", label=t(key="review.comment"), value=review.values.comment, error=e.comment | default(value=""), placeholder=t(key="review.comment_placeholder"), maxlength=comment_max) }}
+    <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-paper-plane") }} {{ t(key="review.send") }}</button>
+  </form>
+</section>
+{%- endmacro review_sheet %}

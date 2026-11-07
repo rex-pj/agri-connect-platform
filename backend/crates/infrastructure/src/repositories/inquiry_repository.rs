@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use sea_orm::{
     sea_query::Expr, ColumnTrait, ConnectionTrait, DatabaseConnection, DbErr, EntityTrait,
     FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait,
@@ -13,7 +13,10 @@ use domain::{
     repositories::inquiry_repository_trait::InquiryRepositoryTrait,
 };
 
-use domain::{Error, ErrorCode};
+use domain::{
+    constants::{INQUIRY_STATUSES_REVIEWABLE, INQUIRY_STATUS_SPAM},
+    Error, ErrorCode,
+};
 
 use crate::{
     db_types::DateTimeWithTimeZone,
@@ -80,6 +83,36 @@ impl InquiryRepositoryTrait for InquiryRepository {
             .map(|c| c as i64)
             .map_err(|e| {
                 error!("inquiry count_admin error: {e}");
+                Error::internal("Failed to count inquiries.")
+            })
+    }
+
+    async fn find_reviewable(&self, business_id: i32, phone: &str) -> Result<Option<i32>, Error> {
+        Inquiry::find()
+            .filter(inquiry::Column::BusinessId.eq(business_id))
+            .filter(inquiry::Column::RequesterPhone.eq(phone))
+            .filter(inquiry::Column::Status.is_in(INQUIRY_STATUSES_REVIEWABLE.iter().copied()))
+            .order_by_desc(inquiry::Column::CreatedOn)
+            .order_by_desc(inquiry::Column::Id)
+            .one(self.db.as_ref())
+            .await
+            .map(|row| row.map(|r| r.id))
+            .map_err(|e| {
+                error!("inquiry find_reviewable error: {e}");
+                Error::internal("Failed to check the contact request.")
+            })
+    }
+
+    async fn count_window(&self, from: DateTime<Utc>, to: DateTime<Utc>) -> Result<i64, Error> {
+        Inquiry::find()
+            .filter(inquiry::Column::CreatedOn.gte(from))
+            .filter(inquiry::Column::CreatedOn.lt(to))
+            .filter(inquiry::Column::Status.ne(INQUIRY_STATUS_SPAM))
+            .count(self.db.as_ref())
+            .await
+            .map(|c| c as i64)
+            .map_err(|e| {
+                error!("inquiry count_window error: {e}");
                 Error::internal("Failed to count inquiries.")
             })
     }

@@ -22,7 +22,7 @@ use tera::{Tera, Value};
 
 use crate::{
     app_state::AppState,
-    constants::EXPLORE_DEFAULT_RADIUS_M,
+    constants::{EXPLORE_DEFAULT_RADIUS_M, ZALO_CHAT_URL},
     extract::ApiPath,
     locale::{fill, Lang, Locale, Locales},
     routes,
@@ -312,6 +312,13 @@ impl Views {
                 .ok_or_else(|| tera::Error::msg("phone: expects a string"))
         });
 
+        tera.register_filter("zalo", |value: &Value, _: &HashMap<String, Value>| {
+            value
+                .as_str()
+                .map(|s| Value::String(zalo_chat_url(s)))
+                .ok_or_else(|| tera::Error::msg("zalo: expects a string"))
+        });
+
         tera.register_filter(
             "vn_datetime",
             |value: &Value, _: &HashMap<String, Value>| {
@@ -463,6 +470,19 @@ pub fn format_phone(phone: &str) -> String {
     } else {
         p.to_owned()
     }
+}
+
+/// The day and month in Vietnam at `instant`: `07/11`.
+pub fn format_vn_day(instant: DateTime<Utc>) -> String {
+    match FixedOffset::east_opt(VN_OFFSET_SECS) {
+        Some(offset) => instant.with_timezone(&offset).format("%d/%m").to_string(),
+        None => instant.format("%d/%m").to_string(),
+    }
+}
+
+/// The Zalo chat with the account behind `phone`.
+pub fn zalo_chat_url(phone: &str) -> String {
+    format!("{ZALO_CHAT_URL}{}", phone.trim())
 }
 
 /// The calendar year in Vietnam at `instant`.
@@ -627,6 +647,11 @@ mod tests {
         assert_eq!(format_phone("0912345678"), "0912 345 678");
         assert_eq!(format_phone(" 0912345678 "), "0912 345 678");
         assert_eq!(format_phone("+84912345678"), "+84912345678");
+    }
+
+    #[test]
+    fn a_zalo_chat_is_the_bare_number() {
+        assert_eq!(zalo_chat_url(" 0912345678 "), "https://zalo.me/0912345678");
     }
 
     #[test]

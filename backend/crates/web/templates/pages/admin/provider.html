@@ -6,6 +6,7 @@
 {% import "molecules/form_field.html" as field %}
 {% import "molecules/sheet_header.html" as sheet_head %}
 {% import "organisms/confirm_sheet.html" as confirm %}
+{% import "organisms/business_fields.html" as business %}
 {#- One provider: details, whether it is on, its verification badge,
     managing account, and what it offers. `page.body` is
     web::pages::admin::providers::ProviderPage. Turning it off and
@@ -15,11 +16,13 @@
     with its messages after a refusal. Its services open their admin page, its products their public
     one; the list links show only what the visitor may open. -#}
 {% block title %}{{ page.body.provider.name }} — {{ site.name }} Admin{% endblock title %}
+{% block scripts %}{% if page.body.can_edit %}<script defer src="{{ asset_url(path='js/islands.js') }}"></script>{% endif %}{% endblock scripts %}
 {% block content %}
 {% set b = page.body %}
 {% set p = b.provider %}
-{#- A refusal is the account form's unless the unverify dialog re-opened. -#}
-{% set account_failed = false %}{% if b.errors.message or b.errors.fields %}{% if not b.confirm_open %}{% set account_failed = true %}{% endif %}{% endif %}
+{#- A refusal belongs to the form named by `b.failed` (the profile form has
+    its own `b.profile_errors`), else it is shown on top. -#}
+{% set account_failed = b.failed == "account" %}
 {{ header::admin_header(title=p.name, icon="fa-store", sub=p.phone, back_href=url_for(name="admin_explore"), back_label=t(key="admin_menu.providers"), action_href=b.public_href, action_icon="fa-arrow-up-right-from-square", action_label=t(key="admin.public_page"), action_class="btn-outline-secondary") }}
 <div class="admin-body">
   {% if b.flash == "provider_verified" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.provider_verified")) }}{% endif %}
@@ -27,7 +30,9 @@
   {% if b.flash == "provider_activated" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.provider_activated")) }}{% endif %}
   {% if b.flash == "provider_deactivated" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.provider_deactivated")) }}{% endif %}
   {% if b.flash == "provider_account_assigned" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.provider_account_assigned")) }}{% endif %}
-  {% if b.errors.message and not account_failed %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
+  {% if b.flash == "provider_created" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.provider_created")) }}{% endif %}
+  {% if b.flash == "provider_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.provider_saved")) }}{% endif %}
+  {% if b.errors.message and not b.failed %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
 
   <section class="admin-section" aria-labelledby="info-title">
     <h2 class="admin-section__title" id="info-title">{{ t(key="admin.info") }}</h2>
@@ -45,6 +50,17 @@
     </div>
     {% endif %}
   </section>
+
+  {% if b.can_edit %}
+  <section class="admin-section" id="ho-so" aria-labelledby="ho-so-title">
+    <h2 class="admin-section__title" id="ho-so-title">{{ t(key="dashboard.profile") }}</h2>
+    <form class="form-stack" method="post" action="{{ b.profile_action }}#ho-so" novalidate>
+      {% if b.profile_errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.profile_errors.message) }}{% endif %}
+      {{ business::business_fields(form=b.profile, errors=b.profile_errors, limits=limits, prefix="pf") }}
+      <button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="dashboard.save_profile") }}</button>
+    </form>
+  </section>
+  {% endif %}
 
   <section class="admin-section" aria-labelledby="status-title" x-data="dialog" x-on:keydown.escape.window="hide">
     <h2 class="admin-section__title" id="status-title">{{ t(key="admin.activity") }}</h2>

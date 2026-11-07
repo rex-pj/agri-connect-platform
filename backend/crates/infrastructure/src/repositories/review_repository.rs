@@ -1,18 +1,21 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    sea_query::Expr, ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, JoinType,
-    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait, RelationTrait,
+    sea_query::{Alias, Expr, Func, Query, SimpleExpr},
+    ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, JoinType, PaginatorTrait,
+    QueryFilter, QueryOrder, QuerySelect, QueryTrait, RelationTrait, Select, Set,
 };
 use std::sync::Arc;
 use tracing::error;
 
 use domain::{
-    models::review::ReviewAdmin, repositories::review_repository_trait::ReviewRepositoryTrait,
+    models::review::{NewReview, OwnReview, PublicReview, RatingSummary, ReviewAdmin},
+    repositories::review_repository_trait::ReviewRepositoryTrait,
 };
 
 use domain::{Error, ErrorCode};
 
+use crate::repositories::unique_or_internal;
 use crate::{
     db_types::DateTimeWithTimeZone,
     entities::{
@@ -39,10 +42,75 @@ struct ReviewAdminRow {
     reviewer_name: String,
     rating: i16,
     comment: Option<String>,
+    reply: Option<String>,
     is_visible: bool,
     created_on: DateTimeWithTimeZone,
     updated_on: DateTimeWithTimeZone,
     updated_by_name: Option<String>,
+}
+
+impl From<ReviewAdminRow> for ReviewAdmin {
+    fn from(r: ReviewAdminRow) -> Self {
+        Self {
+            id: r.id,
+            business_id: r.business_id,
+            business_name: r.business_name,
+            reviewer_name: r.reviewer_name,
+            rating: r.rating,
+            comment: r.comment,
+            reply: r.reply,
+            is_visible: r.is_visible,
+            created_on: r.created_on.with_timezone(&Utc),
+            updated_on: r.updated_on.with_timezone(&Utc),
+            updated_by_name: r.updated_by_name,
+        }
+    }
+}
+
+#[derive(FromQueryResult)]
+struct SummaryRow {
+    count: i64,
+    average: Option<f64>,
+}
+
+/// The columns of the admin list and detail, with the business's name.
+fn admin_select() -> Select<Review> {
+    Review::find()
+        .select_only()
+        .column(review::Column::Id)
+        .column(review::Column::BusinessId)
+        .column_as(business::Column::Name, "business_name")
+        .column(review::Column::ReviewerName)
+        .column(review::Column::Rating)
+        .column(review::Column::Comment)
+        .column(review::Column::Reply)
+        .column(review::Column::IsVisible)
+        .column(review::Column::CreatedOn)
+        .column(review::Column::UpdatedOn)
+        .expr_as(
+            Expr::cust("(SELECT u.username FROM users u WHERE u.id = \"reviews\".updated_by)"),
+            "updated_by_name",
+        )
+        .join(JoinType::InnerJoin, review::Relation::Business.def())
+}
+
+/// Reviews of the live business `owner_user` manages: a subquery, so the
+/// ownership check and the read or write are one statement.
+fn owned_by(owner_user: i32) -> SimpleExpr {
+    Expr::col((review::Entity, review::Column::BusinessId)).in_subquery(
+        Query::select()
+            .column((business::Entity, business::Column::Id))
+            .from(business::Entity)
+            .and_where(Expr::col((business::Entity, business::Column::OwnerId)).eq(owner_user))
+            .and_where(Expr::col((business::Entity, business::Column::DeletedAt)).is_null())
+            .to_owned(),
+    )
+}
+
+fn shown_of(business_id: i32) -> Select<Review> {
+    Review::find()
+        .filter(review::Column::BusinessId.eq(business_id))
+        .filter(review::Column::IsVisible.eq(true))
 }
 
 #[async_trait]
@@ -67,25 +135,10 @@ impl ReviewRepositoryTrait for ReviewRepository {
         limit: i64,
         offset: i64,
     ) -> Result<Vec<ReviewAdmin>, Error> {
-        Review::find()
+        admin_select()
             .apply_if(provider_id, |q, id| {
                 q.filter(review::Column::BusinessId.eq(id))
             })
-            .select_only()
-            .column(review::Column::Id)
-            .column(review::Column::BusinessId)
-            .column_as(business::Column::Name, "business_name")
-            .column(review::Column::ReviewerName)
-            .column(review::Column::Rating)
-            .column(review::Column::Comment)
-            .column(review::Column::IsVisible)
-            .column(review::Column::CreatedOn)
-            .column(review::Column::UpdatedOn)
-            .expr_as(
-                Expr::cust("(SELECT u.username FROM users u WHERE u.id = \"reviews\".updated_by)"),
-                "updated_by_name",
-            )
-            .join(JoinType::InnerJoin, review::Relation::Business.def())
             .order_by_desc(review::Column::CreatedOn)
             .order_by_desc(review::Column::Id)
             .limit(limit as u64)
@@ -93,22 +146,7 @@ impl ReviewRepositoryTrait for ReviewRepository {
             .into_model::<ReviewAdminRow>()
             .all(self.db.as_ref())
             .await
-            .map(|rows| {
-                rows.into_iter()
-                    .map(|r| ReviewAdmin {
-                        id: r.id,
-                        business_id: r.business_id,
-                        business_name: r.business_name,
-                        reviewer_name: r.reviewer_name,
-                        rating: r.rating,
-                        comment: r.comment,
-                        is_visible: r.is_visible,
-                        created_on: r.created_on.with_timezone(&Utc),
-                        updated_on: r.updated_on.with_timezone(&Utc),
-                        updated_by_name: r.updated_by_name,
-                    })
-                    .collect()
-            })
+            .map(|rows| rows.into_iter().map(ReviewAdmin::from).collect())
             .map_err(|e| {
                 error!("review list_admin error: {e}");
                 Error::internal("Failed to load reviews.")
@@ -116,40 +154,12 @@ impl ReviewRepositoryTrait for ReviewRepository {
     }
 
     async fn find_by_id_admin(&self, id: i32) -> Result<Option<ReviewAdmin>, Error> {
-        Review::find()
+        admin_select()
             .filter(review::Column::Id.eq(id))
-            .select_only()
-            .column(review::Column::Id)
-            .column(review::Column::BusinessId)
-            .column_as(business::Column::Name, "business_name")
-            .column(review::Column::ReviewerName)
-            .column(review::Column::Rating)
-            .column(review::Column::Comment)
-            .column(review::Column::IsVisible)
-            .column(review::Column::CreatedOn)
-            .column(review::Column::UpdatedOn)
-            .expr_as(
-                Expr::cust("(SELECT u.username FROM users u WHERE u.id = \"reviews\".updated_by)"),
-                "updated_by_name",
-            )
-            .join(JoinType::InnerJoin, review::Relation::Business.def())
             .into_model::<ReviewAdminRow>()
             .one(self.db.as_ref())
             .await
-            .map(|opt| {
-                opt.map(|r| ReviewAdmin {
-                    id: r.id,
-                    business_id: r.business_id,
-                    business_name: r.business_name,
-                    reviewer_name: r.reviewer_name,
-                    rating: r.rating,
-                    comment: r.comment,
-                    is_visible: r.is_visible,
-                    created_on: r.created_on.with_timezone(&Utc),
-                    updated_on: r.updated_on.with_timezone(&Utc),
-                    updated_by_name: r.updated_by_name,
-                })
-            })
+            .map(|opt| opt.map(ReviewAdmin::from))
             .map_err(|e| {
                 error!("review find_by_id_admin error: {e}");
                 Error::internal("Failed to load review.")
@@ -173,5 +183,135 @@ impl ReviewRepositoryTrait for ReviewRepository {
             return Err(Error::new(ErrorCode::ReviewNotFound));
         }
         Ok(())
+    }
+
+    async fn create(&self, r: NewReview) -> Result<i32, Error> {
+        Review::insert(review::ActiveModel {
+            business_id: Set(r.business_id),
+            inquiry_id: Set(Some(r.inquiry_id)),
+            rating: Set(r.rating),
+            comment: Set(r.comment),
+            reviewer_name: Set(r.reviewer_name),
+            reviewer_phone_hash: Set(r.reviewer_phone_hash),
+            is_visible: Set(false),
+            ..Default::default()
+        })
+        .exec(self.db.as_ref())
+        .await
+        .map(|res| res.last_insert_id)
+        .map_err(|e| {
+            unique_or_internal(
+                e,
+                "reviewer_phone",
+                ErrorCode::ReviewAlreadySent,
+                "review create",
+            )
+        })
+    }
+
+    async fn list_public(&self, business_id: i32, limit: i64) -> Result<Vec<PublicReview>, Error> {
+        shown_of(business_id)
+            .order_by_desc(review::Column::CreatedOn)
+            .order_by_desc(review::Column::Id)
+            .limit(limit as u64)
+            .all(self.db.as_ref())
+            .await
+            .map(|rows| {
+                rows.into_iter()
+                    .map(|r| PublicReview {
+                        id: r.id,
+                        reviewer_name: r.reviewer_name,
+                        rating: r.rating,
+                        comment: r.comment,
+                        reply: r.reply,
+                        created_on: r.created_on.with_timezone(&Utc),
+                    })
+                    .collect()
+            })
+            .map_err(|e| {
+                error!("review list_public error: {e}");
+                Error::internal("Failed to load reviews.")
+            })
+    }
+
+    async fn summary_public(&self, business_id: i32) -> Result<RatingSummary, Error> {
+        // AVG of a SMALLINT is NUMERIC; as float8 it decodes to f64.
+        let average = SimpleExpr::from(Func::avg(Expr::col(review::Column::Rating)))
+            .cast_as(Alias::new("float8"));
+        shown_of(business_id)
+            .select_only()
+            .column_as(review::Column::Id.count(), "count")
+            .column_as(average, "average")
+            .into_model::<SummaryRow>()
+            .one(self.db.as_ref())
+            .await
+            .map(|row| {
+                row.map_or(
+                    RatingSummary {
+                        count: 0,
+                        average: None,
+                    },
+                    |r| RatingSummary {
+                        count: r.count,
+                        average: r.average,
+                    },
+                )
+            })
+            .map_err(|e| {
+                error!("review summary_public error: {e}");
+                Error::internal("Failed to load reviews.")
+            })
+    }
+
+    async fn list_for_owner(&self, owner_user: i32) -> Result<Vec<OwnReview>, Error> {
+        Review::find()
+            .filter(owned_by(owner_user))
+            .order_by_desc(review::Column::CreatedOn)
+            .order_by_desc(review::Column::Id)
+            .all(self.db.as_ref())
+            .await
+            .map(|rows| {
+                rows.into_iter()
+                    .map(|r| OwnReview {
+                        id: r.id,
+                        reviewer_name: r.reviewer_name,
+                        rating: r.rating,
+                        comment: r.comment,
+                        reply: r.reply,
+                        is_visible: r.is_visible,
+                        created_on: r.created_on.with_timezone(&Utc),
+                    })
+                    .collect()
+            })
+            .map_err(|e| {
+                error!("review list_for_owner error: {e}");
+                Error::internal("Failed to load reviews.")
+            })
+    }
+
+    async fn set_reply_for_owner(
+        &self,
+        owner_user: i32,
+        id: i32,
+        reply: Option<String>,
+    ) -> Result<bool, Error> {
+        let replied_at = if reply.is_some() {
+            Expr::current_timestamp().into()
+        } else {
+            Expr::cust("NULL")
+        };
+        Review::update_many()
+            .col_expr(review::Column::Reply, Expr::value(reply))
+            .col_expr(review::Column::RepliedAt, replied_at)
+            .col_expr(review::Column::UpdatedOn, Expr::current_timestamp().into())
+            .filter(review::Column::Id.eq(id))
+            .filter(owned_by(owner_user))
+            .exec(self.db.as_ref())
+            .await
+            .map(|r| r.rows_affected > 0)
+            .map_err(|e| {
+                error!("review set_reply_for_owner error: {e}");
+                Error::internal("Failed to save the reply.")
+            })
     }
 }

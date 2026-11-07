@@ -329,11 +329,13 @@ document.addEventListener("alpine:init", () => {
 
   // A tap on a public call button: counted with a beacon, which the browser
   // sends even as the phone app opens. The tel: link works the same without
-  // JS, only uncounted. Attributes: data-call-url, data-call-kind, data-call-id.
+  // JS, only uncounted. Attributes: data-call-url, data-call-kind, data-call-id,
+  // and data-call-channel on a Zalo button ("zalo"; none is a call).
   Alpine.data("callBeacon", () => ({
     count() {
-      const { callUrl, callKind, callId } = this.$el.dataset;
-      const body = new Blob([JSON.stringify({ kind: callKind, id: Number(callId) })], {
+      const { callUrl, callKind, callId, callChannel } = this.$el.dataset;
+      const target = { kind: callKind, id: Number(callId), channel: callChannel };
+      const body = new Blob([JSON.stringify(target)], {
         type: "application/json",
       });
       if (navigator.sendBeacon) {

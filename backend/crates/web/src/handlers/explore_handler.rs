@@ -10,7 +10,7 @@ use serde::Serialize;
 use crate::{
     app_state::AppState,
     extract::{ApiJson, ApiPath, ApiQuery},
-    requests::{CallRequest, CategoriesQuery, InquiryRequest, ProvidersQuery},
+    requests::{CallRequest, CategoriesQuery, InquiryRequest, ProvidersQuery, ReviewRequest},
 };
 
 /// `/api/explore/providers` answers in two shapes depending on whether a
@@ -130,7 +130,7 @@ impl ExploreHandler {
         Ok(Json(result))
     }
 
-    /// POST /api/explore/calls — `{ kind, id }` of the card or page whose
+    /// POST /api/explore/calls — `{ kind, id, channel? }` of the card or page whose
     /// call button was tapped; 204. Rate-limited like the contact form.
     pub async fn record_call(
         State(state): State<AppState>,
@@ -142,6 +142,7 @@ impl ExploreHandler {
             .record_call(CallInput {
                 kind: req.kind,
                 id: req.id,
+                channel: req.channel,
             })
             .await?;
         Ok(StatusCode::NO_CONTENT)
@@ -165,6 +166,26 @@ impl ExploreHandler {
             })
             .await?;
 
+        Ok((StatusCode::CREATED, Json(result)))
+    }
+
+    /// GET /api/explore/providers/{id}/reviews — the shown reviews: count,
+    /// average and the newest.
+    pub async fn list_reviews(
+        State(state): State<AppState>,
+        ApiPath(id): ApiPath<i32>,
+    ) -> Result<impl IntoResponse, Error> {
+        let result = state.usecases.review.list_public(id).await?;
+        Ok(Json(result))
+    }
+
+    /// POST /api/explore/reviews — 201; the review waits for an admin.
+    /// Rate-limited like the contact form.
+    pub async fn submit_review(
+        State(state): State<AppState>,
+        ApiJson(req): ApiJson<ReviewRequest>,
+    ) -> Result<impl IntoResponse, Error> {
+        let result = state.usecases.review.submit(req.into()).await?;
         Ok((StatusCode::CREATED, Json(result)))
     }
 }

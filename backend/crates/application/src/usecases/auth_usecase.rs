@@ -24,6 +24,7 @@ use crate::{
         BUSINESS_NAME_MAX, FULL_NAME_MAX, LOGIN_FAIL_MAX_ATTEMPTS, LOGIN_LOCK_MINUTES,
         PASSWORD_RESET_EXPIRY_HOURS, REFRESH_REUSE_GRACE_SECS,
     },
+    hashing::sha256_hex,
     outputs::{LoginResponse, MeResponse},
     ports::{EmailService, PasswordHasher, SessionClaims, TokenService},
     validation::{
@@ -512,8 +513,7 @@ impl AuthUseCase {
 /// Refresh tokens are stored as this hash only; the raw value lives in the
 /// browser's cookie.
 fn hash_token(raw: &str) -> String {
-    use sha2::{Digest, Sha256};
-    hex::encode(Sha256::digest(raw.as_bytes()))
+    sha256_hex(raw)
 }
 
 fn generate_token() -> String {

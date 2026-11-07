@@ -6,8 +6,8 @@ use application::{
         admin_usecase::AdminUseCase, auth_usecase::AuthUseCase, explore_usecase::ExploreUseCase,
         health_usecase::HealthUseCase, media_usecase::MediaUseCase,
         permission_usecase::PermissionUseCase, product_usecase::ProductUseCase,
-        provider_dashboard_usecase::ProviderDashboardUseCase, setup_usecase::SetupUseCase,
-        stats_usecase::StatsUseCase,
+        provider_dashboard_usecase::ProviderDashboardUseCase, review_usecase::ReviewUseCase,
+        setup_usecase::SetupUseCase, stats_usecase::StatsUseCase,
     },
 };
 
@@ -25,6 +25,7 @@ pub struct UseCases {
     pub auth: AuthUseCase,
     pub permission: PermissionUseCase,
     pub provider_dashboard: ProviderDashboardUseCase,
+    pub review: ReviewUseCase,
     pub setup: SetupUseCase,
     pub stats: StatsUseCase,
 }

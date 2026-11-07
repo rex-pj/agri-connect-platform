@@ -9,9 +9,12 @@
 use std::collections::BTreeMap;
 
 use application::{
-    constants::{NOTE_MAX_LEN, REQUESTER_NAME_MAX_LEN, TOPIC_MAX_LEN},
-    inputs::ContactInput,
-    outputs::{BusinessDetailDto, ProductDto, PublicServiceDto},
+    constants::{
+        NOTE_MAX_LEN, RATING_MAX, RATING_MIN, REQUESTER_NAME_MAX_LEN, REVIEW_COMMENT_MAX,
+        TOPIC_MAX_LEN,
+    },
+    inputs::{ContactInput, ReviewInput},
+    outputs::{BusinessDetailDto, ProductDto, ProviderReviewsDto, PublicServiceDto},
 };
 use axum::{extract::State, response::Response};
 use domain::{
@@ -27,8 +30,8 @@ use crate::{
     extract::{ApiForm, ApiPath},
     locale::Locale,
     pages::{
-        canonical_url, forms::FormErrors, listing::parse_opt, moved_permanently, parse_id,
-        product as product_page, see_other, service as service_page, summary,
+        admin::is_refusal, canonical_url, forms::FormErrors, listing::parse_opt, moved_permanently,
+        parse_id, product as product_page, see_other, service as service_page, summary,
     },
     shell::Shell,
     views::{render_page, render_page_status},
@@ -120,6 +123,40 @@ pub(super) const LIMITS: ContactLimits = ContactLimits {
     note_max: NOTE_MAX_LEN,
 };
 
+/// POST /reviews body: a farmer's review, from the phone their contact
+/// request came from.
+#[derive(Debug, Deserialize)]
+pub struct ReviewForm {
+    pub business_id: i32,
+    #[serde(default)]
+    pub reviewer_name: String,
+    #[serde(default)]
+    pub reviewer_phone: String,
+    /// The chosen star, "1" to "5"; anything else is no rating.
+    #[serde(default)]
+    pub rating: String,
+    #[serde(default)]
+    pub comment: String,
+}
+
+/// What the visitor typed in the review form, echoed back when re-shown.
+#[derive(Debug, Default, Serialize)]
+pub struct ReviewValues {
+    pub reviewer_name: String,
+    pub reviewer_phone: String,
+    pub rating: String,
+    pub comment: String,
+}
+
+/// The review form: as typed and its messages after a refusal (the sheet
+/// opens by itself), empty otherwise.
+#[derive(Debug, Default, Serialize)]
+pub struct ReviewState {
+    pub values: ReviewValues,
+    pub errors: FormErrors,
+    pub open: bool,
+}
+
 #[derive(Serialize)]
 pub struct ProviderPage {
     pub provider: BusinessDetailDto,
@@ -128,6 +165,14 @@ pub struct ProviderPage {
     pub meta_description: Option<String>,
     pub contact: ContactState,
     pub limits: ContactLimits,
+    /// Its shown reviews (count, average, the newest) and the review form.
+    pub reviews: ProviderReviewsDto,
+    pub review: ReviewState,
+    pub review_comment_max: usize,
+    /// The stars a rating can have, for the form's radio buttons.
+    pub stars: Vec<i16>,
+    /// A review was just sent (flash from the redirect): it waits for an admin.
+    pub review_sent: bool,
     /// Where the provider works, or the region when the address is unknown.
     pub area: String,
     /// The text a share sheet (Zalo, Messenger) puts with the link.
@@ -171,16 +216,44 @@ async fn products_of(state: &AppState, business_id: i32) -> Result<Vec<ProductDt
         .items)
 }
 
-fn page(
-    locale: &Locale,
-    provider: BusinessDetailDto,
+/// What the page shows besides the provider: its products and reviews, the
+/// two forms' states, and which one was just sent.
+struct Around {
     products: Vec<ProductDto>,
+    reviews: ProviderReviewsDto,
     contact: ContactState,
-    sent: bool,
-) -> ProviderPage {
+    review: ReviewState,
+    flash: Option<Flash>,
+}
+
+/// The products and shown reviews of a provider's page.
+async fn around(
+    state: &AppState,
+    business_id: i32,
+) -> Result<(Vec<ProductDto>, ProviderReviewsDto), Error> {
+    tokio::try_join!(
+        products_of(state, business_id),
+        state.usecases.review.list_public(business_id),
+    )
+}
+
+fn page(locale: &Locale, provider: BusinessDetailDto, a: Around) -> ProviderPage {
     let area = area_of(locale, provider.address.as_deref());
+    let Around {
+        products,
+        reviews,
+        contact,
+        review,
+        flash,
+    } = a;
     ProviderPage {
         products,
+        reviews,
+        review,
+        review_comment_max: REVIEW_COMMENT_MAX,
+        stars: (RATING_MIN..=RATING_MAX).rev().collect(),
+        review_sent: flash == Some(Flash::ReviewSent),
+        sent: flash == Some(Flash::ContactSent),
         share_text: locale.text_with(
             "provider.share_text",
             &[("name", &provider.name), ("area", &area)],
@@ -193,7 +266,6 @@ fn page(
         provider,
         contact,
         limits: LIMITS,
-        sent,
     }
 }
 
@@ -218,15 +290,15 @@ pub async fn show(
     if shell.path != canonical {
         return moved_permanently(&canonical);
     }
-    let sent = flash.0 == Some(Flash::ContactSent);
-    let products = products_of(&state, provider.id).await?;
-    let page = page(
-        state.locale(),
-        provider,
+    let (products, reviews) = around(&state, provider.id).await?;
+    let a = Around {
         products,
-        ContactState::default(),
-        sent,
-    );
+        reviews,
+        contact: ContactState::default(),
+        review: ReviewState::default(),
+        flash: flash.0,
+    };
+    let page = page(state.locale(), provider, a);
     let mut response = render_page(&state, &shell, "pages/provider.html", &page)?;
     flash.clear_on(&mut response);
     Ok(response)
@@ -330,15 +402,75 @@ pub async fn submit_contact(
                 }
                 None => {}
             }
-            let products = products_of(&state, provider.id).await?;
-            let page = page(state.locale(), provider, products, contact, false);
-            render_page_status(
-                &state,
-                &shell,
-                err.kind().status(),
-                "pages/provider.html",
-                &page,
-            )
+            let (products, reviews) = around(&state, provider.id).await?;
+            let a = Around {
+                products,
+                reviews,
+                contact,
+                review: ReviewState::default(),
+                flash: None,
+            };
+            let page = page(state.locale(), provider, a);
+            render_page_status(&state, &shell, status, "pages/provider.html", &page)
+        }
+        Err(err) => Err(err),
+    }
+}
+
+/// POST /reviews: Post/Redirect/Get like the contact form. Sent, the
+/// visitor lands back on the provider's page with a one-time flash (the
+/// review waits for an admin); refused, the page comes back with the review
+/// sheet open, the values as typed and one message per field.
+pub async fn submit_review(
+    shell: Shell,
+    State(state): State<AppState>,
+    ApiForm(form): ApiForm<ReviewForm>,
+) -> Result<Response, Error> {
+    // Load first: a review of a provider that is gone is a 404, not a 400.
+    let provider = state
+        .usecases
+        .explore
+        .get_provider_detail(form.business_id)
+        .await?;
+    let result = state
+        .usecases
+        .review
+        .submit(ReviewInput {
+            business_id: form.business_id,
+            reviewer_name: form.reviewer_name.clone(),
+            reviewer_phone: form.reviewer_phone.clone(),
+            rating: parse_opt(&form.rating),
+            comment: Some(form.comment.clone()),
+        })
+        .await;
+    match result {
+        Ok(_) => {
+            let mut response = see_other(&canonical(&provider)?)?;
+            Flash::ReviewSent.set_on(&mut response);
+            Ok(response)
+        }
+        Err(err) if is_refusal(&err) => {
+            let status = err.kind().status();
+            let review = ReviewState {
+                errors: FormErrors::from_error(&state, &err),
+                values: ReviewValues {
+                    reviewer_name: form.reviewer_name,
+                    reviewer_phone: form.reviewer_phone,
+                    rating: form.rating,
+                    comment: form.comment,
+                },
+                open: true,
+            };
+            let (products, reviews) = around(&state, provider.id).await?;
+            let a = Around {
+                products,
+                reviews,
+                contact: ContactState::default(),
+                review,
+                flash: None,
+            };
+            let page = page(state.locale(), provider, a);
+            render_page_status(&state, &shell, status, "pages/provider.html", &page)
         }
         Err(err) => Err(err),
     }

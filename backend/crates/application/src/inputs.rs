@@ -28,6 +28,17 @@ pub struct ContactInput {
     pub service_id: Option<i32>,
 }
 
+/// A farmer's review of a provider, from the phone their contact request
+/// came from.
+pub struct ReviewInput {
+    pub business_id: i32,
+    pub reviewer_name: String,
+    pub reviewer_phone: String,
+    /// 1 to 5 stars; `None` when the box was left empty or was not a number.
+    pub rating: Option<i16>,
+    pub comment: Option<String>,
+}
+
 // ── Provider dashboard ────────────────────────────────────────────────────────
 
 pub struct UpdateProfileInput {
@@ -79,8 +90,10 @@ pub struct CategoryInput {
 
 /// A tap on a public call button: which kind of card or page (`service`,
 /// `product`, `provider`) and that record's id. The business it rings is
-/// looked up from the record, never taken from the request.
+/// looked up from the record, never taken from the request. `channel` is how
+/// the farmer reached out (`call`, `zalo`); none is a call.
 pub struct CallInput {
     pub kind: String,
     pub id: i32,
+    pub channel: Option<String>,
 }

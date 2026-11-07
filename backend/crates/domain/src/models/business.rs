@@ -108,6 +108,8 @@ pub struct BusinessAdminDetail {
     pub is_active: bool,
     pub created_on: DateTime<Utc>,
     pub linked_username: Option<String>,
+    pub lat: Option<f64>,
+    pub lng: Option<f64>,
     pub services: Vec<ServiceAdminItem>,
     pub products: Vec<ProductAdminItem>,
 }

@@ -105,6 +105,8 @@ error_codes! {
     InvalidProductCategory    => (BadRequest,      "invalid_product_category"),
     InvalidServiceCategory    => (BadRequest,      "invalid_service_category"),
     InvalidCallTarget         => (BadRequest,      "invalid_call_target"),
+    InvalidRating             => (BadRequest,      "invalid_rating"),
+    ReviewNeedsContact        => (BadRequest,      "review_needs_contact"),
 
     // ── Uploads ──────────────────────────────────────────────────────────────
     FileTooLarge              => (PayloadTooLarge, "file_too_large"),
@@ -122,6 +124,7 @@ error_codes! {
     LocationLabelTaken        => (Conflict,        "location_label_taken"),
     DemoAlreadyLoaded         => (Conflict,        "demo_already_loaded"),
     ServiceLimitReached       => (Conflict,        "service_limit_reached"),
+    ReviewAlreadySent         => (Conflict,        "review_already_sent"),
 
     // ── Not found ────────────────────────────────────────────────────────────
     AccountNotFound           => (NotFound,        "account_not_found"),

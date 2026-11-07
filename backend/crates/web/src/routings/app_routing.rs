@@ -134,6 +134,10 @@ impl AppRouting {
                 "/api/explore/providers/{id}",
                 get(ExploreHandler::get_provider_by_id),
             )
+            .route(
+                "/api/explore/providers/{id}/reviews",
+                get(ExploreHandler::list_reviews),
+            )
             // GET /api/explore/services — near me when lat+lng present, browse otherwise
             .route("/api/explore/services", get(ExploreHandler::list_services))
             .route(
@@ -170,6 +174,8 @@ impl AppRouting {
             )
             // The page form: same rules and budget as the JSON endpoint.
             .route("/contact", post(pages::provider::submit_contact))
+            .route("/api/explore/reviews", post(ExploreHandler::submit_review))
+            .route("/reviews", post(pages::provider::submit_review))
             .route("/language", post(pages::language::switch))
             // Call-button taps: the click-to-call count, same budget.
             .route("/api/explore/calls", post(ExploreHandler::record_call))
@@ -309,8 +315,14 @@ impl AppRouting {
                 "/admin/locations/{id}/delete",
                 post(pages::admin::locations::delete),
             )
-            .route("/admin/explore", get(pages::admin::providers::list))
-            .route("/admin/explore/{id}", get(pages::admin::providers::show))
+            .route(
+                "/admin/explore",
+                get(pages::admin::providers::list).post(pages::admin::providers::create),
+            )
+            .route(
+                "/admin/explore/{id}",
+                get(pages::admin::providers::show).post(pages::admin::providers::update),
+            )
             .route(
                 "/admin/explore/{id}/verification",
                 post(pages::admin::providers::set_verification),
@@ -385,6 +397,11 @@ impl AppRouting {
                 "/provider/services/{id}/delete",
                 post(pages::own_services::delete_service),
             )
+            .route("/provider/reviews", get(pages::own_reviews::list))
+            .route(
+                "/provider/reviews/{id}/reply",
+                post(pages::own_reviews::reply),
+            )
             .route("/provider/inquiries", get(pages::inbox::list))
             .route(
                 "/provider/inquiries/{id}/status",
@@ -409,10 +426,13 @@ impl AppRouting {
             )
             .route("/api/admin/stats", get(StatsHandler::get_stats))
             // Providers
-            .route("/api/admin/providers", get(AdminHandler::list_providers))
+            .route(
+                "/api/admin/providers",
+                get(AdminHandler::list_providers).post(AdminHandler::create_provider),
+            )
             .route(
                 "/api/admin/providers/{id}",
-                get(AdminHandler::get_provider_detail),
+                get(AdminHandler::get_provider_detail).put(AdminHandler::update_provider),
             )
             .route(
                 "/api/admin/providers/{id}/verification",
@@ -565,6 +585,14 @@ impl AppRouting {
             .route(
                 "/api/provider/services/{id}",
                 delete(ProviderDashboardHandler::delete_service),
+            )
+            .route(
+                "/api/provider/reviews",
+                get(ProviderDashboardHandler::list_reviews),
+            )
+            .route(
+                "/api/provider/reviews/{id}/reply",
+                put(ProviderDashboardHandler::reply_review),
             );
 
         let mut router = Router::new()

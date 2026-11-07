@@ -1,7 +1,7 @@
 //! Click-to-call counts: POST /api/explore/calls from a call button, the
-//! business looked up from what was called, and the counts on the provider's
-//! dashboard and the admin dashboard. Database tests need TEST_DATABASE_URL
-//! and `--include-ignored`.
+//! business looked up from what was called (a call or a Zalo chat), and the
+//! counts on the provider's dashboard and the admin dashboard. Database tests
+//! need TEST_DATABASE_URL and `--include-ignored`.
 
 use axum::{
     body::Body,
@@ -108,10 +108,59 @@ async fn call_buttons_carry_the_beacon_and_the_counts_are_shown() {
     let cookie = sign_in(&e, "nongdan", "matkhau123").await;
     let dashboard =
         body_text(send(&e.router, get_page("/provider/dashboard", Some(&cookie))).await).await;
-    assert!(dashboard.contains("2 lượt bấm gọi"));
+    assert!(dashboard.contains("2 lượt gọi và nhắn Zalo"));
 
     let admin = install_admin(&e).await;
     let stats = body_text(send(&e.router, get_page("/admin/dashboard", Some(&admin))).await).await;
-    assert!(stats.contains("Lượt bấm gọi (30 ngày)"));
+    assert!(stats.contains("Lượt gọi + Zalo (30 ngày)"));
+    e.cleanup().await;
+}
+
+fn zalo_tap(kind: &str, id: i64, channel: &str) -> Request<Body> {
+    Request::post("/api/explore/calls")
+        .header(header::CONTENT_TYPE, "application/json")
+        .header(header::ORIGIN, TEST_ORIGIN)
+        .body(Body::from(format!(
+            r#"{{"kind":"{kind}","id":{id},"channel":"{channel}"}}"#
+        )))
+        .unwrap()
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn zalo_taps_are_leads_of_their_own_channel_and_add_up_by_week() {
+    let e = env_with_origin().await;
+    let (_, service_id) = provider_with_service(&e).await;
+
+    // The detail page offers Zalo beside the call button, counted the same way.
+    let res = send(
+        &e.router,
+        get_page(&format!("/services/{service_id}"), None),
+    )
+    .await;
+    let canonical = res.headers()[header::LOCATION].to_str().unwrap().to_owned();
+    let page = body_text(send(&e.router, get_page(&canonical, None)).await).await;
+    assert!(page.contains(r#"href="https://zalo.me/0901234567""#));
+    assert!(page.contains(r#"data-call-channel="zalo""#));
+
+    let res = send(&e.router, zalo_tap("service", service_id, "zalo")).await;
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+    send(&e.router, tap("service", service_id, TEST_ORIGIN)).await;
+    let res = send(&e.router, zalo_tap("service", service_id, "sms")).await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    let mut channels: Vec<String> = clicks(&e).await.into_iter().map(|c| c.channel).collect();
+    channels.sort();
+    assert_eq!(channels, ["call", "zalo"]);
+
+    let admin = install_admin(&e).await;
+    let stats = body_text(send(&e.router, get_page("/admin/dashboard", Some(&admin))).await).await;
+    assert!(stats.contains("Liên hệ theo tuần"));
+    // This week: one call, one Zalo chat, no request; two in all.
+    assert!(
+        stats.contains(
+            r#"<td class="text-end">1</td><td class="text-end">1</td><td class="text-end">0</td><td class="text-end fw-bold">2</td>"#
+        ),
+        "{stats}"
+    );
     e.cleanup().await;
 }

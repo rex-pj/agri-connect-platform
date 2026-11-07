@@ -19,6 +19,7 @@ use uuid::Uuid;
 use crate::{
     authz::Actor,
     catalogue::{PERM_OWN_LISTING_UPDATE, PERM_OWN_SERVICE_UPDATE},
+    hashing::sha256_hex,
     outputs::{ProviderProductDto, ProviderServiceDto},
     ports::{EventBus, FileStorage, ImageProcessor, ProcessedImage},
 };
@@ -321,11 +322,6 @@ pub(crate) async fn release_file(
         storage.delete(file.key(variant)).await?;
     }
     Ok(())
-}
-
-fn sha256_hex(bytes: &[u8]) -> String {
-    use sha2::{Digest, Sha256};
-    hex::encode(Sha256::digest(bytes))
 }
 
 #[cfg(test)]

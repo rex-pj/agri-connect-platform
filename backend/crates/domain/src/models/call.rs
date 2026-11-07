@@ -5,4 +5,6 @@ pub struct NewCallClick {
     /// The service or product whose card or page the button was on.
     pub service_id: Option<i32>,
     pub product_id: Option<i32>,
+    /// One of `CALL_CHANNELS`.
+    pub channel: String,
 }

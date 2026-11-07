@@ -2,6 +2,7 @@
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/alert.html" as alerts %}
 {% import "atoms/status_badge.html" as status %}
+{% import "atoms/stars.html" as stars %}
 {% import "molecules/admin_header.html" as header %}
 {% import "molecules/admin_filter.html" as filter %}
 {% import "molecules/pagination_nav.html" as paging %}
@@ -10,7 +11,8 @@
 {#- `page.body` is web::pages::admin::reviews::ReviewsPage. "Ẩn" reloads the
     list with that row's confirmation open (`b.confirm`); every form sends the
     list position (page, `provider_id`) back so the redirect lands here
-    again; `b.filter` is set when the list is one provider's. -#}
+    again; `b.filter` is set when the list is one provider's. A farmer's new
+    review arrives hidden ("waiting"): showing it is the approval. -#}
 {% block title %}{{ t(key="admin_menu.reviews") }} — {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
@@ -33,8 +35,8 @@
           <tr{% if not v.is_visible %} class="table-light text-body-secondary"{% endif %}>
             <td class="fw-semibold">{{ v.reviewer_name }}<span class="d-block small text-muted fw-normal"><time datetime="{{ v.created_on | utc_iso }}">{{ v.created_on | vn_datetime }}</time></span></td>
             <td><a class="text-decoration-none" href="{{ r.provider_href }}">{{ v.business_name }}</a></td>
-            <td><span class="text-warning text-nowrap" aria-label="{{ t(key="admin.rating", rating=v.rating) }}">{% for i in range(end=v.rating) %}{{ atoms::icon(name="fa-star") }}{% endfor %}</span>{% if v.comment %}<span class="d-block small">{{ v.comment }}</span>{% endif %}</td>
-            <td class="text-center">{{ status::visibility(on=v.is_visible) }}{% if not v.is_visible and v.updated_by_name %}<span class="d-block small text-muted">{{ v.updated_by_name }}</span>{% endif %}</td>
+            <td>{{ stars::stars(rating=v.rating) }}{% if v.comment %}<span class="d-block small">{{ v.comment }}</span>{% endif %}{% if v.reply %}<span class="d-block small text-muted">{{ atoms::icon(name="fa-reply") }} {{ v.reply }}</span>{% endif %}</td>
+            <td class="text-center">{{ status::visibility(on=v.is_visible) }}{% if not v.is_visible %}<span class="d-block small text-muted">{% if v.updated_by_name %}{{ v.updated_by_name }}{% else %}{{ t(key="review.waiting") }}{% endif %}</span>{% endif %}</td>
             <td class="text-end">
               <div class="row-actions">
                 {% if v.is_visible %}

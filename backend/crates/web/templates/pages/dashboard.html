@@ -1,9 +1,9 @@
 {% extends "layouts/app.html" %}
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/alert.html" as alerts %}
-{% import "molecules/form_field.html" as field %}
 {% import "molecules/empty_state.html" as empty %}
 {% import "organisms/own_services.html" as own %}
+{% import "organisms/business_fields.html" as business %}
 {#- The provider's own area: services and products first (what they come to
     change; services lead unless only products are listed), then the
     business profile. `page` is web::pages::dashboard::DashboardPage. The
@@ -55,6 +55,16 @@
     {{ atoms::icon(name="fa-chevron-right", class="text-muted") }}
   </a>
   {% endif %}
+  {% if page.reviews %}
+  <a class="detail-card d-flex align-items-center gap-3 text-decoration-none" href="{{ page.reviews.href }}">
+    <span class="provider-cta__icon">{{ atoms::icon(name="fa-star") }}</span>
+    <span class="flex-grow-1">
+      <strong class="d-block text-body">{{ t(key="review.title") }}</strong>
+      <span class="small text-muted">{{ t(key="reviews.count", count=page.reviews.total) }}</span>
+    </span>
+    {{ atoms::icon(name="fa-chevron-right", class="text-muted") }}
+  </a>
+  {% endif %}
   {% if page.services_first %}{{ own::own_services(s=page.services) }}{% endif %}
   <section class="detail-card" aria-labelledby="products-title">
     <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
@@ -88,30 +98,9 @@
     <h2 class="detail-card__title" id="profile-title">{{ atoms::icon(name="fa-id-card", class="me-1") }} {{ t(key="dashboard.profile") }}</h2>
     {% if page.public_href %}<p class="small"><a href="{{ page.public_href }}">{{ atoms::icon(name="fa-arrow-up-right-from-square", class="me-1") }}{{ t(key="dashboard.public_page") }}</a></p>{% endif %}
     {% if page.can_edit_profile %}
-    {% set e = page.errors.fields %}
-    {% set f = page.form %}
     <form class="auth-form" method="post" action="{{ page.profile_action }}" novalidate>
       {% if page.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=page.errors.message) }}{% endif %}
-      {{ field::input(id="pf-name", name="name", label=t(key="dashboard.business_name"), value=f.name, error=e.name | default(value=""), required=true, maxlength=limits.business_name_max) }}
-      {{ field::input(id="pf-phone", name="phone", label=t(key="form.phone"), type="tel", value=f.phone, error=e.phone | default(value=""), required=true, inputmode="tel", pattern="0[0-9]{9}", autocomplete="tel") }}
-      {{ field::input(id="pf-address", name="address", label=t(key="form.address"), value=f.address, error=e.address | default(value=""), maxlength=limits.business_address_max, autocomplete="street-address") }}
-      {{ field::textarea(id="pf-description", name="description", label=t(key="form.about"), value=f.description, error=e.description | default(value=""), maxlength=limits.business_description_max, rows=3) }}
-      <fieldset class="form-field">
-        <legend class="form-label fw-semibold fs-6">{{ t(key="dashboard.location") }}</legend>
-        <p class="small text-muted mb-2">{{ t(key="dashboard.location_hint") }}</p>
-        <ac-geolocate lat-target="pf-lat" lng-target="pf-lng" label="{{ t(key="geolocate.fill") }}" busy-label="{{ t(key="geolocate.busy") }}" done="{{ t(key="geolocate.filled") }}" denied="{{ t(key="geolocate.denied_fill") }}" failed="{{ t(key="geolocate.failed") }}" unsupported="{{ t(key="geolocate.unsupported_fill") }}" button-class="btn btn-outline-success mb-2"></ac-geolocate>
-        <div class="row g-2">
-          <div class="col-6">
-            <label class="form-label small" for="pf-lat">{{ t(key="form.lat") }}</label>
-            <input class="form-control{% if e.lat %} is-invalid{% endif %}" id="pf-lat" name="lat" value="{{ f.lat }}" inputmode="decimal" placeholder="10.4048"{% if e.lat %} aria-invalid="true" aria-describedby="pf-coord-error"{% endif %}>
-          </div>
-          <div class="col-6">
-            <label class="form-label small" for="pf-lng">{{ t(key="form.lng") }}</label>
-            <input class="form-control{% if e.lat %} is-invalid{% endif %}" id="pf-lng" name="lng" value="{{ f.lng }}" inputmode="decimal" placeholder="106.1180"{% if e.lat %} aria-invalid="true" aria-describedby="pf-coord-error"{% endif %}>
-          </div>
-        </div>
-        {% if e.lat %}<div class="invalid-feedback d-block" id="pf-coord-error">{{ e.lat }}</div>{% endif %}
-      </fieldset>
+      {{ business::business_fields(form=page.form, errors=page.errors, limits=limits, prefix="pf") }}
       <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="dashboard.save_profile") }}</button>
     </form>
     {% else %}

@@ -1,5 +1,11 @@
-//! /admin/explore and /admin/explore/{id}: the provider list, and one
-//! provider's details, verification badge and managing account.
+//! /admin/explore and /admin/explore/{id}: the provider list with a create
+//! form, and one provider's details, profile, verification badge and
+//! managing account.
+//!
+//! The create form is a sheet on the list: an admin on a field visit lists a
+//! business from its owner's phone number, with no account (one can be
+//! assigned later on its page), and lands on its page to add its services.
+//! Its page carries the same profile form its owner has on the dashboard.
 //!
 //! Withdrawing the badge asks for confirmation and a reason (a dialog with
 //! JS, the same form on the page without); granting it is one button. Both
@@ -12,8 +18,8 @@ use application::{
     authz::Actor,
     catalogue::{
         PERM_INQUIRY_READ, PERM_LISTING_MODERATE, PERM_PROVIDER_ACCOUNT_ASSIGN,
-        PERM_PROVIDER_STATUS_UPDATE, PERM_PROVIDER_VERIFY, PERM_REVIEW_MODERATE,
-        PERM_SERVICE_MANAGE,
+        PERM_PROVIDER_MANAGE, PERM_PROVIDER_STATUS_UPDATE, PERM_PROVIDER_VERIFY,
+        PERM_REVIEW_MODERATE, PERM_SERVICE_MANAGE,
     },
     outputs::{AdminPagedResponse, AdminProviderDetailDto, AdminProviderDto},
 };
@@ -31,7 +37,9 @@ use crate::{
         canonical_url,
         forms::{reason, FormErrors},
         listing::Pagination,
-        parse_id, see_other,
+        parse_id,
+        profile_form::ProfileForm,
+        see_other,
     },
 };
 
@@ -47,6 +55,65 @@ pub struct ProvidersPage {
     pub rows: Vec<ProviderRow>,
     pub pagination: Option<Pagination>,
     pub search: SearchBox,
+    /// The create form, `None` without `provider.manage`.
+    pub create: Option<CreateSheet>,
+}
+
+/// The create sheet, with the values as typed after a refusal.
+#[derive(Serialize)]
+pub struct CreateSheet {
+    pub action: String,
+    pub form: ProfileForm,
+    pub errors: FormErrors,
+}
+
+async fn list_page(
+    state: &AppState,
+    actor: &Actor,
+    position: &ListPosition,
+    typed: Option<(ProfileForm, FormErrors)>,
+    status: StatusCode,
+) -> Result<Response, Error> {
+    let AdminPagedResponse {
+        items,
+        total,
+        page,
+        total_pages,
+        ..
+    } = state
+        .usecases
+        .admin
+        .list_providers(actor, position.page(), position.search())
+        .await?;
+    let path = url("admin_explore", &[])?;
+    let mut rows = Vec::with_capacity(items.len());
+    for provider in items {
+        let href = url("admin_provider", &[("id", &provider.id.to_string())])?;
+        rows.push(ProviderRow { provider, href });
+    }
+    let create = actor.can(PERM_PROVIDER_MANAGE).then(|| {
+        let (form, errors) = typed.unwrap_or_default();
+        CreateSheet {
+            action: path.clone(),
+            form,
+            errors,
+        }
+    });
+    let body = ProvidersPage {
+        total,
+        rows,
+        pagination: position.pagination(&path, page, total_pages),
+        search: position.search_box("admin_explore")?,
+        create,
+    };
+    render_admin(
+        state,
+        actor,
+        &path,
+        status,
+        "pages/admin/providers.html",
+        &body,
+    )
 }
 
 /// GET /admin/explore
@@ -58,37 +125,39 @@ pub async fn list(
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
-    let AdminPagedResponse {
-        items,
-        total,
-        page,
-        total_pages,
-        ..
-    } = state
+    list_page(&state, &actor, &position, None, StatusCode::OK).await
+}
+
+/// POST /admin/explore
+pub async fn create(
+    Viewer(viewer): Viewer,
+    State(state): State<AppState>,
+    ApiForm(form): ApiForm<ProfileForm>,
+) -> Result<Response, Error> {
+    let Some(actor) = viewer else {
+        return see_other(&url("login", &[])?);
+    };
+    match state
         .usecases
         .admin
-        .list_providers(&actor, position.page(), position.search())
-        .await?;
-    let path = url("admin_explore", &[])?;
-    let mut rows = Vec::with_capacity(items.len());
-    for provider in items {
-        let href = url("admin_provider", &[("id", &provider.id.to_string())])?;
-        rows.push(ProviderRow { provider, href });
+        .create_provider(&actor, form.input())
+        .await
+    {
+        Ok(id) => redirect_to(id, Flash::ProviderCreated),
+        Err(err) if is_refusal(&err) => {
+            let typed = (form, FormErrors::from_error(&state, &err));
+            let status = err.kind().status();
+            list_page(
+                &state,
+                &actor,
+                &ListPosition::default(),
+                Some(typed),
+                status,
+            )
+            .await
+        }
+        Err(err) => Err(err),
     }
-    let body = ProvidersPage {
-        total,
-        rows,
-        pagination: position.pagination(&path, page, total_pages),
-        search: position.search_box("admin_explore")?,
-    };
-    render_admin(
-        &state,
-        &actor,
-        &path,
-        StatusCode::OK,
-        "pages/admin/providers.html",
-        &body,
-    )
 }
 
 /// The account form as typed. The password is never sent back.
@@ -101,6 +170,12 @@ pub struct AccountForm {
     pub password: String,
 }
 
+/// The form of the page that came back refused, with its values as typed.
+pub enum Typed {
+    Profile(ProfileForm),
+    Account(AccountForm),
+}
+
 #[derive(Serialize)]
 pub struct ProviderPage {
     pub provider: AdminProviderDetailDto,
@@ -109,9 +184,11 @@ pub struct ProviderPage {
     pub can_verify: bool,
     pub can_assign: bool,
     pub can_change_status: bool,
+    pub can_edit: bool,
     pub verification_action: String,
     pub status_action: String,
     pub account_action: String,
+    pub profile_action: String,
     /// This provider's services and products in their admin lists, when the
     /// visitor may manage them.
     pub services_href: Option<String>,
@@ -120,7 +197,13 @@ pub struct ProviderPage {
     pub inquiries_href: Option<String>,
     pub reviews_href: Option<String>,
     pub form: AccountForm,
+    pub profile: ProfileForm,
+    /// The profile form's messages, apart so they never show in the others.
+    pub profile_errors: FormErrors,
     pub errors: FormErrors,
+    /// The form `errors` belong to: "account", or "" (a refused confirmation,
+    /// shown above everything); "profile" when they are in `profile_errors`.
+    pub failed: &'static str,
     /// The unverify dialog re-opens after a refusal.
     pub confirm_open: bool,
     pub flash: Option<Flash>,
@@ -130,20 +213,33 @@ async fn provider_page(
     state: &AppState,
     actor: &Actor,
     id: i32,
-    outcome: Outcome<AccountForm>,
+    outcome: Outcome<Typed>,
 ) -> Result<Response, Error> {
     let provider = state.usecases.admin.get_provider_detail(actor, id).await?;
     let id_text = id.to_string();
     let path = url("admin_provider", &[("id", &id_text)])?;
+    let (typed_profile, typed_account, failed) = match outcome.form {
+        Some(Typed::Profile(f)) => (Some(f), None, "profile"),
+        Some(Typed::Account(f)) => (None, Some(f), "account"),
+        None => (None, None, ""),
+    };
     // A business without an account is usually set up with its phone number
     // as the username, which is what the owner remembers.
-    let form = outcome.form.unwrap_or_else(|| AccountForm {
+    let form = typed_account.unwrap_or_else(|| AccountForm {
         username: provider
             .linked_username
             .clone()
             .unwrap_or_else(|| provider.phone.clone()),
         ..AccountForm::default()
     });
+    let (profile, profile_errors, errors) = match typed_profile {
+        Some(typed) => (typed, outcome.errors, FormErrors::default()),
+        None => (
+            ProfileForm::from_admin(&provider),
+            FormErrors::default(),
+            outcome.errors,
+        ),
+    };
     let own = ListPosition {
         provider_id: id_text.clone(),
         ..ListPosition::default()
@@ -161,11 +257,16 @@ async fn provider_page(
         can_verify: actor.can(PERM_PROVIDER_VERIFY),
         can_assign: actor.can(PERM_PROVIDER_ACCOUNT_ASSIGN),
         can_change_status: actor.can(PERM_PROVIDER_STATUS_UPDATE),
+        can_edit: actor.can(PERM_PROVIDER_MANAGE),
         verification_action: url("admin_provider_verification", &[("id", &id_text)])?,
         status_action: url("admin_provider_status", &[("id", &id_text)])?,
         account_action: url("admin_provider_account", &[("id", &id_text)])?,
+        profile_action: path.clone(),
         form,
-        errors: outcome.errors,
+        profile,
+        profile_errors,
+        errors,
+        failed,
         confirm_open: outcome.confirm_open,
         flash: outcome.flash,
     };
@@ -177,6 +278,18 @@ async fn provider_page(
         "pages/admin/provider.html",
         &body,
     )
+}
+
+/// The page again after one of its forms was refused.
+async fn refused(
+    state: &AppState,
+    actor: &Actor,
+    id: i32,
+    err: &Error,
+    typed: Typed,
+) -> Result<Response, Error> {
+    let outcome = Outcome::refused(state, err, Some(typed), false);
+    provider_page(state, actor, id, outcome).await
 }
 
 fn redirect_to(id: i32, flash: Flash) -> Result<Response, Error> {
@@ -203,6 +316,31 @@ pub async fn show(
     let mut response = provider_page(&state, &actor, id, outcome).await?;
     flash.clear_on(&mut response);
     Ok(response)
+}
+
+/// POST /admin/explore/{id}: the profile form.
+pub async fn update(
+    Viewer(viewer): Viewer,
+    State(state): State<AppState>,
+    ApiPath(raw_id): ApiPath<String>,
+    ApiForm(form): ApiForm<ProfileForm>,
+) -> Result<Response, Error> {
+    let Some(actor) = viewer else {
+        return see_other(&url("login", &[])?);
+    };
+    let id = parse_id(&raw_id, ErrorCode::ProviderNotFound)?;
+    match state
+        .usecases
+        .admin
+        .update_provider(&actor, id, form.input())
+        .await
+    {
+        Ok(()) => redirect_to(id, Flash::ProviderSaved),
+        Err(err) if is_refusal(&err) => {
+            refused(&state, &actor, id, &err, Typed::Profile(form)).await
+        }
+        Err(err) => Err(err),
+    }
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -296,8 +434,7 @@ pub async fn assign_account(
     match result {
         Ok(_) => redirect_to(id, Flash::ProviderAccountAssigned),
         Err(err) if is_refusal(&err) => {
-            let outcome = Outcome::refused(&state, &err, Some(form), false);
-            provider_page(&state, &actor, id, outcome).await
+            refused(&state, &actor, id, &err, Typed::Account(form)).await
         }
         Err(err) => Err(err),
     }

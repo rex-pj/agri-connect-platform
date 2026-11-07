@@ -1,5 +1,5 @@
 use application::authz::require_actor;
-use application::inputs::{CreateProductInput, UpdateProductInput, UpdateProfileInput};
+use application::inputs::{CreateProductInput, UpdateProductInput};
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use domain::Error;
 
@@ -8,7 +8,8 @@ use crate::{
     extract::{ApiJson, ApiPath},
     middleware::auth::MaybeActor,
     requests::{
-        CreateProductRequest, OwnServiceRequest, UpdateProductRequest, UpdateProfileRequest,
+        CreateProductRequest, OwnServiceRequest, ReviewReplyRequest, UpdateProductRequest,
+        UpdateProfileRequest,
     },
 };
 
@@ -40,20 +41,37 @@ impl ProviderDashboardHandler {
         let result = state
             .usecases
             .provider_dashboard
-            .update_profile(
-                &actor,
-                UpdateProfileInput {
-                    name: req.name,
-                    phone: req.phone,
-                    description: req.description,
-                    address: req.address,
-                    lat: req.lat,
-                    lng: req.lng,
-                },
-            )
+            .update_profile(&actor, req.into())
             .await?;
 
         Ok(Json(result))
+    }
+
+    /// GET /api/provider/reviews — every review of the own business, shown or
+    /// waiting for an admin.
+    pub async fn list_reviews(
+        MaybeActor(actor): MaybeActor,
+        State(state): State<AppState>,
+    ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
+        let result = state.usecases.review.list_own_reviews(&actor).await?;
+        Ok(Json(result))
+    }
+
+    /// PUT /api/provider/reviews/{id}/reply — the public answer; 204.
+    pub async fn reply_review(
+        MaybeActor(actor): MaybeActor,
+        State(state): State<AppState>,
+        ApiPath(id): ApiPath<i32>,
+        ApiJson(req): ApiJson<ReviewReplyRequest>,
+    ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
+        state
+            .usecases
+            .review
+            .reply_own_review(&actor, id, req.reply)
+            .await?;
+        Ok(StatusCode::NO_CONTENT)
     }
 
     /// GET /api/provider/products

@@ -6,7 +6,6 @@ use domain::{
     constants::INQUIRY_STATUSES,
     events::{Change, DomainEvent, Entity},
     models::{
-        business::ProfileUpdate,
         product::{NewProduct, UpdateProduct},
         service::{NewService, UpdateOwnService},
     },
@@ -17,7 +16,7 @@ use domain::{
         product_repository_trait::ProductRepositoryTrait,
         service_repository_trait::ServiceRepositoryTrait,
     },
-    Error, ErrorCode, Result, Validation,
+    Error, ErrorCode, Result,
 };
 
 use crate::{
@@ -27,10 +26,7 @@ use crate::{
         PERM_OWN_LISTING_UPDATE, PERM_OWN_PROFILE_UPDATE, PERM_OWN_SERVICE_CREATE,
         PERM_OWN_SERVICE_DELETE, PERM_OWN_SERVICE_UPDATE,
     },
-    constants::{
-        BUSINESS_ADDRESS_MAX, BUSINESS_DESCRIPTION_MAX, BUSINESS_NAME_MAX, CALL_STATS_DAYS,
-        PAGE_SIZE, SERVICES_PER_BUSINESS_MAX,
-    },
+    constants::{CALL_STATS_DAYS, PAGE_SIZE, SERVICES_PER_BUSINESS_MAX},
     inputs::{CreateProductInput, ServiceInput, UpdateProductInput, UpdateProfileInput},
     outputs::{
         OwnInquiriesResponse, OwnInquiryDto, ProviderProductDto, ProviderProfileDto,
@@ -39,11 +35,8 @@ use crate::{
     pagination::{paginate, total_pages},
     ports::{EventBus, ProcessedImage},
     usecases::{
-        media_usecase::MediaUseCase, product_rules::validate_product,
-        service_rules::validate_service,
-    },
-    validation::{
-        max_chars, max_chars_opt, non_blank, point_wkt, validate_coordinates, validate_phone,
+        business_rules::validate_profile, media_usecase::MediaUseCase,
+        product_rules::validate_product, service_rules::validate_service,
     },
 };
 
@@ -216,47 +209,11 @@ impl ProviderDashboardUseCase {
         input: UpdateProfileInput,
     ) -> Result<ProviderProfileDto> {
         actor.require(PERM_OWN_PROFILE_UPDATE)?;
-
-        let name = input.name.trim().to_owned();
-        let phone = input.phone.trim().to_owned();
-        let description = non_blank(input.description);
-        let address = non_blank(input.address);
-        // Both or neither: one coordinate alone is not a place. Neither means
-        // no location, so a provider can take a wrong pin off the map.
-        let position = match (input.lat, input.lng) {
-            (Some(lat), Some(lng)) => Some((lat, lng)),
-            (None, None) => None,
-            _ => Some((f64::NAN, f64::NAN)),
-        };
-        Validation::new()
-            .check(name.is_empty(), "name", ErrorCode::BusinessNameRequired)
-            .rule("name", max_chars(&name, BUSINESS_NAME_MAX))
-            .rule("phone", validate_phone(&phone))
-            .rule("address", max_chars_opt(&address, BUSINESS_ADDRESS_MAX))
-            .rule(
-                "description",
-                max_chars_opt(&description, BUSINESS_DESCRIPTION_MAX),
-            )
-            .rule(
-                "lat",
-                position.map_or(Ok(()), |(lat, lng)| validate_coordinates(lat, lng)),
-            )
-            .finish()?;
-
+        let profile = validate_profile(input)?;
         let updated = self
             .business_repo
-            .update_profile(
-                actor.user_id,
-                &ProfileUpdate {
-                    name,
-                    phone,
-                    description,
-                    address,
-                    location_wkt: position.map(|(lat, lng)| point_wkt(lat, lng)),
-                },
-            )
+            .update_profile(actor.user_id, &profile)
             .await?;
-
         if !updated {
             return Err(Error::new(ErrorCode::ProviderNotFound));
         }

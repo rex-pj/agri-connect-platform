@@ -15,6 +15,8 @@ pub struct Model {
     pub created_on: DateTimeWithTimeZone,
     pub updated_on: DateTimeWithTimeZone,
     pub updated_by: Option<i32>,
+    pub reply: Option<String>,
+    pub replied_at: Option<DateTimeWithTimeZone>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

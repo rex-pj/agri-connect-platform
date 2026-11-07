@@ -17,6 +17,8 @@ mod m20261017_000007_service_images;
 mod m20261018_000008_service_search;
 mod m20261020_000009_call_clicks;
 mod m20261027_000010_user_search;
+mod m20261107_000011_call_channel;
+mod m20261108_000012_review_replies;
 pub mod search;
 
 pub struct Migrator;
@@ -35,6 +37,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20261018_000008_service_search::Migration),
             Box::new(m20261020_000009_call_clicks::Migration),
             Box::new(m20261027_000010_user_search::Migration),
+            Box::new(m20261107_000011_call_channel::Migration),
+            Box::new(m20261108_000012_review_replies::Migration),
         ]
     }
 }

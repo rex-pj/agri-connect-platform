@@ -1,7 +1,7 @@
 //! HTTP request shapes. Field rules live in the use cases, not here, so the
 //! JSON API and the server-rendered forms enforce exactly the same ones.
 
-use application::inputs::ServiceInput;
+use application::inputs::{ReviewInput, ServiceInput, UpdateProfileInput};
 use serde::Deserialize;
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -155,6 +155,27 @@ pub struct UpdateProfileRequest {
     pub lng: Option<f64>,
 }
 
+impl From<UpdateProfileRequest> for UpdateProfileInput {
+    fn from(r: UpdateProfileRequest) -> Self {
+        Self {
+            name: r.name,
+            phone: r.phone,
+            description: r.description,
+            address: r.address,
+            lat: r.lat,
+            lng: r.lng,
+        }
+    }
+}
+
+/// GET /api/provider/reviews is a list; PUT /api/provider/reviews/{id}/reply
+/// sets the answer (blank or absent: no answer).
+#[derive(Deserialize)]
+pub struct ReviewReplyRequest {
+    #[serde(default)]
+    pub reply: Option<String>,
+}
+
 #[derive(Deserialize)]
 pub struct CreateProductRequest {
     pub category_id: i32,
@@ -285,10 +306,36 @@ pub struct InquiryRequest {
     pub service_id: Option<i32>,
 }
 
+/// POST /api/explore/reviews: a farmer's review of a provider they reached
+/// through the platform, from the phone their contact request came from.
+#[derive(Deserialize)]
+pub struct ReviewRequest {
+    pub business_id: i32,
+    pub reviewer_name: String,
+    pub reviewer_phone: String,
+    pub rating: Option<i16>,
+    pub comment: Option<String>,
+}
+
+impl From<ReviewRequest> for ReviewInput {
+    fn from(r: ReviewRequest) -> Self {
+        Self {
+            business_id: r.business_id,
+            reviewer_name: r.reviewer_name,
+            reviewer_phone: r.reviewer_phone,
+            rating: r.rating,
+            comment: r.comment,
+        }
+    }
+}
+
 /// POST /api/explore/calls: a tap on a public call button (sent by the
 /// `callBeacon` Alpine component).
 #[derive(Deserialize)]
 pub struct CallRequest {
     pub kind: String,
     pub id: i32,
+    /// `call` (the default) or `zalo`.
+    #[serde(default)]
+    pub channel: Option<String>,
 }

@@ -7,6 +7,7 @@ pub mod authz;
 pub mod catalogue;
 pub mod constants;
 pub mod events;
+pub mod hashing;
 pub mod inputs;
 pub mod outputs;
 pub mod pagination;

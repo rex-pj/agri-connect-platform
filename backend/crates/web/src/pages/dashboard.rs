@@ -16,13 +16,12 @@ use application::{
         PERM_OWN_SERVICE_UPDATE,
     },
     constants::{CALL_STATS_DAYS, SERVICES_PER_BUSINESS_MAX},
-    inputs::UpdateProfileInput,
     outputs::{CategoryDto, ProviderProductDto, ProviderProfileDto, ProviderServiceDto},
     ports::ProcessedImage,
 };
 use axum::{extract::State, http::StatusCode, response::Response};
 use domain::{Error, ErrorCode};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::{
     app_state::AppState,
@@ -33,9 +32,10 @@ use crate::{
     pages::{
         admin::is_refusal,
         canonical_url,
-        forms::{optional_coordinate, FormErrors},
+        forms::FormErrors,
         parse_id,
         product_form::{product_categories, ProductForm},
+        profile_form::ProfileForm,
         see_other,
     },
     routes,
@@ -54,43 +54,6 @@ pub(super) fn to_dashboard(flash: Flash) -> Result<Response, Error> {
 }
 
 // ── Dashboard and profile ───────────────────────────────────────────────────
-
-/// The profile form as typed.
-#[derive(Debug, Default, Deserialize, Serialize)]
-#[serde(default)]
-pub struct ProfileForm {
-    pub name: String,
-    pub phone: String,
-    pub address: String,
-    pub description: String,
-    pub lat: String,
-    pub lng: String,
-}
-
-impl ProfileForm {
-    fn from_dto(p: &ProviderProfileDto) -> Self {
-        let coord = |v: Option<f64>| v.map(|v| v.to_string()).unwrap_or_default();
-        Self {
-            name: p.name.clone(),
-            phone: p.phone.clone(),
-            address: p.address.clone().unwrap_or_default(),
-            description: p.description.clone().unwrap_or_default(),
-            lat: coord(p.lat),
-            lng: coord(p.lng),
-        }
-    }
-
-    fn input(&self) -> UpdateProfileInput {
-        UpdateProfileInput {
-            name: self.name.clone(),
-            phone: self.phone.clone(),
-            description: Some(self.description.clone()),
-            address: Some(self.address.clone()),
-            lat: optional_coordinate(&self.lat),
-            lng: optional_coordinate(&self.lng),
-        }
-    }
-}
 
 #[derive(Serialize)]
 pub struct ProductRow {
@@ -122,6 +85,12 @@ pub struct ServicesSection {
 }
 
 #[derive(Serialize)]
+pub struct ReviewsLink {
+    pub href: String,
+    pub total: usize,
+}
+
+#[derive(Serialize)]
 pub struct InboxLink {
     pub href: String,
     pub total: i64,
@@ -147,6 +116,9 @@ pub struct DashboardPage {
     pub can_create: bool,
     /// The link to the inquiry inbox, when the actor may read it.
     pub inbox: Option<InboxLink>,
+    /// The link to the reviews of the business, with how many there are;
+    /// `None` without a business.
+    pub reviews: Option<ReviewsLink>,
     /// Taps on this business's call buttons in the last `call_days` days;
     /// `None` without a business.
     pub calls: Option<i64>,
@@ -227,6 +199,13 @@ async fn dashboard_page(
         }
         _ => None,
     };
+    let reviews = match &profile {
+        Some(_) => Some(ReviewsLink {
+            href: url("provider_reviews", &[])?,
+            total: state.usecases.review.list_own_reviews(actor).await?.len(),
+        }),
+        None => None,
+    };
     let body = DashboardPage {
         public_href: profile
             .as_ref()
@@ -243,6 +222,7 @@ async fn dashboard_page(
         can_edit_profile: actor.can(PERM_OWN_PROFILE_UPDATE),
         can_create: actor.can(PERM_OWN_LISTING_CREATE),
         inbox,
+        reviews,
         calls: usecase.count_own_calls(actor).await?,
         call_days: CALL_STATS_DAYS,
         flash,

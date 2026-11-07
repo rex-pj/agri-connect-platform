@@ -199,3 +199,81 @@ async fn the_report_counts_real_leads_by_area_and_hides_small_figures() {
     assert_eq!(res.status(), StatusCode::FORBIDDEN);
     e.cleanup().await;
 }
+
+/// Waits for the background search records to land.
+async fn searches_stored(e: &Env, n: i64) {
+    for _ in 0..100 {
+        let stored: i64 = scalar(e, "SELECT count(*)::text AS v FROM search_events")
+            .await
+            .parse()
+            .unwrap();
+        if stored >= n {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    panic!("searches were not recorded");
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn searches_are_recorded_without_who_and_unmet_ones_are_listed() {
+    let e = env_with_origin().await;
+    let admin = install_admin(&e).await;
+    for _ in 0..5 {
+        let res = send(&e.router, get_page("/search?q=+May+Xoi+Lua+", None)).await;
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+    // A tab switch is the same search; a page without words is none.
+    send(
+        &e.router,
+        get_page("/search?q=may+xoi+lua&tab=products", None),
+    )
+    .await;
+    send(&e.router, get_page("/search?q=", None)).await;
+    let cai_lay = scalar(
+        &e,
+        "SELECT id::text AS v FROM locations WHERE label = 'Đồng Tháp — Cai Lậy'",
+    )
+    .await;
+    send(
+        &e.router,
+        get_page(&format!("/explore?location_id={cai_lay}"), None),
+    )
+    .await;
+    // A device position is filed under the nearest preset.
+    send(
+        &e.router,
+        get_page("/explore?lat=10.4150&lng=106.0850", None),
+    )
+    .await;
+    searches_stored(&e, 7).await;
+
+    assert_eq!(
+        scalar(
+            &e,
+            "SELECT string_agg(DISTINCT coalesce(query, '-'), ',') AS v FROM search_events"
+        )
+        .await,
+        "-,may xoi lua",
+        "trimmed and lowercased"
+    );
+    assert_eq!(
+        scalar(
+            &e,
+            &format!("SELECT count(*)::text AS v FROM search_events WHERE location_id = {cai_lay}")
+        )
+        .await,
+        "2"
+    );
+    // Moved into the report window: last week.
+    exec(
+        &e,
+        &format!("UPDATE search_events SET created_on = {LAST_WEEK}"),
+    )
+    .await;
+    let page = body_text(send(&e.router, get_page("/admin/demand", Some(&admin))).await).await;
+    assert!(page.contains("Bà con tìm mà không thấy"));
+    assert!(page.contains("“may xoi lua”"));
+    e.cleanup().await;
+}

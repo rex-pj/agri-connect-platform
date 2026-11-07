@@ -1,7 +1,8 @@
 {#- The demand report's table: one row per category (`r.rows`, the leads
     with no category last), a column per week, then the total and its split
-    by channel, and the sums. `r` is application::outputs::DemandReportDto;
-    shared by the admin page and the partner's. -#}
+    by channel, the sums, and the searches made in the same areas. `r` is
+    application::outputs::DemandReportDto; shared by the admin page and the
+    partner's. -#}
 {% import "atoms/figure.html" as fig %}
 {% macro demand_table(r) -%}
 {% set week_count = r.weeks | length %}{% set columns = week_count + 6 %}
@@ -33,7 +34,6 @@
       <tr><td colspan="{{ columns }}" class="text-center text-muted py-4">{{ t(key="demand.empty") }}</td></tr>
       {% endfor %}
     </tbody>
-    {% if r.rows %}
     <tfoot>
       <tr class="fw-bold">
         <th scope="row">{{ t(key="demand.all") }}</th>
@@ -44,8 +44,12 @@
         <td class="text-end">{{ fig::figure(f=r.all.inquiries, min=r.min_count) }}</td>
         <td class="text-end">{{ fig::figure(f=r.all.people, min=r.min_count) }}</td>
       </tr>
+      <tr class="text-body-secondary">
+        <th scope="row" class="fw-normal">{{ t(key="demand.searches") }}</th>
+        {% for f in r.searches %}<td class="text-end">{{ fig::figure(f=f, min=r.min_count) }}</td>{% endfor %}
+        <td colspan="5"></td>
+      </tr>
     </tfoot>
-    {% endif %}
   </table>
 </div>
 {%- endmacro demand_table %}

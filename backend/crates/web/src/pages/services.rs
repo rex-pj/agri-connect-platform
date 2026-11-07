@@ -6,7 +6,10 @@
 //!
 //! Plain GET forms and links, like the product lists.
 
-use application::{inputs::BrowseParams, outputs::CategoryDto};
+use application::{
+    inputs::{BrowseParams, SearchInput, SearchPlace},
+    outputs::CategoryDto,
+};
 use axum::{extract::State, response::Response};
 use domain::{constants::CATEGORY_TYPE_SERVICE, models::business::ProviderSort, Error, ErrorCode};
 use serde::{Deserialize, Serialize};
@@ -52,6 +55,19 @@ pub(super) struct ListState {
 }
 
 impl ListState {
+    /// The search this list is, for the demand report: its words and
+    /// category on the first page (later pages are the same search).
+    pub fn search(&self, results: i64) -> Option<SearchInput> {
+        (self.page <= 1 && (!self.search.is_empty() || self.service_id.is_some())).then(|| {
+            SearchInput {
+                query: self.search.clone(),
+                category_id: self.service_id,
+                place: SearchPlace::Anywhere,
+                results,
+            }
+        })
+    }
+
     /// A category that is not among `categories` (hidden, or a product's) is
     /// no filter at all.
     pub fn parse(q: &ListQuery, categories: &[CategoryDto]) -> Self {
@@ -224,6 +240,9 @@ pub async fn list(
     let categories = explore.get_categories(Some(CATEGORY_TYPE_SERVICE)).await?;
     let list = ListState::parse(&q, &categories);
     let result = explore.browse_services(list.params()).await?;
+    if let Some(search) = list.search(result.total) {
+        state.usecases.demand.record_search(search);
+    }
 
     let path = url("services", &[])?;
     let kept = list.kept();
@@ -283,6 +302,14 @@ pub async fn category(
         })
         .await?;
 
+    if page_number <= 1 {
+        state.usecases.demand.record_search(SearchInput {
+            query: String::new(),
+            category_id: Some(id),
+            place: SearchPlace::Anywhere,
+            results: result.total,
+        });
+    }
     if let Some(redirect) = past_the_end(&canonical, &[], result.page, result.total_pages) {
         return redirect;
     }

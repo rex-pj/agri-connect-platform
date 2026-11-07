@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 
 use crate::{
     error::Error,
-    models::demand::{BusinessArea, LeadEvent, SoleCategory},
+    models::demand::{BusinessArea, LeadEvent, NewSearch, SearchEvent, SoleCategory},
 };
 
 /// The reads behind the demand report: every lead in a window, and how
@@ -24,4 +24,21 @@ pub trait DemandRepositoryTrait {
 
     /// Businesses with exactly one live service, with its category.
     async fn sole_categories(&self) -> Result<Vec<SoleCategory>, Error>;
+
+    /// The nearest active location preset to a point within `radius_m`.
+    async fn nearest_location(
+        &self,
+        lat: f64,
+        lng: f64,
+        radius_m: f64,
+    ) -> Result<Option<i32>, Error>;
+
+    async fn record_search(&self, search: NewSearch) -> Result<(), Error>;
+
+    /// Searches in `[from, to)`.
+    async fn search_events(
+        &self,
+        from: DateTime<Utc>,
+        to: DateTime<Utc>,
+    ) -> Result<Vec<SearchEvent>, Error>;
 }

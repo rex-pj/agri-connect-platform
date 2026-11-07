@@ -128,7 +128,7 @@ pub fn csv_response(locale: &Locale, report: &DemandReportDto, filename: &str) -
     ] {
         header_row.push(locale.text(key));
     }
-    let line = |name: String, r: &DemandRowDto| {
+    let line = |name: String, r: &DemandRowDto| -> Vec<String> {
         let mut fields = vec![name];
         fields.extend(r.weeks.iter().map(cell));
         fields.extend([&r.total, &r.calls, &r.zalo, &r.inquiries, &r.people].map(cell));
@@ -143,6 +143,9 @@ pub fn csv_response(locale: &Locale, report: &DemandReportDto, filename: &str) -
         lines.push(line(name, r));
     }
     lines.push(line(locale.text("demand.all"), &report.all));
+    let mut searches = vec![locale.text("demand.searches")];
+    searches.extend(report.searches.iter().map(cell));
+    lines.push(searches);
     let mut body = String::from('\u{feff}');
     for fields in lines {
         let quoted: Vec<String> = fields.iter().map(|f| csv_field(f)).collect();

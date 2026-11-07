@@ -497,6 +497,9 @@ download      = "Tải CSV"
 areas         = "Các khu vực"
 steady        = "Đều đặn"
 steady_hint   = "Đều đặn: tuần nào cũng có ít nhất {count} liên hệ, đủ {weeks} tuần. Một cửa hàng thuộc khu vực gần nhất trong bán kính 10 km."
+searches      = "Lượt tìm kiếm"
+unmet         = "Bà con tìm mà không thấy"
+unmet_none    = "Chưa có nội dung tìm nào không ra kết quả từ {min} lần trở lên."
 
 [text.users]
 count = "{count} tài khoản"

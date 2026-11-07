@@ -5,7 +5,7 @@
 //! the other sections `hidden`. Alpine `tabs` switches them in place.
 
 use application::{
-    inputs::BrowseParams,
+    inputs::{BrowseParams, SearchInput, SearchPlace},
     outputs::{BrowseResponse, ProductDto, ServiceBrowseResponse},
 };
 use axum::{extract::State, response::Response};
@@ -158,6 +158,15 @@ pub async fn show(
     let service_total = found.as_ref().map_or(0, |f| f.services.total);
     let product_total = found.as_ref().map_or(0, |f| f.products.total);
     let provider_total = found.as_ref().map_or(0, |f| f.providers.total);
+    // Only the first visit of a search counts, not a tab switch.
+    if found.is_some() && query.tab.trim().is_empty() {
+        state.usecases.demand.record_search(SearchInput {
+            query: q.clone(),
+            category_id: None,
+            place: SearchPlace::Anywhere,
+            results: service_total + product_total + provider_total,
+        });
+    }
     let more = |route: &str, total: i64| -> Result<Option<String>, Error> {
         (total > SEARCH_PREVIEW_COUNT as i64)
             .then(|| url(route).map(|path| with_query(&path, &[("q", q.as_str())])))

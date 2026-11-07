@@ -48,6 +48,9 @@ pub async fn list(
     let categories = explore.get_categories(Some(CATEGORY_TYPE_SERVICE)).await?;
     let list = ListState::parse(&q, &categories);
     let result = explore.browse_providers(list.params()).await?;
+    if let Some(search) = list.search(result.total) {
+        state.usecases.demand.record_search(search);
+    }
 
     let path = url("providers", &[])?;
     let kept = list.kept();

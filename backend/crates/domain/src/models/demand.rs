@@ -35,3 +35,22 @@ pub struct SoleCategory {
     pub business_id: i32,
     pub category_id: i32,
 }
+
+/// A search to store: the words (normalised), the category filter, the area
+/// (a preset, or the nearest one to the searcher's position) and how many
+/// results came back. Never who searched.
+pub struct NewSearch {
+    pub query: Option<String>,
+    pub category_id: Option<i32>,
+    pub location_id: Option<i32>,
+    pub results: i64,
+}
+
+/// A stored search, as the demand report reads it.
+pub struct SearchEvent {
+    pub at: DateTime<Utc>,
+    pub query: Option<String>,
+    pub category_id: Option<i32>,
+    pub location_id: Option<i32>,
+    pub results: i64,
+}

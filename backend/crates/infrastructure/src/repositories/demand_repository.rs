@@ -7,15 +7,15 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sea_orm::{
-    sea_query::{Alias, Expr, Func, Query, SelectStatement},
+    sea_query::{Alias, Expr, Func, Order, Query, SelectStatement},
     ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter,
-    QuerySelect,
+    QueryOrder, QuerySelect, Set,
 };
 use tracing::error;
 
 use domain::{
     constants::{CALL_CHANNEL_ZALO, INQUIRY_STATUS_SPAM},
-    models::demand::{BusinessArea, LeadChannel, LeadEvent, SoleCategory},
+    models::demand::{BusinessArea, LeadChannel, LeadEvent, NewSearch, SearchEvent, SoleCategory},
     repositories::demand_repository_trait::DemandRepositoryTrait,
     Error,
 };
@@ -24,7 +24,7 @@ use crate::{
     db_types::DateTimeWithTimeZone,
     entities::{
         business::{self, Entity as Business},
-        call_click, inquiry, product,
+        call_click, inquiry, location, product, search_event,
         service::{self, Entity as ServiceEntity},
     },
     repositories::service_repository::live_public,
@@ -237,6 +237,80 @@ impl DemandRepositoryTrait for DemandRepository {
             })
             .map_err(|e| {
                 error!("demand sole_categories error: {e}");
+                Error::internal("Failed to load the demand report.")
+            })
+    }
+
+    async fn nearest_location(
+        &self,
+        lat: f64,
+        lng: f64,
+        radius_m: f64,
+    ) -> Result<Option<i32>, Error> {
+        let preset = r#"ST_MakePoint("locations".lng, "locations".lat)::geography"#;
+        location::Entity::find()
+            .filter(location::Column::IsActive.eq(true))
+            .filter(Expr::cust_with_values(
+                format!("ST_DWithin({preset}, ST_MakePoint($1, $2)::geography, $3)"),
+                [lng, lat, radius_m],
+            ))
+            .order_by(
+                Expr::cust_with_values(
+                    format!("ST_Distance({preset}, ST_MakePoint($1, $2)::geography)"),
+                    [lng, lat],
+                ),
+                Order::Asc,
+            )
+            .order_by_asc(location::Column::Id)
+            .one(self.db.as_ref())
+            .await
+            .map(|l| l.map(|l| l.id))
+            .map_err(|e| {
+                error!("demand nearest_location error: {e}");
+                Error::internal("Failed to find the area.")
+            })
+    }
+
+    async fn record_search(&self, s: NewSearch) -> Result<(), Error> {
+        search_event::Entity::insert(search_event::ActiveModel {
+            query: Set(s.query),
+            category_id: Set(s.category_id),
+            location_id: Set(s.location_id),
+            results: Set(i32::try_from(s.results).unwrap_or(i32::MAX)),
+            ..Default::default()
+        })
+        .exec(self.db.as_ref())
+        .await
+        .map(|_| ())
+        .map_err(|e| {
+            error!("demand record_search error: {e}");
+            Error::internal("Failed to record the search.")
+        })
+    }
+
+    async fn search_events(
+        &self,
+        from: DateTime<Utc>,
+        to: DateTime<Utc>,
+    ) -> Result<Vec<SearchEvent>, Error> {
+        search_event::Entity::find()
+            .filter(search_event::Column::CreatedOn.gte(from))
+            .filter(search_event::Column::CreatedOn.lt(to))
+            .all(self.db.as_ref())
+            .await
+            .map(|rows| {
+                rows.into_iter()
+                    .map(|r| SearchEvent {
+                        at: r.created_on.with_timezone(&Utc),
+                        query: r.query,
+                        category_id: r.category_id,
+                        location_id: r.location_id,
+                        results: i64::from(r.results),
+                    })
+                    .collect()
+            })
+            .map_err(|e| {
+                error!("demand search_events error: {e}");
                 Error::internal("Failed to load the demand report.")
             })
     }

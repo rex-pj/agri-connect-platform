@@ -68,6 +68,10 @@ pub const DEMAND_AREA_RADIUS_M: f64 = RADIUS_DEFAULT_M;
 /// An area is steady when every one of the report's weeks has at least this
 /// many leads: ready to show partners.
 pub const STEADY_WEEKLY_LEADS: i64 = 20;
+/// A stored search keeps at most this many characters of its words.
+pub const SEARCH_QUERY_MAX: usize = 100;
+/// How many searches that found nothing the report lists, most asked first.
+pub const UNMET_SEARCHES_SHOWN: usize = 10;
 
 // ── Reviews ───────────────────────────────────────────────────────────────────
 pub const RATING_MIN: i16 = 1;

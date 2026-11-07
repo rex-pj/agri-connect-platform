@@ -19,6 +19,7 @@ mod m20261020_000009_call_clicks;
 mod m20261027_000010_user_search;
 mod m20261107_000011_call_channel;
 mod m20261108_000012_review_replies;
+mod m20261109_000013_search_events;
 pub mod search;
 
 pub struct Migrator;
@@ -39,6 +40,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20261027_000010_user_search::Migration),
             Box::new(m20261107_000011_call_channel::Migration),
             Box::new(m20261108_000012_review_replies::Migration),
+            Box::new(m20261109_000013_search_events::Migration),
         ]
     }
 }

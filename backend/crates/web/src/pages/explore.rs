@@ -11,7 +11,7 @@
 use application::outputs::{CategoryDto, LocationDto, ProductDto};
 use application::{
     constants::{GEO_RESULTS_MAX, LAT_MAX, LAT_MIN, LNG_MAX, LNG_MIN},
-    inputs::GeoSearchParams,
+    inputs::{GeoSearchParams, SearchInput, SearchPlace},
 };
 use axum::{extract::State, response::Response};
 use domain::{constants::CATEGORY_TYPE_SERVICE, Error};
@@ -211,6 +211,19 @@ pub async fn show(
                 explore.search_providers(params()),
                 explore.search_products(params()),
             )?;
+            // A near-me search is demand in that area, found or not.
+            state.usecases.demand.record_search(SearchInput {
+                query: String::new(),
+                category_id: service_id,
+                place: match p {
+                    Position::Preset(l) => SearchPlace::Preset(l.id),
+                    Position::Device { lat, lng, .. } => SearchPlace::Point {
+                        lat: *lat,
+                        lng: *lng,
+                    },
+                },
+                results: (services.len() + providers.len() + products.len()) as i64,
+            });
             (
                 ServiceCard::all(services)?,
                 providers.into_iter().map(ProviderCard::from).collect(),

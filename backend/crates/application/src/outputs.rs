@@ -866,7 +866,19 @@ pub struct DemandReportDto {
     pub rows: Vec<DemandRowDto>,
     /// The sums over `rows`.
     pub all: DemandRowDto,
+    /// Searches in the areas (and categories) of the rows, by week.
+    pub searches: Vec<Figure>,
+    /// What was searched for and not found, most asked first; only words
+    /// asked at least `min_count` times.
+    pub unmet: Vec<UnmetSearchDto>,
     pub steady_areas: usize,
     pub min_count: i64,
     pub steady_weekly_leads: i64,
+}
+
+/// Words farmers searched for and found nothing, and how often.
+#[derive(Debug, Clone, Serialize)]
+pub struct UnmetSearchDto {
+    pub query: String,
+    pub count: i64,
 }

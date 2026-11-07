@@ -1,0 +1,16 @@
+{#- What farmers searched for and found nothing, most asked first: the
+    services worth recruiting providers for. `r` is
+    application::outputs::DemandReportDto; only words asked at least
+    `r.min_count` times are listed. -#}
+{% macro unmet_searches(r) -%}
+<section class="admin-section" aria-labelledby="unmet-title">
+  <h2 class="admin-section__title" id="unmet-title">{{ t(key="demand.unmet") }}</h2>
+  {% if r.unmet %}
+  <ul class="list-unstyled mb-0">
+    {% for u in r.unmet %}<li class="py-2 border-bottom d-flex justify-content-between gap-2"><span>“{{ u.query }}”</span><span class="fw-semibold">{{ u.count | number }}</span></li>{% endfor %}
+  </ul>
+  {% else %}
+  <p class="small text-muted mb-0">{{ t(key="demand.unmet_none", min=r.min_count) }}</p>
+  {% endif %}
+</section>
+{%- endmacro unmet_searches %}

@@ -486,6 +486,9 @@ download      = "Download CSV"
 areas         = "Areas"
 steady        = "Steady"
 steady_hint   = "Steady: at least {count} leads every week, {weeks} weeks in a row. A shop counts under the nearest area within 10 km."
+searches      = "Searches"
+unmet         = "Searched for and not found"
+unmet_none    = "No search found nothing {min} times or more yet."
 
 [text.users]
 count = "{count} accounts"

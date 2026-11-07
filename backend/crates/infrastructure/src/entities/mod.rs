@@ -11,5 +11,6 @@ pub mod product;
 pub mod refresh_token;
 pub mod review;
 pub mod role;
+pub mod search_event;
 pub mod service;
 pub mod user;

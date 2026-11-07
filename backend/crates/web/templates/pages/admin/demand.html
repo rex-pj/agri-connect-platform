@@ -3,6 +3,7 @@
 {% import "atoms/figure.html" as fig %}
 {% import "molecules/admin_header.html" as header %}
 {% import "organisms/demand_table.html" as demand %}
+{% import "organisms/unmet_searches.html" as unmet %}
 {#- The demand report. `page.body` is web::pages::admin::demand::DemandPage.
     The area filter is a GET form (works without JS); the header's action
     downloads the same table as CSV. The area list says which areas are
@@ -28,6 +29,8 @@
   <section class="admin-card mb-4" aria-label="{{ t(key="demand.title") }}">
     {{ demand::demand_table(r=r) }}
   </section>
+
+  {{ unmet::unmet_searches(r=r) }}
 
   <section class="admin-section" aria-labelledby="areas-title">
     <h2 class="admin-section__title" id="areas-title">{{ t(key="demand.areas") }}</h2>

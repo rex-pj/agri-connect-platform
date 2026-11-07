@@ -97,3 +97,19 @@ pub struct CallInput {
     pub id: i32,
     pub channel: Option<String>,
 }
+
+/// Where a search looked: a location preset, a point (the device), or
+/// nowhere in particular.
+pub enum SearchPlace {
+    Preset(i32),
+    Point { lat: f64, lng: f64 },
+    Anywhere,
+}
+
+/// A search a visitor made, to count in the demand report.
+pub struct SearchInput {
+    pub query: String,
+    pub category_id: Option<i32>,
+    pub place: SearchPlace,
+    pub results: i64,
+}

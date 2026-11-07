@@ -371,7 +371,7 @@ name_asc       = "A → Z"
 
 [text.location_form]
 label             = "Tên khu vực"
-label_placeholder = "Cai Lậy, Tiền Giang"
+label_placeholder = "Đồng Tháp — Cai Lậy"
 coordinates       = "Toạ độ"
 
 [text.service_form]
@@ -668,7 +668,7 @@ remove         = "Xoá dữ liệu mẫu"
 remove_note    = "Chỉ xoá các nhà cung cấp mẫu cùng dịch vụ và sản phẩm của họ. Dữ liệu thật không bị ảnh hưởng."
 remove_confirm = "Tôi hiểu: {count} nhà cung cấp mẫu sẽ bị xoá."
 load           = "Nạp dữ liệu mẫu"
-load_note      = "Vài nhà cung cấp ở Cai Lậy, Tiền Giang cùng dịch vụ và sản phẩm, để thử các trang."
+load_note      = "Vài nhà cung cấp ở Cai Lậy, Đồng Tháp cùng dịch vụ và sản phẩm, để thử các trang."
 
 [text.email]
 reset_subject   = "Đặt lại mật khẩu – {site}"

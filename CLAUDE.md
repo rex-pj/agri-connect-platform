@@ -4,7 +4,7 @@
 
 An aggregator platform for the Southern Vietnam agricultural ecosystem, solving information fragmentation between farmers and service/supply providers. Core values: **Local · Transparent · Timely**.
 
-Target region: Mekong Delta (priority: durian farms in Cai Lay, rice fields in An Giang).
+Target region: Mekong Delta (priority: durian farms around Cai Lậy, Đồng Tháp; rice fields in An Giang). Places use the units in force since 1 July 2025: 34 provinces, wards and communes, no districts (Tiền Giang is now part of Đồng Tháp, Kiên Giang of An Giang, Long An of Tây Ninh).
 
 ---
 
@@ -369,13 +369,13 @@ Canonical product, provider and category URLs end in a slug from the `slugify` f
 - [x] Contact/inquiry form → stored in DB with status tracking
 - [x] Admin panel: users, providers, categories, inquiries, reviews
 - [x] Field onboarding: an admin lists a provider from its phone number (no account needed), edits its profile, assigns an account later
-- [x] Weekly leads (calls, Zalo, inquiries) on the admin dashboard: the go / no-go figure for a district
+- [x] Weekly leads (calls, Zalo, inquiries) on the admin dashboard: the go / no-go figure for an area
 - [x] Provider self-service dashboard: profile + product management
 - [x] Auth: JWT login, registration, password reset, account lockout
 
 ### Phase 2 — Trust & Growth
 
-Grow the rest only once one district sustains real leads week after week (the admin dashboard's weekly table).
+Grow the rest only once one area sustains real leads week after week (the admin dashboard's weekly table). An area is a location preset ("Đồng Tháp — Cai Lậy") and the radius around it, not an administrative unit: there are no districts since July 2025.
 
 - [x] Review system: only from a phone whose contact request the provider answered (`contacted` / `closed`: `INQUIRY_STATUSES_REVIEWABLE`, linked by `reviews.inquiry_id`), one per phone and provider (`reviewer_phone_hash`, SHA-256), hidden until an admin shows it, with the provider's public reply (`ReviewUseCase`)
 - [ ] Verification badges ("blue tick") for vetted providers
@@ -383,9 +383,9 @@ Grow the rest only once one district sustains real leads week after week (the ad
 
 ### Phase 3 — Ecosystem & Monetization (B2B)
 
-- [ ] Demand report: what farmers look for, by category × district × week (calls, Zalo, inquiries; searches once they are logged), aggregates only; first an admin page, then a partner's view of their own categories and districts
-- [ ] Partners: a `partners` record (brand, dealer, cooperative) with the categories and districts it pays for, a contract period, and a partner sign-in that sees only its report
-- [ ] Sponsored placement: a partner's chosen providers (its dealers, its trained drone pilots) shown first in its categories and districts, always labelled "Tài trợ", never hiding the others, counted like any lead
+- [ ] Demand report: what farmers look for, by category × area × week (calls, Zalo, inquiries; searches once they are logged), aggregates only; first an admin page, then a partner's view of their own categories and areas
+- [ ] Partners: a `partners` record (brand, dealer, cooperative) with the categories and areas it pays for, a contract period, and a partner sign-in that sees only its report
+- [ ] Sponsored placement: a partner's chosen providers (its dealers, its trained drone pilots) shown first in its categories and areas, always labelled "Tài trợ", never hiding the others, counted like any lead
 - [ ] Compliance directory: durian export services (growing-area codes, residue testing, traceability) as their own categories, sponsored by cooperatives and exporters
 - [ ] Crop price feed: daily price tracking for rice and fruit
 - [ ] Zalo Mini App: deep integration into Zalo ecosystem for fastest user acquisition
@@ -396,22 +396,22 @@ Grow the rest only once one district sustains real leads week after week (the ad
 
 Farmers and small providers (an excavator owner, a mechanic, a spraying crew) use the platform for free: they are individual households that will not pay a monthly fee, and a listing that costs money empties the directory. The revenue comes from the companies behind them, who have marketing budgets and need what only the platform has, real local demand and a way to the right farmer at the right moment:
 
-1. **Demand data (B2B):** fertilizer and crop-protection brands, machinery dealers, cooperatives pay for the demand report of their categories and districts. Aggregates only: a partner never sees a farmer's name or phone, nor a count small enough to point at one household (cells under a minimum are hidden).
-2. **Sponsored placement (B2B):** a drone or machinery dealer pays to put the providers it sells to or trains first in its categories and districts (they need customers to pay off their machines); labelled, never exclusive.
+1. **Demand data (B2B):** fertilizer and crop-protection brands, machinery dealers, cooperatives pay for the demand report of their categories and areas. Aggregates only: a partner never sees a farmer's name or phone, nor a count small enough to point at one household (cells under a minimum are hidden).
+2. **Sponsored placement (B2B):** a drone or machinery dealer pays to put the providers it sells to or trains first in its categories and areas (they need customers to pay off their machines); labelled, never exclusive.
 3. **Compliance and export partners (B2B):** cooperatives and durian exporters sponsor the directory of export-compliance services their growers must use.
 4. **Optional, later:** a provider's own paid boost, only once providers ask for more reach than the free listing gives.
 
-The weekly leads table is the sales argument: "last week in Cai Lậy, X farmers looked for spraying". No partner is signed before one district sustains real leads.
+The weekly leads table is the sales argument: "last week in Cai Lậy, X farmers looked for spraying". No partner is signed before one area sustains real leads.
 
 ---
 
 ## Go-To-Market Strategy
 
-1. **Field trip:** 1 week on-the-ground in target district to collect 50–100 initial provider listings manually
-2. **Launch:** Minimal PWA + hyper-targeted Facebook Ads by district radius to drive first users
+1. **Field trip:** 1 week on-the-ground in target area to collect 50–100 initial provider listings manually
+2. **Launch:** Minimal PWA + hyper-targeted Facebook Ads by area radius to drive first users
 3. **Iterate:** Refine UI/UX based on farmer feedback (less text, more images, large buttons)
-4. **First partners:** with 8+ weeks of steady leads in one district, take the demand figures to 2–3 local dealers (drone, fertilizer, machinery) and one cooperative; a first sponsored category per district
-5. **Scale:** Expand to adjacent districts using oil-spill growth model, each district opened with its own field trip and partners
+4. **First partners:** with 8+ weeks of steady leads in one area, take the demand figures to 2–3 local dealers (drone, fertilizer, machinery) and one cooperative; a first sponsored category per area
+5. **Scale:** Expand to adjacent areas using oil-spill growth model, each area opened with its own field trip and partners
 
 ---
 
@@ -419,8 +419,8 @@ The weekly leads table is the sales argument: "last week in Cai Lậy, X farmers
 
 - New provider registrations per month
 - Leads per week (call taps + Zalo taps + inquiries, spam left out; admin dashboard)
-- Districts with steady leads (8+ weeks in a row): the markets partners can be sold
-- Paying partners, and revenue per district
+- Areas with steady leads (8+ weeks in a row): the markets partners can be sold
+- Paying partners, and revenue per area
 - Click-to-call conversion rate
 - User retention rate (return visits for crop prices / weather)
 

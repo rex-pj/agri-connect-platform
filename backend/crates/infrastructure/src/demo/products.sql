@@ -13,7 +13,7 @@ INSERT INTO products (business_id, category_id, name, description, price, unit)
 
                 ('Cơ sở Năm Hùng', 'nong-san',
                  'Xoài cát Hoà Lộc',
-                 'Xoài đặc sản Tiền Giang, trái lớn, thịt vàng, ít xơ, vị ngọt thanh.',
+                 'Xoài đặc sản Cái Bè, Đồng Tháp, trái lớn, thịt vàng, ít xơ, vị ngọt thanh.',
                  '45000', 'kg'),
 
                 ('Đại lý Phân bón Thành', 'thuoc-bvtv',

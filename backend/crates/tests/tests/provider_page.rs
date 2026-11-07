@@ -31,7 +31,7 @@ async fn provider(e: &Env) -> (i32, String) {
         e.t.db
             .query_one(Statement::from_string(
                 e.t.db.get_database_backend(),
-                "UPDATE businesses SET address = 'Ấp 3, Cai Lậy, Tiền Giang',
+                "UPDATE businesses SET address = 'Khu phố 3, phường Cai Lậy, Đồng Tháp',
                  description = 'Múc bùn, nạo vét kênh mương.'
              WHERE name = 'Vườn nongdan' RETURNING id",
             ))
@@ -109,7 +109,7 @@ async fn the_provider_page_has_its_services_a_call_button_and_the_form() {
     let html = body_text(res).await;
     assert!(html.contains("<title>Vườn nongdan — Agri-Connect</title>"));
     assert!(html.contains(r#"content="Múc bùn, nạo vét kênh mương.""#));
-    assert!(html.contains("Ấp 3, Cai Lậy, Tiền Giang"));
+    assert!(html.contains("Khu phố 3, phường Cai Lậy, Đồng Tháp"));
     assert!(html.contains("Múc bùn ao") && html.contains("300.000 ₫/giờ"));
     assert!(html.contains(r#"href="tel:0901234567""#));
     // The form works without JS: a plain POST to /contact, reached by anchor.

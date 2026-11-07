@@ -360,7 +360,7 @@ name_asc       = "A → Z"
 
 [text.location_form]
 label             = "Area name"
-label_placeholder = "Cai Lay, Tien Giang"
+label_placeholder = "Đồng Tháp — Cai Lậy"
 coordinates       = "Coordinates"
 
 [text.service_form]
@@ -657,7 +657,7 @@ remove         = "Remove demo data"
 remove_note    = "Only removes the demo providers with their services and products. Real data is not touched."
 remove_confirm = "I understand: {count} demo providers will be deleted."
 load           = "Load demo data"
-load_note      = "A few providers in Cai Lay, Tien Giang with services and products, to try out the pages."
+load_note      = "A few providers in Cai Lậy, Đồng Tháp with services and products, to try out the pages."
 
 [text.email]
 reset_subject   = "Reset your password – {site}"

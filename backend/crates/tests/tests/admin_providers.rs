@@ -337,7 +337,7 @@ async fn an_admin_lists_a_provider_in_the_field_and_edits_its_profile() {
             &[
                 ("name", "Drone Ba Tu"),
                 ("phone", "0912345678"),
-                ("address", "Cai Lay, Tien Giang"),
+                ("address", "Cai Lay, Dong Thap"),
                 ("lat", "10.4048"),
                 ("lng", "106.118"),
             ],

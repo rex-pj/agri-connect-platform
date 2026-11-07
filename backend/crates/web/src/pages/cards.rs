@@ -14,9 +14,11 @@ pub struct ProviderCard {
     pub id: i32,
     pub name: String,
     pub phone: String,
-    /// The last two parts of the address ("Cai Lậy, Tiền Giang"): enough to
-    /// judge the distance without a long street line on a small screen.
-    pub district: Option<String>,
+    /// The last two parts of the address, the commune or ward and the
+    /// province ("phường Cai Lậy, Đồng Tháp"; no districts since July 2025):
+    /// enough to judge the distance without a long street line on a small
+    /// screen.
+    pub locality: Option<String>,
     pub is_verified: bool,
     pub services: Vec<String>,
     /// Metres away, only on the near-me results; the template words it
@@ -27,7 +29,7 @@ pub struct ProviderCard {
 impl From<BusinessBrowseDto> for ProviderCard {
     fn from(b: BusinessBrowseDto) -> Self {
         Self {
-            district: district(b.address.as_deref()),
+            locality: locality(b.address.as_deref()),
             id: b.id,
             name: b.name,
             phone: b.phone,
@@ -41,7 +43,7 @@ impl From<BusinessBrowseDto> for ProviderCard {
 impl From<BusinessSearchDto> for ProviderCard {
     fn from(b: BusinessSearchDto) -> Self {
         Self {
-            district: district(b.address.as_deref()),
+            locality: locality(b.address.as_deref()),
             distance_m: Some(b.distance_m),
             id: b.id,
             name: b.name,
@@ -70,7 +72,7 @@ pub struct ServiceCard {
     pub provider_name: String,
     pub provider_verified: bool,
     pub phone: String,
-    pub district: Option<String>,
+    pub locality: Option<String>,
     /// Only on the near-me results.
     pub distance_m: Option<f64>,
 }
@@ -80,7 +82,7 @@ impl ServiceCard {
         Ok(Self {
             href: canonical_url("service", s.id, &s.name)?,
             show_category: !same_label(&s.name, &s.category),
-            district: district(s.business_address.as_deref()),
+            locality: locality(s.business_address.as_deref()),
             distance_m: s.distance_m,
             id: s.id,
             name: s.name,
@@ -105,7 +107,7 @@ pub fn same_label(name: &str, category: &str) -> bool {
     name.trim().to_lowercase() == category.trim().to_lowercase()
 }
 
-fn district(address: Option<&str>) -> Option<String> {
+fn locality(address: Option<&str>) -> Option<String> {
     let parts: Vec<&str> = address?
         .split(',')
         .map(str::trim)
@@ -120,7 +122,7 @@ fn district(address: Option<&str>) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::district;
+    use super::locality;
 
     #[test]
     fn a_name_that_is_its_category_is_not_labelled_twice() {
@@ -130,14 +132,14 @@ mod tests {
     }
 
     #[test]
-    fn district_is_the_last_two_address_parts() {
+    fn locality_is_the_last_two_address_parts() {
         assert_eq!(
-            district(Some("12 Quốc lộ 1, Ấp 3, Cai Lậy, Tiền Giang")),
-            Some("Cai Lậy, Tiền Giang".into())
+            locality(Some("12 Quốc lộ 1, Khu phố 3, phường Cai Lậy, Đồng Tháp")),
+            Some("phường Cai Lậy, Đồng Tháp".into())
         );
-        assert_eq!(district(Some("Long Xuyên")), Some("Long Xuyên".into()));
-        assert_eq!(district(Some(" , ")), None);
-        assert_eq!(district(None), None);
+        assert_eq!(locality(Some("Long Xuyên")), Some("Long Xuyên".into()));
+        assert_eq!(locality(Some(" , ")), None);
+        assert_eq!(locality(None), None);
     }
 }
 

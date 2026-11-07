@@ -112,7 +112,7 @@ async fn seeded(e: &Env) -> Seed {
         e,
         "Cơ khí Bảy Tốt",
         "0901000001",
-        Some("Ấp 1, Cai Lậy, Tiền Giang"),
+        Some("Khu phố 1, phường Cai Lậy, Đồng Tháp"),
         false,
         3,
     )
@@ -401,7 +401,10 @@ async fn the_directory_lists_every_provider_and_finds_them_by_their_services() {
             "Vườn mới đăng ký"
         ]
     );
-    assert!(all.contains("Cai Lậy, Tiền Giang"), "district on the card");
+    assert!(
+        all.contains("phường Cai Lậy, Đồng Tháp"),
+        "ward and province on the card"
+    );
 
     assert_eq!(
         provider_names(&html(&e, "/providers?sort=name_asc").await),

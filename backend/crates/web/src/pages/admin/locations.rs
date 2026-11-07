@@ -1,6 +1,6 @@
 //! /admin/locations and /admin/locations/{id}: the location presets the
-//! explore page offers ("Cai Lậy", "Long Xuyên"), with a create form, and one
-//! preset's edit form, visibility and deletion.
+//! explore page offers ("Đồng Tháp — Cai Lậy", "An Giang — Long Xuyên"), with a
+//! create form, and one preset's edit form, visibility and deletion.
 //!
 //! Hiding and deleting ask for confirmation and a reason (a dialog with JS,
 //! the same form on the page without); showing again is one button. The

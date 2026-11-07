@@ -308,13 +308,15 @@ impl Views {
                 .ok_or_else(|| tera::Error::msg("phone: expects a string"))
         });
 
-        tera.register_filter("day_month", |value: &Value, _: &HashMap<String, Value>| {
-            value
-                .as_str()
-                .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
-                .map(|d| Value::String(d.format("%d/%m").to_string()))
-                .ok_or_else(|| tera::Error::msg("day_month: expects a YYYY-MM-DD date"))
-        });
+        for (name, format) in [("day_month", "%d/%m"), ("full_date", "%d/%m/%Y")] {
+            tera.register_filter(name, move |value: &Value, _: &HashMap<String, Value>| {
+                value
+                    .as_str()
+                    .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
+                    .map(|d| Value::String(d.format(format).to_string()))
+                    .ok_or_else(|| tera::Error::msg(format!("{name}: expects a YYYY-MM-DD date")))
+            });
+        }
 
         tera.register_filter("zalo", |value: &Value, _: &HashMap<String, Value>| {
             value

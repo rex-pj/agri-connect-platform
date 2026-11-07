@@ -22,14 +22,17 @@ pub struct RoleModel {
 pub enum UserRole {
     Admin,
     Provider,
+    Partner,
 }
 
 impl UserRole {
-    /// The DB role code string for this role. Matches constants `ROLE_ADMIN` / `ROLE_PROVIDER`.
+    /// The DB role code string for this role: `ROLE_ADMIN`, `ROLE_PROVIDER`,
+    /// `ROLE_PARTNER`.
     pub fn as_code(&self) -> &'static str {
         match self {
             UserRole::Admin => crate::constants::ROLE_ADMIN,
             UserRole::Provider => crate::constants::ROLE_PROVIDER,
+            UserRole::Partner => crate::constants::ROLE_PARTNER,
         }
     }
 
@@ -39,6 +42,7 @@ impl UserRole {
         match code {
             crate::constants::ROLE_ADMIN => Some(UserRole::Admin),
             crate::constants::ROLE_PROVIDER => Some(UserRole::Provider),
+            crate::constants::ROLE_PARTNER => Some(UserRole::Partner),
             _ => None,
         }
     }

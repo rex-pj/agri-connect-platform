@@ -73,6 +73,12 @@ pub const SEARCH_QUERY_MAX: usize = 100;
 /// How many searches that found nothing the report lists, most asked first.
 pub const UNMET_SEARCHES_SHOWN: usize = 10;
 
+// ── Partners ──────────────────────────────────────────────────────────────────
+pub const PARTNER_NAME_MAX: usize = 200;
+pub const CONTRACT_NOTE_MAX: usize = 500;
+/// How many sponsored services a near-me page shows above its results.
+pub const SPONSORED_SHOWN: usize = 2;
+
 // ── Reviews ───────────────────────────────────────────────────────────────────
 pub const RATING_MIN: i16 = 1;
 pub const RATING_MAX: i16 = 5;

@@ -56,6 +56,26 @@ fn area_label(locale: &Locale, label: Option<&str>) -> String {
     label.map_or_else(|| locale.text("demand.unplaced"), str::to_owned)
 }
 
+/// The area filter's options: the report's areas, named.
+pub fn area_options(locale: &Locale, report: &DemandReportDto) -> Vec<AreaOption> {
+    report
+        .areas
+        .iter()
+        .map(|a| AreaOption {
+            value: area_value(a.location_id),
+            label: area_label(locale, a.label.as_deref()),
+        })
+        .collect()
+}
+
+/// The filter's value for the area in focus; empty for all of them.
+pub fn focus_value(focus: Option<AreaKey>) -> String {
+    focus.map_or_else(String::new, |f| match f {
+        AreaKey::Location(id) => id.to_string(),
+        AreaKey::Unplaced => UNPLACED_AREA.to_owned(),
+    })
+}
+
 /// GET /admin/demand
 pub async fn show(
     Viewer(viewer): Viewer,
@@ -66,20 +86,9 @@ pub async fn show(
         return see_other(&url("login", &[])?);
     };
     let report = state.usecases.demand.report(&actor, q.focus()).await?;
-    let locale = state.locale();
-    let areas = report
-        .areas
-        .iter()
-        .map(|a| AreaOption {
-            value: area_value(a.location_id),
-            label: area_label(locale, a.label.as_deref()),
-        })
-        .collect();
+    let areas = area_options(state.locale(), &report);
     let path = url("admin_demand", &[])?;
-    let area = q.focus().map_or_else(String::new, |f| match f {
-        AreaKey::Location(id) => id.to_string(),
-        AreaKey::Unplaced => UNPLACED_AREA.to_owned(),
-    });
+    let area = focus_value(q.focus());
     let body = DemandPage {
         csv_href: with_query(&url("admin_demand_csv", &[])?, &[("area", &area)]),
         area,

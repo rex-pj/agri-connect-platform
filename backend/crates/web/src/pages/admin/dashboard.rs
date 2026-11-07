@@ -3,7 +3,7 @@
 //! warning while demo listings are mixed into the real ones.
 
 use application::{
-    catalogue::{PERM_REPORT_DEMAND_READ, PERM_SYSTEM_DEMO_MANAGE},
+    catalogue::{PERM_PARTNER_MANAGE, PERM_REPORT_DEMAND_READ, PERM_SYSTEM_DEMO_MANAGE},
     constants::CALL_STATS_DAYS,
     outputs::{AdminStatsDto, WeekLeadsDto},
 };
@@ -145,6 +145,24 @@ pub async fn show(
             icon: "fa-chart-column",
             tone: "blue",
             href: Some(url("admin_demand", &[])?),
+        });
+    }
+    if actor.can(PERM_PARTNER_MANAGE) {
+        let kpis = state.usecases.partner.kpis(&actor).await?;
+        let partners_href = url("admin_partners", &[])?;
+        stats_cards.push(StatCard {
+            label: state.locale().text("partner.paying"),
+            value: kpis.paying_partners as i64,
+            icon: "fa-handshake",
+            tone: "green",
+            href: Some(partners_href.clone()),
+        });
+        stats_cards.push(StatCard {
+            label: state.locale().text("admin_stats.monthly_revenue"),
+            value: kpis.monthly_revenue,
+            icon: "fa-coins",
+            tone: "amber",
+            href: Some(partners_href),
         });
     }
     // Asking only when allowed: the banner's button leads to that page.

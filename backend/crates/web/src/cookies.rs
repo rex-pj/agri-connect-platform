@@ -59,6 +59,15 @@ pub enum Flash {
     ProviderSaved,
     ReviewSent,
     ReviewReplied,
+    SponsoredRemoved,
+    SponsoredAdded,
+    ContractDeleted,
+    ContractCreated,
+    PartnerAccountAssigned,
+    PartnerDeactivated,
+    PartnerActivated,
+    PartnerSaved,
+    PartnerCreated,
     ProductHidden,
     ProductShown,
     ProductDeleted,
@@ -76,7 +85,7 @@ pub enum Flash {
 }
 
 impl Flash {
-    const ALL: [Flash; 41] = [
+    const ALL: [Flash; 50] = [
         Flash::ContactSent,
         Flash::PasswordReset,
         Flash::DemoLoaded,
@@ -104,6 +113,15 @@ impl Flash {
         Flash::ProviderSaved,
         Flash::ReviewSent,
         Flash::ReviewReplied,
+        Flash::SponsoredRemoved,
+        Flash::SponsoredAdded,
+        Flash::ContractDeleted,
+        Flash::ContractCreated,
+        Flash::PartnerAccountAssigned,
+        Flash::PartnerDeactivated,
+        Flash::PartnerActivated,
+        Flash::PartnerSaved,
+        Flash::PartnerCreated,
         Flash::ProductHidden,
         Flash::ProductShown,
         Flash::ProductDeleted,
@@ -120,7 +138,7 @@ impl Flash {
         Flash::ProductSaved,
     ];
 
-    const fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Flash::ContactSent => "contact_sent",
             Flash::PasswordReset => "password_reset",
@@ -149,6 +167,15 @@ impl Flash {
             Flash::ProviderSaved => "provider_saved",
             Flash::ReviewSent => "review_sent",
             Flash::ReviewReplied => "review_replied",
+            Flash::SponsoredRemoved => "sponsored_removed",
+            Flash::SponsoredAdded => "sponsored_added",
+            Flash::ContractDeleted => "contract_deleted",
+            Flash::ContractCreated => "contract_created",
+            Flash::PartnerAccountAssigned => "partner_account_assigned",
+            Flash::PartnerDeactivated => "partner_deactivated",
+            Flash::PartnerActivated => "partner_activated",
+            Flash::PartnerSaved => "partner_saved",
+            Flash::PartnerCreated => "partner_created",
             Flash::ProductHidden => "product_hidden",
             Flash::ProductShown => "product_shown",
             Flash::ProductDeleted => "product_deleted",

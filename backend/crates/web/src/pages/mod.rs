@@ -15,6 +15,7 @@ pub mod language;
 pub mod listing;
 pub mod own_reviews;
 pub mod own_services;
+pub mod partner;
 pub mod product;
 pub mod product_form;
 pub mod products;

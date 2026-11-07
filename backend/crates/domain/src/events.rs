@@ -18,6 +18,8 @@ pub enum Entity {
     Service,
     Role,
     Inquiry,
+    Partner,
+    Contract,
 }
 
 impl Entity {
@@ -32,6 +34,8 @@ impl Entity {
             Entity::Service => "service",
             Entity::Role => "role",
             Entity::Inquiry => "inquiry",
+            Entity::Partner => "partner",
+            Entity::Contract => "contract",
         }
     }
 }

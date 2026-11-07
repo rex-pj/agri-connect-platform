@@ -1,3 +1,4 @@
+pub mod account_rules;
 pub mod admin_usecase;
 pub mod auth_usecase;
 pub mod business_rules;
@@ -5,6 +6,7 @@ pub mod demand_usecase;
 pub mod explore_usecase;
 pub mod health_usecase;
 pub mod media_usecase;
+pub mod partner_usecase;
 pub mod permission_usecase;
 pub mod product_rules;
 pub mod product_usecase;

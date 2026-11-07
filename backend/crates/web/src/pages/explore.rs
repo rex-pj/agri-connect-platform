@@ -105,6 +105,8 @@ pub struct ExplorePage {
     /// The results tab shown without JS: `services`, `providers` or `products`.
     pub tab: &'static str,
     pub tabs: Vec<TabLink>,
+    /// Sponsored services of the area, shown first and labelled.
+    pub sponsored: Vec<ServiceCard>,
     /// Services whose provider is within the radius, nearest first.
     pub services: Vec<ServiceCard>,
     pub providers: Vec<ProviderCard>,
@@ -190,9 +192,10 @@ pub async fn show(
     };
     let link = |radius: i64, service: Option<i32>| link_to(radius, service, tab);
 
-    let (services, providers, products, featured_services) = match &position {
+    let (sponsored, services, providers, products, featured_services) = match &position {
         // No position yet: what the home page features, instead of results.
         None => (
+            Vec::new(),
             Vec::new(),
             Vec::new(),
             Vec::new(),
@@ -224,7 +227,21 @@ pub async fn show(
                 },
                 results: (services.len() + providers.len() + products.len()) as i64,
             });
+            // The area's sponsored providers come first, labelled; the rest keep
+            // their order.
+            let area = match p {
+                Position::Preset(l) => Some(l.id),
+                Position::Device { lat, lng, .. } => {
+                    state.usecases.partner.area_of_point(*lat, *lng).await?
+                }
+            };
+            let (sponsored, services) = state
+                .usecases
+                .partner
+                .feature_sponsored(area, service_id, services)
+                .await?;
             (
+                ServiceCard::all(sponsored)?,
                 ServiceCard::all(services)?,
                 providers.into_iter().map(ProviderCard::from).collect(),
                 products,
@@ -234,7 +251,11 @@ pub async fn show(
     };
     let tabs = [
         // The order of the bottom tabs and the search page's.
-        (TAB_SERVICES, "nav.services", services.len()),
+        (
+            TAB_SERVICES,
+            "nav.services",
+            sponsored.len() + services.len(),
+        ),
         (TAB_PRODUCTS, "nav.products", products.len()),
         (TAB_PROVIDERS, "nav.shops", providers.len()),
     ]
@@ -298,6 +319,7 @@ pub async fn show(
         service_id,
         tab,
         tabs,
+        sponsored,
         services,
         providers,
         products,

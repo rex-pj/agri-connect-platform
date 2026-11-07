@@ -20,6 +20,7 @@ use application::{
         explore_usecase::{ExploreDeps, ExploreUseCase},
         health_usecase::HealthUseCase,
         media_usecase::{MediaDeps, MediaUseCase},
+        partner_usecase::{PartnerDeps, PartnerUseCase},
         permission_usecase::{PermissionDeps, PermissionUseCase},
         product_usecase::ProductUseCase,
         provider_dashboard_usecase::{ProviderDashboardDeps, ProviderDashboardUseCase},
@@ -41,10 +42,11 @@ use infrastructure::{
         call_repository::CallRepository, category_repository::CategoryRepository,
         demand_repository::DemandRepository, file_repository::FileRepository,
         health_repository::HealthRepository, inquiry_repository::InquiryRepository,
-        location_repository::LocationRepository, permission_repository::PermissionRepository,
-        product_repository::ProductRepository, refresh_token_repository::RefreshTokenRepository,
-        review_repository::ReviewRepository, role_repository::RoleRepository,
-        service_repository::ServiceRepository, user_repository::UserRepository,
+        location_repository::LocationRepository, partner_repository::PartnerRepository,
+        permission_repository::PermissionRepository, product_repository::ProductRepository,
+        refresh_token_repository::RefreshTokenRepository, review_repository::ReviewRepository,
+        role_repository::RoleRepository, service_repository::ServiceRepository,
+        user_repository::UserRepository,
     },
 };
 use migration::{Migrator, MigratorTrait};
@@ -401,6 +403,13 @@ pub fn build_state(
         max_upload_bytes: uploads.max_bytes,
     });
 
+    let demand_repo = Arc::new(DemandRepository::new(Arc::clone(&db)));
+    let demand = DemandReportUseCase::new(DemandDeps {
+        demand_repo: demand_repo.clone(),
+        category_repo: category_repo.clone(),
+        location_repo: location_repo.clone(),
+    });
+
     let usecases = UseCases {
         explore: ExploreUseCase::new(ExploreDeps {
             business_repo: business_repo.clone(),
@@ -433,7 +442,7 @@ pub fn build_state(
             permission_repo: permission_repo.clone(),
             refresh_repo: Arc::new(RefreshTokenRepository::new(Arc::clone(&db))),
             email,
-            password_hasher,
+            password_hasher: password_hasher.clone(),
             token_svc: token_service.clone(),
             refresh_days,
         }),
@@ -446,11 +455,17 @@ pub fn build_state(
             grants_repo: role_repo.clone(),
             events: events.clone(),
         }),
-        demand: DemandReportUseCase::new(DemandDeps {
-            demand_repo: Arc::new(DemandRepository::new(Arc::clone(&db))),
+        partner: PartnerUseCase::new(PartnerDeps {
+            partner_repo: Arc::new(PartnerRepository::new(Arc::clone(&db))),
+            user_repo: user_repo.clone(),
             category_repo,
             location_repo,
+            demand_repo,
+            demand: demand.clone(),
+            password_hasher,
+            events: events.clone(),
         }),
+        demand,
         review: ReviewUseCase::new(ReviewDeps {
             review_repo,
             inquiry_repo: inquiry_repo.clone(),

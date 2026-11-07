@@ -10,7 +10,8 @@
 {#- Services, providers and products near the visitor, in three tabs (links without JS,
     switched in place by Alpine `tabs`). `page` is web::pages::explore::ExplorePage.
     The GPS button is the `ac-geolocate` island; the preset form beside it
-    works without JS. -#}
+    works without JS. The area's sponsored services (`page.sponsored`) come
+    first under a "Tài trợ" label; they are moved up, never duplicated. -#}
 {% block title %}{{ t(key="explore.title") }} — {{ site.name }}{% endblock title %}
 {% block meta %}<meta name="description" content="{{ t(key="explore.meta") }}">{% endblock meta %}
 {% block scripts %}<script defer src="{{ asset_url(path='js/islands.js') }}"></script>{% endblock scripts %}
@@ -73,9 +74,17 @@
   {% set no_product_title = t(key="explore.no_products", km=page.radius_km) %}
 
   <section data-panel="services"{% if page.tab != "services" %} hidden{% endif %} :hidden="panelHidden">
+    {% if page.sponsored or page.services %}
+    {% if page.sponsored %}
+    <div class="mb-3" aria-label="{{ t(key="partner_area.tag") }}">
+      <p class="small fw-semibold mb-2"><span class="badge text-bg-warning">{{ t(key="partner_area.tag") }}</span></p>
+      {{ services::service_grid(services=page.sponsored) }}
+    </div>
+    {% endif %}
     {% if page.services %}
     <p class="small text-muted mb-2"><strong>{{ page.services | length }}{% if page.services | length >= page.results_max %}+{% endif %}</strong> {{ t(key="explore.services_near") }}</p>
     {{ services::service_grid(services=page.services) }}
+    {% endif %}
     {% elif page.wider %}
     {% set wider_label = t(key="explore.search_within", area=page.wider.label) %}
     {{ empty::empty_state(icon="fa-magnifying-glass", title=none_title, hint=t(key="explore.hint_services_wider"), action_href=page.wider.href, action_icon="fa-expand", action_label=wider_label) }}

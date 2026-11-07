@@ -882,3 +882,82 @@ pub struct UnmetSearchDto {
     pub query: String,
     pub count: i64,
 }
+
+// ── Partners ──────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PartnerDto {
+    pub id: i32,
+    pub name: String,
+    pub kind: String,
+    pub contact_name: Option<String>,
+    pub phone: Option<String>,
+    pub email: Option<String>,
+    pub is_active: bool,
+    pub account_username: Option<String>,
+    pub created_on: DateTime<Utc>,
+    /// Contracts in force today, and what they bring in a month.
+    pub contracts_in_force: usize,
+    pub monthly_revenue: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct NamedDto {
+    pub id: i32,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ContractDto {
+    pub id: i32,
+    pub location_id: i32,
+    pub location_label: String,
+    pub starts_on: chrono::NaiveDate,
+    pub ends_on: chrono::NaiveDate,
+    pub monthly_fee: i64,
+    pub note: Option<String>,
+    pub categories: Vec<NamedDto>,
+    /// Sponsored providers (`id` is the business).
+    pub sponsored: Vec<NamedDto>,
+    pub in_force: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PartnerDetailDto {
+    pub partner: PartnerDto,
+    pub contracts: Vec<ContractDto>,
+}
+
+/// What one area brings in: partners with a contract in force there, and
+/// their monthly fees.
+#[derive(Debug, Clone, Serialize)]
+pub struct AreaRevenueDto {
+    pub location_id: i32,
+    pub label: String,
+    pub partners: usize,
+    pub monthly_revenue: i64,
+}
+
+/// The partner KPIs: paying partners today, the monthly revenue, by area.
+#[derive(Debug, Clone, Serialize)]
+pub struct PartnerKpiDto {
+    pub paying_partners: usize,
+    pub monthly_revenue: i64,
+    pub areas: Vec<AreaRevenueDto>,
+}
+
+/// A partner's own page: its report over the areas and categories it pays
+/// for, and its contracts in force.
+#[derive(Debug, Clone, Serialize)]
+pub struct PartnerReportDto {
+    pub partner_name: String,
+    pub report: DemandReportDto,
+    pub contracts: Vec<ContractDto>,
+}
+
+/// The account a partner now reads its report with.
+#[derive(Debug, Clone, Serialize)]
+pub struct PartnerAccountDto {
+    pub partner_id: i32,
+    pub username: String,
+}

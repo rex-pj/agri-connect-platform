@@ -115,7 +115,7 @@ Templates live under `backend/crates/web/templates/` and are organized by atomic
 
 | Entity                  | Key Fields                                                                                             | Notes                                          |
 | ----------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
-| `roles`                 | id, code, name, is_active                                                                              | Codes: `admin`, `provider`                     |
+| `roles`                 | id, code, name, is_active                                                                              | Codes: `admin`, `provider`, `partner`          |
 | `users`                 | id, username, email, password_hash, full_name, role_id, is_active, failed_login_attempts, locked_until | Soft-deletable                                 |
 | `categories`            | id, name, slug, type, icon, display_order, is_active                                                   | Types: `service`, `product`                    |
 | `businesses`            | id, name, phone, email, description, address, lat, lng, is_verified, is_active                         | Provider/business listing                      |
@@ -125,6 +125,9 @@ Templates live under `backend/crates/web/templates/` and are organized by atomic
 | `reviews`               | id, business_id, inquiry_id, reviewer_name, reviewer_phone_hash, rating (1–5), comment, reply, replied_at, is_visible | Hidden until an admin shows it |
 | `call_clicks`           | id, business_id, service_id, product_id, channel, created_on                                           | Call / Zalo taps (`call`, `zalo`); never who   |
 | `password_reset_tokens` | id, user_id, token, expires_at, consumed_at                                                            | Single-use, 1-hour TTL                         |
+| `search_events`         | id, query, category_id, location_id, results, created_on                                               | What was searched; never who                   |
+| `partners`              | id, name, kind, contact_name, phone, email, account_id, is_active                                      | Kinds: `brand`, `dealer`, `cooperative`, `exporter` |
+| `partner_contracts`     | id, partner_id, location_id, starts_on, ends_on, monthly_fee (+ `partner_contract_categories`, `partner_sponsored`) | In force between its dates while the partner is on |
 
 ### Geo Query Pattern
 
@@ -188,6 +191,17 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 | Method | Path                                     | Description                                                       |
 | ------ | ---------------------------------------- | ----------------------------------------------------------------- |
 | GET    | `/api/admin/stats`                       | Dashboard statistics                                              |
+| GET    | `/api/admin/reports/demand`              | Demand report (`area?`; hidden figures are `value: null`; `report.demand.read`) |
+| GET    | `/api/admin/partners`                    | Partners, with contracts in force and monthly revenue (`partner.manage`) |
+| POST   | `/api/admin/partners`                    | Create a partner (201 + detail)                                   |
+| GET    | `/api/admin/partners/kpis`               | Paying partners, monthly revenue, by area                         |
+| GET    | `/api/admin/partners/{id}`               | Partner detail with contracts                                     |
+| PUT    | `/api/admin/partners/{id}`               | Update a partner                                                  |
+| PATCH  | `/api/admin/partners/{id}/status`        | Turn on / off (`is_active`, `reason?`; off: its contracts stop)   |
+| POST   | `/api/admin/partners/{id}/account`       | Link or create its report account (role `partner`)                |
+| POST   | `/api/admin/partners/{id}/contracts`     | Add a contract (`location_id`, `category_ids`, `starts_on`, `ends_on`, `monthly_fee`, `note?`) |
+| DELETE | `/api/admin/partners/{id}/contracts/{cid}` | Delete a contract (`reason?`)                                   |
+| POST / DELETE | `/api/admin/partners/{id}/contracts/{cid}/sponsored[/{bid}]` | Sponsor a shop of the contract's area / stop |
 | GET    | `/api/admin/users`                       | User list (paginated)                                             |
 | GET    | `/api/admin/users/{id}`                  | User detail                                                       |
 | PATCH  | `/api/admin/users/{id}/role`             | Update user role                                                  |
@@ -248,6 +262,12 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 | PUT    | `/api/provider/services/{id}/image` | Replace service image (multipart field `image`; 20/min) |
 | GET    | `/api/provider/reviews`             | Reviews of the own business (waiting ones too)          |
 | PUT    | `/api/provider/reviews/{id}/reply`  | Public answer (`{reply}`; blank removes it; 204; `own.review.reply`) |
+
+### Partner (`partner.report.read`)
+
+| Method | Path                  | Description                                                              |
+| ------ | --------------------- | ------------------------------------------------------------------------ |
+| GET    | `/api/partner/report` | The partner account's own demand report (`area?`), its contracts in force |
 
 ### Setup (first-run / development only)
 
@@ -316,6 +336,7 @@ Every page is a handler in `backend/crates/web/src/pages/`, routed in `web/src/r
 | `/provider/services/new`, `/provider/services/[id]/edit` | Multipart service form: category cards, optional photo, delete (confirm) (`own.service.*`) (`web/src/pages/own_services.rs`)             |
 | `/provider/inquiries`                                    | Farmers' contact requests to this business: call button, status per card (`own.inquiry.manage`) (`web/src/pages/inbox.rs`)              |
 | `/provider/reviews`                                      | Reviews of this business (shown or waiting), a public answer per card (`own.review.reply`) (`web/src/pages/own_reviews.rs`)              |
+| `/partner`                                               | A partner account's home: the demand report of its contracts in force (areas × categories), its contracts; `/partner/report.csv` (`partner.report.read`) (`web/src/pages/partner.rs`) |
 
 ### Admin
 
@@ -339,6 +360,9 @@ Every page is a handler in `backend/crates/web/src/pages/`, routed in `web/src/r
 | `/admin/services/[id]`   | Edit, hide / show, delete (confirm + reason)                                                                                   |
 | `/admin/inquiries`       | Status per row (select + button; `autoSubmit` with JS); filter `provider_id`                                                                       |
 | `/admin/reviews`         | Hide (confirm + reason) / show; filter `provider_id`                                                                                               |
+| `/admin/demand`          | Demand report: category × week for one area (`?area=` id or `none`) or all, by channel, searches, unmet searches, steady areas; `/admin/demand.csv` (`report.demand.read`) (`web/src/pages/admin/demand.rs`) |
+| `/admin/partners`        | Partners, paying ones and monthly revenue by area + create sheet (`partner.manage`) (`web/src/pages/admin/partners.rs`)      |
+| `/admin/partners/[id]`   | Edit, turn off (confirm + reason) / on, report account (sheet), contracts (area, categories, dates, fee; add sheet, delete confirm + reason) with sponsored shops of the area |
 | `/admin/logout`          | POST: same as `/logout`, lands on `/login`                                                                                     |
 
 ---
@@ -383,10 +407,10 @@ Grow the rest only once one area sustains real leads week after week (the admin 
 
 ### Phase 3 — Ecosystem & Monetization (B2B)
 
-- [ ] Demand report: what farmers look for, by category × area × week (calls, Zalo, inquiries; searches once they are logged), aggregates only; first an admin page, then a partner's view of their own categories and areas
-- [ ] Partners: a `partners` record (brand, dealer, cooperative) with the categories and areas it pays for, a contract period, and a partner sign-in that sees only its report
-- [ ] Sponsored placement: a partner's chosen providers (its dealers, its trained drone pilots) shown first in its categories and areas, always labelled "Tài trợ", never hiding the others, counted like any lead
-- [ ] Compliance directory: durian export services (growing-area codes, residue testing, traceability) as their own categories, sponsored by cooperatives and exporters
+- [x] Demand report: category × area × week (calls, Zalo, inquiries, searches, unmet searches), aggregates only, small figures hidden; the admin's page, CSV and JSON, and each partner's view of its own areas and categories
+- [x] Partners: brand, dealer, cooperative or exporter; contracts by area × categories × dates × monthly fee; a `partner` account that reads only its report; paying partners and revenue by area
+- [x] Sponsored placement: a contract's providers of its area shown first on that area's near-me page, labelled "Tài trợ", moved up, never hiding the others, counted like any lead
+- [x] Compliance directory: export-compliance service categories (growing-area codes, residue testing, traceability), sponsored like any other
 - [ ] Crop price feed: daily price tracking for rice and fruit
 - [ ] Zalo Mini App: deep integration into Zalo ecosystem for fastest user acquisition
 
@@ -452,6 +476,8 @@ The weekly leads table is the sales argument: "last week in Cai Lậy, X farmers
 - Public provider lists (`/providers`, near-me shops tab, search's shops tab) include providers with no service yet, so a new sign-up can be found; a service filter (`category_id`) matches only a live service in a live category. Featured services (home, near-me before a position): one per verified provider, those with a photo first, providers rotated by day, every category once before a repeat (`pick_featured`). Service cards are compact rows at every width (a fixed 104/120 px square photo beside the text, one call button), and fewer than three keep the two-column width (`service-grid--1/--2`), never one card across a wide screen. The default service order and the near-me services take turns by provider (`with_provider_turn`: each provider's first service before anyone's second); an explicit sort is kept as chosen. The wide top bar has a "Cửa hàng" tab (`wide_only`); on a phone the directory is the second of the `/services` tabs. The home page opens with one strip of category tiles: services (green squares) then products (amber circles), `HOME_CATEGORY_TILES` of each (one fewer on a phone, so each kind is one row of four), each kind ending in an outlined "Tất cả" tile to its whole list; near-me has no tile (its tab and the banner cover it). The "Tài khoản" tab is `phone_only`: on a wide screen the top bar's account button covers it. `/services` and `/providers` open with "Dịch vụ | Cửa hàng" tabs (`services::view_tabs`: both read `ListQuery`, so a switch keeps the search, category and sort); their near-me banner comes after the third card (`near_me_href`, category and tab kept), and an empty search offers the other list as its second action.
 - Providers manage their own services (`own.service.create` / `update` / `delete`). Every owner-scoped query matches the owner in the same statement (an `in_subquery` on the business), the business comes from the session, never the request, and someone else's service answers `service_not_found`. `is_active` is the admin's moderation switch: an owner's edit never changes it. A business lists at most `SERVICES_PER_BUSINESS_MAX` services (hidden ones count; the business row is locked while counting). Admin and owner forms share `usecases::service_rules::validate_service` (a blank name takes the category's); likewise the business profile: `usecases::business_rules::validate_profile` (owner dashboard, admin create / edit), one form `organisms/business_fields.html`.
 - Reviews (`ReviewUseCase`): a farmer reviews a provider only from the phone of a contact request that provider answered (`review_needs_contact` otherwise), once (`review_already_sent`, from the UNIQUE on `reviewer_phone_hash`); the phone is kept only as `hashing::sha256_hex` (the one SHA-256 helper) and never shown. A new review is hidden; the admin's "show" on `/admin/reviews` is the approval ("Chờ duyệt" until then). The owner's answer (`reply_own_review`, owner-scoped in one statement) shows under the review once it is shown; a blank answer removes it. Stars render through `atoms/stars.html` everywhere.
+- The demand report (`DemandReportUseCase`) counts leads (call and Zalo taps, inquiries without spam) of non-demo businesses over the `DEMAND_WEEKS` whole weeks before this one, Monday to Sunday in Vietnam (`VN_UTC_OFFSET_SECS`, the one offset). A lead counts under its business's area: the nearest active location preset within `DEMAND_AREA_RADIUS_M` (else "no area"); a tap on a shop with one live service takes that service's category. Any figure above zero and under `DEMAND_REPORT_MIN_COUNT` is hidden, and so is a total that would give exactly one hidden figure away; every view of the figures (page, CSV, JSON, a partner's) goes through the same `aggregate`. Steady areas: every report week at `STEADY_WEEKLY_LEADS`. Searches (`record_search`) are stored in the background with no identity: words (lowercased, `SEARCH_QUERY_MAX`), category, area, result count; a page never waits for them.
+- Partners (`PartnerUseCase`): a contract is in force between its dates (both included, Vietnam days) while its partner is on; the revenue figures are the monthly fees of contracts in force today. A partner account (role `partner`) reads only `ReportScope { areas, categories }` of its contracts in force. Sponsored shops must count under the contract's area; on `/explore` they are moved up under "Tài trợ" (`feature_sponsored`: one service per shop, at most `SPONSORED_SHOWN`), never hidden, never shown twice, counted by the same call beacon. "Assign an account" forms (provider, partner) share `account_rules::account_for_role`.
 - Repository queries use Sea-ORM's query builder (`find`, `update_many`, `Query::select` subqueries, `lock_exclusive` in a transaction), not raw SQL strings; `Expr::cust_with_values` only for a PostGIS fragment the builder cannot express.
 - Every list sort ends with an `id` tiebreaker, and price sorts put unpriced products last, so pages never repeat or skip rows.
 

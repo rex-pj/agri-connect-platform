@@ -2,6 +2,10 @@
 // Codes stored in `roles.code`. The role catalogue in `application` seeds them.
 pub const ROLE_ADMIN: &str = "admin";
 pub const ROLE_PROVIDER: &str = "provider";
+pub const ROLE_PARTNER: &str = "partner";
+
+/// What kind of company a partner is. Keep in sync with the `partners.kind` CHECK.
+pub const PARTNER_KINDS: &[&str] = &["brand", "dealer", "cooperative", "exporter"];
 
 // ── Business rules ────────────────────────────────────────────────────────────
 // Must match the CHECK constraints in the baseline migration; a value added here

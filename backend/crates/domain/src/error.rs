@@ -106,6 +106,11 @@ error_codes! {
     InvalidServiceCategory    => (BadRequest,      "invalid_service_category"),
     InvalidCallTarget         => (BadRequest,      "invalid_call_target"),
     InvalidRating             => (BadRequest,      "invalid_rating"),
+    InvalidPartnerKind        => (BadRequest,      "invalid_partner_kind"),
+    InvalidContractDates      => (BadRequest,      "invalid_contract_dates"),
+    InvalidMonthlyFee         => (BadRequest,      "invalid_monthly_fee"),
+    ContractCategoriesRequired=> (BadRequest,      "contract_categories_required"),
+    SponsoredOutsideArea      => (BadRequest,      "sponsored_outside_area"),
     ReviewNeedsContact        => (BadRequest,      "review_needs_contact"),
 
     // ── Uploads ──────────────────────────────────────────────────────────────
@@ -125,6 +130,7 @@ error_codes! {
     DemoAlreadyLoaded         => (Conflict,        "demo_already_loaded"),
     ServiceLimitReached       => (Conflict,        "service_limit_reached"),
     ReviewAlreadySent         => (Conflict,        "review_already_sent"),
+    PartnerAccountInUse       => (Conflict,        "partner_account_in_use"),
 
     // ── Not found ────────────────────────────────────────────────────────────
     AccountNotFound           => (NotFound,        "account_not_found"),
@@ -138,6 +144,8 @@ error_codes! {
     LocationNotFound          => (NotFound,        "location_not_found"),
     InquiryNotFound           => (NotFound,        "inquiry_not_found"),
     ReviewNotFound            => (NotFound,        "review_not_found"),
+    PartnerNotFound           => (NotFound,        "partner_not_found"),
+    ContractNotFound          => (NotFound,        "contract_not_found"),
     FileNotFound              => (NotFound,        "file_not_found"),
 }
 

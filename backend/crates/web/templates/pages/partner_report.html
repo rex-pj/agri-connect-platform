@@ -1,0 +1,57 @@
+{% extends "layouts/app.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "organisms/demand_table.html" as demand %}
+{% import "organisms/unmet_searches.html" as unmet %}
+{#- A partner's own area: the demand report of the areas and categories its
+    contracts in force cover, and those contracts. `page` is
+    web::pages::partner::PartnerPage. The area filter is a GET form; the CSV
+    is the same table. -#}
+{% block title %}{{ t(key="partner_area.title") }} — {{ site.name }}{% endblock title %}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
+{% block main %}
+{% set o = page.own %}
+{% set r = o.report %}
+<header class="acct-header">
+  <span class="acct-avatar">{{ atoms::icon(name="fa-handshake") }}</span>
+  <div>
+    <h1 class="acct-name">{{ o.partner_name }}</h1>
+    <span class="acct-role">{{ t(key="partner_area.title") }}</span>
+  </div>
+</header>
+
+<div class="detail-body">
+  <section class="detail-card">
+    <p class="small text-muted">{{ t(key="demand.hint", min=r.min_count) }}</p>
+    <form class="d-flex flex-wrap gap-2 align-items-end mb-3" method="get" action="{{ page.action }}">
+      <div>
+        <label class="form-label small fw-semibold" for="partner-area">{{ t(key="demand.area") }}</label>
+        <select class="form-select" id="partner-area" name="area">
+          <option value="">{{ t(key="demand.all_areas") }}</option>
+          {% for a in page.areas %}<option value="{{ a.value }}"{% if a.value == page.area %} selected{% endif %}>{{ a.label }}</option>{% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="btn btn-outline-success">{{ atoms::icon(name="fa-filter") }} {{ t(key="demand.apply") }}</button>
+      <a class="btn btn-outline-secondary" href="{{ page.csv_href }}">{{ atoms::icon(name="fa-file-arrow-down") }} {{ t(key="demand.download") }}</a>
+    </form>
+    {{ demand::demand_table(r=r) }}
+  </section>
+
+  <section class="detail-card">
+    {{ unmet::unmet_searches(r=r) }}
+  </section>
+
+  <section class="detail-card" aria-labelledby="own-contracts">
+    <h2 class="detail-card__title" id="own-contracts">{{ t(key="partner.contracts") }}</h2>
+    {% for c in o.contracts %}
+    <div class="py-2 border-bottom">
+      <p class="fw-semibold mb-1">{{ c.location_label }}</p>
+      <p class="small mb-1"><time datetime="{{ c.starts_on }}">{{ c.starts_on | full_date }}</time> – <time datetime="{{ c.ends_on }}">{{ c.ends_on | full_date }}</time></p>
+      <p class="mb-1">{% for cat in c.categories %}<span class="ac-tag">{{ cat.name }}</span> {% endfor %}</p>
+      {% if c.sponsored %}<p class="small text-muted mb-0">{{ t(key="partner.sponsored") }}: {% for s in c.sponsored %}{{ s.name }}{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+    </div>
+    {% else %}
+    <p class="small text-muted">{{ t(key="partner_area.no_contracts") }}</p>
+    {% endfor %}
+  </section>
+</div>
+{% endblock main %}

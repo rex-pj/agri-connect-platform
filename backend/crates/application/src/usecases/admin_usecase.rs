@@ -9,7 +9,6 @@ use domain::{
         product::UpdateProductAdmin,
         role::UserRole,
         service::{NewService, UpdateService},
-        user::NewUser,
     },
     repositories::{
         business_repository_trait::BusinessRepositoryTrait,
@@ -48,13 +47,13 @@ use crate::{
     ports::{EventBus, PasswordHasher},
     slug::{numbered, slugify},
     usecases::{
+        account_rules::account_for_role,
         business_rules::validate_profile,
         product_rules::{validate_product, ProductFields},
         service_rules::{validate_service, ServiceFields},
     },
     validation::{
-        audit_reason, max_chars, max_chars_opt, non_blank, validate_coordinates, validate_email,
-        validate_password, validate_slug, validate_username,
+        audit_reason, max_chars, max_chars_opt, non_blank, validate_coordinates, validate_slug,
     },
 };
 
@@ -344,51 +343,27 @@ impl AdminUseCase {
         {
             return Err(Error::new(ErrorCode::ProviderNotFound));
         }
-        let username = username.trim().to_lowercase();
-        let email = email.trim().to_lowercase();
-        let existing = self.user_repo.find_by_username(&username).await?;
-        let mut rules = Validation::new();
-        rules.rule("username", validate_username(&username));
-        if existing.is_none() {
-            rules
-                .rule("email", validate_email(&email))
-                .rule("password", validate_password(&password));
+        // One account manages one business: the dashboard shows the business
+        // its account owns. A new account owns none.
+        if let Some(u) = self
+            .user_repo
+            .find_by_username(&username.trim().to_lowercase())
+            .await?
+        {
+            let owned = self.business_repo.get_profile_by_user(u.id).await?;
+            if u.role == ROLE_PROVIDER && owned.is_some_and(|b| b.id != business_id) {
+                return Err(Error::field("username", ErrorCode::ProviderAccountInUse));
+            }
         }
-        rules.finish()?;
-
-        let user_id = match existing {
-            // Any other role is refused so an admin cannot be demoted here.
-            Some(u) if u.role != ROLE_PROVIDER => {
-                return Err(Error::field(
-                    "username",
-                    ErrorCode::UsernameTakenByOtherRole,
-                ));
-            }
-            Some(u) => {
-                // One account manages one business: the dashboard shows the
-                // business its account owns.
-                let owned = self.business_repo.get_profile_by_user(u.id).await?;
-                if owned.is_some_and(|b| b.id != business_id) {
-                    return Err(Error::field("username", ErrorCode::ProviderAccountInUse));
-                }
-                u.id
-            }
-            None => {
-                if self.user_repo.email_exists(&email).await? {
-                    return Err(Error::field("email", ErrorCode::EmailTaken));
-                }
-                let password_hash = self.password_hasher.hash(&password).await?;
-                self.user_repo
-                    .create(NewUser {
-                        username: username.clone(),
-                        email,
-                        password_hash,
-                        role: ROLE_PROVIDER.into(),
-                        full_name: None,
-                    })
-                    .await?
-            }
-        };
+        let (user_id, username) = account_for_role(
+            self.user_repo.as_ref(),
+            self.password_hasher.as_ref(),
+            &username,
+            &email,
+            &password,
+            ROLE_PROVIDER,
+        )
+        .await?;
 
         self.business_repo.assign_user(business_id, user_id).await?;
         self.publish(

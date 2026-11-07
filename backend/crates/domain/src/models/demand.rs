@@ -27,6 +27,7 @@ pub struct LeadEvent {
 pub struct BusinessArea {
     pub business_id: i32,
     pub location_id: i32,
+    pub name: String,
 }
 
 /// A business with exactly one live service, and that service's category:

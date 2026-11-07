@@ -7,7 +7,7 @@
 //! default roles.
 
 use domain::{
-    constants::{ROLE_ADMIN, ROLE_PROVIDER},
+    constants::{ROLE_ADMIN, ROLE_PARTNER, ROLE_PROVIDER},
     models::catalogue::{Catalogue, CategorySeed, LocationSeed, PermissionSeed, RoleSeed},
 };
 
@@ -32,6 +32,8 @@ pub const PERM_INQUIRY_READ: &str = "inquiry.read";
 pub const PERM_INQUIRY_MANAGE: &str = "inquiry.manage";
 pub const PERM_REVIEW_MODERATE: &str = "review.moderate";
 pub const PERM_REPORT_DEMAND_READ: &str = "report.demand.read";
+pub const PERM_PARTNER_MANAGE: &str = "partner.manage";
+pub const PERM_PARTNER_REPORT_READ: &str = "partner.report.read";
 pub const PERM_SYSTEM_DEMO_MANAGE: &str = "system.demo.manage";
 pub const PERM_OWN_PROFILE_UPDATE: &str = "own.profile.update";
 pub const PERM_OWN_LISTING_CREATE: &str = "own.listing.create";
@@ -45,9 +47,11 @@ pub const PERM_OWN_REVIEW_REPLY: &str = "own.review.reply";
 
 const ADMIN: &[&str] = &[ROLE_ADMIN];
 const PROVIDER: &[&str] = &[ROLE_PROVIDER];
+const PARTNER: &[&str] = &[ROLE_PARTNER];
 
 pub static ROLES: &[RoleSeed] = &[
     RoleSeed { code: ROLE_ADMIN },
+    RoleSeed { code: ROLE_PARTNER },
     RoleSeed {
         code: ROLE_PROVIDER,
     },
@@ -129,6 +133,14 @@ pub static PERMISSIONS: &[PermissionSeed] = &[
     PermissionSeed {
         key: PERM_REPORT_DEMAND_READ,
         default_roles: ADMIN,
+    },
+    PermissionSeed {
+        key: PERM_PARTNER_MANAGE,
+        default_roles: ADMIN,
+    },
+    PermissionSeed {
+        key: PERM_PARTNER_REPORT_READ,
+        default_roles: PARTNER,
     },
     PermissionSeed {
         key: PERM_SYSTEM_DEMO_MANAGE,
@@ -244,6 +256,36 @@ pub static CATEGORIES: &[CategorySeed] = &[
         color: "#7F1D1D",
         description: "Phân NPK, phân hữu cơ, vôi bột",
         display_order: 5,
+    },
+    // Export compliance: what a durian or fruit grower must have done to
+    // sell abroad, the directory cooperatives and exporters sponsor. Listed
+    // last, so the ids of the categories above never move.
+    CategorySeed {
+        name: "Mã số vùng trồng",
+        slug: "ma-so-vung-trong",
+        kind: "service",
+        icon: "fa-solid fa-certificate",
+        color: "#1E40AF",
+        description: "Hồ sơ cấp mã số vùng trồng, cơ sở đóng gói xuất khẩu",
+        display_order: 4,
+    },
+    CategorySeed {
+        name: "Xét nghiệm dư lượng",
+        slug: "xet-nghiem-du-luong",
+        kind: "service",
+        icon: "fa-solid fa-flask-vial",
+        color: "#6D28D9",
+        description: "Kiểm nghiệm dư lượng thuốc, kim loại nặng, chất cấm trước khi xuất",
+        display_order: 5,
+    },
+    CategorySeed {
+        name: "Truy xuất nguồn gốc",
+        slug: "truy-xuat-nguon-goc",
+        kind: "service",
+        icon: "fa-solid fa-qrcode",
+        color: "#065F46",
+        description: "Nhật ký canh tác, tem truy xuất, chứng nhận GAP",
+        display_order: 6,
     },
 ];
 

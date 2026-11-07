@@ -7,7 +7,7 @@
 
 use application::{
     authz::Actor,
-    catalogue::{PERM_ADMIN_DASHBOARD_VIEW, PERM_OWN_LISTING_CREATE},
+    catalogue::{PERM_ADMIN_DASHBOARD_VIEW, PERM_OWN_LISTING_CREATE, PERM_PARTNER_REPORT_READ},
 };
 use axum::{
     extract::FromRequestParts,
@@ -138,13 +138,16 @@ impl Dest {
 
 const ADMIN_AREA: Dest = dest("admin_dashboard", "fa-shield-halved", "account_menu.admin");
 const PROVIDER_AREA: Dest = dest("provider_dashboard", "fa-store", "account_menu.manage");
+const PARTNER_AREA: Dest = dest("partner_report", "fa-handshake", "account_menu.partner");
 const ACCOUNT: Dest = dest("account", "fa-circle-user", "nav.account");
 
-/// Where "my area" is for this visitor: the admin panel, the provider
+/// Where "my area" is for this visitor: the admin panel, the partner's
+/// report, the provider
 /// dashboard, or the account page (which asks anonymous visitors to log in).
 fn area_of(actor: Option<&Actor>) -> Dest {
     match actor {
         Some(a) if a.can(PERM_ADMIN_DASHBOARD_VIEW) => ADMIN_AREA,
+        Some(a) if a.can(PERM_PARTNER_REPORT_READ) => PARTNER_AREA,
         Some(a) if a.can(PERM_OWN_LISTING_CREATE) => PROVIDER_AREA,
         _ => ACCOUNT,
     }

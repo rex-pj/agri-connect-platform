@@ -113,3 +113,22 @@ pub struct SearchInput {
     pub place: SearchPlace,
     pub results: i64,
 }
+
+/// A partner's boxes as sent (create and edit alike).
+pub struct PartnerInput {
+    pub name: String,
+    pub kind: String,
+    pub contact_name: Option<String>,
+    pub phone: Option<String>,
+    pub email: Option<String>,
+}
+
+/// A contract as sent. A box left empty or not parsed is `None`.
+pub struct ContractInput {
+    pub location_id: Option<i32>,
+    pub starts_on: Option<chrono::NaiveDate>,
+    pub ends_on: Option<chrono::NaiveDate>,
+    pub monthly_fee: Option<i64>,
+    pub note: Option<String>,
+    pub category_ids: Vec<i32>,
+}

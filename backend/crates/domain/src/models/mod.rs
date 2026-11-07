@@ -6,6 +6,7 @@ pub mod demand;
 pub mod file;
 pub mod inquiry;
 pub mod location;
+pub mod partner;
 pub mod permission;
 pub mod product;
 pub mod review;

@@ -24,9 +24,9 @@ use crate::{
     handlers::{
         admin_handler::AdminHandler, auth_handler::AuthHandler, explore_handler::ExploreHandler,
         health_handler::HealthHandler, media_handler::MediaHandler,
-        permission_handler::PermissionHandler, products_handler::ProductsHandler,
-        provider_dashboard_handler::ProviderDashboardHandler, role_handler::RoleHandler,
-        setup_handler::SetupHandler, stats_handler::StatsHandler,
+        partner_handler::PartnerHandler, permission_handler::PermissionHandler,
+        products_handler::ProductsHandler, provider_dashboard_handler::ProviderDashboardHandler,
+        role_handler::RoleHandler, setup_handler::SetupHandler, stats_handler::StatsHandler,
     },
     middleware::{
         client_ip, language, origin,
@@ -371,6 +371,40 @@ impl AppRouting {
             )
             .route("/admin/demand", get(pages::admin::demand::show))
             .route("/admin/demand.csv", get(pages::admin::demand::csv))
+            .route(
+                "/admin/partners",
+                get(pages::admin::partners::list).post(pages::admin::partners::create),
+            )
+            .route(
+                "/admin/partners/{id}",
+                get(pages::admin::partners::show).post(pages::admin::partners::update),
+            )
+            .route(
+                "/admin/partners/{id}/status",
+                post(pages::admin::partners::change_status),
+            )
+            .route(
+                "/admin/partners/{id}/account",
+                post(pages::admin::partners::assign_account),
+            )
+            .route(
+                "/admin/partners/{id}/contracts",
+                post(pages::admin::partners::create_contract),
+            )
+            .route(
+                "/admin/partners/{id}/contracts/{cid}/delete",
+                post(pages::admin::partners::delete_contract),
+            )
+            .route(
+                "/admin/partners/{id}/contracts/{cid}/sponsored",
+                post(pages::admin::partners::add_sponsored),
+            )
+            .route(
+                "/admin/partners/{id}/contracts/{cid}/sponsored/{bid}/delete",
+                post(pages::admin::partners::remove_sponsored),
+            )
+            .route("/partner", get(pages::partner::show))
+            .route("/partner/report.csv", get(pages::partner::csv))
             .route("/admin/reviews", get(pages::admin::reviews::list))
             .route(
                 "/admin/reviews/{id}/visibility",
@@ -492,6 +526,40 @@ impl AppRouting {
                 "/api/admin/reports/demand",
                 get(StatsHandler::demand_report),
             )
+            .route(
+                "/api/admin/partners",
+                get(PartnerHandler::list).post(PartnerHandler::create),
+            )
+            .route("/api/admin/partners/kpis", get(PartnerHandler::kpis))
+            .route(
+                "/api/admin/partners/{id}",
+                get(PartnerHandler::get).put(PartnerHandler::update),
+            )
+            .route(
+                "/api/admin/partners/{id}/status",
+                patch(PartnerHandler::set_status),
+            )
+            .route(
+                "/api/admin/partners/{id}/account",
+                post(PartnerHandler::assign_account),
+            )
+            .route(
+                "/api/admin/partners/{id}/contracts",
+                post(PartnerHandler::create_contract),
+            )
+            .route(
+                "/api/admin/partners/{id}/contracts/{cid}",
+                delete(PartnerHandler::delete_contract),
+            )
+            .route(
+                "/api/admin/partners/{id}/contracts/{cid}/sponsored",
+                post(PartnerHandler::add_sponsored),
+            )
+            .route(
+                "/api/admin/partners/{id}/contracts/{cid}/sponsored/{bid}",
+                delete(PartnerHandler::remove_sponsored),
+            )
+            .route("/api/partner/report", get(PartnerHandler::own_report))
             .route("/api/admin/reviews", get(AdminHandler::list_reviews))
             .route(
                 "/api/admin/reviews/{id}/visibility",

@@ -361,3 +361,60 @@ impl DemandQuery {
         }
     }
 }
+
+/// POST /api/admin/partners and PUT /api/admin/partners/{id}.
+#[derive(Deserialize)]
+pub struct PartnerRequest {
+    pub name: String,
+    pub kind: String,
+    pub contact_name: Option<String>,
+    pub phone: Option<String>,
+    pub email: Option<String>,
+}
+
+impl From<PartnerRequest> for application::inputs::PartnerInput {
+    fn from(r: PartnerRequest) -> Self {
+        Self {
+            name: r.name,
+            kind: r.kind,
+            contact_name: r.contact_name,
+            phone: r.phone,
+            email: r.email,
+        }
+    }
+}
+
+/// POST /api/admin/partners/{id}/contracts. Dates are `YYYY-MM-DD`; a date
+/// that does not parse is reported by the use case like a missing one.
+#[derive(Deserialize)]
+pub struct ContractRequest {
+    pub location_id: Option<i32>,
+    pub starts_on: Option<String>,
+    pub ends_on: Option<String>,
+    pub monthly_fee: Option<i64>,
+    pub note: Option<String>,
+    #[serde(default)]
+    pub category_ids: Vec<i32>,
+}
+
+impl From<ContractRequest> for application::inputs::ContractInput {
+    fn from(r: ContractRequest) -> Self {
+        let date = |s: Option<String>| {
+            s.and_then(|s| chrono::NaiveDate::parse_from_str(s.trim(), "%Y-%m-%d").ok())
+        };
+        Self {
+            location_id: r.location_id,
+            starts_on: date(r.starts_on),
+            ends_on: date(r.ends_on),
+            monthly_fee: r.monthly_fee,
+            note: r.note,
+            category_ids: r.category_ids,
+        }
+    }
+}
+
+/// POST /api/admin/partners/{id}/contracts/{cid}/sponsored.
+#[derive(Deserialize)]
+pub struct SponsorRequest {
+    pub business_id: i32,
+}

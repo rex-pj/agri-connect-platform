@@ -3,6 +3,7 @@ pub mod auth_handler;
 pub mod explore_handler;
 pub mod health_handler;
 pub mod media_handler;
+pub mod partner_handler;
 pub mod permission_handler;
 pub mod products_handler;
 pub mod provider_dashboard_handler;

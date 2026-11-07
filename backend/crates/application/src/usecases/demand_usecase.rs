@@ -179,8 +179,13 @@ fn vn() -> Result<FixedOffset> {
 
 /// The `DEMAND_WEEKS` whole weeks before the one `now` falls in, oldest
 /// first, as Vietnam dates.
+/// Today in Vietnam.
+pub fn vn_today(now: DateTime<Utc>) -> Result<NaiveDate> {
+    Ok(now.with_timezone(&vn()?).date_naive())
+}
+
 pub fn report_weeks(now: DateTime<Utc>) -> Result<Vec<DemandWeekDto>> {
-    let today = now.with_timezone(&vn()?).date_naive();
+    let today = vn_today(now)?;
     let this_monday = today - Duration::days(i64::from(today.weekday().num_days_from_monday()));
     Ok((1..=DEMAND_WEEKS as i64)
         .rev()
@@ -569,6 +574,7 @@ mod tests {
             areas: vec![BusinessArea {
                 business_id: 1,
                 location_id: 10,
+                name: "shop".into(),
             }],
             sole: vec![SoleCategory {
                 business_id: 1,

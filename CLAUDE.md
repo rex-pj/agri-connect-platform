@@ -381,19 +381,27 @@ Grow the rest only once one district sustains real leads week after week (the ad
 - [ ] Verification badges ("blue tick") for vetted providers
 - [ ] Demand posts: farmers post a job, system pushes notifications to nearby providers
 
-### Phase 3 — Ecosystem & Monetization
+### Phase 3 — Ecosystem & Monetization (B2B)
 
+- [ ] Demand report: what farmers look for, by category × district × week (calls, Zalo, inquiries; searches once they are logged), aggregates only; first an admin page, then a partner's view of their own categories and districts
+- [ ] Partners: a `partners` record (brand, dealer, cooperative) with the categories and districts it pays for, a contract period, and a partner sign-in that sees only its report
+- [ ] Sponsored placement: a partner's chosen providers (its dealers, its trained drone pilots) shown first in its categories and districts, always labelled "Tài trợ", never hiding the others, counted like any lead
+- [ ] Compliance directory: durian export services (growing-area codes, residue testing, traceability) as their own categories, sponsored by cooperatives and exporters
 - [ ] Crop price feed: daily price tracking for rice and fruit
-- [ ] Ads: promoted listings for equipment dealers and fertilizer brands
 - [ ] Zalo Mini App: deep integration into Zalo ecosystem for fastest user acquisition
 
 ---
 
 ## Monetization Model
 
-1. **Listing fee:** Monthly charge for verified/priority placement
-2. **Lead gen:** Small fee when a provider receives a qualified contact request
-3. **Display ads:** Banner placements for fertilizer, pesticide, and equipment brands
+Farmers and small providers (an excavator owner, a mechanic, a spraying crew) use the platform for free: they are individual households that will not pay a monthly fee, and a listing that costs money empties the directory. The revenue comes from the companies behind them, who have marketing budgets and need what only the platform has, real local demand and a way to the right farmer at the right moment:
+
+1. **Demand data (B2B):** fertilizer and crop-protection brands, machinery dealers, cooperatives pay for the demand report of their categories and districts. Aggregates only: a partner never sees a farmer's name or phone, nor a count small enough to point at one household (cells under a minimum are hidden).
+2. **Sponsored placement (B2B):** a drone or machinery dealer pays to put the providers it sells to or trains first in its categories and districts (they need customers to pay off their machines); labelled, never exclusive.
+3. **Compliance and export partners (B2B):** cooperatives and durian exporters sponsor the directory of export-compliance services their growers must use.
+4. **Optional, later:** a provider's own paid boost, only once providers ask for more reach than the free listing gives.
+
+The weekly leads table is the sales argument: "last week in Cai Lậy, X farmers looked for spraying". No partner is signed before one district sustains real leads.
 
 ---
 
@@ -402,7 +410,8 @@ Grow the rest only once one district sustains real leads week after week (the ad
 1. **Field trip:** 1 week on-the-ground in target district to collect 50–100 initial provider listings manually
 2. **Launch:** Minimal PWA + hyper-targeted Facebook Ads by district radius to drive first users
 3. **Iterate:** Refine UI/UX based on farmer feedback (less text, more images, large buttons)
-4. **Scale:** Expand to adjacent districts using oil-spill growth model
+4. **First partners:** with 8+ weeks of steady leads in one district, take the demand figures to 2–3 local dealers (drone, fertilizer, machinery) and one cooperative; a first sponsored category per district
+5. **Scale:** Expand to adjacent districts using oil-spill growth model, each district opened with its own field trip and partners
 
 ---
 
@@ -410,6 +419,8 @@ Grow the rest only once one district sustains real leads week after week (the ad
 
 - New provider registrations per month
 - Leads per week (call taps + Zalo taps + inquiries, spam left out; admin dashboard)
+- Districts with steady leads (8+ weeks in a row): the markets partners can be sold
+- Paying partners, and revenue per district
 - Click-to-call conversion rate
 - User retention rate (return visits for crop prices / weather)
 

@@ -64,6 +64,24 @@ jobs:
       # change without a rebuild ships stale behaviour; this fails instead.
       - run: git diff --exit-code -- ../crates/web/static/js/islands.js
 
+  mini-app:
+    name: Zalo Mini App builds
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: zalo-mini-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.19"
+          cache: npm
+          cache-dependency-path: zalo-mini-app/package-lock.json
+      - run: npm ci
+      # Deployed to Zalo by hand with zmp-cli (see zalo-mini-app/README.md);
+      # here it only has to build.
+      - run: npm run build
+
   images:
     name: Container image build
     runs-on: ubuntu-24.04

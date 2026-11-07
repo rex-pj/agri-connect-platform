@@ -23,9 +23,10 @@ agri-connect-platform/
 │   │   │   ├── static/         # CSS, fonts, Bootstrap, Alpine, the committed islands.js
 │   │   │   └── locales/       # vi.toml, en.toml: every user-facing word ([errors] by code, [text] by key)
 │   │   └── tests/              # Integration + convention tests (no workspace lints)
-│   ├── islands/                # Svelte custom elements → static/js/islands.js (Node only here)
+│   ├── islands/                # Svelte custom elements → static/js/islands.js
 │   └── migration/              # Sea-ORM migrations: DDL only, append-only
-└── deploy/                     # compose, Caddy, VM deploy script, backups (see deploy/README.md)
+├── deploy/                     # compose, Caddy, VM deploy script, backups (see deploy/README.md)
+└── zalo-mini-app/              # Zalo Mini App (React, zmp-ui, zmp-sdk): a JSON API client (see its README)
 ```
 
 ---
@@ -61,7 +62,7 @@ agri-connect-platform/
 ### Infrastructure
 
 - **Cloud:** Google Compute Engine (one VM, docker compose), Artifact Registry, Cloud Storage for uploads; deployed by GitHub Actions
-- **Integration:** Zalo OA & Mini App API (planned)
+- **Integration:** Zalo Mini App (`zalo-mini-app/`: near me, prices, job post over the JSON API; position and phone tokens read with `ZALO_APP_SECRET`); Zalo OA (planned)
 
 ---
 
@@ -163,6 +164,7 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 | GET    | `/api/explore/categories`          | Category listing (filter by `type=service\|product`)                                                   |
 | GET    | `/api/explore/locations`           | Location presets listing                                                                               |
 | POST   | `/api/explore/jobs`                | A job post (`category_id`, `lat`+`lng` or `location_id`, description, name, phone; 201 `{id}`; 30/min) |
+| POST   | `/api/zalo/location`, `/api/zalo/phone` | The Zalo Mini App's `{access_token, token}` → `{lat, lng}` / `{phone}` through the Zalo Graph API (`ZALO_APP_SECRET`; unset: 503 `zalo_not_configured`; 30/min) |
 | GET    | `/api/explore/prices`              | Crop prices: each shown crop's latest price per area within `PRICE_FRESH_DAYS`, its move (`location_id?`)  |
 | GET    | `/api/explore/products`            | Browse products (paginated, filter by `category_id?`)                                                  |
 | GET    | `/api/explore/products/{id}`       | Product detail                                                                                         |
@@ -431,7 +433,7 @@ Grow the rest only once one area sustains real leads week after week (the admin 
 - [x] Sponsored placement: a contract's providers of its area shown first on that area's near-me page, labelled "Tài trợ", moved up, never hiding the others, counted like any lead
 - [x] Compliance directory: export-compliance service categories (growing-area codes, residue testing, traceability), sponsored like any other
 - [x] Crop price feed: the admin enters the day's farm-gate price of a crop per area; `/prices` and the home page show the fresh ones
-- [ ] Zalo Mini App: deep integration into Zalo ecosystem for fastest user acquisition
+- [x] Zalo Mini App: services near the farmer with a call button, crop prices, a job post; the position and phone come from Zalo (`zalo-mini-app/`)
 
 ---
 
@@ -499,6 +501,7 @@ The weekly leads table is the sales argument: "last week in Cai Lậy, X farmers
 - Partners (`PartnerUseCase`): a contract is in force between its dates (both included, Vietnam days) while its partner is on; the revenue figures are the monthly fees of contracts in force today. A partner account (role `partner`) reads only `ReportScope { areas, categories }` of its contracts in force. Sponsored shops must count under the contract's area; on `/explore` they are moved up under "Tài trợ" (`feature_sponsored`: one service per shop, at most `SPONSORED_SHOWN`), never hidden, never shown twice, counted by the same call beacon. "Assign an account" forms (provider, partner) share `account_rules::account_for_role`.
 - Crop prices (`PriceUseCase`): the admin (`price.manage`) enters a low–high price in đồng per unit for a shown crop in a shown area on a day not after today (Vietnam), at most `PRICE_PER_UNIT_MAX`; the same crop, area and day again replaces it (UNIQUE, upsert). The board (`build_board`, one place) shows each shown crop's latest price per area only within `PRICE_FRESH_DAYS`, with the move of its middle since the price before (`PRICE_HISTORY_DAYS` back); a hidden crop or area leaves it. The tab is `wide_only`; on a phone the home strip (`molecules/price_line.html`) leads there.
 - Job posts (`JobUseCase`): a farmer posts a job (a shown service category, the phone's position or else a location preset, a description, a name and a phone); one phone has at most `JOB_POSTS_OPEN_PER_PHONE` open posts within `JOB_POST_DAYS`. A post is never public: `JobNotificationSubscriber` emails the nearest `JOB_NOTIFY_MAX` providers within `JOB_NOTIFY_RADIUS_M` with a live service in its category (live, not demo, the managing account's address else the business's) in a background task, and those providers see it with the phone on `/provider/jobs` while it is open and at most `JOB_POST_DAYS` old (`OFFERS_THE_JOB` in the job repository, the one place that says so). The admin closes a post or marks it spam.
+- The Zalo Mini App (`zalo-mini-app/`) is a client of the JSON API, never a second backend: no business rule lives there, its words are in `src/texts.js`, errors show the backend's message, the API origin is `VITE_API_URL`. Zalo's location and phone tokens are converted only on the server (`ZaloUseCase` over the `ZaloGateway` port, `ZaloGraphGateway` the one file that calls the Zalo Graph API); the secret never reaches the phone. Its origin (`https://h5.zdn.vn`) goes in `CORS_ORIGINS`. CI only checks it builds; it is deployed with zmp-cli.
 - Repository queries use Sea-ORM's query builder (`find`, `update_many`, `Query::select` subqueries, `lock_exclusive` in a transaction), not raw SQL strings; `Expr::cust_with_values` only for a PostGIS fragment the builder cannot express.
 - Every list sort ends with an `id` tiebreaker, and price sorts put unpriced products last, so pages never repeat or skip rows.
 
@@ -551,7 +554,7 @@ middleware / handlers  →  application (use cases, ports)  →  domain  ←  in
 - **No words in code:** every user-facing word lives in `web/locales/vi.toml` and `en.toml` (same keys, a test compares them; `[text]` nested tables read as dotted keys). Templates say `t(key="area.name", count=…)` (an unknown key fails the render, like `url_for`); page code says `state.locale().text("area.name")` / `text_with(key, &[("name", &value)])`, the request's language; `Shell` takes the `Locale`, `Views` holds one Tera set per language; emails get their wording at startup (`EmailTexts`). A sentence that wraps markup is split into `_before` / `_after` keys (never `| safe`). Roles and permissions are worded by code (`role.<code>`, `role_description.<code>`, `permission.<key>`) through `labels::Worded`, in pages and the JSON API alike; the database `name` (seeded as the code) is only the fallback. Convention tests fail on a key with no text and on Vietnamese letters outside the locale files (category and location seeds in `catalogue.rs`, which admins edit, and the slug rule excepted).
 - **Bootstrap first:** Bootstrap 5 components and utilities before custom CSS; custom styles go in `static/css/app.css` only for what Bootstrap cannot do. No `style=""` attributes and no `<style>` elements: the page CSP is `style-src 'self'`.
 - Interactive bits are Alpine components (CSP build) registered in `static/js/app.js`; attribute values name a component property, never an expression (convention test). Markup must work without them: links and plain forms first.
-- What Alpine cannot do (today only geolocation) is an island: a Svelte custom element in `backend/islands/src` (light DOM, no `<style>`, all text passed as attributes), built with `npm run build` into `static/js/islands.js`, which is committed. CI rebuilds it and fails on a diff. Pages that use one load it in `{% block scripts %}`. Node is needed only for this.
+- What Alpine cannot do (today only geolocation) is an island: a Svelte custom element in `backend/islands/src` (light DOM, no `<style>`, all text passed as attributes), built with `npm run build` into `static/js/islands.js`, which is committed. CI rebuilds it and fails on a diff. Pages that use one load it in `{% block scripts %}`. Node is needed only for this and the Zalo Mini App.
 - **Large tap targets** (min 44 px) and **minimal text**: the primary users are farmers on low-end Android phones with poor connectivity.
 - Custom SQL in `Expr::cust_with_values` uses `$1`, `$2`: a `?` is left unbound and the query fails at runtime (convention test).
 - Page forms post urlencoded (`ApiForm`) and follow Post/Redirect/Get: success is a 303 with a `cookies::Flash`; a broken rule re-renders the page with the error's status, the typed values and one message per field (from `error_body`). The rules stay in the use case the JSON API uses. A form with a file box posts `multipart/form-data`, read with `ApiMultipart::into_form`; a photo is checked with `MediaUseCase::prepare_image` before anything else is saved, and ownership is checked before the body is read.
@@ -599,6 +602,9 @@ cargo test --workspace
 
 # Only after changing backend/islands/src: rebuild and commit the bundle
 cd islands; npm ci; npm run build
+
+# The Zalo Mini App (see zalo-mini-app/README.md)
+cd ../../zalo-mini-app; npm ci; npm run build
 ```
 
 > **Windows note:** If `npm` fails with a script execution policy error, run:

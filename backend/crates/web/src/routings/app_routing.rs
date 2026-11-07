@@ -27,7 +27,7 @@ use crate::{
         partner_handler::PartnerHandler, permission_handler::PermissionHandler,
         price_handler::PriceHandler, products_handler::ProductsHandler,
         provider_dashboard_handler::ProviderDashboardHandler, role_handler::RoleHandler,
-        setup_handler::SetupHandler, stats_handler::StatsHandler,
+        setup_handler::SetupHandler, stats_handler::StatsHandler, zalo_handler::ZaloHandler,
     },
     middleware::{
         client_ip, language, origin,
@@ -181,6 +181,9 @@ impl AppRouting {
             .route("/api/explore/reviews", post(ExploreHandler::submit_review))
             .route("/reviews", post(pages::provider::submit_review))
             .route("/api/explore/jobs", post(JobHandler::post))
+            // The Zalo Mini App's token conversions.
+            .route("/api/zalo/location", post(ZaloHandler::location))
+            .route("/api/zalo/phone", post(ZaloHandler::phone))
             // The job form: same rules and budget as the JSON endpoint.
             .route("/jobs", post(pages::jobs::create))
             .route("/language", post(pages::language::switch))

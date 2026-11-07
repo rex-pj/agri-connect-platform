@@ -1052,3 +1052,18 @@ pub struct JobPostDto {
     pub created_on: chrono::DateTime<chrono::Utc>,
     pub distance_m: Option<f64>,
 }
+
+// ── Zalo Mini App ─────────────────────────────────────────────────────────────
+
+/// The position behind a Mini App `getLocation` token.
+#[derive(Debug, Clone, Serialize)]
+pub struct ZaloLocationDto {
+    pub lat: f64,
+    pub lng: f64,
+}
+
+/// The phone behind a Mini App `getPhoneNumber` token, as our forms take it.
+#[derive(Debug, Clone, Serialize)]
+pub struct ZaloPhoneDto {
+    pub phone: String,
+}

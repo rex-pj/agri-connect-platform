@@ -1,0 +1,22 @@
+{
+  "name": "agri-connect-zalo-mini-app",
+  "private": true,
+  "type": "module",
+  "description": "The Zalo Mini App of Agri-Connect: services near the farmer, crop prices, a job post. A client of the backend's JSON API; deployed to Zalo with zmp-cli.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "deploy": "zmp deploy"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "zmp-sdk": "2.53.2",
+    "zmp-ui": "1.11.14"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "4.3.4",
+    "vite": "5.4.21",
+    "zmp-vite-plugin": "1.1.6"
+  }
+}

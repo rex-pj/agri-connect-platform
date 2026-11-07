@@ -13,7 +13,7 @@ use application::{
         AuditLogSubscriber, FileCleanupSubscriber, InProcessEventBus,
         InquiryNotificationSubscriber, JobNotificationSubscriber,
     },
-    ports::{EmailService, EventBus, FileStorage, PasswordHasher, TokenService},
+    ports::{EmailService, EventBus, FileStorage, PasswordHasher, TokenService, ZaloGateway},
     usecases::{
         admin_usecase::{AdminDeps, AdminUseCase},
         auth_usecase::{AuthDeps, AuthUseCase},
@@ -30,6 +30,7 @@ use application::{
         review_usecase::{ReviewDeps, ReviewUseCase},
         setup_usecase::SetupUseCase,
         stats_usecase::{StatsDeps, StatsUseCase},
+        zalo_usecase::ZaloUseCase,
     },
 };
 use infrastructure::{
@@ -52,6 +53,7 @@ use infrastructure::{
         role_repository::RoleRepository, service_repository::ServiceRepository,
         user_repository::UserRepository,
     },
+    zalo_gateway::ZaloGraphGateway,
 };
 use migration::{Migrator, MigratorTrait};
 use sea_orm::{ConnectOptions, Database, DatabaseConnection, DbErr};
@@ -59,7 +61,10 @@ use tracing::{info, warn};
 
 use crate::{
     app_state::{AppState, UseCases},
-    constants::{DB_MAX_CONNECTIONS, DEFAULT_APP_URL, DEFAULT_BIND_ADDR, DEFAULT_UPLOAD_DIR},
+    constants::{
+        DB_MAX_CONNECTIONS, DEFAULT_APP_URL, DEFAULT_BIND_ADDR, DEFAULT_UPLOAD_DIR, ZALO_GRAPH_URL,
+        ZALO_TIMEOUT_SECS,
+    },
     locale::{Lang, Locale, Locales},
     middleware::{origin::origin_of, rate_limit::Limiters},
     routes,
@@ -265,6 +270,22 @@ fn site_config() -> SiteConfig {
     }
 }
 
+/// `ZALO_APP_SECRET`: the Zalo app's secret key (developers.zalo.me), which
+/// lets the server read a Mini App's location and phone tokens. Unset: the
+/// Mini App asks for an area and a typed phone instead.
+fn zalo_gateway() -> Result<Option<Arc<dyn ZaloGateway>>, StartupError> {
+    let Some(secret) = optional_env("ZALO_APP_SECRET") else {
+        info!("ZALO_APP_SECRET not set; the Mini App's location and phone tokens are not read");
+        return Ok(None);
+    };
+    let gateway = ZaloGraphGateway::new(
+        ZALO_GRAPH_URL.to_owned(),
+        secret,
+        std::time::Duration::from_secs(ZALO_TIMEOUT_SECS),
+    )?;
+    Ok(Some(Arc::new(gateway)))
+}
+
 /// Where uploads go and how big they may be.
 #[derive(Clone)]
 pub struct Uploads {
@@ -349,6 +370,8 @@ pub fn build_state(
     email: Arc<dyn EmailService>,
     site: SiteConfig,
     uploads: Uploads,
+    // The Zalo Graph API for Mini App tokens; `None` without ZALO_APP_SECRET.
+    zalo: Option<Arc<dyn ZaloGateway>>,
     // REFRESH_TOKEN_DAYS.
     refresh_days: i64,
 ) -> Result<AppState, StartupError> {
@@ -491,6 +514,7 @@ pub fn build_state(
             location_repo,
             events.clone(),
         ),
+        zalo: ZaloUseCase::new(zalo),
         demand,
         review: ReviewUseCase::new(ReviewDeps {
             review_repo,
@@ -597,6 +621,7 @@ pub async fn start() -> Result<(), StartupError> {
         email_service(app_url.clone(), texts)?,
         site,
         uploads()?,
+        zalo_gateway()?,
         refresh_days()?,
     )?;
 

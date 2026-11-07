@@ -133,3 +133,17 @@ pub struct ProcessedImage {
 pub trait ImageProcessor: Send + Sync {
     async fn process(&self, upload: Vec<u8>) -> Result<ProcessedImage>;
 }
+
+/// The Zalo Graph API, for a Mini App's tokens: what a `getLocation` or
+/// `getPhoneNumber` token stands for. Each token is single-use and expires
+/// two minutes after it was issued; the server converts it with the app's
+/// secret key, which never reaches the phone.
+#[async_trait]
+pub trait ZaloGateway: Send + Sync {
+    /// (latitude, longitude) of a `getLocation` token.
+    async fn location(&self, access_token: &str, code: &str) -> domain::Result<(f64, f64)>;
+
+    /// The phone number of a `getPhoneNumber` token, as Zalo writes it
+    /// ("849…").
+    async fn phone_number(&self, access_token: &str, code: &str) -> domain::Result<String>;
+}

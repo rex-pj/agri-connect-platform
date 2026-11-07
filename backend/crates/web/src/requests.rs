@@ -509,3 +509,13 @@ pub struct JobStatusRequest {
     pub status: String,
     pub reason: Option<String>,
 }
+
+/// POST /api/zalo/location and /api/zalo/phone: the user's Zalo access token
+/// (`getAccessToken`) and the Mini App's one-time token.
+#[derive(Deserialize)]
+pub struct ZaloTokenRequest {
+    #[serde(default)]
+    pub access_token: String,
+    #[serde(default)]
+    pub token: String,
+}

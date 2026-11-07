@@ -9,7 +9,7 @@ use application::{
         partner_usecase::PartnerUseCase, permission_usecase::PermissionUseCase,
         price_usecase::PriceUseCase, product_usecase::ProductUseCase,
         provider_dashboard_usecase::ProviderDashboardUseCase, review_usecase::ReviewUseCase,
-        setup_usecase::SetupUseCase, stats_usecase::StatsUseCase,
+        setup_usecase::SetupUseCase, stats_usecase::StatsUseCase, zalo_usecase::ZaloUseCase,
     },
 };
 
@@ -34,6 +34,7 @@ pub struct UseCases {
     pub review: ReviewUseCase,
     pub setup: SetupUseCase,
     pub stats: StatsUseCase,
+    pub zalo: ZaloUseCase,
 }
 
 /// Cloned into every request, so it holds only `Arc`s. `startup.rs` builds it.

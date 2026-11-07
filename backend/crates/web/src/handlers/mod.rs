@@ -12,3 +12,4 @@ pub mod provider_dashboard_handler;
 pub mod role_handler;
 pub mod setup_handler;
 pub mod stats_handler;
+pub mod zalo_handler;

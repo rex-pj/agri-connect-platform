@@ -125,6 +125,10 @@ governor = { version = "0.6", default-features = false, features = [
     "dashmap", # DefaultKeyedStateStore is DashMap-backed; without it keyed() needs a custom store
     "quanta",  # DefaultClock is the quanta clock; without it the type alias changes
 ] }
+reqwest = { version = "0.12", default-features = false, features = [
+    "rustls-tls-native-roots", # HTTPS to graph.zalo.me with the system roots, as object_store already does
+    "json",                    # the Zalo Graph API answers JSON
+] }
 lettre = { version = "0.11", default-features = false, features = [
     "builder",           # Message::builder for the reset email
     "smtp-transport",    # AsyncSmtpTransport

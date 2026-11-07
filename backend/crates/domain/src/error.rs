@@ -57,6 +57,9 @@ error_codes! {
     InvalidQuery              => (BadRequest,      "invalid_query"),
     TooManyRequests           => (TooManyRequests, "too_many_requests"),
     DatabaseUnavailable       => (Unavailable,     "database_unavailable"),
+    ZaloNotConfigured         => (Unavailable,     "zalo_not_configured"),
+    ZaloUnavailable           => (Unavailable,     "zalo_unavailable"),
+    ZaloTokenRejected         => (BadRequest,      "zalo_token_rejected"),
 
     // ── Authentication / access ──────────────────────────────────────────────
     AuthenticationRequired    => (Unauthorized,    "authentication_required"),

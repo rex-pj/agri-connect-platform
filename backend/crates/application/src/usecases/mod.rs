@@ -17,3 +17,4 @@ pub mod review_usecase;
 pub mod service_rules;
 pub mod setup_usecase;
 pub mod stats_usecase;
+pub mod zalo_usecase;

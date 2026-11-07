@@ -127,6 +127,7 @@ pub fn state_with_email(
         email,
         web::views::SiteConfig::default(),
         uploads,
+        None,
         REFRESH_TOKEN_DEFAULT_DAYS,
     )
     .unwrap()

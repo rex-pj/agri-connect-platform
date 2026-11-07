@@ -73,3 +73,10 @@ pub const EXPLORE_RADII_M: [i64; 4] = [5_000, 10_000, 25_000, 50_000];
 /// whole number of metres for the radius links. Must be one of the choices.
 pub const EXPLORE_DEFAULT_RADIUS_M: i64 = RADIUS_DEFAULT_M as i64;
 const _: () = assert!(EXPLORE_RADII_M[1] == EXPLORE_DEFAULT_RADIUS_M);
+
+/// The Zalo Graph endpoint that converts a Mini App's location or phone
+/// token (with the app's secret key) into the data it stands for.
+pub const ZALO_GRAPH_URL: &str = "https://graph.zalo.me/v2.0/me/info";
+/// How long that call may take, in seconds, before the farmer is told to
+/// try again (a token expires two minutes after it was issued).
+pub const ZALO_TIMEOUT_SECS: u64 = 10;

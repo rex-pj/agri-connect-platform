@@ -8,7 +8,7 @@ use axum::{
 };
 use integration_tests::{
     body_text, categories_of, env_with_origin, get_page, install_admin, json_body,
-    register_provider, send, sign_in, Env, TEST_ORIGIN,
+    register_provider, send, send_from, sign_in, Env, TEST_ORIGIN,
 };
 use sea_orm::{ConnectionTrait, Statement};
 
@@ -220,10 +220,23 @@ async fn searches_stored(e: &Env, n: i64) {
 async fn searches_are_recorded_without_who_and_unmet_ones_are_listed() {
     let e = env_with_origin().await;
     let admin = install_admin(&e).await;
-    for _ in 0..5 {
-        let res = send(&e.router, get_page("/search?q=+May+Xoi+Lua+", None)).await;
+    // Five farmers search the same words; the first one reloads the page,
+    // which is the same search.
+    for n in 0..5_u8 {
+        let res = send_from(
+            &e.router,
+            get_page("/search?q=+May+Xoi+Lua+", None),
+            [10, 0, 0, n],
+        )
+        .await;
         assert_eq!(res.status(), StatusCode::OK);
     }
+    send_from(
+        &e.router,
+        get_page("/search?q=may+xoi+lua", None),
+        [10, 0, 0, 0],
+    )
+    .await;
     // A tab switch is the same search; a page without words is none.
     send(
         &e.router,
@@ -248,6 +261,14 @@ async fn searches_are_recorded_without_who_and_unmet_ones_are_listed() {
     )
     .await;
     searches_stored(&e, 7).await;
+    // A signed-in admin trying the search is not demand.
+    send(&e.router, get_page("/search?q=thu+nghiem", Some(&admin))).await;
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    assert_eq!(
+        scalar(&e, "SELECT count(*)::text AS v FROM search_events").await,
+        "7",
+        "no reload, no tab switch, no admin"
+    );
 
     assert_eq!(
         scalar(

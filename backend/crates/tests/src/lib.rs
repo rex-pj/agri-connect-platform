@@ -134,6 +134,19 @@ pub async fn send(router: &Router, mut request: Request<Body>) -> Response<Body>
     router.clone().oneshot(request).await.unwrap()
 }
 
+/// Sends one request as if from `peer`: different visitors, for counts that
+/// tell visitors apart.
+pub async fn send_from(
+    router: &Router,
+    mut request: Request<Body>,
+    peer: [u8; 4],
+) -> Response<Body> {
+    request
+        .extensions_mut()
+        .insert(ConnectInfo(SocketAddr::from((peer, 40000))));
+    router.clone().oneshot(request).await.unwrap()
+}
+
 pub async fn json_body(response: Response<Body>) -> serde_json::Value {
     let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await

@@ -50,9 +50,6 @@ pub const RADIUS_DEFAULT_M: f64 = 10_000.0;
 pub const GEO_RESULTS_MAX: i64 = 50;
 /// The window the call counts cover (admin dashboard, provider dashboard).
 pub const CALL_STATS_DAYS: i64 = 30;
-/// How many weeks of leads (calls, Zalo chats, inquiries) the admin dashboard
-/// shows, newest first: enough to see whether a field visit took hold.
-pub const LEAD_WEEKS: i64 = 8;
 
 // ── Demand report ─────────────────────────────────────────────────────────────
 /// Vietnam is UTC+7 all year (no daylight saving since 1975), so a fixed
@@ -72,6 +69,9 @@ pub const STEADY_WEEKLY_LEADS: i64 = 20;
 pub const SEARCH_QUERY_MAX: usize = 100;
 /// How many searches that found nothing the report lists, most asked first.
 pub const UNMET_SEARCHES_SHOWN: usize = 10;
+/// The same search by the same visitor within this many seconds counts once
+/// (a reload, a back button).
+pub const SEARCH_REPEAT_SECS: u64 = 600;
 
 // ── Partners ──────────────────────────────────────────────────────────────────
 pub const PARTNER_NAME_MAX: usize = 200;

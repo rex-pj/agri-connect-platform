@@ -329,29 +329,9 @@ pub struct AdminStatsDto {
     pub verified_businesses: i64,
     pub active_products: i64,
     pub total_users: i64,
-    /// Taps on public call buttons in the last `CALL_STATS_DAYS` days.
+    /// Taps on the public call and Zalo buttons of real (not demo) shops in
+    /// the last `CALL_STATS_DAYS` days.
     pub recent_calls: i64,
-    /// The last `LEAD_WEEKS` weeks, newest first.
-    pub weeks: Vec<WeekLeadsDto>,
-}
-
-/// The leads of one week: `[from, to)`, seven days ending at `to`.
-#[derive(Serialize)]
-pub struct WeekLeadsDto {
-    pub from: DateTime<Utc>,
-    pub to: DateTime<Utc>,
-    /// Taps on call buttons.
-    pub calls: i64,
-    /// Taps on Zalo buttons.
-    pub zalo: i64,
-    /// Contact requests sent, spam left out.
-    pub inquiries: i64,
-}
-
-impl WeekLeadsDto {
-    pub fn total(&self) -> i64 {
-        self.calls + self.zalo + self.inquiries
-    }
 }
 
 #[derive(Serialize)]

@@ -88,6 +88,15 @@ pub struct CategoryInput {
     pub display_order: i16,
 }
 
+/// Who made a tap or a search, as far as counting it goes. Every account is
+/// an admin, a provider or a partner (farmers never sign in), so a
+/// signed-in visitor's taps and searches are never demand. `key` tells one
+/// anonymous visitor's repeats apart; it is kept in memory only, never
+/// stored.
+pub enum Visitor {
+    SignedIn,
+    Anonymous { key: String },
+}
 /// A tap on a public call button: which kind of card or page (`service`,
 /// `product`, `provider`) and that record's id. The business it rings is
 /// looked up from the record, never taken from the request. `channel` is how
@@ -96,6 +105,7 @@ pub struct CallInput {
     pub kind: String,
     pub id: i32,
     pub channel: Option<String>,
+    pub visitor: Visitor,
 }
 
 /// Where a search looked: a location preset, a point (the device), or
@@ -112,6 +122,7 @@ pub struct SearchInput {
     pub category_id: Option<i32>,
     pub place: SearchPlace,
     pub results: i64,
+    pub visitor: Visitor,
 }
 
 /// A partner's boxes as sent (create and edit alike).

@@ -820,17 +820,14 @@ verified  = "Verified"
 products  = "Products on sale"
 users     = "System accounts"
 calls     = "Call + Zalo taps ({days} days)"
+platform  = "Platform"
 steady_areas = "Steady areas ({weeks} weeks)"
-monthly_revenue = "Monthly revenue (đồng)"
 
 [text.admin_leads]
 title     = "Leads by week"
-hint      = "Farmers reaching providers through the platform: call taps, Zalo chats, contact requests (spam left out)."
+hint      = "The demand report figures: call taps, Zalo chats and contact requests of whole weeks, no spam, no demo data. Figures under {min} are hidden."
 week      = "Week"
-calls     = "Calls"
-zalo      = "Zalo"
-inquiries = "Requests"
-total     = "Total"
+total     = "Leads"
 
 [text.permission_group]
 system    = "System"

@@ -80,6 +80,23 @@ pub fn summary(text: &str, max: usize) -> Option<String> {
     Some(format!("{}…", cut.trim_end()))
 }
 
+/// Who is looking, for counting demand: a signed-in admin, provider or
+/// partner (never counted), or an anonymous visitor told apart by their
+/// address, which the counter keeps in memory only.
+pub fn visitor(
+    shell: &crate::shell::Shell,
+    ip: Option<&crate::middleware::client_ip::ClientIp>,
+) -> application::inputs::Visitor {
+    use application::inputs::Visitor;
+    if shell.profile.as_ref().is_some_and(|p| p.signed_in) {
+        Visitor::SignedIn
+    } else {
+        Visitor::Anonymous {
+            key: ip.map(|i| i.0.to_string()).unwrap_or_default(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::summary;

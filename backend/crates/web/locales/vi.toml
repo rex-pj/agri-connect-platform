@@ -831,17 +831,14 @@ verified  = "Đã xác minh"
 products  = "Sản phẩm đang bán"
 users     = "Tài khoản hệ thống"
 calls     = "Lượt gọi + Zalo ({days} ngày)"
+platform  = "Nền tảng"
 steady_areas = "Khu vực đều đặn ({weeks} tuần)"
-monthly_revenue = "Doanh thu tháng (đồng)"
 
 [text.admin_leads]
 title     = "Liên hệ theo tuần"
-hint      = "Nông dân liên hệ nhà cung cấp qua nền tảng: bấm gọi, nhắn Zalo, gửi yêu cầu (không tính spam)."
+hint      = "Cùng số liệu với báo cáo nhu cầu: lượt gọi, nhắn Zalo và yêu cầu liên hệ của các tuần đã trọn, không tính spam và dữ liệu mẫu. Số dưới {min} được ẩn."
 week      = "Tuần"
-calls     = "Gọi"
-zalo      = "Zalo"
-inquiries = "Yêu cầu"
-total     = "Tổng"
+total     = "Liên hệ"
 
 [text.permission_group]
 system    = "Hệ thống"

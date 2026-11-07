@@ -1,14 +1,15 @@
-//! GET /admin → /admin/dashboard, and the dashboard: platform counts, the
-//! leads of the last weeks (calls, Zalo chats, inquiries), plus a
-//! warning while demo listings are mixed into the real ones.
+//! GET /admin → /admin/dashboard, and the dashboard: the platform counts,
+//! then the business ones (steady areas, paying partners, revenue) and the
+//! leads of the report weeks, plus a warning while demo listings are mixed
+//! into the real ones. The weekly leads are the demand report's: one
+//! definition of a lead everywhere.
 
 use application::{
     catalogue::{PERM_PARTNER_MANAGE, PERM_REPORT_DEMAND_READ, PERM_SYSTEM_DEMO_MANAGE},
     constants::CALL_STATS_DAYS,
-    outputs::{AdminStatsDto, WeekLeadsDto},
+    outputs::{AdminStatsDto, DemandReportDto, Figure},
 };
 use axum::{extract::State, http::StatusCode, response::Response};
-use chrono::Duration;
 use domain::Error;
 use serde::Serialize;
 
@@ -20,13 +21,14 @@ use crate::{
         admin::{render_admin, url},
         see_other,
     },
-    views::format_vn_day,
 };
 
 #[derive(Serialize)]
 pub struct StatCard {
     pub label: String,
     pub value: i64,
+    /// An amount of đồng: shown with the `vnd` filter.
+    pub money: bool,
     pub icon: &'static str,
     /// Colour modifier of the icon tile (`stat-card__icon--<tone>`).
     pub tone: &'static str,
@@ -34,14 +36,25 @@ pub struct StatCard {
     pub href: Option<String>,
 }
 
-fn cards(locale: &Locale, s: &AdminStatsDto) -> Vec<StatCard> {
-    let card = |label: String, value, icon, tone| StatCard {
-        href: None,
+/// A titled row of cards, as the admin menu groups its pages.
+#[derive(Serialize)]
+pub struct StatGroup {
+    pub title: String,
+    pub cards: Vec<StatCard>,
+}
+
+fn card(label: String, value: i64, icon: &'static str, tone: &'static str) -> StatCard {
+    StatCard {
         label,
         value,
+        money: false,
         icon,
         tone,
-    };
+        href: None,
+    }
+}
+
+fn platform_cards(locale: &Locale, s: &AdminStatsDto) -> Vec<StatCard> {
     vec![
         card(
             locale.text("admin_stats.providers"),
@@ -76,39 +89,40 @@ fn cards(locale: &Locale, s: &AdminStatsDto) -> Vec<StatCard> {
     ]
 }
 
-/// One week of leads, worded for the table: "01/11 – 07/11".
+/// One report week of the dashboard's table: "02/11 – 08/11", its leads and
+/// its searches, hidden like the report hides them.
 #[derive(Serialize)]
 pub struct WeekRow {
-    pub label: String,
-    pub calls: i64,
-    pub zalo: i64,
-    pub inquiries: i64,
-    pub total: i64,
+    pub starts_on: chrono::NaiveDate,
+    pub ends_on: chrono::NaiveDate,
+    pub leads: Figure,
+    pub searches: Figure,
 }
 
-fn week_rows(weeks: &[WeekLeadsDto]) -> Vec<WeekRow> {
-    weeks
+/// The report's weeks, newest first.
+fn week_rows(report: &DemandReportDto) -> Vec<WeekRow> {
+    report
+        .weeks
         .iter()
-        .map(|w| WeekRow {
-            // `to` is the first instant after the week: its last day is before it.
-            label: format!(
-                "{} – {}",
-                format_vn_day(w.from),
-                format_vn_day(w.to - Duration::seconds(1))
-            ),
-            calls: w.calls,
-            zalo: w.zalo,
-            inquiries: w.inquiries,
-            total: w.total(),
+        .zip(&report.all.weeks)
+        .zip(&report.searches)
+        .rev()
+        .map(|((w, leads), searches)| WeekRow {
+            starts_on: w.starts_on,
+            ends_on: w.ends_on,
+            leads: *leads,
+            searches: *searches,
         })
         .collect()
 }
 
 #[derive(Serialize)]
 pub struct DashboardPage {
-    pub stats: Vec<StatCard>,
-    /// The last `LEAD_WEEKS` weeks of leads, newest first.
+    pub groups: Vec<StatGroup>,
+    /// The report weeks' leads (with `report.demand.read`), newest first.
     pub weeks: Vec<WeekRow>,
+    pub min_count: i64,
+    pub report_href: Option<String>,
     /// Demo businesses still listed; only for those who may remove them.
     pub demo_count: Option<i64>,
 }
@@ -131,40 +145,67 @@ pub async fn show(
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
+    let locale = state.locale();
     let stats = state.usecases.stats.get_stats(&actor).await?;
-    let mut stats_cards = cards(state.locale(), &stats);
+    let mut groups = vec![StatGroup {
+        title: locale.text("admin_stats.platform"),
+        cards: platform_cards(locale, &stats),
+    }];
+
+    let mut business = Vec::new();
+    let mut weeks = Vec::new();
+    let mut min_count = 0;
+    let mut report_href = None;
     // Areas ready to show partners: every report week at the bar.
     if actor.can(PERM_REPORT_DEMAND_READ) {
         let report = state.usecases.demand.report(&actor, None).await?;
-        stats_cards.push(StatCard {
-            label: state.locale().text_with(
-                "admin_stats.steady_areas",
-                &[("weeks", &report.weeks.len())],
-            ),
-            value: report.steady_areas as i64,
-            icon: "fa-chart-column",
-            tone: "blue",
-            href: Some(url("admin_demand", &[])?),
+        let href = url("admin_demand", &[])?;
+        business.push(StatCard {
+            href: Some(href.clone()),
+            ..card(
+                locale.text_with(
+                    "admin_stats.steady_areas",
+                    &[("weeks", &report.weeks.len())],
+                ),
+                report.steady_areas as i64,
+                "fa-chart-column",
+                "blue",
+            )
         });
+        weeks = week_rows(&report);
+        min_count = report.min_count;
+        report_href = Some(href);
     }
     if actor.can(PERM_PARTNER_MANAGE) {
         let kpis = state.usecases.partner.kpis(&actor).await?;
-        let partners_href = url("admin_partners", &[])?;
-        stats_cards.push(StatCard {
-            label: state.locale().text("partner.paying"),
-            value: kpis.paying_partners as i64,
-            icon: "fa-handshake",
-            tone: "green",
-            href: Some(partners_href.clone()),
+        let href = url("admin_partners", &[])?;
+        business.push(StatCard {
+            href: Some(href.clone()),
+            ..card(
+                locale.text("partner.paying"),
+                kpis.paying_partners as i64,
+                "fa-handshake",
+                "green",
+            )
         });
-        stats_cards.push(StatCard {
-            label: state.locale().text("admin_stats.monthly_revenue"),
-            value: kpis.monthly_revenue,
-            icon: "fa-coins",
-            tone: "amber",
-            href: Some(partners_href),
+        business.push(StatCard {
+            href: Some(href),
+            money: true,
+            ..card(
+                locale.text("partner.monthly_revenue"),
+                kpis.monthly_revenue,
+                "fa-coins",
+                "amber",
+            )
         });
     }
+    if !business.is_empty() {
+        groups.push(StatGroup {
+            title: locale.text("admin_menu.business"),
+            cards: business,
+        });
+    }
+
     // Asking only when allowed: the banner's button leads to that page.
     let demo_count = if actor.can(PERM_SYSTEM_DEMO_MANAGE) {
         let status = state.usecases.setup.demo_status(&actor).await?;
@@ -179,8 +220,10 @@ pub async fn show(
         StatusCode::OK,
         "pages/admin/dashboard.html",
         &DashboardPage {
-            stats: stats_cards,
-            weeks: week_rows(&stats.weeks),
+            groups,
+            weeks,
+            min_count,
+            report_href,
             demo_count,
         },
     )

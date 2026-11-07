@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 
 use crate::{
     error::Error,
@@ -15,10 +14,6 @@ pub trait InquiryRepositoryTrait {
 
     /// `provider_id`: only that business's.
     async fn count_admin(&self, provider_id: Option<i32>) -> Result<i64, Error>;
-
-    /// Inquiries sent in `[from, to)`, spam left out: the weekly leads of the
-    /// admin dashboard.
-    async fn count_window(&self, from: DateTime<Utc>, to: DateTime<Utc>) -> Result<i64, Error>;
 
     /// The newest inquiry from `phone` to the business that its provider
     /// answered (`INQUIRY_STATUSES_REVIEWABLE`): what lets that farmer review

@@ -493,7 +493,6 @@ pub fn build_state(
             product_repo,
             user_repo,
             call_repo: call_repo.clone(),
-            inquiry_repo,
         }),
     };
 

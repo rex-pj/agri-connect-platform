@@ -31,7 +31,7 @@ use crate::{
         GEO_RESULTS_MAX, NOTE_MAX_LEN, PAGE_SIZE, RADIUS_MAX_M, RADIUS_MIN_M,
         REQUESTER_NAME_MAX_LEN, SERVICES_PER_BUSINESS_MAX, TOPIC_MAX_LEN,
     },
-    inputs::{BrowseParams, CallInput, ContactInput, GeoSearchParams},
+    inputs::{BrowseParams, CallInput, ContactInput, GeoSearchParams, Visitor},
     outputs::{
         BrowseResponse, BusinessBrowseDto, BusinessDetailDto, BusinessSearchDto, CategoryDto,
         ExploreData, InquiryCreatedDto, LocationDto, ProductDto, PublicServiceDto,
@@ -221,6 +221,10 @@ impl ExploreUseCase {
             }
             _ => return Err(Error::new(ErrorCode::InvalidCallTarget)),
         };
+        // An admin, provider or partner trying a button is not demand.
+        if matches!(input.visitor, Visitor::SignedIn) {
+            return Ok(());
+        }
         self.call_repo
             .record(NewCallClick {
                 business_id,

@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use sea_orm::{
     sea_query::Expr, ColumnTrait, ConnectionTrait, DatabaseConnection, DbErr, EntityTrait,
     FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait,
@@ -13,10 +13,7 @@ use domain::{
     repositories::inquiry_repository_trait::InquiryRepositoryTrait,
 };
 
-use domain::{
-    constants::{INQUIRY_STATUSES_REVIEWABLE, INQUIRY_STATUS_SPAM},
-    Error, ErrorCode,
-};
+use domain::{constants::INQUIRY_STATUSES_REVIEWABLE, Error, ErrorCode};
 
 use crate::{
     db_types::DateTimeWithTimeZone,
@@ -100,20 +97,6 @@ impl InquiryRepositoryTrait for InquiryRepository {
             .map_err(|e| {
                 error!("inquiry find_reviewable error: {e}");
                 Error::internal("Failed to check the contact request.")
-            })
-    }
-
-    async fn count_window(&self, from: DateTime<Utc>, to: DateTime<Utc>) -> Result<i64, Error> {
-        Inquiry::find()
-            .filter(inquiry::Column::CreatedOn.gte(from))
-            .filter(inquiry::Column::CreatedOn.lt(to))
-            .filter(inquiry::Column::Status.ne(INQUIRY_STATUS_SPAM))
-            .count(self.db.as_ref())
-            .await
-            .map(|c| c as i64)
-            .map_err(|e| {
-                error!("inquiry count_window error: {e}");
-                Error::internal("Failed to count inquiries.")
             })
     }
 

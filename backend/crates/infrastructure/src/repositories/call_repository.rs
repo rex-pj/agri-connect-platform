@@ -1,13 +1,19 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter, Set};
+use sea_orm::{
+    sea_query::Query, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
+    Set,
+};
 use std::sync::Arc;
 
 use domain::{
     models::call::NewCallClick, repositories::call_repository_trait::CallRepositoryTrait, Error,
 };
 
-use crate::entities::call_click::{self, Entity as CallClick};
+use crate::entities::{
+    business,
+    call_click::{self, Entity as CallClick},
+};
 
 pub struct CallRepository {
     db: Arc<DatabaseConnection>,
@@ -40,7 +46,15 @@ impl CallRepositoryTrait for CallRepository {
         business_id: Option<i32>,
         since: DateTime<Utc>,
     ) -> Result<i64, Error> {
-        let mut query = CallClick::find().filter(call_click::Column::CreatedOn.gte(since));
+        // Demo shops' taps are never leads.
+        let real = Query::select()
+            .column(business::Column::Id)
+            .from(business::Entity)
+            .and_where(business::Column::IsDemo.eq(false))
+            .to_owned();
+        let mut query = CallClick::find()
+            .filter(call_click::Column::CreatedOn.gte(since))
+            .filter(call_click::Column::BusinessId.in_subquery(real));
         if let Some(id) = business_id {
             query = query.filter(call_click::Column::BusinessId.eq(id));
         }
@@ -49,21 +63,5 @@ impl CallRepositoryTrait for CallRepository {
             .await
             .map(|c| c as i64)
             .map_err(|e| Error::internal(format!("call count_since: {e}")))
-    }
-
-    async fn count_window(
-        &self,
-        channel: &str,
-        from: DateTime<Utc>,
-        to: DateTime<Utc>,
-    ) -> Result<i64, Error> {
-        CallClick::find()
-            .filter(call_click::Column::Channel.eq(channel))
-            .filter(call_click::Column::CreatedOn.gte(from))
-            .filter(call_click::Column::CreatedOn.lt(to))
-            .count(self.db.as_ref())
-            .await
-            .map(|c| c as i64)
-            .map_err(|e| Error::internal(format!("call count_window: {e}")))
     }
 }

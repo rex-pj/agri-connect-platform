@@ -8,12 +8,13 @@
 //! position. Coordinates are in the query string but never in the logs: the
 //! request span records the path only.
 
+use crate::{middleware::client_ip::ClientIp, pages::visitor};
 use application::outputs::{CategoryDto, LocationDto, ProductDto};
 use application::{
     constants::{GEO_RESULTS_MAX, LAT_MAX, LAT_MIN, LNG_MAX, LNG_MIN},
     inputs::{GeoSearchParams, SearchInput, SearchPlace},
 };
-use axum::{extract::State, response::Response};
+use axum::{extract::State, response::Response, Extension};
 use domain::{constants::CATEGORY_TYPE_SERVICE, Error};
 use serde::{Deserialize, Serialize};
 
@@ -145,6 +146,7 @@ fn device_position(q: &ExploreQuery) -> Option<Position> {
 
 pub async fn show(
     shell: Shell,
+    ip: Option<Extension<ClientIp>>,
     State(state): State<AppState>,
     ApiQuery(q): ApiQuery<ExploreQuery>,
 ) -> Result<Response, Error> {
@@ -226,6 +228,7 @@ pub async fn show(
                     },
                 },
                 results: (services.len() + providers.len() + products.len()) as i64,
+                visitor: visitor(&shell, ip.as_ref().map(|e| &e.0)),
             });
             // The area's sponsored providers come first, labelled; the rest keep
             // their order.

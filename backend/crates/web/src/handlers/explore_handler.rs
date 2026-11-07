@@ -1,6 +1,6 @@
 use application::{
     constants::RADIUS_DEFAULT_M,
-    inputs::{BrowseParams, CallInput, ContactInput, GeoSearchParams},
+    inputs::{BrowseParams, CallInput, ContactInput, GeoSearchParams, Visitor},
     outputs::{BrowseResponse, BusinessSearchDto, PublicServiceDto, ServiceBrowseResponse},
 };
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
@@ -10,6 +10,7 @@ use serde::Serialize;
 use crate::{
     app_state::AppState,
     extract::{ApiJson, ApiPath, ApiQuery},
+    middleware::auth::MaybeActor,
     requests::{CallRequest, CategoriesQuery, InquiryRequest, ProvidersQuery, ReviewRequest},
 };
 
@@ -133,6 +134,7 @@ impl ExploreHandler {
     /// POST /api/explore/calls — `{ kind, id, channel? }` of the card or page whose
     /// call button was tapped; 204. Rate-limited like the contact form.
     pub async fn record_call(
+        MaybeActor(actor): MaybeActor,
         State(state): State<AppState>,
         ApiJson(req): ApiJson<CallRequest>,
     ) -> Result<impl IntoResponse, Error> {
@@ -143,6 +145,14 @@ impl ExploreHandler {
                 kind: req.kind,
                 id: req.id,
                 channel: req.channel,
+                visitor: if actor.is_some() {
+                    Visitor::SignedIn
+                } else {
+                    Visitor::Anonymous {
+                        // Taps are not told apart: every tap is a lead.
+                        key: String::new(),
+                    }
+                },
             })
             .await?;
         Ok(StatusCode::NO_CONTENT)

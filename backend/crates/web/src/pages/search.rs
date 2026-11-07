@@ -4,11 +4,12 @@
 //! Tabs are links (`tab=services`), so they work without JS; the server marks
 //! the other sections `hidden`. Alpine `tabs` switches them in place.
 
+use crate::{middleware::client_ip::ClientIp, pages::visitor};
 use application::{
     inputs::{BrowseParams, SearchInput, SearchPlace},
     outputs::{BrowseResponse, ProductDto, ServiceBrowseResponse},
 };
-use axum::{extract::State, response::Response};
+use axum::{extract::State, response::Response, Extension};
 use domain::{
     models::{
         business::ProviderSort,
@@ -143,6 +144,7 @@ async fn find(state: &AppState, q: &str) -> Result<Found, Error> {
 
 pub async fn show(
     shell: Shell,
+    ip: Option<Extension<ClientIp>>,
     State(state): State<AppState>,
     ApiQuery(query): ApiQuery<SearchQuery>,
 ) -> Result<Response, Error> {
@@ -165,6 +167,7 @@ pub async fn show(
             category_id: None,
             place: SearchPlace::Anywhere,
             results: service_total + product_total + provider_total,
+            visitor: visitor(&shell, ip.as_ref().map(|e| &e.0)),
         });
     }
     let more = |route: &str, total: i64| -> Result<Option<String>, Error> {

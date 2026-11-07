@@ -3,7 +3,8 @@
 //! services it offers. Providers with no service yet are listed too, so a
 //! new sign-up can be found. The services themselves are `/services`.
 
-use axum::{extract::State, response::Response};
+use crate::{middleware::client_ip::ClientIp, pages::visitor};
+use axum::{extract::State, response::Response, Extension};
 use domain::{constants::CATEGORY_TYPE_SERVICE, Error};
 use serde::Serialize;
 
@@ -41,6 +42,7 @@ pub struct DirectoryPage {
 /// GET /providers
 pub async fn list(
     shell: Shell,
+    ip: Option<Extension<ClientIp>>,
     State(state): State<AppState>,
     ApiQuery(q): ApiQuery<ListQuery>,
 ) -> Result<Response, Error> {
@@ -48,7 +50,7 @@ pub async fn list(
     let categories = explore.get_categories(Some(CATEGORY_TYPE_SERVICE)).await?;
     let list = ListState::parse(&q, &categories);
     let result = explore.browse_providers(list.params()).await?;
-    if let Some(search) = list.search(result.total) {
+    if let Some(search) = list.search(result.total, visitor(&shell, ip.as_ref().map(|e| &e.0))) {
         state.usecases.demand.record_search(search);
     }
 

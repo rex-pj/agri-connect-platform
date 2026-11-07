@@ -14,7 +14,8 @@
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    sync::Arc,
+    sync::{Arc, Mutex},
+    time::Instant,
 };
 
 use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveDate, TimeZone, Utc};
@@ -38,9 +39,10 @@ use crate::{
     catalogue::PERM_REPORT_DEMAND_READ,
     constants::{
         DEMAND_AREA_RADIUS_M, DEMAND_REPORT_MIN_COUNT, DEMAND_WEEKS, SEARCH_QUERY_MAX,
-        STEADY_WEEKLY_LEADS, UNMET_SEARCHES_SHOWN, VN_UTC_OFFSET_SECS,
+        SEARCH_REPEAT_SECS, STEADY_WEEKLY_LEADS, UNMET_SEARCHES_SHOWN, VN_UTC_OFFSET_SECS,
     },
-    inputs::{SearchInput, SearchPlace},
+    hashing::sha256_hex,
+    inputs::{SearchInput, SearchPlace, Visitor},
     outputs::{
         DemandAreaDto, DemandReportDto, DemandRowDto, DemandWeekDto, Figure, UnmetSearchDto,
     },
@@ -69,6 +71,9 @@ pub struct DemandReportUseCase {
     demand_repo: Arc<dyn DemandRepositoryTrait + Send + Sync>,
     category_repo: Arc<dyn CategoryRepositoryTrait + Send + Sync>,
     location_repo: Arc<dyn LocationRepositoryTrait + Send + Sync>,
+    /// Fingerprints of recent searches (hashed, in memory only) and when
+    /// they were made: a repeat within `SEARCH_REPEAT_SECS` counts once.
+    recent_searches: Arc<Mutex<HashMap<String, Instant>>>,
 }
 
 /// Everything `DemandReportUseCase` depends on, named so wiring cannot swap
@@ -85,6 +90,7 @@ impl DemandReportUseCase {
             demand_repo: d.demand_repo,
             category_repo: d.category_repo,
             location_repo: d.location_repo,
+            recent_searches: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -96,6 +102,22 @@ impl DemandReportUseCase {
             ..ReportScope::default()
         };
         self.build(Utc::now(), &scope).await
+    }
+
+    /// True the first time `fingerprint` is seen within `SEARCH_REPEAT_SECS`;
+    /// older ones are forgotten as it goes, so the memory stays small.
+    fn first_in_window(&self, fingerprint: String) -> bool {
+        let window = std::time::Duration::from_secs(SEARCH_REPEAT_SECS);
+        let now = Instant::now();
+        let Ok(mut recent) = self.recent_searches.lock() else {
+            return true;
+        };
+        recent.retain(|_, seen| now.duration_since(*seen) < window);
+        if recent.contains_key(&fingerprint) {
+            return false;
+        }
+        recent.insert(fingerprint, now);
+        true
     }
 
     /// The report as a scope allows; the caller has checked who may see it.
@@ -128,8 +150,13 @@ impl DemandReportUseCase {
 
     /// Counts a visitor's search for the report, in the background: a page
     /// never waits for it nor fails on it. Words are trimmed, lowercased and
-    /// capped; a search with no words, category or place is not one.
+    /// capped; a search with no words, category or place is not one, nor is
+    /// a signed-in visitor's, nor the same search again by the same visitor
+    /// within `SEARCH_REPEAT_SECS`.
     pub fn record_search(&self, input: SearchInput) {
+        let Visitor::Anonymous { key } = &input.visitor else {
+            return;
+        };
         let query: String = input
             .query
             .trim()
@@ -142,6 +169,19 @@ impl DemandReportUseCase {
             && input.category_id.is_none()
             && matches!(input.place, SearchPlace::Anywhere)
         {
+            return;
+        }
+        let place = match input.place {
+            SearchPlace::Preset(id) => format!("p{id}"),
+            SearchPlace::Point { lat, lng } => format!("{lat:.3},{lng:.3}"),
+            SearchPlace::Anywhere => String::new(),
+        };
+        let fingerprint = sha256_hex(format!(
+            "{key}|{}|{:?}|{place}",
+            query.as_deref().unwrap_or_default(),
+            input.category_id
+        ));
+        if !self.first_in_window(fingerprint) {
             return;
         }
         let repo = Arc::clone(&self.demand_repo);

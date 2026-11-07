@@ -128,9 +128,9 @@ fn zalo_tap(kind: &str, id: i64, channel: &str) -> Request<Body> {
 
 #[tokio::test]
 #[ignore = "needs TEST_DATABASE_URL"]
-async fn zalo_taps_are_leads_of_their_own_channel_and_add_up_by_week() {
+async fn zalo_taps_are_leads_of_their_own_channel() {
     let e = env_with_origin().await;
-    let (_, service_id) = provider_with_service(&e).await;
+    let (token, service_id) = provider_with_service(&e).await;
 
     // The detail page offers Zalo beside the call button, counted the same way.
     let res = send(
@@ -146,6 +146,13 @@ async fn zalo_taps_are_leads_of_their_own_channel_and_add_up_by_week() {
     let res = send(&e.router, zalo_tap("service", service_id, "zalo")).await;
     assert_eq!(res.status(), StatusCode::NO_CONTENT);
     send(&e.router, tap("service", service_id, TEST_ORIGIN)).await;
+    // The provider trying its own button is not a lead.
+    let mut own = zalo_tap("service", service_id, "zalo");
+    own.headers_mut().insert(
+        header::AUTHORIZATION,
+        format!("Bearer {token}").parse().unwrap(),
+    );
+    assert_eq!(send(&e.router, own).await.status(), StatusCode::NO_CONTENT);
     let res = send(&e.router, zalo_tap("service", service_id, "sms")).await;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     let mut channels: Vec<String> = clicks(&e).await.into_iter().map(|c| c.channel).collect();
@@ -155,12 +162,9 @@ async fn zalo_taps_are_leads_of_their_own_channel_and_add_up_by_week() {
     let admin = install_admin(&e).await;
     let stats = body_text(send(&e.router, get_page("/admin/dashboard", Some(&admin))).await).await;
     assert!(stats.contains("Liên hệ theo tuần"));
-    // This week: one call, one Zalo chat, no request; two in all.
-    assert!(
-        stats.contains(
-            r#"<td class="text-end">1</td><td class="text-end">1</td><td class="text-end">0</td><td class="text-end fw-bold">2</td>"#
-        ),
-        "{stats}"
-    );
+    // The weeks are the demand report's: whole weeks only, so this week's
+    // two taps are not in them yet, and small figures are hidden.
+    assert!(stats.contains(r#"href="/admin/demand""#));
+    assert!(!stats.contains(">2</td>"));
     e.cleanup().await;
 }

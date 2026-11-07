@@ -6,11 +6,12 @@
 //!
 //! Plain GET forms and links, like the product lists.
 
+use crate::{middleware::client_ip::ClientIp, pages::visitor};
 use application::{
-    inputs::{BrowseParams, SearchInput, SearchPlace},
+    inputs::{BrowseParams, SearchInput, SearchPlace, Visitor},
     outputs::CategoryDto,
 };
-use axum::{extract::State, response::Response};
+use axum::{extract::State, response::Response, Extension};
 use domain::{constants::CATEGORY_TYPE_SERVICE, models::business::ProviderSort, Error, ErrorCode};
 use serde::{Deserialize, Serialize};
 
@@ -57,13 +58,14 @@ pub(super) struct ListState {
 impl ListState {
     /// The search this list is, for the demand report: its words and
     /// category on the first page (later pages are the same search).
-    pub fn search(&self, results: i64) -> Option<SearchInput> {
+    pub fn search(&self, results: i64, visitor: Visitor) -> Option<SearchInput> {
         (self.page <= 1 && (!self.search.is_empty() || self.service_id.is_some())).then(|| {
             SearchInput {
                 query: self.search.clone(),
                 category_id: self.service_id,
                 place: SearchPlace::Anywhere,
                 results,
+                visitor,
             }
         })
     }
@@ -233,6 +235,7 @@ pub(super) fn url(name: &str, params: &[(&str, &str)]) -> Result<String, Error> 
 /// GET /services
 pub async fn list(
     shell: Shell,
+    ip: Option<Extension<ClientIp>>,
     State(state): State<AppState>,
     ApiQuery(q): ApiQuery<ListQuery>,
 ) -> Result<Response, Error> {
@@ -240,7 +243,7 @@ pub async fn list(
     let categories = explore.get_categories(Some(CATEGORY_TYPE_SERVICE)).await?;
     let list = ListState::parse(&q, &categories);
     let result = explore.browse_services(list.params()).await?;
-    if let Some(search) = list.search(result.total) {
+    if let Some(search) = list.search(result.total, visitor(&shell, ip.as_ref().map(|e| &e.0))) {
         state.usecases.demand.record_search(search);
     }
 
@@ -276,6 +279,7 @@ pub async fn list(
 /// GET /services/category/{id}/{slug}
 pub async fn category(
     shell: Shell,
+    ip: Option<Extension<ClientIp>>,
     State(state): State<AppState>,
     ApiPath((raw_id, _slug)): ApiPath<(String, String)>,
     ApiQuery(q): ApiQuery<ListQuery>,
@@ -308,6 +312,7 @@ pub async fn category(
             category_id: Some(id),
             place: SearchPlace::Anywhere,
             results: result.total,
+            visitor: visitor(&shell, ip.as_ref().map(|e| &e.0)),
         });
     }
     if let Some(redirect) = past_the_end(&canonical, &[], result.page, result.total_pages) {

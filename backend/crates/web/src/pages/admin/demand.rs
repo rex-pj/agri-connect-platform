@@ -1,12 +1,12 @@
 //! /admin/demand and /admin/demand.csv: the demand report (leads by
 //! category × week for one area or all), the figures to take to partners.
-//! The area is a GET filter (`?area=` a location id, `none`, or empty for
-//! all), so the page works without JS; the CSV is the same table to open in
+//! The area is a GET filter (`?area=` a province `p82`, a ward `w28439`,
+//! `none`, or empty for all), so the page works without JS; the CSV is the same table to open in
 //! a spreadsheet.
 
 use application::{
+    admin_units::AreaKey,
     outputs::{DemandReportDto, DemandRowDto, Figure},
-    usecases::demand_usecase::AreaKey,
 };
 use axum::{
     extract::State,
@@ -26,7 +26,7 @@ use crate::{
         listing::with_query,
         see_other,
     },
-    requests::{DemandQuery, UNPLACED_AREA},
+    requests::DemandQuery,
 };
 
 /// The file name the CSV downloads as.
@@ -47,10 +47,6 @@ pub struct DemandPage {
     pub action: String,
 }
 
-fn area_value(location_id: Option<i32>) -> String {
-    location_id.map_or_else(|| UNPLACED_AREA.to_owned(), |id| id.to_string())
-}
-
 /// The area's name, "no area" for the businesses without one.
 fn area_label(locale: &Locale, label: Option<&str>) -> String {
     label.map_or_else(|| locale.text("demand.unplaced"), str::to_owned)
@@ -62,7 +58,7 @@ pub fn area_options(locale: &Locale, report: &DemandReportDto) -> Vec<AreaOption
         .areas
         .iter()
         .map(|a| AreaOption {
-            value: area_value(a.location_id),
+            value: a.value.clone(),
             label: area_label(locale, a.label.as_deref()),
         })
         .collect()
@@ -70,10 +66,7 @@ pub fn area_options(locale: &Locale, report: &DemandReportDto) -> Vec<AreaOption
 
 /// The filter's value for the area in focus; empty for all of them.
 pub fn focus_value(focus: Option<AreaKey>) -> String {
-    focus.map_or_else(String::new, |f| match f {
-        AreaKey::Location(id) => id.to_string(),
-        AreaKey::Unplaced => UNPLACED_AREA.to_owned(),
-    })
+    focus.map_or_else(String::new, |f| f.value())
 }
 
 /// GET /admin/demand
@@ -198,11 +191,13 @@ mod tests {
     }
 
     #[test]
-    fn the_area_filter_reads_ids_and_none() {
+    fn the_area_filter_reads_provinces_wards_and_none() {
         let q = |s: &str| DemandQuery { area: s.into() }.focus();
         assert_eq!(q(""), None);
-        assert_eq!(q("12"), Some(AreaKey::Location(12)));
+        assert_eq!(q("p82"), Some(AreaKey::Province("82".into())));
+        assert_eq!(q("w28439"), Some(AreaKey::Ward("28439".into())));
         assert_eq!(q("none"), Some(AreaKey::Unplaced));
-        assert_eq!(q("x"), None);
+        assert_eq!(q("12"), None);
+        assert_eq!(focus_value(q("w28439")), "w28439");
     }
 }

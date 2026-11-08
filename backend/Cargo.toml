@@ -103,6 +103,9 @@ object_store = { version = "0.12", default-features = false, features = [
     "gcp", # Google Cloud Storage in production (VM service account via the metadata server)
     "fs",  # local-disk storage in development and on a VM without a bucket
 ] }
+flate2 = { version = "1", default-features = false, features = [
+    "rust_backend", # pure Rust inflate for the bundled provinces and wards (admin_units.tsv.gz)
+] }
 
 unicode-normalization = { version = "0.1", default-features = false, features = [
     "std", # NFD for slugs: "Gạo Thơm" -> "gao-thom" (pinned by web/src/slugify.fixtures.json)

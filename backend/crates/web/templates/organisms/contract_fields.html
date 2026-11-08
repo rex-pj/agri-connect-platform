@@ -7,7 +7,7 @@
 {% macro contract_fields(form, errors, areas, categories, prefix, with_area=true) -%}
 {% set e = errors.fields %}
 {% if with_area %}
-{{ field::select(id=prefix ~ "-area", name="location_id", label=t(key="demand.area"), options=areas, value_key="id", label_key="label", value=form.location_id, error=e.location_id | default(value=""), required=true, placeholder=t(key="partner.choose_area")) }}
+{{ field::area_select(id=prefix ~ "-area", name="area", label=t(key="demand.area"), groups=areas, value=form.area, error=e.area | default(value=""), required=true, placeholder=t(key="partner.choose_unit")) }}
 {% endif %}
 <fieldset class="form-field">
   <legend class="form-label fw-semibold fs-6">{{ t(key="partner.categories") }} <span class="text-danger" aria-hidden="true">*</span></legend>

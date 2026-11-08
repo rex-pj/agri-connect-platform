@@ -3,6 +3,7 @@
 //! Depends only on `domain`. No HTTP, ORM, JWT or bcrypt types may appear
 //! here; infrastructure concerns arrive through the traits in `ports`.
 
+pub mod admin_units;
 pub mod authz;
 pub mod catalogue;
 pub mod constants;

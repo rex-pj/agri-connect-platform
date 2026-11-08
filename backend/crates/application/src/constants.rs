@@ -60,8 +60,11 @@ pub const DEMAND_WEEKS: usize = 8;
 /// A figure under this (and above zero) is shown as "fewer than": it could
 /// point at one household.
 pub const DEMAND_REPORT_MIN_COUNT: i64 = 5;
-/// A business counts under the nearest location preset within this reach.
-pub const DEMAND_AREA_RADIUS_M: f64 = RADIUS_DEFAULT_M;
+/// A point counts under the ward it lies in; one just outside every ward
+/// (a coastline, a sliver between two simplified boundaries) under the
+/// nearest within this reach. The stored boundaries are within a few metres
+/// of the official ones, so this only catches what falls between them.
+pub const ADMIN_UNIT_SNAP_M: f64 = 500.0;
 /// An area is steady when every one of the report's weeks has at least this
 /// many leads: ready to show partners.
 pub const STEADY_WEEKLY_LEADS: i64 = 20;

@@ -136,7 +136,8 @@ pub struct PartnerInput {
 
 /// A contract as sent. A box left empty or not parsed is `None`.
 pub struct ContractInput {
-    pub location_id: Option<i32>,
+    /// The area as text (`admin_units::AreaKey`); ignored on an edit.
+    pub area: Option<String>,
     pub starts_on: Option<chrono::NaiveDate>,
     pub ends_on: Option<chrono::NaiveDate>,
     pub monthly_fee: Option<i64>,

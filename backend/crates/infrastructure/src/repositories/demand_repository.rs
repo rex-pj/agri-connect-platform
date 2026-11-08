@@ -7,9 +7,9 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sea_orm::{
-    sea_query::{Expr, Func, Order, Query, SelectStatement},
+    sea_query::{Expr, Func, Query, SelectStatement},
     ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter,
-    QueryOrder, QuerySelect, Set,
+    QuerySelect, Set,
 };
 use tracing::error;
 
@@ -24,11 +24,11 @@ use crate::{
     db_types::DateTimeWithTimeZone,
     entities::{
         business::{self, Entity as Business},
-        call_click, inquiry, location, product, search_event,
+        call_click, inquiry, product, search_event,
         service::{self, Entity as ServiceEntity},
     },
-    repositories::service_repository::live_public,
-    sql::QueryAs,
+    repositories::{admin_unit_repository::ward_code_at, service_repository::live_public},
+    sql::{business_location, QueryAs},
 };
 
 pub struct DemandRepository {
@@ -75,7 +75,7 @@ struct InquiryRow {
 #[derive(FromQueryResult)]
 struct AreaRow {
     business_id: i32,
-    location_id: Option<i32>,
+    ward_code: Option<String>,
     name: String,
     phone: String,
     address: Option<String>,
@@ -186,24 +186,15 @@ impl DemandRepositoryTrait for DemandRepository {
         Ok(events)
     }
 
-    async fn business_areas(&self, radius_m: f64) -> Result<Vec<BusinessArea>, Error> {
-        // The nearest active preset in reach; the presets store plain lat/lng.
-        let nearest = Expr::cust_with_values(
-            r#"(SELECT l.id FROM locations l
-                 WHERE l.is_active
-                   AND ST_DWithin(ST_MakePoint(l.lng, l.lat)::geography, "businesses".location, $1)
-                 ORDER BY ST_Distance(ST_MakePoint(l.lng, l.lat)::geography, "businesses".location), l.id
-                 LIMIT 1)"#,
-            [radius_m],
-        );
+    async fn business_areas(&self, snap_m: f64) -> Result<Vec<BusinessArea>, Error> {
         let rows = Business::find()
             .select_only()
-            .column_as(business::Column::Id, "business_id")
+            .column_as(business::Column::Id, QueryAs::BusinessId)
             .column(business::Column::Name)
             .column(business::Column::Phone)
             .column(business::Column::Address)
-            .expr_as(nearest, "location_id")
-            .filter(Expr::cust(r#""businesses".location IS NOT NULL"#))
+            .expr_as(ward_code_at(business_location(), snap_m), QueryAs::WardCode)
+            .filter(Expr::expr(business_location()).is_not_null())
             .filter(business::Column::IsDemo.eq(false))
             .filter(business::Column::DeletedAt.is_null())
             .into_model::<AreaRow>()
@@ -217,12 +208,12 @@ impl DemandRepositoryTrait for DemandRepository {
             .into_iter()
             .filter_map(|r| {
                 let (name, phone, address) = (r.name, r.phone, r.address);
-                r.location_id.map(|location_id| BusinessArea {
+                r.ward_code.map(|ward_code| BusinessArea {
                     name,
                     phone,
                     address,
                     business_id: r.business_id,
-                    location_id,
+                    ward_code,
                 })
             })
             .collect())
@@ -252,41 +243,11 @@ impl DemandRepositoryTrait for DemandRepository {
             })
     }
 
-    async fn nearest_location(
-        &self,
-        lat: f64,
-        lng: f64,
-        radius_m: f64,
-    ) -> Result<Option<i32>, Error> {
-        let preset = r#"ST_MakePoint("locations".lng, "locations".lat)::geography"#;
-        location::Entity::find()
-            .filter(location::Column::IsActive.eq(true))
-            .filter(Expr::cust_with_values(
-                format!("ST_DWithin({preset}, ST_MakePoint($1, $2)::geography, $3)"),
-                [lng, lat, radius_m],
-            ))
-            .order_by(
-                Expr::cust_with_values(
-                    format!("ST_Distance({preset}, ST_MakePoint($1, $2)::geography)"),
-                    [lng, lat],
-                ),
-                Order::Asc,
-            )
-            .order_by_asc(location::Column::Id)
-            .one(self.db.as_ref())
-            .await
-            .map(|l| l.map(|l| l.id))
-            .map_err(|e| {
-                error!("demand nearest_location error: {e}");
-                Error::internal("Failed to find the area.")
-            })
-    }
-
     async fn record_search(&self, s: NewSearch) -> Result<(), Error> {
         search_event::Entity::insert(search_event::ActiveModel {
             query: Set(s.query),
             category_id: Set(s.category_id),
-            location_id: Set(s.location_id),
+            ward_code: Set(s.ward_code),
             results: Set(i32::try_from(s.results).unwrap_or(i32::MAX)),
             ..Default::default()
         })
@@ -315,7 +276,7 @@ impl DemandRepositoryTrait for DemandRepository {
                         at: r.created_on.with_timezone(&Utc),
                         query: r.query,
                         category_id: r.category_id,
-                        location_id: r.location_id,
+                        ward_code: r.ward_code,
                         results: i64::from(r.results),
                     })
                     .collect()

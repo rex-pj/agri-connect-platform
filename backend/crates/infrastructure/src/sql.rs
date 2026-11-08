@@ -16,14 +16,20 @@ use crate::entities::{business, location, user};
 /// Database functions the query builder has no name for.
 #[derive(DeriveIden, Clone, Copy)]
 pub enum DbFn {
+    #[sea_orm(iden = "ST_Covers")]
+    StCovers,
     #[sea_orm(iden = "ST_Distance")]
     StDistance,
     #[sea_orm(iden = "ST_DWithin")]
     StDWithin,
     #[sea_orm(iden = "ST_GeographyFromText")]
     StGeographyFromText,
+    #[sea_orm(iden = "ST_GeomFromTWKB")]
+    StGeomFromTwkb,
     #[sea_orm(iden = "ST_MakePoint")]
     StMakePoint,
+    #[sea_orm(iden = "ST_SetSRID")]
+    StSetSrid,
     #[sea_orm(iden = "ST_X")]
     StX,
     #[sea_orm(iden = "ST_Y")]
@@ -36,6 +42,9 @@ pub enum DbFn {
     NullIf,
     #[sea_orm(iden = "TRIM")]
     Trim,
+    /// `decode(text, 'hex')`: bytes from their hex spelling.
+    #[sea_orm(iden = "decode")]
+    Decode,
 }
 
 /// Types a value is cast to.
@@ -48,11 +57,15 @@ pub enum PgType {
     Text,
 }
 
-/// The PostGIS `GEOGRAPHY(POINT, 4326)` column of `businesses` and
-/// `job_posts`, left out of their entities (Sea-ORM cannot decode it).
+/// The PostGIS columns left out of the entities (Sea-ORM cannot decode
+/// them): `location`, the `GEOGRAPHY(POINT, 4326)` of `businesses` and
+/// `job_posts`; `center` (a point) and `boundary` (a multipolygon) of
+/// `provinces` and `wards`.
 #[derive(DeriveIden, Clone, Copy)]
 pub enum Geo {
     Location,
+    Center,
+    Boundary,
 }
 
 /// A second reference to a table already in the query (`users` read again
@@ -102,6 +115,7 @@ pub enum QueryAs {
     VendorName,
     VendorPhone,
     VendorVerified,
+    WardCode,
 }
 
 /// `ST_GeographyFromText(wkt)`, the WKT bound as a parameter

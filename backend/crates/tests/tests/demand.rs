@@ -8,13 +8,18 @@ use axum::{
 };
 use integration_tests::{
     body_text, categories_of, env_with_origin, get_page, install_admin, json_body,
-    register_provider, send, send_from, sign_in, Env, TEST_ORIGIN,
+    load_admin_units, register_provider, send, send_from, sign_in, Env, TEST_ORIGIN,
 };
 use sea_orm::{ConnectionTrait, Statement};
 
 /// Wednesday 10:00 of last week, Vietnam time: inside the report's last week.
 const LAST_WEEK: &str = "((date_trunc('week', now() AT TIME ZONE 'Asia/Ho_Chi_Minh') \
      - interval '5 days' + interval '10 hours') AT TIME ZONE 'Asia/Ho_Chi_Minh')";
+
+/// The commune the shops of these tests lie in (by Cai Lậy, Đồng Tháp), and
+/// what the report calls it.
+const BINH_PHU: &str = "28471";
+const BINH_PHU_LABEL: &str = "Đồng Tháp — Xã Bình Phú";
 
 async fn scalar(e: &Env, sql: &str) -> String {
     e.t.db
@@ -100,6 +105,7 @@ async fn inquiry(e: &Env, business: i32, service: i32, phone: &str, status: &str
 #[ignore = "needs TEST_DATABASE_URL"]
 async fn the_report_counts_real_leads_by_area_and_hides_small_figures() {
     let e = env_with_origin().await;
+    load_admin_units(&e).await;
     let admin = install_admin(&e).await;
     let (business, service, category) = provider_at_cai_lay(&e, "nongdan", "0901234567").await;
     // 6 calls, 2 Zalo, 2 requests from one phone, 1 spam: 10 leads.
@@ -121,7 +127,11 @@ async fn the_report_counts_real_leads_by_area_and_hides_small_figures() {
     assert_eq!(res.status(), StatusCode::OK);
     let page = body_text(res).await;
     assert!(page.contains(&category));
-    assert!(page.contains("Đồng Tháp — Cai Lậy"), "the area of the shop");
+    assert!(page.contains("Xã Bình Phú"), "the commune of the shop");
+    assert!(
+        page.contains(r#"<option value="p82">Đồng Tháp</option>"#),
+        "its province"
+    );
     assert!(page.contains("&lt; 5"), "2 Zalo taps are hidden");
 
     // JSON: the same figures, a hidden one is null.
@@ -155,26 +165,21 @@ async fn the_report_counts_real_leads_by_area_and_hides_small_figures() {
         .as_array()
         .unwrap()
         .iter()
-        .find(|a| a["label"] == "Đồng Tháp — Cai Lậy")
+        .find(|a| a["label"] == BINH_PHU_LABEL)
         .unwrap()
         .clone();
+    assert_eq!(cai_lay["value"], format!("w{BINH_PHU}"));
     assert_eq!(cai_lay["total"]["value"], 10);
     assert_eq!(cai_lay["steady"], false);
+    assert_eq!(json["areas"][0]["value"], "p82", "the province first");
+    assert_eq!(json["areas"][0]["total"]["value"], 10);
 
-    // Narrowed to another area: no rows.
-    let other = scalar(
-        &e,
-        "SELECT id::text AS v FROM locations WHERE label = 'An Giang — Long Xuyên'",
-    )
-    .await;
-    let page = body_text(
-        send(
-            &e.router,
-            get_page(&format!("/admin/demand?area={other}"), Some(&admin)),
-        )
-        .await,
-    )
-    .await;
+    // Narrowed to the province: its commune's leads; to another: no rows.
+    let page =
+        body_text(send(&e.router, get_page("/admin/demand?area=p82", Some(&admin))).await).await;
+    assert!(page.contains(&category));
+    let page =
+        body_text(send(&e.router, get_page("/admin/demand?area=p91", Some(&admin))).await).await;
     assert!(page.contains("Chưa có liên hệ nào trong các tuần này."));
 
     // CSV: a header line, the category, the hidden figure as "< 5".
@@ -219,6 +224,7 @@ async fn searches_stored(e: &Env, n: i64) {
 #[ignore = "needs TEST_DATABASE_URL"]
 async fn searches_are_recorded_without_who_and_unmet_ones_are_listed() {
     let e = env_with_origin().await;
+    load_admin_units(&e).await;
     let admin = install_admin(&e).await;
     // Five farmers search the same words; the first one reloads the page,
     // which is the same search.
@@ -254,7 +260,7 @@ async fn searches_are_recorded_without_who_and_unmet_ones_are_listed() {
         get_page(&format!("/explore?location_id={cai_lay}"), None),
     )
     .await;
-    // A device position is filed under the nearest preset.
+    // A device position is filed under the commune it lies in.
     send(
         &e.router,
         get_page("/explore?lat=10.4150&lng=106.0850", None),
@@ -282,7 +288,9 @@ async fn searches_are_recorded_without_who_and_unmet_ones_are_listed() {
     assert_eq!(
         scalar(
             &e,
-            &format!("SELECT count(*)::text AS v FROM search_events WHERE location_id = {cai_lay}")
+            &format!(
+                "SELECT count(*)::text AS v FROM search_events WHERE ward_code = '{BINH_PHU}'"
+            )
         )
         .await,
         "2"

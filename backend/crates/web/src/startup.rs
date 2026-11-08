@@ -42,16 +42,16 @@ use infrastructure::{
     image_processor::{ImageRules, RasterImageProcessor},
     jwt_token_service::JwtTokenService,
     repositories::{
-        audit_log_repository::AuditLogRepository, business_repository::BusinessRepository,
-        call_repository::CallRepository, category_repository::CategoryRepository,
-        demand_repository::DemandRepository, file_repository::FileRepository,
-        health_repository::HealthRepository, inquiry_repository::InquiryRepository,
-        job_repository::JobRepository, location_repository::LocationRepository,
-        partner_repository::PartnerRepository, permission_repository::PermissionRepository,
-        price_repository::PriceRepository, product_repository::ProductRepository,
-        refresh_token_repository::RefreshTokenRepository, review_repository::ReviewRepository,
-        role_repository::RoleRepository, service_repository::ServiceRepository,
-        user_repository::UserRepository,
+        admin_unit_repository::AdminUnitRepository, audit_log_repository::AuditLogRepository,
+        business_repository::BusinessRepository, call_repository::CallRepository,
+        category_repository::CategoryRepository, demand_repository::DemandRepository,
+        file_repository::FileRepository, health_repository::HealthRepository,
+        inquiry_repository::InquiryRepository, job_repository::JobRepository,
+        location_repository::LocationRepository, partner_repository::PartnerRepository,
+        permission_repository::PermissionRepository, price_repository::PriceRepository,
+        product_repository::ProductRepository, refresh_token_repository::RefreshTokenRepository,
+        review_repository::ReviewRepository, role_repository::RoleRepository,
+        service_repository::ServiceRepository, user_repository::UserRepository,
     },
     zalo_gateway::ZaloGraphGateway,
 };
@@ -391,6 +391,7 @@ pub fn build_state(
     let user_repo = Arc::new(UserRepository::new(Arc::clone(&db)));
     let audit_log_repo = Arc::new(AuditLogRepository::new(Arc::clone(&db)));
     let catalogue_repo = Arc::new(CatalogueRepository::new(Arc::clone(&db)));
+    let admin_unit_repo = Arc::new(AdminUnitRepository::new(Arc::clone(&db)));
     let demo_repo = Arc::new(DemoDataRepository::new(Arc::clone(&db)));
     // Readiness is about the primary: without it nothing can be written.
     let health_repo = Arc::new(HealthRepository::new(Arc::clone(&db)));
@@ -446,6 +447,7 @@ pub fn build_state(
         demand_repo: demand_repo.clone(),
         category_repo: category_repo.clone(),
         location_repo: location_repo.clone(),
+        admin_unit_repo: admin_unit_repo.clone(),
     });
 
     let usecases = UseCases {
@@ -497,7 +499,7 @@ pub fn build_state(
             partner_repo: Arc::new(PartnerRepository::new(Arc::clone(&db))),
             user_repo: user_repo.clone(),
             category_repo: category_repo.clone(),
-            location_repo: location_repo.clone(),
+            admin_unit_repo: admin_unit_repo.clone(),
             demand_repo,
             demand: demand.clone(),
             password_hasher,
@@ -533,6 +535,7 @@ pub fn build_state(
         }),
         setup: SetupUseCase::new(
             catalogue_repo,
+            admin_unit_repo,
             demo_repo,
             business_repo.clone(),
             user_repo.clone(),
@@ -628,6 +631,8 @@ pub async fn start() -> Result<(), StartupError> {
     // Roles and permissions must exist before the first request, or the first
     // registration fails on a missing role.
     state.usecases.setup.seed_catalogue(&CATALOGUE).await?;
+    // The demand report and partner areas place every point in a ward.
+    state.usecases.setup.seed_admin_units().await?;
 
     let sessions = state.usecases.clone();
     tokio::spawn(async move {

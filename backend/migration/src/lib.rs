@@ -24,6 +24,7 @@ mod m20261109_000013_search_events;
 mod m20261110_000014_partners;
 mod m20261111_000015_crop_prices;
 mod m20261112_000016_job_posts;
+mod m20261113_000017_admin_units;
 pub mod schema;
 pub mod search;
 
@@ -49,6 +50,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20261110_000014_partners::Migration),
             Box::new(m20261111_000015_crop_prices::Migration),
             Box::new(m20261112_000016_job_posts::Migration),
+            Box::new(m20261113_000017_admin_units::Migration),
         ]
     }
 }

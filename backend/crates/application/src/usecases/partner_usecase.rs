@@ -2,8 +2,8 @@
 //! the demand report of some areas and categories, and for sponsored places
 //! for some providers there.
 //!
-//! A contract covers one area (a location preset), some categories, two
-//! dates (both included) and a monthly fee. It is in force between its
+//! A contract covers one area (a province, or one ward of it), some
+//! categories, two dates (both included) and a monthly fee. It is in force between its
 //! dates while its partner is on. A partner's account reads the report of
 //! its contracts in force, and nothing else; the sponsored providers of a
 //! contract must count under its area. The revenue figures are the monthly
@@ -18,11 +18,14 @@ use chrono::Utc;
 use domain::{
     constants::{PARTNER_KINDS, ROLE_PARTNER},
     events::{Change, DomainEvent, Entity},
-    models::partner::{ActiveContract, Contract, NewContract, Partner, PartnerFields},
+    models::{
+        admin_unit::Ward,
+        partner::{ActiveContract, Contract, ContractArea, NewContract, Partner, PartnerFields},
+    },
     repositories::{
+        admin_unit_repository_trait::AdminUnitRepositoryTrait,
         category_repository_trait::CategoryRepositoryTrait,
         demand_repository_trait::DemandRepositoryTrait,
-        location_repository_trait::LocationRepositoryTrait,
         partner_repository_trait::PartnerRepositoryTrait,
         user_repository_trait::UserRepositoryTrait,
     },
@@ -30,18 +33,19 @@ use domain::{
 };
 
 use crate::{
+    admin_units::{AdminUnits, AreaKey},
     authz::Actor,
     catalogue::{PERM_PARTNER_MANAGE, PERM_PARTNER_REPORT_READ},
-    constants::{CONTRACT_NOTE_MAX, DEMAND_AREA_RADIUS_M, PARTNER_NAME_MAX, SPONSORED_SHOWN},
+    constants::{ADMIN_UNIT_SNAP_M, CONTRACT_NOTE_MAX, PARTNER_NAME_MAX, SPONSORED_SHOWN},
     inputs::{ContractInput, PartnerInput},
     outputs::{
-        AreaRevenueDto, ContractDto, NamedDto, PartnerAccountDto, PartnerDetailDto, PartnerDto,
-        PartnerKpiDto, PartnerReportDto, PublicServiceDto, SponsorCandidateDto,
+        AreaGroupDto, AreaRevenueDto, ContractDto, NamedDto, PartnerAccountDto, PartnerDetailDto,
+        PartnerDto, PartnerKpiDto, PartnerReportDto, PublicServiceDto, SponsorCandidateDto,
     },
     ports::{EventBus, PasswordHasher},
     usecases::{
         account_rules::account_for_role,
-        demand_usecase::{vn_today, AreaKey, DemandReportUseCase, ReportScope},
+        demand_usecase::{vn_today, DemandReportUseCase, ReportScope},
     },
     validation::{
         audit_reason, max_chars, max_chars_opt, non_blank, validate_email, validate_phone,
@@ -53,7 +57,7 @@ pub struct PartnerUseCase {
     partner_repo: Arc<dyn PartnerRepositoryTrait + Send + Sync>,
     user_repo: Arc<dyn UserRepositoryTrait + Send + Sync>,
     category_repo: Arc<dyn CategoryRepositoryTrait + Send + Sync>,
-    location_repo: Arc<dyn LocationRepositoryTrait + Send + Sync>,
+    admin_unit_repo: Arc<dyn AdminUnitRepositoryTrait + Send + Sync>,
     demand_repo: Arc<dyn DemandRepositoryTrait + Send + Sync>,
     demand: DemandReportUseCase,
     password_hasher: Arc<dyn PasswordHasher>,
@@ -66,7 +70,7 @@ pub struct PartnerDeps {
     pub partner_repo: Arc<dyn PartnerRepositoryTrait + Send + Sync>,
     pub user_repo: Arc<dyn UserRepositoryTrait + Send + Sync>,
     pub category_repo: Arc<dyn CategoryRepositoryTrait + Send + Sync>,
-    pub location_repo: Arc<dyn LocationRepositoryTrait + Send + Sync>,
+    pub admin_unit_repo: Arc<dyn AdminUnitRepositoryTrait + Send + Sync>,
     pub demand_repo: Arc<dyn DemandRepositoryTrait + Send + Sync>,
     pub demand: DemandReportUseCase,
     pub password_hasher: Arc<dyn PasswordHasher>,
@@ -79,7 +83,7 @@ impl PartnerUseCase {
             partner_repo: d.partner_repo,
             user_repo: d.user_repo,
             category_repo: d.category_repo,
-            location_repo: d.location_repo,
+            admin_unit_repo: d.admin_unit_repo,
             demand_repo: d.demand_repo,
             demand: d.demand,
             password_hasher: d.password_hasher,
@@ -112,6 +116,10 @@ impl PartnerUseCase {
             .await
     }
 
+    async fn units(&self) -> Result<AdminUnits> {
+        AdminUnits::load(self.admin_unit_repo.as_ref()).await
+    }
+
     async fn category_names(&self) -> Result<HashMap<i32, String>> {
         Ok(self
             .category_repo
@@ -140,18 +148,25 @@ impl PartnerUseCase {
             .find(id)
             .await?
             .ok_or_else(|| Error::new(ErrorCode::PartnerNotFound))?;
-        let (contracts, in_force, names) = tokio::try_join!(
+        let (contracts, in_force, names, units) = tokio::try_join!(
             self.partner_repo.contracts(id),
             self.in_force(),
             self.category_names(),
+            self.units(),
         )?;
         Ok(PartnerDetailDto {
             contracts: contracts
                 .into_iter()
-                .map(|c| contract_dto(c, &in_force, &names))
+                .map(|c| contract_dto(c, &in_force, &names, &units))
                 .collect(),
             partner: partner_dto(partner, &in_force),
         })
+    }
+
+    /// What a contract may cover: each active province, and its wards.
+    pub async fn area_choices(&self, actor: &Actor) -> Result<Vec<AreaGroupDto>> {
+        actor.require(PERM_PARTNER_MANAGE)?;
+        Ok(self.units().await?.choices())
     }
 
     pub async fn create_partner(&self, actor: &Actor, input: PartnerInput) -> Result<i32> {
@@ -284,7 +299,7 @@ impl PartnerUseCase {
         actor.require(PERM_PARTNER_MANAGE)?;
         let current = self.contract_of(partner_id, contract_id).await?;
         let contract = self
-            .checked_contract(partner_id, input, Some(current.location_id))
+            .checked_contract(partner_id, input, Some(current.area))
             .await?;
         if !self
             .partner_repo
@@ -300,17 +315,14 @@ impl PartnerUseCase {
 
     /// Every rule of a contract's boxes, reported together. `area` is the
     /// area of the contract being edited (it cannot change); a new contract
-    /// takes the one sent, which must be an active preset.
+    /// takes the one sent, which must be an active province or ward.
     async fn checked_contract(
         &self,
         partner_id: i32,
         input: ContractInput,
-        area: Option<i32>,
+        area: Option<ContractArea>,
     ) -> Result<NewContract> {
-        let (locations, categories) = tokio::try_join!(
-            self.location_repo.list_all(),
-            self.category_repo.list_admin()
-        )?;
+        let (units, categories) = tokio::try_join!(self.units(), self.category_repo.list_admin())?;
         let known: HashSet<i32> = categories.iter().map(|c| c.id).collect();
         let note = non_blank(input.note);
         let mut category_ids: Vec<i32> = input
@@ -320,10 +332,12 @@ impl PartnerUseCase {
             .collect();
         category_ids.sort_unstable();
         category_ids.dedup();
-        let location = area.or_else(|| {
+        let area = area.or_else(|| {
             input
-                .location_id
-                .filter(|id| locations.iter().any(|l| l.id == *id && l.is_active))
+                .area
+                .as_deref()
+                .and_then(AreaKey::parse)
+                .and_then(|key| units.contract_area(&key))
         });
         let dates = match (input.starts_on, input.ends_on) {
             (Some(s), Some(e)) if e >= s => Some((s, e)),
@@ -331,11 +345,7 @@ impl PartnerUseCase {
         };
         let fee = input.monthly_fee.filter(|f| *f >= 0);
         Validation::new()
-            .check(
-                location.is_none(),
-                "location_id",
-                ErrorCode::LocationNotFound,
-            )
+            .check(area.is_none(), "area", ErrorCode::LocationNotFound)
             .check(dates.is_none(), "ends_on", ErrorCode::InvalidContractDates)
             .check(fee.is_none(), "monthly_fee", ErrorCode::InvalidMonthlyFee)
             .check(
@@ -345,14 +355,12 @@ impl PartnerUseCase {
             )
             .rule("note", max_chars_opt(&note, CONTRACT_NOTE_MAX))
             .finish()?;
-        let (Some(location_id), Some((starts_on, ends_on)), Some(monthly_fee)) =
-            (location, dates, fee)
-        else {
+        let (Some(area), Some((starts_on, ends_on)), Some(monthly_fee)) = (area, dates, fee) else {
             return Err(Error::new(ErrorCode::ValidationFailed));
         };
         Ok(NewContract {
             partner_id,
-            location_id,
+            area,
             starts_on,
             ends_on,
             monthly_fee,
@@ -405,12 +413,14 @@ impl PartnerUseCase {
         actor.require(PERM_PARTNER_MANAGE)?;
         let contract = self.contract_of(partner_id, contract_id).await?;
         let taken: HashSet<i32> = contract.sponsored.iter().map(|s| s.business_id).collect();
-        let mut candidates: Vec<SponsorCandidateDto> = self
-            .demand_repo
-            .business_areas(DEMAND_AREA_RADIUS_M)
-            .await?
+        let (areas, units) = tokio::try_join!(
+            self.demand_repo.business_areas(ADMIN_UNIT_SNAP_M),
+            self.units()
+        )?;
+        let mut candidates: Vec<SponsorCandidateDto> = areas
             .into_iter()
-            .filter(|a| a.location_id == contract.location_id && !taken.contains(&a.business_id))
+            .filter(|a| in_area(&contract.area, &a.ward_code, &units))
+            .filter(|a| !taken.contains(&a.business_id))
             .map(|a| SponsorCandidateDto {
                 id: a.business_id,
                 name: a.name,
@@ -432,13 +442,14 @@ impl PartnerUseCase {
     ) -> Result<()> {
         actor.require(PERM_PARTNER_MANAGE)?;
         let contract = self.contract_of(partner_id, contract_id).await?;
-        let in_area = self
-            .demand_repo
-            .business_areas(DEMAND_AREA_RADIUS_M)
-            .await?
+        let (areas, units) = tokio::try_join!(
+            self.demand_repo.business_areas(ADMIN_UNIT_SNAP_M),
+            self.units()
+        )?;
+        let inside = areas
             .iter()
-            .any(|a| a.business_id == business_id && a.location_id == contract.location_id);
-        if !in_area {
+            .any(|a| a.business_id == business_id && in_area(&contract.area, &a.ward_code, &units));
+        if !inside {
             return Err(Error::field("business_id", ErrorCode::SponsoredOutsideArea));
         }
         self.partner_repo
@@ -481,10 +492,8 @@ impl PartnerUseCase {
     /// Paying partners today, the monthly revenue, and by area.
     pub async fn kpis(&self, actor: &Actor) -> Result<PartnerKpiDto> {
         actor.require(PERM_PARTNER_MANAGE)?;
-        let (in_force, locations) =
-            tokio::try_join!(self.in_force(), self.location_repo.list_all())?;
-        let labels: HashMap<i32, String> = locations.into_iter().map(|l| (l.id, l.label)).collect();
-        Ok(kpis_of(&in_force, &labels))
+        let (in_force, units) = tokio::try_join!(self.in_force(), self.units())?;
+        Ok(kpis_of(&in_force, &units))
     }
 
     // ── The partner's own report ──────────────────────────────────────────────
@@ -503,26 +512,24 @@ impl PartnerUseCase {
         }
         .filter(|p| p.is_active)
         .ok_or_else(|| Error::new(ErrorCode::PartnerNotFound))?;
-        let (contracts, in_force, names) = tokio::try_join!(
+        let (contracts, in_force, names, units) = tokio::try_join!(
             self.partner_repo.contracts(partner.id),
             self.in_force(),
             self.category_names(),
+            self.units(),
         )?;
         let mine: Vec<&ActiveContract> = in_force
             .iter()
             .filter(|c| c.partner_id == partner.id)
             .collect();
-        let mut areas: Vec<AreaKey> = mine
-            .iter()
-            .map(|c| AreaKey::Location(c.location_id))
-            .collect();
+        let mut areas: Vec<AreaKey> = mine.iter().map(|c| AreaKey::of_contract(&c.area)).collect();
         areas.sort();
         areas.dedup();
         let mut categories: Vec<i32> = mine.iter().flat_map(|c| c.category_ids.clone()).collect();
         categories.sort_unstable();
         categories.dedup();
         let scope = ReportScope {
-            focus: focus.filter(|f| areas.contains(f)),
+            focus: focus.filter(|f| units.within(f, &areas)),
             areas: Some(areas),
             categories: Some(categories),
         };
@@ -532,7 +539,7 @@ impl PartnerUseCase {
             report,
             contracts: contracts
                 .into_iter()
-                .map(|c| contract_dto(c, &in_force, &names))
+                .map(|c| contract_dto(c, &in_force, &names, &units))
                 .filter(|c| c.in_force)
                 .collect(),
         })
@@ -540,25 +547,28 @@ impl PartnerUseCase {
 
     // ── Sponsored places ──────────────────────────────────────────────────────
 
-    /// The providers sponsored in an area for a category (any of the
-    /// contract's when `None`), by contracts in force: what a near-me page
-    /// shows first, labelled.
-    pub async fn sponsored_in(
+    /// The providers sponsored where a point lies (its ward, or its whole
+    /// province) for a category (any of the contract's when `None`), by
+    /// contracts in force: what a near-me page shows first, labelled. The
+    /// point's ward is looked up only when some contract is in force.
+    pub async fn sponsored_at(
         &self,
-        location_id: i32,
+        lat: f64,
+        lng: f64,
         category_id: Option<i32>,
     ) -> Result<Vec<i32>> {
-        let mut ids: Vec<i32> = self
-            .in_force()
+        let in_force = self.in_force().await?;
+        if in_force.is_empty() {
+            return Ok(Vec::new());
+        }
+        let Some(place) = self
+            .admin_unit_repo
+            .ward_at(lat, lng, ADMIN_UNIT_SNAP_M)
             .await?
-            .into_iter()
-            .filter(|c| c.location_id == location_id)
-            .filter(|c| category_id.is_none_or(|id| c.category_ids.contains(&id)))
-            .flat_map(|c| c.business_ids)
-            .collect();
-        ids.sort_unstable();
-        ids.dedup();
-        Ok(ids)
+        else {
+            return Ok(Vec::new());
+        };
+        Ok(sponsored_of(&in_force, &place, category_id))
     }
 
     /// Near-me services split into the sponsored ones to show first, labelled
@@ -567,23 +577,36 @@ impl PartnerUseCase {
     /// moves up; nothing is hidden and nothing is shown twice.
     pub async fn feature_sponsored(
         &self,
-        location_id: Option<i32>,
+        point: Option<(f64, f64)>,
         category_id: Option<i32>,
         services: Vec<PublicServiceDto>,
     ) -> Result<(Vec<PublicServiceDto>, Vec<PublicServiceDto>)> {
-        let sponsored = match location_id {
-            Some(id) => self.sponsored_in(id, category_id).await?,
+        let sponsored = match point {
+            Some((lat, lng)) => self.sponsored_at(lat, lng, category_id).await?,
             None => Vec::new(),
         };
         Ok(split_sponsored(services, &sponsored))
     }
+}
 
-    /// The location preset a point counts under (for a device position).
-    pub async fn area_of_point(&self, lat: f64, lng: f64) -> Result<Option<i32>> {
-        self.demand_repo
-            .nearest_location(lat, lng, DEMAND_AREA_RADIUS_M)
-            .await
-    }
+/// The providers the contracts in force sponsor where `place` lies.
+fn sponsored_of(in_force: &[ActiveContract], place: &Ward, category_id: Option<i32>) -> Vec<i32> {
+    let mut ids: Vec<i32> = in_force
+        .iter()
+        .filter(|c| c.area.covers(&place.code, &place.province_code))
+        .filter(|c| category_id.is_none_or(|id| c.category_ids.contains(&id)))
+        .flat_map(|c| c.business_ids.iter().copied())
+        .collect();
+    ids.sort_unstable();
+    ids.dedup();
+    ids
+}
+
+/// Whether a business in this ward counts under a contract's area.
+fn in_area(area: &ContractArea, ward_code: &str, units: &AdminUnits) -> bool {
+    units
+        .province_of(ward_code)
+        .is_some_and(|province| area.covers(ward_code, province))
 }
 
 /// Every rule of a partner's boxes, reported together.
@@ -638,7 +661,9 @@ fn contract_dto(
     c: Contract,
     in_force: &[ActiveContract],
     names: &HashMap<i32, String>,
+    units: &AdminUnits,
 ) -> ContractDto {
+    let area = AreaKey::of_contract(&c.area);
     ContractDto {
         in_force: in_force.iter().any(|a| a.contract_id == c.id),
         categories: c
@@ -660,8 +685,8 @@ fn contract_dto(
             })
             .collect(),
         id: c.id,
-        location_id: c.location_id,
-        location_label: c.location_label,
+        area_label: units.label(&area).unwrap_or_default(),
+        area: area.value(),
         starts_on: c.starts_on,
         ends_on: c.ends_on,
         monthly_fee: c.monthly_fee,
@@ -689,19 +714,19 @@ fn split_sponsored(
     (first, rest)
 }
 
-fn kpis_of(in_force: &[ActiveContract], labels: &HashMap<i32, String>) -> PartnerKpiDto {
+fn kpis_of(in_force: &[ActiveContract], units: &AdminUnits) -> PartnerKpiDto {
     let paying: HashSet<i32> = in_force.iter().map(|c| c.partner_id).collect();
-    let mut by_area: BTreeMap<i32, (HashSet<i32>, i64)> = BTreeMap::new();
+    let mut by_area: BTreeMap<AreaKey, (HashSet<i32>, i64)> = BTreeMap::new();
     for c in in_force {
-        let entry = by_area.entry(c.location_id).or_default();
+        let entry = by_area.entry(AreaKey::of_contract(&c.area)).or_default();
         entry.0.insert(c.partner_id);
         entry.1 += c.monthly_fee;
     }
     let mut areas: Vec<AreaRevenueDto> = by_area
         .into_iter()
-        .map(|(location_id, (partners, revenue))| AreaRevenueDto {
-            label: labels.get(&location_id).cloned().unwrap_or_default(),
-            location_id,
+        .map(|(area, (partners, revenue))| AreaRevenueDto {
+            label: units.label(&area).unwrap_or_default(),
+            area: area.value(),
             partners: partners.len(),
             monthly_revenue: revenue,
         })
@@ -709,7 +734,7 @@ fn kpis_of(in_force: &[ActiveContract], labels: &HashMap<i32, String>) -> Partne
     areas.sort_by(|a, b| {
         b.monthly_revenue
             .cmp(&a.monthly_revenue)
-            .then(a.location_id.cmp(&b.location_id))
+            .then(a.area.cmp(&b.area))
     });
     PartnerKpiDto {
         paying_partners: paying.len(),
@@ -722,11 +747,14 @@ fn kpis_of(in_force: &[ActiveContract], labels: &HashMap<i32, String>) -> Partne
 mod tests {
     use super::*;
 
-    fn contract(id: i32, partner: i32, location: i32, fee: i64) -> ActiveContract {
+    fn contract(id: i32, partner: i32, province: &str, fee: i64) -> ActiveContract {
         ActiveContract {
             contract_id: id,
             partner_id: partner,
-            location_id: location,
+            area: ContractArea {
+                province_code: province.into(),
+                ward_code: None,
+            },
             monthly_fee: fee,
             category_ids: vec![1],
             business_ids: Vec::new(),
@@ -735,14 +763,13 @@ mod tests {
 
     #[test]
     fn revenue_is_counted_once_per_partner_and_by_area() {
-        let labels = HashMap::from([(10, "A".to_owned()), (11, "B".to_owned())]);
         let kpis = kpis_of(
             &[
-                contract(1, 7, 10, 2_000_000),
-                contract(2, 7, 11, 1_000_000),
-                contract(3, 8, 10, 500_000),
+                contract(1, 7, "82", 2_000_000),
+                contract(2, 7, "91", 1_000_000),
+                contract(3, 8, "82", 500_000),
             ],
-            &labels,
+            &crate::admin_units::tests::units(),
         );
         assert_eq!(kpis.paying_partners, 2);
         assert_eq!(kpis.monthly_revenue, 3_500_000);
@@ -751,7 +778,10 @@ mod tests {
             .iter()
             .map(|a| (a.label.as_str(), a.partners, a.monthly_revenue))
             .collect();
-        assert_eq!(areas, vec![("A", 2, 2_500_000), ("B", 1, 1_000_000)]);
+        assert_eq!(
+            areas,
+            vec![("Đồng Tháp", 2, 2_500_000), ("An Giang", 1, 1_000_000)]
+        );
     }
 
     #[test]

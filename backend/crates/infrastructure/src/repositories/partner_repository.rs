@@ -15,20 +15,32 @@ use tracing::error;
 
 use domain::{
     models::partner::{
-        ActiveContract, Contract, NewContract, Partner, PartnerFields, SponsoredBusiness,
+        ActiveContract, Contract, ContractArea, NewContract, Partner, PartnerFields,
+        SponsoredBusiness,
     },
     repositories::partner_repository_trait::PartnerRepositoryTrait,
     Error,
 };
 
 use crate::entities::{
-    business, location,
+    business,
     partner::{self, Entity as PartnerEntity},
     partner_contract::{self, Entity as ContractEntity},
     partner_contract_category::{self, Entity as ContractCategory},
     partner_sponsored::{self, Entity as Sponsored},
     user,
 };
+
+/// A contract's area. The first load of the provinces and wards gives every
+/// older contract one (`AdminUnitRepository::sync`, before the server
+/// starts), so a contract without a province is one whose preset lay in no
+/// ward: an empty code, which no place matches.
+fn area_of(c: &partner_contract::Model) -> ContractArea {
+    ContractArea {
+        province_code: c.province_code.clone().unwrap_or_default(),
+        ward_code: c.ward_code.clone(),
+    }
+}
 
 pub struct PartnerRepository {
     db: Arc<DatabaseConnection>,
@@ -77,19 +89,10 @@ impl PartnerRepository {
             .collect())
     }
 
-    /// Contracts as the domain has them: area label, categories, sponsored.
+    /// Contracts as the domain has them: area, categories, sponsored.
     async fn assemble(&self, rows: Vec<partner_contract::Model>) -> Result<Vec<Contract>, Error> {
         let db = self.db.as_ref();
         let ids: Vec<i32> = rows.iter().map(|c| c.id).collect();
-        let location_ids: Vec<i32> = rows.iter().map(|c| c.location_id).collect();
-        let labels: HashMap<i32, String> = location::Entity::find()
-            .filter(location::Column::Id.is_in(location_ids))
-            .all(db)
-            .await
-            .map_err(Self::fail("contract areas"))?
-            .into_iter()
-            .map(|l| (l.id, l.label))
-            .collect();
         let mut categories: HashMap<i32, Vec<i32>> = HashMap::new();
         for c in ContractCategory::find()
             .filter(partner_contract_category::Column::ContractId.is_in(ids.clone()))
@@ -131,12 +134,11 @@ impl PartnerRepository {
         Ok(rows
             .into_iter()
             .map(|c| Contract {
-                location_label: labels.get(&c.location_id).cloned().unwrap_or_default(),
+                area: area_of(&c),
                 category_ids: categories.remove(&c.id).unwrap_or_default(),
                 sponsored: sponsored.remove(&c.id).unwrap_or_default(),
                 id: c.id,
                 partner_id: c.partner_id,
-                location_id: c.location_id,
                 starts_on: c.starts_on,
                 ends_on: c.ends_on,
                 monthly_fee: c.monthly_fee,
@@ -276,7 +278,8 @@ impl PartnerRepositoryTrait for PartnerRepository {
         let txn = self.db.begin().await.map_err(&fail)?;
         let id = ContractEntity::insert(partner_contract::ActiveModel {
             partner_id: Set(c.partner_id),
-            location_id: Set(c.location_id),
+            province_code: Set(Some(c.area.province_code.clone())),
+            ward_code: Set(c.area.ward_code.clone()),
             starts_on: Set(c.starts_on),
             ends_on: Set(c.ends_on),
             monthly_fee: Set(c.monthly_fee),
@@ -424,7 +427,7 @@ impl PartnerRepositoryTrait for PartnerRepository {
             .map(|c| ActiveContract {
                 contract_id: c.id,
                 partner_id: c.partner_id,
-                location_id: c.location_id,
+                area: c.area,
                 monthly_fee: c.monthly_fee,
                 category_ids: c.category_ids,
                 business_ids: c.sponsored.iter().map(|s| s.business_id).collect(),

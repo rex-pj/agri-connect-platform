@@ -232,16 +232,10 @@ pub async fn show(
             });
             // The area's sponsored providers come first, labelled; the rest keep
             // their order.
-            let area = match p {
-                Position::Preset(l) => Some(l.id),
-                Position::Device { lat, lng, .. } => {
-                    state.usecases.partner.area_of_point(*lat, *lng).await?
-                }
-            };
             let (sponsored, services) = state
                 .usecases
                 .partner
-                .feature_sponsored(area, service_id, services)
+                .feature_sponsored(Some(p.coordinates()), service_id, services)
                 .await?;
             (
                 rated_services(&state, sponsored).await?,

@@ -1,8 +1,12 @@
 use std::sync::Arc;
 
 use domain::{
-    models::catalogue::{Catalogue, DemoReport, SeedReport},
+    models::{
+        admin_unit::AdminUnitSync,
+        catalogue::{Catalogue, DemoReport, SeedReport},
+    },
     repositories::{
+        admin_unit_repository_trait::AdminUnitRepositoryTrait,
         business_repository_trait::BusinessRepositoryTrait,
         catalogue_repository_trait::CatalogueRepositoryTrait,
         demo_data_repository_trait::DemoDataRepositoryTrait,
@@ -22,6 +26,7 @@ use crate::{
 #[derive(Clone)]
 pub struct SetupUseCase {
     catalogue_repo: Arc<dyn CatalogueRepositoryTrait + Send + Sync>,
+    admin_unit_repo: Arc<dyn AdminUnitRepositoryTrait + Send + Sync>,
     demo_repo: Arc<dyn DemoDataRepositoryTrait + Send + Sync>,
     business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
     user_repo: Arc<dyn UserRepositoryTrait + Send + Sync>,
@@ -32,6 +37,7 @@ pub struct SetupUseCase {
 impl SetupUseCase {
     pub fn new(
         catalogue_repo: Arc<dyn CatalogueRepositoryTrait + Send + Sync>,
+        admin_unit_repo: Arc<dyn AdminUnitRepositoryTrait + Send + Sync>,
         demo_repo: Arc<dyn DemoDataRepositoryTrait + Send + Sync>,
         business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
         user_repo: Arc<dyn UserRepositoryTrait + Send + Sync>,
@@ -39,6 +45,7 @@ impl SetupUseCase {
     ) -> Self {
         Self {
             catalogue_repo,
+            admin_unit_repo,
             demo_repo,
             business_repo,
             user_repo,
@@ -66,6 +73,23 @@ impl SetupUseCase {
             warn!(keys = ?report.unknown_permissions, "permissions in the database are not in the catalogue");
         }
         Ok(report)
+    }
+
+    /// Runs at every startup, after the catalogue: loads the bundled
+    /// provinces and wards when their version is not the one stored (the
+    /// first start, or a new dataset), else does nothing.
+    pub async fn seed_admin_units(&self) -> Result<AdminUnitSync> {
+        let sync = self.admin_unit_repo.sync().await?;
+        if sync.loaded {
+            info!(
+                version = %sync.version,
+                provinces = sync.provinces,
+                wards = sync.wards,
+                backfilled = sync.backfilled,
+                "administrative units loaded"
+            );
+        }
+        Ok(sync)
     }
 
     pub async fn get_status(&self, actor: &Actor) -> Result<SetupStatusDto> {

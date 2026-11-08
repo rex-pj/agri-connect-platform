@@ -1,3 +1,4 @@
+pub mod admin_unit_repository_trait;
 pub mod audit_log_repository_trait;
 pub mod business_repository_trait;
 pub mod call_repository_trait;

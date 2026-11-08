@@ -265,6 +265,7 @@ pub enum SearchEvents {
     LocationId,
     Results,
     CreatedOn,
+    WardCode,
 }
 
 #[derive(DeriveIden, Clone, Copy)]
@@ -296,6 +297,8 @@ pub enum PartnerContracts {
     Note,
     CreatedOn,
     CreatedBy,
+    ProvinceCode,
+    WardCode,
 }
 
 #[derive(DeriveIden, Clone, Copy)]
@@ -388,6 +391,16 @@ impl Iden for GeographyPoint {
     fn unquoted(&self, s: &mut dyn std::fmt::Write) {
         // SRID 4326 is the project's only spatial reference.
         let _ = write!(s, "GEOGRAPHY(POINT, 4326)");
+    }
+}
+
+/// A PostGIS multipolygon on the WGS84 spheroid: an administrative unit's
+/// boundary, so a point-in-area test agrees with the distances.
+pub struct GeographyMultiPolygon;
+
+impl Iden for GeographyMultiPolygon {
+    fn unquoted(&self, s: &mut dyn std::fmt::Write) {
+        let _ = write!(s, "GEOGRAPHY(MULTIPOLYGON, 4326)");
     }
 }
 

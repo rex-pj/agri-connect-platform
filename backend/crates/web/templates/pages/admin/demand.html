@@ -38,8 +38,8 @@
     <p class="small text-muted">{{ t(key="demand.steady_hint", count=r.steady_weekly_leads, weeks=r.weeks | length) }}</p>
     <ul class="list-unstyled mb-0">
       {% for a in r.areas %}
-      <li class="py-2 border-bottom d-flex justify-content-between gap-2">
-        <span>{% if a.label %}{{ a.label }}{% else %}<span class="text-muted">{{ t(key="demand.unplaced") }}</span>{% endif %}{% if a.steady %} <span class="badge text-bg-success">{{ t(key="demand.steady") }}</span>{% endif %}</span>
+      <li class="py-2 border-bottom d-flex justify-content-between gap-2{% if a.nested %} ps-3 small{% endif %}">
+        <span>{% if a.nested %}{{ a.name }}{% elif a.label %}<span class="fw-semibold">{{ a.label }}</span>{% else %}<span class="text-muted">{{ t(key="demand.unplaced") }}</span>{% endif %}{% if a.steady %} <span class="badge text-bg-success">{{ t(key="demand.steady") }}</span>{% endif %}</span>
         <span class="fw-semibold">{{ fig::figure(f=a.total, min=r.min_count) }}</span>
       </li>
       {% endfor %}

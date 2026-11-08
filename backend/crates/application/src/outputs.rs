@@ -826,12 +826,20 @@ pub struct DemandRowDto {
     pub people: Figure,
 }
 
-/// An area of the report: a location preset (`location_id`), or businesses
-/// with no position or no preset in reach (`None`).
+/// An area of the report: a province, a ward, or the businesses with no
+/// ward in reach (`level` `none`, no `label`). `value` is the area as
+/// `?area=` takes it (`admin_units::AreaKey::value`).
 #[derive(Debug, Clone, Serialize)]
 pub struct DemandAreaDto {
-    pub location_id: Option<i32>,
+    pub value: String,
+    /// `province`, `ward` or `none`.
+    pub level: String,
+    /// The full name: "Đồng Tháp", "Đồng Tháp — Phường Cai Lậy".
     pub label: Option<String>,
+    /// The name to show under its province ("Phường Cai Lậy").
+    pub name: Option<String>,
+    /// A ward listed right under its province's row.
+    pub nested: bool,
     pub total: Figure,
     /// Every week reached `STEADY_WEEKLY_LEADS`.
     pub steady: bool,
@@ -890,8 +898,9 @@ pub struct NamedDto {
 #[derive(Debug, Clone, Serialize)]
 pub struct ContractDto {
     pub id: i32,
-    pub location_id: i32,
-    pub location_label: String,
+    /// The area as text (`p82`, `w28439`) and its name.
+    pub area: String,
+    pub area_label: String,
     pub starts_on: chrono::NaiveDate,
     pub ends_on: chrono::NaiveDate,
     pub monthly_fee: i64,
@@ -912,7 +921,7 @@ pub struct PartnerDetailDto {
 /// their monthly fees.
 #[derive(Debug, Clone, Serialize)]
 pub struct AreaRevenueDto {
-    pub location_id: i32,
+    pub area: String,
     pub label: String,
     pub partners: usize,
     pub monthly_revenue: i64,
@@ -933,6 +942,21 @@ pub struct PartnerReportDto {
     pub partner_name: String,
     pub report: DemandReportDto,
     pub contracts: Vec<ContractDto>,
+}
+
+/// A province a contract may cover (the whole of it: `value`), with its
+/// wards, by name.
+#[derive(Debug, Clone, Serialize)]
+pub struct AreaGroupDto {
+    pub value: String,
+    pub label: String,
+    pub wards: Vec<AreaChoiceDto>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AreaChoiceDto {
+    pub value: String,
+    pub label: String,
 }
 
 /// The account a partner now reads its report with.

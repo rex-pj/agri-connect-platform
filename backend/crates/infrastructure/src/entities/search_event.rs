@@ -7,7 +7,9 @@ pub struct Model {
     pub id: i64,
     pub query: Option<String>,
     pub category_id: Option<i32>,
+    /// The preset of a search stored before wards; new ones keep `ward_code`.
     pub location_id: Option<i32>,
+    pub ward_code: Option<String>,
     pub results: i32,
     pub created_on: DateTimeWithTimeZone,
 }

@@ -79,7 +79,7 @@
     {% set c = r.contract %}
     <article class="py-3 border-bottom" id="hd-{{ c.id }}" aria-labelledby="hd-{{ c.id }}-title">
       <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
-        <h3 class="fs-6 fw-bold mb-1" id="hd-{{ c.id }}-title">{{ c.location_label }}</h3>
+        <h3 class="fs-6 fw-bold mb-1" id="hd-{{ c.id }}-title">{{ c.area_label }}</h3>
         {% if c.in_force %}<span class="badge text-bg-success">{{ t(key="partner.in_force_badge") }}</span>{% else %}<span class="badge text-bg-secondary">{{ t(key="partner.not_in_force") }}</span>{% endif %}
       </div>
       <p class="small mb-1"><time datetime="{{ c.starts_on }}">{{ c.starts_on | full_date }}</time> – <time datetime="{{ c.ends_on }}">{{ c.ends_on | full_date }}</time> · <strong>{{ c.monthly_fee | vnd }}</strong> {{ t(key="partner.per_month") }}</p>
@@ -121,7 +121,7 @@
       {% endif %}
       <div x-data="dialog" x-on:keydown.escape.window="hide">
         <a class="btn btn-sm btn-outline-danger" href="#xoa-hd-{{ c.id }}" x-on:click.prevent="show">{{ atoms::icon(name="fa-trash") }} {{ t(key="partner.delete_contract") }}</a>
-        {{ confirm::confirm_sheet(id="xoa-hd-" ~ c.id, title=t(key="partner.delete_contract_title", name=c.location_label), icon="fa-trash", action=r.delete_action, button=t(key="common.confirm_delete"), reason_max=limits.audit_reason_max, effect="delete", what=t(key="partner.contract_what"), button_class="btn-danger") }}
+        {{ confirm::confirm_sheet(id="xoa-hd-" ~ c.id, title=t(key="partner.delete_contract_title", name=c.area_label), icon="fa-trash", action=r.delete_action, button=t(key="common.confirm_delete"), reason_max=limits.audit_reason_max, effect="delete", what=t(key="partner.contract_what"), button_class="btn-danger") }}
       </div>
     </article>
     {% else %}

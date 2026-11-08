@@ -340,25 +340,18 @@ pub struct CallRequest {
     pub channel: Option<String>,
 }
 
-/// `?area=` of the demand report: a location id, `none` (businesses with no
-/// area), or empty for every area.
+/// `?area=` of the demand report: a province (`p82`), a ward (`w28439`),
+/// `none` (businesses with no ward), or empty for every area.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct DemandQuery {
     pub area: String,
 }
 
-/// `?area=` value of the businesses with no area.
-pub const UNPLACED_AREA: &str = "none";
-
 impl DemandQuery {
     /// The area in focus; anything unknown is all of them.
-    pub fn focus(&self) -> Option<application::usecases::demand_usecase::AreaKey> {
-        use application::usecases::demand_usecase::AreaKey;
-        match self.area.trim() {
-            UNPLACED_AREA => Some(AreaKey::Unplaced),
-            other => other.parse::<i32>().ok().map(AreaKey::Location),
-        }
+    pub fn focus(&self) -> Option<application::admin_units::AreaKey> {
+        application::admin_units::AreaKey::parse(&self.area)
     }
 }
 
@@ -388,7 +381,8 @@ impl From<PartnerRequest> for application::inputs::PartnerInput {
 /// that does not parse is reported by the use case like a missing one.
 #[derive(Deserialize)]
 pub struct ContractRequest {
-    pub location_id: Option<i32>,
+    /// `p82` (a whole province) or `w28439` (one ward); ignored on an edit.
+    pub area: Option<String>,
     pub starts_on: Option<String>,
     pub ends_on: Option<String>,
     pub monthly_fee: Option<i64>,
@@ -403,7 +397,7 @@ impl From<ContractRequest> for application::inputs::ContractInput {
             s.and_then(|s| chrono::NaiveDate::parse_from_str(s.trim(), "%Y-%m-%d").ok())
         };
         Self {
-            location_id: r.location_id,
+            area: r.area,
             starts_on: date(r.starts_on),
             ends_on: date(r.ends_on),
             monthly_fee: r.monthly_fee,

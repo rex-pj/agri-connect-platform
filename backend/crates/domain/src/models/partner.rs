@@ -30,13 +30,30 @@ pub struct SponsoredBusiness {
     pub name: String,
 }
 
+/// Where a contract applies: a whole province, or one ward of it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ContractArea {
+    pub province_code: String,
+    /// `None`: the whole province.
+    pub ward_code: Option<String>,
+}
+
+impl ContractArea {
+    /// Whether a place in this ward (of this province) is in the area.
+    pub fn covers(&self, ward_code: &str, province_code: &str) -> bool {
+        match &self.ward_code {
+            Some(w) => w == ward_code,
+            None => self.province_code == province_code,
+        }
+    }
+}
+
 /// What a partner pays for in one area: some categories, between two dates
 /// (both included), a monthly fee in đồng, and the providers it sponsors.
 pub struct Contract {
     pub id: i32,
     pub partner_id: i32,
-    pub location_id: i32,
-    pub location_label: String,
+    pub area: ContractArea,
     pub starts_on: NaiveDate,
     pub ends_on: NaiveDate,
     pub monthly_fee: i64,
@@ -47,7 +64,7 @@ pub struct Contract {
 
 pub struct NewContract {
     pub partner_id: i32,
-    pub location_id: i32,
+    pub area: ContractArea,
     pub starts_on: NaiveDate,
     pub ends_on: NaiveDate,
     pub monthly_fee: i64,
@@ -60,7 +77,7 @@ pub struct NewContract {
 pub struct ActiveContract {
     pub contract_id: i32,
     pub partner_id: i32,
-    pub location_id: i32,
+    pub area: ContractArea,
     pub monthly_fee: i64,
     pub category_ids: Vec<i32>,
     pub business_ids: Vec<i32>,

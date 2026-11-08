@@ -537,6 +537,19 @@ pub async fn known_reset_token(env: &Env, raw: &str) -> String {
 pub const TEST_ORIGIN: &str = "http://localhost:5173";
 
 /// A router that accepts `TEST_ORIGIN`, like production accepts APP_URL.
+/// Loads the bundled provinces and wards, as startup does. Only the tests
+/// that place something in a ward need it (a few seconds per database).
+pub async fn load_admin_units(e: &Env) {
+    let sync = e
+        .state
+        .usecases
+        .setup
+        .seed_admin_units()
+        .await
+        .unwrap_or_else(|err| panic!("seed_admin_units: {err}"));
+    assert!(sync.loaded && sync.wards > 0, "the dataset loads once");
+}
+
 pub async fn env_with_origin() -> Env {
     Env::with(
         None,

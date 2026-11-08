@@ -8,8 +8,8 @@ use axum::{
     http::{header, Request, StatusCode},
 };
 use integration_tests::{
-    body_text, categories_of, env_with_origin, get_page, install_admin, json_body, post_form,
-    register_provider, send, sign_in, Env, TEST_ORIGIN,
+    body_text, categories_of, env_with_origin, get_page, install_admin, json_body,
+    load_admin_units, post_form, register_provider, send, sign_in, Env, TEST_ORIGIN,
 };
 use sea_orm::{ConnectionTrait, Statement};
 
@@ -74,12 +74,16 @@ async fn location(e: &Env, label: &str) -> String {
 #[ignore = "needs TEST_DATABASE_URL"]
 async fn a_partner_pays_for_an_area_reads_its_report_and_sponsors_a_shop() {
     let e = env_with_origin().await;
+    load_admin_units(&e).await;
     let admin = install_admin(&e).await;
-    // Two shops by Cai Lậy (the second is sponsored), one in Long Xuyên.
+    // Two shops in Xã Bình Phú by Cai Lậy (the second is sponsored), one in
+    // Phường Long Xuyên.
     let (_plain, category) = provider_at(&e, "thuong", "0901111111", 106.090, 10.420).await;
     let (sponsored, _) = provider_at(&e, "taitro", "0902222222", 106.085, 10.415).await;
     let (far, _) = provider_at(&e, "longxuyen", "0903333333", 105.446, 10.374).await;
     let cai_lay = location(&e, "Đồng Tháp — Cai Lậy").await;
+    // The contract covers the commune the preset's point lies in.
+    let binh_phu = "w28471";
 
     // A partner: the kind is checked.
     let res = send(
@@ -116,7 +120,7 @@ async fn a_partner_pays_for_an_area_reads_its_report_and_sponsors_a_shop() {
         post_form(
             &contracts,
             &[
-                ("location_id", &cai_lay),
+                ("area", binh_phu),
                 ("starts_on", "2026-12-01"),
                 ("ends_on", "2026-11-01"),
                 ("monthly_fee", "2.000.000"),
@@ -135,7 +139,7 @@ async fn a_partner_pays_for_an_area_reads_its_report_and_sponsors_a_shop() {
         post_form(
             &contracts,
             &[
-                ("location_id", &cai_lay),
+                ("area", binh_phu),
                 ("starts_on", "2020-01-01"),
                 ("ends_on", "2099-12-31"),
                 ("monthly_fee", "2.000.000"),
@@ -167,10 +171,10 @@ async fn a_partner_pays_for_an_area_reads_its_report_and_sponsors_a_shop() {
     .await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
 
-    // The revenue: one paying partner, 2 000 000 a month in Cai Lậy.
+    // The revenue: one paying partner, 2 000 000 a month in Xã Bình Phú.
     let list = body_text(send(&e.router, get_page("/admin/partners", Some(&admin))).await).await;
     assert!(list.contains("Dai ly Drone"));
-    assert!(list.contains("Đồng Tháp — Cai Lậy"));
+    assert!(list.contains("Đồng Tháp — Xã Bình Phú"));
     assert!(list.contains("2.000.000"));
     let dashboard =
         body_text(send(&e.router, get_page("/admin/dashboard", Some(&admin))).await).await;
@@ -238,11 +242,8 @@ async fn a_partner_pays_for_an_area_reads_its_report_and_sponsors_a_shop() {
     let own = body_text(send(&e.router, get_page("/partner", Some(&partner))).await).await;
     assert!(own.contains("Dai ly Drone"));
     assert!(!own.contains("bottom-nav"), "its own frame: no farmer tabs");
-    assert!(own.contains("Đồng Tháp — Cai Lậy"));
-    assert!(
-        !own.contains("An Giang — Long Xuyên"),
-        "only the areas it pays for"
-    );
+    assert!(own.contains("Đồng Tháp — Xã Bình Phú"));
+    assert!(!own.contains("Long Xuyên"), "only the areas it pays for");
     let res = send(&e.router, get_page("/admin/demand", Some(&partner))).await;
     assert_eq!(res.status(), StatusCode::FORBIDDEN);
     let res = send(&e.router, get_page("/partner/report.csv", Some(&partner))).await;
@@ -333,15 +334,32 @@ async fn the_json_api_manages_partners_and_reports_their_revenue() {
     .await;
     assert_eq!(res.status(), StatusCode::CREATED);
     let id = json_body(res).await["partner"]["id"].as_i64().unwrap();
-    let area = location(&e, "Đồng Tháp — Cai Lậy").await;
+    load_admin_units(&e).await;
     let category = categories_of(&e, "service").await[0].0;
+    // A preset id is no area any more; a whole province is.
     let res = send(
         &e.router,
         json(
             "POST",
             &format!("/api/admin/partners/{id}/contracts"),
             &format!(
-                r#"{{"location_id":{area},"starts_on":"2020-01-01","ends_on":"2099-12-31","monthly_fee":500000,"category_ids":[{category}]}}"#
+                r#"{{"area":"12","starts_on":"2020-01-01","ends_on":"2099-12-31","monthly_fee":500000,"category_ids":[{category}]}}"#
+            ),
+        ),
+    )
+    .await;
+    assert!(res.status().is_client_error());
+    assert_eq!(
+        json_body(res).await["field_errors"]["area"][0],
+        "Không tìm thấy khu vực."
+    );
+    let res = send(
+        &e.router,
+        json(
+            "POST",
+            &format!("/api/admin/partners/{id}/contracts"),
+            &format!(
+                r#"{{"area":"p82","starts_on":"2020-01-01","ends_on":"2099-12-31","monthly_fee":500000,"category_ids":[{category}]}}"#
             ),
         ),
     )
@@ -349,9 +367,12 @@ async fn the_json_api_manages_partners_and_reports_their_revenue() {
     assert_eq!(res.status(), StatusCode::CREATED);
     let detail = json_body(res).await;
     assert_eq!(detail["contracts"][0]["in_force"], true);
+    assert_eq!(detail["contracts"][0]["area"], "p82");
+    assert_eq!(detail["contracts"][0]["area_label"], "Đồng Tháp");
     assert_eq!(detail["partner"]["monthly_revenue"], 500_000);
     let kpis = json_body(send(&e.router, json("GET", "/api/admin/partners/kpis", "")).await).await;
     assert_eq!(kpis["paying_partners"], 1);
     assert_eq!(kpis["areas"][0]["monthly_revenue"], 500_000);
+    assert_eq!(kpis["areas"][0]["label"], "Đồng Tháp");
     e.cleanup().await;
 }

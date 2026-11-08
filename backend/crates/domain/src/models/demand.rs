@@ -11,6 +11,7 @@ pub enum LeadChannel {
 /// One lead of a real (not demo) business: a call or Zalo tap, or a contact
 /// request that is not spam. Never who sent it, except a request's phone,
 /// which only tells two requests from the same person apart.
+#[derive(Debug, Clone)]
 pub struct LeadEvent {
     pub at: DateTime<Utc>,
     pub business_id: i32,
@@ -22,11 +23,11 @@ pub struct LeadEvent {
     pub requester_phone: Option<String>,
 }
 
-/// The location preset a business counts under: the nearest active one
-/// within the report radius. Businesses without a position are absent.
+/// The ward a business counts under: the one its position lies in (or the
+/// nearest within `ADMIN_UNIT_SNAP_M`). Businesses without one are absent.
 pub struct BusinessArea {
     pub business_id: i32,
-    pub location_id: i32,
+    pub ward_code: String,
     pub name: String,
     pub phone: String,
     pub address: Option<String>,
@@ -39,13 +40,13 @@ pub struct SoleCategory {
     pub category_id: i32,
 }
 
-/// A search to store: the words (normalised), the category filter, the area
-/// (a preset, or the nearest one to the searcher's position) and how many
+/// A search to store: the words (normalised), the category filter, the ward
+/// (of the preset chosen, or of the searcher's position) and how many
 /// results came back. Never who searched.
 pub struct NewSearch {
     pub query: Option<String>,
     pub category_id: Option<i32>,
-    pub location_id: Option<i32>,
+    pub ward_code: Option<String>,
     pub results: i64,
 }
 
@@ -54,6 +55,6 @@ pub struct SearchEvent {
     pub at: DateTime<Utc>,
     pub query: Option<String>,
     pub category_id: Option<i32>,
-    pub location_id: Option<i32>,
+    pub ward_code: Option<String>,
     pub results: i64,
 }

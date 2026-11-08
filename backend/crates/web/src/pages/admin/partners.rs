@@ -13,7 +13,9 @@ use std::collections::HashMap;
 use application::{
     authz::Actor,
     inputs::{ContractInput, PartnerInput},
-    outputs::{NamedDto, PartnerDetailDto, PartnerDto, PartnerKpiDto, SponsorCandidateDto},
+    outputs::{
+        AreaGroupDto, NamedDto, PartnerDetailDto, PartnerDto, PartnerKpiDto, SponsorCandidateDto,
+    },
 };
 use axum::{extract::State, http::StatusCode, response::Response};
 use chrono::NaiveDate;
@@ -29,7 +31,6 @@ use crate::{
     pages::{
         admin::{is_refusal, render_admin, url, Outcome},
         forms::{reason, FormErrors},
-        listing::parse_opt,
         parse_id, see_other,
     },
 };
@@ -73,7 +74,8 @@ impl PartnerForm {
 /// The contract form as typed: the plain boxes, and the ticked categories.
 #[derive(Debug, Default, Serialize)]
 pub struct ContractForm {
-    pub location_id: String,
+    /// `p82` (a whole province) or `w28439` (one ward).
+    pub area: String,
     pub starts_on: String,
     pub ends_on: String,
     pub monthly_fee: String,
@@ -85,7 +87,7 @@ impl ContractForm {
     /// A contract as stored, for its edit form.
     fn from_dto(c: &application::outputs::ContractDto) -> Self {
         Self {
-            location_id: c.location_id.to_string(),
+            area: c.area.clone(),
             starts_on: c.starts_on.to_string(),
             ends_on: c.ends_on.to_string(),
             monthly_fee: c.monthly_fee.to_string(),
@@ -103,7 +105,7 @@ impl ContractForm {
             .collect();
         category_ids.sort_unstable();
         Self {
-            location_id: get("location_id"),
+            area: get("area"),
             starts_on: get("starts_on"),
             ends_on: get("ends_on"),
             monthly_fee: get("monthly_fee"),
@@ -121,7 +123,7 @@ impl ContractForm {
             .filter(char::is_ascii_digit)
             .collect();
         ContractInput {
-            location_id: parse_opt(&self.location_id),
+            area: Some(self.area.clone()),
             starts_on: date(&self.starts_on),
             ends_on: date(&self.ends_on),
             monthly_fee: if digits.is_empty() {
@@ -286,12 +288,6 @@ pub struct ContractRow {
 }
 
 #[derive(Serialize)]
-pub struct AreaOption {
-    pub id: i32,
-    pub label: String,
-}
-
-#[derive(Serialize)]
 pub struct CategoryOption {
     pub id: i32,
     pub name: String,
@@ -306,7 +302,8 @@ pub struct PartnerPage {
     pub flash_text: Option<String>,
     pub contracts: Vec<ContractRow>,
     pub kinds: Vec<KindOption>,
-    pub areas: Vec<AreaOption>,
+    /// Each province (the whole of it), with its wards.
+    pub areas: Vec<AreaGroupDto>,
     pub categories: Vec<CategoryOption>,
     pub profile: PartnerForm,
     pub profile_errors: FormErrors,
@@ -330,8 +327,8 @@ async fn partner_page(
 ) -> Result<Response, Error> {
     let partners = &state.usecases.partner;
     let PartnerDetailDto { partner, contracts } = partners.get_partner(actor, id).await?;
-    let (locations, categories) = tokio::try_join!(
-        state.usecases.explore.get_locations(),
+    let (areas, categories) = tokio::try_join!(
+        partners.area_choices(actor),
         state.usecases.explore.get_categories(None),
     )?;
     let id_text = id.to_string();
@@ -413,13 +410,7 @@ async fn partner_page(
         partner,
         contracts: rows,
         kinds: kinds(state.locale()),
-        areas: locations
-            .into_iter()
-            .map(|l| AreaOption {
-                id: l.id,
-                label: l.label,
-            })
-            .collect(),
+        areas,
         categories: categories
             .into_iter()
             .map(|c| CategoryOption {
@@ -722,7 +713,7 @@ mod tests {
     #[test]
     fn a_contract_form_reads_its_ticked_categories_and_the_fee_digits() {
         let form: HashMap<String, String> = [
-            ("location_id", "3"),
+            ("area", "w28439"),
             ("starts_on", "2026-11-01"),
             ("ends_on", "2027-10-31"),
             ("monthly_fee", "2.000.000 d"),
@@ -737,7 +728,7 @@ mod tests {
         assert_eq!(parsed.category_ids, vec![2, 7]);
         let input = parsed.input();
         assert_eq!(input.monthly_fee, Some(2_000_000));
-        assert_eq!(input.location_id, Some(3));
+        assert_eq!(input.area.as_deref(), Some("w28439"));
         assert!(input.starts_on.is_some() && input.ends_on.is_some());
     }
 }

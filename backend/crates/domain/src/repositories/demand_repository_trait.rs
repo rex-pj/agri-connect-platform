@@ -18,20 +18,13 @@ pub trait DemandRepositoryTrait {
         to: DateTime<Utc>,
     ) -> Result<Vec<LeadEvent>, Error>;
 
-    /// Each positioned business's nearest active location preset within
-    /// `radius_m` metres; businesses with none in reach are absent.
-    async fn business_areas(&self, radius_m: f64) -> Result<Vec<BusinessArea>, Error>;
+    /// Each positioned business's ward: the active one its position lies
+    /// in, else the nearest within `snap_m` metres; businesses with none in
+    /// reach are absent.
+    async fn business_areas(&self, snap_m: f64) -> Result<Vec<BusinessArea>, Error>;
 
     /// Businesses with exactly one live service, with its category.
     async fn sole_categories(&self) -> Result<Vec<SoleCategory>, Error>;
-
-    /// The nearest active location preset to a point within `radius_m`.
-    async fn nearest_location(
-        &self,
-        lat: f64,
-        lng: f64,
-        radius_m: f64,
-    ) -> Result<Option<i32>, Error>;
 
     async fn record_search(&self, search: NewSearch) -> Result<(), Error>;
 

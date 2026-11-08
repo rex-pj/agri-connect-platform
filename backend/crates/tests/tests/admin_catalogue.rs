@@ -446,8 +446,28 @@ async fn a_location_is_filled_from_the_ward_chosen() {
     )
     .await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
-    let detail = page(&e, &location_of(&res), &admin).await;
+    let preset = location_of(&res);
+    let detail = page(&e, &preset, &admin).await;
     assert!(detail.contains("Đồng Tháp — Bình Phú"));
+
+    // The edit form has the same picker, and the same rule.
+    assert!(detail.contains(r#"<option value="w28378" data-preset="Đồng Tháp — Mỹ Thiện""#));
+    assert!(detail.contains(r#"x-data="wardFill""#));
+    let res = send(
+        &e.router,
+        post_form(
+            &preset,
+            &[("ward", "w28378"), ("label", ""), ("lat", ""), ("lng", "")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let detail = page(&e, &preset, &admin).await;
+    assert!(
+        detail.contains("<title>Đồng Tháp — Mỹ Thiện"),
+        "renamed and moved to Mỹ Thiện"
+    );
 
     // What was typed stays.
     let res = send(

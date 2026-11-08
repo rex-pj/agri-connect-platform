@@ -3,6 +3,7 @@
 {% import "atoms/alert.html" as alerts %}
 {% import "atoms/status_badge.html" as status %}
 {% import "molecules/admin_header.html" as header %}
+{% import "molecules/form_field.html" as field %}
 {% import "organisms/location_fields.html" as fields %}
 {% import "organisms/confirm_sheet.html" as confirm %}
 {#- One location preset: its edit form, visibility and deletion.
@@ -10,6 +11,7 @@
     deleting each go through a confirmation with a reason (each in its own
     `dialog` scope: its section); showing again is one button. -#}
 {% block title %}{{ page.body.location.label }} — {{ site.name }} Admin{% endblock title %}
+{% block vendor %}{{ field::area_select_assets() }}{% endblock vendor %}
 {% block content %}
 {% set b = page.body %}
 {% set l = b.location %}
@@ -24,7 +26,7 @@
   <section class="admin-section" aria-labelledby="edit-title">
     <h2 class="admin-section__title" id="edit-title">{{ t(key="admin.info") }}</h2>
     <form class="form-stack" method="post" action="{{ b.update_action }}" novalidate>
-      {{ fields::location_fields(form=b.form, errors=b.errors, label_max=b.label_max, prefix="edit") }}
+      {{ fields::location_fields(form=b.form, errors=b.errors, label_max=b.label_max, prefix="edit", wards=b.wards) }}
       <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button></div>
     </form>
   </section>

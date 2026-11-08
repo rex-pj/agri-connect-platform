@@ -833,15 +833,11 @@ impl AdminUseCase {
             .choices())
     }
 
-    /// A new preset. A ward chosen fills what was left blank: the label
-    /// with its preset name, a missing coordinate with its point; what was
-    /// typed stays. An unknown or turned-off ward is a field error.
-    pub async fn create_location(
-        &self,
-        actor: &Actor,
-        input: LocationInput,
-    ) -> Result<AdminLocationDto> {
-        actor.require(PERM_LOCATION_MANAGE)?;
+    /// A preset's boxes, checked. A ward chosen fills what was left blank:
+    /// the label with its preset name, a missing coordinate with its point;
+    /// what was typed stays. An unknown or turned-off ward is a field error.
+    /// The one rule of the create and the edit forms (and their JSON).
+    async fn location_fields(&self, input: LocationInput) -> Result<(String, f64, f64, i32)> {
         let LocationInput {
             mut label,
             mut lat,
@@ -869,6 +865,16 @@ impl AdminUseCase {
             }
         }
         let label = validate_location(&label, lat, lng)?;
+        Ok((label, lat, lng, display_order))
+    }
+
+    pub async fn create_location(
+        &self,
+        actor: &Actor,
+        input: LocationInput,
+    ) -> Result<AdminLocationDto> {
+        actor.require(PERM_LOCATION_MANAGE)?;
+        let (label, lat, lng, display_order) = self.location_fields(input).await?;
         let id = self
             .location_repo
             .create(label, lat, lng, display_order)
@@ -880,13 +886,10 @@ impl AdminUseCase {
         &self,
         actor: &Actor,
         id: i32,
-        label: String,
-        lat: f64,
-        lng: f64,
-        display_order: i32,
+        input: LocationInput,
     ) -> Result<AdminLocationDto> {
         actor.require(PERM_LOCATION_MANAGE)?;
-        let label = validate_location(&label, lat, lng)?;
+        let (label, lat, lng, display_order) = self.location_fields(input).await?;
         self.location_repo
             .update(id, label, lat, lng, display_order)
             .await?;

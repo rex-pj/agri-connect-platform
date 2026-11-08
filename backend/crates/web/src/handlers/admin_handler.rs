@@ -10,10 +10,10 @@ use crate::{
     middleware::auth::MaybeActor,
     requests::{
         AdminCreateServiceRequest, AdminListQuery, AdminPageQuery, AdminUpdateProductRequest,
-        AdminUpdateServiceRequest, AssignUserRequest, CreateCategoryRequest, CreateLocationRequest,
-        DeleteWithReasonBody, SetVerificationRequest, SlugSuggestionQuery, ToggleActiveRequest,
+        AdminUpdateServiceRequest, AssignUserRequest, CreateCategoryRequest, DeleteWithReasonBody,
+        LocationRequest, SetVerificationRequest, SlugSuggestionQuery, ToggleActiveRequest,
         ToggleVisibleRequest, UpdateCategoryRequest, UpdateInquiryStatusRequest,
-        UpdateLocationRequest, UpdateProfileRequest, UpdateUserRoleRequest,
+        UpdateProfileRequest, UpdateUserRoleRequest,
     },
 };
 
@@ -363,7 +363,7 @@ impl AdminHandler {
     pub async fn create_location(
         MaybeActor(actor): MaybeActor,
         State(state): State<AppState>,
-        ApiJson(req): ApiJson<CreateLocationRequest>,
+        ApiJson(req): ApiJson<LocationRequest>,
     ) -> Result<impl IntoResponse, Error> {
         let actor = require_actor(actor)?;
         let result = state
@@ -390,13 +390,13 @@ impl AdminHandler {
         MaybeActor(actor): MaybeActor,
         State(state): State<AppState>,
         ApiPath(id): ApiPath<i32>,
-        ApiJson(req): ApiJson<UpdateLocationRequest>,
+        ApiJson(req): ApiJson<LocationRequest>,
     ) -> Result<impl IntoResponse, Error> {
         let actor = require_actor(actor)?;
         let result = state
             .usecases
             .admin
-            .update_location(&actor, id, req.label, req.lat, req.lng, req.display_order)
+            .update_location(&actor, id, req.into())
             .await?;
         Ok(Json(result))
     }

@@ -121,8 +121,9 @@ pub struct UpdateInquiryStatusRequest {
     pub status: String,
 }
 
+/// POST /api/admin/locations and PUT /api/admin/locations/{id}.
 #[derive(Deserialize)]
-pub struct CreateLocationRequest {
+pub struct LocationRequest {
     #[serde(default)]
     pub label: String,
     /// Left out with a `ward`: the ward's point.
@@ -133,8 +134,8 @@ pub struct CreateLocationRequest {
     pub ward: Option<String>,
 }
 
-impl From<CreateLocationRequest> for application::inputs::LocationInput {
-    fn from(r: CreateLocationRequest) -> Self {
+impl From<LocationRequest> for application::inputs::LocationInput {
+    fn from(r: LocationRequest) -> Self {
         Self {
             label: r.label,
             lat: r.lat.unwrap_or(f64::NAN),
@@ -143,14 +144,6 @@ impl From<CreateLocationRequest> for application::inputs::LocationInput {
             ward: r.ward,
         }
     }
-}
-
-#[derive(Deserialize)]
-pub struct UpdateLocationRequest {
-    pub label: String,
-    pub lat: f64,
-    pub lng: f64,
-    pub display_order: i32,
 }
 
 #[derive(Deserialize)]

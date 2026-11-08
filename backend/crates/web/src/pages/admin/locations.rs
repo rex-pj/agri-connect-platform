@@ -41,7 +41,7 @@ pub struct LocationForm {
     pub lat: String,
     pub lng: String,
     pub display_order: String,
-    /// The ward chosen to fill the form (`w28471`); create only.
+    /// The ward chosen to fill the form (`w28471`).
     pub ward: String,
 }
 
@@ -237,6 +237,8 @@ pub struct LocationPage {
     /// The delete dialog re-opens after a refusal.
     pub confirm_open: bool,
     pub flash: Option<Flash>,
+    /// The wards the form fills itself from, by province.
+    pub wards: Vec<AreaGroupDto>,
 }
 
 async fn location_page(
@@ -245,7 +247,10 @@ async fn location_page(
     id: i32,
     outcome: Outcome<LocationForm>,
 ) -> Result<Response, Error> {
-    let location = state.usecases.admin.get_location_admin(actor, id).await?;
+    let (location, wards) = tokio::try_join!(
+        state.usecases.admin.get_location_admin(actor, id),
+        state.usecases.admin.location_choices(actor),
+    )?;
     let id_text = id.to_string();
     let path = url("admin_location", &[("id", &id_text)])?;
     let body = LocationPage {
@@ -260,6 +265,7 @@ async fn location_page(
         delete_action: url("admin_location_delete", &[("id", &id_text)])?,
         confirm_open: outcome.confirm_open,
         flash: outcome.flash,
+        wards,
     };
     render_admin(
         state,
@@ -310,11 +316,7 @@ pub async fn update(
     let id = parse_id(&raw_id, ErrorCode::LocationNotFound)?;
     let result = async {
         let i = form.input()?;
-        state
-            .usecases
-            .admin
-            .update_location(&actor, id, i.label, i.lat, i.lng, i.display_order)
-            .await
+        state.usecases.admin.update_location(&actor, id, i).await
     }
     .await;
     match result {

@@ -11,9 +11,8 @@
 {#- `page.body` is web::pages::admin::locations::LocationsPage: every
     location preset (hidden ones too) and the create form, a sheet opened by
     the header's "add" (an anchored section without JS), which comes back
-    open with its messages when a rule is broken. Choosing a ward fills the
-    name and point (Alpine `wardFill`); without JS, the boxes left blank
-    take the ward's on save. "Ẩn" and "Xoá" reload the
+    open with its messages when a rule is broken. Its ward picker comes with
+    `organisms/location_fields.html`, as on the edit page. "Ẩn" and "Xoá" reload the
     list with that row's confirmation open (`b.confirm`, in its own `dialog`
     scope). Row actions send `back=list` (`b.keep`) so they land here again. -#}
 {% block title %}{{ t(key="admin_menu.locations") }} — {{ site.name }} Admin{% endblock title %}
@@ -76,10 +75,9 @@
   <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
   <section class="contact-sheet" id="them-khu-vuc" aria-labelledby="them-khu-vuc-title" :class="sheetClass">
     {{ sheet_head::sheet_header(id="them-khu-vuc", title=t(key="admin.add_location"), icon="fa-map-location-dot") }}
-    <form class="contact-sheet__form" method="post" action="{{ b.create_action }}" novalidate x-data="wardFill" x-on:change="filled">
+    <form class="contact-sheet__form" method="post" action="{{ b.create_action }}" novalidate>
       {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
-      {{ field::area_select(id="new-ward", name="ward", label=t(key="location_form.ward"), groups=b.wards, value=b.form.ward, error=b.errors.fields.ward | default(value=""), placeholder=t(key="location_form.ward_placeholder"), whole=false, points=true, hint=t(key="location_form.ward_hint")) }}
-      {{ fields::location_fields(form=b.form, errors=b.errors, label_max=b.label_max, prefix="new") }}
+      {{ fields::location_fields(form=b.form, errors=b.errors, label_max=b.label_max, prefix="new", wards=b.wards) }}
       <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-plus") }} {{ t(key="admin.add_location") }}</button>
     </form>
   </section>

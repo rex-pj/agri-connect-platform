@@ -3195,3 +3195,35 @@ a.chip {
     border-bottom: 0;
   }
 }
+
+/* ── Form icons ──────────────────────────────────────────────────────────── */
+/* Bootstrap and Tom Select draw these as data: images, which the page CSP
+ * (img-src 'self') blocks: the same drawings, as files (img/forms/). Only the
+ * ones the templates use: the select chevron, the checkbox tick and the
+ * invalid mark. Each is set as background-image itself, never through
+ * Bootstrap's --bs-* variables: a relative url() in a variable resolves
+ * against the stylesheet that uses it (Bootstrap's, under vendor/). Tom
+ * Select's stylesheet loads after this one, so its overrides sit under
+ * .form-field (every area select is in one). */
+.form-select {
+  background-image: url("../img/forms/chevron.svg");
+}
+.form-check-input:checked[type="checkbox"] {
+  background-image: url("../img/forms/check.svg");
+}
+.form-control.is-invalid {
+  background-image: url("../img/forms/invalid.svg");
+}
+.form-select.is-invalid:not([multiple]):not([size]),
+.form-select.is-invalid:not([multiple])[size="1"] {
+  background-image: url("../img/forms/chevron.svg"), url("../img/forms/invalid.svg");
+}
+.form-field .ts-wrapper.is-invalid:not(.single) {
+  background-image: url("../img/forms/invalid.svg");
+}
+.form-field .ts-wrapper.is-invalid.single {
+  background-image: url("../img/forms/chevron.svg"), url("../img/forms/invalid.svg");
+}
+.form-field .ts-wrapper:not(.form-control, .form-select).single .ts-control {
+  background-image: url("../img/forms/chevron.svg");
+}

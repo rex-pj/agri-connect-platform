@@ -8,7 +8,8 @@
     logout), permission-filtered menu, content. On a
     phone the menu is a drawer under the header, opened by a button (Alpine
     `collapse`) and closed by the button, the dimmed page or Escape; without
-    JS it simply sits above the content. Pages set `page.admin` (AdminNav)
+    JS it simply sits above the content. The menu keeps its scroll position
+    from page to page (Alpine `menuScroll`). Pages set `page.admin` (AdminNav)
     and `page.body`, and fill `content`. Never indexed. -#}
 {% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
 {% block body %}
@@ -24,7 +25,7 @@
       {{ account::account_menu(menu=page.admin.account, label=page.admin.username, label_class="d-none d-sm-inline") }}
     </div>
   </header>
-  <nav class="ash-sidebar" id="admin-menu" aria-label="{{ t(key="account_menu.admin") }}" :class="panelClass">
+  <nav class="ash-sidebar" id="admin-menu" aria-label="{{ t(key="account_menu.admin") }}" x-data="menuScroll" x-on:pagehide.window="remember" :class="panelClass">
     {% for group in page.admin.groups %}
     {% if group.label %}<p class="ash-group-label">{{ group.label }}</p>{% endif %}
     {% for item in group.items %}

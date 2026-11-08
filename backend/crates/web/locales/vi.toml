@@ -860,7 +860,9 @@ Gọi ngay nếu bạn nhận được. Xem các việc gần bạn tại:
 
 [text.admin_menu]
 dashboard   = "Tổng quan"
-content     = "Nội dung"
+daily       = "Việc hằng ngày"
+directory   = "Danh bạ"
+setup       = "Thiết lập"
 providers   = "Nhà cung cấp"
 products    = "Sản phẩm"
 services    = "Dịch vụ"

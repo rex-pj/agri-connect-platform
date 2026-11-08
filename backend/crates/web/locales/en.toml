@@ -849,7 +849,9 @@ Call now if you can take it. See the jobs near you at:
 
 [text.admin_menu]
 dashboard   = "Dashboard"
-content     = "Content"
+daily       = "Daily work"
+directory   = "Directory"
+setup       = "Setup"
 providers   = "Providers"
 products    = "Products"
 services    = "Services"

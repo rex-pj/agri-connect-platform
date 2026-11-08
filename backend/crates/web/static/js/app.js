@@ -177,6 +177,34 @@ document.addEventListener("alpine:init", () => {
     },
   }));
 
+  // A menu that scrolls on its own (the admin sidebar) keeps its place from
+  // page to page in this tab, then makes sure the current page's link is in
+  // view. Storage may be blocked: the menu then starts at the top, as without
+  // JS.
+  const MENU_SCROLL_KEY = "admin-menu-scroll";
+  Alpine.data("menuScroll", () => ({
+    init() {
+      // After the frame's bindings, so the phone drawer is already the
+      // scrolling box.
+      this.$nextTick(() => {
+        const menu = this.$el;
+        try {
+          menu.scrollTop = Number(sessionStorage.getItem(MENU_SCROLL_KEY)) || 0;
+        } catch {}
+        const current = menu.querySelector('[aria-current="page"]');
+        if (!current) return;
+        const box = menu.getBoundingClientRect();
+        const link = current.getBoundingClientRect();
+        if (link.top < box.top) menu.scrollTop += link.top - box.top;
+        else if (link.bottom > box.bottom) menu.scrollTop += link.bottom - box.bottom;
+      });
+    },
+    remember() {
+      try {
+        sessionStorage.setItem(MENU_SCROLL_KEY, String(this.$el.scrollTop));
+      } catch {}
+    },
+  }));
 
   // Tabs that are links (?tab=…): without JS each one reloads the page with
   // that tab. With JS a click switches the panels in place and puts the link

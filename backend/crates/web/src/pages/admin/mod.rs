@@ -77,6 +77,9 @@ const ACCOUNT_LINKS: &[(&str, &str, &str)] = &[("account", "fa-id-card", "accoun
 /// (route, icon, label text key, permission that opens it).
 type Entry = (&'static str, &'static str, &'static str, &'static str);
 
+/// Grouped by the job and ordered by how often it comes up: what farmers sent
+/// in (and the day's prices), the listings, the B2B figures, the reference
+/// data set once, then accounts and access.
 const MENU: &[(Option<&str>, &[Entry])] = &[
     (
         None,
@@ -88,32 +91,8 @@ const MENU: &[(Option<&str>, &[Entry])] = &[
         )],
     ),
     (
-        Some("admin_menu.content"),
+        Some("admin_menu.daily"),
         &[
-            (
-                "admin_explore",
-                "fa-store",
-                "admin_menu.providers",
-                PERM_PROVIDER_READ,
-            ),
-            (
-                "admin_products",
-                "fa-box-open",
-                "admin_menu.products",
-                PERM_LISTING_MODERATE,
-            ),
-            (
-                "admin_services",
-                "fa-screwdriver-wrench",
-                "admin_menu.services",
-                PERM_SERVICE_MANAGE,
-            ),
-            (
-                "admin_categories",
-                "fa-tags",
-                "admin_menu.categories",
-                PERM_CATEGORY_MANAGE,
-            ),
             (
                 "admin_inquiries",
                 "fa-envelope-open-text",
@@ -133,16 +112,33 @@ const MENU: &[(Option<&str>, &[Entry])] = &[
                 PERM_REVIEW_MODERATE,
             ),
             (
-                "admin_locations",
-                "fa-map-location-dot",
-                "admin_menu.locations",
-                PERM_LOCATION_MANAGE,
-            ),
-            (
                 "admin_prices",
                 "fa-chart-line",
                 "admin_menu.prices",
                 PERM_PRICE_MANAGE,
+            ),
+        ],
+    ),
+    (
+        Some("admin_menu.directory"),
+        &[
+            (
+                "admin_explore",
+                "fa-store",
+                "admin_menu.providers",
+                PERM_PROVIDER_READ,
+            ),
+            (
+                "admin_services",
+                "fa-screwdriver-wrench",
+                "admin_menu.services",
+                PERM_SERVICE_MANAGE,
+            ),
+            (
+                "admin_products",
+                "fa-box-open",
+                "admin_menu.products",
+                PERM_LISTING_MODERATE,
             ),
         ],
     ),
@@ -160,6 +156,29 @@ const MENU: &[(Option<&str>, &[Entry])] = &[
                 "fa-handshake",
                 "admin_menu.partners",
                 PERM_PARTNER_MANAGE,
+            ),
+        ],
+    ),
+    (
+        Some("admin_menu.setup"),
+        &[
+            (
+                "admin_categories",
+                "fa-tags",
+                "admin_menu.categories",
+                PERM_CATEGORY_MANAGE,
+            ),
+            (
+                "admin_locations",
+                "fa-map-location-dot",
+                "admin_menu.locations",
+                PERM_LOCATION_MANAGE,
+            ),
+            (
+                "admin_crops",
+                "fa-seedling",
+                "admin_menu.crops",
+                PERM_PRICE_MANAGE,
             ),
         ],
     ),
@@ -559,7 +578,7 @@ mod tests {
                 vi.text("admin_menu.permissions")
             ]
         );
-        assert_eq!(nav.groups.len(), 2, "the empty content group is hidden");
+        assert_eq!(nav.groups.len(), 2, "the empty groups are hidden");
         let active: Vec<&str> = nav
             .groups
             .iter()

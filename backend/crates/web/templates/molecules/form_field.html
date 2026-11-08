@@ -35,24 +35,39 @@
 {%- endmacro select %}
 
 {#- An area: one group per province (application::outputs::AreaGroupDto),
-    first the whole province, then its communes and wards by name. -#}
-{% macro area_select(id, name, label, groups, value="", error="", required=false, placeholder="") -%}
+    first the whole province (`whole`), then its communes and wards by name.
+    `points`: each ward carries its preset name and point (`data-preset`,
+    `data-lat`, `data-lng`) for a form that fills itself; `hint` under it.
+    With JS the select itself takes typing (Alpine `searchableSelect` over
+    Tom Select, accents ignored); the page loads the library with
+    `area_select_assets()` in its `vendor` block. Without JS it is a plain
+    select. -#}
+{% macro area_select(id, name, label, groups, value="", error="", required=false, placeholder="", whole=true, points=false, hint="") -%}
 <div class="form-field">
   <label class="form-label fw-semibold" for="{{ id }}">{{ label }}{% if required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
-  <select class="form-select{% if error %} is-invalid{% endif %}" id="{{ id }}" name="{{ name }}"{% if required %} required{% endif %}{% if error %} aria-invalid="true" aria-describedby="{{ id }}-error"{% endif %}>
+  <select class="form-select{% if error %} is-invalid{% endif %}" id="{{ id }}" name="{{ name }}" x-data="searchableSelect" data-no-results="{{ t(key="form.no_results") }}"{% if required %} required{% endif %}{% if error %} aria-invalid="true" aria-describedby="{{ id }}-error"{% endif %}>
     {% if placeholder %}<option value="">{{ placeholder }}</option>{% endif %}
     {% for g in groups %}
     <optgroup label="{{ g.label }}">
+      {%- if whole %}
       <option value="{{ g.value }}"{% if g.value == value %} selected{% endif %}>{{ t(key="partner.whole_province", name=g.label) }}</option>
+      {%- endif %}
       {%- for w in g.wards %}
-      <option value="{{ w.value }}"{% if w.value == value %} selected{% endif %}>{{ w.label }}</option>
+      <option value="{{ w.value }}"{% if w.value == value %} selected{% endif %}{% if points %} data-preset="{{ w.preset }}" data-lat="{{ w.lat }}" data-lng="{{ w.lng }}"{% endif %}>{{ w.label }}</option>
       {%- endfor %}
     </optgroup>
     {% endfor %}
   </select>
+  {% if hint %}<div class="form-text">{{ hint }}</div>{% endif %}
   {% if error %}<div class="invalid-feedback" id="{{ id }}-error">{{ error }}</div>{% endif %}
 </div>
 {%- endmacro area_select %}
+
+{#- The library `area_select` searches with, for a page's `vendor` block. -#}
+{% macro area_select_assets() -%}
+<link rel="stylesheet" href="{{ asset_url(path='vendor/tom-select-2.6.2/tom-select.bootstrap5.min.css') }}">
+<script defer src="{{ asset_url(path='vendor/tom-select-2.6.2/tom-select.complete.min.js') }}"></script>
+{%- endmacro area_select_assets %}
 
 {% macro textarea(id, name, label, value="", error="", placeholder="", maxlength=0, rows=3) -%}
 <div class="form-field">

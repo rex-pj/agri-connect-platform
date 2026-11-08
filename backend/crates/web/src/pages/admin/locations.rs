@@ -7,7 +7,12 @@
 //! list's rows carry them all (`?hide={id}` / `?delete={id}` open the
 //! confirmation there); sent with `back=list`, they land back on the list.
 
-use application::{authz::Actor, constants::LOCATION_LABEL_MAX, outputs::AdminLocationDto};
+use application::{
+    authz::Actor,
+    constants::LOCATION_LABEL_MAX,
+    inputs::LocationInput,
+    outputs::{AdminLocationDto, AreaGroupDto},
+};
 use axum::{extract::State, http::StatusCode, response::Response};
 use domain::{Error, ErrorCode};
 use serde::{Deserialize, Serialize};
@@ -36,14 +41,8 @@ pub struct LocationForm {
     pub lat: String,
     pub lng: String,
     pub display_order: String,
-}
-
-/// What the use case takes, parsed from the form.
-struct LocationInput {
-    label: String,
-    lat: f64,
-    lng: f64,
-    display_order: i32,
+    /// The ward chosen to fill the form (`w28471`); create only.
+    pub ward: String,
 }
 
 impl LocationForm {
@@ -53,6 +52,7 @@ impl LocationForm {
             lat: coordinate(&self.lat),
             lng: coordinate(&self.lng),
             display_order: whole_number(&self.display_order, "display_order")?,
+            ward: Some(self.ward.clone()),
         })
     }
 
@@ -62,6 +62,7 @@ impl LocationForm {
             lat: l.lat.to_string(),
             lng: l.lng.to_string(),
             display_order: l.display_order.to_string(),
+            ward: String::new(),
         }
     }
 }
@@ -88,6 +89,8 @@ pub struct LocationsPage {
     /// The hidden fields of every row action: land back here.
     pub keep: ListReturn,
     pub flash: Option<Flash>,
+    /// The wards the create form fills itself from, by province.
+    pub wards: Vec<AreaGroupDto>,
 }
 
 /// The list page around the create form; `asked`: the row whose hide or
@@ -108,7 +111,10 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
         flash,
         status,
     } = view;
-    let locations = state.usecases.admin.list_locations_admin(actor).await?;
+    let (locations, wards) = tokio::try_join!(
+        state.usecases.admin.list_locations_admin(actor),
+        state.usecases.admin.location_choices(actor),
+    )?;
     let position = ListPosition::default();
     let mut confirm = None;
     let mut rows = Vec::with_capacity(locations.len());
@@ -147,6 +153,7 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
         confirm,
         keep: ListReturn::new(position),
         flash,
+        wards,
     };
     render_admin(
         state,
@@ -199,11 +206,7 @@ pub async fn create(
     };
     let result = async {
         let i = form.input()?;
-        state
-            .usecases
-            .admin
-            .create_location(&actor, i.label, i.lat, i.lng, i.display_order)
-            .await
+        state.usecases.admin.create_location(&actor, i).await
     }
     .await;
     match result {

@@ -257,6 +257,7 @@ change      = "Đổi ảnh"
 formats     = "JPG, PNG hoặc WebP · tối đa {max_mb} MB"
 
 [text.form]
+no_results         = "Không tìm thấy"
 email              = "Email"
 optional           = "(không bắt buộc)"
 show_password      = "Hiện mật khẩu"
@@ -403,6 +404,9 @@ verified_first = "Ưu tiên xác minh"
 name_asc       = "A → Z"
 
 [text.location_form]
+ward             = "Lấy từ xã, phường"
+ward_placeholder = "Chọn để tự điền tên và toạ độ"
+ward_hint        = "Tên và toạ độ điền theo xã, phường đã chọn; vẫn sửa được."
 label             = "Tên khu vực"
 label_placeholder = "Đồng Tháp — Cai Lậy"
 coordinates       = "Toạ độ"

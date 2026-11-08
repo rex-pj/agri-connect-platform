@@ -246,6 +246,7 @@ change      = "Change photo"
 formats     = "JPG, PNG or WebP · up to {max_mb} MB"
 
 [text.form]
+no_results         = "Nothing found"
 email              = "Email"
 optional           = "(optional)"
 show_password      = "Show password"
@@ -392,6 +393,9 @@ verified_first = "Verified first"
 name_asc       = "A → Z"
 
 [text.location_form]
+ward             = "From a ward or commune"
+ward_placeholder = "Choose one to fill the name and point"
+ward_hint        = "The name and point come from the ward chosen; you can still edit them."
 label             = "Area name"
 label_placeholder = "Đồng Tháp — Cai Lậy"
 coordinates       = "Coordinates"

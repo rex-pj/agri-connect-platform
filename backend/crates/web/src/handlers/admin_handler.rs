@@ -369,7 +369,7 @@ impl AdminHandler {
         let result = state
             .usecases
             .admin
-            .create_location(&actor, req.label, req.lat, req.lng, req.display_order)
+            .create_location(&actor, req.into())
             .await?;
         Ok((StatusCode::CREATED, Json(result)))
     }

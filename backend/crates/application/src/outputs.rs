@@ -957,6 +957,11 @@ pub struct AreaGroupDto {
 pub struct AreaChoiceDto {
     pub value: String,
     pub label: String,
+    /// The ward's point, and the name a location preset made from it takes
+    /// (`admin_units::preset_label`), for a form that fills itself.
+    pub lat: f64,
+    pub lng: f64,
+    pub preset: String,
 }
 
 /// The account a partner now reads its report with.

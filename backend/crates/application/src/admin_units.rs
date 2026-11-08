@@ -30,6 +30,12 @@ pub const UNPLACED_AREA: &str = "none";
 /// Official codes are two (province) or five (ward) digits.
 const CODE_MAX: usize = 5;
 
+/// A location preset's name for a ward: "Đồng Tháp — Bình Phú", like the
+/// seeded ones (the province, then the ward's own name without "Xã").
+pub fn preset_label(province_name: &str, ward_name: &str) -> String {
+    format!("{province_name} — {ward_name}")
+}
+
 /// Where a lead counts.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum AreaKey {
@@ -126,6 +132,14 @@ impl AdminUnits {
             .filter_map(|code| self.wards.get(code))
     }
 
+    pub fn province(&self, code: &str) -> Option<&Province> {
+        self.provinces.get(code)
+    }
+
+    pub fn ward(&self, code: &str) -> Option<&Ward> {
+        self.wards.get(code)
+    }
+
     pub fn province_of(&self, ward_code: &str) -> Option<&str> {
         self.wards.get(ward_code).map(|w| w.province_code.as_str())
     }
@@ -198,7 +212,8 @@ impl AdminUnits {
     }
 
     /// What a contract form offers: each active province (the whole of it),
-    /// then its active wards.
+    /// then its active wards (each with its point and preset name, which a
+    /// location form fills itself from).
     pub fn choices(&self) -> Vec<AreaGroupDto> {
         self.provinces()
             .filter(|p| p.is_active)
@@ -211,6 +226,9 @@ impl AdminUnits {
                     .map(|w| AreaChoiceDto {
                         value: AreaKey::Ward(w.code.clone()).value(),
                         label: w.full_name.clone(),
+                        lat: w.lat,
+                        lng: w.lng,
+                        preset: preset_label(&p.name, &w.name),
                     })
                     .collect(),
             })
@@ -313,6 +331,21 @@ pub(crate) mod tests {
             wards,
             vec!["Phường Cai Lậy", "Xã Bình Phú", "Xã Tân Phước"],
             "by name, accents ignored"
+        );
+    }
+
+    #[test]
+    fn a_ward_names_its_preset_like_the_seeded_ones() {
+        let u = units();
+        let choices = u.choices();
+        let first = choices.first().and_then(|g| g.wards.first());
+        assert_eq!(
+            first.map(|w| w.preset.as_str()),
+            Some("Đồng Tháp — Phường Cai Lậy")
+        );
+        assert_eq!(
+            preset_label("Đồng Tháp", "Bình Phú"),
+            "Đồng Tháp — Bình Phú"
         );
     }
 

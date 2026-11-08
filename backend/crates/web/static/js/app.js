@@ -177,6 +177,7 @@ document.addEventListener("alpine:init", () => {
     },
   }));
 
+
   // Tabs that are links (?tab=…): without JS each one reloads the page with
   // that tab. With JS a click switches the panels in place and puts the link
   // in the address bar, so a reload or a shared URL keeps the tab. Tabs carry
@@ -220,6 +221,68 @@ document.addEventListener("alpine:init", () => {
     // The button shows only with JS, so only then the box joins it.
     get groupClass() {
       return "password-group--joined";
+    },
+  }));
+
+  // Lowercase, without Vietnamese accents or the d stroke: typed without
+  // accents, a name still matches.
+  const fold = (text) =>
+    text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\u0111/gi, "d").toLowerCase();
+
+  // A long select (provinces and their wards) that takes typing: Tom Select
+  // over the select itself, which stays what the form sends. Every word typed
+  // must appear in the option or its group (the province), accents ignored.
+  // The words typed together ("ca mau") rank first, and the province of the
+  // best match leads; equal matches keep the official order. A page without
+  // the library keeps the plain select. data-no-results: the words when
+  // nothing matches.
+  Alpine.data("searchableSelect", () => ({
+    init() {
+      if (typeof TomSelect === "undefined") return;
+      const select = this.$el;
+      new TomSelect(select, {
+        maxOptions: 50,
+        lockOptgroupOrder: false,
+        sortField: [{ field: "$score", direction: "desc" }, { field: "$order" }],
+        // Called on the Tom Select instance: an option's group is an id into
+        // its optgroups, whose label is the province.
+        score(query) {
+          const words = fold(query).split(/\s+/).filter(Boolean);
+          const phrase = words.join(" ");
+          const groups = this.optgroups;
+          return (item) => {
+            const province = groups[item.optgroup]?.label || "";
+            const text = fold(`${province} ${item.text}`);
+            if (!words.every((w) => text.includes(w))) return 0;
+            return text.includes(phrase) ? 2 : 1;
+          };
+        },
+        render: {
+          no_results() {
+            const note = document.createElement("div");
+            note.className = "no-results";
+            note.textContent = select.dataset.noResults;
+            return note;
+          },
+        },
+      });
+    },
+  }));
+
+  // A location preset's create form: choosing a ward (an option carrying
+  // data-preset, data-lat, data-lng) fills the name and point, which stay
+  // editable. Without it the server fills the boxes left blank.
+  Alpine.data("wardFill", () => ({
+    filled(event) {
+      if (event.target.name !== "ward") return;
+      const select = event.target;
+      const kept = select.selectedOptions[0];
+      const option = kept && kept.dataset.preset ? kept : select.tomselect?.options[select.value]?.$option;
+      if (!option || !option.dataset.preset) return;
+      const form = this.$root;
+      form.querySelector('[name="label"]').value = option.dataset.preset;
+      form.querySelector('[name="lat"]').value = option.dataset.lat;
+      form.querySelector('[name="lng"]').value = option.dataset.lng;
     },
   }));
 

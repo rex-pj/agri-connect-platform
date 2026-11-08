@@ -11,6 +11,7 @@ use domain::{
         service::{NewService, UpdateService},
     },
     repositories::{
+        admin_unit_repository_trait::AdminUnitRepositoryTrait,
         business_repository_trait::BusinessRepositoryTrait,
         category_repository_trait::CategoryRepositoryTrait,
         inquiry_repository_trait::InquiryRepositoryTrait,
@@ -24,6 +25,7 @@ use domain::{
 };
 
 use crate::{
+    admin_units::{preset_label, AdminUnits, AreaKey},
     authz::Actor,
     catalogue::{
         PERM_CATEGORY_MANAGE, PERM_INQUIRY_MANAGE, PERM_INQUIRY_READ, PERM_LISTING_MODERATE,
@@ -36,12 +38,12 @@ use crate::{
         ADMIN_PAGE_SIZE, CATEGORY_COLOR_MAX, CATEGORY_DESCRIPTION_MAX, CATEGORY_ICON_MAX,
         CATEGORY_NAME_MAX, CATEGORY_SLUG_MAX, LOCATION_LABEL_MAX, SLUG_CANDIDATES_PER_QUERY,
     },
-    inputs::{CategoryInput, UpdateProductInput, UpdateProfileInput},
+    inputs::{CategoryInput, LocationInput, UpdateProductInput, UpdateProfileInput},
     outputs::{
         AdminCategoryDto, AdminInquiryDto, AdminLocationDto, AdminPagedResponse, AdminProductDto,
         AdminProductItemDto, AdminProviderDetailDto, AdminProviderDto, AdminReviewDto,
-        AdminServiceDto, AdminServiceItemDto, AdminUserDetailDto, AdminUserDto, AssignUserDto,
-        ProviderStatusDto, RoleDto, SlugSuggestionDto, VerificationDto,
+        AdminServiceDto, AdminServiceItemDto, AdminUserDetailDto, AdminUserDto, AreaGroupDto,
+        AssignUserDto, ProviderStatusDto, RoleDto, SlugSuggestionDto, VerificationDto,
     },
     pagination::{paginate, total_pages},
     ports::{EventBus, PasswordHasher},
@@ -66,6 +68,8 @@ pub struct AdminUseCase {
     category_repo: Arc<dyn CategoryRepositoryTrait + Send + Sync>,
     inquiry_repo: Arc<dyn InquiryRepositoryTrait + Send + Sync>,
     location_repo: Arc<dyn LocationRepositoryTrait + Send + Sync>,
+    /// The wards a new preset may be filled from.
+    admin_unit_repo: Arc<dyn AdminUnitRepositoryTrait + Send + Sync>,
     review_repo: Arc<dyn ReviewRepositoryTrait + Send + Sync>,
     product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
     role_repo: Arc<dyn RoleRepositoryTrait + Send + Sync>,
@@ -83,6 +87,7 @@ pub struct AdminDeps {
     pub category_repo: Arc<dyn CategoryRepositoryTrait + Send + Sync>,
     pub inquiry_repo: Arc<dyn InquiryRepositoryTrait + Send + Sync>,
     pub location_repo: Arc<dyn LocationRepositoryTrait + Send + Sync>,
+    pub admin_unit_repo: Arc<dyn AdminUnitRepositoryTrait + Send + Sync>,
     pub review_repo: Arc<dyn ReviewRepositoryTrait + Send + Sync>,
     pub product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
     pub role_repo: Arc<dyn RoleRepositoryTrait + Send + Sync>,
@@ -99,6 +104,7 @@ impl AdminUseCase {
             category_repo: d.category_repo,
             inquiry_repo: d.inquiry_repo,
             location_repo: d.location_repo,
+            admin_unit_repo: d.admin_unit_repo,
             review_repo: d.review_repo,
             product_repo: d.product_repo,
             role_repo: d.role_repo,
@@ -819,15 +825,49 @@ impl AdminUseCase {
             .ok_or_else(|| Error::new(ErrorCode::LocationNotFound))
     }
 
+    /// The wards a new preset may be filled from, by province.
+    pub async fn location_choices(&self, actor: &Actor) -> Result<Vec<AreaGroupDto>> {
+        actor.require(PERM_LOCATION_MANAGE)?;
+        Ok(AdminUnits::load(self.admin_unit_repo.as_ref())
+            .await?
+            .choices())
+    }
+
+    /// A new preset. A ward chosen fills what was left blank: the label
+    /// with its preset name, a missing coordinate with its point; what was
+    /// typed stays. An unknown or turned-off ward is a field error.
     pub async fn create_location(
         &self,
         actor: &Actor,
-        label: String,
-        lat: f64,
-        lng: f64,
-        display_order: i32,
+        input: LocationInput,
     ) -> Result<AdminLocationDto> {
         actor.require(PERM_LOCATION_MANAGE)?;
+        let LocationInput {
+            mut label,
+            mut lat,
+            mut lng,
+            display_order,
+            ward,
+        } = input;
+        if let Some(ward) = ward.as_deref().map(str::trim).filter(|w| !w.is_empty()) {
+            let units = AdminUnits::load(self.admin_unit_repo.as_ref()).await?;
+            let found = match AreaKey::parse(ward) {
+                Some(AreaKey::Ward(code)) => units
+                    .ward(&code)
+                    .filter(|w| w.is_active)
+                    .and_then(|w| units.province(&w.province_code).map(|p| (p, w))),
+                _ => None,
+            };
+            let Some((province, ward)) = found else {
+                return Err(Error::field("ward", ErrorCode::LocationNotFound));
+            };
+            if label.trim().is_empty() {
+                label = preset_label(&province.name, &ward.name);
+            }
+            if !lat.is_finite() || !lng.is_finite() {
+                (lat, lng) = (ward.lat, ward.lng);
+            }
+        }
         let label = validate_location(&label, lat, lng)?;
         let id = self
             .location_repo

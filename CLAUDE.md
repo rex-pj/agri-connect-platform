@@ -55,6 +55,7 @@ agri-connect-platform/
 - **UI Framework:** Bootstrap 5.3 (vendored under `static/vendor`)
 - **Interactivity:** Alpine.js (CSP build), components registered in `static/js/app.js`
 - **Islands:** Svelte 5 custom elements for what Alpine cannot do (today: geolocation)
+- **Searchable selects:** Tom Select 2.6 (vendored, `static/vendor/VERSIONS`) over the province / ward selects (`molecules/form_field.html` `area_select`, Alpine `searchableSelect`, accents ignored); a page loads it with `area_select_assets()` in its `vendor` block, and without JS the select is a plain one
 - **Icons:** FontAwesome 6 (fa-solid classes)
 - **Design methodology:** Atomic Design (atoms → molecules → organisms → pages)
 - **Target:** optimized for low-end Android on weak signal; pages work without JS
@@ -244,7 +245,7 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 | GET / POST | `/api/admin/prices`                  | Prices entered, newest day first (`page?`) / enter one (`crop_id`, `location_id`, `observed_on`, `price_low`, `price_high?`, `note?`; 201 `{id}`) |
 | DELETE | `/api/admin/prices/{id}`                 | Delete a price (`reason?`)                                        |
 | GET    | `/api/admin/locations`                   | Location preset list                                              |
-| POST   | `/api/admin/locations`                   | Create location preset                                            |
+| POST   | `/api/admin/locations`                   | Create location preset (`ward?` `w28471` fills a blank label and a missing lat/lng) |
 | GET    | `/api/admin/locations/{id}`              | Location preset detail                                            |
 | PUT    | `/api/admin/locations/{id}`              | Update location preset                                            |
 | PATCH  | `/api/admin/locations/{id}/status`       | Toggle location active state                                      |
@@ -371,7 +372,7 @@ Every page is a handler in `backend/crates/web/src/pages/`, routed in `web/src/r
 | `/admin/permissions`     | Permissions × roles, read-only                                                                                                 |
 | `/admin/categories`      | Category list (row: hide (confirm + reason) / show, open) + create sheet (`web/src/pages/admin/categories.rs`) |
 | `/admin/categories/[id]` | Edit; hide (confirm + reason) / show                                                                                           |
-| `/admin/locations`       | Location presets (row: hide (confirm + reason) / show, delete (confirm), open) + create sheet (`web/src/pages/admin/locations.rs`) |
+| `/admin/locations`       | Location presets (row: hide (confirm + reason) / show, delete (confirm), open) + create sheet: choosing a ward fills the name ("Đồng Tháp — Bình Phú") and point (Alpine `wardFill`; without JS the blank boxes take the ward's, `AdminUseCase::create_location`) (`web/src/pages/admin/locations.rs`) |
 | `/admin/locations/[id]`  | Edit, hide (confirm + reason) / show, delete (confirm + reason) → list                                                                         |
 | `/admin/explore`         | Provider list, paged + create sheet (`provider.manage`: a listing from name + phone, no account; GPS fill) (`web/src/pages/admin/providers.rs`) |
 | `/admin/explore/[id]`    | Details, profile form (the owner's rules: `business_rules::validate_profile`; `organisms/business_fields.html`), turn off (confirm + reason) / on, verify / unverify (confirm + reason), assign the managing account; links to its services, products, inquiries, reviews |

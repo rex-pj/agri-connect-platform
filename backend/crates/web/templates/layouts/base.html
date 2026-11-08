@@ -19,6 +19,9 @@
   <link rel="stylesheet" href="{{ asset_url(path='vendor/fontawesome-6.5.1/css/solid.min.css') }}">
   <link rel="stylesheet" href="{{ asset_url(path='css/fonts.css') }}">
   <link rel="stylesheet" href="{{ asset_url(path='css/app.css') }}">
+  {#- Libraries a page's components build on (Tom Select): before app.js
+      and Alpine, so they exist when a component starts. -#}
+  {% block vendor %}{% endblock vendor %}
   {#- Before Alpine: app.js registers the components on alpine:init. -#}
   <script defer src="{{ asset_url(path='js/app.js') }}"></script>
   <script defer src="{{ asset_url(path='vendor/alpinejs-csp-3.14.9/cdn.min.js') }}"></script>

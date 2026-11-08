@@ -123,10 +123,26 @@ pub struct UpdateInquiryStatusRequest {
 
 #[derive(Deserialize)]
 pub struct CreateLocationRequest {
+    #[serde(default)]
     pub label: String,
-    pub lat: f64,
-    pub lng: f64,
+    /// Left out with a `ward`: the ward's point.
+    pub lat: Option<f64>,
+    pub lng: Option<f64>,
     pub display_order: i32,
+    /// `w28471`: fills a blank label and a missing point from that ward.
+    pub ward: Option<String>,
+}
+
+impl From<CreateLocationRequest> for application::inputs::LocationInput {
+    fn from(r: CreateLocationRequest) -> Self {
+        Self {
+            label: r.label,
+            lat: r.lat.unwrap_or(f64::NAN),
+            lng: r.lng.unwrap_or(f64::NAN),
+            display_order: r.display_order,
+            ward: r.ward,
+        }
+    }
 }
 
 #[derive(Deserialize)]

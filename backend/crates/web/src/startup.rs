@@ -470,6 +470,7 @@ pub fn build_state(
             category_repo: category_repo.clone(),
             inquiry_repo: inquiry_repo.clone(),
             location_repo: location_repo.clone(),
+            admin_unit_repo: admin_unit_repo.clone(),
             review_repo: review_repo.clone(),
             product_repo: product_repo.clone(),
             role_repo: role_repo.clone(),

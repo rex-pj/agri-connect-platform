@@ -125,6 +125,16 @@ pub struct SearchInput {
     pub visitor: Visitor,
 }
 
+/// A new location preset. With a ward (`w28471`), a blank label takes the
+/// ward's preset name and a missing coordinate (not finite) its point.
+pub struct LocationInput {
+    pub label: String,
+    pub lat: f64,
+    pub lng: f64,
+    pub display_order: i32,
+    pub ward: Option<String>,
+}
+
 /// A partner's boxes as sent (create and edit alike).
 pub struct PartnerInput {
     pub name: String,

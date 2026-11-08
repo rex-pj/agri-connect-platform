@@ -422,3 +422,66 @@ async fn a_location_is_validated_created_hidden_and_deleted() {
     assert_eq!(res.status(), StatusCode::NOT_FOUND);
     e.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_location_is_filled_from_the_ward_chosen() {
+    let e = env_with_origin().await;
+    integration_tests::load_admin_units(&e).await;
+    let admin = install_admin(&e).await;
+
+    // The create sheet offers the wards, each with its preset name and point.
+    let list = page(&e, "/admin/locations", &admin).await;
+    assert!(list.contains(r#"<option value="w28471" data-preset="Đồng Tháp — Bình Phú""#));
+    assert!(list.contains(r#"x-data="wardFill""#));
+
+    // Without JS: the blank boxes take the ward's name and point.
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/locations",
+            &[("ward", "w28471"), ("label", ""), ("lat", ""), ("lng", "")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let detail = page(&e, &location_of(&res), &admin).await;
+    assert!(detail.contains("Đồng Tháp — Bình Phú"));
+
+    // What was typed stays.
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/locations",
+            &[
+                ("ward", "w28471"),
+                ("label", "Cai Lậy cũ"),
+                ("lat", ""),
+                ("lng", ""),
+            ],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert!(page(&e, &location_of(&res), &admin)
+        .await
+        .contains("Cai Lậy cũ"));
+
+    // An unknown ward is reported on its box, with what was typed kept.
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/locations",
+            &[("ward", "w99999"), ("label", "Thử")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert!(res.status().is_client_error());
+    let html = body_text(res).await;
+    assert!(html.contains("Không tìm thấy khu vực."));
+    assert!(html.contains(r#"value="Thử""#));
+    e.cleanup().await;
+}

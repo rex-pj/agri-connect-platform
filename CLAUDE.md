@@ -55,7 +55,7 @@ agri-connect-platform/
 - **UI Framework:** Bootstrap 5.3 (vendored under `static/vendor`)
 - **Interactivity:** Alpine.js (CSP build), components registered in `static/js/app.js`
 - **Islands:** Svelte 5 custom elements for what Alpine cannot do (today: geolocation)
-- **Searchable selects:** Tom Select 2.6 (vendored, `static/vendor/VERSIONS`) over the province / ward selects (`molecules/form_field.html` `area_select`, Alpine `searchableSelect`, accents ignored); a page loads it with `area_select_assets()` in its `vendor` block, and without JS the select is a plain one
+- **Searchable selects:** Tom Select 2.6 (vendored, `static/vendor/VERSIONS`) over the province / ward selects (`molecules/form_field.html` `area_select`, Alpine `searchableSelect`, accents ignored; every option listed, provinces in Vietnamese dictionary order and each ward by its own name: `slug::sort_key`, `AdminUnits::choices`; the demand report keeps the official code order); a page loads it with `area_select_assets()` in its `vendor` block, and without JS the select is a plain one
 - **Icons:** FontAwesome 6 (fa-solid classes)
 - **Design methodology:** Atomic Design (atoms → molecules → organisms → pages)
 - **Target:** optimized for low-end Android on weak signal; pages work without JS

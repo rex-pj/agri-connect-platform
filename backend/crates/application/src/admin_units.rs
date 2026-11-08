@@ -18,7 +18,7 @@ use domain::{
 
 use crate::{
     outputs::{AreaChoiceDto, AreaGroupDto},
-    slug::slugify,
+    slug::sort_key,
 };
 
 /// The text of a province area: `p` and its code.
@@ -27,6 +27,9 @@ pub const PROVINCE_PREFIX: &str = "p";
 pub const WARD_PREFIX: &str = "w";
 /// The text of "no area".
 pub const UNPLACED_AREA: &str = "none";
+/// `slug::sort_key` of a name.
+type SortKey = (Vec<u32>, Vec<u8>);
+
 /// Official codes are two (province) or five (ward) digits.
 const CODE_MAX: usize = 5;
 
@@ -86,24 +89,29 @@ pub struct AdminUnits {
     /// By code: the official order, north to south.
     provinces: BTreeMap<String, Province>,
     wards: HashMap<String, Ward>,
-    /// Each province's ward codes, in alphabetical order of their names.
+    /// Each province's ward codes, in alphabetical order of their own names
+    /// ("Bình Phú" before "Cai Lậy", whatever their type), in dictionary order.
     wards_by_province: HashMap<String, Vec<String>>,
 }
 
 impl AdminUnits {
     pub fn new(provinces: Vec<Province>, wards: Vec<Ward>) -> Self {
-        let mut wards_by_province: HashMap<String, Vec<(String, String)>> = HashMap::new();
+        let mut wards_by_province: HashMap<String, Vec<(SortKey, SortKey, String)>> =
+            HashMap::new();
         for w in &wards {
             wards_by_province
                 .entry(w.province_code.clone())
                 .or_default()
-                .push((slugify(&w.full_name), w.code.clone()));
+                .push((sort_key(&w.name), sort_key(&w.full_name), w.code.clone()));
         }
         let wards_by_province = wards_by_province
             .into_iter()
             .map(|(province, mut list)| {
                 list.sort();
-                (province, list.into_iter().map(|(_, code)| code).collect())
+                (
+                    province,
+                    list.into_iter().map(|(_, _, code)| code).collect(),
+                )
             })
             .collect();
         Self {
@@ -211,12 +219,15 @@ impl AdminUnits {
         }
     }
 
-    /// What a contract form offers: each active province (the whole of it),
-    /// then its active wards (each with its point and preset name, which a
-    /// location form fills itself from).
+    /// What an area select offers: each active province in alphabetical
+    /// order (Vietnamese dictionary order: a person looks a name up, not a code), the
+    /// whole of it, then its active wards (each with its point and preset
+    /// name, which a location form fills itself from).
     pub fn choices(&self) -> Vec<AreaGroupDto> {
-        self.provinces()
-            .filter(|p| p.is_active)
+        let mut provinces: Vec<&Province> = self.provinces().filter(|p| p.is_active).collect();
+        provinces.sort_by_cached_key(|p| (sort_key(&p.name), p.code.clone()));
+        provinces
+            .into_iter()
             .map(|p| AreaGroupDto {
                 value: AreaKey::Province(p.code.clone()).value(),
                 label: p.name.clone(),
@@ -252,11 +263,16 @@ pub(crate) mod tests {
         }
     }
 
+    /// `full_name` is "Phường Cai Lậy" or "Xã Bình Phú"; `name` drops the type.
     pub fn ward(code: &str, province_code: &str, full_name: &str) -> Ward {
+        let name = full_name
+            .strip_prefix("Phường ")
+            .or_else(|| full_name.strip_prefix("Xã "))
+            .unwrap_or(full_name);
         Ward {
             code: code.into(),
             province_code: province_code.into(),
-            name: full_name.into(),
+            name: name.into(),
             full_name: full_name.into(),
             unit_type: "ward".into(),
             lat: 0.0,
@@ -310,7 +326,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn labels_and_choices_follow_the_official_and_alphabetical_order() {
+    fn choices_are_alphabetical_by_province_then_by_ward_name() {
         let u = units();
         assert_eq!(
             u.label(&AreaKey::Ward("28439".into())).as_deref(),
@@ -322,16 +338,23 @@ pub(crate) mod tests {
         );
         let choices = u.choices();
         let provinces: Vec<_> = choices.iter().map(|g| g.value.as_str()).collect();
-        assert_eq!(provinces, vec!["p82", "p91"], "by code");
+        assert_eq!(
+            provinces,
+            vec!["p91", "p82"],
+            "An Giang before Đồng Tháp, not by code"
+        );
         let wards: Vec<_> = choices
-            .first()
+            .get(1)
             .map(|g| g.wards.iter().map(|w| w.label.as_str()).collect())
             .unwrap_or_default();
         assert_eq!(
             wards,
-            vec!["Phường Cai Lậy", "Xã Bình Phú", "Xã Tân Phước"],
-            "by name, accents ignored"
+            vec!["Xã Bình Phú", "Phường Cai Lậy", "Xã Tân Phước"],
+            "by the ward's own name, accents ignored, whatever its type"
         );
+        // The report keeps the official order.
+        let official: Vec<_> = u.provinces().map(|p| p.code.as_str()).collect();
+        assert_eq!(official, vec!["82", "91"]);
     }
 
     #[test]
@@ -341,7 +364,7 @@ pub(crate) mod tests {
         let first = choices.first().and_then(|g| g.wards.first());
         assert_eq!(
             first.map(|w| w.preset.as_str()),
-            Some("Đồng Tháp — Phường Cai Lậy")
+            Some("An Giang — Long Xuyên")
         );
         assert_eq!(
             preset_label("Đồng Tháp", "Bình Phú"),

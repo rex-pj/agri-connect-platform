@@ -241,7 +241,9 @@ document.addEventListener("alpine:init", () => {
       if (typeof TomSelect === "undefined") return;
       const select = this.$el;
       new TomSelect(select, {
-        maxOptions: 50,
+        // Every option, as a plain select scrolls through them all (the
+        // provinces alphabetical, each ward by name: application::admin_units).
+        maxOptions: null,
         lockOptgroupOrder: false,
         sortField: [{ field: "$score", direction: "desc" }, { field: "$order" }],
         // Called on the Tom Select instance: an option's group is an id into

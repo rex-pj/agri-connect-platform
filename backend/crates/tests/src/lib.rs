@@ -4,15 +4,15 @@ use std::{
     net::SocketAddr,
     sync::{
         atomic::{AtomicBool, AtomicU32, Ordering},
-        Arc,
+        Arc, OnceLock,
     },
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use application::{
     catalogue::CATALOGUE,
     constants::{DEFAULT_UPLOAD_MAX_BYTES, REFRESH_TOKEN_DEFAULT_DAYS},
-    ports::{EmailService, InquiryNotice, JobNotice, TokenService},
+    ports::{EmailService, InquiryNotice, JobNotice, PasswordHasher, TokenService},
 };
 use axum::{
     body::Body,
@@ -22,16 +22,20 @@ use axum::{
 };
 use domain::repositories::catalogue_repository_trait::CatalogueRepositoryTrait;
 use infrastructure::{
-    catalogue_repository::CatalogueRepository, email_service::LogEmailService,
-    file_storage::ObjectFileStorage, jwt_token_service::JwtTokenService,
+    bcrypt_password_hasher::BcryptPasswordHasher, catalogue_repository::CatalogueRepository,
+    email_service::LogEmailService, file_storage::ObjectFileStorage,
+    jwt_token_service::JwtTokenService,
 };
 use migration::{Migrator, MigratorTrait};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, Statement};
+use tokio::sync::OnceCell;
 use tower::ServiceExt;
 use web::{
     app_state::AppState,
+    locale::Locales,
     routings::app_routing::{AppRouting, RouterConfig},
-    startup::{build_state, Uploads},
+    startup::{build_state, Uploads, Wiring},
+    views::{SiteConfig, Views},
 };
 
 pub const TEST_JWT_SECRET: &str = "integration-test-secret-at-least-32-bytes";
@@ -116,20 +120,41 @@ pub fn state_with_uploads(db: DatabaseConnection, uploads: Uploads) -> AppState 
     state_with_email(db, uploads, email_service())
 }
 
+/// Every language's templates, built once per test process: parsing them is
+/// the costliest part of `build_state`, and no test changes them.
+pub fn views() -> Arc<Views> {
+    static VIEWS: OnceLock<Arc<Views>> = OnceLock::new();
+    VIEWS
+        .get_or_init(|| {
+            let locales = Arc::new(Locales::load().unwrap());
+            web::startup::views(SiteConfig::default(), locales).unwrap()
+        })
+        .clone()
+}
+
+/// Real bcrypt at its cheapest cost: what tests check is that the password
+/// round-trips, not how long an attacker waits.
+pub fn password_hasher() -> Arc<dyn PasswordHasher> {
+    Arc::new(BcryptPasswordHasher::with_cost(
+        BcryptPasswordHasher::MIN_COST,
+    ))
+}
+
 pub fn state_with_email(
     db: DatabaseConnection,
     uploads: Uploads,
     email: Arc<dyn EmailService>,
 ) -> AppState {
-    build_state(
-        web::startup::Databases::single(db),
-        token_service(),
+    build_state(Wiring {
+        dbs: web::startup::Databases::single(db),
+        token_service: token_service(),
+        password_hasher: password_hasher(),
         email,
-        web::views::SiteConfig::default(),
+        views: views(),
         uploads,
-        None,
-        REFRESH_TOKEN_DEFAULT_DAYS,
-    )
+        zalo: None,
+        refresh_days: REFRESH_TOKEN_DEFAULT_DAYS,
+    })
     .unwrap()
 }
 
@@ -244,7 +269,8 @@ fn drop_sql(name: &str) -> String {
 }
 
 /// Once per test process: drops test databases left by killed runs. Names
-/// carry their creation time (`agri_test_{secs}_{pid}_{n}`), so a database a
+/// carry their creation time (`agri_test_{secs}_{pid}_{n}`, the template
+/// `agri_test_{secs}_{pid}_template`), so a database a
 /// concurrent run is still using is never touched. Names from before the time
 /// was added (`agri_test_{pid}_{n}`) read as ancient and are dropped too.
 async fn sweep_stale(admin: &DatabaseConnection) {
@@ -271,6 +297,66 @@ async fn sweep_stale(admin: &DatabaseConnection) {
     }
 }
 
+/// `url` (TEST_DATABASE_URL) pointing at the database `name` instead.
+fn database_url(url: &str, name: &str) -> String {
+    let (base, query) = match url.split_once('?') {
+        Some((b, q)) => (b, format!("?{q}")),
+        None => (url, String::new()),
+    };
+    let (server, _) = base.rsplit_once('/').unwrap();
+    format!("{server}/{name}{query}")
+}
+
+/// The migrated database every test database is copied from, made once per
+/// test process: copying it is several times faster than migrating each
+/// database from scratch. Named like a test database
+/// (`agri_test_{secs}_{pid}_template`), so a later run's sweep drops it once
+/// it is stale; a process cannot drop it when it exits.
+async fn template(url: &str, admin: &DatabaseConnection) -> &'static str {
+    static TEMPLATE: OnceCell<String> = OnceCell::const_new();
+    TEMPLATE
+        .get_or_init(|| async {
+            let name = format!(
+                "{TEST_DB_PREFIX}{}_{}_template",
+                unix_now(),
+                std::process::id()
+            );
+            // A previous attempt in this process may have panicked half-way.
+            admin.execute_unprepared(&drop_sql(&name)).await.unwrap();
+            admin
+                .execute_unprepared(&format!("CREATE DATABASE {name}"))
+                .await
+                .unwrap();
+            let db = Database::connect(database_url(url, &name)).await.unwrap();
+            Migrator::up(&db, None).await.unwrap();
+            // Postgres refuses to copy a database anyone is connected to.
+            db.close().await.unwrap();
+            name
+        })
+        .await
+}
+
+/// How long a copy waits for the template's last session to go: closing a
+/// pool returns before the server has ended its sessions.
+const TEMPLATE_BUSY_RETRIES: u32 = 50;
+const TEMPLATE_BUSY_WAIT: Duration = Duration::from_millis(100);
+
+async fn copy_template(admin: &DatabaseConnection, template: &str, name: &str) {
+    let sql = format!("CREATE DATABASE {name} TEMPLATE {template}");
+    for attempt in 0.. {
+        match admin.execute_unprepared(&sql).await {
+            Ok(_) => return,
+            Err(e)
+                if attempt < TEMPLATE_BUSY_RETRIES
+                    && e.to_string().contains("is being accessed by other users") =>
+            {
+                tokio::time::sleep(TEMPLATE_BUSY_WAIT).await;
+            }
+            Err(e) => panic!("cannot copy {template} into {name}: {e}"),
+        }
+    }
+}
+
 impl TestDb {
     pub async fn create() -> TestDb {
         let url = std::env::var("TEST_DATABASE_URL")
@@ -284,30 +370,17 @@ impl TestDb {
 
         let admin = Database::connect(&url).await.unwrap();
         sweep_stale(&admin).await;
+        let template = template(&url, &admin).await;
         // Armed before CREATE: a panic from here on still drops the database.
         let guard = DropGuard {
             url: url.clone(),
             name: name.clone(),
             armed: true,
         };
-        admin
-            .execute_unprepared(&format!("DROP DATABASE IF EXISTS {name} WITH (FORCE)"))
-            .await
-            .unwrap();
-        admin
-            .execute_unprepared(&format!("CREATE DATABASE {name}"))
-            .await
-            .unwrap();
+        admin.execute_unprepared(&drop_sql(&name)).await.unwrap();
+        copy_template(&admin, template, &name).await;
 
-        let (base, query) = match url.split_once('?') {
-            Some((b, q)) => (b, format!("?{q}")),
-            None => (url.as_str(), String::new()),
-        };
-        let (server, _) = base.rsplit_once('/').unwrap();
-        let db = Database::connect(format!("{server}/{name}{query}"))
-            .await
-            .unwrap();
-        Migrator::up(&db, None).await.unwrap();
+        let db = Database::connect(database_url(&url, &name)).await.unwrap();
 
         TestDb {
             db,

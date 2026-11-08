@@ -362,19 +362,42 @@ async fn connect(url: String) -> Result<DatabaseConnection, StartupError> {
     Ok(Database::connect(options).await?)
 }
 
+/// What `build_state` wires the use cases to: the outside world, chosen by
+/// `run` from the environment, or by a test.
+pub struct Wiring {
+    pub dbs: Databases,
+    pub token_service: Arc<dyn TokenService>,
+    /// bcrypt at its default cost in production.
+    pub password_hasher: Arc<dyn PasswordHasher>,
+    pub email: Arc<dyn EmailService>,
+    /// Every language's templates, with the site identity. Building them is
+    /// the costliest part of startup, so a test process builds them once.
+    pub views: Arc<Views>,
+    pub uploads: Uploads,
+    /// The Zalo Graph API for Mini App tokens; `None` without ZALO_APP_SECRET.
+    pub zalo: Option<Arc<dyn ZaloGateway>>,
+    /// REFRESH_TOKEN_DAYS.
+    pub refresh_days: i64,
+}
+
+/// The templates of every language over `locales`, with the site identity.
+pub fn views(site: SiteConfig, locales: Arc<Locales>) -> Result<Arc<Views>, StartupError> {
+    Ok(Arc::new(Views::new(site, locales)?))
+}
+
 /// Wires every use case. Public so integration tests can build the exact
 /// production graph on a test database.
-pub fn build_state(
-    dbs: Databases,
-    token_service: Arc<dyn TokenService>,
-    email: Arc<dyn EmailService>,
-    site: SiteConfig,
-    uploads: Uploads,
-    // The Zalo Graph API for Mini App tokens; `None` without ZALO_APP_SECRET.
-    zalo: Option<Arc<dyn ZaloGateway>>,
-    // REFRESH_TOKEN_DAYS.
-    refresh_days: i64,
-) -> Result<AppState, StartupError> {
+pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
+    let Wiring {
+        dbs,
+        token_service,
+        password_hasher,
+        email,
+        views,
+        uploads,
+        zalo,
+        refresh_days,
+    } = wiring;
     let db = dbs.primary;
     let business_repo = Arc::new(BusinessRepository::new(Arc::clone(&db)));
     let product_repo = Arc::new(ProductRepository::new(Arc::clone(&db)));
@@ -396,7 +419,6 @@ pub fn build_state(
     // Readiness is about the primary: without it nothing can be written.
     let health_repo = Arc::new(HealthRepository::new(Arc::clone(&db)));
 
-    let password_hasher: Arc<dyn PasswordHasher> = Arc::new(BcryptPasswordHasher);
     // The inbox the "new inquiry" email links to, from the route table.
     let inbox_path = routes::url("provider_inquiries", &[])
         .map_err(|e| domain::Error::internal(format!("route provider_inquiries: {e}")))?;
@@ -550,12 +572,11 @@ pub fn build_state(
         }),
     };
 
-    let locales = Arc::new(Locales::load()?);
     Ok(AppState {
         usecases: Arc::new(usecases),
         token_service,
-        views: Arc::new(Views::new(site, Arc::clone(&locales))?),
-        locales,
+        locales: Arc::clone(views.locales()),
+        views,
     })
 }
 
@@ -617,17 +638,19 @@ pub async fn start() -> Result<(), StartupError> {
         Arc::new(JwtTokenService::new(&required_env("JWT_SECRET")?)?);
     let app_url = app_url();
     let site = site_config();
+    let locales = Arc::new(Locales::load()?);
     // Emails go out in the default language: whom they reach has not chosen one.
-    let texts = email_texts(Locales::load()?.get(Lang::DEFAULT), &site.name);
-    let state = build_state(
+    let texts = email_texts(locales.get(Lang::DEFAULT), &site.name);
+    let state = build_state(Wiring {
         dbs,
         token_service,
-        email_service(app_url.clone(), texts)?,
-        site,
-        uploads()?,
-        zalo_gateway()?,
-        refresh_days()?,
-    )?;
+        password_hasher: Arc::new(BcryptPasswordHasher::default()),
+        email: email_service(app_url.clone(), texts)?,
+        views: views(site, locales)?,
+        uploads: uploads()?,
+        zalo: zalo_gateway()?,
+        refresh_days: refresh_days()?,
+    })?;
 
     // Roles and permissions must exist before the first request, or the first
     // registration fails on a missing role.

@@ -527,3 +527,39 @@ fn user_facing_text_lives_in_the_locale_files() {
         found.join("\n")
     );
 }
+
+// ── Test layout ──────────────────────────────────────────────────────────────
+
+#[test]
+fn integration_tests_are_one_binary() {
+    // A file directly under tests/ is a binary of its own that links the whole
+    // workspace again; a file in tests/it/ that main.rs does not declare
+    // never runs.
+    let tests = crates_dir().join("tests").join("tests");
+    let loose: Vec<String> = fs::read_dir(&tests)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.is_file())
+        .map(|path| path.file_name().unwrap().to_string_lossy().into_owned())
+        .collect();
+    assert!(
+        loose.is_empty(),
+        "move these into tests/it/ and declare them in tests/it/main.rs: {loose:?}"
+    );
+
+    let it = tests.join("it");
+    let main = fs::read_to_string(it.join("main.rs")).unwrap();
+    let undeclared: Vec<String> = fs::read_dir(&it)
+        .unwrap()
+        .filter_map(|entry| {
+            let path = entry.unwrap().path();
+            let stem = path.file_stem()?.to_string_lossy().into_owned();
+            let is_module = path.extension().is_some_and(|e| e == "rs") && stem != "main";
+            (is_module && !main.contains(&format!("mod {stem};"))).then_some(stem)
+        })
+        .collect();
+    assert!(
+        undeclared.is_empty(),
+        "declare these in tests/it/main.rs: {undeclared:?}"
+    );
+}

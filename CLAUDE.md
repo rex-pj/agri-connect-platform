@@ -22,7 +22,7 @@ agri-connect-platform/
 │   │   │   ├── templates/      # Tera: atoms/ molecules/ organisms/ pages/ layouts/
 │   │   │   ├── static/         # CSS, fonts, Bootstrap, Alpine, the committed islands.js
 │   │   │   └── locales/       # vi.toml, en.toml: every user-facing word ([errors] by code, [text] by key)
-│   │   └── tests/              # Integration + convention tests (no workspace lints)
+│   │   └── tests/              # Integration + convention tests (no workspace lints): one binary, tests/it/ (a module per file in main.rs)
 │   ├── islands/                # Svelte custom elements → static/js/islands.js
 │   └── migration/              # Sea-ORM migrations: DDL only, append-only
 ├── deploy/                     # compose, Caddy, VM deploy script, backups (see deploy/README.md)
@@ -492,6 +492,8 @@ The weekly leads table is the sales argument: "last week in Cai Lậy, X farmers
 - Every failure is a `domain::Error` with an `ErrorCode`. Never put user-facing text in Rust: add the code to `domain/src/error.rs` and its Vietnamese text to `web/locales/vi.toml` `[errors]` (a test fails if either is missing). Never build an error response with an ad-hoc status code.
 - Handlers extract with `ApiJson` / `ApiPath` / `ApiQuery` from `web::extract`, never axum's own, so malformed input gets a coded error.
 - Environment variables are read only in `web/src/startup.rs`; everything else receives configuration as arguments.
+- `build_state` takes a `Wiring` (the adapters and settings) and builds the exact production graph; tests pass the same adapters except bcrypt at `BcryptPasswordHasher::MIN_COST` and one `Views` shared by the whole test process (`integration_tests::views`).
+- Integration tests are one binary (`crates/tests/tests/it/`, each file a module of `main.rs`; a convention test fails on a file elsewhere or undeclared). Third-party crates build at `opt-level = 2` in dev and every crate with line tables only (`[profile.dev]`); `CARGO_PROFILE_DEV_DEBUG=full` for a debugger session.
 - Migrations are DDL only and append-only: never edit or delete one that has run anywhere. Reference data (roles, permissions, categories, locations) lives in `application/src/catalogue.rs` and is seeded idempotently at startup; demo data only through `/api/setup/seed`.
 - Keep internal logs in English.
 - All location data uses **SRID 4326** (WGS84). Never mix geometry and geography types in the same query.
@@ -602,8 +604,9 @@ cargo run --bin agri-connect
 # Before every push: both must pass across the whole workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-# Database tests (each creates and drops its own database):
+# Database tests (each copies its own database from one migrated per run, and drops it):
 # TEST_DATABASE_URL=postgres://... cargo test --workspace -- --include-ignored
+# One file's tests: cargo test -p integration-tests --test it search_page:: -- --include-ignored
 
 # Only after changing backend/islands/src: rebuild and commit the bundle
 cd islands; npm ci; npm run build

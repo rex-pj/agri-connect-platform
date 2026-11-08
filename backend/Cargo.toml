@@ -164,3 +164,17 @@ unreachable      = "deny"
 todo             = "deny"
 unimplemented    = "deny"
 indexing_slicing = "deny"
+
+# `cargo build`, `cargo run` and `cargo test` (the test profile inherits dev).
+# Line tables keep file:line in backtraces and panics; full debug info made
+# each test binary's PDB ~350 MB, and writing it was most of every link. For a
+# debugger session that needs variables: CARGO_PROFILE_DEV_DEBUG=full.
+[profile.dev]
+debug = "line-tables-only"
+
+# Third-party crates are compiled once and cached, so optimizing them costs
+# one slower clean build. Unoptimized, they made every test spend seconds in
+# Tera's template parser, bcrypt, sha2 and the image codecs.
+[profile.dev.package."*"]
+opt-level = 2
+debug = false

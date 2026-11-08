@@ -189,6 +189,11 @@ impl Views {
         })
     }
 
+    /// The texts the templates were bound to.
+    pub fn locales(&self) -> &Arc<Locales> {
+        &self.locales
+    }
+
     fn tera(&self, lang: Lang) -> &Tera {
         match lang {
             Lang::Vi => &self.vi,

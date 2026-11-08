@@ -1,7 +1,8 @@
 //! Schema migrations. DDL only; reference data is seeded at startup from the
 //! catalogue in `application`, demo data only on request.
 //!
-//! Append-only: an applied migration is never edited or removed. sea-orm
+//! Append-only: an applied migration is never removed, and its schema never
+//! changes (rewriting one to the builder must produce the same catalog). sea-orm
 //! refuses to start against a database whose recorded migrations have no file,
 //! and editing one leaves existing databases on the old definition.
 
@@ -23,6 +24,7 @@ mod m20261109_000013_search_events;
 mod m20261110_000014_partners;
 mod m20261111_000015_crop_prices;
 mod m20261112_000016_job_posts;
+pub mod schema;
 pub mod search;
 
 pub struct Migrator;

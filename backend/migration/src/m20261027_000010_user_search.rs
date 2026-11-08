@@ -4,9 +4,12 @@
 //! Expression indexes on `fold(column)` (see `search.rs`), built from the
 //! same `fold` the query uses, as for the services.
 
-use sea_orm_migration::{prelude::*, sea_orm::ConnectionTrait};
+use sea_orm_migration::prelude::*;
 
-use crate::search::{fold, USER_SEARCH_INDEXES};
+use crate::{
+    schema::run,
+    search::{user_search_indexes, FoldIndex},
+};
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -14,28 +17,16 @@ pub struct Migration;
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        let db = manager.get_connection();
-        for (index, table, column) in USER_SEARCH_INDEXES {
-            db.execute_unprepared(&format!(
-                "CREATE INDEX {index} ON {table} USING gin ({} gin_trgm_ops)",
-                fold(column)
-            ))
-            .await?;
-        }
-        Ok(())
+        let statements: Vec<String> = user_search_indexes()
+            .iter()
+            .map(FoldIndex::create)
+            .collect();
+        run(manager, &statements).await
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        for (index, table, _) in USER_SEARCH_INDEXES {
-            manager
-                .drop_index(
-                    Index::drop()
-                        .name(*index)
-                        .table(Alias::new(*table))
-                        .if_exists()
-                        .to_owned(),
-                )
-                .await?;
+        for index in user_search_indexes() {
+            manager.drop_index(index.drop()).await?;
         }
         Ok(())
     }

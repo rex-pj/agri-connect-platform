@@ -154,24 +154,45 @@ fn handlers_build_no_ad_hoc_error_responses() {
 }
 
 #[test]
-fn custom_sql_uses_numbered_placeholders() {
-    // sea-query binds `$1`, `$2` in a custom Postgres expression but leaves a
-    // `?` in the SQL unbound: the query then fails with a syntax error at
-    // runtime. Geo search, saving a location and the login lockout were all
-    // broken this way.
-    let call = regex::Regex::new(r#"cust_with_(?:values|exprs)\(\s*r?#*"([^"]*)""#).unwrap();
-    let mut found = Vec::new();
-    for (file, src) in sources("infrastructure") {
-        for cap in call.captures_iter(&src) {
-            if cap[1].contains('?') {
-                found.push(format!("{file}: {}", &cap[1]));
-            }
-        }
-    }
-    assert!(
-        found.is_empty(),
-        "use $1, $2 … in cust_with_values:\n{}",
-        found.join("\n")
+fn queries_are_built_never_written_as_sql() {
+    // Every query is built from entities and the typed names in
+    // `infrastructure::sql` (PostGIS calls, casts, output aliases), so a typo
+    // is a compile error, not a runtime one. (A `?` in hand-written custom
+    // SQL was once left unbound and broke geo search, saving a location and
+    // the login lockout.)
+    assert_absent(
+        &["infrastructure", "web", "application"],
+        &[
+            "Expr::cust",
+            "cust_with_values",
+            "cust_with_exprs",
+            "Statement::from_s",
+            "execute_unprepared",
+            "Alias::new(",
+            "query_one(",
+            "query_all(",
+        ],
+        &[],
+        "build the query with sea-query and the names in infrastructure::sql",
+    );
+}
+
+#[test]
+fn migrations_are_built_never_written_as_sql() {
+    // The migrations use the schema builder and the typed names of
+    // `migration::schema`; only that module assembles the few statements
+    // sea-query cannot (named checks, operator-class indexes, triggers).
+    assert_absent(
+        &["../migration"],
+        &[
+            "execute_unprepared",
+            "Statement::from_s",
+            "Expr::cust",
+            "Alias::new(",
+            "include_str!(",
+        ],
+        &["../migration/src/schema.rs"],
+        "build the DDL with the schema builder and migration::schema",
     );
 }
 

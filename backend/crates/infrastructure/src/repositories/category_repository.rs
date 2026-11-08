@@ -20,6 +20,7 @@ use domain::{
 
 use crate::entities::category::{self, Entity as CategoryEntity};
 use crate::repositories::unique_or_internal;
+use crate::sql::{username_of, QueryAs};
 
 pub struct CategoryRepository {
     db: Arc<DatabaseConnection>,
@@ -110,7 +111,7 @@ impl CategoryRepositoryTrait for CategoryRepository {
             .column(category::Column::Id)
             .column(category::Column::Name)
             .column(category::Column::Slug)
-            .column_as(category::Column::Type, "category_type")
+            .column_as(category::Column::Type, QueryAs::CategoryType)
             .column(category::Column::Icon)
             .column(category::Column::Color)
             .column(category::Column::Description)
@@ -119,16 +120,12 @@ impl CategoryRepositoryTrait for CategoryRepository {
             .column(category::Column::CreatedOn)
             .column(category::Column::UpdatedOn)
             .expr_as(
-                Expr::cust(
-                    "(SELECT u.username FROM users u WHERE u.id = \"categories\".created_by)",
-                ),
-                "created_by_name",
+                username_of((category::Entity, category::Column::CreatedBy)),
+                QueryAs::CreatedByName,
             )
             .expr_as(
-                Expr::cust(
-                    "(SELECT u.username FROM users u WHERE u.id = \"categories\".updated_by)",
-                ),
-                "updated_by_name",
+                username_of((category::Entity, category::Column::UpdatedBy)),
+                QueryAs::UpdatedByName,
             )
             .order_by_asc(category::Column::Type)
             .order_by_asc(category::Column::DisplayOrder)
@@ -148,7 +145,7 @@ impl CategoryRepositoryTrait for CategoryRepository {
             .column(category::Column::Id)
             .column(category::Column::Name)
             .column(category::Column::Slug)
-            .column_as(category::Column::Type, "category_type")
+            .column_as(category::Column::Type, QueryAs::CategoryType)
             .column(category::Column::Icon)
             .column(category::Column::Color)
             .column(category::Column::Description)
@@ -157,16 +154,12 @@ impl CategoryRepositoryTrait for CategoryRepository {
             .column(category::Column::CreatedOn)
             .column(category::Column::UpdatedOn)
             .expr_as(
-                Expr::cust(
-                    "(SELECT u.username FROM users u WHERE u.id = \"categories\".created_by)",
-                ),
-                "created_by_name",
+                username_of((category::Entity, category::Column::CreatedBy)),
+                QueryAs::CreatedByName,
             )
             .expr_as(
-                Expr::cust(
-                    "(SELECT u.username FROM users u WHERE u.id = \"categories\".updated_by)",
-                ),
-                "updated_by_name",
+                username_of((category::Entity, category::Column::UpdatedBy)),
+                QueryAs::UpdatedByName,
             )
             .into_model::<CategoryAdminRow>()
             .one(self.db.as_ref())

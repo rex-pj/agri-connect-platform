@@ -5,10 +5,10 @@ use std::{collections::HashMap, sync::Arc};
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    sea_query::{Alias, Expr, Func, Order, Query, SimpleExpr, SubQueryStatement},
+    sea_query::{Expr, Func, Order, SimpleExpr},
     ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, DatabaseConnection, DbErr,
     EntityTrait, FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
-    QueryTrait, RelationTrait, Set, TransactionTrait, UpdateMany, Value,
+    QueryTrait, RelationTrait, Set, TransactionTrait, UpdateMany,
 };
 use tracing::error;
 
@@ -35,6 +35,10 @@ use crate::{
         product::{self, Entity as ProductEntity},
         service::{self, Entity as ServiceEntity},
         user,
+    },
+    sql::{
+        business_lat, business_lng, business_location, distance, geography_from_text, null, output,
+        username_of, within, Geo, QueryAs,
     },
 };
 
@@ -210,9 +214,7 @@ struct ProductAdminRow {
 
 #[async_trait]
 impl BusinessRepositoryTrait for BusinessRepository {
-    // ── Geo search: PostGIS expressions embedded via Expr::cust_with_values ─────
-    // Placeholders are `$1`, `$2`: sea-query leaves a `?` in custom SQL unbound
-    // for Postgres, and the query fails (convention test in tests/conventions.rs).
+    // ── Geo search: PostGIS calls built from `sql` ──────────────────────────────
 
     async fn search_geo(
         &self,
@@ -223,14 +225,8 @@ impl BusinessRepositoryTrait for BusinessRepository {
     ) -> Result<Vec<BusinessGeoResult>, Error> {
         let db = self.db.as_ref();
 
-        let distance_expr = Expr::cust_with_values(
-            r#"ST_Distance("businesses".location, ST_GeographyFromText($1))"#,
-            [Value::from(point_wkt.to_owned())],
-        );
-        let within_filter = Expr::cust_with_values(
-            r#"ST_DWithin("businesses".location, ST_GeographyFromText($1), $2)"#,
-            [Value::from(point_wkt.to_owned()), Value::from(radius)],
-        );
+        let distance_expr = distance(business_location(), geography_from_text(point_wkt));
+        let within_filter = within(business_location(), geography_from_text(point_wkt), radius);
 
         let mut query = Business::find()
             .select_only()
@@ -239,7 +235,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .column(business::Column::Phone)
             .column(business::Column::Address)
             .column(business::Column::IsVerified)
-            .expr_as(distance_expr, "distance_m")
+            .expr_as(distance_expr, QueryAs::DistanceM)
             .filter(business::Column::IsActive.eq(true))
             .filter(business::Column::DeletedAt.is_null())
             .filter(within_filter)
@@ -248,7 +244,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             query = query.filter(offers_service(id));
         }
 
-        QueryTrait::query(&mut query).order_by_expr(Expr::cust("distance_m"), Order::Asc);
+        QueryTrait::query(&mut query).order_by_expr(output(QueryAs::DistanceM), Order::Asc);
         let query = query.order_by_asc(business::Column::Id);
 
         let businesses = query.into_model::<GeoRow>().all(db).await.map_err(|e| {
@@ -466,8 +462,8 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .column(service::Column::Name)
             .column(service::Column::Description)
             .column(service::Column::PriceNote)
-            .column_as(category::Column::Name, "category")
-            .column_as(category::Column::Icon, "category_icon")
+            .column_as(category::Column::Name, QueryAs::Category)
+            .column_as(category::Column::Icon, QueryAs::CategoryIcon)
             .column(service::Column::ImageFileId)
             .join(JoinType::InnerJoin, service::Relation::Category.def())
             .filter(service::Column::BusinessId.eq(b.id))
@@ -539,38 +535,14 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .column(business::Column::IsActive)
             .column(business::Column::CreatedOn)
             .column(business::Column::UpdatedOn)
-            .column_as(user::Column::Username, "linked_username")
+            .column_as(user::Column::Username, QueryAs::LinkedUsername)
             .expr_as(
-                SimpleExpr::SubQuery(
-                    None,
-                    Box::new(SubQueryStatement::SelectStatement(
-                        Query::select()
-                            .from(user::Entity)
-                            .column(user::Column::Username)
-                            .and_where(
-                                Expr::col((user::Entity, user::Column::Id))
-                                    .equals((business::Entity, business::Column::CreatedBy)),
-                            )
-                            .to_owned(),
-                    )),
-                ),
-                "created_by_name",
+                username_of((business::Entity, business::Column::CreatedBy)),
+                QueryAs::CreatedByName,
             )
             .expr_as(
-                SimpleExpr::SubQuery(
-                    None,
-                    Box::new(SubQueryStatement::SelectStatement(
-                        Query::select()
-                            .from(user::Entity)
-                            .column(user::Column::Username)
-                            .and_where(
-                                Expr::col((user::Entity, user::Column::Id))
-                                    .equals((business::Entity, business::Column::UpdatedBy)),
-                            )
-                            .to_owned(),
-                    )),
-                ),
-                "updated_by_name",
+                username_of((business::Entity, business::Column::UpdatedBy)),
+                QueryAs::UpdatedByName,
             )
             .join(JoinType::LeftJoin, business::Relation::Owner.def())
             .filter(business::Column::DeletedAt.is_null())
@@ -598,7 +570,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             ServiceEntity::find()
                 .select_only()
                 .column(service::Column::BusinessId)
-                .expr_as(Func::count(Expr::col(service::Column::Id)), "count")
+                .expr_as(Func::count(Expr::col(service::Column::Id)), QueryAs::Count)
                 .filter(service::Column::BusinessId.is_in(page_ids.clone()))
                 .filter(service::Column::IsActive.eq(true))
                 .filter(service::Column::DeletedAt.is_null())
@@ -608,7 +580,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             ProductEntity::find()
                 .select_only()
                 .column(product::Column::BusinessId)
-                .expr_as(Func::count(Expr::col(product::Column::Id)), "count")
+                .expr_as(Func::count(Expr::col(product::Column::Id)), QueryAs::Count)
                 .filter(product::Column::BusinessId.is_in(page_ids))
                 .filter(product::Column::IsActive.eq(true))
                 .filter(product::Column::DeletedAt.is_null())
@@ -664,15 +636,9 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .column(business::Column::IsVerified)
             .column(business::Column::IsActive)
             .column(business::Column::CreatedOn)
-            .column_as(user::Column::Username, "linked_username")
-            .expr_as(
-                Expr::cust(r#"ST_Y("businesses".location::geometry)"#),
-                "lat",
-            )
-            .expr_as(
-                Expr::cust(r#"ST_X("businesses".location::geometry)"#),
-                "lng",
-            )
+            .column_as(user::Column::Username, QueryAs::LinkedUsername)
+            .expr_as(business_lat(), QueryAs::Lat)
+            .expr_as(business_lng(), QueryAs::Lng)
             .join(JoinType::LeftJoin, business::Relation::Owner.def())
             .filter(business::Column::Id.eq(id))
             .filter(business::Column::DeletedAt.is_null())
@@ -691,7 +657,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .select_only()
             .column(service::Column::Id)
             .column(service::Column::Name)
-            .column_as(category::Column::Name, "category")
+            .column_as(category::Column::Name, QueryAs::Category)
             .column(service::Column::PriceNote)
             .column(service::Column::IsActive)
             .join(JoinType::InnerJoin, service::Relation::Category.def())
@@ -710,7 +676,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .column(product::Column::Name)
             .column(product::Column::Price)
             .column(product::Column::Unit)
-            .column_as(category::Column::Name, "category")
+            .column_as(category::Column::Name, QueryAs::Category)
             .column(product::Column::IsActive)
             .join(JoinType::InnerJoin, product::Relation::Category.def())
             .filter(product::Column::BusinessId.eq(id))
@@ -798,7 +764,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             })
     }
 
-    // ── Profile (includes PostGIS ST_Y/ST_X via Expr::cust) ──────────────────
+    // ── Profile (the position from `sql::business_lat` / `business_lng`) ──────────────────
 
     async fn get_profile_by_user(&self, user_id: i32) -> Result<Option<BusinessProfile>, Error> {
         let row = Business::find()
@@ -810,14 +776,8 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .column(business::Column::Description)
             .column(business::Column::Address)
             .column(business::Column::IsVerified)
-            .expr_as(
-                Expr::cust(r#"ST_Y("businesses".location::geometry)"#),
-                "lat",
-            )
-            .expr_as(
-                Expr::cust(r#"ST_X("businesses".location::geometry)"#),
-                "lng",
-            )
+            .expr_as(business_lat(), QueryAs::Lat)
+            .expr_as(business_lng(), QueryAs::Lng)
             .filter(business::Column::OwnerId.eq(user_id))
             .filter(business::Column::DeletedAt.is_null())
             .limit(1)
@@ -1005,10 +965,10 @@ fn profile_update(profile: &ProfileUpdate, which: SimpleExpr) -> UpdateMany<Busi
 
     // The location column is not in the entity (PostGIS type).
     let location = match &profile.location_wkt {
-        Some(wkt) => Expr::cust_with_values("ST_GeographyFromText($1)", [wkt.clone()]),
-        None => Expr::cust("NULL"),
+        Some(wkt) => geography_from_text(wkt),
+        None => null(),
     };
-    QueryTrait::query(&mut update).value(Alias::new("location"), location);
+    QueryTrait::query(&mut update).value(Geo::Location, location);
     update
 }
 
@@ -1063,7 +1023,7 @@ async fn load_service_names(
     let rows = ServiceEntity::find()
         .select_only()
         .column(service::Column::BusinessId)
-        .column_as(category::Column::Name, "svc_name")
+        .column_as(category::Column::Name, QueryAs::SvcName)
         .join(JoinType::InnerJoin, service::Relation::Category.def())
         .filter(service::Column::BusinessId.is_in(ids.to_vec()))
         .filter(service::Column::IsActive.eq(true))

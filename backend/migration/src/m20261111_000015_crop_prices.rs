@@ -4,51 +4,120 @@
 //! replaces it. The crops themselves are reference data (seeded when the
 //! table is empty, then edited by admins).
 
-use sea_orm_migration::{prelude::*, sea_orm::ConnectionTrait};
+use sea_orm_migration::prelude::*;
+
+use crate::schema::{
+    add_check, add_unique, by_user, flag, int, int_null, references, run, serial_id, stamped,
+    varchar, varchar_null, CropPrices, Crops, Locations,
+};
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
 
+fn crops() -> TableCreateStatement {
+    Table::create()
+        .table(Crops::Table)
+        .col(serial_id(Crops::Id))
+        .col(varchar(Crops::Name, 100).unique_key())
+        .col(varchar(Crops::Kind, 20))
+        .col(varchar(Crops::Unit, 20))
+        .col(int(Crops::DisplayOrder).default(0))
+        .col(flag(Crops::IsActive, true))
+        .to_owned()
+}
+
+fn crop_prices() -> TableCreateStatement {
+    Table::create()
+        .table(CropPrices::Table)
+        .col(serial_id(CropPrices::Id))
+        .col(int(CropPrices::CropId))
+        .col(int(CropPrices::LocationId))
+        .col(ColumnDef::new(CropPrices::ObservedOn).date().not_null())
+        .col(
+            ColumnDef::new(CropPrices::PriceLow)
+                .big_integer()
+                .not_null(),
+        )
+        .col(
+            ColumnDef::new(CropPrices::PriceHigh)
+                .big_integer()
+                .not_null(),
+        )
+        .col(varchar_null(CropPrices::Note, 200))
+        .col(stamped(CropPrices::CreatedOn))
+        .col(int_null(CropPrices::CreatedBy))
+        .foreign_key(&mut references(
+            CropPrices::Table,
+            CropPrices::CropId,
+            Crops::Table,
+            Crops::Id,
+            ForeignKeyAction::Cascade,
+        ))
+        .foreign_key(&mut references(
+            CropPrices::Table,
+            CropPrices::LocationId,
+            Locations::Table,
+            Locations::Id,
+            ForeignKeyAction::Cascade,
+        ))
+        .foreign_key(&mut by_user(CropPrices::Table, CropPrices::CreatedBy))
+        .to_owned()
+}
+
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        // Keep the kinds in sync with domain::constants::CROP_KINDS.
+        manager.create_table(crops()).await?;
+        manager.create_table(crop_prices()).await?;
+        // Kinds frozen here; the live list is domain::constants::CROP_KINDS.
+        run(
+            manager,
+            &[
+                add_check(
+                    &Crops::Table,
+                    "chk_crops_kind",
+                    Expr::col(Crops::Kind).is_in(["rice", "fruit"]),
+                ),
+                add_unique(
+                    &CropPrices::Table,
+                    "uq_crop_prices_day",
+                    &[
+                        &CropPrices::CropId,
+                        &CropPrices::LocationId,
+                        &CropPrices::ObservedOn,
+                    ],
+                ),
+                add_check(
+                    &CropPrices::Table,
+                    "chk_crop_prices_range",
+                    Expr::col(CropPrices::PriceLow)
+                        .gt(0)
+                        .and(Expr::col(CropPrices::PriceHigh).gte(Expr::col(CropPrices::PriceLow))),
+                ),
+            ],
+        )
+        .await?;
         manager
-            .get_connection()
-            .execute_unprepared(
-                "CREATE TABLE crops (
-                    id            SERIAL       PRIMARY KEY,
-                    name          VARCHAR(100) NOT NULL UNIQUE,
-                    kind          VARCHAR(20)  NOT NULL,
-                    unit          VARCHAR(20)  NOT NULL,
-                    display_order INT          NOT NULL DEFAULT 0,
-                    is_active     BOOLEAN      NOT NULL DEFAULT TRUE,
-                    CONSTRAINT chk_crops_kind CHECK (kind IN ('rice', 'fruit'))
-                );
-                CREATE TABLE crop_prices (
-                    id          SERIAL       PRIMARY KEY,
-                    crop_id     INT          NOT NULL REFERENCES crops (id) ON DELETE CASCADE,
-                    location_id INT          NOT NULL REFERENCES locations (id) ON DELETE CASCADE,
-                    observed_on DATE         NOT NULL,
-                    price_low   BIGINT       NOT NULL,
-                    price_high  BIGINT       NOT NULL,
-                    note        VARCHAR(200),
-                    created_on  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-                    created_by  INT          REFERENCES users (id) ON DELETE SET NULL,
-                    CONSTRAINT uq_crop_prices_day UNIQUE (crop_id, location_id, observed_on),
-                    CONSTRAINT chk_crop_prices_range CHECK (price_low > 0 AND price_high >= price_low)
-                );
-                CREATE INDEX ix_crop_prices_observed ON crop_prices (observed_on DESC, id DESC);",
+            .create_index(
+                Index::create()
+                    .name("ix_crop_prices_observed")
+                    .table(CropPrices::Table)
+                    .col((CropPrices::ObservedOn, IndexOrder::Desc))
+                    .col((CropPrices::Id, IndexOrder::Desc))
+                    .to_owned(),
             )
-            .await?;
-        Ok(())
+            .await
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .get_connection()
-            .execute_unprepared("DROP TABLE IF EXISTS crop_prices, crops;")
-            .await?;
-        Ok(())
+            .drop_table(
+                Table::drop()
+                    .table(CropPrices::Table)
+                    .table(Crops::Table)
+                    .if_exists()
+                    .to_owned(),
+            )
+            .await
     }
 }

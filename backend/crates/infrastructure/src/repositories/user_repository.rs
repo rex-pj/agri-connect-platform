@@ -8,7 +8,7 @@ use sea_orm::{
     sea_query::{Expr, SimpleExpr},
     ColumnTrait, ConnectionTrait, DatabaseConnection, DbErr, EntityTrait, FromQueryResult,
     JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set, SqlErr,
-    Statement, TransactionTrait,
+    TransactionTrait,
 };
 use tracing::error;
 
@@ -27,6 +27,7 @@ use domain::{Error, ErrorCode};
 
 use crate::repositories::{business_repository::insert_registration_business, unique_or_internal};
 use crate::search::{search_condition, ADMIN_USER_SEARCH_COLUMNS};
+use crate::sql::{advisory_xact_lock, null, username_of, PgType, QueryAs};
 use crate::{
     db_types::DateTimeWithTimeZone,
     entities::{
@@ -173,7 +174,7 @@ impl UserRepositoryTrait for UserRepository {
             .column(user::Column::PasswordHash)
             .column(user::Column::IsActive)
             .column(user::Column::LockedUntil)
-            .column_as(role::Column::Code, "role")
+            .column_as(role::Column::Code, QueryAs::Role)
             .join(JoinType::InnerJoin, user::Relation::Role.def())
             .filter(user::Column::Username.eq(username))
             .filter(user::Column::DeletedAt.is_null())
@@ -211,11 +212,10 @@ impl UserRepositoryTrait for UserRepository {
         let txn = self.db.begin().await.map_err(fail)?;
         // Two setup forms sent at once must not both see "no admin yet": the
         // second waits here until the first commits, then sees its admin.
-        txn.execute(Statement::from_sql_and_values(
-            txn.get_database_backend(),
-            "SELECT pg_advisory_xact_lock($1)",
-            [FIRST_ADMIN_LOCK.into()],
-        ))
+        txn.execute(
+            txn.get_database_backend()
+                .build(&advisory_xact_lock(FIRST_ADMIN_LOCK)),
+        )
         .await
         .map_err(fail)?;
         if count_by_role_in(&txn, &user.role).await? > 0 {
@@ -248,7 +248,7 @@ impl UserRepositoryTrait for UserRepository {
         UserEntity::find()
             .select_only()
             .column(user::Column::Id)
-            .column_as(role::Column::Code, "role")
+            .column_as(role::Column::Code, QueryAs::Role)
             .join(JoinType::InnerJoin, user::Relation::Role.def())
             .filter(user::Column::Username.eq(username))
             .filter(user::Column::DeletedAt.is_null())
@@ -304,18 +304,18 @@ impl UserRepositoryTrait for UserRepository {
             .column(user::Column::Username)
             .column(user::Column::Email)
             .column(user::Column::FullName)
-            .column_as(role::Column::Code, "role_code")
-            .column_as(role::Column::Name, "role_name")
+            .column_as(role::Column::Code, QueryAs::RoleCode)
+            .column_as(role::Column::Name, QueryAs::RoleName)
             .column(user::Column::IsActive)
             .column(user::Column::CreatedOn)
             .column(user::Column::UpdatedOn)
             .expr_as(
-                Expr::cust("(SELECT u2.username FROM users u2 WHERE u2.id = created_by)"),
-                "created_by_name",
+                username_of((user::Entity, user::Column::CreatedBy)),
+                QueryAs::CreatedByName,
             )
             .expr_as(
-                Expr::cust("(SELECT u2.username FROM users u2 WHERE u2.id = updated_by)"),
-                "updated_by_name",
+                username_of((user::Entity, user::Column::UpdatedBy)),
+                QueryAs::UpdatedByName,
             )
             .join(JoinType::LeftJoin, user::Relation::Role.def())
             .filter(user::Column::DeletedAt.is_null())
@@ -356,8 +356,8 @@ impl UserRepositoryTrait for UserRepository {
             .column(user::Column::Username)
             .column(user::Column::Email)
             .column(user::Column::FullName)
-            .column_as(role::Column::Code, "role_code")
-            .column_as(role::Column::Name, "role_name")
+            .column_as(role::Column::Code, QueryAs::RoleCode)
+            .column_as(role::Column::Name, QueryAs::RoleName)
             .column(user::Column::IsActive)
             .column(user::Column::CreatedOn)
             .join(JoinType::InnerJoin, user::Relation::Role.def())
@@ -439,7 +439,7 @@ impl UserRepositoryTrait for UserRepository {
             .column(user::Column::Email)
             .column(user::Column::FullName)
             .column(user::Column::CreatedOn)
-            .column_as(role::Column::Code, "role_code")
+            .column_as(role::Column::Code, QueryAs::RoleCode)
             .join(JoinType::InnerJoin, user::Relation::Role.def())
             .filter(user::Column::Id.eq(user_id))
             .filter(user::Column::IsActive.eq(true))
@@ -469,7 +469,7 @@ impl UserRepositoryTrait for UserRepository {
             .column(user::Column::PasswordHash)
             .column(user::Column::IsActive)
             .column(user::Column::LockedUntil)
-            .column_as(role::Column::Code, "role")
+            .column_as(role::Column::Code, QueryAs::Role)
             .join(JoinType::InnerJoin, user::Relation::Role.def())
             .filter(user::Column::Id.eq(id))
             .filter(user::Column::DeletedAt.is_null())
@@ -582,28 +582,29 @@ impl UserRepositoryTrait for UserRepository {
     }
 
     async fn claim_reset_token(&self, token_hash: &str) -> Result<Option<ResetToken>, Error> {
-        let row = self
-            .db
-            .query_one(Statement::from_sql_and_values(
-                self.db.get_database_backend(),
-                "UPDATE password_reset_tokens SET used_at = now() \
-                 WHERE token = $1 AND used_at IS NULL AND expires_at > now() \
-                 RETURNING id, user_id",
-                [token_hash.into()],
-            ))
+        // One UPDATE … RETURNING: two requests with the same link cannot
+        // both claim it.
+        let claimed = PasswordResetToken::update_many()
+            .col_expr(
+                password_reset_token::Column::UsedAt,
+                Expr::current_timestamp().into(),
+            )
+            .filter(password_reset_token::Column::Token.eq(token_hash))
+            .filter(password_reset_token::Column::UsedAt.is_null())
+            .filter(
+                Expr::col((PasswordResetToken, password_reset_token::Column::ExpiresAt))
+                    .gt(Expr::current_timestamp()),
+            )
+            .exec_with_returning(self.db.as_ref())
             .await
             .map_err(|e| {
                 error!("claim_reset_token error: {e}");
                 Error::internal("System error.")
             })?;
-        row.map(|r| {
-            Ok(ResetToken {
-                id: r.try_get("", "id")?,
-                user_id: r.try_get("", "user_id")?,
-            })
-        })
-        .transpose()
-        .map_err(|e: sea_orm::DbErr| Error::internal(format!("claim_reset_token row: {e}")))
+        Ok(claimed.into_iter().next().map(|t| ResetToken {
+            id: t.id,
+            user_id: t.user_id,
+        }))
     }
 
     async fn retire_reset_tokens(&self, user_id: i32) -> Result<(), Error> {
@@ -633,21 +634,29 @@ impl UserRepositoryTrait for UserRepository {
         // that has run out starts a fresh count at this attempt; otherwise the
         // count would stay at the threshold and every later typo would lock
         // the account again. Each SET sees the row as it was.
-        const ATTEMPT: &str = "CASE WHEN locked_until IS NOT NULL AND locked_until <= NOW() \
-                               THEN 1 ELSE failed_login_attempts + 1 END";
+        let locked_until = || Expr::col((user::Entity, user::Column::LockedUntil));
+        let lock_ran_out = || locked_until().lte(Expr::current_timestamp());
+        // This attempt's number: 1 after a lock ran out, else one more.
+        let attempt = || -> SimpleExpr {
+            Expr::case(
+                locked_until().is_not_null().and(lock_ran_out()),
+                Expr::val(1),
+            )
+            .finally(Expr::col((user::Entity, user::Column::FailedLoginAttempts)).add(1))
+            .into()
+        };
+        let lockout = Expr::val(format!("{lockout_minutes} minutes")).cast_as(PgType::Interval);
         UserEntity::update_many()
-            .col_expr(user::Column::FailedLoginAttempts, Expr::cust(ATTEMPT))
+            .col_expr(user::Column::FailedLoginAttempts, attempt())
             .col_expr(
                 user::Column::LockedUntil,
-                Expr::cust_with_exprs(
-                    format!(
-                        "CASE WHEN {ATTEMPT} >= $1 \
-                         THEN NOW() + ($2 * INTERVAL '1 minute') \
-                         WHEN locked_until <= NOW() THEN NULL \
-                         ELSE locked_until END"
-                    ),
-                    [Expr::value(max_attempts), Expr::value(lockout_minutes)],
-                ),
+                Expr::case(
+                    Expr::expr(attempt()).gte(max_attempts),
+                    Expr::current_timestamp().add(lockout),
+                )
+                .case(lock_ran_out(), null())
+                .finally(locked_until())
+                .into(),
             )
             .filter(user::Column::Id.eq(user_id))
             .exec(self.db.as_ref())

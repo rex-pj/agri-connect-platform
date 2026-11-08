@@ -3,7 +3,9 @@
 //! descended from one login share a `family_id`, and reusing a spent one
 //! revokes the whole family (someone else has a copy).
 
-use sea_orm_migration::{prelude::*, sea_orm::ConnectionTrait};
+use sea_orm_migration::prelude::*;
+
+use crate::schema::{int, references, stamped, timestamp_null, RefreshTokens, Users};
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -12,32 +14,63 @@ pub struct Migration;
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .get_connection()
-            .execute_unprepared(
-                "CREATE TABLE refresh_tokens (
-                     id          UUID        PRIMARY KEY,
-                     family_id   UUID        NOT NULL,
-                     user_id     INT         NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-                     token_hash  TEXT        NOT NULL UNIQUE,
-                     expires_at  TIMESTAMPTZ NOT NULL,
-                     created_on  TIMESTAMPTZ NOT NULL DEFAULT now(),
-                     used_at     TIMESTAMPTZ,
-                     revoked_at  TIMESTAMPTZ
-                 );
-                 CREATE INDEX ix_refresh_tokens_family ON refresh_tokens (family_id);
-                 CREATE INDEX ix_refresh_tokens_user ON refresh_tokens (user_id);
-                 -- The hourly purge deletes by expiry.
-                 CREATE INDEX ix_refresh_tokens_expires ON refresh_tokens (expires_at);",
+            .create_table(
+                Table::create()
+                    .table(RefreshTokens::Table)
+                    .col(ColumnDef::new(RefreshTokens::Id).uuid().primary_key())
+                    .col(ColumnDef::new(RefreshTokens::FamilyId).uuid().not_null())
+                    .col(int(RefreshTokens::UserId))
+                    .col(
+                        ColumnDef::new(RefreshTokens::TokenHash)
+                            .text()
+                            .not_null()
+                            .unique_key(),
+                    )
+                    .col(
+                        ColumnDef::new(RefreshTokens::ExpiresAt)
+                            .timestamp_with_time_zone()
+                            .not_null(),
+                    )
+                    .col(stamped(RefreshTokens::CreatedOn))
+                    .col(timestamp_null(RefreshTokens::UsedAt))
+                    .col(timestamp_null(RefreshTokens::RevokedAt))
+                    .foreign_key(&mut references(
+                        RefreshTokens::Table,
+                        RefreshTokens::UserId,
+                        Users::Table,
+                        Users::Id,
+                        ForeignKeyAction::Cascade,
+                    ))
+                    .to_owned(),
             )
             .await?;
+        for (name, column) in [
+            ("ix_refresh_tokens_family", RefreshTokens::FamilyId),
+            ("ix_refresh_tokens_user", RefreshTokens::UserId),
+            // The hourly purge deletes by expiry.
+            ("ix_refresh_tokens_expires", RefreshTokens::ExpiresAt),
+        ] {
+            manager
+                .create_index(
+                    Index::create()
+                        .name(name)
+                        .table(RefreshTokens::Table)
+                        .col(column)
+                        .to_owned(),
+                )
+                .await?;
+        }
         Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .get_connection()
-            .execute_unprepared("DROP TABLE IF EXISTS refresh_tokens;")
-            .await?;
-        Ok(())
+            .drop_table(
+                Table::drop()
+                    .table(RefreshTokens::Table)
+                    .if_exists()
+                    .to_owned(),
+            )
+            .await
     }
 }

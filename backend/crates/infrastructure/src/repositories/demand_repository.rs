@@ -7,7 +7,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sea_orm::{
-    sea_query::{Alias, Expr, Func, Order, Query, SelectStatement},
+    sea_query::{Expr, Func, Order, Query, SelectStatement},
     ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter,
     QueryOrder, QuerySelect, Set,
 };
@@ -28,6 +28,7 @@ use crate::{
         service::{self, Entity as ServiceEntity},
     },
     repositories::service_repository::live_public,
+    sql::QueryAs,
 };
 
 pub struct DemandRepository {
@@ -107,7 +108,7 @@ where
                 Expr::col((service::Entity, service::Column::CategoryId)).into(),
                 Expr::col((product::Entity, product::Column::CategoryId)).into(),
             ]),
-            Alias::new("category_id"),
+            QueryAs::CategoryId,
         )
         .inner_join(
             business::Entity,
@@ -231,7 +232,7 @@ impl DemandRepositoryTrait for DemandRepository {
         live_public(ServiceEntity::find())
             .select_only()
             .column(service::Column::BusinessId)
-            .column_as(service::Column::CategoryId.min(), "category_id")
+            .column_as(service::Column::CategoryId.min(), QueryAs::CategoryId)
             .group_by(service::Column::BusinessId)
             .having(service::Column::Id.count().eq(1))
             .into_model::<SoleRow>()

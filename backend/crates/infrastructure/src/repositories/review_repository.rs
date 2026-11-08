@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    sea_query::{Alias, Expr, Func, Query, SimpleExpr},
+    sea_query::{Expr, Func, SimpleExpr},
     ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, JoinType, PaginatorTrait,
     QueryFilter, QueryOrder, QuerySelect, QueryTrait, RelationTrait, Select, Set,
 };
@@ -24,6 +24,7 @@ use crate::{
         business,
         review::{self, Entity as Review},
     },
+    sql::{businesses_of, null, username_of, PgType, QueryAs},
 };
 
 pub struct ReviewRepository {
@@ -85,7 +86,7 @@ struct RatingRow {
 /// The average rating: AVG of a SMALLINT is NUMERIC; as float8 it decodes
 /// to f64.
 fn average_rating() -> SimpleExpr {
-    SimpleExpr::from(Func::avg(Expr::col(review::Column::Rating))).cast_as(Alias::new("float8"))
+    SimpleExpr::from(Func::avg(Expr::col(review::Column::Rating))).cast_as(PgType::Float8)
 }
 
 /// The columns of the admin list and detail, with the business's name.
@@ -94,7 +95,7 @@ fn admin_select() -> Select<Review> {
         .select_only()
         .column(review::Column::Id)
         .column(review::Column::BusinessId)
-        .column_as(business::Column::Name, "business_name")
+        .column_as(business::Column::Name, QueryAs::BusinessName)
         .column(review::Column::ReviewerName)
         .column(review::Column::Rating)
         .column(review::Column::Comment)
@@ -103,8 +104,8 @@ fn admin_select() -> Select<Review> {
         .column(review::Column::CreatedOn)
         .column(review::Column::UpdatedOn)
         .expr_as(
-            Expr::cust("(SELECT u.username FROM users u WHERE u.id = \"reviews\".updated_by)"),
-            "updated_by_name",
+            username_of((review::Entity, review::Column::UpdatedBy)),
+            QueryAs::UpdatedByName,
         )
         .join(JoinType::InnerJoin, review::Relation::Business.def())
 }
@@ -112,14 +113,7 @@ fn admin_select() -> Select<Review> {
 /// Reviews of the live business `owner_user` manages: a subquery, so the
 /// ownership check and the read or write are one statement.
 fn owned_by(owner_user: i32) -> SimpleExpr {
-    Expr::col((review::Entity, review::Column::BusinessId)).in_subquery(
-        Query::select()
-            .column((business::Entity, business::Column::Id))
-            .from(business::Entity)
-            .and_where(Expr::col((business::Entity, business::Column::OwnerId)).eq(owner_user))
-            .and_where(Expr::col((business::Entity, business::Column::DeletedAt)).is_null())
-            .to_owned(),
-    )
+    Expr::col((review::Entity, review::Column::BusinessId)).in_subquery(businesses_of(owner_user))
 }
 
 fn shown_of(business_id: i32) -> Select<Review> {
@@ -253,8 +247,8 @@ impl ReviewRepositoryTrait for ReviewRepository {
         let average = average_rating();
         shown_of(business_id)
             .select_only()
-            .column_as(review::Column::Id.count(), "count")
-            .column_as(average, "average")
+            .column_as(review::Column::Id.count(), QueryAs::Count)
+            .column_as(average, QueryAs::Average)
             .into_model::<SummaryRow>()
             .one(self.db.as_ref())
             .await
@@ -285,8 +279,8 @@ impl ReviewRepositoryTrait for ReviewRepository {
             .filter(review::Column::IsVisible.eq(true))
             .select_only()
             .column(review::Column::BusinessId)
-            .column_as(review::Column::Id.count(), "count")
-            .column_as(average_rating(), "average")
+            .column_as(review::Column::Id.count(), QueryAs::Count)
+            .column_as(average_rating(), QueryAs::Average)
             .group_by(review::Column::BusinessId)
             .into_model::<RatingRow>()
             .all(self.db.as_ref())
@@ -341,7 +335,7 @@ impl ReviewRepositoryTrait for ReviewRepository {
         let replied_at = if reply.is_some() {
             Expr::current_timestamp().into()
         } else {
-            Expr::cust("NULL")
+            null()
         };
         Review::update_many()
             .col_expr(review::Column::Reply, Expr::value(reply))

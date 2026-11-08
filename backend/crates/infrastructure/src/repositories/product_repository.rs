@@ -2,9 +2,8 @@ use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::sea_query::{Expr, NullOrdering, Order};
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, FromQueryResult, JoinType,
-    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait, RelationTrait, Set,
-    Statement, Value,
+    ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, JoinType, PaginatorTrait,
+    QueryFilter, QueryOrder, QuerySelect, QueryTrait, RelationTrait, Set, TransactionTrait,
 };
 use std::sync::Arc;
 use tracing::error;
@@ -29,6 +28,9 @@ use crate::{
         business,
         category::{self, Entity as Category},
         product::{self, Entity as ProductEntity},
+    },
+    sql::{
+        business_location, businesses_of, distance, geography_from_text, output, within, QueryAs,
     },
 };
 
@@ -105,11 +107,11 @@ fn base_product_view_query() -> sea_orm::Select<ProductEntity> {
         .column(product::Column::Description)
         .column(product::Column::Price)
         .column(product::Column::Unit)
-        .column_as(category::Column::Name, "category")
-        .column_as(category::Column::Icon, "category_icon")
-        .column_as(business::Column::Name, "vendor_name")
-        .column_as(business::Column::Phone, "vendor_phone")
-        .column_as(business::Column::IsVerified, "vendor_verified")
+        .column_as(category::Column::Name, QueryAs::Category)
+        .column_as(category::Column::Icon, QueryAs::CategoryIcon)
+        .column_as(business::Column::Name, QueryAs::VendorName)
+        .column_as(business::Column::Phone, QueryAs::VendorPhone)
+        .column_as(business::Column::IsVerified, QueryAs::VendorVerified)
         .column(product::Column::BusinessId)
         .column(product::Column::CreatedOn)
         .column(product::Column::ImageFileId)
@@ -128,7 +130,7 @@ fn base_provider_product_query() -> sea_orm::Select<ProductEntity> {
         .column(product::Column::Description)
         .column(product::Column::Price)
         .column(product::Column::Unit)
-        .column_as(category::Column::Name, "category")
+        .column_as(category::Column::Name, QueryAs::Category)
         .column(product::Column::CategoryId)
         .column(product::Column::IsActive)
         .column(product::Column::CreatedOn)
@@ -144,10 +146,10 @@ fn base_admin_product_query() -> sea_orm::Select<ProductEntity> {
         .column(product::Column::Description)
         .column(product::Column::Price)
         .column(product::Column::Unit)
-        .column_as(category::Column::Name, "category")
+        .column_as(category::Column::Name, QueryAs::Category)
         .column(product::Column::CategoryId)
         .column(product::Column::BusinessId)
-        .column_as(business::Column::Name, "business_name")
+        .column_as(business::Column::Name, QueryAs::BusinessName)
         .column(product::Column::IsActive)
         .column(product::Column::CreatedOn)
         .column(product::Column::UpdatedOn)
@@ -349,29 +351,22 @@ impl ProductRepositoryTrait for ProductRepository {
             })
     }
 
-    // PostGIS expressions via Expr::cust_with_values, the one thing the
-    // builder cannot express; placeholders are `$1`, `$2`.
+    // PostGIS calls built from `sql`, as in the business repository's geo search.
     async fn search_geo(
         &self,
         point_wkt: &str,
         radius: f64,
         limit: i64,
     ) -> Result<Vec<ProductView>, Error> {
-        let distance = Expr::cust_with_values(
-            r#"ST_Distance("businesses".location, ST_GeographyFromText($1))"#,
-            [Value::from(point_wkt.to_owned())],
-        );
-        let within = Expr::cust_with_values(
-            r#"ST_DWithin("businesses".location, ST_GeographyFromText($1), $2)"#,
-            [Value::from(point_wkt.to_owned()), Value::from(radius)],
-        );
+        let distance = distance(business_location(), geography_from_text(point_wkt));
+        let within = within(business_location(), geography_from_text(point_wkt), radius);
         let mut query = base_product_view_query()
             .filter(product::Column::IsActive.eq(true))
             .filter(product::Column::DeletedAt.is_null())
-            .expr_as(distance, "distance_m")
+            .expr_as(distance, QueryAs::DistanceM)
             .filter(within)
             .limit(limit as u64);
-        QueryTrait::query(&mut query).order_by_expr(Expr::cust("distance_m"), Order::Asc);
+        QueryTrait::query(&mut query).order_by_expr(output(QueryAs::DistanceM), Order::Asc);
         query
             .order_by_asc(product::Column::Id)
             .into_model::<GeoProductRow>()
@@ -585,30 +580,34 @@ impl ProductRepositoryTrait for ProductRepository {
         owner_user: i32,
         file_id: Uuid,
     ) -> Result<Option<Option<Uuid>>, Error> {
-        // One statement: the ownership check, the old value and the update
-        // cannot be separated by a concurrent upload, which would orphan the
-        // image that upload replaced.
-        let row = self
-            .db
-            .query_one(Statement::from_sql_and_values(
-                self.db.get_database_backend(),
-                "WITH target AS (
-                     SELECT p.id, p.image_file_id AS previous
-                     FROM products p JOIN businesses b ON b.id = p.business_id
-                     WHERE p.id = $1 AND p.deleted_at IS NULL
-                       AND b.owner_id = $2 AND b.deleted_at IS NULL
-                     FOR UPDATE OF p
-                 )
-                 UPDATE products SET image_file_id = $3, updated_on = now()
-                 FROM target WHERE products.id = target.id
-                 RETURNING target.previous",
-                [id.into(), owner_user.into(), file_id.into()],
-            ))
+        let fail = |e: sea_orm::DbErr| Error::internal(format!("product set_image (id={id}): {e}"));
+        let txn = self.db.begin().await.map_err(fail)?;
+        // FOR UPDATE, with the ownership check: a concurrent upload waits
+        // here, then reads this upload's image as its previous one, so the
+        // image it replaces is never orphaned.
+        let previous = ProductEntity::find_by_id(id)
+            .select_only()
+            .column(product::Column::ImageFileId)
+            .filter(product::Column::DeletedAt.is_null())
+            .filter(product::Column::BusinessId.in_subquery(businesses_of(owner_user)))
+            .lock_exclusive()
+            .into_tuple::<Option<Uuid>>()
+            .one(&txn)
             .await
-            .map_err(|e| Error::internal(format!("product set_image (id={id}): {e}")))?;
-        row.map(|r| r.try_get::<Option<Uuid>>("", "previous"))
-            .transpose()
-            .map_err(|e| Error::internal(format!("product set_image (id={id}): {e}")))
+            .map_err(fail)?;
+        let Some(previous) = previous else {
+            txn.rollback().await.map_err(fail)?;
+            return Ok(None);
+        };
+        ProductEntity::update_many()
+            .col_expr(product::Column::ImageFileId, Expr::value(Some(file_id)))
+            .col_expr(product::Column::UpdatedOn, Expr::current_timestamp().into())
+            .filter(product::Column::Id.eq(id))
+            .exec(&txn)
+            .await
+            .map_err(fail)?;
+        txn.commit().await.map_err(fail)?;
+        Ok(Some(previous))
     }
 
     async fn image_of(&self, id: i32) -> Result<Option<Uuid>, Error> {

@@ -21,10 +21,12 @@ pub const CATEGORY_TYPE_PRODUCT: &str = "product";
 pub const CATEGORY_TYPES: &[&str] = &[CATEGORY_TYPE_SERVICE, CATEGORY_TYPE_PRODUCT];
 /// An inquiry marked as junk: never counted as a lead.
 pub const INQUIRY_STATUS_SPAM: &str = "spam";
+/// A farmer's request the provider has not answered yet.
+pub const INQUIRY_STATUS_NEW: &str = "new";
 pub const INQUIRY_STATUS_CONTACTED: &str = "contacted";
 pub const INQUIRY_STATUS_CLOSED: &str = "closed";
 pub const INQUIRY_STATUSES: &[&str] = &[
-    "new",
+    INQUIRY_STATUS_NEW,
     INQUIRY_STATUS_CONTACTED,
     INQUIRY_STATUS_CLOSED,
     INQUIRY_STATUS_SPAM,

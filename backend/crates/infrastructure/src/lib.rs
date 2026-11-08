@@ -15,4 +15,5 @@ pub mod jwt_token_service;
 pub mod rate_limiter;
 pub mod repositories;
 pub mod search;
+pub mod sql;
 pub mod zalo_gateway;

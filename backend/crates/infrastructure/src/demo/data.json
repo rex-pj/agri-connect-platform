@@ -1,0 +1,179 @@
+{
+  "_comment": "Demo listings. Every business is loaded with is_demo = TRUE so 'remove demo data' can never touch a real listing. Services and products name their business and category slug; a slug an admin renamed makes its rows silently drop out, and the returned counts show it.",
+  "businesses": [
+    {
+      "name": "Dịch vụ Nguyễn Văn An",
+      "phone": "0901234567",
+      "description": "Chuyên múc bùn và sửa máy nổ vùng Cai Lậy, kinh nghiệm 10 năm.",
+      "address": "Phường Nhị Quý, Đồng Tháp",
+      "lng": 106.075,
+      "lat": 10.41,
+      "is_verified": true
+    },
+    {
+      "name": "Dịch vụ Trần Thị Bình",
+      "phone": "0912345678",
+      "description": "Phun thuốc bảo vệ thực vật bằng drone, phủ đều toàn ruộng.",
+      "address": "Phường Thanh Hòa, Đồng Tháp",
+      "lng": 106.095,
+      "lat": 10.42,
+      "is_verified": true
+    },
+    {
+      "name": "Cơ sở Lê Văn Cường",
+      "phone": "0923456789",
+      "description": "Tổng hợp dịch vụ nông nghiệp: múc bùn, phun thuốc, sửa máy.",
+      "address": "Phường Mỹ Phước Tây, Đồng Tháp",
+      "lng": 106.07,
+      "lat": 10.425,
+      "is_verified": false
+    },
+    {
+      "name": "Cơ sở Năm Hùng",
+      "phone": "0901111001",
+      "description": "Chuyên kinh doanh gạo ST25 và nông sản đặc sản Mekong.",
+      "address": "12 Lê Lợi, phường Cai Lậy, Đồng Tháp",
+      "is_verified": true
+    },
+    {
+      "name": "Vườn Tư Phát",
+      "phone": "0901111002",
+      "description": "Vườn sầu riêng Ri6 chuẩn xuất khẩu, bán buôn và lẻ.",
+      "address": "Xã Ngũ Hiệp, Đồng Tháp",
+      "is_verified": true
+    },
+    {
+      "name": "Đại lý Phân bón Thành",
+      "phone": "0904444001",
+      "description": "Đại lý cấp 1 phân bón Bình Điền, NPK, Urea và phân hữu cơ.",
+      "address": "88 Hùng Vương, phường Cai Lậy, Đồng Tháp",
+      "is_verified": false
+    }
+  ],
+  "services": [
+    {
+      "business": "Dịch vụ Nguyễn Văn An",
+      "category_slug": "muc-bun",
+      "name": "Múc bùn kênh mương",
+      "description": "Nạo vét kênh mương, ao hồ, ruộng lúa bằng máy múc mini.",
+      "price_note": "800.000 ₫/ca (8 giờ), có thể thương lượng"
+    },
+    {
+      "business": "Dịch vụ Nguyễn Văn An",
+      "category_slug": "sua-may-no",
+      "name": "Sửa máy nổ, máy bơm",
+      "description": "Sửa chữa, bảo dưỡng máy bơm nước, máy gặt, động cơ nổ.",
+      "price_note": "100.000–300.000 ₫ tuỳ lỗi"
+    },
+    {
+      "business": "Dịch vụ Trần Thị Bình",
+      "category_slug": "phun-thuoc",
+      "name": "Phun thuốc bằng drone",
+      "description": "Drone DJI Agras T40, tải 40 L, phủ 1 ha/15 phút.",
+      "price_note": "80.000 ₫/công (1.000 m²)"
+    },
+    {
+      "business": "Cơ sở Lê Văn Cường",
+      "category_slug": "muc-bun",
+      "name": "Múc bùn ao hồ",
+      "description": "Múc bùn cải tạo ao nuôi tôm, cá; ruộng lúa vùng trũng.",
+      "price_note": "Liên hệ báo giá"
+    },
+    {
+      "business": "Cơ sở Lê Văn Cường",
+      "category_slug": "phun-thuoc",
+      "name": "Phun thuốc thủ công",
+      "description": "Phun thuốc bảo vệ thực vật bằng bình đeo vai.",
+      "price_note": "50.000 ₫/công"
+    },
+    {
+      "business": "Cơ sở Lê Văn Cường",
+      "category_slug": "sua-may-no",
+      "name": "Sửa máy nông nghiệp",
+      "description": "Bảo dưỡng định kỳ và sửa chữa các loại máy nông nghiệp.",
+      "price_note": "150.000–500.000 ₫"
+    }
+  ],
+  "products": [
+    {
+      "business": "Cơ sở Năm Hùng",
+      "category_slug": "nong-san",
+      "name": "Gạo ST25",
+      "description": "Gạo ngon nhất thế giới, sản xuất tại Sóc Trăng. Hạt dài, thơm tự nhiên, cơm dẻo.",
+      "price": 28000,
+      "unit": "kg"
+    },
+    {
+      "business": "Vườn Tư Phát",
+      "category_slug": "nong-san",
+      "name": "Sầu riêng Ri6",
+      "description": "Sầu riêng Cai Lậy chín cây, múi vàng, hạt lép, ngọt béo, thu hoạch đúng mùa.",
+      "price": 85000,
+      "unit": "kg"
+    },
+    {
+      "business": "Cơ sở Năm Hùng",
+      "category_slug": "nong-san",
+      "name": "Xoài cát Hoà Lộc",
+      "description": "Xoài đặc sản Cái Bè, Đồng Tháp, trái lớn, thịt vàng, ít xơ, vị ngọt thanh.",
+      "price": 45000,
+      "unit": "kg"
+    },
+    {
+      "business": "Đại lý Phân bón Thành",
+      "category_slug": "thuoc-bvtv",
+      "name": "Thuốc trừ sâu Actara 25WG",
+      "description": "Thiamethoxam 25%, đặc trị rầy nâu và bọ trĩ trên lúa. Gói 100g.",
+      "price": 85000,
+      "unit": "gói"
+    },
+    {
+      "business": "Đại lý Phân bón Thành",
+      "category_slug": "thuoc-bvtv",
+      "name": "Thuốc diệt cỏ Sofit 300EC",
+      "description": "Pretilachlor 300g/L, kiểm soát cỏ dại ruộng lúa gieo sạ. Chai 1L.",
+      "price": 120000,
+      "unit": "chai"
+    },
+    {
+      "business": "Đại lý Phân bón Thành",
+      "category_slug": "phan-bon",
+      "name": "Phân NPK 16-16-8 Bình Điền",
+      "description": "Phân hỗn hợp cân đối dinh dưỡng cho lúa, bắp, rau màu. Bao 50 kg.",
+      "price": 420000,
+      "unit": "bao"
+    },
+    {
+      "business": "Đại lý Phân bón Thành",
+      "category_slug": "phan-bon",
+      "name": "Phân Urea 46%",
+      "description": "Phân đạm nguyên chất 46% N, dạng hạt trắng, tan nhanh, bao 50 kg.",
+      "price": 380000,
+      "unit": "bao"
+    },
+    {
+      "business": "Đại lý Phân bón Thành",
+      "category_slug": "phan-bon",
+      "name": "Phân hữu cơ vi sinh",
+      "description": "Phân ủ từ bã mía + vi khuẩn cố định đạm, cải tạo đất lâu dài. Bao 25 kg.",
+      "price": 180000,
+      "unit": "bao"
+    },
+    {
+      "business": "Đại lý Phân bón Thành",
+      "category_slug": "nong-cu",
+      "name": "Bình phun thuốc 16L",
+      "description": "Bình xịt tay có van điều áp, vòi phun xoay 360°, chịu hoá chất tốt.",
+      "price": 320000,
+      "unit": "cái"
+    },
+    {
+      "business": "Đại lý Phân bón Thành",
+      "category_slug": "nong-cu",
+      "name": "Liềm cắt lúa thép",
+      "description": "Lưỡi thép carbon, cán gỗ chắc, răng cưa sắc bén cho gặt thủ công.",
+      "price": 55000,
+      "unit": "cái"
+    }
+  ]
+}

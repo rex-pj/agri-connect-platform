@@ -11,9 +11,13 @@ use domain::{
     },
     repositories::catalogue_repository_trait::CatalogueRepositoryTrait,
 };
-use infrastructure::{catalogue_repository::CatalogueRepository, search::contains_sql};
+use infrastructure::{
+    catalogue_repository::CatalogueRepository,
+    search::{contains, contains_pattern, SearchColumn},
+};
 use integration_tests::{state, TestDb};
-use migration::search::{SEARCH_INDEXES, SERVICE_SEARCH_INDEXES};
+use migration::search::all_fold_indexes;
+use sea_orm::sea_query::{ColumnRef, Expr, Query};
 use sea_orm::{ConnectionTrait, Statement, TransactionTrait};
 
 async fn seeded() -> TestDb {
@@ -145,23 +149,41 @@ async fn the_search_query_uses_each_folded_index() {
     // for character, Postgres silently falls back to a full scan; this is the
     // test that notices.
     let t = seeded().await;
-    for (index, table, column) in SEARCH_INDEXES.iter().chain(SERVICE_SEARCH_INDEXES) {
+    let indexes = all_fold_indexes();
+    for column in [
+        SearchColumn::BusinessName,
+        SearchColumn::BusinessDescription,
+        SearchColumn::ProductName,
+        SearchColumn::ProductDescription,
+        SearchColumn::ServiceName,
+        SearchColumn::ServiceDescription,
+    ] {
+        let ColumnRef::TableColumn(table, name) = column.column_ref() else {
+            unreachable!("search columns are table-qualified")
+        };
+        let index = indexes
+            .iter()
+            .find(|i| {
+                i.table.to_string() == table.to_string() && i.column.to_string() == name.to_string()
+            })
+            .map(|i| i.name)
+            .unwrap();
         let txn = t.db.begin().await.unwrap();
         // Tiny test tables would make a seq scan cheaper; we are asking whether
         // the index CAN be used, not whether it is worth it here.
         txn.execute_unprepared("SET LOCAL enable_seqscan = off")
             .await
             .unwrap();
-        let sql = format!(
-            "EXPLAIN SELECT 1 FROM {table} WHERE {}",
-            contains_sql(table, column)
-        );
+        // The very condition the repositories build.
+        let query = Query::select()
+            .expr(Expr::val(1))
+            .from(table.clone())
+            .and_where(contains(column, &contains_pattern("phan bon")))
+            .to_owned();
+        let mut explain = txn.get_database_backend().build(&query);
+        explain.sql = format!("EXPLAIN {}", explain.sql);
         let plan: Vec<String> = txn
-            .query_all(Statement::from_sql_and_values(
-                txn.get_database_backend(),
-                &sql,
-                [infrastructure::search::contains_pattern("phan bon").into()],
-            ))
+            .query_all(explain)
             .await
             .unwrap()
             .iter()
@@ -170,7 +192,7 @@ async fn the_search_query_uses_each_folded_index() {
         txn.rollback().await.unwrap();
         assert!(
             plan.iter().any(|l| l.contains(index)),
-            "{table}.{column}: plan does not use {index}:\n{}",
+            "{column:?}: plan does not use {index}:\n{}",
             plan.join("\n")
         );
     }

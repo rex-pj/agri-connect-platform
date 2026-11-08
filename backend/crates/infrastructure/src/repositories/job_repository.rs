@@ -1,19 +1,31 @@
 //! Job posts. The geography column, the distance to a provider and the
-//! "live service in the category" rule meet in one statement each, so these
-//! are SQL statements with `$n` placeholders (as the inquiry repository's
-//! owner queries), not builder queries.
+//! "live service in the category" rule meet in one statement each, built
+//! with the query builder (`OFFERS_THE_JOB` is `offers_the_job`).
 
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use sea_orm::{ConnectionTrait, DatabaseConnection, DbErr, FromQueryResult, Statement, Value};
+use sea_orm::{
+    sea_query::{Expr, IntoIden, Order, Query, SelectStatement, SimpleExpr},
+    ColumnTrait, ConnectionTrait, DatabaseConnection, DbErr, EntityTrait, FromQueryResult,
+    PaginatorTrait, QueryFilter, StatementBuilder,
+};
 use tracing::error;
 
 use domain::{
+    constants::JOB_STATUS_OPEN,
     models::job::{JobForNotice, JobPost, JobRecipient, NewJobPost},
     repositories::job_repository_trait::JobRepositoryTrait,
     Error,
+};
+
+use crate::{
+    entities::{business, category, job_post, location, service, user},
+    sql::{
+        business_location, distance, geography_from_text, live_owner_on, notice_email, null_float,
+        within, Geo, QueryAs,
+    },
 };
 
 pub struct JobRepository {
@@ -32,31 +44,103 @@ impl JobRepository {
         }
     }
 
-    fn statement(&self, sql: &str, values: Vec<Value>) -> Statement {
-        Statement::from_sql_and_values(self.db.get_database_backend(), sql, values)
+    async fn rows<T: FromQueryResult, S: StatementBuilder>(
+        &self,
+        query: &S,
+        what: &'static str,
+    ) -> Result<Vec<T>, Error> {
+        let db = self.db.as_ref();
+        T::find_by_statement(db.get_database_backend().build(query))
+            .all(db)
+            .await
+            .map_err(Self::fail(what))
     }
 }
 
-/// A live service of business `b` in the job `j`'s category, in a shown
-/// category: what makes a provider one to tell.
-const OFFERS_THE_JOB: &str = "EXISTS (SELECT 1 FROM services s \
-     JOIN categories c ON c.id = s.category_id AND c.is_active \
-     WHERE s.business_id = b.id AND s.category_id = j.category_id \
-       AND s.is_active AND s.deleted_at IS NULL)";
+/// `"job_posts"."location"`.
+fn job_location() -> SimpleExpr {
+    Expr::col((job_post::Entity, Geo::Location)).into()
+}
 
-/// The columns of a `JobPost` row, from `job_posts j`, `categories c` and
-/// `locations l` (left-joined).
-const JOB_COLUMNS: &str = "j.id, j.category_id, c.name AS category, l.label AS area, \
-     j.description, j.requester_name, j.requester_phone, j.status, j.created_on";
+/// A live service of the business in the job's category, in a shown
+/// category: what makes a provider one to tell (OFFERS_THE_JOB).
+fn offers_the_job() -> SimpleExpr {
+    Expr::exists(
+        Query::select()
+            .expr(Expr::val(1))
+            .from(service::Entity)
+            .inner_join(
+                category::Entity,
+                Expr::col((category::Entity, category::Column::Id))
+                    .equals((service::Entity, service::Column::CategoryId))
+                    .and(Expr::col((category::Entity, category::Column::IsActive)).eq(true)),
+            )
+            .and_where(
+                Expr::col((service::Entity, service::Column::BusinessId))
+                    .equals((business::Entity, business::Column::Id)),
+            )
+            .and_where(
+                Expr::col((service::Entity, service::Column::CategoryId))
+                    .equals((job_post::Entity, job_post::Column::CategoryId)),
+            )
+            .and_where(Expr::col((service::Entity, service::Column::IsActive)).eq(true))
+            .and_where(Expr::col((service::Entity, service::Column::DeletedAt)).is_null())
+            .to_owned(),
+    )
+}
+
+/// The columns of a `JobRow`, from `job_posts` with its category and its
+/// area (left-joined); `distance_m` as given.
+fn job_select(distance_m: SimpleExpr) -> SelectStatement {
+    Query::select()
+        .column((job_post::Entity, job_post::Column::Id))
+        .column((job_post::Entity, job_post::Column::CategoryId))
+        .expr_as(
+            Expr::col((category::Entity, category::Column::Name)),
+            QueryAs::Category,
+        )
+        .expr_as(
+            Expr::col((location::Entity, location::Column::Label)),
+            QueryAs::Area,
+        )
+        .column((job_post::Entity, job_post::Column::Description))
+        .column((job_post::Entity, job_post::Column::RequesterName))
+        .column((job_post::Entity, job_post::Column::RequesterPhone))
+        .column((job_post::Entity, job_post::Column::Status))
+        .column((job_post::Entity, job_post::Column::CreatedOn))
+        .expr_as(distance_m, QueryAs::DistanceM)
+        .from(job_post::Entity)
+        .inner_join(
+            category::Entity,
+            Expr::col((category::Entity, category::Column::Id))
+                .equals((job_post::Entity, job_post::Column::CategoryId)),
+        )
+        .left_join(
+            location::Entity,
+            Expr::col((location::Entity, location::Column::Id))
+                .equals((job_post::Entity, job_post::Column::LocationId)),
+        )
+        .to_owned()
+}
+
+/// Newest first, id as the tiebreaker.
+fn newest_first(query: &mut SelectStatement) -> &mut SelectStatement {
+    query
+        .order_by((job_post::Entity, job_post::Column::CreatedOn), Order::Desc)
+        .order_by((job_post::Entity, job_post::Column::Id), Order::Desc)
+}
+
+/// The live business: switched on and not deleted.
+fn live_business() -> SimpleExpr {
+    Expr::col((business::Entity, business::Column::IsActive))
+        .eq(true)
+        .and(Expr::col((business::Entity, business::Column::DeletedAt)).is_null())
+        .and(Expr::expr(business_location()).is_not_null())
+}
 
 #[derive(FromQueryResult)]
 struct IdRow {
     id: i32,
-}
-
-#[derive(FromQueryResult)]
-struct CountRow {
-    n: i64,
 }
 
 #[derive(FromQueryResult)]
@@ -99,36 +183,42 @@ struct RecipientRow {
 #[async_trait]
 impl JobRepositoryTrait for JobRepository {
     async fn create(&self, job: &NewJobPost) -> Result<i32, Error> {
-        IdRow::find_by_statement(self.statement(
-            "INSERT INTO job_posts \
-                 (category_id, location_id, location, description, requester_name, requester_phone) \
-             VALUES ($1, $2, ST_GeographyFromText($3), $4, $5, $6) RETURNING id",
-            vec![
-                job.category_id.into(),
-                job.location_id.into(),
-                job.point_wkt.clone().into(),
-                job.description.clone().into(),
-                job.requester_name.clone().into(),
-                job.requester_phone.clone().into(),
-            ],
-        ))
-        .one(self.db.as_ref())
-        .await
-        .map_err(Self::fail("create"))?
-        .map(|r| r.id)
-        .ok_or_else(|| Error::internal("job insert returned no id"))
+        let insert = Query::insert()
+            .into_table(job_post::Entity)
+            .columns([
+                job_post::Column::CategoryId.into_iden(),
+                job_post::Column::LocationId.into_iden(),
+                Geo::Location.into_iden(),
+                job_post::Column::Description.into_iden(),
+                job_post::Column::RequesterName.into_iden(),
+                job_post::Column::RequesterPhone.into_iden(),
+            ])
+            .values([
+                Expr::val(job.category_id).into(),
+                Expr::val(job.location_id).into(),
+                geography_from_text(&job.point_wkt),
+                Expr::val(job.description.clone()).into(),
+                Expr::val(job.requester_name.clone()).into(),
+                Expr::val(job.requester_phone.clone()).into(),
+            ])
+            .map_err(|e| Error::internal(format!("job insert: {e}")))?
+            .returning_col(job_post::Column::Id)
+            .to_owned();
+        self.rows::<IdRow, _>(&insert, "create")
+            .await?
+            .first()
+            .map(|r| r.id)
+            .ok_or_else(|| Error::internal("job insert returned no id"))
     }
 
     async fn count_open_by_phone(&self, phone: &str, since: DateTime<Utc>) -> Result<u64, Error> {
-        let row = CountRow::find_by_statement(self.statement(
-            "SELECT COUNT(*) AS n FROM job_posts \
-             WHERE requester_phone = $1 AND status = 'open' AND created_on >= $2",
-            vec![phone.into(), since.into()],
-        ))
-        .one(self.db.as_ref())
-        .await
-        .map_err(Self::fail("count_open_by_phone"))?;
-        Ok(row.map_or(0, |r| u64::try_from(r.n).unwrap_or(0)))
+        job_post::Entity::find()
+            .filter(job_post::Column::RequesterPhone.eq(phone))
+            .filter(job_post::Column::Status.eq(JOB_STATUS_OPEN))
+            .filter(job_post::Column::CreatedOn.gte(since))
+            .count(self.db.as_ref())
+            .await
+            .map_err(Self::fail("count_open_by_phone"))
     }
 
     async fn find_for_notice(
@@ -137,40 +227,43 @@ impl JobRepositoryTrait for JobRepository {
         radius_m: f64,
         limit: i64,
     ) -> Result<Option<JobForNotice>, Error> {
-        let db = self.db.as_ref();
-        let Some(job) = JobRow::find_by_statement(self.statement(
-            &format!(
-                "SELECT {JOB_COLUMNS}, NULL::float8 AS distance_m FROM job_posts j \
-                 JOIN categories c ON c.id = j.category_id \
-                 LEFT JOIN locations l ON l.id = j.location_id WHERE j.id = $1"
-            ),
-            vec![id.into()],
-        ))
-        .one(db)
-        .await
-        .map_err(Self::fail("find_for_notice"))?
+        let Some(job) = self
+            .rows::<JobRow, _>(
+                &*job_select(null_float())
+                    .and_where(Expr::col((job_post::Entity, job_post::Column::Id)).eq(id)),
+                "find_for_notice",
+            )
+            .await?
+            .into_iter()
+            .next()
         else {
             return Ok(None);
         };
         // The managing account's address, if it is live, else the business's.
-        let recipients = RecipientRow::find_by_statement(self.statement(
-            &format!(
-                "SELECT b.name AS business_name, \
-                        COALESCE(u.email, NULLIF(TRIM(b.email), '')) AS email \
-                 FROM job_posts j \
-                 JOIN businesses b ON b.is_active AND b.deleted_at IS NULL AND NOT b.is_demo \
-                      AND b.location IS NOT NULL \
-                      AND ST_DWithin(b.location, j.location, $2) \
-                 LEFT JOIN users u ON u.id = b.owner_id AND u.is_active AND u.deleted_at IS NULL \
-                 WHERE j.id = $1 AND {OFFERS_THE_JOB} \
-                   AND COALESCE(u.email, NULLIF(TRIM(b.email), '')) IS NOT NULL \
-                 ORDER BY ST_Distance(b.location, j.location), b.id LIMIT $3"
-            ),
-            vec![id.into(), radius_m.into(), limit.into()],
-        ))
-        .all(db)
-        .await
-        .map_err(Self::fail("recipients"))?;
+        let recipients = Query::select()
+            .expr_as(
+                Expr::col((business::Entity, business::Column::Name)),
+                QueryAs::BusinessName,
+            )
+            .expr_as(notice_email(), QueryAs::Email)
+            .from(job_post::Entity)
+            .inner_join(
+                business::Entity,
+                live_business()
+                    .and(Expr::col((business::Entity, business::Column::IsDemo)).eq(false))
+                    .and(within(business_location(), job_location(), radius_m)),
+            )
+            .left_join(user::Entity, live_owner_on())
+            .and_where(Expr::col((job_post::Entity, job_post::Column::Id)).eq(id))
+            .and_where(offers_the_job())
+            .and_where(Expr::expr(notice_email()).is_not_null())
+            .order_by_expr(distance(business_location(), job_location()), Order::Asc)
+            .order_by((business::Entity, business::Column::Id), Order::Asc)
+            .limit(u64::try_from(limit).unwrap_or(0))
+            .to_owned();
+        let recipients = self
+            .rows::<RecipientRow, _>(&recipients, "recipients")
+            .await?;
         Ok(Some(JobForNotice {
             category: job.category,
             area: job.area,
@@ -194,63 +287,49 @@ impl JobRepositoryTrait for JobRepository {
         radius_m: f64,
         limit: i64,
     ) -> Result<Vec<JobPost>, Error> {
-        JobRow::find_by_statement(self.statement(
-            &format!(
-                "SELECT {JOB_COLUMNS}, ST_Distance(j.location, b.location) AS distance_m \
-                 FROM job_posts j \
-                 JOIN businesses b ON b.owner_id = $1 AND b.is_active AND b.deleted_at IS NULL \
-                      AND b.location IS NOT NULL \
-                 JOIN categories c ON c.id = j.category_id \
-                 LEFT JOIN locations l ON l.id = j.location_id \
-                 WHERE j.status = 'open' AND j.created_on >= $2 \
-                   AND ST_DWithin(j.location, b.location, $3) AND {OFFERS_THE_JOB} \
-                 ORDER BY j.created_on DESC, j.id DESC LIMIT $4"
-            ),
-            vec![
-                owner_user.into(),
-                since.into(),
-                radius_m.into(),
-                limit.into(),
-            ],
-        ))
-        .all(self.db.as_ref())
-        .await
-        .map(|rows| rows.into_iter().map(JobPost::from).collect())
-        .map_err(Self::fail("open_near_owner"))
+        let mut query = job_select(distance(job_location(), business_location()));
+        query
+            .inner_join(
+                business::Entity,
+                Expr::col((business::Entity, business::Column::OwnerId))
+                    .eq(owner_user)
+                    .and(live_business()),
+            )
+            .and_where(Expr::col((job_post::Entity, job_post::Column::Status)).eq(JOB_STATUS_OPEN))
+            .and_where(Expr::col((job_post::Entity, job_post::Column::CreatedOn)).gte(since))
+            .and_where(within(job_location(), business_location(), radius_m))
+            .and_where(offers_the_job())
+            .limit(u64::try_from(limit).unwrap_or(0));
+        self.rows::<JobRow, _>(&*newest_first(&mut query), "open_near_owner")
+            .await
+            .map(|rows| rows.into_iter().map(JobPost::from).collect())
     }
 
     async fn list_admin(&self, limit: i64, offset: i64) -> Result<(Vec<JobPost>, i64), Error> {
-        let db = self.db.as_ref();
-        let total = CountRow::find_by_statement(
-            self.statement("SELECT COUNT(*) AS n FROM job_posts", vec![]),
-        )
-        .one(db)
-        .await
-        .map_err(Self::fail("count"))?
-        .map_or(0, |r| r.n);
-        let rows = JobRow::find_by_statement(self.statement(
-            &format!(
-                "SELECT {JOB_COLUMNS}, NULL::float8 AS distance_m FROM job_posts j \
-                 JOIN categories c ON c.id = j.category_id \
-                 LEFT JOIN locations l ON l.id = j.location_id \
-                 ORDER BY j.created_on DESC, j.id DESC LIMIT $1 OFFSET $2"
-            ),
-            vec![limit.into(), offset.into()],
+        let total = job_post::Entity::find()
+            .count(self.db.as_ref())
+            .await
+            .map_err(Self::fail("count"))?;
+        let mut query = job_select(null_float());
+        query
+            .limit(u64::try_from(limit).unwrap_or(0))
+            .offset(u64::try_from(offset).unwrap_or(0));
+        let rows = self
+            .rows::<JobRow, _>(&*newest_first(&mut query), "list_admin")
+            .await?;
+        Ok((
+            rows.into_iter().map(JobPost::from).collect(),
+            i64::try_from(total).unwrap_or(i64::MAX),
         ))
-        .all(db)
-        .await
-        .map_err(Self::fail("list_admin"))?;
-        Ok((rows.into_iter().map(JobPost::from).collect(), total))
     }
 
     async fn set_status(&self, id: i32, status: &str) -> Result<bool, Error> {
-        self.db
-            .execute(self.statement(
-                "UPDATE job_posts SET status = $2 WHERE id = $1",
-                vec![id.into(), status.into()],
-            ))
+        job_post::Entity::update_many()
+            .col_expr(job_post::Column::Status, Expr::value(status.to_owned()))
+            .filter(job_post::Column::Id.eq(id))
+            .exec(self.db.as_ref())
             .await
-            .map(|r| r.rows_affected() > 0)
+            .map(|r| r.rows_affected > 0)
             .map_err(Self::fail("set_status"))
     }
 }

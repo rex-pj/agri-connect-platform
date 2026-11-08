@@ -1,9 +1,9 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    sea_query::Expr, ColumnTrait, ConnectionTrait, DatabaseConnection, DbErr, EntityTrait,
-    FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait,
-    RelationTrait, Set, Statement,
+    sea_query::{Asterisk, Expr, Func},
+    ColumnTrait, DatabaseConnection, DbErr, EntityTrait, FromQueryResult, JoinType, PaginatorTrait,
+    QueryFilter, QueryOrder, QuerySelect, QueryTrait, RelationTrait, Select, Set,
 };
 use std::sync::Arc;
 use tracing::error;
@@ -13,14 +13,19 @@ use domain::{
     repositories::inquiry_repository_trait::InquiryRepositoryTrait,
 };
 
-use domain::{constants::INQUIRY_STATUSES_REVIEWABLE, Error, ErrorCode};
+use domain::{
+    constants::{INQUIRY_STATUSES_REVIEWABLE, INQUIRY_STATUS_NEW},
+    Error, ErrorCode,
+};
 
 use crate::{
     db_types::DateTimeWithTimeZone,
     entities::{
         business,
         inquiry::{self, Entity as Inquiry},
+        service, user,
     },
+    sql::{businesses_of, live_owner_on, notice_email, username_of, QueryAs},
 };
 
 pub struct InquiryRepository {
@@ -113,7 +118,7 @@ impl InquiryRepositoryTrait for InquiryRepository {
             .select_only()
             .column(inquiry::Column::Id)
             .column(inquiry::Column::BusinessId)
-            .column_as(business::Column::Name, "business_name")
+            .column_as(business::Column::Name, QueryAs::BusinessName)
             .column(inquiry::Column::RequesterName)
             .column(inquiry::Column::RequesterPhone)
             .column(inquiry::Column::Topic)
@@ -121,10 +126,8 @@ impl InquiryRepositoryTrait for InquiryRepository {
             .column(inquiry::Column::CreatedOn)
             .column(inquiry::Column::UpdatedOn)
             .expr_as(
-                Expr::cust(
-                    "(SELECT u.username FROM users u WHERE u.id = \"inquiries\".updated_by)",
-                ),
-                "updated_by_name",
+                username_of((inquiry::Entity, inquiry::Column::UpdatedBy)),
+                QueryAs::UpdatedByName,
             )
             .join(JoinType::InnerJoin, inquiry::Relation::Business.def())
             .order_by_desc(inquiry::Column::CreatedOn)
@@ -162,7 +165,7 @@ impl InquiryRepositoryTrait for InquiryRepository {
             .select_only()
             .column(inquiry::Column::Id)
             .column(inquiry::Column::BusinessId)
-            .column_as(business::Column::Name, "business_name")
+            .column_as(business::Column::Name, QueryAs::BusinessName)
             .column(inquiry::Column::RequesterName)
             .column(inquiry::Column::RequesterPhone)
             .column(inquiry::Column::Topic)
@@ -170,10 +173,8 @@ impl InquiryRepositoryTrait for InquiryRepository {
             .column(inquiry::Column::CreatedOn)
             .column(inquiry::Column::UpdatedOn)
             .expr_as(
-                Expr::cust(
-                    "(SELECT u.username FROM users u WHERE u.id = \"inquiries\".updated_by)",
-                ),
-                "updated_by_name",
+                username_of((inquiry::Entity, inquiry::Column::UpdatedBy)),
+                QueryAs::UpdatedByName,
             )
             .join(JoinType::InnerJoin, inquiry::Relation::Business.def())
             .into_model::<InquiryAdminRow>()
@@ -220,24 +221,24 @@ impl InquiryRepositoryTrait for InquiryRepository {
 
     async fn find_for_notice(&self, id: i32) -> Result<Option<InquiryForNotice>, Error> {
         // The managing account's address, if it is live, else the business's.
-        let row = InquiryNoticeRow::find_by_statement(Statement::from_sql_and_values(
-            self.db.get_database_backend(),
-            "SELECT b.name AS business_name, \
-                    COALESCE(u.email, NULLIF(TRIM(b.email), '')) AS recipient_email, \
-                    i.requester_name, i.requester_phone, i.topic, i.note \
-             FROM inquiries i \
-             JOIN businesses b ON b.id = i.business_id \
-             LEFT JOIN users u ON u.id = b.owner_id \
-                  AND u.is_active AND u.deleted_at IS NULL \
-             WHERE i.id = $1",
-            [id.into()],
-        ))
-        .one(self.db.as_ref())
-        .await
-        .map_err(|e| {
-            error!("inquiry find_for_notice error: {e}");
-            Error::internal("Failed to load inquiry.")
-        })?;
+        let mut query = Inquiry::find_by_id(id)
+            .select_only()
+            .column_as(business::Column::Name, QueryAs::BusinessName)
+            .expr_as(notice_email(), QueryAs::RecipientEmail)
+            .column(inquiry::Column::RequesterName)
+            .column(inquiry::Column::RequesterPhone)
+            .column(inquiry::Column::Topic)
+            .column(inquiry::Column::Note)
+            .join(JoinType::InnerJoin, inquiry::Relation::Business.def());
+        QueryTrait::query(&mut query).left_join(user::Entity, live_owner_on());
+        let row = query
+            .into_model::<InquiryNoticeRow>()
+            .one(self.db.as_ref())
+            .await
+            .map_err(|e| {
+                error!("inquiry find_for_notice error: {e}");
+                Error::internal("Failed to load inquiry.")
+            })?;
         Ok(row.map(|r| InquiryForNotice {
             business_name: r.business_name,
             recipient_email: r.recipient_email,
@@ -249,17 +250,21 @@ impl InquiryRepositoryTrait for InquiryRepository {
     }
 
     async fn count_for_owner(&self, owner_user: i32) -> Result<(i64, i64), Error> {
-        let row = OwnerCountsRow::find_by_statement(Statement::from_sql_and_values(
-            self.db.get_database_backend(),
-            format!(
-                "SELECT count(*) AS total, count(*) FILTER (WHERE i.status = 'new') AS fresh \
-                 {OWNED_INQUIRIES}"
-            ),
-            [owner_user.into()],
-        ))
-        .one(self.db.as_ref())
-        .await
-        .map_err(owner_error("count_for_owner"))?;
+        let row = owned_inquiries(owner_user)
+            .select_only()
+            .expr_as(Func::count(Expr::col(Asterisk)), QueryAs::Total)
+            // COUNT skips the NULL the CASE gives every other status.
+            .expr_as(
+                Func::count(Expr::case(
+                    inquiry::Column::Status.eq(INQUIRY_STATUS_NEW),
+                    Expr::val(1),
+                )),
+                QueryAs::Fresh,
+            )
+            .into_model::<OwnerCountsRow>()
+            .one(self.db.as_ref())
+            .await
+            .map_err(owner_error("count_for_owner"))?;
         Ok(row.map_or((0, 0), |r| (r.total, r.fresh)))
     }
 
@@ -269,19 +274,24 @@ impl InquiryRepositoryTrait for InquiryRepository {
         limit: i64,
         offset: i64,
     ) -> Result<Vec<InquiryForOwner>, Error> {
-        let rows = InquiryForOwnerRow::find_by_statement(Statement::from_sql_and_values(
-            self.db.get_database_backend(),
-            format!(
-                "SELECT i.id, s.name AS service_name, i.topic, i.requester_name, \
-                        i.requester_phone, i.note, i.status, i.created_on \
-                 {OWNED_INQUIRIES} \
-                 ORDER BY i.created_on DESC, i.id DESC LIMIT $2 OFFSET $3"
-            ),
-            [owner_user.into(), limit.into(), offset.into()],
-        ))
-        .all(self.db.as_ref())
-        .await
-        .map_err(owner_error("list_for_owner"))?;
+        let rows = owned_inquiries(owner_user)
+            .select_only()
+            .column(inquiry::Column::Id)
+            .column_as(service::Column::Name, QueryAs::ServiceName)
+            .column(inquiry::Column::Topic)
+            .column(inquiry::Column::RequesterName)
+            .column(inquiry::Column::RequesterPhone)
+            .column(inquiry::Column::Note)
+            .column(inquiry::Column::Status)
+            .column(inquiry::Column::CreatedOn)
+            .order_by_desc(inquiry::Column::CreatedOn)
+            .order_by_desc(inquiry::Column::Id)
+            .limit(u64::try_from(limit).unwrap_or(0))
+            .offset(u64::try_from(offset).unwrap_or(0))
+            .into_model::<InquiryForOwnerRow>()
+            .all(self.db.as_ref())
+            .await
+            .map_err(owner_error("list_for_owner"))?;
         Ok(rows
             .into_iter()
             .map(|r| InquiryForOwner {
@@ -304,17 +314,15 @@ impl InquiryRepositoryTrait for InquiryRepository {
         status: &str,
     ) -> Result<bool, Error> {
         // The ownership check is in the same statement as the change.
-        self.db
-            .execute(Statement::from_sql_and_values(
-                self.db.get_database_backend(),
-                "UPDATE inquiries i SET status = $3, updated_on = now(), updated_by = $2 \
-                 FROM businesses b \
-                 WHERE i.id = $1 AND b.id = i.business_id \
-                   AND b.owner_id = $2 AND b.deleted_at IS NULL",
-                [id.into(), owner_user.into(), status.into()],
-            ))
+        Inquiry::update_many()
+            .col_expr(inquiry::Column::Status, Expr::value(status.to_owned()))
+            .col_expr(inquiry::Column::UpdatedOn, Expr::current_timestamp().into())
+            .col_expr(inquiry::Column::UpdatedBy, Expr::value(Some(owner_user)))
+            .filter(inquiry::Column::Id.eq(id))
+            .filter(inquiry::Column::BusinessId.in_subquery(businesses_of(owner_user)))
+            .exec(self.db.as_ref())
             .await
-            .map(|r| r.rows_affected() > 0)
+            .map(|r| r.rows_affected > 0)
             .map_err(|e| {
                 error!("inquiry update_status_for_owner error: {e}");
                 Error::internal("Failed to update status.")
@@ -350,12 +358,19 @@ struct InquiryForOwnerRow {
     created_on: DateTimeWithTimeZone,
 }
 
-/// Inquiries to the live business `$1` owns, with the service each names.
-/// Shared by the count and the list so the two can never disagree.
-const OWNED_INQUIRIES: &str = "FROM inquiries i \
-     JOIN businesses b ON b.id = i.business_id AND b.deleted_at IS NULL \
-     LEFT JOIN services s ON s.id = i.service_id \
-     WHERE b.owner_id = $1";
+/// Inquiries to the live business `owner_user` owns, with the service each
+/// names (left-joined). Shared by the count and the list so the two can
+/// never disagree.
+fn owned_inquiries(owner_user: i32) -> Select<Inquiry> {
+    let mut query =
+        Inquiry::find().filter(inquiry::Column::BusinessId.in_subquery(businesses_of(owner_user)));
+    QueryTrait::query(&mut query).left_join(
+        service::Entity,
+        Expr::col((service::Entity, service::Column::Id))
+            .equals((inquiry::Entity, inquiry::Column::ServiceId)),
+    );
+    query
+}
 
 fn owner_error(what: &'static str) -> impl Fn(DbErr) -> Error {
     move |e| {

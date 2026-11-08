@@ -1,7 +1,8 @@
 use async_trait::async_trait;
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
-    Statement, TransactionTrait,
+    sea_query::{Expr, OnConflict, Query},
+    ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter,
+    QueryOrder, QuerySelect, TransactionTrait,
 };
 use std::sync::Arc;
 use tracing::error;
@@ -15,7 +16,11 @@ use domain::{
 
 use domain::Error;
 
-use crate::entities::role::{self, Entity as Role};
+use crate::entities::{
+    permission,
+    role::{self, Entity as Role},
+    role_permission,
+};
 
 pub struct RoleRepository {
     db: Arc<DatabaseConnection>,
@@ -102,44 +107,82 @@ impl RoleGrantsRepositoryTrait for RoleRepository {
         let fail =
             |e: sea_orm::DbErr| Error::internal(format!("role grants (role {role_id}): {e}"));
         let backend = self.db.get_database_backend();
-        let keys = keys.to_vec();
+        // The ids of the permissions `keys` names.
+        let named = Query::select()
+            .column(permission::Column::Id)
+            .from(permission::Entity)
+            .and_where(permission::Column::Code.is_in(keys.iter().cloned()))
+            .to_owned();
         // One transaction: a reader sees the old grants or the new ones,
         // never a role with half its permissions removed.
         let txn = self.db.begin().await.map_err(fail)?;
-        let removed: Vec<String> = txn
-            .query_all(Statement::from_sql_and_values(
-                backend,
-                "WITH gone AS (
-                     DELETE FROM role_permissions rp USING permissions p
-                     WHERE rp.permission_id = p.id AND rp.role_id = $1
-                       AND NOT (p.code = ANY($2))
-                     RETURNING p.code)
-                 SELECT code FROM gone ORDER BY code",
-                [role_id.into(), keys.clone().into()],
-            ))
+        let gone = Query::delete()
+            .from_table(role_permission::Entity)
+            .and_where(role_permission::Column::RoleId.eq(role_id))
+            .and_where(role_permission::Column::PermissionId.not_in_subquery(named.clone()))
+            .returning_col(role_permission::Column::PermissionId)
+            .to_owned();
+        let gone = GrantRow::find_by_statement(backend.build(&gone))
+            .all(&txn)
             .await
-            .map_err(fail)?
-            .iter()
-            .filter_map(|r| r.try_get::<String>("", "code").ok())
-            .collect();
-        let added: Vec<String> = txn
-            .query_all(Statement::from_sql_and_values(
-                backend,
-                "WITH new AS (
-                     INSERT INTO role_permissions (role_id, permission_id, granted_by)
-                     SELECT $1, p.id, $3 FROM permissions p WHERE p.code = ANY($2)
-                     ON CONFLICT (role_id, permission_id) DO NOTHING
-                     RETURNING permission_id)
-                 SELECT p.code FROM new JOIN permissions p ON p.id = new.permission_id
-                 ORDER BY p.code",
-                [role_id.into(), keys.into(), granted_by.into()],
-            ))
+            .map_err(fail)?;
+        let new = Query::insert()
+            .into_table(role_permission::Entity)
+            .columns([
+                role_permission::Column::RoleId,
+                role_permission::Column::PermissionId,
+                role_permission::Column::GrantedBy,
+            ])
+            .select_from(
+                Query::select()
+                    .expr(Expr::val(role_id))
+                    .column(permission::Column::Id)
+                    .expr(Expr::val(granted_by))
+                    .from(permission::Entity)
+                    .and_where(permission::Column::Code.is_in(keys.iter().cloned()))
+                    .to_owned(),
+            )
+            .map_err(|e| Error::internal(format!("role grants (role {role_id}): {e}")))?
+            .on_conflict(
+                OnConflict::columns([
+                    role_permission::Column::RoleId,
+                    role_permission::Column::PermissionId,
+                ])
+                .do_nothing()
+                .to_owned(),
+            )
+            .returning_col(role_permission::Column::PermissionId)
+            .to_owned();
+        let new = GrantRow::find_by_statement(backend.build(&new))
+            .all(&txn)
             .await
-            .map_err(fail)?
-            .iter()
-            .filter_map(|r| r.try_get::<String>("", "code").ok())
-            .collect();
+            .map_err(fail)?;
+        let removed = codes_of(&txn, gone).await.map_err(fail)?;
+        let added = codes_of(&txn, new).await.map_err(fail)?;
         txn.commit().await.map_err(fail)?;
         Ok(GrantChanges { added, removed })
     }
+}
+
+#[derive(FromQueryResult)]
+struct GrantRow {
+    permission_id: i32,
+}
+
+/// The codes of the permissions in `rows`, sorted.
+async fn codes_of<C: ConnectionTrait>(
+    db: &C,
+    rows: Vec<GrantRow>,
+) -> Result<Vec<String>, sea_orm::DbErr> {
+    if rows.is_empty() {
+        return Ok(Vec::new());
+    }
+    permission::Entity::find()
+        .select_only()
+        .column(permission::Column::Code)
+        .filter(permission::Column::Id.is_in(rows.into_iter().map(|r| r.permission_id)))
+        .order_by_asc(permission::Column::Code)
+        .into_tuple::<String>()
+        .all(db)
+        .await
 }

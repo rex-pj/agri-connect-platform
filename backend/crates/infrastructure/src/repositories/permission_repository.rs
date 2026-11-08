@@ -8,12 +8,18 @@ use domain::{
     Error,
 };
 use sea_orm::{
-    ConnectionTrait, DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QueryOrder, Statement,
+    sea_query::{Expr, Query, SelectStatement},
+    ColumnTrait, DatabaseConnection, DbErr, EntityTrait, FromQueryResult, JoinType, PaginatorTrait,
+    QueryFilter, QueryOrder, QuerySelect, RelationTrait,
 };
 
 use crate::{
     db_types::DateTimeWithTimeZone,
-    entities::permission::{self, Entity as Permission},
+    entities::{
+        permission::{self, Entity as Permission},
+        role, role_permission, user,
+    },
+    sql::QueryAs,
 };
 
 pub struct PermissionRepository {
@@ -25,39 +31,19 @@ impl PermissionRepository {
         Self { db }
     }
 
-    async fn query_models(
+    /// The permissions whose id `ids` selects, by code.
+    async fn permissions_in(
         &self,
-        sql: &str,
-        value: i32,
-        what: &str,
+        ids: SelectStatement,
+        what: &'static str,
     ) -> Result<Vec<PermissionModel>, Error> {
-        let db = self.db.as_ref();
-        PermissionRow::find_by_statement(Statement::from_sql_and_values(
-            db.get_database_backend(),
-            sql,
-            [value.into()],
-        ))
-        .all(db)
-        .await
-        .map(|rows| rows.into_iter().map(PermissionModel::from).collect())
-        .map_err(|e| db_error(what, e))
-    }
-}
-
-#[derive(FromQueryResult)]
-struct PermissionRow {
-    id: i32,
-    code: String,
-    name: String,
-}
-
-impl From<PermissionRow> for PermissionModel {
-    fn from(r: PermissionRow) -> Self {
-        Self {
-            id: r.id,
-            code: r.code,
-            name: r.name,
-        }
+        Permission::find()
+            .filter(permission::Column::Id.in_subquery(ids))
+            .order_by_asc(permission::Column::Code)
+            .all(self.db.as_ref())
+            .await
+            .map(|rows| rows.into_iter().map(to_model).collect())
+            .map_err(|e| db_error(what, e))
     }
 }
 
@@ -70,13 +56,49 @@ struct ActorRow {
     sessions_valid_after: Option<DateTimeWithTimeZone>,
 }
 
-#[derive(FromQueryResult)]
-struct ExistsRow {
-    granted: bool,
+fn to_model(r: permission::Model) -> PermissionModel {
+    PermissionModel {
+        id: r.id,
+        code: r.code,
+        name: r.name,
+    }
 }
 
 fn db_error(what: &str, e: DbErr) -> Error {
     Error::internal(format!("permission {what}: {e}"))
+}
+
+/// The ids of the permissions granted to `role_id`.
+fn granted_to_role(role_id: i32) -> SelectStatement {
+    Query::select()
+        .column(role_permission::Column::PermissionId)
+        .from(role_permission::Entity)
+        .and_where(role_permission::Column::RoleId.eq(role_id))
+        .to_owned()
+}
+
+/// The ids of the permissions `user_id` holds through its role, while that
+/// role is active.
+fn granted_to_user(user_id: i32) -> SelectStatement {
+    Query::select()
+        .column((
+            role_permission::Entity,
+            role_permission::Column::PermissionId,
+        ))
+        .from(role_permission::Entity)
+        .inner_join(
+            role::Entity,
+            Expr::col((role::Entity, role::Column::Id))
+                .equals((role_permission::Entity, role_permission::Column::RoleId))
+                .and(Expr::col((role::Entity, role::Column::IsActive)).eq(true)),
+        )
+        .inner_join(
+            user::Entity,
+            Expr::col((user::Entity, user::Column::RoleId))
+                .equals((role::Entity, role::Column::Id)),
+        )
+        .and_where(Expr::col((user::Entity, user::Column::Id)).eq(user_id))
+        .to_owned()
 }
 
 #[async_trait]
@@ -86,81 +108,49 @@ impl PermissionRepositoryTrait for PermissionRepository {
             .order_by_asc(permission::Column::Code)
             .all(self.db.as_ref())
             .await
-            .map(|rows| {
-                rows.into_iter()
-                    .map(|r| PermissionModel {
-                        id: r.id,
-                        code: r.code,
-                        name: r.name,
-                    })
-                    .collect()
-            })
+            .map(|rows| rows.into_iter().map(to_model).collect())
             .map_err(|e| db_error("list_all", e))
     }
 
     async fn list_for_role(&self, role_id: i32) -> Result<Vec<PermissionModel>, Error> {
-        self.query_models(
-            "SELECT p.id, p.code, p.name
-             FROM permissions p
-             JOIN role_permissions rp ON rp.permission_id = p.id
-             WHERE rp.role_id = $1
-             ORDER BY p.code",
-            role_id,
-            "list_for_role",
-        )
-        .await
+        self.permissions_in(granted_to_role(role_id), "list_for_role")
+            .await
     }
 
     async fn list_for_user(&self, user_id: i32) -> Result<Vec<PermissionModel>, Error> {
-        self.query_models(
-            "SELECT p.id, p.code, p.name
-             FROM users u
-             JOIN roles r             ON r.id = u.role_id AND r.is_active
-             JOIN role_permissions rp ON rp.role_id = r.id
-             JOIN permissions p       ON p.id = rp.permission_id
-             WHERE u.id = $1
-             ORDER BY p.code",
-            user_id,
-            "list_for_user",
-        )
-        .await
+        self.permissions_in(granted_to_user(user_id), "list_for_user")
+            .await
     }
 
     async fn has_permission(&self, user_id: i32, key: &str) -> Result<bool, Error> {
-        let db = self.db.as_ref();
-        let row = ExistsRow::find_by_statement(Statement::from_sql_and_values(
-            db.get_database_backend(),
-            "SELECT EXISTS (
-                 SELECT 1
-                 FROM users u
-                 JOIN roles r             ON r.id = u.role_id AND r.is_active
-                 JOIN role_permissions rp ON rp.role_id = r.id
-                 JOIN permissions p       ON p.id = rp.permission_id
-                 WHERE u.id = $1 AND p.code = $2
-             ) AS granted",
-            [user_id.into(), key.into()],
-        ))
-        .one(db)
-        .await
-        .map_err(|e| db_error("has_permission", e))?;
-
-        Ok(row.is_some_and(|r| r.granted))
+        Permission::find()
+            .filter(permission::Column::Id.in_subquery(granted_to_user(user_id)))
+            .filter(permission::Column::Code.eq(key))
+            .count(self.db.as_ref())
+            .await
+            .map(|n| n > 0)
+            .map_err(|e| db_error("has_permission", e))
     }
 
     async fn find_actor(&self, user_id: i32) -> Result<Option<ActorRecord>, Error> {
-        let db = self.db.as_ref();
-        let Some(user) = ActorRow::find_by_statement(Statement::from_sql_and_values(
-            db.get_database_backend(),
-            "SELECT u.id, u.username, r.code AS role_code,
-                    (u.is_active AND u.deleted_at IS NULL) AS is_active,
-                    u.sessions_valid_after
-             FROM users u JOIN roles r ON r.id = u.role_id
-             WHERE u.id = $1",
-            [user_id.into()],
-        ))
-        .one(db)
-        .await
-        .map_err(|e| db_error("find_actor", e))?
+        let Some(user) = user::Entity::find_by_id(user_id)
+            .select_only()
+            .column(user::Column::Id)
+            .column(user::Column::Username)
+            .column_as(role::Column::Code, QueryAs::RoleCode)
+            // A deleted account is an inactive one.
+            .expr_as(
+                Expr::col((user::Entity, user::Column::IsActive))
+                    .eq(true)
+                    .and(Expr::col((user::Entity, user::Column::DeletedAt)).is_null()),
+                user::Column::IsActive,
+            )
+            .column(user::Column::SessionsValidAfter)
+            .join(JoinType::InnerJoin, user::Relation::Role.def())
+            .into_model::<ActorRow>()
+            .one(self.db.as_ref())
+            .await
+            .map_err(|e| db_error("find_actor", e))?
         else {
             return Ok(None);
         };

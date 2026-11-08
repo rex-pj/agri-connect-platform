@@ -1,10 +1,9 @@
 use async_trait::async_trait;
 use chrono::Utc;
-use sea_orm::sea_query::{Alias, Expr, Func, Order, Query, SimpleExpr, WindowStatement};
+use sea_orm::sea_query::{Expr, Func, Order, SimpleExpr, WindowStatement};
 use sea_orm::{
     ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, JoinType, PaginatorTrait,
     QueryFilter, QueryOrder, QuerySelect, QueryTrait, RelationTrait, Select, Set, TransactionTrait,
-    Value,
 };
 use std::sync::Arc;
 use tracing::error;
@@ -33,6 +32,10 @@ use crate::{
     search::{
         search_condition, text_contains, ADMIN_SERVICE_SEARCH_COLUMNS,
         SERVICE_LISTING_SEARCH_COLUMNS,
+    },
+    sql::{
+        business_location, businesses_of, distance, geography_from_text, output, within, DbFn,
+        QueryAs,
     },
 };
 
@@ -85,10 +88,10 @@ fn base_admin_service_query() -> sea_orm::Select<ServiceEntity> {
         .column(service::Column::Name)
         .column(service::Column::Description)
         .column(service::Column::PriceNote)
-        .column_as(category::Column::Name, "category")
+        .column_as(category::Column::Name, QueryAs::Category)
         .column(service::Column::CategoryId)
         .column(service::Column::BusinessId)
-        .column_as(business::Column::Name, "business_name")
+        .column_as(business::Column::Name, QueryAs::BusinessName)
         .column(service::Column::IsActive)
         .column(service::Column::ImageFileId)
         .column(service::Column::CreatedBy)
@@ -108,9 +111,9 @@ fn base_provider_service_query() -> sea_orm::Select<ServiceEntity> {
         .column(service::Column::Name)
         .column(service::Column::Description)
         .column(service::Column::PriceNote)
-        .column_as(category::Column::Name, "category")
+        .column_as(category::Column::Name, QueryAs::Category)
         .column(service::Column::CategoryId)
-        .column_as(category::Column::Icon, "category_icon")
+        .column_as(category::Column::Icon, QueryAs::CategoryIcon)
         .column(service::Column::IsActive)
         .column(service::Column::ImageFileId)
         .column(service::Column::CreatedOn)
@@ -121,14 +124,7 @@ fn base_provider_service_query() -> sea_orm::Select<ServiceEntity> {
 /// Services of a live business `owner_user` owns: a subquery, so the
 /// ownership check and the read or write are one statement.
 fn owned_by(owner_user: i32) -> SimpleExpr {
-    Expr::col((service::Entity, service::Column::BusinessId)).in_subquery(
-        Query::select()
-            .column((business::Entity, business::Column::Id))
-            .from(business::Entity)
-            .and_where(Expr::col((business::Entity, business::Column::OwnerId)).eq(owner_user))
-            .and_where(Expr::col((business::Entity, business::Column::DeletedAt)).is_null())
-            .to_owned(),
-    )
+    Expr::col((service::Entity, service::Column::BusinessId)).in_subquery(businesses_of(owner_user))
 }
 
 fn map_admin_row(r: AdminServiceRow) -> AdminService {
@@ -213,32 +209,29 @@ fn base_public_query() -> Select<ServiceEntity> {
             .column(service::Column::Description)
             .column(service::Column::PriceNote)
             .column(service::Column::CategoryId)
-            .column_as(category::Column::Name, "category")
-            .column_as(category::Column::Slug, "category_slug")
-            .column_as(category::Column::Icon, "category_icon")
+            .column_as(category::Column::Name, QueryAs::Category)
+            .column_as(category::Column::Slug, QueryAs::CategorySlug)
+            .column_as(category::Column::Icon, QueryAs::CategoryIcon)
             .column(service::Column::ImageFileId)
             .column(service::Column::BusinessId)
-            .column_as(business::Column::Name, "business_name")
-            .column_as(business::Column::Phone, "business_phone")
-            .column_as(business::Column::Address, "business_address")
-            .column_as(business::Column::IsVerified, "business_verified")
+            .column_as(business::Column::Name, QueryAs::BusinessName)
+            .column_as(business::Column::Phone, QueryAs::BusinessPhone)
+            .column_as(business::Column::Address, QueryAs::BusinessAddress)
+            .column_as(business::Column::IsVerified, QueryAs::BusinessVerified)
             .column(service::Column::CreatedOn),
     )
 }
-
-/// The output column holding a service's turn within its provider.
-const PROVIDER_TURN: &str = "provider_turn";
 
 /// Adds each service's turn within its provider (1 for its newest), so a list
 /// ordered by it first shows every provider once before anyone's second.
 fn with_provider_turn(mut query: Select<ServiceEntity>) -> Select<ServiceEntity> {
     QueryTrait::query(&mut query).expr_window_as(
-        Func::cust(Alias::new("ROW_NUMBER")),
+        Func::cust(DbFn::RowNumber),
         WindowStatement::partition_by((service::Entity, service::Column::BusinessId))
             .order_by((service::Entity, service::Column::CreatedOn), Order::Desc)
             .order_by((service::Entity, service::Column::Id), Order::Desc)
             .to_owned(),
-        Alias::new(PROVIDER_TURN),
+        QueryAs::ProviderTurn,
     );
     query
 }
@@ -593,7 +586,7 @@ impl ServiceRepositoryTrait for ServiceRepository {
             // The default order takes turns: every provider's first service,
             // then every provider's second, so one shop never fills a page.
             ProviderSort::VerifiedFirst => with_provider_turn(query)
-                .order_by(Expr::col(Alias::new(PROVIDER_TURN)), Order::Asc)
+                .order_by(output(QueryAs::ProviderTurn), Order::Asc)
                 .order_by_desc(business::Column::IsVerified)
                 .order_by_desc(service::Column::CreatedOn),
         };
@@ -644,9 +637,7 @@ impl ServiceRepositoryTrait for ServiceRepository {
             .map_err(|e| Error::internal(format!("service featured_candidates: {e}")))
     }
 
-    // PostGIS expressions via Expr::cust_with_values, the one thing the
-    // builder cannot express; placeholders are `$1`, `$2` (see the business
-    // repository's geo search).
+    // PostGIS calls built from `sql`, as in the business repository's geo search.
     async fn search_geo_public(
         &self,
         point_wkt: &str,
@@ -654,14 +645,8 @@ impl ServiceRepositoryTrait for ServiceRepository {
         category_id: Option<i32>,
         limit: i64,
     ) -> Result<Vec<PublicService>, Error> {
-        let distance = Expr::cust_with_values(
-            r#"ST_Distance("businesses".location, ST_GeographyFromText($1))"#,
-            [Value::from(point_wkt.to_owned())],
-        );
-        let within = Expr::cust_with_values(
-            r#"ST_DWithin("businesses".location, ST_GeographyFromText($1), $2)"#,
-            [Value::from(point_wkt.to_owned()), Value::from(radius)],
-        );
+        let distance = distance(business_location(), geography_from_text(point_wkt));
+        let within = within(business_location(), geography_from_text(point_wkt), radius);
         let filter = PublicServiceFilter {
             category_id,
             text: None,
@@ -669,11 +654,11 @@ impl ServiceRepositoryTrait for ServiceRepository {
         // Nearest first, taking turns: each provider's first service before
         // anyone's second (a provider's services all share its distance).
         let mut query = with_provider_turn(public_filtered(base_public_query(), &filter))
-            .expr_as(distance, "distance_m")
+            .expr_as(distance, QueryAs::DistanceM)
             .filter(within)
-            .order_by(Expr::col(Alias::new(PROVIDER_TURN)), Order::Asc)
+            .order_by(output(QueryAs::ProviderTurn), Order::Asc)
             .limit(limit as u64);
-        QueryTrait::query(&mut query).order_by_expr(Expr::cust("distance_m"), Order::Asc);
+        QueryTrait::query(&mut query).order_by_expr(output(QueryAs::DistanceM), Order::Asc);
         query
             .order_by_asc(service::Column::Id)
             .into_model::<GeoServiceRow>()

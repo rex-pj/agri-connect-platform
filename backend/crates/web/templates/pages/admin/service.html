@@ -13,7 +13,7 @@
 {% block content %}
 {% set b = page.body %}
 {% set s = b.service %}
-{{ header::admin_header(title=s.name, icon="fa-screwdriver-wrench", sub=s.business_name, back_href=b.provider_services_href, back_label=t(key="admin.provider_services")) }}
+{{ header::admin_header(title=s.name, icon="fa-screwdriver-wrench", sub=s.business_name, back_href=b.provider_services_href, back_label=t(key="admin.provider_services"), action_href=b.public_href, action_icon="fa-arrow-up-right-from-square", action_label=t(key="admin.public_page"), action_class="btn-outline-secondary") }}
 <div class="admin-body">
   {% if b.flash == "service_created" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="dashboard.service_created")) }}{% endif %}
   {% if b.flash == "service_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.saved")) }}{% endif %}
@@ -26,7 +26,7 @@
     {% if s.image_file_id or s.added_by_owner %}
     <div class="d-flex align-items-center gap-3">
       {% if s.image_file_id %}<a href="{{ file_url(id=s.image_file_id) }}" aria-label="{{ t(key="admin.view_photo", name=s.name) }}"><img class="rounded object-fit-cover" width="96" height="96" src="{{ file_url(id=s.image_file_id, variant="thumb") }}" alt=""></a>{% endif %}
-      {% if s.added_by_owner %}<span class="badge text-bg-info">{{ t(key="admin.added_by_owner") }}</span>{% endif %}
+      {% if s.added_by_owner %}<span class="badge text-bg-light border">{{ t(key="admin.added_by_owner") }}</span>{% endif %}
     </div>
     {% endif %}
     <form class="form-stack" method="post" action="{{ b.update_action }}" novalidate>

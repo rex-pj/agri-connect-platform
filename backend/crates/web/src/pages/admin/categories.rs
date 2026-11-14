@@ -1,6 +1,9 @@
 //! /admin/categories and /admin/categories/{id}: the category list with a
 //! create form, and one category's edit form and visibility.
 //!
+//! One screen, two tabs (`?type=`): service types (`service_types`) and
+//! supply types (`supply_types`, "vật tư"), each with its count; the create sheet makes one of the tab's type.
+//!
 //! Hiding a category takes its listings off the public pages, so it asks for
 //! confirmation and a reason (a dialog with JS, the same form on the page
 //! without). Showing it again is one button. A category never changes type.
@@ -16,21 +19,25 @@ use application::{
     outputs::AdminCategoryDto,
 };
 use axum::{extract::State, http::StatusCode, response::Response};
-use domain::{Error, ErrorCode};
+use domain::{
+    constants::{CATEGORY_TYPES, CATEGORY_TYPE_SERVICE},
+    Error, ErrorCode,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     app_state::AppState,
     cookies::{Flash, TakeFlash},
     extract::{ApiForm, ApiPath, ApiQuery},
+    labels::{sector_name, sector_options, CodeOption},
     middleware::auth::Viewer,
     pages::{
         admin::{
-            is_refusal, render_admin, url, ListPosition, ListReturn, Outcome, RowConfirm,
-            BACK_TO_LIST,
+            catalogue_tabs, is_refusal, render_admin, url, AdminTab, CatalogueTab, ListPosition,
+            ListReturn, Outcome, RowConfirm, BACK_TO_LIST,
         },
         forms::{reason, whole_number, FormErrors},
-        listing::parse_opt,
+        listing::{parse_opt, with_query},
         parse_id, see_other,
     },
 };
@@ -49,6 +56,7 @@ pub struct CategoryForm {
     pub color: String,
     pub description: String,
     pub display_order: String,
+    pub sector: String,
 }
 
 impl CategoryForm {
@@ -60,6 +68,7 @@ impl CategoryForm {
             color: Some(self.color.clone()),
             description: Some(self.description.clone()),
             display_order: whole_number(&self.display_order, "display_order")?,
+            sector: self.sector.clone(),
         })
     }
 
@@ -72,6 +81,7 @@ impl CategoryForm {
             color: c.color.clone().unwrap_or_default(),
             description: c.description.clone().unwrap_or_default(),
             display_order: c.display_order.to_string(),
+            sector: c.sector.clone().unwrap_or_default(),
         }
     }
 }
@@ -81,6 +91,7 @@ impl CategoryForm {
 pub struct Limits {
     pub name: usize,
     pub slug: usize,
+    pub slug_pattern: &'static str,
     pub icon: usize,
     pub color: usize,
     pub description: usize,
@@ -89,6 +100,7 @@ pub struct Limits {
 const LIMITS: Limits = Limits {
     name: CATEGORY_NAME_MAX,
     slug: CATEGORY_SLUG_MAX,
+    slug_pattern: application::validation::SLUG_PATTERN,
     icon: CATEGORY_ICON_MAX,
     color: CATEGORY_COLOR_MAX,
     description: CATEGORY_DESCRIPTION_MAX,
@@ -97,15 +109,39 @@ const LIMITS: Limits = Limits {
 #[derive(Serialize)]
 pub struct CategoryRow {
     pub category: AdminCategoryDto,
+    /// Its sector, worded ("every sector" when none).
+    pub sector_label: String,
     pub href: String,
     /// The list again with this row's hide confirmation open.
     pub hide_href: String,
     pub status_action: String,
 }
 
+/// The type a `?type=` names, else services.
+fn tab_type(text: &str) -> &'static str {
+    CATEGORY_TYPES
+        .iter()
+        .copied()
+        .find(|t| *t == text)
+        .unwrap_or(CATEGORY_TYPE_SERVICE)
+}
+
+/// The list on the tab of `kind`.
+fn list_href(kind: &str) -> Result<String, Error> {
+    Ok(with_query(
+        &url("admin_categories", &[])?,
+        &[("type", kind)],
+    ))
+}
+
 #[derive(Serialize)]
 pub struct CategoriesPage {
+    /// The tab shown and every tab.
+    pub kind: &'static str,
+    pub tabs: Vec<AdminTab>,
     pub limits: &'static Limits,
+    /// The sectors a category may serve, for the form.
+    pub sectors: Vec<CodeOption>,
     pub rows: Vec<CategoryRow>,
     pub form: CategoryForm,
     pub errors: FormErrors,
@@ -119,6 +155,7 @@ pub struct CategoriesPage {
 /// The list page around the create form; `hide`: the row whose hide
 /// confirmation is open.
 struct ListView {
+    kind: &'static str,
     form: CategoryForm,
     errors: FormErrors,
     hide: Option<i32>,
@@ -128,13 +165,29 @@ struct ListView {
 
 async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Response, Error> {
     let ListView {
+        kind,
         form,
         errors,
         hide,
         flash,
         status,
     } = view;
-    let categories = state.usecases.admin.list_categories(actor).await?;
+    let (all, sectors) = tokio::try_join!(
+        state.usecases.admin.list_categories(actor),
+        state.usecases.sector.named(),
+    )?;
+    let tabs = catalogue_tabs(
+        state,
+        if kind == CATEGORY_TYPE_SERVICE {
+            CatalogueTab::ServiceTypes
+        } else {
+            CatalogueTab::SupplyTypes
+        },
+    )?;
+    let categories: Vec<AdminCategoryDto> = all
+        .into_iter()
+        .filter(|c| c.category_type == kind)
+        .collect();
     let position = ListPosition::default();
     let mut confirm = None;
     let mut rows = Vec::with_capacity(categories.len());
@@ -149,15 +202,22 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
             });
         }
         rows.push(CategoryRow {
+            sector_label: match category.sector.as_deref() {
+                Some(s) => sector_name(&sectors, s),
+                None => state.locale().text("sector.all"),
+            },
             href: url("admin_category", &[("id", &id)])?,
-            hide_href: position.href("admin_categories", &[("hide", &id)])?,
+            hide_href: position.href("admin_categories", &[("type", kind), ("hide", &id)])?,
             status_action,
             category,
         });
     }
     let path = url("admin_categories", &[])?;
     let body = CategoriesPage {
+        kind,
+        tabs,
         limits: &LIMITS,
+        sectors: sector_options(&sectors),
         rows,
         form,
         errors,
@@ -179,6 +239,9 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct ListQuery {
+    /// The tab: `service` or `product`.
+    #[serde(rename = "type")]
+    pub kind: String,
     /// The category whose hide confirmation is open.
     pub hide: String,
 }
@@ -193,9 +256,11 @@ pub async fn list(
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
+    let kind = tab_type(&q.kind);
     let view = ListView {
+        kind,
         form: CategoryForm {
-            category_type: "service".to_owned(),
+            category_type: kind.to_owned(),
             ..CategoryForm::default()
         },
         errors: FormErrors::default(),
@@ -230,6 +295,7 @@ pub async fn create(
         Ok(created) => redirect_to(created.id, Flash::CategoryCreated),
         Err(err) if is_refusal(&err) => {
             let view = ListView {
+                kind: tab_type(&form.category_type),
                 errors: FormErrors::from_error(&state, &err),
                 form,
                 hide: None,
@@ -245,6 +311,12 @@ pub async fn create(
 #[derive(Serialize)]
 pub struct CategoryPage {
     pub limits: &'static Limits,
+    /// The list on this category's tab.
+    pub list_href: String,
+    /// What is filed under it: the admin's supply list narrowed to it, or
+    /// the public list of its services.
+    pub listings_href: String,
+    pub sectors: Vec<CodeOption>,
     pub category: AdminCategoryDto,
     pub form: CategoryForm,
     pub errors: FormErrors,
@@ -268,11 +340,29 @@ async fn category_page(
         flash,
         status,
     } = outcome;
-    let category = state.usecases.admin.get_category_detail(actor, id).await?;
+    let (category, sectors) = tokio::try_join!(
+        state.usecases.admin.get_category_detail(actor, id),
+        state.usecases.sector.named(),
+    )?;
     let id_text = id.to_string();
     let path = url("admin_category", &[("id", &id_text)])?;
+    let listings_href = if category.category_type == CATEGORY_TYPE_SERVICE {
+        url(
+            "service_category",
+            &[("id", &category.id.to_string()), ("slug", &category.slug)],
+        )?
+    } else {
+        ListPosition {
+            category_id: category.id.to_string(),
+            ..ListPosition::default()
+        }
+        .href("admin_products", &[])?
+    };
     let body = CategoryPage {
+        listings_href,
+        list_href: list_href(&category.category_type)?,
         limits: &LIMITS,
+        sectors: sector_options(&sectors),
         form: form.unwrap_or_else(|| CategoryForm::from_dto(&category)),
         category,
         errors,
@@ -381,7 +471,11 @@ pub async fn change_status(
     };
     match result {
         Ok(_) if form.back == BACK_TO_LIST => {
-            ListPosition::default().back_to("admin_categories", flash)
+            // Back to the list on the category's own tab.
+            let category = state.usecases.admin.get_category_detail(&actor, id).await?;
+            let mut response = see_other(&list_href(&category.category_type)?)?;
+            flash.set_on(&mut response);
+            Ok(response)
         }
         Ok(_) => redirect_to(id, flash),
         Err(err) if is_refusal(&err) => {

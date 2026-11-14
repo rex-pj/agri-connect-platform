@@ -11,7 +11,7 @@ use domain::{Error, ErrorCode, Result};
 use crate::{
     outputs::{ZaloLocationDto, ZaloPhoneDto},
     ports::ZaloGateway,
-    validation::{is_valid_vn_phone, validate_coordinates},
+    validation::{is_valid_vn_phone, validate_coordinates, VN_CALLING_CODE, VN_PHONE_DIGITS},
 };
 
 #[derive(Clone)]
@@ -63,8 +63,8 @@ impl ZaloUseCase {
 /// number of another country is `None`.
 pub fn local_phone(number: &str) -> Option<String> {
     let digits: String = number.chars().filter(char::is_ascii_digit).collect();
-    let local = match digits.strip_prefix("84") {
-        Some(rest) if rest.len() == 9 => format!("0{rest}"),
+    let local = match digits.strip_prefix(VN_CALLING_CODE) {
+        Some(rest) if rest.len() == VN_PHONE_DIGITS - 1 => format!("0{rest}"),
         _ => digits,
     };
     is_valid_vn_phone(&local).then_some(local)

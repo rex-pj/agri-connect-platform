@@ -177,25 +177,41 @@ document.addEventListener("alpine:init", () => {
     },
   }));
 
-  // A menu that scrolls on its own (the admin sidebar) keeps its place from
-  // page to page in this tab, then makes sure the current page's link is in
-  // view. Storage may be blocked: the menu then starts at the top, as without
-  // JS.
+  // The admin sidebar. Its groups are <details> (they fold without JS); this
+  // remembers the folded ones in this browser, the current page's group
+  // always open. The search box (x-cloak: only with JS) keeps the entries
+  // whose name, group or keywords (data-keywords: the lists on their tabs)
+  // hold every word typed, accents ignored, every group open meanwhile;
+  // Enter opens the first one. The menu scrolls on its own, so it keeps its
+  // place from page to page in this tab, then makes sure the current page's
+  // link is in view. Storage may be blocked: the menu then starts unfolded
+  // at the top, as without JS.
   const MENU_SCROLL_KEY = "admin-menu-scroll";
-  Alpine.data("menuScroll", () => ({
+  const MENU_FOLDED_KEY = "admin-menu-folded";
+  Alpine.data("adminMenu", () => ({
+    words: [],
+    folded: [],
+
     init() {
+      const menu = this.$el;
+      const current = menu.querySelector('[aria-current="page"]');
+      const currentGroup = current?.closest("[data-group]")?.dataset.group;
+      try {
+        const stored = JSON.parse(localStorage.getItem(MENU_FOLDED_KEY));
+        if (Array.isArray(stored)) this.folded = stored.filter((key) => key !== currentGroup);
+      } catch {}
       // After the frame's bindings, so the phone drawer is already the
-      // scrolling box.
+      // scrolling box and the folded groups are folded.
       this.$nextTick(() => {
-        const menu = this.$el;
         try {
           menu.scrollTop = Number(sessionStorage.getItem(MENU_SCROLL_KEY)) || 0;
         } catch {}
-        const current = menu.querySelector('[aria-current="page"]');
         if (!current) return;
         const box = menu.getBoundingClientRect();
+        // The search box stays at the top, over the links.
+        const top = box.top + this.$refs.searchBox.offsetHeight;
         const link = current.getBoundingClientRect();
-        if (link.top < box.top) menu.scrollTop += link.top - box.top;
+        if (link.top < top) menu.scrollTop += link.top - top;
         else if (link.bottom > box.bottom) menu.scrollTop += link.bottom - box.bottom;
       });
     },
@@ -203,6 +219,50 @@ document.addEventListener("alpine:init", () => {
       try {
         sessionStorage.setItem(MENU_SCROLL_KEY, String(this.$el.scrollTop));
       } catch {}
+    },
+    links() {
+      return [...this.$root.querySelectorAll(".ash-link")];
+    },
+    matches(link) {
+      const group = link.closest("[data-group]")?.querySelector("summary")?.textContent || "";
+      const text = fold(`${link.textContent} ${link.dataset.keywords || ""} ${group}`);
+      return this.words.every((word) => text.includes(word));
+    },
+    search(event) {
+      this.words = fold(event.target.value).split(/\s+/).filter(Boolean);
+    },
+    openFirst() {
+      if (!this.searching) return;
+      const first = this.links().find((link) => this.matches(link));
+      if (first) window.location.assign(first.href);
+    },
+    // On a group: the visitor folded or unfolded it. While searching, the
+    // groups are only held open, which is not remembered.
+    groupToggled() {
+      if (this.searching) return;
+      const key = this.$el.dataset.group;
+      const others = this.folded.filter((other) => other !== key);
+      this.folded = this.$el.open ? others : [...others, key];
+      try {
+        localStorage.setItem(MENU_FOLDED_KEY, JSON.stringify(this.folded));
+      } catch {}
+    },
+    get searching() {
+      return this.words.length > 0;
+    },
+    get nothingFound() {
+      return this.searching && !this.links().some((link) => this.matches(link));
+    },
+    // On a link.
+    get linkShown() {
+      return this.matches(this.$el);
+    },
+    // On a group.
+    get groupOpen() {
+      return this.searching || !this.folded.includes(this.$el.dataset.group);
+    },
+    get groupShown() {
+      return [...this.$el.querySelectorAll(".ash-link")].some((link) => this.matches(link));
     },
   }));
 

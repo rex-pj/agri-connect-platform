@@ -2,7 +2,7 @@ use async_trait::async_trait;
 
 use crate::{
     error::Error,
-    models::catalogue::{Catalogue, SeedReport},
+    models::catalogue::{Catalogue, PlatformCounts, SeedReport},
 };
 
 /// Applies the reference-data catalogue at startup.
@@ -12,4 +12,8 @@ use crate::{
 #[async_trait]
 pub trait CatalogueRepositoryTrait {
     async fn apply(&self, catalogue: &Catalogue) -> Result<SeedReport, Error>;
+
+    /// How much platform data there is (hidden rows included): what the demo
+    /// data page lists as kept.
+    async fn platform_counts(&self) -> Result<PlatformCounts, Error>;
 }

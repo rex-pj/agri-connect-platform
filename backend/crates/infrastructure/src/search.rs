@@ -2,6 +2,7 @@
 //! built from `migration::search::fold`, the same function that defines the
 //! indexes, so a change to one cannot leave the other behind.
 
+use domain::search_terms::query_variants;
 use migration::search::fold;
 use sea_orm::{
     sea_query::{BinOper, ColumnRef, Expr, IntoColumnRef, SimpleExpr},
@@ -100,10 +101,15 @@ pub fn contains_pattern(query: &str) -> String {
 /// True when any of `columns` contains `query`, ignoring case and Vietnamese
 /// diacritics.
 pub fn text_contains(columns: &[SearchColumn], query: &str) -> Condition {
-    let needle = contains_pattern(query);
-    columns.iter().fold(Condition::any(), |cond, column| {
-        cond.add(contains(*column, &needle))
-    })
+    // Every variant of the query (`heo` also finds `lợn`), in every column.
+    query_variants(query)
+        .iter()
+        .map(|variant| contains_pattern(variant))
+        .fold(Condition::any(), |cond, needle| {
+            columns
+                .iter()
+                .fold(cond, |cond, column| cond.add(contains(*column, &needle)))
+        })
 }
 
 /// `text_contains` for an optional search box: blank or absent matches

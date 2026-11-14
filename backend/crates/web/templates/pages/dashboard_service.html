@@ -24,7 +24,7 @@
   {% if x and not x.is_active %}{{ alerts::alert(kind="warning", icon="fa-eye-slash", text=t(key="dashboard.service_hidden_by_admin")) }}{% endif %}
   {% if not page.can_save %}{{ alerts::alert(kind="secondary", icon="fa-lock", text=t(key="dashboard.service_cannot_edit")) }}{% endif %}
   <section class="detail-card">
-    <form class="auth-form" method="post" action="{{ page.action }}" enctype="multipart/form-data" novalidate>
+    <form class="form-stack" method="post" action="{{ page.action }}" enctype="multipart/form-data" novalidate>
       {% if page.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=page.errors.message) }}{% endif %}
       <fieldset class="auth-fieldset"{% if not page.can_save %} disabled{% endif %}>
       {{ fields::service_fields(form=page.form, errors=page.errors, categories=page.categories, limits=page.limits, prefix="sv", cards=true) }}

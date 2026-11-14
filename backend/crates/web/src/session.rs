@@ -57,7 +57,7 @@ impl CookiePolicy {
             (
                 SESSION_COOKIE,
                 tokens.access.as_str(),
-                JWT_EXPIRY_HOURS * 3600,
+                chrono::Duration::hours(JWT_EXPIRY_HOURS).num_seconds(),
             ),
             (REFRESH_COOKIE, tokens.refresh.as_str(), refresh_secs),
         ];
@@ -81,10 +81,7 @@ impl CookiePolicy {
 /// Requests that never need a session: assets (the favicon too) and probes. Skipping them keeps
 /// a page's dozen asset requests from racing to rotate the same token.
 fn needs_session(path: &str) -> bool {
-    !(path.starts_with("/static/")
-        || path.starts_with("/files/")
-        || path.starts_with("/health/")
-        || path == crate::views::FAVICON_PATH)
+    !crate::routes::is_asset_path(path)
 }
 
 /// `Cookie` with `auth_token` and `refresh_token` replaced by the new pair,

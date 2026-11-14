@@ -2,46 +2,83 @@
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/alert.html" as alerts %}
 {% import "molecules/admin_header.html" as header %}
-{#- Demo data: how much is loaded, load it, remove it. `page.body` is
-    web::pages::setup::SeedPage. Removing needs a ticked confirmation, so
-    it is safe without JS too. Real listings are never touched. -#}
+{% import "molecules/count_row.html" as rows %}
+{#- Demo data, kept apart from platform data. `page.body` is
+    web::pages::setup::SeedPage. The first card is the demo data (the
+    starting catalogue: categories, areas, crops; and the listings) with its
+    load / remove forms; removing needs a ticked confirmation, so it is safe
+    without JS too. The second card is the platform data (roles, provinces,
+    wards): kept whatever happens here. Real rows are never touched. -#}
 {% block title %}{{ t(key="admin_menu.demo_data") }} — {{ site.name }}{% endblock title %}
 {% block content %}
 {% set page = page.body %}
+{% set demo = page.status.demo %}
+{% set platform = page.status.platform %}
 {{ header::admin_header(title=t(key="admin_menu.demo_data"), icon="fa-database", sub=t(key="seed.sub")) }}
 <div class="admin-body">
   {% if page.flash == "demo_loaded" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="seed.loaded")) }}{% endif %}
   {% if page.flash == "demo_removed" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="seed.removed")) }}{% endif %}
   {% if page.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=page.errors.message) }}{% endif %}
 
-  <section class="admin-section" aria-labelledby="seed-count-title">
-    <h2 class="admin-section__title" id="seed-count-title">{{ t(key="seed.current") }}</h2>
-    <p class="seed-count"><strong>{{ page.status.demo_business_count }}</strong> {{ t(key="seed.demo_providers") }} · <strong>{{ page.status.business_count }}</strong> {{ t(key="seed.all_providers") }}</p>
-  </section>
+  <section class="admin-section" aria-labelledby="seed-demo-title">
+    <h2 class="admin-section__title" id="seed-demo-title">{{ atoms::icon(name="fa-flask") }} {{ t(key="seed.demo_title") }}</h2>
+    <p class="small text-muted">{{ t(key="seed.demo_note") }}</p>
+    <div class="list-group mb-3">
+      {{ rows::count_row(count=demo.sectors, label=t(key="seed.demo_sectors"), href=url_for(name="admin_sectors")) }}
+      {% set kinds_tab = url_for(name="admin_alerts") ~ "?tab=kinds" %}
+      {{ rows::count_row(count=demo.alert_kinds, label=t(key="seed.demo_alert_kinds"), href=kinds_tab) }}
+      {{ rows::count_row(count=demo.commodities, label=t(key="seed.demo_commodities"), href=url_for(name="admin_commodities")) }}
+      {{ rows::count_row(count=demo.categories, label=t(key="seed.demo_categories"), href=url_for(name="admin_categories")) }}
+      {{ rows::count_row(count=demo.locations, label=t(key="seed.demo_locations"), href=url_for(name="admin_locations")) }}
+      {% set crops_tab = url_for(name="admin_prices") ~ "?tab=crops" %}
+      {{ rows::count_row(count=demo.crops, label=t(key="seed.demo_crops"), href=crops_tab) }}
+      {{ rows::count_row(count=demo.businesses, label=t(key="seed.demo_providers")) }}
+      {{ rows::count_row(count=demo.services, label=t(key="seed.demo_services")) }}
+      {{ rows::count_row(count=demo.products, label=t(key="seed.demo_products")) }}
+      {{ rows::count_row(count=demo.inquiries, label=t(key="seed.demo_inquiries"), href=url_for(name="admin_inquiries")) }}
+      {{ rows::count_row(count=demo.reviews, label=t(key="seed.demo_reviews"), href=url_for(name="admin_reviews")) }}
+      {{ rows::count_row(count=demo.calls, label=t(key="seed.demo_calls"), href=url_for(name="admin_demand")) }}
+      {{ rows::count_row(count=demo.searches, label=t(key="seed.demo_searches"), href=url_for(name="admin_demand")) }}
+      {{ rows::count_row(count=demo.prices, label=t(key="seed.demo_prices"), href=url_for(name="admin_prices")) }}
+      {{ rows::count_row(count=demo.jobs, label=t(key="seed.demo_jobs"), href=url_for(name="admin_jobs")) }}
+      {{ rows::count_row(count=demo.alerts, label=t(key="seed.demo_alerts"), href=url_for(name="admin_alerts")) }}
+      {{ rows::count_row(count=demo.partners, label=t(key="seed.demo_partners"), href=url_for(name="admin_partners")) }}
+      {{ rows::count_row(count=demo.contracts, label=t(key="seed.demo_contracts"), href=url_for(name="admin_partners")) }}
+    </div>
+    <p class="admin-status">{{ t(key="seed.all_providers", count=page.status.business_count) }}</p>
 
-  {% if page.status.is_seeded %}
-  <section class="admin-section" aria-labelledby="seed-remove-title">
-    <h2 class="admin-section__title" id="seed-remove-title">{{ t(key="seed.remove") }}</h2>
+    {% if page.status.is_seeded %}
+    <h3 class="h6 mt-3" id="seed-remove-title">{{ t(key="seed.remove") }}</h3>
     <p class="small text-muted">{{ t(key="seed.remove_note") }}</p>
-    <form class="form-stack" method="post" action="{{ url_for(name="setup_seed") }}">
+    <form class="form-stack" method="post" action="{{ url_for(name="setup_seed") }}" aria-labelledby="seed-remove-title">
       <input type="hidden" name="action" value="remove">
       <div class="form-check">
         <input class="form-check-input{% if page.errors.fields.confirm %} is-invalid{% endif %}" type="checkbox" id="seed_confirm" name="confirm" required{% if page.errors.fields.confirm %} aria-invalid="true" aria-describedby="seed_confirm-error"{% endif %}>
-        <label class="form-check-label" for="seed_confirm">{{ t(key="seed.remove_confirm", count=page.status.demo_business_count) }}</label>
+        <label class="form-check-label" for="seed_confirm">{{ t(key="seed.remove_confirm") }}</label>
         {% if page.errors.fields.confirm %}<div class="invalid-feedback" id="seed_confirm-error">{{ page.errors.fields.confirm }}</div>{% endif %}
       </div>
       <div class="admin-actions"><button type="submit" class="btn btn-outline-danger">{{ atoms::icon(name="fa-trash") }} {{ t(key="seed.remove") }}</button></div>
     </form>
-  </section>
-  {% else %}
-  <section class="admin-section" aria-labelledby="seed-load-title">
-    <h2 class="admin-section__title" id="seed-load-title">{{ t(key="seed.load") }}</h2>
+    {% endif %}
+    {% if demo.businesses == 0 %}
+    <h3 class="h6 mt-3" id="seed-load-title">{{ t(key="seed.load") }}</h3>
     <p class="small text-muted">{{ t(key="seed.load_note") }}</p>
-    <form class="admin-actions" method="post" action="{{ url_for(name="setup_seed") }}">
+    <form class="admin-actions" method="post" action="{{ url_for(name="setup_seed") }}" aria-labelledby="seed-load-title">
       <input type="hidden" name="action" value="load">
       <button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-download") }} {{ t(key="seed.load") }}</button>
     </form>
+    {% endif %}
   </section>
-  {% endif %}
+
+  <section class="admin-section" aria-labelledby="seed-platform-title">
+    <h2 class="admin-section__title" id="seed-platform-title">{{ atoms::icon(name="fa-layer-group") }} {{ t(key="seed.platform_title") }}</h2>
+    <p class="small text-muted">{{ t(key="seed.platform_note") }}</p>
+    <div class="list-group">
+      {{ rows::count_row(count=platform.roles, label=t(key="admin_menu.roles"), href=url_for(name="admin_roles")) }}
+      {{ rows::count_row(count=platform.provinces, label=t(key="seed.provinces")) }}
+      {{ rows::count_row(count=platform.wards, label=t(key="seed.wards")) }}
+    </div>
+    <p class="small text-muted mt-2 mb-0">{{ t(key="seed.units_note") }}</p>
+  </section>
 </div>
 {% endblock content %}

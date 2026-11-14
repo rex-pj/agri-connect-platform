@@ -47,6 +47,56 @@ async fn set_up(e: &Env, extra: &[(&str, &str)]) -> String {
 
 #[tokio::test]
 #[ignore = "needs TEST_DATABASE_URL"]
+async fn with_a_setup_token_the_first_admin_needs_it() {
+    const TOKEN: &str = "ma-thiet-lap-rieng-cua-may-chu";
+    let e = Env::new().await;
+    // No SETUP_TOKEN: the form does not ask for one.
+    let open = body_text(send(&e.router, get_page("/setup", None)).await).await;
+    assert!(!open.contains(r#"name="setup_token""#));
+
+    let router = integration_tests::router_with(
+        integration_tests::state_with(
+            e.t.db.clone(),
+            integration_tests::memory_uploads(None),
+            integration_tests::email_service(),
+            Some(TOKEN.to_owned()),
+        ),
+        web::routings::app_routing::RouterConfig {
+            allowed_origins: vec![integration_tests::TEST_ORIGIN.to_owned()],
+            ..Default::default()
+        },
+    );
+    let page = body_text(send(&router, get_page("/setup", None)).await).await;
+    assert!(page.contains(r#"name="setup_token""#));
+
+    for wrong in [None, Some("doan-mo")] {
+        let mut form = ADMIN.to_vec();
+        form.extend(wrong.map(|t| ("setup_token", t)));
+        let res = send(&router, post_form("/setup", &form, None)).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST, "{wrong:?}");
+        let page = body_text(res).await;
+        assert!(
+            page.contains(r#"id="su_token-error""#),
+            "the form comes back with the token box at fault"
+        );
+        assert!(!page.contains("doan-mo"), "the token is never echoed back");
+    }
+    assert_eq!(
+        count(&e, "SELECT count(*) AS n FROM users").await,
+        0,
+        "no account without the token"
+    );
+
+    let mut form = ADMIN.to_vec();
+    form.push(("setup_token", TOKEN));
+    let res = send(&router, post_form("/setup", &form, None)).await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(location(&res), "/admin/dashboard");
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
 async fn a_fresh_install_goes_to_setup_and_setup_closes_after_use() {
     let e = env_with_origin().await;
     // Bug 0.2: with no admin yet, /login leads to /setup.
@@ -321,7 +371,7 @@ async fn the_demo_data_page_is_for_admins_and_removal_needs_a_tick() {
     assert_eq!(res.status(), StatusCode::FORBIDDEN);
 
     let page = body_text(send(&e.router, get_page("/setup/seed", Some(&admin))).await).await;
-    assert!(page.contains("nhà cung cấp mẫu"));
+    assert!(page.contains("Nhà cung cấp mẫu"));
 
     let res = send(
         &e.router,
@@ -369,5 +419,56 @@ async fn a_login_form_posted_from_another_site_is_refused() {
     let res = send(&e.router, req).await;
     assert_eq!(res.status(), StatusCode::FORBIDDEN);
     assert!(cookies_from(&res).is_empty());
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_sign_up_confirms_its_address_with_the_emailed_link() {
+    let e = env_with_origin().await;
+    register_provider(&e.state, "nongdan", "0901234567").await;
+    let confirmed = "SELECT count(*) AS n FROM users WHERE email_verified_at IS NOT NULL";
+
+    let sent = e.mail.verifications(1).await;
+    assert_eq!(sent.len(), 1);
+    assert_eq!(sent[0].0, "nongdan@example.vn");
+    let token = sent[0].1.clone();
+    assert_eq!(count(&e, confirmed).await, 0);
+
+    // The account page says so and offers the link again.
+    let cookie = integration_tests::sign_in(&e, "nongdan", "matkhau123").await;
+    let account = body_text(send(&e.router, get_page("/account", Some(&cookie))).await).await;
+    assert!(account.contains(r#"action="/account/email-verification""#));
+    let res = send(
+        &e.router,
+        post_form("/account/email-verification", &[], Some(&cookie)),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(location(&res), "/account");
+    assert_eq!(e.mail.verifications(2).await.len(), 2);
+
+    // Opening the link (a mail scanner does too) confirms nothing.
+    let link = format!("/verify-email?token={token}");
+    let page = body_text(send(&e.router, get_page(&link, None)).await).await;
+    assert!(page.contains(r#"name="token""#));
+    assert_eq!(count(&e, confirmed).await, 0);
+
+    // A wrong token is refused; the form confirms, once.
+    let res = send(
+        &e.router,
+        post_form("/verify-email", &[("token", "khong-dung")], None),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    let form = [("token", token.as_str())];
+    let res = send(&e.router, post_form("/verify-email", &form, None)).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(count(&e, confirmed).await, 1);
+    let res = send(&e.router, post_form("/verify-email", &form, None)).await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    let account = body_text(send(&e.router, get_page("/account", Some(&cookie))).await).await;
+    assert!(!account.contains(r#"action="/account/email-verification""#));
     e.cleanup().await;
 }

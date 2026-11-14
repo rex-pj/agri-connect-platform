@@ -1,11 +1,12 @@
 {#- The demand report's table: one row per category (`r.rows`, the leads
     with no category last), a column per week, then the total and its split
     by channel, the sums, and the searches made in the same areas. `r` is
-    application::outputs::DemandReportDto; shared by the admin page and the
+    application::outputs::DemandReportDto, `sectors` every sector (to name a
+    row's sector); shared by the admin page and the
     partner's. On a phone only the last four weeks show (the totals still
     cover all of them). -#}
 {% import "atoms/figure.html" as fig %}
-{% macro demand_table(r) -%}
+{% macro demand_table(r, sectors) -%}
 {% set week_count = r.weeks | length %}{% set columns = week_count + 6 %}
 <div class="table-responsive">
   <table class="table align-middle mb-0 admin-table">
@@ -23,7 +24,7 @@
     <tbody>
       {% for row in r.rows %}
       <tr>
-        <th scope="row" class="fw-semibold">{% if row.category %}{{ row.category }}{% else %}<span class="text-muted">{{ t(key="demand.general") }}</span>{% endif %}</th>
+        <th scope="row" class="fw-semibold">{% if row.category %}{{ row.category }}{% else %}<span class="text-muted">{{ t(key="demand.general") }}</span>{% endif %}{% if row.sector %}{% for s in sectors %}{% if s.value == row.sector %}<span class="d-block small fw-normal text-muted">{{ s.label }}</span>{% endif %}{% endfor %}{% endif %}</th>
         {% for f in row.weeks %}<td class="text-end{% if loop.index <= week_count - 4 %} d-none d-md-table-cell{% endif %}">{{ fig::figure(f=f, min=r.min_count) }}</td>{% endfor %}
         <td class="text-end fw-bold">{{ fig::figure(f=row.total, min=r.min_count) }}</td>
         <td class="text-end">{{ fig::figure(f=row.calls, min=r.min_count) }}</td>

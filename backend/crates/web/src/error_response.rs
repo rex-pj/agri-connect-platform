@@ -5,9 +5,10 @@
 
 use std::collections::BTreeMap;
 
+use application::authz::Actor;
 use axum::{
-    extract::{Request, State},
-    http::{header, HeaderMap},
+    extract::{FromRequestParts, Request, State},
+    http::{header, HeaderMap, Uri},
     middleware::Next,
     response::{IntoResponse, Response},
     Json,
@@ -17,8 +18,12 @@ use serde::Serialize;
 
 use crate::{
     app_state::AppState,
+    locale::Locale,
+    middleware::auth::Viewer,
+    pages::admin::render_admin,
+    routes,
     routings::app_routing::REQUEST_ID_HEADER,
-    shell::{self, Shell},
+    shell::{self, Area, Link, Shell},
     views,
 };
 
@@ -27,16 +32,48 @@ struct ErrorPage {
     status: u16,
     message: String,
     request_id: String,
+    /// Home, or the visitor's own area when the error is inside it.
+    back: Link,
+}
+
+/// Who asked, for the frame of the error page: the same session the page
+/// would have read. Not looked up for a refused flood (429) nor when the
+/// server is failing (internal, unavailable), where it would only add load;
+/// those pages show
+/// signed out, as they did before.
+async fn viewer(state: &AppState, kind: ErrorKind, uri: Uri, headers: HeaderMap) -> Option<Actor> {
+    if matches!(
+        kind,
+        ErrorKind::TooManyRequests | ErrorKind::Internal | ErrorKind::Unavailable
+    ) {
+        return None;
+    }
+    let (mut parts, ()) = Request::new(()).into_parts();
+    parts.uri = uri;
+    parts.headers = headers;
+    Viewer::from_request_parts(&mut parts, state)
+        .await
+        .ok()
+        .and_then(|Viewer(actor)| actor)
+}
+
+/// Where the error page leads back to: the visitor's area when the error
+/// is one of its pages, else home.
+fn way_back(locale: &Locale, area: Area, actor: Option<&Actor>, path: &str) -> Link {
+    if area.covers(path) {
+        return shell::home_area(locale, actor);
+    }
+    Link {
+        href: routes::url("home", &[]).unwrap_or_else(|_| "/".to_owned()),
+        icon: "fa-house",
+        label: locale.text("common.back_home"),
+    }
 }
 
 /// Paths that are never pages: the API, assets, probes and uploaded files.
 /// Their errors stay JSON (or a bare status) whatever the client accepts.
 pub fn is_machine_path(path: &str) -> bool {
-    path.starts_with("/api/")
-        || path.starts_with("/static/")
-        || path.starts_with("/health/")
-        || path.starts_with("/files/")
-        || path == crate::views::FAVICON_PATH
+    path.starts_with(crate::routes::API_PREFIX) || crate::routes::is_asset_path(path)
 }
 
 /// A browser navigation (not an API call, not an asset) gets an HTML page;
@@ -74,9 +111,12 @@ pub fn error_body(state: &AppState, err: &Error) -> ErrorBody {
 
 pub async fn render_errors(State(state): State<AppState>, req: Request, next: Next) -> Response {
     let method = req.method().clone();
-    let path = req.uri().path().to_owned();
-    let query = req.uri().query().map(str::to_owned);
+    let uri = req.uri().clone();
+    let path = uri.path().to_owned();
+    let query = uri.query().map(str::to_owned);
     let html = wants_html(&req);
+    // Only a page needs to know who asked; kept until the outcome is known.
+    let request_headers = html.then(|| req.headers().clone());
     // A visitor landing on an error page from a link is offered a language
     // like on any other page.
     let language_offer = html
@@ -110,16 +150,46 @@ pub async fn render_errors(State(state): State<AppState>, req: Request, next: Ne
     headers.remove(header::CONTENT_TYPE);
 
     let body = error_body(&state, &err);
-    let page = ErrorPage {
-        status: status.as_u16(),
-        message: body.message.clone(),
-        request_id,
+    let rendered = match request_headers {
+        None => None,
+        Some(request_headers) => {
+            let actor = viewer(&state, err.kind(), uri, request_headers).await;
+            let locale = state.locale();
+            let area = Area::of(actor.as_ref());
+            let page = ErrorPage {
+                status: status.as_u16(),
+                message: body.message.clone(),
+                request_id,
+                back: way_back(locale, area, actor.as_ref(), &path),
+            };
+            // Inside the admin panel or the partner's report, the error keeps
+            // that frame; anywhere else it is an app page, signed in or not.
+            Some(match (area.covers(&path), actor.as_ref()) {
+                (true, Some(admin)) if area == Area::Admin => render_admin(
+                    &state,
+                    admin,
+                    &path,
+                    status,
+                    "pages/admin/error.html",
+                    &page,
+                ),
+                _ => {
+                    let template = if area == Area::Partner && area.covers(&path) {
+                        "pages/partner_error.html"
+                    } else {
+                        "pages/error.html"
+                    };
+                    let mut shell = match actor.as_ref() {
+                        Some(a) => Shell::new(locale, &path, query.as_deref(), Some(a)),
+                        None => Shell::without_session(locale, &path, query.as_deref()),
+                    };
+                    shell.language_offer = language_offer;
+                    views::render_page_status(&state, &shell, status, template, &page)
+                }
+            })
+        }
     };
-    let mut rendered = match html.then(|| {
-        let mut shell = Shell::without_session(state.locale(), &path, query.as_deref());
-        shell.language_offer = language_offer;
-        views::render_page_status(&state, &shell, status, "pages/error.html", &page)
-    }) {
+    let mut rendered = match rendered {
         Some(Ok(page)) => page,
         Some(Err(render_err)) => {
             // The error page itself failed; JSON still tells the user something.

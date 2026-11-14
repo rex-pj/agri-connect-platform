@@ -179,17 +179,26 @@ async fn the_admin_enters_prices_and_farmers_see_the_fresh_ones() {
     assert_eq!(res.status(), StatusCode::FORBIDDEN);
 
     // A crop's name is unique; hiding a crop takes its prices off the page.
+    let commodity = scalar(
+        &e,
+        &format!("SELECT commodity_id::text AS v FROM crops WHERE id = {rice}"),
+    )
+    .await;
     let res = send(
         &e.router,
         post_form(
             "/admin/crops",
-            &[("name", "Lúa OM 18"), ("kind", "rice"), ("unit", "kg")],
+            &[
+                ("name", "Lúa OM 18"),
+                ("commodity_id", &commodity),
+                ("unit", "kg"),
+            ],
             Some(&admin),
         ),
     )
     .await;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
-    assert!(body_text(res).await.contains("Đã có loại cây với tên này"));
+    assert!(body_text(res).await.contains("Đã có nông sản với tên này"));
     let res = send(
         &e.router,
         post_form(

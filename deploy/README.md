@@ -113,7 +113,11 @@ Values never pass through GitHub; the VM reads them at deploy time.
 openssl rand -hex 32 | gcloud secrets create agri-jwt-secret --data-file=-
 openssl rand -hex 24 | gcloud secrets create agri-postgres-password --data-file=-
 openssl rand -hex 24 | gcloud secrets create agri-app-db-password --data-file=-
-# Optional. Without them, password-reset links are only written to the log.
+# The first-admin form (/setup) asks for this; the server refuses to start in
+# production while there is no admin and no token. Print it once, keep it.
+openssl rand -hex 16 | tee /dev/stderr | gcloud secrets create agri-setup-token --data-file=-
+# Required in production: without SMTP_HOST the server refuses to start
+# (password-reset links would otherwise be written to the log).
 printf 'smtp.example.vn' | gcloud secrets create agri-smtp-host --data-file=-
 printf '587'             | gcloud secrets create agri-smtp-port --data-file=-
 printf 'user'            | gcloud secrets create agri-smtp-username --data-file=-

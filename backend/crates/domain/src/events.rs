@@ -20,9 +20,13 @@ pub enum Entity {
     Inquiry,
     Partner,
     Contract,
+    Commodity,
+    Sector,
+    AlertKind,
     Crop,
     CropPrice,
     JobPost,
+    Alert,
 }
 
 impl Entity {
@@ -39,9 +43,13 @@ impl Entity {
             Entity::Inquiry => "inquiry",
             Entity::Partner => "partner",
             Entity::Contract => "contract",
+            Entity::Commodity => "commodity",
+            Entity::Sector => "sector",
+            Entity::AlertKind => "alert_kind",
             Entity::Crop => "crop",
             Entity::CropPrice => "crop_price",
             Entity::JobPost => "job_post",
+            Entity::Alert => "alert",
         }
     }
 }
@@ -82,6 +90,38 @@ pub enum Change {
     },
     /// It was just made (an inquiry a farmer sent).
     Created,
+    /// Something about signing in to an account; the actor is the account.
+    Auth(AuthEvent),
+}
+
+/// What happened to an account's sign-in, for the audit log: who got in,
+/// who was kept out, and when a password changed hands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthEvent {
+    LoggedIn,
+    /// A wrong password for this account.
+    LoginFailed,
+    PasswordChanged,
+    /// The password was set through an emailed reset link.
+    PasswordReset,
+    /// A spent refresh token was shown again: a copy of the session exists,
+    /// and the session was ended.
+    SessionReused,
+    EmailVerified,
+}
+
+impl AuthEvent {
+    /// The audit log's action.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            AuthEvent::LoggedIn => "login",
+            AuthEvent::LoginFailed => "login_failed",
+            AuthEvent::PasswordChanged => "change_password",
+            AuthEvent::PasswordReset => "reset_password",
+            AuthEvent::SessionReused => "refresh_token_reused",
+            AuthEvent::EmailVerified => "verify_email",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

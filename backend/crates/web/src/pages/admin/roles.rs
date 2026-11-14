@@ -13,19 +13,19 @@ use application::{
 };
 use axum::{extract::State, http::StatusCode, response::Response};
 use domain::{Error, ErrorCode};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     app_state::AppState,
     cookies::{Flash, TakeFlash},
-    extract::{ApiForm, ApiPath},
+    extract::{ApiForm, ApiPath, ApiQuery},
     labels::Worded,
     locale::Locale,
     middleware::auth::Viewer,
     pages::{
-        admin::{render_admin, url},
+        admin::{render_admin, url, AdminTab, ListPosition},
         forms::{is_form_error, FormErrors},
-        parse_id, see_other,
+        moved_permanently, parse_id, see_other,
     },
 };
 
@@ -40,7 +40,7 @@ fn group_key(key: &str) -> &'static str {
         "user" | "role" => "permission_group.users",
         "provider" => "permission_group.providers",
         "listing" | "service" => "permission_group.listings",
-        "category" | "location" | "price" => "permission_group.catalogue",
+        "category" | "location" | "price" | "alert" => "permission_group.catalogue",
         "inquiry" | "review" | "job" => "permission_group.feedback",
         "report" | "partner" => "permission_group.business",
         "own" => "permission_group.own",
@@ -83,7 +83,40 @@ fn ticked(form: &HashMap<String, String>) -> Vec<String> {
 
 #[derive(Serialize)]
 pub struct RolesPage {
+    pub tabs: Vec<AdminTab>,
     pub roles: Vec<RoleRow>,
+}
+
+/// The value of `?tab=` for every permission against every role.
+pub const TAB_PERMISSIONS: &str = "permissions";
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct RolesQuery {
+    /// `permissions`: the second tab, the read-only grid of every role.
+    pub tab: String,
+}
+
+/// The page's two tabs: the roles, and every permission against them.
+fn tabs(state: &AppState, grid: bool) -> Result<Vec<AdminTab>, Error> {
+    Ok(vec![
+        AdminTab {
+            label: state.locale().text("admin_roles.tab_roles"),
+            href: url("admin_roles", &[])?,
+            count: None,
+            current: !grid,
+        },
+        AdminTab {
+            label: state.locale().text("admin_roles.tab_permissions"),
+            href: ListPosition {
+                tab: TAB_PERMISSIONS.to_owned(),
+                ..ListPosition::default()
+            }
+            .href("admin_roles", &[])?,
+            count: None,
+            current: grid,
+        },
+    ])
 }
 
 #[derive(Serialize)]
@@ -93,14 +126,18 @@ pub struct RoleRow {
     pub href: String,
 }
 
-/// GET /admin/roles
+/// GET /admin/roles (`?tab=permissions`: the grid of every permission)
 pub async fn list(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
+    ApiQuery(q): ApiQuery<RolesQuery>,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
+    if q.tab == TAB_PERMISSIONS {
+        return grid_page(&state, &actor).await;
+    }
     let matrix = state
         .usecases
         .permission
@@ -127,7 +164,10 @@ pub async fn list(
         &url("admin_roles", &[])?,
         StatusCode::OK,
         "pages/admin/roles.html",
-        &RolesPage { roles },
+        &RolesPage {
+            tabs: tabs(&state, false)?,
+            roles,
+        },
     )
 }
 
@@ -240,22 +280,28 @@ pub async fn save(
 
 #[derive(Serialize)]
 pub struct PermissionsPage {
+    pub tabs: Vec<AdminTab>,
     pub matrix: PermissionMatrixDto,
     pub role_hrefs: Vec<String>,
 }
 
-/// GET /admin/permissions
-pub async fn matrix(
-    Viewer(viewer): Viewer,
-    State(state): State<AppState>,
-) -> Result<Response, Error> {
-    let Some(actor) = viewer else {
-        return see_other(&url("login", &[])?);
-    };
+/// GET /admin/permissions → /admin/roles?tab=permissions (moved for good).
+pub async fn matrix() -> Result<Response, Error> {
+    moved_permanently(
+        &ListPosition {
+            tab: TAB_PERMISSIONS.to_owned(),
+            ..ListPosition::default()
+        }
+        .href("admin_roles", &[])?,
+    )
+}
+
+/// The roles page's second tab: every permission against every role.
+async fn grid_page(state: &AppState, actor: &application::authz::Actor) -> Result<Response, Error> {
     let matrix = state
         .usecases
         .permission
-        .matrix(&actor)
+        .matrix(actor)
         .await?
         .worded(state.locale());
     let role_hrefs = matrix
@@ -264,12 +310,16 @@ pub async fn matrix(
         .map(|r| url("admin_role", &[("id", &r.id.to_string())]))
         .collect::<Result<_, _>>()?;
     render_admin(
-        &state,
-        &actor,
-        &url("admin_permissions", &[])?,
+        state,
+        actor,
+        &url("admin_roles", &[])?,
         StatusCode::OK,
         "pages/admin/permissions.html",
-        &PermissionsPage { matrix, role_hrefs },
+        &PermissionsPage {
+            tabs: tabs(state, true)?,
+            matrix,
+            role_hrefs,
+        },
     )
 }
 
@@ -282,6 +332,7 @@ mod tests {
             code: code.into(),
             name: code.into(),
             granted: false,
+            grantable: true,
         }
     }
 

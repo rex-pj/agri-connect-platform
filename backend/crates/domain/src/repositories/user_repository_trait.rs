@@ -5,8 +5,8 @@ use crate::{
     models::{
         role::UserRole,
         user::{
-            ExistingUser, NewResetToken, NewUser, ResetToken, UserAdmin, UserAdminDetail,
-            UserByEmail, UserCredentials, UserMe,
+            ExistingUser, NewResetToken, NewUser, UserAdmin, UserAdminDetail, UserByEmail,
+            UserCredentials, UserMe,
         },
     },
 };
@@ -53,14 +53,52 @@ pub trait UserRepositoryTrait {
 
     async fn create_reset_token(&self, token: NewResetToken) -> Result<(), Error>;
 
-    /// Marks the unexpired, unused token with this hash as used and returns
-    /// it, in one statement: of two concurrent resets with the same link,
-    /// exactly one gets it.
-    async fn claim_reset_token(&self, token_hash: &str) -> Result<Option<ResetToken>, Error>;
+    /// The reset tokens of `user_id` that have not run out at `now`, used
+    /// or not: how many links the account was sent lately.
+    async fn count_live_reset_tokens(
+        &self,
+        user_id: i32,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<u64, Error>;
 
-    /// Marks every unused reset token of `user_id` as used, so older links
-    /// stop working once the password was reset.
-    async fn retire_reset_tokens(&self, user_id: i32) -> Result<(), Error>;
+    /// Whether a reset link with this hash would be taken now (unused, not
+    /// run out): asked before the costly password hash, so a made-up link
+    /// costs a lookup and nothing more.
+    async fn reset_token_live(&self, token_hash: &str) -> Result<bool, Error>;
+
+    /// Uses the reset link with this hash: marks it used, stores
+    /// `password_hash` for its account and retires the account's other
+    /// links, all or nothing; the account's id. None for a link that is
+    /// unknown, spent or run out. Of two concurrent resets with the same
+    /// link, exactly one gets it.
+    async fn reset_password_with_token(
+        &self,
+        token_hash: &str,
+        password_hash: &str,
+    ) -> Result<Option<i32>, Error>;
+
+    /// Deletes the emailed links (password resets, email confirmations) that
+    /// ran out before `before`; how many. Nothing reads them again.
+    async fn delete_expired_links(
+        &self,
+        before: chrono::DateTime<chrono::Utc>,
+    ) -> Result<u64, Error>;
+
+    /// Stores a link that confirms the account's email address.
+    async fn create_email_verification(&self, token: NewResetToken) -> Result<(), Error>;
+
+    /// The confirmation links of `user_id` that have not run out at `now`,
+    /// used or not.
+    async fn count_live_email_verifications(
+        &self,
+        user_id: i32,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<u64, Error>;
+
+    /// Marks the unexpired, unused confirmation link with this hash as used
+    /// and its account's address as verified, together; the account's id, or
+    /// none for a link that is unknown, spent or run out.
+    async fn claim_email_verification(&self, token_hash: &str) -> Result<Option<i32>, Error>;
 
     async fn count_all(&self) -> Result<i64, Error>;
 

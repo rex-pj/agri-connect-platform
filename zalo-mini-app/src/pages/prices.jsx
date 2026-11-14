@@ -7,12 +7,7 @@ import { PriceLine } from "../components/price-line";
 import { T } from "../texts";
 import { messageOf } from "../zalo";
 
-const KINDS = [
-  ["rice", T.rice],
-  ["fruit", T.fruit],
-];
-
-/** Crop prices, rice then fruit, each crop's latest per area; an area filter. */
+/** Farm prices by commodity (the board's `commodities`: rice, durian, pigs…), each item's latest per area; an area filter. */
 export default function PricesPage() {
   const [area, setArea] = useState("");
   const [board, setBoard] = useState(null);
@@ -43,12 +38,12 @@ export default function PricesPage() {
       {(error || !board) && <Loading error={error} onRetry={load} />}
       {board && board.crops.length === 0 && <Text className="muted center">{T.pricesEmpty}</Text>}
       {board &&
-        KINDS.map(([kind, title]) => {
-          const crops = board.crops.filter((c) => c.kind === kind);
+        board.commodities.map((group) => {
+          const crops = board.crops.filter((c) => c.commodity_id === group.id);
           if (crops.length === 0) return null;
           return (
-            <Box key={kind} className="section">
-              <Text.Header>{title}</Text.Header>
+            <Box key={group.id} className="section">
+              <Text.Header>{group.name}</Text.Header>
               {crops.map((crop) => (
                 <Box key={crop.crop_id} className="card">
                   <Text.Title size="small">{crop.name}</Text.Title>

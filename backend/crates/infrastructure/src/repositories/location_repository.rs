@@ -32,6 +32,7 @@ fn to_location(r: location::Model) -> Location {
         lng: r.lng,
         display_order: r.display_order,
         is_active: r.is_active,
+        is_demo: r.is_demo,
     }
 }
 

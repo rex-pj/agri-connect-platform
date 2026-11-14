@@ -8,7 +8,7 @@ use axum::{
     http::{header, Request, StatusCode},
 };
 use chrono::{Duration, Utc};
-use infrastructure::entities::{business, category, inquiry, service};
+use infrastructure::entities::{business, inquiry, service, service_type as category};
 use integration_tests::{
     body_text, categories_of, env_with_origin, json_body, post_form, send, Env,
 };
@@ -31,7 +31,8 @@ async fn html(e: &Env, uri: &str) -> String {
 fn provider_names(html: &str) -> Vec<String> {
     html.split(r#"<h3 class="card-title fs-6 fw-bold mb-0 flex-grow-1">"#)
         .skip(1)
-        .filter_map(|s| s.split_once("</h3>").map(|(name, _)| name.to_owned()))
+        .filter_map(|s| s.split_once("</a></h3>"))
+        .filter_map(|(link, _)| link.rsplit_once('>').map(|(_, name)| name.to_owned()))
         .collect()
 }
 
@@ -80,7 +81,7 @@ async fn add_service(
 ) -> i32 {
     service::ActiveModel {
         business_id: Set(business_id),
-        category_id: Set(category_id),
+        service_type_id: Set(category_id),
         name: Set(name.to_owned()),
         price_note: Set(price_note.map(str::to_owned)),
         created_on: Set((Utc::now() - Duration::days(days_ago)).fixed_offset()),
@@ -200,7 +201,7 @@ async fn the_listing_shows_services_with_their_provider_and_filters_them() {
         seed.a.0
     )));
 
-    // "Dịch vụ | Cửa hàng" tabs carry the same search to the other list, and
+    // "Dịch vụ | Nhà cung cấp" tabs carry the same search to the other list, and
     // the near-me banner keeps the category.
     let filtered = html(&e, &format!("/services?q=phun&service_id={}", seed.a.0)).await;
     assert!(filtered.contains(&format!(
@@ -386,9 +387,9 @@ async fn the_directory_lists_every_provider_and_finds_them_by_their_services() {
     let seed = seeded(&e).await;
 
     let all = html(&e, "/providers").await;
-    assert!(all.contains("<title>Cửa hàng nông nghiệp — Agri-Connect</title>"));
+    assert!(all.contains("<title>Nhà cung cấp — Agri-Connect</title>"));
     assert!(
-        all.contains("<strong>4</strong> cửa hàng"),
+        all.contains("<strong>4</strong> nhà cung cấp"),
         "a new sign-up without services is listed too"
     );
     // Default order: verified first, then newest.
@@ -432,7 +433,7 @@ async fn the_directory_lists_every_provider_and_finds_them_by_their_services() {
     );
 
     let none = html(&e, "/providers?q=khong-co-ai").await;
-    assert!(none.contains("Không tìm thấy cửa hàng nào"));
+    assert!(none.contains("Không tìm thấy nhà cung cấp nào"));
     assert!(none.contains(r#"href="/providers?q=khong-co-ai""#));
     assert_eq!(
         provider_names(&html(&e, "/providers?service_id=khong&sort=rating&page=-3").await).len(),

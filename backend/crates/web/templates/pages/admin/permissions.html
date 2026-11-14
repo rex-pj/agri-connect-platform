@@ -1,14 +1,16 @@
 {% extends "layouts/admin.html" %}
 {% import "atoms/icon.html" as atoms %}
 {% import "molecules/admin_header.html" as header %}
+{% import "molecules/admin_tabs.html" as tabs %}
 {#- Every permission against every role. `page.body` is
     web::pages::admin::roles::PermissionsPage. Read-only; a role's column
     header links to its grid. -#}
-{% block title %}{{ t(key="admin_menu.permissions") }} — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ t(key="admin_menu.roles") }} — {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set m = page.body.matrix %}
-{{ header::admin_header(title=t(key="admin_menu.permissions"), icon="fa-key", sub=t(key="admin.permissions_sub")) }}
+{{ header::admin_header(title=t(key="admin_menu.roles"), icon="fa-shield-halved", sub=t(key="admin.permissions_sub")) }}
 <div class="admin-body">
+  {{ tabs::admin_tabs(tabs=page.body.tabs, label=t(key="admin_menu.roles")) }}
   <div class="admin-card">
     <div class="table-responsive">
       <table class="table align-middle mb-0 admin-table perm-matrix">

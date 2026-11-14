@@ -3,11 +3,11 @@
     its FormErrors, `kinds` the kinds with their names. `first`: its first
     box takes the focus when its sheet opens. -#}
 {% import "molecules/form_field.html" as field %}
-{% macro partner_fields(form, errors, kinds, prefix, first=false) -%}
+{% macro partner_fields(form, errors, kinds, phone_pattern, prefix, first=false) -%}
 {% set e = errors.fields %}
 {{ field::input(id=prefix ~ "-name", name="name", label=t(key="partner.name"), value=form.name, error=e.name | default(value=""), required=true, first=first) }}
 {{ field::select(id=prefix ~ "-kind", name="kind", label=t(key="partner.kind"), options=kinds, value_key="value", label_key="label", value=form.kind, error=e.kind | default(value=""), required=true, placeholder=t(key="partner.choose_kind")) }}
 {{ field::input(id=prefix ~ "-contact", name="contact_name", label=t(key="partner.contact_name"), value=form.contact_name, error=e.contact_name | default(value=""), autocomplete="off") }}
-{{ field::input(id=prefix ~ "-phone", name="phone", label=t(key="form.phone"), type="tel", value=form.phone, error=e.phone | default(value=""), inputmode="tel", pattern="0[0-9]{9}") }}
+{{ field::input(id=prefix ~ "-phone", name="phone", label=t(key="form.phone"), type="tel", value=form.phone, error=e.phone | default(value=""), inputmode="tel", pattern=phone_pattern) }}
 {{ field::input(id=prefix ~ "-email", name="email", label=t(key="form.email"), type="email", value=form.email, error=e.email | default(value=""), inputmode="email") }}
 {%- endmacro partner_fields %}

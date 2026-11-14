@@ -180,3 +180,19 @@ body {
 .form {
   gap: 12px;
 }
+
+/* Alerts at the top of the home page: amber, as the website's. */
+.alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.alert {
+  background: #fff3cd;
+  border: 1px solid #ffda6a;
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}

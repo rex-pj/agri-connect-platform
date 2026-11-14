@@ -56,7 +56,22 @@ async fn a_tap_is_counted_for_the_business_of_what_was_called() {
     assert_eq!(stored[0].service_id, Some(service_id as i32));
     let business_id = stored[0].business_id;
 
-    let res = send(&e.router, tap("provider", business_id.into(), TEST_ORIGIN)).await;
+    // The same visitor ringing the same business again is the same lead,
+    // whichever button it was; another visitor is another lead.
+    for kind_and_id in [
+        ("provider", i64::from(business_id)),
+        ("service", service_id),
+    ] {
+        let res = send(&e.router, tap(kind_and_id.0, kind_and_id.1, TEST_ORIGIN)).await;
+        assert_eq!(res.status(), StatusCode::NO_CONTENT);
+    }
+    assert_eq!(clicks(&e).await.len(), 1, "a repeat is not counted");
+    let res = integration_tests::send_from(
+        &e.router,
+        tap("provider", business_id.into(), TEST_ORIGIN),
+        [203, 0, 113, 9],
+    )
+    .await;
     assert_eq!(res.status(), StatusCode::NO_CONTENT);
     assert_eq!(clicks(&e).await.len(), 2);
 
@@ -102,8 +117,14 @@ async fn call_buttons_carry_the_beacon_and_the_counts_are_shown() {
         "still a plain tel: link"
     );
 
+    // Two farmers, two leads.
     send(&e.router, tap("service", service_id, TEST_ORIGIN)).await;
-    send(&e.router, tap("service", service_id, TEST_ORIGIN)).await;
+    integration_tests::send_from(
+        &e.router,
+        tap("service", service_id, TEST_ORIGIN),
+        [203, 0, 113, 9],
+    )
+    .await;
 
     let cookie = sign_in(&e, "nongdan", "matkhau123").await;
     let dashboard =

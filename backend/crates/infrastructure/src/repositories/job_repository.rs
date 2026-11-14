@@ -21,7 +21,7 @@ use domain::{
 };
 
 use crate::{
-    entities::{business, category, job_post, location, service, user},
+    entities::{business, job_post, location, service, service_type as category, user},
     sql::{
         business_location, distance, geography_from_text, live_owner_on, notice_email, null_float,
         within, Geo, QueryAs,
@@ -72,7 +72,7 @@ fn offers_the_job() -> SimpleExpr {
             .inner_join(
                 category::Entity,
                 Expr::col((category::Entity, category::Column::Id))
-                    .equals((service::Entity, service::Column::CategoryId))
+                    .equals((service::Entity, service::Column::ServiceTypeId))
                     .and(Expr::col((category::Entity, category::Column::IsActive)).eq(true)),
             )
             .and_where(
@@ -80,8 +80,8 @@ fn offers_the_job() -> SimpleExpr {
                     .equals((business::Entity, business::Column::Id)),
             )
             .and_where(
-                Expr::col((service::Entity, service::Column::CategoryId))
-                    .equals((job_post::Entity, job_post::Column::CategoryId)),
+                Expr::col((service::Entity, service::Column::ServiceTypeId))
+                    .equals((job_post::Entity, job_post::Column::ServiceTypeId)),
             )
             .and_where(Expr::col((service::Entity, service::Column::IsActive)).eq(true))
             .and_where(Expr::col((service::Entity, service::Column::DeletedAt)).is_null())
@@ -94,7 +94,10 @@ fn offers_the_job() -> SimpleExpr {
 fn job_select(distance_m: SimpleExpr) -> SelectStatement {
     Query::select()
         .column((job_post::Entity, job_post::Column::Id))
-        .column((job_post::Entity, job_post::Column::CategoryId))
+        .expr_as(
+            Expr::col((job_post::Entity, job_post::Column::ServiceTypeId)),
+            QueryAs::CategoryId,
+        )
         .expr_as(
             Expr::col((category::Entity, category::Column::Name)),
             QueryAs::Category,
@@ -113,7 +116,7 @@ fn job_select(distance_m: SimpleExpr) -> SelectStatement {
         .inner_join(
             category::Entity,
             Expr::col((category::Entity, category::Column::Id))
-                .equals((job_post::Entity, job_post::Column::CategoryId)),
+                .equals((job_post::Entity, job_post::Column::ServiceTypeId)),
         )
         .left_join(
             location::Entity,
@@ -186,7 +189,7 @@ impl JobRepositoryTrait for JobRepository {
         let insert = Query::insert()
             .into_table(job_post::Entity)
             .columns([
-                job_post::Column::CategoryId.into_iden(),
+                job_post::Column::ServiceTypeId.into_iden(),
                 job_post::Column::LocationId.into_iden(),
                 Geo::Location.into_iden(),
                 job_post::Column::Description.into_iden(),
@@ -214,6 +217,8 @@ impl JobRepositoryTrait for JobRepository {
     async fn count_open_by_phone(&self, phone: &str, since: DateTime<Utc>) -> Result<u64, Error> {
         job_post::Entity::find()
             .filter(job_post::Column::RequesterPhone.eq(phone))
+            // Demo posts never hold a farmer back.
+            .filter(job_post::Column::IsDemo.eq(false))
             .filter(job_post::Column::Status.eq(JOB_STATUS_OPEN))
             .filter(job_post::Column::CreatedOn.gte(since))
             .count(self.db.as_ref())
@@ -299,6 +304,11 @@ impl JobRepositoryTrait for JobRepository {
             .and_where(Expr::col((job_post::Entity, job_post::Column::CreatedOn)).gte(since))
             .and_where(within(job_location(), business_location(), radius_m))
             .and_where(offers_the_job())
+            // A real business sees real posts, a demo one demo posts.
+            .and_where(
+                Expr::col((job_post::Entity, job_post::Column::IsDemo))
+                    .equals((business::Entity, business::Column::IsDemo)),
+            )
             .limit(u64::try_from(limit).unwrap_or(0));
         self.rows::<JobRow, _>(&*newest_first(&mut query), "open_near_owner")
             .await

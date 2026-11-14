@@ -1,12 +1,14 @@
 {% extends "layouts/admin.html" %}
 {% import "atoms/status_badge.html" as status %}
 {% import "molecules/admin_header.html" as header %}
+{% import "molecules/admin_tabs.html" as tabs %}
 {% import "molecules/row_action.html" as row %}
 {#- `page.body` is web::pages::admin::roles::RolesPage. -#}
 {% block title %}{{ t(key="admin_menu.roles") }} — {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {{ header::admin_header(title=t(key="admin_menu.roles"), icon="fa-shield-halved", sub=t(key="admin.roles_sub")) }}
 <div class="admin-body">
+  {{ tabs::admin_tabs(tabs=page.body.tabs, label=t(key="admin_menu.roles")) }}
   <div class="admin-card">
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0 admin-table">

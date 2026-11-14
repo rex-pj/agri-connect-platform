@@ -14,6 +14,17 @@ const fn per_minute(n: u32) -> NonZeroU32 {
 // ── Rate limiting (per client IP, in-process) ─────────────────────────────────
 pub const AUTH_RATE_LIMIT_PER_MIN: NonZeroU32 = per_minute(10);
 pub const PUBLIC_WRITE_RATE_LIMIT_PER_MIN: NonZeroU32 = per_minute(30);
+/// Searches (text and near-me, pages and JSON): each is a query over the
+/// listings. Generous, because one carrier address is many farmers; it stops
+/// a script, not a village.
+pub const PUBLIC_SEARCH_RATE_LIMIT_PER_MIN: NonZeroU32 = per_minute(240);
+/// An IPv6 client is its /64: one subscriber holds the whole prefix, and a
+/// budget per address would be no budget at all.
+pub const RATE_LIMIT_IPV6_PREFIX_BITS: u32 = 64;
+/// The longest `x-request-id` a client may bring; a UUID is 36.
+pub const REQUEST_ID_MAX_LEN: usize = 64;
+/// How long a request may run before it is given up on (uploads excepted).
+pub const REQUEST_TIMEOUT_SECS: u64 = 30;
 /// Generous: an admin clearing a moderation queue clicks fast. It exists to
 /// stop a stolen session or a runaway script, not a person.
 pub const MEMBER_WRITE_RATE_LIMIT_PER_MIN: NonZeroU32 = per_minute(120);
@@ -73,6 +84,24 @@ pub const EXPLORE_RADII_M: [i64; 4] = [5_000, 10_000, 25_000, 50_000];
 /// whole number of metres for the radius links. Must be one of the choices.
 pub const EXPLORE_DEFAULT_RADIUS_M: i64 = RADIUS_DEFAULT_M as i64;
 const _: () = assert!(EXPLORE_RADII_M[1] == EXPLORE_DEFAULT_RADIUS_M);
+
+/// Metres in a kilometre: radii are kept in metres, shown in whole km.
+pub const METRES_PER_KM: i64 = 1_000;
+
+/// A distance in metres as whole kilometres, as the pages show it.
+pub const fn km(metres: i64) -> i64 {
+    metres / METRES_PER_KM
+}
+
+// ── Server ────────────────────────────────────────────────────────────────────
+/// The SMTP port when `SMTP_PORT` is unset (submission with STARTTLS).
+pub const SMTP_PORT_DEFAULT: u16 = 587;
+/// How often expired refresh tokens are deleted, in seconds.
+pub const SESSION_PURGE_EVERY_SECS: u64 = 3_600;
+/// How often the rate limiters forget idle clients, in seconds.
+pub const RATE_LIMIT_PRUNE_EVERY_SECS: u64 = 300;
+/// How long the `healthcheck` command waits for the server, in seconds.
+pub const HEALTHCHECK_TIMEOUT_SECS: u64 = 5;
 
 /// The Zalo Graph endpoint that converts a Mini App's location or phone
 /// token (with the app's secret key) into the data it stands for.

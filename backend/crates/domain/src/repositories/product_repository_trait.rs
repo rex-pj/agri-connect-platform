@@ -4,8 +4,8 @@ use uuid::Uuid;
 use crate::{
     error::Error,
     models::product::{
-        AdminProduct, NewProduct, ProductFilter, ProductSort, ProductView, ProviderProduct,
-        UpdateProduct, UpdateProductAdmin,
+        AdminProduct, AdminProductFilter, NewProduct, ProductFilter, ProductSort, ProductView,
+        ProviderProduct, UpdateProduct, UpdateProductAdmin,
     },
 };
 
@@ -15,17 +15,12 @@ pub trait ProductRepositoryTrait {
     /// `search` (accents and case ignored).
     async fn list_admin(
         &self,
-        provider_id: Option<i32>,
-        search: Option<&str>,
+        filter: &AdminProductFilter,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<AdminProduct>, Error>;
 
-    async fn count_admin(
-        &self,
-        provider_id: Option<i32>,
-        search: Option<&str>,
-    ) -> Result<i64, Error>;
+    async fn count_admin(&self, filter: &AdminProductFilter) -> Result<i64, Error>;
 
     async fn find_by_id_admin(&self, id: i32) -> Result<Option<AdminProduct>, Error>;
 
@@ -43,7 +38,7 @@ pub trait ProductRepositoryTrait {
 
     async fn count_browse(&self, filter: &ProductFilter) -> Result<i64, Error>;
 
-    async fn featured(&self, limit: i64) -> Result<Vec<ProductView>, Error>;
+    async fn featured(&self, limit: i64, sector: Option<&str>) -> Result<Vec<ProductView>, Error>;
 
     async fn find_by_id(&self, id: i32) -> Result<Option<ProductView>, Error>;
 
@@ -58,7 +53,11 @@ pub trait ProductRepositoryTrait {
 
     async fn list_by_user(&self, user_id: i32) -> Result<Vec<ProviderProduct>, Error>;
 
+    /// A shown supply type: what a supply may be filed under.
     async fn check_category_is_product(&self, category_id: i32) -> Result<bool, Error>;
+
+    /// A shown commodity: what a supply may say it is for.
+    async fn check_commodity_is_shown(&self, commodity_id: i32) -> Result<bool, Error>;
 
     async fn create(&self, product: NewProduct) -> Result<i32, Error>;
 

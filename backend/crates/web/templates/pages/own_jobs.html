@@ -20,7 +20,7 @@
   <section class="detail-card" aria-labelledby="job-{{ j.id }}">
     <div class="d-flex justify-content-between align-items-start gap-2">
       <h2 class="detail-card__title mb-1" id="job-{{ j.id }}">{{ j.category }}</h2>
-      {% if j.distance_m is number %}<span class="badge text-bg-light">{{ atoms::icon(name="fa-location-dot", class="me-1") }}{{ j.distance_m | distance }}</span>{% endif %}
+      {% if j.distance_m is number %}<span class="badge text-bg-light border">{{ atoms::icon(name="fa-location-dot", class="me-1") }}{{ j.distance_m | distance }}</span>{% endif %}
     </div>
     <p class="detail-card__text mb-1">{{ j.description }}</p>
     <p class="small text-muted mb-2">{{ j.requester_name }}{% if j.area %} · {{ j.area }}{% endif %} · <time datetime="{{ j.created_on | utc_iso }}">{{ j.created_on | vn_datetime }}</time></p>

@@ -6,7 +6,7 @@
 
 use application::{
     admin_units::AreaKey,
-    outputs::{DemandReportDto, DemandRowDto, Figure},
+    outputs::{CodedDto, DemandReportDto, DemandRowDto, Figure},
 };
 use axum::{
     extract::State,
@@ -19,6 +19,7 @@ use serde::Serialize;
 use crate::{
     app_state::AppState,
     extract::ApiQuery,
+    labels::{sector_name, sector_options, CodeOption},
     locale::Locale,
     middleware::auth::Viewer,
     pages::{
@@ -41,6 +42,8 @@ pub struct AreaOption {
 #[derive(Serialize)]
 pub struct DemandPage {
     pub report: DemandReportDto,
+    /// Every sector, to name a row's.
+    pub sectors: Vec<CodeOption>,
     pub area: String,
     pub areas: Vec<AreaOption>,
     pub csv_href: String,
@@ -78,7 +81,10 @@ pub async fn show(
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
-    let report = state.usecases.demand.report(&actor, q.focus()).await?;
+    let (report, sectors) = tokio::try_join!(
+        state.usecases.demand.report(&actor, q.focus()),
+        state.usecases.sector.named(),
+    )?;
     let areas = area_options(state.locale(), &report);
     let path = url("admin_demand", &[])?;
     let area = focus_value(q.focus());
@@ -87,6 +93,7 @@ pub async fn show(
         area,
         areas,
         report,
+        sectors: sector_options(&sectors),
         action: path.clone(),
     };
     render_admin(
@@ -108,16 +115,29 @@ pub async fn csv(
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
-    let report = state.usecases.demand.report(&actor, q.focus()).await?;
-    Ok(csv_response(state.locale(), &report, DEMAND_CSV_NAME))
+    let (report, sectors) = tokio::try_join!(
+        state.usecases.demand.report(&actor, q.focus()),
+        state.usecases.sector.named(),
+    )?;
+    Ok(csv_response(
+        state.locale(),
+        &sectors,
+        &report,
+        DEMAND_CSV_NAME,
+    ))
 }
 
 /// The report as CSV: a header, one line per category, then the sums.
 /// Excel reads UTF-8 only after a byte order mark.
-pub fn csv_response(locale: &Locale, report: &DemandReportDto, filename: &str) -> Response {
+pub fn csv_response(
+    locale: &Locale,
+    sectors: &[CodedDto],
+    report: &DemandReportDto,
+    filename: &str,
+) -> Response {
     let few = locale.text_with("demand.fewer_than", &[("min", &report.min_count)]);
     let cell = |f: &Figure| f.value.map_or_else(|| few.clone(), |v| v.to_string());
-    let mut header_row = vec![locale.text("demand.category")];
+    let mut header_row = vec![locale.text("demand.category"), locale.text("sector.label")];
     for w in &report.weeks {
         header_row.push(w.starts_on.format("%d/%m/%Y").to_string());
     }
@@ -131,7 +151,12 @@ pub fn csv_response(locale: &Locale, report: &DemandReportDto, filename: &str) -
         header_row.push(locale.text(key));
     }
     let line = |name: String, r: &DemandRowDto| -> Vec<String> {
-        let mut fields = vec![name];
+        let sector = r
+            .sector
+            .as_deref()
+            .map(|s| sector_name(sectors, s))
+            .unwrap_or_default();
+        let mut fields = vec![name, sector];
         fields.extend(r.weeks.iter().map(cell));
         fields.extend([&r.total, &r.calls, &r.zalo, &r.inquiries, &r.people].map(cell));
         fields
@@ -145,7 +170,7 @@ pub fn csv_response(locale: &Locale, report: &DemandReportDto, filename: &str) -
         lines.push(line(name, r));
     }
     lines.push(line(locale.text("demand.all"), &report.all));
-    let mut searches = vec![locale.text("demand.searches")];
+    let mut searches = vec![locale.text("demand.searches"), String::new()];
     searches.extend(report.searches.iter().map(cell));
     lines.push(searches);
     let mut body = String::from('\u{feff}');
@@ -172,10 +197,18 @@ pub fn csv_response(locale: &Locale, report: &DemandReportDto, filename: &str) -
 
 /// One CSV field: quoted when it holds a comma, a quote or a line break.
 fn csv_field(value: &str) -> String {
+    // A spreadsheet runs a cell that starts like a formula; a leading
+    // apostrophe makes it text. The figures are digits or blank, so only a
+    // name an admin typed can start this way.
+    let value = if value.starts_with(['=', '+', '-', '@', '\t', '\r']) {
+        format!("'{value}")
+    } else {
+        value.to_owned()
+    };
     if value.contains([',', '"', '\n', '\r']) {
         format!("\"{}\"", value.replace('"', "\"\""))
     } else {
-        value.to_owned()
+        value
     }
 }
 
@@ -188,6 +221,9 @@ mod tests {
         assert_eq!(csv_field("Phun thuoc"), "Phun thuoc");
         assert_eq!(csv_field("a, b"), "\"a, b\"");
         assert_eq!(csv_field("say \"hi\""), "\"say \"\"hi\"\"\"");
+        // A name that would run as a formula is made text.
+        assert_eq!(csv_field("=HYPERLINK(1)"), "'=HYPERLINK(1)");
+        assert_eq!(csv_field("@a, b"), "\"'@a, b\"");
     }
 
     #[test]

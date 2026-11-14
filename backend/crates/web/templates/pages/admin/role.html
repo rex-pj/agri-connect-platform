@@ -18,7 +18,7 @@
       <legend class="grant-group__label">{{ g.label }}</legend>
       {% for p in g.permissions %}
       <div class="form-check grant-row">
-        <input class="form-check-input" type="checkbox" id="perm-{{ p.code }}" name="{{ b.field_prefix }}{{ p.code }}"{% if p.granted %} checked{% endif %}>
+        <input class="form-check-input" type="checkbox" id="perm-{{ p.code }}" name="{{ b.field_prefix }}{{ p.code }}"{% if p.granted and p.grantable %} checked{% endif %}{% if not p.grantable %} disabled{% endif %}>
         <label class="form-check-label" for="perm-{{ p.code }}">{{ p.name }} <code class="grant-row__code">{{ p.code }}</code></label>
       </div>
       {% endfor %}

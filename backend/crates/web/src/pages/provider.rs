@@ -29,11 +29,17 @@ use crate::{
     cookies::{Flash, TakeFlash},
     extract::{ApiForm, ApiPath},
     locale::Locale,
+    middleware::auth::Viewer,
     pages::{
-        admin::is_refusal, canonical_url, forms::FormErrors, listing::parse_opt, moved_permanently,
-        parse_id, product as product_page, see_other, service as service_page, summary,
+        admin::is_refusal,
+        canonical_url,
+        forms::FormErrors,
+        listing::parse_opt,
+        manage::{manage_link, Managed},
+        moved_permanently, parse_id, product as product_page, see_other, service as service_page,
+        summary,
     },
-    shell::Shell,
+    shell::{Link, Shell},
     views::{render_page, render_page_status},
 };
 
@@ -115,9 +121,11 @@ pub struct ContactLimits {
     pub name_max: usize,
     pub topic_max: usize,
     pub note_max: usize,
+    pub phone_pattern: &'static str,
 }
 
 pub(super) const LIMITS: ContactLimits = ContactLimits {
+    phone_pattern: application::validation::VN_PHONE_PATTERN,
     name_max: REQUESTER_NAME_MAX_LEN,
     topic_max: TOPIC_MAX_LEN,
     note_max: NOTE_MAX_LEN,
@@ -181,6 +189,18 @@ pub struct ProviderPage {
     pub share_text: String,
     /// The form was just sent (flash from the redirect).
     pub sent: bool,
+    /// Where the owner or an admin edits it (`pages::manage`).
+    pub manage: Option<Link>,
+}
+
+/// Who is looking and what just happened, for the detail pages (provider,
+/// service, product): the contact form was just sent, and the edit link for
+/// the owner or an admin. A refused form re-shown is `default()`: the
+/// farmer who sent it has nothing to edit.
+#[derive(Debug, Default)]
+pub(super) struct Visit {
+    pub sent: bool,
+    pub manage: Option<Link>,
 }
 
 /// The region the platform serves (its text key); stands in for a missing
@@ -226,6 +246,7 @@ struct Around {
     contact: ContactState,
     review: ReviewState,
     flash: Option<Flash>,
+    manage: Option<Link>,
 }
 
 /// The products and shown reviews of a provider's page.
@@ -247,8 +268,10 @@ fn page(locale: &Locale, provider: BusinessDetailDto, a: Around) -> ProviderPage
         contact,
         review,
         flash,
+        manage,
     } = a;
     ProviderPage {
+        manage,
         products,
         reviews,
         review,
@@ -284,6 +307,7 @@ pub async fn by_id(
 /// GET /providers/{id}/{slug}
 pub async fn show(
     shell: Shell,
+    Viewer(viewer): Viewer,
     flash: TakeFlash,
     State(state): State<AppState>,
     ApiPath((id, _slug)): ApiPath<(String, String)>,
@@ -300,6 +324,7 @@ pub async fn show(
         contact: ContactState::default(),
         review: ReviewState::default(),
         flash: flash.0,
+        manage: manage_link(&state, viewer.as_ref(), provider.id, Managed::Provider).await?,
     };
     let page = page(state.locale(), provider, a);
     let mut response = render_page(&state, &shell, "pages/provider.html", &page)?;
@@ -369,6 +394,7 @@ pub async fn submit_contact(
             requester_phone: v.requester_phone.clone(),
             note: Some(v.note.clone()),
             service_id: parse_opt(&v.service_id),
+            product_id: parse_opt(&form.product_id),
         })
         .await;
 
@@ -395,13 +421,25 @@ pub async fn submit_contact(
             match origin {
                 Some(Origin::Service(service)) => {
                     return service_page::render(
-                        &state, &shell, service, provider, contact, false, status,
+                        &state,
+                        &shell,
+                        service,
+                        provider,
+                        contact,
+                        Visit::default(),
+                        status,
                     )
                     .await;
                 }
                 Some(Origin::Product(product)) => {
                     return product_page::render(
-                        &state, &shell, product, provider, contact, false, status,
+                        &state,
+                        &shell,
+                        product,
+                        provider,
+                        contact,
+                        Visit::default(),
+                        status,
                     )
                     .await;
                 }
@@ -414,6 +452,7 @@ pub async fn submit_contact(
                 contact,
                 review: ReviewState::default(),
                 flash: None,
+                manage: None,
             };
             let page = page(state.locale(), provider, a);
             render_page_status(&state, &shell, status, "pages/provider.html", &page)
@@ -473,6 +512,7 @@ pub async fn submit_review(
                 contact: ContactState::default(),
                 review,
                 flash: None,
+                manage: None,
             };
             let page = page(state.locale(), provider, a);
             render_page_status(&state, &shell, status, "pages/provider.html", &page)

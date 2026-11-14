@@ -31,7 +31,8 @@ async fn html(e: &Env, uri: &str) -> String {
 fn names(html: &str) -> Vec<String> {
     html.split(r#"<h3 class="card-title fs-6 fw-bold mb-0 flex-grow-1">"#)
         .skip(1)
-        .filter_map(|s| s.split_once("</h3>").map(|(n, _)| n.to_owned()))
+        .filter_map(|s| s.split_once("</a></h3>"))
+        .filter_map(|(link, _)| link.rsplit_once('>').map(|(_, n)| n.to_owned()))
         .collect()
 }
 
@@ -61,7 +62,7 @@ async fn seeded(e: &Env) -> i32 {
                      VALUES ('{name}', '0901234567', 'Ninh Kiều, Cần Thơ',
                              ST_GeographyFromText('SRID=4326;POINT({lng} {lat})'))
                      RETURNING id)
-                 INSERT INTO services (business_id, category_id, name)
+                 INSERT INTO services (business_id, service_type_id, name)
                  SELECT id, {service}, 'Dịch vụ' FROM b",
                 lng = CAN_THO.1
             ))
@@ -161,7 +162,7 @@ async fn bad_positions_fall_back_to_the_onboarding_and_empty_results_offer_more_
         "/explore?location_id=999",
     ] {
         let page = html(&e, uri).await;
-        assert!(page.contains("Tìm thợ gần bạn"), "{uri}");
+        assert!(page.contains("Tìm nhà cung cấp gần bạn"), "{uri}");
     }
 
     // Far from everyone (Hà Nội): nothing within 10 km, offer 25 km.
@@ -181,7 +182,7 @@ async fn a_provider_saving_coordinates_appears_in_the_geo_api() {
     let token = register_provider(&e.state, "nongdan", "0901234567").await;
     e.t.db
         .execute_unprepared(&format!(
-            "INSERT INTO services (business_id, category_id, name)
+            "INSERT INTO services (business_id, service_type_id, name)
              SELECT id, {service}, 'Múc bùn' FROM businesses WHERE name = 'Vườn nongdan'"
         ))
         .await
@@ -242,7 +243,7 @@ async fn near_me_shows_services_and_shops_in_two_tabs() {
 #[tokio::test]
 #[ignore = "needs TEST_DATABASE_URL"]
 async fn near_me_finds_products_and_features_services_before_a_position() {
-    use infrastructure::entities::{business, category, product};
+    use infrastructure::entities::{business, product, supply_type};
     use sea_orm::{sea_query::Expr, ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
     let e = Env::new().await;
@@ -254,15 +255,14 @@ async fn near_me_finds_products_and_features_services_before_a_position() {
         .await
         .unwrap()
         .unwrap();
-    let product_category = category::Entity::find()
-        .filter(category::Column::Type.eq("product"))
+    let product_category = supply_type::Entity::find()
         .one(&e.t.db)
         .await
         .unwrap()
         .unwrap();
     product::ActiveModel {
         business_id: Set(near.id),
-        category_id: Set(product_category.id),
+        supply_type_id: Set(product_category.id),
         name: Set("Phân Urê".to_owned()),
         ..Default::default()
     }
@@ -271,7 +271,7 @@ async fn near_me_finds_products_and_features_services_before_a_position() {
     .unwrap();
 
     let page = html(&e, &format!("/explore?location_id={id}&tab=products")).await;
-    assert!(page.contains("<strong>1</strong> sản phẩm gần bạn"));
+    assert!(page.contains("<strong>1</strong> vật tư gần bạn"));
     assert!(page.contains("Cách bạn <strong>995 m</strong>"));
     assert!(page.contains(r#"data-tab="products" aria-current="page""#));
     assert!(page.contains(r#"data-panel="services" hidden"#));
@@ -311,7 +311,7 @@ async fn near_me_services_take_turns_nearest_first() {
         .unwrap();
     service::ActiveModel {
         business_id: Set(near.id),
-        category_id: Set(category),
+        service_type_id: Set(category),
         name: Set("Thứ hai của Gần".to_owned()),
         ..Default::default()
     }

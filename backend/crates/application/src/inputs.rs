@@ -14,6 +14,8 @@ pub struct GeoSearchParams {
 
 pub struct BrowseParams {
     pub service_id: Option<i32>,
+    /// The visitor's sector: its categories and those of every sector.
+    pub sector: Option<String>,
     pub name: Option<String>,
     pub sort: ProviderSort,
     pub page: i64,
@@ -26,6 +28,8 @@ pub struct ContactInput {
     pub requester_phone: String,
     pub note: Option<String>,
     pub service_id: Option<i32>,
+    /// The supply whose page the form was on.
+    pub product_id: Option<i32>,
 }
 
 /// A farmer's review of a provider, from the phone their contact request
@@ -52,6 +56,8 @@ pub struct UpdateProfileInput {
 
 pub struct CreateProductInput {
     pub category_id: i32,
+    /// The commodity it is for; `None`: every one.
+    pub commodity_id: Option<i32>,
     pub name: String,
     pub description: Option<String>,
     pub price: Option<i64>,
@@ -61,6 +67,7 @@ pub struct CreateProductInput {
 pub struct UpdateProductInput {
     pub product_id: i32,
     pub category_id: i32,
+    pub commodity_id: Option<i32>,
     pub name: String,
     pub description: Option<String>,
     pub price: Option<i64>,
@@ -85,6 +92,25 @@ pub struct CategoryInput {
     pub icon: Option<String>,
     pub color: Option<String>,
     pub description: Option<String>,
+    pub display_order: i16,
+    /// A sector code, or empty for every sector.
+    pub sector: String,
+}
+
+/// A sector's or an alert kind's boxes (admin create and edit; the code
+/// is made from the name once).
+pub struct CodedInput {
+    pub name: String,
+    pub icon: Option<String>,
+    pub display_order: i16,
+}
+
+/// A commodity's boxes (admin create and edit).
+pub struct CommodityInput {
+    pub name: String,
+    /// A sector code (`sectors.code`).
+    pub sector: String,
+    pub icon: Option<String>,
     pub display_order: i16,
 }
 
@@ -158,7 +184,8 @@ pub struct ContractInput {
 /// A crop's boxes (admin create and edit).
 pub struct CropInput {
     pub name: String,
-    pub kind: String,
+    /// The commodity it is of; `None` when none was chosen.
+    pub commodity_id: Option<i32>,
     pub unit: String,
     pub display_order: i32,
 }
@@ -184,4 +211,17 @@ pub struct JobInput {
     pub description: String,
     pub requester_name: String,
     pub requester_phone: String,
+}
+
+/// An alert as typed (admin create and edit): a date that did not parse is
+/// `None` and refused like a missing one; a blank sector or province means
+/// every sector, the whole region.
+pub struct AlertInput {
+    pub kind: String,
+    pub sector: String,
+    pub province_code: String,
+    pub title: String,
+    pub body: String,
+    pub starts_on: Option<chrono::NaiveDate>,
+    pub ends_on: Option<chrono::NaiveDate>,
 }

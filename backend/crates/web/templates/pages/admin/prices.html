@@ -2,6 +2,8 @@
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/alert.html" as alerts %}
 {% import "molecules/admin_header.html" as header %}
+{% import "molecules/admin_tabs.html" as tabs %}
+{% import "molecules/admin_filter.html" as filter %}
 {% import "molecules/pagination_nav.html" as paging %}
 {% import "molecules/row_action.html" as row %}
 {% import "molecules/sheet_header.html" as sheet_head %}
@@ -13,15 +15,17 @@
     with its messages when a rule is broken. "Xoá" reloads the list with that
     row's confirmation open (`b.confirm`, in its own `dialog` scope); its
     form sends the page back (`b.keep`). -#}
-{% block title %}{{ t(key="admin_menu.prices") }} — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ t(key="admin_menu.price_board") }} — {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
 <div x-data="dialog" data-open="{% if b.errors.message or b.errors.fields %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
-{{ header::admin_header(title=t(key="admin_menu.prices"), icon="fa-chart-line", sub=t(key="admin_prices.sub", count=b.total), action_href="#nhap-gia", action_icon="fa-plus", action_label=t(key="admin_prices.add"), action_opens=true) }}
+{{ header::admin_header(title=t(key="admin_menu.price_board"), icon="fa-chart-line", sub=t(key="admin_prices.sub", count=b.total), action_href="#nhap-gia", action_icon="fa-plus", action_label=t(key="admin_prices.add"), action_opens=true) }}
 <div class="admin-body">
+  {{ tabs::admin_tabs(tabs=b.tabs, label=t(key="admin_menu.price_board")) }}
   {% if b.flash == "price_recorded" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin_prices.recorded")) }}{% endif %}
   {% if b.flash == "price_deleted" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin_prices.deleted")) }}{% endif %}
-  <p class="small text-muted">{{ t(key="admin_prices.hint", days=b.fresh_days) }} <a href="{{ b.crops_href }}">{{ atoms::icon(name="fa-seedling", class="me-1") }}{{ t(key="admin_menu.crops") }}</a></p>
+  {% if b.filter %}{{ filter::admin_filter(f=b.filter) }}{% endif %}
+  <p class="small text-muted mb-0">{{ t(key="admin_prices.hint", days=b.fresh_days) }}</p>
 
   <div class="admin-card">
     <div class="table-responsive">
@@ -33,8 +37,8 @@
           {% for r in b.rows %}
           {% set p = r.price %}
           <tr>
-            <td><span class="fw-bold">{{ p.crop_name }}</span>{% if p.note %}<span class="d-block small text-muted">{{ p.note }}</span>{% endif %}</td>
-            <td>{{ p.location_label }}</td>
+            <td><a class="fw-bold text-decoration-none" href="{{ r.crop_href }}">{{ p.crop_name }}</a>{% if p.note %}<span class="d-block small text-muted">{{ p.note }}</span>{% endif %}</td>
+            <td><a class="text-decoration-none" href="{{ r.area_href }}">{{ p.location_label }}</a></td>
             <td class="text-nowrap">{{ p.observed_on | full_date }}</td>
             <td class="text-end text-nowrap">{% if p.price_low == p.price_high %}{{ p.price_low | vnd }}{% else %}{{ p.price_low | number }} – {{ p.price_high | vnd }}{% endif %}<span class="small text-muted">/{{ p.unit }}</span></td>
             <td class="text-end"><div class="row-actions">{{ row::delete(href=r.delete_href ~ "#xac-nhan", name=p.crop_name) }}</div></td>

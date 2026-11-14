@@ -1,0 +1,77 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "atoms/status_badge.html" as status %}
+{% import "molecules/admin_header.html" as header %}
+{% import "molecules/admin_tabs.html" as tabs %}
+{% import "molecules/row_action.html" as row %}
+{% import "molecules/sheet_header.html" as sheet_head %}
+{% import "organisms/alert_fields.html" as fields %}
+{% import "organisms/confirm_sheet.html" as confirm %}
+{#- `page.body` is web::pages::admin::alerts::AlertsPage: every alert (the
+    ones turned off too, the latest to end first) and the create sheet opened
+    by the header's "add" (an anchored section without JS), which comes back
+    open with its messages when a rule is broken. "Tắt" reloads the list with
+    that row's confirmation open (`b.confirm`, in its own `dialog` scope). -#}
+{% block title %}{{ t(key="admin_menu.alerts") }} — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+<div x-data="dialog" data-open="{% if b.errors.message or b.errors.fields %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+{{ header::admin_header(title=t(key="admin_menu.alerts"), icon="fa-triangle-exclamation", sub=t(key="alert.sub"), action_href="#them-canh-bao", action_icon="fa-plus", action_label=t(key="alert.add"), action_opens=true) }}
+<div class="admin-body">
+  {{ tabs::admin_tabs(tabs=b.tabs, label=t(key="admin_menu.alerts")) }}
+  {% if b.flash == "alert_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="alert.hidden")) }}{% endif %}
+  {% if b.flash == "alert_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="alert.shown")) }}{% endif %}
+
+  <div class="admin-card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 admin-table">
+        <thead class="admin-table-head">
+          <tr><th>{{ t(key="alert.title") }}</th><th>{{ t(key="alert.kind") }}</th><th>{{ t(key="alert.dates") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
+        </thead>
+        <tbody>
+          {% for r in b.rows %}
+          {% set a = r.alert %}
+          <tr{% if not a.live %} class="table-light text-body-secondary"{% endif %}>
+            <td><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ a.title }}</a>{% if a.is_demo %} {{ status::demo() }}{% endif %}<span class="d-block small text-muted">{{ r.reach }}</span></td>
+            <td>{{ r.kind_label }}</td>
+            <td class="small text-nowrap"><time datetime="{{ a.starts_on }}">{{ a.starts_on | full_date }}</time> – <time datetime="{{ a.ends_on }}">{{ a.ends_on | full_date }}</time></td>
+            <td class="text-center">{{ status::visibility(on=a.live) }}</td>
+            <td class="text-end">
+              <div class="row-actions">
+                {% if a.is_active %}
+                {{ row::hide(href=r.hide_href ~ "#xac-nhan", name=a.title) }}
+                {% else %}
+                {{ row::show(action=r.status_action, name=a.title, field="is_active", keep=b.keep) }}
+                {% endif %}
+                {{ row::open(href=r.href, name=a.title) }}
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-center text-muted py-4">{{ t(key="alert.none") }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if b.confirm %}
+  {% set c = b.confirm %}
+  <div x-data="dialog" data-open="true" x-on:keydown.escape.window="hide">
+    {{ confirm::confirm_sheet(id="xac-nhan", title=t(key="alert.hide_title", name=c.name), icon="fa-eye-slash", action=c.action, button=t(key="admin.confirm_hide"), reason_max=limits.audit_reason_max, effect="hide", what=t(key="alert.what"), hidden_name="is_active", hidden_value="false", keep=b.keep) }}
+  </div>
+  {% endif %}
+
+  <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
+  <section class="contact-sheet" id="them-canh-bao" aria-labelledby="them-canh-bao-title" :class="sheetClass">
+    {{ sheet_head::sheet_header(id="them-canh-bao", title=t(key="alert.add"), icon="fa-triangle-exclamation") }}
+    <form class="contact-sheet__form" method="post" action="{{ b.create_action }}" novalidate>
+      {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
+      {{ fields::alert_fields(form=b.form, errors=b.errors, choices=b.choices, title_max=limits.alert_title_max, body_max=limits.alert_body_max, prefix="new", first=true) }}
+      <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-plus") }} {{ t(key="alert.add") }}</button>
+    </form>
+  </section>
+</div>
+</div>
+{% endblock content %}

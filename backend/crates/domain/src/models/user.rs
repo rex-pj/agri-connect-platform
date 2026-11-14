@@ -17,6 +17,10 @@ pub struct NewUser {
     pub password_hash: String,
     pub role: String,
     pub full_name: Option<String>,
+    /// The address is taken as the account's own from the start: an admin
+    /// typed it for an account they create. A sign-up's is not, until the
+    /// link sent to it is opened.
+    pub email_verified: bool,
 }
 
 pub struct ExistingUser {
@@ -56,6 +60,8 @@ pub struct UserMe {
     pub full_name: Option<String>,
     pub role: String,
     pub created_on: chrono::DateTime<chrono::Utc>,
+    /// The link sent to `email` was opened.
+    pub email_verified: bool,
 }
 
 /// Minimal user info looked up by email for password-reset flows.
@@ -64,12 +70,8 @@ pub struct UserByEmail {
     pub email: String,
 }
 
-/// A valid (unexpired, unused) reset token row.
-pub struct ResetToken {
-    pub id: i32,
-    pub user_id: i32,
-}
-
+/// A link emailed to an account: a password reset, or the confirmation of
+/// its address (each kind in its own table).
 pub struct NewResetToken {
     pub user_id: i32,
     /// SHA-256 of the emailed token; the raw value is never stored.

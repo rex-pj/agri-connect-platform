@@ -17,18 +17,20 @@ use crate::{
     constants::META_DESCRIPTION_MAX_CHARS,
     cookies::{Flash, TakeFlash},
     extract::ApiPath,
+    middleware::auth::Viewer,
     pages::{
         canonical_url,
         cards::same_label,
+        manage::{manage_link, Managed},
         moved_permanently, parse_id,
         provider::{
-            area_of, rating_line, ContactLimits, ContactState, RatingLine, LIMITS,
+            area_of, rating_line, ContactLimits, ContactState, RatingLine, Visit, LIMITS,
             RETURN_TO_SERVICE,
         },
         summary,
     },
     routes,
-    shell::Shell,
+    shell::{Link, Shell},
     views::render_page_status,
 };
 
@@ -63,6 +65,8 @@ pub struct ServicePage {
     pub return_to: &'static str,
     /// The form was just sent (flash from the redirect).
     pub sent: bool,
+    /// Where the owner or an admin edits it (`pages::manage`).
+    pub manage: Option<Link>,
 }
 
 async fn load(state: &AppState, raw_id: &str) -> Result<PublicServiceDto, Error> {
@@ -101,7 +105,7 @@ pub(super) async fn render(
     service: PublicServiceDto,
     provider: BusinessDetailDto,
     mut contact: ContactState,
-    sent: bool,
+    visit: Visit,
     status: StatusCode,
 ) -> Result<Response, Error> {
     // A fresh form has this service chosen.
@@ -142,7 +146,8 @@ pub(super) async fn render(
         contact,
         limits: LIMITS,
         return_to: RETURN_TO_SERVICE,
-        sent,
+        sent: visit.sent,
+        manage: visit.manage,
     };
     render_page_status(state, shell, status, "pages/service.html", &page)
 }
@@ -159,6 +164,7 @@ pub async fn by_id(
 /// GET /services/{id}/{slug}
 pub async fn show(
     shell: Shell,
+    Viewer(viewer): Viewer,
     flash: TakeFlash,
     State(state): State<AppState>,
     ApiPath((id, _slug)): ApiPath<(String, String)>,
@@ -173,14 +179,23 @@ pub async fn show(
         .explore
         .get_provider_detail(service.business_id)
         .await?;
-    let sent = flash.0 == Some(Flash::ContactSent);
+    let visit = Visit {
+        sent: flash.0 == Some(Flash::ContactSent),
+        manage: manage_link(
+            &state,
+            viewer.as_ref(),
+            service.business_id,
+            Managed::Service(service.id),
+        )
+        .await?,
+    };
     let mut response = render(
         &state,
         &shell,
         service,
         provider,
         ContactState::default(),
-        sent,
+        visit,
         StatusCode::OK,
     )
     .await?;

@@ -1,20 +1,23 @@
-//! Crop prices: the farm-gate price of a rice variety or a fruit in one area
-//! (a location preset) on one day, as a low–high range in đồng per unit.
+//! Farm produce prices ("nông sản"): the farm-gate price of a rice variety, a
+//! fruit, live pigs or shrimp in one area (a location preset) on one day, as a
+//! low–high range in đồng per unit.
 //!
-//! Admins keep the crops and enter the prices (`price.manage`); entering the
-//! same crop, area and day again replaces that day's price. The public board
-//! shows each crop's latest price per area, only when it is at most
-//! `PRICE_FRESH_DAYS` old (a stale price misleads more than none), with how
-//! its middle moved since the price before.
+//! Admins keep the crops, each a variety or grade of one commodity (cây trồng, vật nuôi:
+//! rice, durian, pigs), and enter the prices (`price.manage`);
+//! entering the same crop, area and day again replaces that day's price. The
+//! public board shows, commodity by commodity, each crop's latest price per area,
+//! only when it is at most `PRICE_FRESH_DAYS` old (a stale price misleads
+//! more than none), with how its middle moved since the price before.
 
 use std::{collections::HashMap, sync::Arc};
 
 use chrono::{Duration, NaiveDate, Utc};
 use domain::{
-    constants::CROP_KINDS,
     events::{Change, DomainEvent, Entity},
+    models::commodity::Commodity,
     models::price::{Crop, CropFields, CropPrice, NewCropPrice},
     repositories::{
+        commodity_repository_trait::CommodityRepositoryTrait,
         location_repository_trait::LocationRepositoryTrait,
         price_repository_trait::PriceRepositoryTrait,
     },
@@ -30,8 +33,8 @@ use crate::{
     },
     inputs::{CropInput, PriceInput},
     outputs::{
-        AdminPagedResponse, CropBoardDto, CropDto, CropPriceDto, NamedDto, PriceBoardDto,
-        PriceChoicesDto, PriceQuoteDto,
+        AdminPagedResponse, CommodityDto, CropBoardDto, CropDto, CropPriceDto, NamedDto,
+        PriceBoardDto, PriceChoicesDto, PriceQuoteDto,
     },
     pagination::{paginate, total_pages},
     ports::EventBus,
@@ -43,6 +46,7 @@ use crate::{
 pub struct PriceUseCase {
     price_repo: Arc<dyn PriceRepositoryTrait + Send + Sync>,
     location_repo: Arc<dyn LocationRepositoryTrait + Send + Sync>,
+    commodity_repo: Arc<dyn CommodityRepositoryTrait + Send + Sync>,
     events: Arc<dyn EventBus>,
 }
 
@@ -50,11 +54,13 @@ impl PriceUseCase {
     pub fn new(
         price_repo: Arc<dyn PriceRepositoryTrait + Send + Sync>,
         location_repo: Arc<dyn LocationRepositoryTrait + Send + Sync>,
+        commodity_repo: Arc<dyn CommodityRepositoryTrait + Send + Sync>,
         events: Arc<dyn EventBus>,
     ) -> Self {
         Self {
             price_repo,
             location_repo,
+            commodity_repo,
             events,
         }
     }
@@ -83,27 +89,38 @@ impl PriceUseCase {
     /// Every crop, hidden ones too.
     pub async fn list_crops(&self, actor: &Actor) -> Result<Vec<CropDto>> {
         actor.require(PERM_PRICE_MANAGE)?;
+        let (crops, commodities) =
+            tokio::try_join!(self.price_repo.list_crops(), self.commodity_repo.list_all())?;
+        Ok(crops
+            .into_iter()
+            .map(|c| crop_dto(c, &commodities))
+            .collect())
+    }
+
+    /// The crops of one commodity, hidden ones too, in their order.
+    pub async fn crops_of(&self, actor: &Actor, commodity_id: i32) -> Result<Vec<CropDto>> {
+        actor.require(PERM_PRICE_MANAGE)?;
         Ok(self
-            .price_repo
-            .list_crops()
+            .list_crops(actor)
             .await?
             .into_iter()
-            .map(crop_dto)
+            .filter(|c| c.commodity_id == commodity_id)
             .collect())
     }
 
     pub async fn get_crop(&self, actor: &Actor, id: i32) -> Result<CropDto> {
         actor.require(PERM_PRICE_MANAGE)?;
-        self.price_repo
-            .find_crop(id)
-            .await?
-            .map(crop_dto)
+        let (crop, commodities) = tokio::try_join!(
+            self.price_repo.find_crop(id),
+            self.commodity_repo.list_all()
+        )?;
+        crop.map(|c| crop_dto(c, &commodities))
             .ok_or_else(|| Error::new(ErrorCode::CropNotFound))
     }
 
     pub async fn create_crop(&self, actor: &Actor, input: CropInput) -> Result<i32> {
         actor.require(PERM_PRICE_MANAGE)?;
-        let fields = validate_crop(input)?;
+        let fields = validate_crop(input, &self.commodity_repo.list_all().await?)?;
         let id = self.price_repo.create_crop(&fields).await?;
         self.publish(actor, Entity::Crop, id, Change::Created, None)
             .await;
@@ -112,7 +129,7 @@ impl PriceUseCase {
 
     pub async fn update_crop(&self, actor: &Actor, id: i32, input: CropInput) -> Result<()> {
         actor.require(PERM_PRICE_MANAGE)?;
-        let fields = validate_crop(input)?;
+        let fields = validate_crop(input, &self.commodity_repo.list_all().await?)?;
         if !self.price_repo.update_crop(id, &fields).await? {
             return Err(Error::new(ErrorCode::CropNotFound));
         }
@@ -149,12 +166,26 @@ impl PriceUseCase {
         Ok(())
     }
 
+    /// The shown commodities the crop form offers, in their order.
+    pub async fn commodity_choices(&self, actor: &Actor) -> Result<Vec<CommodityDto>> {
+        actor.require(PERM_PRICE_MANAGE)?;
+        Ok(self
+            .commodity_repo
+            .list_all()
+            .await?
+            .into_iter()
+            .filter(|c| c.is_active)
+            .map(CommodityDto::from)
+            .collect())
+    }
+
     // ── Prices (admin) ─────────────────────────────────────────────────────────
 
-    /// Every price entered, the newest day first.
+    /// Every price entered (or `crop`'s only), the newest day first.
     pub async fn list_prices(
         &self,
         actor: &Actor,
+        crop: Option<i32>,
         page: i64,
     ) -> Result<AdminPagedResponse<CropPriceDto>> {
         actor.require(PERM_PRICE_MANAGE)?;
@@ -162,6 +193,7 @@ impl PriceUseCase {
         let (rows, total) = self
             .price_repo
             .list_prices(
+                crop,
                 u64::try_from(ADMIN_PAGE_SIZE).unwrap_or(0),
                 u64::try_from(offset).unwrap_or(0),
             )
@@ -282,16 +314,28 @@ impl PriceUseCase {
     // ── Public ─────────────────────────────────────────────────────────────────
 
     /// The price page: each shown crop's latest fresh price in `area`, or in
-    /// every area, with the areas that have one.
-    pub async fn board(&self, area: Option<i32>) -> Result<PriceBoardDto> {
+    /// every area, with the areas that have one; by commodity (shown ones, in
+    /// their order), those of `sector` only when one is chosen.
+    pub async fn board(&self, area: Option<i32>, sector: Option<&str>) -> Result<PriceBoardDto> {
         let today = vn_today(Utc::now())?;
-        let (prices, crops) = tokio::try_join!(
+        let (prices, crops, commodities) = tokio::try_join!(
             self.price_repo
                 .public_prices_since(today - Duration::days(PRICE_HISTORY_DAYS)),
             self.price_repo.list_crops(),
+            self.commodity_repo.list_all(),
         )?;
-        let (crops, areas) = build_board(&prices, &crops, today, area);
+        let commodities: Vec<Commodity> = commodities
+            .into_iter()
+            .filter(|c| c.is_active)
+            .filter(|c| sector.is_none_or(|chosen| chosen == c.sector))
+            .collect();
+        let (crops, areas) = build_board(&prices, &crops, &commodities, today, area);
         Ok(PriceBoardDto {
+            commodities: commodities
+                .into_iter()
+                .filter(|g| crops.iter().any(|c| c.commodity_id == g.id))
+                .map(CommodityDto::from)
+                .collect(),
             crops,
             areas,
             today,
@@ -301,8 +345,12 @@ impl PriceUseCase {
 
     /// The home page's few prices: each crop's newest fresh price (whatever
     /// the area), the most recent first, at most `limit`.
-    pub async fn highlights(&self, limit: usize) -> Result<Vec<PriceQuoteDto>> {
-        Ok(highlights_of(self.board(None).await?.crops, limit))
+    pub async fn highlights(
+        &self,
+        limit: usize,
+        sector: Option<&str>,
+    ) -> Result<Vec<PriceQuoteDto>> {
+        Ok(highlights_of(self.board(None, sector).await?.crops, limit))
     }
 }
 
@@ -311,22 +359,25 @@ fn middle(p: &CropPrice) -> i64 {
     (p.price_low + p.price_high) / 2
 }
 
-/// The board from prices newest first: per crop (in the crops' order, shown
-/// ones only) the latest price of each area if it is fresh, compared with
+/// The board from prices newest first: per crop (by commodity in the order
+/// of `commodities`, then in the crops' order; shown crops of those only) the latest price of each area if it is fresh, compared with
 /// the one before; `area` keeps one area. Also the areas with a fresh price,
 /// by label.
 fn build_board(
     prices: &[CropPrice],
     crops: &[Crop],
+    commodities: &[Commodity],
     today: NaiveDate,
     area: Option<i32>,
 ) -> (Vec<CropBoardDto>, Vec<NamedDto>) {
     let fresh_from = today - Duration::days(PRICE_FRESH_DAYS);
-    // (crop, area) → [latest, previous], in the newest-first order given.
+    // (crop, area) → [latest, previous], in the newest-first order given:
+    // the move is the latest against the one before.
+    const COMPARED: usize = 2;
     let mut pairs: HashMap<(i32, i32), Vec<&CropPrice>> = HashMap::new();
     for p in prices {
         let seen = pairs.entry((p.crop_id, p.location_id)).or_default();
-        if seen.len() < 2 {
+        if seen.len() < COMPARED {
             seen.push(p);
         }
     }
@@ -356,8 +407,9 @@ fn build_board(
                 change: seen.get(1).map(|before| middle(latest) - middle(before)),
             });
     }
-    let board = crops
+    let board = commodities
         .iter()
+        .flat_map(|g| crops.iter().filter(move |c| c.commodity_id == g.id))
         .filter(|c| c.is_active)
         .filter_map(|c| {
             let mut quotes = quotes.remove(&c.id)?;
@@ -369,7 +421,7 @@ fn build_board(
             Some(CropBoardDto {
                 crop_id: c.id,
                 name: c.name.clone(),
-                kind: c.kind.clone(),
+                commodity_id: c.commodity_id,
                 unit: c.unit.clone(),
                 quotes,
             })
@@ -403,37 +455,49 @@ fn highlights_of(crops: Vec<CropBoardDto>, limit: usize) -> Vec<PriceQuoteDto> {
     newest.into_iter().take(limit).map(|(_, q)| q).collect()
 }
 
-fn validate_crop(input: CropInput) -> Result<CropFields> {
+/// A crop's boxes; its commodity must be one of `commodities`.
+fn validate_crop(input: CropInput, commodities: &[Commodity]) -> Result<CropFields> {
     let name = input.name.trim().to_owned();
-    let kind = input.kind.trim().to_owned();
+    let commodity_id = input
+        .commodity_id
+        .filter(|id| commodities.iter().any(|g| g.id == *id));
     let unit = input.unit.trim().to_owned();
     Validation::new()
         .check(name.is_empty(), "name", ErrorCode::NameRequired)
         .rule("name", max_chars(&name, CROP_NAME_MAX))
         .check(
-            !CROP_KINDS.contains(&kind.as_str()),
-            "kind",
-            ErrorCode::InvalidCropKind,
+            commodity_id.is_none(),
+            "commodity_id",
+            ErrorCode::InvalidCommodity,
         )
         .check(unit.is_empty(), "unit", ErrorCode::UnitRequired)
         .rule("unit", max_chars(&unit, CROP_UNIT_MAX))
         .finish()?;
+    let Some(commodity_id) = commodity_id else {
+        return Err(Error::field("commodity_id", ErrorCode::InvalidCommodity));
+    };
     Ok(CropFields {
         name,
-        kind,
+        commodity_id,
         unit,
         display_order: input.display_order,
     })
 }
 
-fn crop_dto(c: Crop) -> CropDto {
+/// A crop with its commodity's name (from `commodities`, hidden ones too).
+fn crop_dto(c: Crop, commodities: &[Commodity]) -> CropDto {
     CropDto {
+        commodity: commodities
+            .iter()
+            .find(|g| g.id == c.commodity_id)
+            .map(|g| g.name.clone()),
+        commodity_id: c.commodity_id,
         id: c.id,
         name: c.name,
-        kind: c.kind,
         unit: c.unit,
         display_order: c.display_order,
         is_active: c.is_active,
+        is_demo: c.is_demo,
     }
 }
 
@@ -464,11 +528,25 @@ mod tests {
         Crop {
             id,
             name: format!("crop {id}"),
-            kind: "rice".into(),
+            commodity_id: 1,
             unit: "kg".into(),
             display_order: id,
             is_active: active,
+            is_demo: false,
         }
+    }
+
+    /// The one commodity the test crops are of.
+    fn rice() -> Vec<Commodity> {
+        vec![Commodity {
+            id: 1,
+            name: "rice".into(),
+            sector: "crop".into(),
+            icon: None,
+            display_order: 1,
+            is_active: true,
+            is_demo: false,
+        }]
     }
 
     fn price(id: i32, crop_id: i32, location_id: i32, on: u32, low: i64, high: i64) -> CropPrice {
@@ -476,7 +554,6 @@ mod tests {
             id,
             crop_id,
             crop_name: format!("crop {crop_id}"),
-            crop_kind: "rice".into(),
             unit: "kg".into(),
             location_id,
             location_label: format!("area {location_id}"),
@@ -499,7 +576,13 @@ mod tests {
             // Crop 2's only price is older than PRICE_FRESH_DAYS.
             price(1, 2, 10, 1, 90_000, 95_000),
         ];
-        let (board, areas) = build_board(&prices, &[crop(1, true), crop(2, true)], today, None);
+        let (board, areas) = build_board(
+            &prices,
+            &[crop(1, true), crop(2, true)],
+            &rice(),
+            today,
+            None,
+        );
         assert_eq!(board.len(), 1, "a stale price is not shown");
         let quotes = &board.first().map(|c| c.quotes.clone()).unwrap_or_default();
         assert_eq!(quotes.len(), 2);
@@ -522,7 +605,7 @@ mod tests {
             "only areas with a fresh price"
         );
 
-        let (one, areas) = build_board(&prices, &[crop(1, true)], today, Some(11));
+        let (one, areas) = build_board(&prices, &[crop(1, true)], &rice(), today, Some(11));
         assert_eq!(one.first().map(|c| c.quotes.len()), Some(1));
         assert_eq!(
             areas.len(),
@@ -530,8 +613,14 @@ mod tests {
             "the area list does not shrink with the filter"
         );
 
-        let (hidden, _) = build_board(&prices, &[crop(1, false)], today, None);
+        let (hidden, _) = build_board(&prices, &[crop(1, false)], &rice(), today, None);
         assert!(hidden.is_empty(), "a hidden crop is not shown");
+
+        let (no_group, _) = build_board(&prices, &[crop(1, true)], &[], today, None);
+        assert!(
+            no_group.is_empty(),
+            "a crop of no shown commodity is not shown"
+        );
     }
 
     #[test]
@@ -544,7 +633,7 @@ mod tests {
             price(1, 3, 10, 18, 30_000, 30_000),
         ];
         let crops = [crop(1, true), crop(2, true), crop(3, true)];
-        let (board, _) = build_board(&prices, &crops, today, None);
+        let (board, _) = build_board(&prices, &crops, &rice(), today, None);
         let top = highlights_of(board, 2);
         assert_eq!(
             top.iter()
@@ -555,18 +644,22 @@ mod tests {
     }
 
     #[test]
-    fn a_crop_needs_a_name_a_known_kind_and_a_unit() {
-        let err = validate_crop(CropInput {
-            name: " ".into(),
-            kind: "vegetable".into(),
-            unit: "".into(),
-            display_order: 0,
-        })
+    fn a_crop_needs_a_name_a_known_commodity_and_a_unit() {
+        let commodities = rice();
+        let err = validate_crop(
+            CropInput {
+                name: " ".into(),
+                commodity_id: Some(99),
+                unit: "".into(),
+                display_order: 0,
+            },
+            &commodities,
+        )
         .err();
         let fields: Vec<&str> = err
             .as_ref()
             .map(|e| e.fields().iter().map(|f| f.field).collect())
             .unwrap_or_default();
-        assert_eq!(fields, vec!["name", "kind", "unit"]);
+        assert_eq!(fields, vec!["name", "commodity_id", "unit"]);
     }
 }

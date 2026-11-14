@@ -26,6 +26,12 @@
       <div class="acct-row"><dt>{{ t(key="account.role") }}</dt><dd>{% if b.role_href %}<a href="{{ b.role_href }}">{{ u.role_name }}</a>{% else %}{{ u.role_name }}{% endif %}</dd></div>
       <div class="acct-row"><dt>{{ t(key="admin.created") }}</dt><dd><time datetime="{{ u.created_on | utc_iso }}">{{ u.created_on | vn_datetime }}</time></dd></div>
     </dl>
+    {% if b.business_href or b.partner_href %}
+    <div class="admin-actions">
+      {% if b.business_href %}<a class="btn btn-outline-secondary" href="{{ b.business_href }}">{{ atoms::icon(name="fa-store") }} {{ t(key="admin.open_business") }}</a>{% endif %}
+      {% if b.partner_href %}<a class="btn btn-outline-secondary" href="{{ b.partner_href }}">{{ atoms::icon(name="fa-handshake") }} {{ t(key="admin.open_partner") }}</a>{% endif %}
+    </div>
+    {% endif %}
   </section>
 
   {% if b.roles %}

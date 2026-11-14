@@ -5,8 +5,8 @@
 //! answering. A row the catalogue no longer has keeps its stored name.
 
 use application::outputs::{
-    AdminPagedResponse, AdminUserDetailDto, AdminUserDto, GrantDto, PermissionDto,
-    PermissionMatrixDto, RoleDto, RoleGrantsDto, UserPermissionsDto,
+    AdminPagedResponse, AdminUserDetailDto, AdminUserDto, AlertDto, CodedDto, GrantDto,
+    PermissionDto, PermissionMatrixDto, RoleDto, RoleGrantsDto, UserPermissionsDto,
 };
 use serde::Serialize;
 
@@ -15,6 +15,67 @@ use crate::locale::Locale;
 /// A role's name by its code.
 pub fn role_name(locale: &Locale, code: &str, stored: &str) -> String {
     locale.label(&format!("role.{code}"), stored)
+}
+
+/// A choice of a select or a switch: its code, its word, its icon.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct CodeOption {
+    pub value: String,
+    pub label: String,
+    pub icon: String,
+}
+
+/// The icon of a sector or an alert kind with none of its own.
+pub const SECTOR_ICON_DEFAULT: &str = "fa-layer-group";
+
+/// For whom and where an alert is, in words: "Chăn nuôi · Đồng Tháp",
+/// "Mọi ngành · Cả vùng".
+pub fn alert_reach(locale: &Locale, sectors: &[CodedDto], a: &AlertDto) -> String {
+    let sector = match a.sector.as_deref() {
+        Some(s) => sector_name(sectors, s),
+        None => locale.text("sector.all"),
+    };
+    let place = a
+        .province_name
+        .clone()
+        .unwrap_or_else(|| locale.text("alert.whole_region"));
+    format!("{sector} · {place}")
+}
+
+/// A sector's name, from `sectors` (the stored ones); its code for one
+/// no longer there.
+pub fn sector_name(sectors: &[CodedDto], code: &str) -> String {
+    sectors
+        .iter()
+        .find(|s| s.code == code)
+        .map_or_else(|| code.to_owned(), |s| s.name.clone())
+}
+
+/// The sector of a row in words: its name, or "every sector" for none.
+pub fn sector_label(
+    state: &crate::app_state::AppState,
+    sectors: &[CodedDto],
+    code: Option<&str>,
+) -> String {
+    code.map_or_else(
+        || state.locale().text("sector.all"),
+        |c| sector_name(sectors, c),
+    )
+}
+
+/// `sectors`, in their order, for a select or a switch.
+pub fn sector_options(sectors: &[CodedDto]) -> Vec<CodeOption> {
+    sectors
+        .iter()
+        .map(|s| CodeOption {
+            value: s.code.clone(),
+            label: s.name.clone(),
+            icon: s
+                .icon
+                .clone()
+                .unwrap_or_else(|| SECTOR_ICON_DEFAULT.to_owned()),
+        })
+        .collect()
 }
 
 fn permission_name(locale: &Locale, code: &str, stored: &str) -> String {

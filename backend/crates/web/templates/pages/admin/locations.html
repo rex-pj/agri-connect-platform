@@ -37,7 +37,7 @@
           {% for r in b.rows %}
           {% set l = r.location %}
           <tr{% if not l.is_active %} class="table-light text-body-secondary"{% endif %}>
-            <td><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ l.label }}</a></td>
+            <td><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ l.label }}</a>{% if l.is_demo %} {{ status::demo() }}{% endif %}</td>
             <td class="small text-muted font-monospace">{{ l.lat }}, {{ l.lng }}</td>
             <td class="text-center">{{ l.display_order }}</td>
             <td class="text-center">{{ status::visibility(on=l.is_active) }}</td>

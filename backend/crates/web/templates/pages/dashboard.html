@@ -91,7 +91,7 @@
         {% if x.image_file_id %}<img class="rounded object-fit-cover flex-shrink-0" width="56" height="56" src="{{ file_url(id=x.image_file_id, variant="thumb") }}" alt="" loading="lazy" decoding="async">{% else %}<span class="dash-thumb flex-shrink-0">{{ atoms::icon(name="fa-image") }}</span>{% endif %}
         <div class="flex-grow-1 min-w-0">
           {% if r.public_href %}<a class="fw-bold text-decoration-none d-block text-truncate" href="{{ r.public_href }}">{{ x.name }}</a>{% else %}<strong class="d-block text-truncate">{{ x.name }}</strong>{% endif %}
-          <span class="small text-muted">{% if x.price %}{{ x.price | vnd }}{% if x.unit %}/{{ x.unit }}{% endif %}{% else %}{{ t(key="price.ask") }}{% endif %} · {{ x.category }}</span>
+          <span class="small text-muted">{% if x.price %}{{ x.price | vnd }}{% if x.unit %}/{{ x.unit }}{% endif %}{% else %}{{ t(key="price.ask") }}{% endif %} · {{ x.category }}{% if x.commodity %} · {{ x.commodity }}{% endif %}</span>
           {% if not x.is_active %}<span class="badge text-bg-secondary ms-1">{{ t(key="dashboard.hidden_by_admin") }}</span>{% endif %}
         </div>
         <a class="btn btn-outline-success" href="{{ r.edit_href }}" aria-label="{{ t(key="common.edit_label", name=x.name) }}">{{ atoms::icon(name="fa-pen") }}</a>
@@ -110,7 +110,7 @@
     <h2 class="detail-card__title" id="profile-title">{{ atoms::icon(name="fa-id-card", class="me-1") }} {{ t(key="dashboard.profile") }}</h2>
     {% if page.public_href %}<p class="small"><a href="{{ page.public_href }}">{{ atoms::icon(name="fa-arrow-up-right-from-square", class="me-1") }}{{ t(key="dashboard.public_page") }}</a></p>{% endif %}
     {% if page.can_edit_profile %}
-    <form class="auth-form" method="post" action="{{ page.profile_action }}" novalidate>
+    <form class="form-stack" method="post" action="{{ page.profile_action }}" novalidate>
       {% if page.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=page.errors.message) }}{% endif %}
       {{ business::business_fields(form=page.form, errors=page.errors, limits=limits, prefix="pf") }}
       <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="dashboard.save_profile") }}</button>

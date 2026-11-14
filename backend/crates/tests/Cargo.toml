@@ -17,7 +17,7 @@ axum.workspace           = true
 sea-orm.workspace        = true
 serde_json.workspace     = true
 tokio = { workspace = true, features = [
-    "sync", # OnceCell: the template database is migrated once per test process
+    "sync", # OnceCell: the template database is looked up or built once per test process
 ] }
 async-trait.workspace    = true
 tower.workspace          = true

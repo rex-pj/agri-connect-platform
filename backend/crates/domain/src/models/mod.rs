@@ -1,8 +1,11 @@
 pub mod admin_unit;
+pub mod alert;
 pub mod business;
 pub mod call;
 pub mod catalogue;
 pub mod category;
+pub mod coded;
+pub mod commodity;
 pub mod demand;
 pub mod file;
 pub mod inquiry;

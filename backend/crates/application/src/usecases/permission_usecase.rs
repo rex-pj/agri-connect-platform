@@ -12,7 +12,7 @@ use domain::{
 
 use crate::{
     authz::Actor,
-    catalogue::{PERM_ROLE_PERMISSION_MANAGE, PERM_ROLE_READ, PERM_USER_READ},
+    catalogue::{grantable, PERM_ROLE_PERMISSION_MANAGE, PERM_ROLE_READ, PERM_USER_READ},
     outputs::{
         GrantDto, PermissionDto, PermissionMatrixDto, PermissionMatrixRowDto, RoleDto,
         RoleGrantsDto, UserPermissionsDto,
@@ -92,12 +92,14 @@ impl PermissionUseCase {
             self.permission_repo.list_for_role(role_id),
         )?;
         let granted: BTreeSet<String> = granted.into_iter().map(|p| p.code).collect();
+        let role_code = role.code.clone();
         Ok(RoleGrantsDto {
             role: RoleDto::from(role),
             permissions: all
                 .into_iter()
                 .map(|p| GrantDto {
                     granted: granted.contains(&p.code),
+                    grantable: grantable(&role_code, &p.code),
                     code: p.code,
                     name: p.name,
                 })
@@ -162,6 +164,11 @@ impl PermissionUseCase {
         let keys: BTreeSet<String> = keys.into_iter().collect();
         if let Some(unknown) = keys.iter().find(|k| !known.contains(*k)) {
             return Err(Error::new(ErrorCode::UnknownPermission).with_param("key", unknown));
+        }
+        // An admin's key never reaches the role every sign-up gets, by a
+        // wrong tick or a forged form.
+        if let Some(foreign) = keys.iter().find(|k| !grantable(&role.code, k)) {
+            return Err(Error::new(ErrorCode::PermissionNotForRole).with_param("key", foreign));
         }
         // The caller's own role is identified by its code, which is what the
         // session carries; this is about who would be locked out, not access.

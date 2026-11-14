@@ -32,7 +32,7 @@ async fn provider(e: &Env) -> (String, String, (i32, String)) {
 }
 
 async fn category_name(e: &Env, id: i32) -> String {
-    infrastructure::entities::category::Entity::find_by_id(id)
+    infrastructure::entities::service_type::Entity::find_by_id(id)
         .one(&e.t.db)
         .await
         .unwrap()
@@ -86,6 +86,54 @@ async fn revoke(e: &Env, admin: &Actor, key: &str) {
         .set_role_grants(admin, provider_role.id, keep, None)
         .await
         .unwrap();
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn the_provider_role_cannot_be_given_an_admins_permission() {
+    let e = env_with_origin().await;
+    let admin = first_admin(&e.state).await;
+    let provider_role = role::Entity::find()
+        .filter(role::Column::Code.eq("provider"))
+        .one(&e.t.db)
+        .await
+        .unwrap()
+        .unwrap();
+    let permission = &e.state.usecases.permission;
+    let grants = permission
+        .role_grants(&admin, provider_role.id)
+        .await
+        .unwrap();
+    assert!(grants
+        .permissions
+        .iter()
+        .all(|g| g.grantable == g.code.starts_with("own.")));
+    let mut keys: Vec<String> = grants
+        .permissions
+        .into_iter()
+        .filter(|g| g.granted)
+        .map(|g| g.code)
+        .collect();
+    let before = keys.clone();
+    keys.push("user.read".into());
+    let refused = permission
+        .set_role_grants(&admin, provider_role.id, keys, None)
+        .await;
+    assert_eq!(
+        refused.err().map(|e| e.code()),
+        Some(domain::ErrorCode::PermissionNotForRole)
+    );
+    let after: Vec<String> = permission
+        .role_grants(&admin, provider_role.id)
+        .await
+        .unwrap()
+        .permissions
+        .into_iter()
+        .filter(|g| g.granted)
+        .map(|g| g.code)
+        .collect();
+    assert_eq!(after, before, "nothing was granted");
+    e.cleanup().await;
 }
 
 fn api(method: Method, path: &str, token: &str, json: &str) -> Request<Body> {
@@ -172,7 +220,13 @@ async fn a_service_is_added_with_its_photo_edited_and_deleted() {
     let public = body_text(send(&e.router, get_page(&canonical, None)).await).await;
     assert!(public.contains(&format!("/files/{first_photo}/thumb")));
     assert!(public.contains(r#"class="service-list__photo""#));
-    let featured = e.state.usecases.explore.get_explore_data().await.unwrap();
+    let featured = e
+        .state
+        .usecases
+        .explore
+        .get_explore_data(None)
+        .await
+        .unwrap();
     assert!(
         featured.featured_providers.is_empty(),
         "an unverified account is not featured"
@@ -184,7 +238,13 @@ async fn a_service_is_added_with_its_photo_edited_and_deleted() {
         .set_verification(&admin, biz.id, true, None)
         .await
         .unwrap();
-    let featured = e.state.usecases.explore.get_explore_data().await.unwrap();
+    let featured = e
+        .state
+        .usecases
+        .explore
+        .get_explore_data(None)
+        .await
+        .unwrap();
     assert_eq!(featured.featured_providers.len(), 1, "verified: featured");
 
     // Edit with a new photo: the old one is released.
@@ -447,7 +507,7 @@ async fn the_rules_hold_through_the_api_and_a_business_lists_at_most_the_cap() {
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     assert_eq!(
         json_body(res).await["field_errors"]["category_id"][0],
-        "Danh mục dịch vụ không hợp lệ."
+        "Vui lòng chọn loại dịch vụ."
     );
 
     let max = application::constants::SERVICES_PER_BUSINESS_MAX;

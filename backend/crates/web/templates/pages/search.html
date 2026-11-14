@@ -3,13 +3,17 @@
 {% import "molecules/search_bar.html" as bar %}
 {% import "molecules/empty_state.html" as empty %}
 {% import "molecules/tab_nav.html" as tabs %}
+{% import "molecules/sector_switch.html" as sector %}
 {% import "organisms/service_card.html" as services %}
 {% import "organisms/product_card.html" as products %}
 {% import "organisms/provider_card.html" as providers %}
 {#- Search results: services, products and shops. `page` is
-    web::pages::search::SearchPage. Every section is rendered; the ones
-    outside the chosen tab get `hidden`, which Alpine `tabs` then toggles
-    without a reload. -#}
+    web::pages::search::SearchPage. Only what was found is on the page: a kind
+    with no result has no section and no tab, and tabs show only when two
+    kinds have one; nothing found at all is one message with the ways forward
+    (every sector when one was chosen, else a job post and near me). The
+    sections outside the chosen tab get `hidden`, which Alpine `tabs` then
+    toggles without a reload. -#}
 {% block title %}{% if page.q %}{{ t(key="search.title_query", q=page.q) }}{% else %}{{ t(key="common.search") }}{% endif %} — {{ site.name }}{% endblock title %}
 {% block meta %}<meta name="robots" content="noindex">{% endblock meta %}
 {% block main %}
@@ -17,49 +21,54 @@
 
 {% if not page.q %}
 <section class="list-results">{{ empty::empty_state(icon="fa-magnifying-glass", title=t(key="search.prompt"), hint=t(key="search.prompt_hint")) }}</section>
+{% elif page.total == 0 %}
+{{ sector::sector_links(sectors=page.sectors) }}
+<section class="list-results">
+  {% if page.sector_name %}
+  {{ empty::empty_state(icon="fa-magnifying-glass", title=t(key="search.none_in_sector", q=page.q, sector=page.sector_name), hint=t(key="search.none_in_sector_hint"), action_href=page.every_sector_href, action_icon="fa-border-all", action_label=t(key="search.every_sector"), second_href=url_for(name="job_new"), second_icon="fa-bullhorn", second_label=t(key="search.post_job")) }}
+  {% else %}
+  {{ empty::empty_state(icon="fa-magnifying-glass", title=t(key="search.none", q=page.q), hint=t(key="search.none_hint"), action_href=url_for(name="job_new"), action_icon="fa-bullhorn", action_label=t(key="search.post_job"), second_href=url_for(name="explore"), second_icon="fa-location-dot", second_label=t(key="nav.near_me")) }}
+  {% endif %}
+</section>
 {% else %}
 <div x-data="tabs" data-tab="{{ page.tab }}">
-  {{ tabs::tab_nav(tabs=page.tabs, label=t(key="search.tabs_label")) }}
+  {{ sector::sector_links(sectors=page.sectors) }}
+  {% if page.tabs %}{{ tabs::tab_nav(tabs=page.tabs, label=t(key="search.tabs_label")) }}{% endif %}
+  <p class="list-tools small text-muted mb-0"><strong>{{ page.total }}</strong> {{ t(key="search.unit") }} {{ t(key="list.for_query", q=page.q) }}</p>
 
+  {% if page.services %}
   <section class="list-results" data-panel="services"{% if page.tab != "all" and page.tab != "services" %} hidden{% endif %} :hidden="panelHidden">
     <div class="section-header mb-2">
       <h2 class="section-title">{{ atoms::icon(name="fa-screwdriver-wrench", class="text-success me-1") }}{{ t(key="nav.services") }} <span class="text-muted fw-normal small">({{ page.service_total }})</span></h2>
       {% if page.services_more %}<a class="section-more" href="{{ page.services_more }}">{{ t(key="common.see_more") }} {{ atoms::icon(name="fa-chevron-right") }}</a>{% endif %}
     </div>
-    {% if page.services %}
     {{ services::service_grid(services=page.services) }}
-    {% else %}
-    {{ empty::empty_state(icon="fa-screwdriver-wrench", title=t(key="search.no_services"), hint=t(key="search.no_services_hint"), action_href=url_for(name="services"), action_icon="fa-border-all", action_label=t(key="list.all_services")) }}
-    {% endif %}
   </section>
+  {% endif %}
 
+  {% if page.products %}
   <section class="list-results" data-panel="products"{% if page.tab != "all" and page.tab != "products" %} hidden{% endif %} :hidden="panelHidden">
     <div class="section-header mb-2">
       <h2 class="section-title">{{ atoms::icon(name="fa-bag-shopping", class="text-success me-1") }}{{ t(key="nav.products") }} <span class="text-muted fw-normal small">({{ page.product_total }})</span></h2>
       {% if page.products_more %}<a class="section-more" href="{{ page.products_more }}">{{ t(key="common.see_more") }} {{ atoms::icon(name="fa-chevron-right") }}</a>{% endif %}
     </div>
-    {% if page.products %}
     <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 row-cols-xl-6 g-2 g-md-3">
       {% for p in page.products %}<div class="col">{{ products::product_card(p=p) }}</div>{% endfor %}
     </div>
-    {% else %}
-    {{ empty::empty_state(icon="fa-bag-shopping", title=t(key="search.no_products"), hint=t(key="search.no_products_hint"), action_href=url_for(name="products"), action_icon="fa-bag-shopping", action_label=t(key="list.all_products")) }}
-    {% endif %}
   </section>
+  {% endif %}
 
+  {% if page.providers %}
   <section class="list-results" data-panel="providers"{% if page.tab != "all" and page.tab != "providers" %} hidden{% endif %} :hidden="panelHidden">
     <div class="section-header mb-2">
       <h2 class="section-title">{{ atoms::icon(name="fa-store", class="text-success me-1") }}{{ t(key="nav.shops") }} <span class="text-muted fw-normal small">({{ page.provider_total }})</span></h2>
       {% if page.providers_more %}<a class="section-more" href="{{ page.providers_more }}">{{ t(key="common.see_more") }} {{ atoms::icon(name="fa-chevron-right") }}</a>{% endif %}
     </div>
-    {% if page.providers %}
     <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
       {% for p in page.providers %}<div class="col">{{ providers::provider_card(p=p) }}</div>{% endfor %}
     </div>
-    {% else %}
-    {{ empty::empty_state(icon="fa-store", title=t(key="search.no_shops"), hint=t(key="search.no_shops_hint"), action_href=url_for(name="providers"), action_icon="fa-store", action_label=t(key="list.all_shops")) }}
-    {% endif %}
   </section>
+  {% endif %}
 </div>
 {% endif %}
 {% endblock main %}

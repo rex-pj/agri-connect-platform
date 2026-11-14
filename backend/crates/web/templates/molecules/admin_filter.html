@@ -1,11 +1,11 @@
-{#- Above an admin list narrowed to one provider: which one (a link to its
+{#- Above an admin list narrowed to one provider or crop: which one (a link to its
     page) and the way back to the whole list. `f` is
     web::pages::admin::ProviderFilter; its `name` is empty when the narrowed
     list has no rows to take it from. -#}
 {% import "atoms/icon.html" as atoms %}
 {% macro admin_filter(f) -%}
 <p class="admin-filter">
-  <a href="{{ f.href }}">{{ atoms::icon(name="fa-store") }}{% if f.name %}{{ f.name }}{% else %}{{ t(key="admin_filter.selected_provider") }}{% endif %}</a>
+  <a href="{{ f.href }}">{{ atoms::icon(name=f.icon) }}{% if f.name %}{{ f.name }}{% else %}{{ t(key="admin_filter.selected_provider") }}{% endif %}</a>
   <a class="admin-filter__clear" href="{{ f.clear_href }}">{{ atoms::icon(name="fa-xmark") }}{{ t(key="admin_filter.show_all") }}</a>
 </p>
 {%- endmacro admin_filter %}

@@ -1,6 +1,7 @@
 {% extends "layouts/admin.html" %}
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/figure.html" as fig %}
+{% import "atoms/alert.html" as alerts %}
 {% import "molecules/admin_header.html" as header %}
 {% import "organisms/demand_table.html" as demand %}
 {% import "organisms/unmet_searches.html" as unmet %}
@@ -15,6 +16,7 @@
 {% set r = b.report %}
 {{ header::admin_header(title=t(key="admin_menu.demand"), icon="fa-chart-column", sub=t(key="demand.sub", count=r.steady_areas), action_href=b.csv_href, action_icon="fa-file-arrow-down", action_label=t(key="demand.download"), action_class="btn-outline-secondary") }}
 <div class="admin-body">
+  {% if r.with_demo %}{{ alerts::alert(kind="warning", icon="fa-flask", text=t(key="demand.with_demo")) }}{% endif %}
   <p class="small text-muted">{{ t(key="demand.hint", min=r.min_count) }}</p>
   <form class="d-flex flex-wrap gap-2 align-items-end mb-3" method="get" action="{{ b.action }}" x-data="autoSubmit" x-on:change="submit">
     <div>
@@ -28,7 +30,7 @@
   </form>
 
   <section class="admin-card mb-4" aria-label="{{ t(key="demand.title") }}">
-    {{ demand::demand_table(r=r) }}
+    {{ demand::demand_table(r=r, sectors=b.sectors) }}
   </section>
 
   {{ unmet::unmet_searches(r=r) }}

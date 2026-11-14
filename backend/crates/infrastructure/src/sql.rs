@@ -11,7 +11,7 @@ use sea_orm::{
     Condition, DeriveColumn, DeriveIden, EnumIter,
 };
 
-use crate::entities::{business, location, user};
+use crate::entities::{business, commodity, location, product, service_type, supply_type, user};
 
 /// Database functions the query builder has no name for.
 #[derive(DeriveIden, Clone, Copy)]
@@ -91,13 +91,16 @@ pub enum QueryAs {
     CategoryId,
     CategorySlug,
     CategoryType,
+    Commodity,
     Count,
     CreatedByName,
     DistanceM,
     Email,
+    EmailVerified,
     Fresh,
     Granted,
     Lat,
+    LinkedUserId,
     LinkedUsername,
     Lng,
     LocationId,
@@ -108,6 +111,7 @@ pub enum QueryAs {
     Role,
     RoleCode,
     RoleName,
+    Sector,
     ServiceName,
     SvcName,
     Total,
@@ -204,13 +208,69 @@ pub fn live_owner_on() -> Condition {
         .add(Expr::col((user::Entity, user::Column::DeletedAt)).is_null())
 }
 
-/// Where a notice to a business goes: its live managing account's address
-/// (`live_owner_on`), else the business's own, unless blank.
-pub fn notice_email() -> SimpleExpr {
+/// A joined service type that serves `sector`: one of that sector, or one
+/// of every sector (no sector set). The one definition of "a service in a
+/// sector".
+pub fn category_in_sector(sector: &str) -> Condition {
+    Condition::any()
+        .add(Expr::col((service_type::Entity, service_type::Column::Sector)).eq(sector))
+        .add(Expr::col((service_type::Entity, service_type::Column::Sector)).is_null())
+}
+
+/// A supply (its type joined) of `sector`: for a commodity of that sector,
+/// or for none and of a type of that sector or of every sector. The one
+/// definition of "a supply in a sector": cá tra feed is aquatic even when
+/// filed under a feed type that serves every sector.
+pub fn supply_in_sector(sector: &str) -> Condition {
+    let of_sector = Query::select()
+        .column(commodity::Column::Id)
+        .from(commodity::Entity)
+        .and_where(Expr::col(commodity::Column::Sector).eq(sector))
+        .to_owned();
+    Condition::any()
+        .add(Expr::col((product::Entity, product::Column::CommodityId)).in_subquery(of_sector))
+        .add(
+            Condition::all()
+                .add(Expr::col((product::Entity, product::Column::CommodityId)).is_null())
+                .add(
+                    Condition::any()
+                        .add(
+                            Expr::col((supply_type::Entity, supply_type::Column::Sector))
+                                .eq(sector),
+                        )
+                        .add(
+                            Expr::col((supply_type::Entity, supply_type::Column::Sector)).is_null(),
+                        ),
+                ),
+        )
+}
+
+/// The sector of a supply (its type and its commodity joined), as
+/// `supply_in_sector` decides it: its commodity's, else its type's, else
+/// none (every sector).
+pub fn supply_sector() -> SimpleExpr {
     Func::coalesce([
-        Expr::col((user::Entity, user::Column::Email)).into(),
-        blank_as_null(Expr::col((business::Entity, business::Column::Email)).into()),
+        Expr::col((commodity::Entity, commodity::Column::Sector)).into(),
+        Expr::col((supply_type::Entity, supply_type::Column::Sector)).into(),
     ])
+    .into()
+}
+
+/// Where a notice to a business goes. A business with a managing account:
+/// that account's address, once it is verified and while the account is live
+/// (`live_owner_on`), else nowhere: an address nobody confirmed is never
+/// written to, or a sign-up with a stranger's address would make us do so.
+/// A business without an account (listed by an admin): its own address,
+/// unless blank.
+pub fn notice_email() -> SimpleExpr {
+    Expr::case(
+        Expr::col((business::Entity, business::Column::OwnerId)).is_null(),
+        blank_as_null(Expr::col((business::Entity, business::Column::Email)).into()),
+    )
+    .case(
+        Expr::col((user::Entity, user::Column::EmailVerifiedAt)).is_not_null(),
+        Expr::col((user::Entity, user::Column::Email)),
+    )
     .into()
 }
 

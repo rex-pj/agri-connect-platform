@@ -85,6 +85,7 @@ pub fn audit_action(event: &DomainEvent) -> String {
         (Change::Updated, _) => format!("update_{entity}"),
         (Change::StatusChanged { .. }, _) => format!("set_{entity}_status"),
         (Change::Created, _) => format!("create_{entity}"),
+        (Change::Auth(what), _) => what.as_str().into(),
     }
 }
 

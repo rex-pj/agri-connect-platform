@@ -1,6 +1,6 @@
-//! GET /products/{id} and /products/{id}/{slug} — product detail.
+//! GET /supplies/{id} and /supplies/{id}/{slug} — a supply ("vật tư") page.
 //!
-//! One canonical URL per product, `/products/{id}/{slug of its name}`. Any
+//! One canonical URL per product, `/supplies/{id}/{slug of its name}`. Any
 //! other spelling (no slug, an old slug after a rename, `007` for `7`) answers
 //! 301 to it, so shared links keep working and search engines index one page.
 //! Like a service's page it carries the seller (call button, their page) and
@@ -17,16 +17,20 @@ use crate::{
     constants::META_DESCRIPTION_MAX_CHARS,
     cookies::{Flash, TakeFlash},
     extract::ApiPath,
+    middleware::auth::Viewer,
     pages::{
-        canonical_url, moved_permanently, parse_id,
+        canonical_url,
+        manage::{manage_link, Managed},
+        moved_permanently, parse_id,
         provider::{
-            area_of, rating_line, ContactLimits, ContactState, RatingLine, LIMITS,
+            area_of, rating_line, ContactLimits, ContactState, RatingLine, Visit, LIMITS,
             RETURN_TO_PRODUCT,
         },
         service::{service_links, OtherService},
         summary,
     },
-    shell::Shell,
+    routes,
+    shell::{Link, Shell},
     views::render_page_status,
 };
 
@@ -42,6 +46,9 @@ pub struct ProductPage {
     pub meta_description: Option<String>,
     /// The seller's page.
     pub provider_href: String,
+    /// The products of its category: where the back link leads, so a
+    /// visitor who browsed one category goes back to it.
+    pub category_href: String,
     /// What else the seller does: their services, each to its own page.
     pub provider_services: Vec<OtherService>,
     /// Where the seller works, or the region when the address is unknown.
@@ -53,6 +60,8 @@ pub struct ProductPage {
     pub return_to: &'static str,
     /// The form was just sent (flash from the redirect).
     pub sent: bool,
+    /// Where the owner or an admin edits it (`pages::manage`).
+    pub manage: Option<Link>,
 }
 
 async fn load(state: &AppState, raw_id: &str) -> Result<ProductDto, Error> {
@@ -72,7 +81,7 @@ pub(super) async fn render(
     product: ProductDto,
     provider: BusinessDetailDto,
     mut contact: ContactState,
-    sent: bool,
+    visit: Visit,
     status: StatusCode,
 ) -> Result<Response, Error> {
     // A fresh form is about this product.
@@ -85,6 +94,14 @@ pub(super) async fn render(
         rating,
         provider_services: service_links(&provider.services, None)?,
         provider_href: canonical_url("provider", provider.id, &provider.name)?,
+        category_href: routes::url(
+            "product_category",
+            &[
+                ("id", &product.category_id.to_string()),
+                ("slug", &product.category_slug),
+            ],
+        )
+        .map_err(|e| Error::internal(format!("product page links: {e}")))?,
         meta_description: product
             .description
             .as_deref()
@@ -103,12 +120,13 @@ pub(super) async fn render(
         contact,
         limits: LIMITS,
         return_to: RETURN_TO_PRODUCT,
-        sent,
+        sent: visit.sent,
+        manage: visit.manage,
     };
     render_page_status(state, shell, status, "pages/product.html", &page)
 }
 
-/// GET /products/{id}
+/// GET /supplies/{id}
 pub async fn by_id(
     State(state): State<AppState>,
     ApiPath(id): ApiPath<String>,
@@ -117,9 +135,10 @@ pub async fn by_id(
     moved_permanently(&canonical(&product)?)
 }
 
-/// GET /products/{id}/{slug}
+/// GET /supplies/{id}/{slug}
 pub async fn show(
     shell: Shell,
+    Viewer(viewer): Viewer,
     flash: TakeFlash,
     State(state): State<AppState>,
     ApiPath((id, _slug)): ApiPath<(String, String)>,
@@ -134,14 +153,23 @@ pub async fn show(
         .explore
         .get_provider_detail(product.business_id)
         .await?;
-    let sent = flash.0 == Some(Flash::ContactSent);
+    let visit = Visit {
+        sent: flash.0 == Some(Flash::ContactSent),
+        manage: manage_link(
+            &state,
+            viewer.as_ref(),
+            product.business_id,
+            Managed::Product(product.id),
+        )
+        .await?,
+    };
     let mut response = render(
         &state,
         &shell,
         product,
         provider,
         ContactState::default(),
-        sent,
+        visit,
         StatusCode::OK,
     )
     .await?;

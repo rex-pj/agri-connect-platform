@@ -30,7 +30,8 @@ pub struct SetupUseCase {
     demo_repo: Arc<dyn DemoDataRepositoryTrait + Send + Sync>,
     business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
     user_repo: Arc<dyn UserRepositoryTrait + Send + Sync>,
-    /// Removes the photos of demo products when the demo data goes.
+    /// Removes the photos of demo services and products when the demo data
+    /// goes.
     media: MediaUseCase,
 }
 
@@ -62,10 +63,7 @@ impl SetupUseCase {
             permissions = report.permissions_inserted,
             grants = report.grants_inserted,
             bootstrapped_grants = report.bootstrapped_grants,
-            categories = report.categories_inserted,
-            locations = report.locations_inserted,
-            crops = report.crops_inserted,
-            "reference catalogue applied"
+            "platform catalogue applied"
         );
         if !report.unknown_permissions.is_empty() {
             // Left in place on purpose: deleting them would silently drop
@@ -85,7 +83,6 @@ impl SetupUseCase {
                 version = %sync.version,
                 provinces = sync.provinces,
                 wards = sync.wards,
-                backfilled = sync.backfilled,
                 "administrative units loaded"
             );
         }
@@ -105,28 +102,33 @@ impl SetupUseCase {
     }
 
     async fn load_status(&self) -> Result<SetupStatusDto> {
-        let (business_count, user_count, demo_business_count) = tokio::try_join!(
+        let (business_count, user_count, demo, platform) = tokio::try_join!(
             self.business_repo.count_all(),
             self.user_repo.count_all(),
             self.demo_repo.count(),
+            self.catalogue_repo.platform_counts(),
         )?;
 
         Ok(SetupStatusDto {
             database_connected: true,
-            is_seeded: demo_business_count > 0,
-            demo_business_count,
+            is_seeded: demo.any(),
             business_count,
             user_count,
+            demo,
+            platform,
         })
     }
 
     pub async fn load_demo(&self, actor: &Actor) -> Result<DemoReport> {
         actor.require(PERM_SYSTEM_DEMO_MANAGE)?;
-        if self.demo_repo.count().await? > 0 {
+        if self.demo_repo.count().await?.businesses > 0 {
             return Err(Error::new(ErrorCode::DemoAlreadyLoaded));
         }
         let report = self.demo_repo.load().await?;
         info!(
+            categories = report.categories,
+            locations = report.locations,
+            crops = report.crops,
             businesses = report.businesses,
             services = report.services,
             products = report.products,
@@ -138,13 +140,15 @@ impl SetupUseCase {
     pub async fn remove_demo(&self, actor: &Actor) -> Result<u64> {
         actor.require(PERM_SYSTEM_DEMO_MANAGE)?;
         let removed = self.demo_repo.remove().await?;
-        // Photos someone uploaded to a demo product go too; a failure only
-        // orphans an object (logged), the rows are already gone.
+        // Photos someone uploaded to a demo service or product go too; a
+        // failure only orphans an object (logged), the rows are already gone.
         for file in &removed.image_files {
             self.media.discard(*file).await;
         }
         info!(
             businesses = removed.businesses,
+            catalogue_removed = removed.catalogue_removed,
+            catalogue_kept = removed.catalogue_kept,
             photos = removed.image_files.len(),
             "demo data removed"
         );

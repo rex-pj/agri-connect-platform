@@ -51,7 +51,7 @@
           {% for r in b.rows %}
           {% set p = r.partner %}
           <tr{% if not p.is_active %} class="table-light text-body-secondary"{% endif %}>
-            <td><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ p.name }}</a>{% if p.account_username %}<span class="d-block small text-muted">{{ p.account_username }}</span>{% endif %}</td>
+            <td><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ p.name }}</a>{% if p.is_demo %} {{ status::demo() }}{% endif %}{% if p.account_username %}<span class="d-block small text-muted">{{ p.account_username }}</span>{% endif %}</td>
             <td>{{ r.kind_label }}</td>
             <td class="text-center">{{ p.contracts_in_force }}</td>
             <td class="text-end">{{ p.monthly_revenue | vnd }}</td>
@@ -71,7 +71,7 @@
     {{ sheet_head::sheet_header(id="them-doi-tac", title=t(key="partner.add"), icon="fa-handshake") }}
     <form class="contact-sheet__form" method="post" action="{{ b.create_action }}" novalidate>
       {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
-      {{ fields::partner_fields(form=b.form, errors=b.errors, kinds=b.kinds, prefix="new", first=true) }}
+      {{ fields::partner_fields(form=b.form, errors=b.errors, kinds=b.kinds, phone_pattern=limits.phone_pattern, prefix="new", first=true) }}
       <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-plus") }} {{ t(key="partner.add") }}</button>
     </form>
   </section>

@@ -1,23 +1,23 @@
 {% extends "layouts/base.html" %}
-{% import "atoms/icon.html" as atoms %}
 {% import "atoms/logo.html" as brand %}
 {% import "molecules/language_switch.html" as lang %}
-{#- A partner account's frame: the brand, the language switch and logging
-    out. No farmer tabs, search or footer: a partner reads its report here,
-    it does not browse. Pages fill `main`; the frame comes from `shell`. -#}
+{% import "molecules/account_menu.html" as account %}
+{#- A partner account's frame: the brand (back to the report), the language
+    switch and the account menu (the report, the profile with the password
+    change, logout), the same molecule as the app and admin bars. No farmer
+    tabs, search or footer: a partner reads its report here, it does not
+    browse. Pages fill `main`; the frame comes from `shell`. -#}
 {% block body %}
 <nav class="app-nav" aria-label="{{ t(key="nav_bar.label") }}">
   <div class="app-nav__top">
-    <span class="app-nav__brand">
+    <a class="app-nav__brand" href="{{ url_for(name="partner_report") }}">
       {{ brand::logo(class="app-nav__logo") }}
       {{ site.name }}
-    </span>
+    </a>
     <div class="app-nav__actions">
       {{ lang::language_switch(languages=languages, back=shell.here) }}
-      {% if shell.profile and shell.profile.logout %}
-      <form method="post" action="{{ shell.profile.logout }}">
-        <button type="submit" class="app-nav__login">{{ atoms::icon(name="fa-right-from-bracket") }} <span>{{ t(key="common.logout") }}</span></button>
-      </form>
+      {% if shell.profile and shell.profile.signed_in %}
+      {{ account::account_menu(menu=shell.profile, label=t(key="nav.account"), label_class="d-none d-sm-inline") }}
       {% endif %}
     </div>
   </div>

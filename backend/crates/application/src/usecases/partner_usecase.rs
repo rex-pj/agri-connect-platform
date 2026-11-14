@@ -20,6 +20,7 @@ use domain::{
     events::{Change, DomainEvent, Entity},
     models::{
         admin_unit::Ward,
+        demand::DemoScope,
         partner::{ActiveContract, Contract, ContractArea, NewContract, Partner, PartnerFields},
     },
     repositories::{
@@ -139,6 +140,13 @@ impl PartnerUseCase {
             .into_iter()
             .map(|p| partner_dto(p, &in_force))
             .collect())
+    }
+
+    /// The partner whose report account `user_id` is, for the link from the
+    /// account's admin page.
+    pub async fn partner_of_account(&self, actor: &Actor, user_id: i32) -> Result<Option<i32>> {
+        actor.require(PERM_PARTNER_MANAGE)?;
+        self.partner_repo.find_by_account(user_id).await
     }
 
     pub async fn get_partner(&self, actor: &Actor, id: i32) -> Result<PartnerDetailDto> {
@@ -402,6 +410,18 @@ impl PartnerUseCase {
             .ok_or_else(|| Error::new(ErrorCode::ContractNotFound))
     }
 
+    /// The shops a partner's contracts may sponsor: real ones for a real
+    /// partner, demo ones for a demo partner, so demo data never mixes into
+    /// what a paying partner gets.
+    async fn sponsor_scope(&self, partner_id: i32) -> Result<DemoScope> {
+        let partner = self
+            .partner_repo
+            .find(partner_id)
+            .await?
+            .ok_or_else(|| Error::new(ErrorCode::PartnerNotFound))?;
+        Ok(scope_of(&partner))
+    }
+
     /// The providers a contract may sponsor: those counting under its area,
     /// not sponsored by it yet.
     pub async fn sponsor_candidates(
@@ -413,8 +433,9 @@ impl PartnerUseCase {
         actor.require(PERM_PARTNER_MANAGE)?;
         let contract = self.contract_of(partner_id, contract_id).await?;
         let taken: HashSet<i32> = contract.sponsored.iter().map(|s| s.business_id).collect();
+        let scope = self.sponsor_scope(partner_id).await?;
         let (areas, units) = tokio::try_join!(
-            self.demand_repo.business_areas(ADMIN_UNIT_SNAP_M),
+            self.demand_repo.business_areas(ADMIN_UNIT_SNAP_M, scope),
             self.units()
         )?;
         let mut candidates: Vec<SponsorCandidateDto> = areas
@@ -442,8 +463,9 @@ impl PartnerUseCase {
     ) -> Result<()> {
         actor.require(PERM_PARTNER_MANAGE)?;
         let contract = self.contract_of(partner_id, contract_id).await?;
+        let scope = self.sponsor_scope(partner_id).await?;
         let (areas, units) = tokio::try_join!(
-            self.demand_repo.business_areas(ADMIN_UNIT_SNAP_M),
+            self.demand_repo.business_areas(ADMIN_UNIT_SNAP_M, scope),
             self.units()
         )?;
         let inside = areas
@@ -532,6 +554,8 @@ impl PartnerUseCase {
             focus: focus.filter(|f| units.within(f, &areas)),
             areas: Some(areas),
             categories: Some(categories),
+            // A real partner never sees demo figures; a demo one only those.
+            demo: scope_of(&partner),
         };
         let report = self.demand.build(Utc::now(), &scope).await?;
         Ok(PartnerReportDto {
@@ -652,6 +676,8 @@ fn partner_dto(p: Partner, in_force: &[ActiveContract]) -> PartnerDto {
         phone: p.phone,
         email: p.email,
         is_active: p.is_active,
+        is_demo: p.is_demo,
+        account_id: p.account_id,
         account_username: p.account_username,
         created_on: p.created_on,
     }
@@ -740,6 +766,16 @@ fn kpis_of(in_force: &[ActiveContract], units: &AdminUnits) -> PartnerKpiDto {
         paying_partners: paying.len(),
         monthly_revenue: in_force.iter().map(|c| c.monthly_fee).sum(),
         areas,
+    }
+}
+
+/// The data a partner's report and sponsored shops come from: real data for
+/// a real partner, demo data for a demo one.
+fn scope_of(partner: &Partner) -> DemoScope {
+    if partner.is_demo {
+        DemoScope::Demo
+    } else {
+        DemoScope::Real
     }
 }
 

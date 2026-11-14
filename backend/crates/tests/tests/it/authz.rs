@@ -224,7 +224,8 @@ async fn admin_changes_reach_the_audit_log_through_events() {
     let rows =
         <Row as sea_orm::FromQueryResult>::find_by_statement(sea_orm::Statement::from_string(
             e.t.db.get_database_backend(),
-            "SELECT action, entity_type, reason FROM audit_logs",
+            // The admin's own sign-in is audited too; this is about the change.
+            "SELECT action, entity_type, reason FROM audit_logs WHERE action <> 'login'",
         ))
         .all(&e.t.db)
         .await

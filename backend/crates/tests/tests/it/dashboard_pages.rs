@@ -131,7 +131,7 @@ async fn a_new_product_and_its_photo_are_saved_together() {
     let res = send(
         &e.router,
         post_multipart_form(
-            "/provider/products/new",
+            "/provider/supplies/new",
             &[("category_id", &category), ("name", "Sầu riêng Ri6")],
             Some(&photo),
             &cookie,
@@ -153,7 +153,7 @@ async fn a_new_product_and_its_photo_are_saved_together() {
     let res = send(
         &e.router,
         post_multipart_form(
-            "/provider/products/new",
+            "/provider/supplies/new",
             &[("category_id", &category), ("name", " ")],
             Some(&photo),
             &cookie,
@@ -171,7 +171,7 @@ async fn a_product_is_added_with_its_photo_edited_and_deleted() {
     let e = env_with_origin().await;
     let (cookie, category) = provider(&e).await;
 
-    let new_page = page(&e, "/provider/products/new", &cookie).await;
+    let new_page = page(&e, "/provider/supplies/new", &cookie).await;
     assert!(new_page.contains(r#"enctype="multipart/form-data""#));
     assert!(
         !new_page.contains("capture="),
@@ -182,7 +182,7 @@ async fn a_product_is_added_with_its_photo_edited_and_deleted() {
     let res = send(
         &e.router,
         post_multipart_form(
-            "/provider/products/new",
+            "/provider/supplies/new",
             &[("category_id", "x"), ("name", " "), ("price", "85.000")],
             None,
             &cookie,
@@ -199,7 +199,7 @@ async fn a_product_is_added_with_its_photo_edited_and_deleted() {
     let res = send(
         &e.router,
         post_multipart_form(
-            "/provider/products/new",
+            "/provider/supplies/new",
             &[
                 ("category_id", &category),
                 ("name", "Sầu riêng Ri6"),
@@ -224,7 +224,7 @@ async fn a_product_is_added_with_its_photo_edited_and_deleted() {
         "price parsed with its separators, photo attached"
     );
 
-    let edit = format!("/provider/products/{id}/edit");
+    let edit = format!("/provider/supplies/{id}/edit");
     let html = page(&e, &edit, &cookie).await;
     assert!(html.contains(r#"value="Sầu riêng Ri6""#));
     assert!(html.contains("Ảnh hiện tại"));
@@ -257,7 +257,7 @@ async fn a_product_is_added_with_its_photo_edited_and_deleted() {
     let res = send(
         &e.router,
         post_form(
-            &format!("/provider/products/{id}/delete"),
+            &format!("/provider/supplies/{id}/delete"),
             &[],
             Some(&cookie),
         ),
@@ -278,7 +278,7 @@ async fn a_refused_photo_saves_nothing() {
     let res = send(
         &e.router,
         post_multipart_form(
-            "/provider/products/new",
+            "/provider/supplies/new",
             &[("category_id", &category), ("name", "Sầu riêng")],
             Some(b"not an image at all"),
             &cookie,
@@ -305,7 +305,7 @@ async fn another_providers_product_looks_missing() {
     let res = send(
         &e.router,
         post_multipart_form(
-            "/provider/products/new",
+            "/provider/supplies/new",
             &[("category_id", &category), ("name", "Bưởi")],
             None,
             &cookie,
@@ -317,7 +317,7 @@ async fn another_providers_product_looks_missing() {
 
     register_provider(&e.state, "hangxom", "0907654321").await;
     let other = sign_in(&e, "hangxom", "matkhau123").await;
-    let edit = format!("/provider/products/{id}/edit");
+    let edit = format!("/provider/supplies/{id}/edit");
     let res = send(&e.router, get_page(&edit, Some(&other))).await;
     assert_eq!(res.status(), StatusCode::NOT_FOUND);
     let res = send(
@@ -340,7 +340,7 @@ async fn another_providers_product_looks_missing() {
     // An admin has no business: the dashboard says so instead of failing.
     let admin = install_admin(&e).await;
     let html = page(&e, "/provider/dashboard", &admin).await;
-    assert!(html.contains("Tài khoản chưa gắn với cửa hàng nào"));
+    assert!(html.contains("Tài khoản chưa gắn với nhà cung cấp nào"));
     let res = send(&e.router, get_page("/provider/dashboard", None)).await;
     assert_eq!(res.headers()[header::LOCATION], "/login");
     e.cleanup().await;

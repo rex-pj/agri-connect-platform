@@ -11,7 +11,10 @@ use crate::{
     app_state::AppState,
     extract::{ApiJson, ApiPath, ApiQuery},
     middleware::auth::MaybeActor,
-    requests::{CallRequest, CategoriesQuery, InquiryRequest, ProvidersQuery, ReviewRequest},
+    pages::listing::list_sector,
+    requests::{
+        CallRequest, CategoriesQuery, InquiryRequest, ProvidersQuery, ReviewRequest, SectorQuery,
+    },
 };
 
 /// `/api/explore/providers` answers in two shapes depending on whether a
@@ -44,13 +47,24 @@ fn geo_params(q: &ProvidersQuery) -> Option<GeoSearchParams> {
     })
 }
 
-fn browse_params(q: ProvidersQuery) -> BrowseParams {
-    BrowseParams {
+async fn browse_params(state: &AppState, q: ProvidersQuery) -> Result<BrowseParams, Error> {
+    let sector = state
+        .usecases
+        .sector
+        .chosen(q.sector.as_deref().unwrap_or_default())
+        .await?;
+    let name = q.name.filter(|n| !n.trim().is_empty());
+    Ok(BrowseParams {
+        sector: list_sector(
+            sector.as_deref(),
+            q.service_id,
+            name.as_deref().unwrap_or_default(),
+        ),
         service_id: q.service_id,
-        name: q.name,
+        name,
         sort: ProviderSort::parse(q.sort.as_deref()),
         page: q.page.unwrap_or(1),
-    }
+    })
 }
 
 pub struct ExploreHandler;
@@ -65,7 +79,11 @@ impl ExploreHandler {
         let explore = &state.usecases.explore;
         Ok(Json(match geo_params(&q) {
             Some(geo) => ProvidersResponse::Nearby(explore.search_providers(geo).await?),
-            None => ProvidersResponse::Browse(explore.browse_providers(browse_params(q)).await?),
+            None => ProvidersResponse::Browse(
+                explore
+                    .browse_providers(browse_params(&state, q).await?)
+                    .await?,
+            ),
         }))
     }
 
@@ -79,7 +97,11 @@ impl ExploreHandler {
         let explore = &state.usecases.explore;
         Ok(Json(match geo_params(&q) {
             Some(geo) => ServicesResponse::Nearby(explore.search_services(geo).await?),
-            None => ServicesResponse::Browse(explore.browse_services(browse_params(q)).await?),
+            None => ServicesResponse::Browse(
+                explore
+                    .browse_services(browse_params(&state, q).await?)
+                    .await?,
+            ),
         }))
     }
 
@@ -101,13 +123,29 @@ impl ExploreHandler {
         Ok(Json(result))
     }
 
-    /// GET /api/explore/featured
+    /// GET /api/explore/featured?sector=
     pub async fn get_explore_data(
         State(state): State<AppState>,
+        ApiQuery(q): ApiQuery<SectorQuery>,
     ) -> Result<impl IntoResponse, Error> {
-        let result = state.usecases.explore.get_explore_data().await?;
+        let sector = state.usecases.sector.chosen(&q.sector).await?;
+        Ok(Json(
+            state
+                .usecases
+                .explore
+                .get_explore_data(sector.as_deref())
+                .await?,
+        ))
+    }
 
-        Ok(Json(result))
+    /// GET /api/explore/alerts?sector= — the alerts in force today for that
+    /// sector (and every sector); with none, all of them, as the home page.
+    pub async fn list_alerts(
+        State(state): State<AppState>,
+        ApiQuery(q): ApiQuery<SectorQuery>,
+    ) -> Result<impl IntoResponse, Error> {
+        let sector = state.usecases.sector.chosen(&q.sector).await?;
+        Ok(Json(state.usecases.alert.live(sector.as_deref()).await?))
     }
 
     /// GET /api/explore/categories?type=product|service
@@ -135,6 +173,7 @@ impl ExploreHandler {
     /// call button was tapped; 204. Rate-limited like the contact form.
     pub async fn record_call(
         MaybeActor(actor): MaybeActor,
+        ip: Option<axum::Extension<crate::middleware::client_ip::ClientIp>>,
         State(state): State<AppState>,
         ApiJson(req): ApiJson<CallRequest>,
     ) -> Result<impl IntoResponse, Error> {
@@ -149,8 +188,9 @@ impl ExploreHandler {
                     Visitor::SignedIn
                 } else {
                     Visitor::Anonymous {
-                        // Taps are not told apart: every tap is a lead.
-                        key: String::new(),
+                        // Told apart by address (in memory only), so one
+                        // visitor's repeated taps are one lead.
+                        key: ip.map(|i| i.0 .0.to_string()).unwrap_or_default(),
                     }
                 },
             })
@@ -173,6 +213,7 @@ impl ExploreHandler {
                 requester_phone: req.requester_phone,
                 note: req.note,
                 service_id: req.service_id,
+                product_id: req.product_id,
             })
             .await?;
 

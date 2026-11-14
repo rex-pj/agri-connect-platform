@@ -1,6 +1,9 @@
 pub struct NewInquiry {
     pub business_id: i32,
     pub service_id: Option<i32>,
+    /// The supply it was about (sent from that supply's page); never set
+    /// together with a service.
+    pub product_id: Option<i32>,
     pub topic: String,
     pub requester_name: String,
     pub requester_phone: String,

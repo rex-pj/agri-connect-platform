@@ -1,5 +1,6 @@
 {% extends "layouts/app.html" %}
 {% import "atoms/icon.html" as atoms %}
+{% import "molecules/manage_link.html" as manage %}
 {% import "molecules/call_button.html" as call %}
 {% import "molecules/zalo_button.html" as zalo %}
 {% import "atoms/alert.html" as alerts %}
@@ -9,6 +10,7 @@
 {% import "organisms/product_card.html" as cards %}
 {% import "organisms/review_sheet.html" as review %}
 {% import "atoms/stars.html" as stars %}
+{% import "molecules/rating_line.html" as rating %}
 {#- Provider detail. `page` is web::pages::provider::ProviderPage. The call
     button is the main action; the contact form is the fallback for when
     nobody answers. Then what they do, what they sell, and the reviews of
@@ -32,6 +34,7 @@
 
 <div class="detail-body provider-detail" x-data="dialog" data-open="{% if page.contact.open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
   {% if page.sent %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="contact.sent")) }}<p class="small mb-3">{{ t(key="review.after_contact") }} <a href="#{{ page.reviews_anchor }}">{{ t(key="review.write") }}</a></p>{% endif %}
+  {{ manage::manage_link(link=page.manage) }}
 
   <section class="detail-card">
     <div class="provider-actions">
@@ -80,7 +83,7 @@
   <section class="detail-card" id="{{ page.reviews_anchor }}" aria-labelledby="reviews-title" x-data="dialog" data-open="{% if page.review.open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
     <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
       <h2 class="detail-card__title mb-0" id="reviews-title">{{ t(key="review.title") }}</h2>
-      {% if r.count > 0 %}<p class="mb-0"><strong>{{ r.average }}</strong> {{ atoms::icon(name="fa-star", class="text-warning") }} <span class="text-muted">· {{ t(key="reviews.count", count=r.count) }}</span></p>{% endif %}
+      {% if r.count > 0 %}<p class="mb-0">{{ rating::rating_line(r=r) }}</p>{% endif %}
     </div>
     {% if page.review_sent %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="review.sent")) }}{% endif %}
     {% if r.items %}
@@ -98,7 +101,7 @@
     <p class="small text-muted">{{ t(key="review.none") }}</p>
     {% endif %}
     <a class="btn btn-outline-warning btn-lg w-100" href="#danh-gia" x-on:click.prevent="show">{{ atoms::icon(name="fa-star") }} {{ t(key="review.write") }}</a>
-    {{ review::review_sheet(provider=p, review=page.review, stars=page.stars, name_max=page.limits.name_max, comment_max=page.review_comment_max) }}
+    {{ review::review_sheet(provider=p, review=page.review, stars=page.stars, name_max=page.limits.name_max, comment_max=page.review_comment_max, phone_pattern=limits.phone_pattern) }}
   </section>
 
   {{ sheet::contact_sheet(provider=p, contact=page.contact, limits=page.limits) }}

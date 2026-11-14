@@ -6,11 +6,14 @@
 use std::{collections::HashMap, sync::Arc};
 
 use application::constants::{
-    AUDIT_REASON_MAX, BUSINESS_ADDRESS_MAX, BUSINESS_DESCRIPTION_MAX, BUSINESS_NAME_MAX,
-    CROP_NAME_MAX, CROP_UNIT_MAX, FULL_NAME_MAX, JOB_DESCRIPTION_MAX, PASSWORD_MIN_CHARS,
-    PASSWORD_RESET_EXPIRY_HOURS, PRICE_NOTE_MAX, PRODUCT_DESCRIPTION_MAX, PRODUCT_NAME_MAX,
-    PRODUCT_UNIT_MAX, USERNAME_MAX_LEN, USERNAME_MIN_LEN, VN_UTC_OFFSET_SECS,
+    ALERT_BODY_MAX, ALERT_TITLE_MAX, AUDIT_REASON_MAX, BUSINESS_ADDRESS_MAX,
+    BUSINESS_DESCRIPTION_MAX, BUSINESS_NAME_MAX, CODED_ICON_MAX, CODED_NAME_MAX,
+    COMMODITY_ICON_MAX, COMMODITY_NAME_MAX, CROP_NAME_MAX, CROP_UNIT_MAX, FULL_NAME_MAX,
+    JOB_DESCRIPTION_MAX, PASSWORD_MIN_CHARS, PASSWORD_RESET_EXPIRY_HOURS, PRICE_NOTE_MAX,
+    PRODUCT_DESCRIPTION_MAX, PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX, USERNAME_MAX_LEN,
+    USERNAME_MIN_LEN, VN_UTC_OFFSET_SECS,
 };
+use application::validation::{is_valid_vn_phone, SLUG_PATTERN, VN_PHONE_PATTERN};
 use axum::{
     http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
@@ -23,7 +26,7 @@ use tera::{Tera, Value};
 
 use crate::{
     app_state::AppState,
-    constants::{EXPLORE_DEFAULT_RADIUS_M, ZALO_CHAT_URL},
+    constants::{km, EXPLORE_DEFAULT_RADIUS_M, ZALO_CHAT_URL},
     extract::ApiPath,
     locale::{fill, Lang, Locale, Locales},
     routes,
@@ -106,15 +109,27 @@ struct FieldLimits {
     product_unit_max: usize,
     product_description_max: usize,
     audit_reason_max: usize,
+    coded_name_max: usize,
+    coded_icon_max: usize,
+    commodity_name_max: usize,
+    commodity_icon_max: usize,
     crop_name_max: usize,
     crop_unit_max: usize,
+    alert_title_max: usize,
+    alert_body_max: usize,
     price_note_max: usize,
     job_description_max: usize,
+    /// `validation::VN_PHONE_PATTERN`, for a phone box's `pattern`.
+    phone_pattern: &'static str,
+    /// `validation::SLUG_PATTERN`, for a slug box's `pattern`.
+    slug_pattern: &'static str,
     /// The near-me radius before the visitor picks one.
     near_me_km: i64,
 }
 
 const FIELD_LIMITS: FieldLimits = FieldLimits {
+    phone_pattern: VN_PHONE_PATTERN,
+    slug_pattern: SLUG_PATTERN,
     password_min_chars: PASSWORD_MIN_CHARS,
     username_min_len: USERNAME_MIN_LEN,
     username_max_len: USERNAME_MAX_LEN,
@@ -127,11 +142,17 @@ const FIELD_LIMITS: FieldLimits = FieldLimits {
     product_unit_max: PRODUCT_UNIT_MAX,
     product_description_max: PRODUCT_DESCRIPTION_MAX,
     audit_reason_max: AUDIT_REASON_MAX,
+    coded_name_max: CODED_NAME_MAX,
+    coded_icon_max: CODED_ICON_MAX,
+    commodity_name_max: COMMODITY_NAME_MAX,
+    commodity_icon_max: COMMODITY_ICON_MAX,
     crop_name_max: CROP_NAME_MAX,
     crop_unit_max: CROP_UNIT_MAX,
+    alert_title_max: ALERT_TITLE_MAX,
+    alert_body_max: ALERT_BODY_MAX,
     price_note_max: PRICE_NOTE_MAX,
     job_description_max: JOB_DESCRIPTION_MAX,
-    near_me_km: EXPLORE_DEFAULT_RADIUS_M / 1000,
+    near_me_km: km(EXPLORE_DEFAULT_RADIUS_M),
 };
 
 /// What every template sees: `site`, `lang` (and `languages` for the
@@ -149,13 +170,25 @@ struct PageContext<'a, T: Serialize> {
     page: &'a T,
 }
 
+/// Bytes of a static file's SHA-256 its version shows (`?v=`): enough to
+/// tell two builds apart.
+const ASSET_VERSION_BYTES: usize = 6;
+
+/// A static file's version: the start of its hash, in hex.
+fn asset_version(file: &rust_embed::EmbeddedFile) -> String {
+    file.metadata
+        .sha256_hash()
+        .iter()
+        .take(ASSET_VERSION_BYTES)
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
 fn asset_versions() -> HashMap<String, String> {
     StaticFiles::iter()
         .filter_map(|path| {
             let file = StaticFiles::get(&path)?;
-            let hash = file.metadata.sha256_hash();
-            let short: String = hash.iter().take(6).map(|b| format!("{b:02x}")).collect();
-            Some((path.into_owned(), short))
+            Some((path.into_owned(), asset_version(&file)))
         })
         .collect()
 }
@@ -223,7 +256,10 @@ impl Views {
             let version = versions
                 .get(path)
                 .ok_or_else(|| tera::Error::msg(format!("asset_url: no static file {path:?}")))?;
-            Ok(Value::String(format!("/static/{path}?v={version}")))
+            Ok(Value::String(format!(
+                "{}{path}?v={version}",
+                crate::routes::STATIC_PREFIX
+            )))
         });
 
         // t(key="nav.home", count=3): the locale's text with its `{count}`
@@ -485,7 +521,7 @@ pub fn format_number(n: i64) -> String {
 /// other shape is shown as stored.
 pub fn format_phone(phone: &str) -> String {
     let p = phone.trim();
-    if p.len() == 10 && p.bytes().all(|b| b.is_ascii_digit()) {
+    if is_valid_vn_phone(p) {
         format!("{} {} {}", &p[..4], &p[4..7], &p[7..])
     } else {
         p.to_owned()
@@ -604,13 +640,7 @@ fn serve_static(path: &str, query: Option<&str>) -> Result<Response, Error> {
         return Err(Error::new(ErrorCode::RouteNotFound));
     }
     let file = StaticFiles::get(path).ok_or_else(|| Error::new(ErrorCode::RouteNotFound))?;
-    let hash: String = file
-        .metadata
-        .sha256_hash()
-        .iter()
-        .take(6)
-        .map(|b| format!("{b:02x}"))
-        .collect();
+    let hash = asset_version(&file);
     let versioned = query == Some(&format!("v={hash}"));
 
     let mut response = file.data.into_owned().into_response();

@@ -310,6 +310,80 @@ pub async fn reset_page(
     )
 }
 
+// ── Confirm the email address ─────────────────────────────────────────────────
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct VerifyEmailForm {
+    pub token: String,
+}
+
+#[derive(Serialize)]
+pub struct VerifyEmailPage {
+    pub token: String,
+    /// No token, or one that is unknown, already used or run out.
+    pub invalid: bool,
+    /// The address was just confirmed.
+    pub done: bool,
+}
+
+fn verify_email_view(
+    state: &AppState,
+    status: axum::http::StatusCode,
+    page: &VerifyEmailPage,
+) -> Result<Response, Error> {
+    render_page_status(
+        state,
+        &bare_shell(state, &url("verify_email")?),
+        status,
+        "pages/verify_email.html",
+        page,
+    )
+}
+
+/// GET /verify-email?token=… — the link from the email. It only shows the
+/// button: opening a link (a mail scanner does it too) confirms nothing.
+pub async fn verify_email_page(
+    State(state): State<AppState>,
+    ApiQuery(q): ApiQuery<VerifyEmailForm>,
+) -> Result<Response, Error> {
+    let token = q.token.trim().to_owned();
+    let page = VerifyEmailPage {
+        invalid: token.is_empty(),
+        token,
+        done: false,
+    };
+    verify_email_view(&state, axum::http::StatusCode::OK, &page)
+}
+
+/// POST /verify-email — confirms the address the link was sent to.
+pub async fn verify_email(
+    State(state): State<AppState>,
+    ApiForm(form): ApiForm<VerifyEmailForm>,
+) -> Result<Response, Error> {
+    match state.usecases.auth.verify_email(&form.token).await {
+        Ok(()) => verify_email_view(
+            &state,
+            axum::http::StatusCode::OK,
+            &VerifyEmailPage {
+                token: String::new(),
+                invalid: false,
+                done: true,
+            },
+        ),
+        Err(err) if err.code() == ErrorCode::EmailVerificationInvalid => verify_email_view(
+            &state,
+            err.kind().status(),
+            &VerifyEmailPage {
+                token: String::new(),
+                invalid: true,
+                done: false,
+            },
+        ),
+        Err(err) => Err(err),
+    }
+}
+
 pub async fn reset(
     State(state): State<AppState>,
     ApiForm(form): ApiForm<ResetForm>,

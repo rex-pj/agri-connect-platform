@@ -19,22 +19,34 @@ use tower_http::{
 
 use crate::{
     app_state::AppState,
-    constants::MULTIPART_OVERHEAD_BYTES,
+    constants::{MULTIPART_OVERHEAD_BYTES, REQUEST_ID_MAX_LEN},
     error_response::render_errors,
     handlers::{
-        admin_handler::AdminHandler, auth_handler::AuthHandler, explore_handler::ExploreHandler,
-        health_handler::HealthHandler, job_handler::JobHandler, media_handler::MediaHandler,
-        partner_handler::PartnerHandler, permission_handler::PermissionHandler,
-        price_handler::PriceHandler, products_handler::ProductsHandler,
-        provider_dashboard_handler::ProviderDashboardHandler, role_handler::RoleHandler,
-        setup_handler::SetupHandler, stats_handler::StatsHandler, zalo_handler::ZaloHandler,
+        admin_handler::AdminHandler,
+        auth_handler::AuthHandler,
+        coded_handler::{AlertKindHandler, SectorHandler},
+        commodity_handler::CommodityHandler,
+        explore_handler::ExploreHandler,
+        health_handler::HealthHandler,
+        job_handler::JobHandler,
+        media_handler::MediaHandler,
+        partner_handler::PartnerHandler,
+        permission_handler::PermissionHandler,
+        price_handler::PriceHandler,
+        products_handler::ProductsHandler,
+        provider_dashboard_handler::ProviderDashboardHandler,
+        role_handler::RoleHandler,
+        setup_handler::SetupHandler,
+        stats_handler::StatsHandler,
+        zalo_handler::ZaloHandler,
     },
     middleware::{
         client_ip, language, origin,
         rate_limit::{self, Limiters, Scope},
+        timeout,
     },
     pages,
-    routes::{FILE_PATH, FILE_THUMB_PATH},
+    routes::{self, FILE_PATH, FILE_THUMB_PATH},
     session, views,
 };
 
@@ -53,6 +65,9 @@ pub struct RouterConfig {
     /// Origins whose non-GET requests are accepted (APP_URL + CORS_ORIGINS).
     /// Missing ours: every form on the site is refused as cross-site.
     pub allowed_origins: Vec<String>,
+    /// Other sites allowed to call the API (CORS_ORIGINS): their non-GET
+    /// requests are accepted only without a session cookie.
+    pub api_origins: Vec<String>,
     pub limiters: Limiters,
 }
 
@@ -63,6 +78,7 @@ impl Default for RouterConfig {
             https: false,
             trusted_proxy_hops: 0,
             allowed_origins: Vec::new(),
+            api_origins: Vec::new(),
             limiters: Limiters::in_process(),
         }
     }
@@ -79,7 +95,10 @@ impl AppRouting {
             let l = l.clone();
             middleware::from_fn(move |req, next| rate_limit::enforce(l.clone(), scope, req, next))
         };
-        let allowed_origins = Arc::new(config.allowed_origins.clone());
+        let origins = Arc::new(origin::Origins {
+            own: config.allowed_origins.clone(),
+            api: config.api_origins.clone(),
+        });
 
         let cors = if config.cors_origins.is_empty() {
             // No origins configured — block all cross-origin requests.
@@ -105,15 +124,22 @@ impl AppRouting {
         // Contact form is rate-limited separately to prevent spam.
         let public_routes = Router::new()
             .route("/", get(pages::home::show))
-            .route("/products", get(pages::products::list))
+            .route("/supplies", get(pages::products::list))
+            .route(
+                "/supplies/category/{id}/{slug}",
+                get(pages::products::category),
+            )
+            .route("/supplies/{id}", get(pages::product::by_id))
+            .route("/supplies/{id}/{slug}", get(pages::product::show))
+            // Supplies were "products": the former addresses move for good (a
+            // supply's or a category's page sends any spelling to its own).
+            .route("/products", get(pages::moved::supplies))
             .route(
                 "/products/category/{id}/{slug}",
                 get(pages::products::category),
             )
             .route("/products/{id}", get(pages::product::by_id))
             .route("/products/{id}/{slug}", get(pages::product::show))
-            .route("/explore", get(pages::explore::show))
-            .route("/search", get(pages::search::show))
             .route("/services", get(pages::services::list))
             .route("/prices", get(pages::prices::show))
             .route("/jobs/new", get(pages::jobs::new))
@@ -126,13 +152,8 @@ impl AppRouting {
             .route("/providers", get(pages::directory::list))
             .route("/providers/{id}", get(pages::provider::by_id))
             .route("/providers/{id}/{slug}", get(pages::provider::show))
-            .route("/health/live", get(HealthHandler::live))
-            .route("/health/ready", get(HealthHandler::ready))
-            // GET /api/explore/providers — geo-search when lat+lng present, browse otherwise
-            .route(
-                "/api/explore/providers",
-                get(ExploreHandler::list_providers),
-            )
+            .route(routes::HEALTH_LIVE_PATH, get(HealthHandler::live))
+            .route(routes::HEALTH_READY_PATH, get(HealthHandler::ready))
             .route(
                 "/api/explore/providers/{id}",
                 get(ExploreHandler::get_provider_by_id),
@@ -141,8 +162,6 @@ impl AppRouting {
                 "/api/explore/providers/{id}/reviews",
                 get(ExploreHandler::list_reviews),
             )
-            // GET /api/explore/services — near me when lat+lng present, browse otherwise
-            .route("/api/explore/services", get(ExploreHandler::list_services))
             .route(
                 "/api/explore/services/{id}",
                 get(ExploreHandler::get_service_by_id),
@@ -152,17 +171,16 @@ impl AppRouting {
                 "/api/explore/featured",
                 get(ExploreHandler::get_explore_data),
             )
+            .route("/api/explore/alerts", get(ExploreHandler::list_alerts))
             .route(
                 "/api/explore/categories",
                 get(ExploreHandler::get_categories),
             )
+            .route("/api/explore/sectors", get(SectorHandler::shown))
+            .route("/api/explore/alert-kinds", get(AlertKindHandler::shown))
+            .route("/api/explore/commodities", get(CommodityHandler::shown))
             .route("/api/explore/locations", get(ExploreHandler::get_locations))
             .route("/api/explore/prices", get(PriceHandler::board))
-            // GET /api/explore/products — replaces the old /products/browse verb path
-            .route(
-                "/api/explore/products",
-                get(ProductsHandler::browse_products),
-            )
             .route(
                 "/api/explore/products/{id}",
                 get(ProductsHandler::get_product_by_id),
@@ -170,6 +188,25 @@ impl AppRouting {
             // Uploaded images, same-origin so the page CSP can stay img-src 'self'.
             .route(FILE_PATH, get(MediaHandler::file))
             .route(FILE_THUMB_PATH, get(MediaHandler::thumb));
+
+        // ── SEARCH routes (public reads with their own budget) ───────────────
+        // Each is a text or geo query over the listings, and the search pages
+        // also record what was searched.
+        let search_routes = Router::new()
+            .route("/explore", get(pages::explore::show))
+            .route("/search", get(pages::search::show))
+            // GET /api/explore/providers — geo-search when lat+lng present, browse otherwise
+            .route(
+                "/api/explore/providers",
+                get(ExploreHandler::list_providers),
+            )
+            // GET /api/explore/services — near me when lat+lng present, browse otherwise
+            .route("/api/explore/services", get(ExploreHandler::list_services))
+            .route(
+                "/api/explore/products",
+                get(ProductsHandler::browse_products),
+            )
+            .layer(limiter(&config.limiters.public_search, Scope::AllRequests));
 
         let contact_routes = Router::new()
             .route(
@@ -187,6 +224,7 @@ impl AppRouting {
             // The job form: same rules and budget as the JSON endpoint.
             .route("/jobs", post(pages::jobs::create))
             .route("/language", post(pages::language::switch))
+            .route("/sector", post(pages::sector::switch))
             // Call-button taps: the click-to-call count, same budget.
             .route("/api/explore/calls", post(ExploreHandler::record_call))
             // Logging out is a write; under the same budget as the contact form.
@@ -201,13 +239,13 @@ impl AppRouting {
                 "/api/provider/products/{id}/image",
                 put(MediaHandler::put_product_image),
             )
-            // The provider's product forms carry the photo.
+            // The provider's supply forms carry the photo.
             .route(
-                "/provider/products/new",
+                "/provider/supplies/new",
                 post(pages::dashboard::create_product),
             )
             .route(
-                "/provider/products/{id}/edit",
+                "/provider/supplies/{id}/edit",
                 post(pages::dashboard::update_product),
             )
             .route(
@@ -266,6 +304,10 @@ impl AppRouting {
                 get(pages::auth::reset_page).post(pages::auth::reset),
             )
             .route(
+                "/verify-email",
+                get(pages::auth::verify_email_page).post(pages::auth::verify_email),
+            )
+            .route(
                 "/setup",
                 get(pages::setup::setup_page).post(pages::setup::setup),
             )
@@ -318,6 +360,42 @@ impl AppRouting {
                 post(pages::admin::prices::delete),
             )
             .route(
+                "/admin/alert-kinds",
+                get(pages::admin::alert_kinds::list).post(pages::admin::alert_kinds::create),
+            )
+            .route(
+                "/admin/alert-kinds/{id}",
+                get(pages::admin::alert_kinds::show).post(pages::admin::alert_kinds::update),
+            )
+            .route(
+                "/admin/alert-kinds/{id}/status",
+                post(pages::admin::alert_kinds::change_status),
+            )
+            .route(
+                "/admin/sectors",
+                get(pages::admin::sectors::list).post(pages::admin::sectors::create),
+            )
+            .route(
+                "/admin/sectors/{id}",
+                get(pages::admin::sectors::show).post(pages::admin::sectors::update),
+            )
+            .route(
+                "/admin/sectors/{id}/status",
+                post(pages::admin::sectors::change_status),
+            )
+            .route(
+                "/admin/commodities",
+                get(pages::admin::commodities::list).post(pages::admin::commodities::create),
+            )
+            .route(
+                "/admin/commodities/{id}",
+                get(pages::admin::commodities::show).post(pages::admin::commodities::update),
+            )
+            .route(
+                "/admin/commodities/{id}/status",
+                post(pages::admin::commodities::change_status),
+            )
+            .route(
                 "/admin/crops",
                 get(pages::admin::crops::list).post(pages::admin::crops::create),
             )
@@ -328,6 +406,18 @@ impl AppRouting {
             .route(
                 "/admin/crops/{id}/status",
                 post(pages::admin::crops::change_status),
+            )
+            .route(
+                "/admin/alerts",
+                get(pages::admin::alerts::list).post(pages::admin::alerts::create),
+            )
+            .route(
+                "/admin/alerts/{id}",
+                get(pages::admin::alerts::show).post(pages::admin::alerts::update),
+            )
+            .route(
+                "/admin/alerts/{id}/status",
+                post(pages::admin::alerts::change_status),
             )
             .route(
                 "/admin/locations",
@@ -345,37 +435,42 @@ impl AppRouting {
                 "/admin/locations/{id}/delete",
                 post(pages::admin::locations::delete),
             )
+            // Former addresses, kept for bookmarks and old emails.
+            .route("/admin/explore", get(pages::moved::admin_providers))
+            .route("/admin/explore/{id}", get(pages::moved::admin_provider))
+            .route("/admin/products", get(pages::moved::admin_supplies))
+            .route("/admin/products/{id}", get(pages::moved::admin_supply))
             .route(
-                "/admin/explore",
+                "/admin/providers",
                 get(pages::admin::providers::list).post(pages::admin::providers::create),
             )
             .route(
-                "/admin/explore/{id}",
+                "/admin/providers/{id}",
                 get(pages::admin::providers::show).post(pages::admin::providers::update),
             )
             .route(
-                "/admin/explore/{id}/verification",
+                "/admin/providers/{id}/verification",
                 post(pages::admin::providers::set_verification),
             )
             .route(
-                "/admin/explore/{id}/account",
+                "/admin/providers/{id}/account",
                 post(pages::admin::providers::assign_account),
             )
             .route(
-                "/admin/explore/{id}/status",
+                "/admin/providers/{id}/status",
                 post(pages::admin::providers::change_status),
             )
-            .route("/admin/products", get(pages::admin::products::list))
+            .route("/admin/supplies", get(pages::admin::products::list))
             .route(
-                "/admin/products/{id}",
+                "/admin/supplies/{id}",
                 get(pages::admin::products::show).post(pages::admin::products::update),
             )
             .route(
-                "/admin/products/{id}/status",
+                "/admin/supplies/{id}/status",
                 post(pages::admin::products::change_status),
             )
             .route(
-                "/admin/products/{id}/delete",
+                "/admin/supplies/{id}/delete",
                 post(pages::admin::products::delete),
             )
             .route(
@@ -451,13 +546,18 @@ impl AppRouting {
             )
             .route("/provider/dashboard", get(pages::dashboard::show))
             .route("/provider/profile", post(pages::dashboard::update_profile))
-            .route("/provider/products/new", get(pages::dashboard::new_product))
+            .route("/provider/supplies/new", get(pages::dashboard::new_product))
             .route(
-                "/provider/products/{id}/edit",
+                "/provider/supplies/{id}/edit",
                 get(pages::dashboard::edit_product),
             )
+            .route("/provider/products/new", get(pages::moved::own_supply_new))
             .route(
-                "/provider/products/{id}/delete",
+                "/provider/products/{id}/edit",
+                get(pages::moved::own_supply_edit),
+            )
+            .route(
+                "/provider/supplies/{id}/delete",
                 post(pages::dashboard::delete_product),
             )
             .route(
@@ -483,7 +583,11 @@ impl AppRouting {
                 "/provider/inquiries/{id}/status",
                 post(pages::inbox::change_status),
             )
-            .route("/account/password", post(pages::account::change_password));
+            .route("/account/password", post(pages::account::change_password))
+            .route(
+                "/account/email-verification",
+                post(pages::account::send_email_verification),
+            );
 
         // ── USER routes (authenticated, no rate limit) ───────────────────────
         let user_routes = Router::new()
@@ -615,7 +719,45 @@ impl AppRouting {
             .route("/api/provider/jobs", get(JobHandler::list_own))
             .route("/api/admin/jobs", get(JobHandler::list_admin))
             .route("/api/admin/jobs/{id}/status", patch(JobHandler::set_status))
+            // Alert kinds
+            .route(
+                "/api/admin/alert-kinds",
+                get(AlertKindHandler::list).post(AlertKindHandler::create),
+            )
+            .route(
+                "/api/admin/alert-kinds/{id}",
+                get(AlertKindHandler::get).put(AlertKindHandler::update),
+            )
+            .route(
+                "/api/admin/alert-kinds/{id}/status",
+                patch(AlertKindHandler::set_status),
+            )
+            // Sectors
+            .route(
+                "/api/admin/sectors",
+                get(SectorHandler::list).post(SectorHandler::create),
+            )
+            .route(
+                "/api/admin/sectors/{id}",
+                get(SectorHandler::get).put(SectorHandler::update),
+            )
+            .route(
+                "/api/admin/sectors/{id}/status",
+                patch(SectorHandler::set_status),
+            )
             // Crop prices
+            .route(
+                "/api/admin/commodities",
+                get(CommodityHandler::list).post(CommodityHandler::create),
+            )
+            .route(
+                "/api/admin/commodities/{id}",
+                get(CommodityHandler::get).put(CommodityHandler::update),
+            )
+            .route(
+                "/api/admin/commodities/{id}/status",
+                patch(CommodityHandler::set_status),
+            )
             .route(
                 "/api/admin/crops",
                 get(PriceHandler::list_crops).post(PriceHandler::create_crop),
@@ -733,16 +875,20 @@ impl AppRouting {
 
         let mut router = Router::new()
             .merge(public_routes)
+            .merge(search_routes)
             .merge(contact_routes)
-            .merge(upload_routes)
             .merge(auth_routes)
             .merge(auth_pages)
             .merge(member_pages.layer(limiter(&config.limiters.member_write, Scope::WritesOnly)))
             .merge(user_routes.layer(limiter(&config.limiters.member_write, Scope::WritesOnly)))
             .merge(admin_routes.layer(limiter(&config.limiters.member_write, Scope::WritesOnly)))
             .merge(provider_routes.layer(limiter(&config.limiters.member_write, Scope::WritesOnly)))
-            .route("/static/{*path}", get(views::static_file))
+            .route(routes::STATIC_ROUTE, get(views::static_file))
             .route(views::FAVICON_PATH, get(views::favicon))
+            // Every route above gives up after REQUEST_TIMEOUT_SECS; the
+            // uploads, merged after it, may take as long as the signal needs.
+            .layer(middleware::from_fn(timeout::enforce))
+            .merge(upload_routes)
             .fallback(fallback)
             .layer(cors)
             .layer(SetResponseHeaderLayer::if_not_present(
@@ -789,7 +935,7 @@ impl AppRouting {
             }))
             // Inside the renderer so a refused cross-site request gets a coded body.
             .layer(middleware::from_fn(move |req, next| {
-                origin::enforce(allowed_origins.clone(), req, next)
+                origin::enforce(origins.clone(), req, next)
             }))
             .layer(error_renderer)
             // Outermost of the page layers: every page and error body is worded
@@ -805,13 +951,43 @@ impl AppRouting {
             }))
             .layer(PropagateRequestIdLayer::new(request_id.clone()))
             .layer(SetRequestIdLayer::new(request_id, MakeRequestUuid))
+            // Outermost: a client's own id is kept only when it looks like
+            // one; anything else is dropped and a fresh id made above.
+            .layer(middleware::from_fn(plain_request_id))
             .with_state(state)
     }
 }
 
 /// Echoed on every response, so a user's bug report can be matched to the log
-/// lines of that exact request. A client-supplied value is kept as-is.
+/// lines of that exact request. A client-supplied value is kept when it is a
+/// plain id (`plain_request_id`).
 pub const REQUEST_ID_HEADER: &str = "x-request-id";
+
+/// Whether a client's request id may go into the log lines and the error
+/// page: short, and only letters, digits, `-` and `_`.
+pub fn is_plain_request_id(value: &[u8]) -> bool {
+    !value.is_empty()
+        && value.len() <= REQUEST_ID_MAX_LEN
+        && value
+            .iter()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'))
+}
+
+/// Drops a client's `x-request-id` that is not a plain id, so the server
+/// makes its own: a long or odd value never reaches the logs.
+async fn plain_request_id(
+    mut req: axum::extract::Request,
+    next: middleware::Next,
+) -> axum::response::Response {
+    let plain = req
+        .headers()
+        .get(REQUEST_ID_HEADER)
+        .is_none_or(|v| is_plain_request_id(v.as_bytes()));
+    if !plain {
+        req.headers_mut().remove(REQUEST_ID_HEADER);
+    }
+    next.run(req).await
+}
 
 fn request_span(req: &axum::http::Request<axum::body::Body>) -> tracing::Span {
     let request_id = req

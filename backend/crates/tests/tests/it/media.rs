@@ -4,11 +4,11 @@
 
 use axum::{
     body::Body,
-    http::{header, Request, StatusCode},
+    http::{header, Method, Request, StatusCode},
 };
 use integration_tests::{
-    create_product, json_body, multipart, photo, put_photo, register_provider, router_without_db,
-    send, upload_request, with_product_category, Env,
+    categories_of, create_product, json_body, multipart, photo, put_photo, register_provider,
+    router_without_db, send, upload_request, with_product_category, Env, MULTIPART_BOUNDARY,
 };
 use sea_orm::{ConnectionTrait, Statement};
 use web::routings::app_routing::RouterConfig;
@@ -210,11 +210,12 @@ async fn bad_uploads_get_a_reason_and_store_nothing() {
 
 #[tokio::test]
 #[ignore = "needs TEST_DATABASE_URL"]
-async fn removing_demo_data_removes_the_photos_of_its_products() {
+async fn removing_demo_data_removes_the_photos_of_its_services_and_products() {
     let e = env().await;
     let token = register_provider(&e.state, "nongdan", "0901234567").await;
     let id = product(&e, &token).await;
-    let file = put_photo(&e, id, &token).await;
+    let product_file = put_photo(&e, id, &token).await;
+    let service_file = service_with_photo(&e, &token).await;
     // As if this were a demo business someone had added a photo to.
     e.t.db
         .execute_unprepared("UPDATE businesses SET is_demo = TRUE")
@@ -224,8 +225,40 @@ async fn removing_demo_data_removes_the_photos_of_its_products() {
 
     let removed = e.state.usecases.setup.remove_demo(&admin).await.unwrap();
     assert_eq!(removed, 1);
-    assert_eq!(file_rows(&e).await, 0, "the files row went too");
-    let res = send(&e.router, get(&format!("/files/{file}"))).await;
-    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+    assert_eq!(file_rows(&e).await, 0, "the files rows went too");
+    for file in [product_file, service_file] {
+        let res = send(&e.router, get(&format!("/files/{file}"))).await;
+        assert_eq!(res.status(), StatusCode::NOT_FOUND, "{file}");
+    }
     e.cleanup().await;
+}
+
+/// Adds a service with a photo to the provider's business through the API;
+/// the photo's file id.
+async fn service_with_photo(e: &Env, token: &str) -> String {
+    let (category, _) = categories_of(e, "service").await[0].clone();
+    let create = Request::post("/api/provider/services")
+        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(format!(r#"{{"category_id":{category}}}"#)))
+        .unwrap();
+    let res = send(&e.router, create).await;
+    assert_eq!(res.status(), StatusCode::CREATED);
+    let id = json_body(res).await["id"].as_i64().unwrap();
+    let upload = Request::builder()
+        .method(Method::PUT)
+        .uri(format!("/api/provider/services/{id}/image"))
+        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .header(
+            header::CONTENT_TYPE,
+            format!("multipart/form-data; boundary={MULTIPART_BOUNDARY}"),
+        )
+        .body(Body::from(multipart("image", &photo(32, 32))))
+        .unwrap();
+    let res = send(&e.router, upload).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    json_body(res).await["image_file_id"]
+        .as_str()
+        .unwrap()
+        .to_owned()
 }

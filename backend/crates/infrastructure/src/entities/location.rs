@@ -10,6 +10,8 @@ pub struct Model {
     pub lng: f64,
     pub display_order: i32,
     pub is_active: bool,
+    /// Loaded with the demo data, removed with it unless real data uses it.
+    pub is_demo: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

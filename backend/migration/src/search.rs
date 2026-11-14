@@ -53,7 +53,8 @@ impl FoldIndex {
     }
 }
 
-/// Every folded search index of the search migration.
+/// Every folded search index: listings (name, description) and the admin's
+/// account search (username, name, email).
 pub fn search_indexes() -> Vec<FoldIndex> {
     vec![
         FoldIndex::new(
@@ -72,27 +73,12 @@ pub fn search_indexes() -> Vec<FoldIndex> {
             Products::Table,
             Products::Description,
         ),
-    ]
-}
-
-/// The folded search indexes on services (name, description), added after
-/// `search_indexes` had run; kept apart so that migration's list never
-/// changes under a database it already built.
-pub fn service_search_indexes() -> Vec<FoldIndex> {
-    vec![
         FoldIndex::new("ix_services_name_fold", Services::Table, Services::Name),
         FoldIndex::new(
             "ix_services_description_fold",
             Services::Table,
             Services::Description,
         ),
-    ]
-}
-
-/// The folded indexes for the admin's account search (username, name,
-/// email), added after the lists above had run.
-pub fn user_search_indexes() -> Vec<FoldIndex> {
-    vec![
         FoldIndex::new("ix_users_username_fold", Users::Table, Users::Username),
         FoldIndex::new("ix_users_full_name_fold", Users::Table, Users::FullName),
         FoldIndex::new("ix_users_email_fold", Users::Table, Users::Email),
@@ -101,8 +87,5 @@ pub fn user_search_indexes() -> Vec<FoldIndex> {
 
 /// Every folded index, for the check that each searched column has one.
 pub fn all_fold_indexes() -> Vec<FoldIndex> {
-    let mut all = search_indexes();
-    all.extend(service_search_indexes());
-    all.extend(user_search_indexes());
-    all
+    search_indexes()
 }

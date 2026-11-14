@@ -6,6 +6,7 @@
 pub mod bcrypt_password_hasher;
 pub mod catalogue_repository;
 pub mod db_types;
+mod demo_activity;
 pub mod demo_data_repository;
 pub mod email_service;
 pub mod entities;

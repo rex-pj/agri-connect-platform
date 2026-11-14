@@ -14,7 +14,7 @@
   <fieldset class="auth-fieldset">
     <legend class="auth-legend">{{ t(key="auth.your_business") }}</legend>
     {{ field::input(id="r_biz_name", name="business_name", label=t(key="auth.business_name"), value=v.business_name, error=e.business_name | default(value=""), required=true, autocomplete="organization", maxlength=limits.business_name_max, first=true) }}
-    {{ field::input(id="r_biz_phone", name="business_phone", label=t(key="form.phone"), type="tel", value=v.business_phone, error=e.business_phone | default(value=""), required=true, placeholder="0901234567", pattern="0[0-9]{9}", inputmode="numeric", autocomplete="tel") }}
+    {{ field::input(id="r_biz_phone", name="business_phone", label=t(key="form.phone"), type="tel", value=v.business_phone, error=e.business_phone | default(value=""), required=true, placeholder=t(key="form.phone_placeholder"), pattern=limits.phone_pattern, inputmode="numeric", autocomplete="tel") }}
   </fieldset>
   <fieldset class="auth-fieldset">
     <legend class="auth-legend">{{ t(key="nav.account") }}</legend>

@@ -33,7 +33,7 @@
       <button type="submit" class="btn btn-outline-success" x-show="withoutScript">{{ atoms::icon(name="fa-filter") }} {{ t(key="demand.apply") }}</button>
       <a class="btn btn-outline-secondary" href="{{ page.csv_href }}">{{ atoms::icon(name="fa-file-arrow-down") }} {{ t(key="demand.download") }}</a>
     </form>
-    {{ demand::demand_table(r=r) }}
+    {{ demand::demand_table(r=r, sectors=page.sectors) }}
   </section>
 
   <section class="detail-card">

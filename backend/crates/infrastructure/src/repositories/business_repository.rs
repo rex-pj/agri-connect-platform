@@ -8,7 +8,7 @@ use sea_orm::{
     sea_query::{Expr, Func, Order, SimpleExpr},
     ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, DatabaseConnection, DbErr,
     EntityTrait, FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
-    QueryTrait, RelationTrait, Set, TransactionTrait, UpdateMany,
+    QueryTrait, RelationTrait, Select, Set, TransactionTrait, UpdateMany,
 };
 use tracing::error;
 
@@ -17,6 +17,7 @@ use domain::{
         BusinessAdminDetail, BusinessAdminView, BusinessBrowse, BusinessDetail, BusinessGeoResult,
         BusinessProfile, ProductAdminItem, ProfileUpdate, ProviderSort, Service, ServiceAdminItem,
     },
+    models::service::PublicServiceFilter,
     repositories::business_repository_trait::BusinessRepositoryTrait,
 };
 
@@ -31,14 +32,13 @@ use crate::{
     db_types::DateTimeWithTimeZone,
     entities::{
         business::{self, Entity as Business},
-        category,
         product::{self, Entity as ProductEntity},
         service::{self, Entity as ServiceEntity},
-        user,
+        service_type as category, supply_type, user,
     },
     sql::{
-        business_lat, business_lng, business_location, distance, geography_from_text, null, output,
-        username_of, within, Geo, QueryAs,
+        business_lat, business_lng, business_location, category_in_sector, distance,
+        geography_from_text, null, output, username_of, within, Geo, QueryAs,
     },
 };
 
@@ -188,6 +188,7 @@ struct BusinessAdminDetailRow {
     is_verified: bool,
     is_active: bool,
     created_on: DateTimeWithTimeZone,
+    linked_user_id: Option<i32>,
     linked_username: Option<String>,
     lat: Option<f64>,
     lng: Option<f64>,
@@ -280,8 +281,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
 
     async fn browse(
         &self,
-        service_id: Option<i32>,
-        name: Option<String>,
+        filter: &PublicServiceFilter,
         sort: ProviderSort,
         limit: i64,
         offset: i64,
@@ -299,12 +299,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .filter(business::Column::IsActive.eq(true))
             .filter(business::Column::DeletedAt.is_null());
 
-        if let Some(id) = service_id {
-            query = query.filter(offers_service(id));
-        }
-        if let Some(q) = name.as_deref().filter(|q| !q.trim().is_empty()) {
-            query = query.filter(matches_text(q));
-        }
+        query = directory_filtered(query, filter);
 
         let query = match sort {
             ProviderSort::Newest => query.order_by_desc(business::Column::CreatedOn),
@@ -348,22 +343,14 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .collect())
     }
 
-    async fn count_browse(
-        &self,
-        service_id: Option<i32>,
-        name: Option<String>,
-    ) -> Result<i64, Error> {
+    async fn count_browse(&self, filter: &PublicServiceFilter) -> Result<i64, Error> {
         // The same conditions as `browse`, so the page count matches the pages.
-        let mut query = Business::find()
-            .filter(business::Column::IsActive.eq(true))
-            .filter(business::Column::DeletedAt.is_null());
-
-        if let Some(id) = service_id {
-            query = query.filter(offers_service(id));
-        }
-        if let Some(q) = name.as_deref().filter(|q| !q.trim().is_empty()) {
-            query = query.filter(matches_text(q));
-        }
+        let query = directory_filtered(
+            Business::find()
+                .filter(business::Column::IsActive.eq(true))
+                .filter(business::Column::DeletedAt.is_null()),
+            filter,
+        );
 
         query
             .count(self.db.as_ref())
@@ -372,24 +359,21 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .map_err(|e| Error::internal(format!("business count_browse: {e}")))
     }
 
-    async fn featured(&self, limit: i64) -> Result<Vec<BusinessBrowse>, Error> {
+    async fn featured(
+        &self,
+        limit: i64,
+        sector: Option<&str>,
+    ) -> Result<Vec<BusinessBrowse>, Error> {
         let db = self.db.as_ref();
 
         // The home page shows off vetted providers with something to offer:
         // a self-registered account is listed and searchable at once, but
         // reaches the home page only once an admin has verified it.
-        let svc_subq = ServiceEntity::find()
-            .select_only()
-            .column(service::Column::Id)
-            .join(JoinType::InnerJoin, service::Relation::Category.def())
-            .filter(
-                Expr::col((service::Entity, service::Column::BusinessId))
-                    .equals((business::Entity, business::Column::Id)),
-            )
-            .filter(service::Column::IsActive.eq(true))
-            .filter(service::Column::DeletedAt.is_null())
-            .filter(category::Column::IsActive.eq(true))
-            .into_query();
+        let mut svc = live_services_here();
+        if let Some(sector) = sector {
+            svc = svc.filter(category_in_sector(sector));
+        }
+        let svc_subq = svc.into_query();
 
         let businesses = Business::find()
             .select_only()
@@ -465,7 +449,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .column_as(category::Column::Name, QueryAs::Category)
             .column_as(category::Column::Icon, QueryAs::CategoryIcon)
             .column(service::Column::ImageFileId)
-            .join(JoinType::InnerJoin, service::Relation::Category.def())
+            .join(JoinType::InnerJoin, service::Relation::ServiceType.def())
             .filter(service::Column::BusinessId.eq(b.id))
             .filter(service::Column::IsActive.eq(true))
             .filter(service::Column::DeletedAt.is_null())
@@ -636,6 +620,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .column(business::Column::IsVerified)
             .column(business::Column::IsActive)
             .column(business::Column::CreatedOn)
+            .column_as(user::Column::Id, QueryAs::LinkedUserId)
             .column_as(user::Column::Username, QueryAs::LinkedUsername)
             .expr_as(business_lat(), QueryAs::Lat)
             .expr_as(business_lng(), QueryAs::Lng)
@@ -660,7 +645,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .column_as(category::Column::Name, QueryAs::Category)
             .column(service::Column::PriceNote)
             .column(service::Column::IsActive)
-            .join(JoinType::InnerJoin, service::Relation::Category.def())
+            .join(JoinType::InnerJoin, service::Relation::ServiceType.def())
             .filter(service::Column::BusinessId.eq(id))
             .filter(service::Column::DeletedAt.is_null())
             .order_by_asc(category::Column::DisplayOrder)
@@ -676,12 +661,12 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .column(product::Column::Name)
             .column(product::Column::Price)
             .column(product::Column::Unit)
-            .column_as(category::Column::Name, QueryAs::Category)
+            .column_as(supply_type::Column::Name, QueryAs::Category)
             .column(product::Column::IsActive)
-            .join(JoinType::InnerJoin, product::Relation::Category.def())
+            .join(JoinType::InnerJoin, product::Relation::SupplyType.def())
             .filter(product::Column::BusinessId.eq(id))
             .filter(product::Column::DeletedAt.is_null())
-            .order_by_asc(category::Column::DisplayOrder)
+            .order_by_asc(supply_type::Column::DisplayOrder)
             .order_by_desc(product::Column::CreatedOn)
             .into_model::<ProductAdminRow>()
             .all(db)
@@ -701,6 +686,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             is_verified: core.is_verified,
             is_active: core.is_active,
             created_on: core.created_on.with_timezone(&Utc),
+            linked_user_id: core.linked_user_id,
             linked_username: core.linked_username,
             lat: core.lat,
             lng: core.lng,
@@ -983,7 +969,7 @@ fn matches_text(q: &str) -> Condition {
     let service_matches = ServiceEntity::find()
         .select_only()
         .column(service::Column::Id)
-        .join(JoinType::InnerJoin, service::Relation::Category.def())
+        .join(JoinType::InnerJoin, service::Relation::ServiceType.def())
         .filter(
             Expr::col((service::Entity, service::Column::BusinessId))
                 .equals((business::Entity, business::Column::Id)),
@@ -996,22 +982,57 @@ fn matches_text(q: &str) -> Condition {
     text_contains(BUSINESS_SEARCH_COLUMNS, q).add(Expr::exists(service_matches))
 }
 
+/// The live services (shown, not deleted, in a shown category) of the
+/// business of the outer query.
+fn live_services_here() -> Select<ServiceEntity> {
+    ServiceEntity::find()
+        .select_only()
+        .column(service::Column::Id)
+        .join(JoinType::InnerJoin, service::Relation::ServiceType.def())
+        .filter(
+            Expr::col((service::Entity, service::Column::BusinessId))
+                .equals((business::Entity, business::Column::Id)),
+        )
+        .filter(service::Column::IsActive.eq(true))
+        .filter(service::Column::DeletedAt.is_null())
+        .filter(category::Column::IsActive.eq(true))
+}
+
 fn offers_service(category_id: i32) -> SimpleExpr {
     Expr::exists(
-        ServiceEntity::find()
-            .select_only()
-            .column(service::Column::Id)
-            .join(JoinType::InnerJoin, service::Relation::Category.def())
-            .filter(
-                Expr::col((service::Entity, service::Column::BusinessId))
-                    .equals((business::Entity, business::Column::Id)),
-            )
-            .filter(service::Column::IsActive.eq(true))
-            .filter(service::Column::DeletedAt.is_null())
-            .filter(service::Column::CategoryId.eq(category_id))
-            .filter(category::Column::IsActive.eq(true))
+        live_services_here()
+            .filter(service::Column::ServiceTypeId.eq(category_id))
             .into_query(),
     )
+}
+
+/// A provider of `sector`: one with nothing live yet (a new sign-up is still
+/// found) or with a live service in a category serving that sector.
+fn serves_sector(sector: &str) -> Condition {
+    Condition::any()
+        .add(Expr::exists(live_services_here().into_query()).not())
+        .add(Expr::exists(
+            live_services_here()
+                .filter(category_in_sector(sector))
+                .into_query(),
+        ))
+}
+
+/// The directory's narrowing, the same for its rows and its count.
+fn directory_filtered(
+    mut query: Select<Business>,
+    filter: &PublicServiceFilter,
+) -> Select<Business> {
+    if let Some(id) = filter.category_id {
+        query = query.filter(offers_service(id));
+    }
+    if let Some(sector) = filter.sector.as_deref() {
+        query = query.filter(serves_sector(sector));
+    }
+    if let Some(q) = filter.text.as_deref().filter(|q| !q.trim().is_empty()) {
+        query = query.filter(matches_text(q));
+    }
+    query
 }
 
 // ── Shared helper: load distinct service category names per business ──────────
@@ -1024,7 +1045,7 @@ async fn load_service_names(
         .select_only()
         .column(service::Column::BusinessId)
         .column_as(category::Column::Name, QueryAs::SvcName)
-        .join(JoinType::InnerJoin, service::Relation::Category.def())
+        .join(JoinType::InnerJoin, service::Relation::ServiceType.def())
         .filter(service::Column::BusinessId.is_in(ids.to_vec()))
         .filter(service::Column::IsActive.eq(true))
         .filter(service::Column::DeletedAt.is_null())

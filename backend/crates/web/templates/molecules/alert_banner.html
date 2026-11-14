@@ -1,0 +1,22 @@
+{#- The alerts in force today, every sector's, at the very top of
+    the home page: what to know at once comes before anything to browse.
+    `alerts` are web::pages::home::AlertCard (kind icon, title, what to do,
+    for whom and where, until when). Bootstrap's alert box, amber; nothing
+    when there is none. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro alert_banner(alerts) -%}
+{% if alerts %}
+<section class="home-alerts" aria-label="{{ t(key="alert.banner_label") }}">
+  {% for a in alerts %}
+  <div class="alert alert-warning d-flex gap-3 mb-2" role="alert">
+    <span class="fs-4 lh-1">{{ atoms::icon(name=a.icon) }}</span>
+    <div>
+      <strong class="d-block">{{ a.title }}</strong>
+      <p class="mb-1">{{ a.body }}</p>
+      {% set until = a.until | day_month %}<span class="small">{{ a.reach }} · {{ t(key="alert.until", day=until) }}</span>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+{%- endmacro alert_banner %}

@@ -8,5 +8,6 @@ pub mod error;
 pub mod events;
 pub mod models;
 pub mod repositories;
+pub mod search_terms;
 
 pub use error::{Error, ErrorCode, ErrorKind, FieldError, Result, Validation};

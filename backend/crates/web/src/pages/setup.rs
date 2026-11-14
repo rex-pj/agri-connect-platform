@@ -40,6 +40,9 @@ pub struct SetupForm {
     pub password: String,
     #[serde(skip_serializing)]
     pub password2: String,
+    /// SETUP_TOKEN as typed; never echoed back.
+    #[serde(skip_serializing)]
+    pub setup_token: String,
     /// The "load demo data" checkbox: present ("on") only when ticked.
     pub demo: Option<String>,
 }
@@ -48,6 +51,8 @@ pub struct SetupForm {
 pub struct SetupPage {
     pub values: SetupForm,
     pub errors: FormErrors,
+    /// The server has a SETUP_TOKEN: the form asks for it.
+    pub token_required: bool,
 }
 
 pub async fn setup_page(State(state): State<AppState>) -> Result<Response, Error> {
@@ -57,6 +62,7 @@ pub async fn setup_page(State(state): State<AppState>) -> Result<Response, Error
     let page = SetupPage {
         values: SetupForm::default(),
         errors: FormErrors::default(),
+        token_required: state.usecases.auth.setup_token_required(),
     };
     render_page(
         &state,
@@ -81,6 +87,7 @@ pub async fn setup(
                 form.email.clone(),
                 form.password.clone(),
                 full_name,
+                Some(form.setup_token.clone()),
             )
             .await
         }
@@ -96,6 +103,7 @@ pub async fn setup(
             let page = SetupPage {
                 values: form,
                 errors,
+                token_required: auth.setup_token_required(),
             };
             return render_page_status(
                 &state,

@@ -5,8 +5,9 @@ use domain::{
     events::{Change, DomainEvent, Entity},
     models::{
         category::{CategoryAdmin, NewCategory, UpdateCategory},
+        coded::CodedEntry,
         location::Location,
-        product::UpdateProductAdmin,
+        product::{AdminProductFilter, UpdateProductAdmin},
         role::UserRole,
         service::{NewService, UpdateService},
     },
@@ -14,9 +15,11 @@ use domain::{
         admin_unit_repository_trait::AdminUnitRepositoryTrait,
         business_repository_trait::BusinessRepositoryTrait,
         category_repository_trait::CategoryRepositoryTrait,
+        coded_repository_trait::CodedRepositoryTrait,
         inquiry_repository_trait::InquiryRepositoryTrait,
         location_repository_trait::LocationRepositoryTrait,
         product_repository_trait::ProductRepositoryTrait,
+        refresh_token_repository_trait::RefreshTokenRepositoryTrait,
         review_repository_trait::ReviewRepositoryTrait, role_repository_trait::RoleRepositoryTrait,
         service_repository_trait::ServiceRepositoryTrait,
         user_repository_trait::UserRepositoryTrait,
@@ -55,7 +58,8 @@ use crate::{
         service_rules::{validate_service, ServiceFields},
     },
     validation::{
-        audit_reason, max_chars, max_chars_opt, non_blank, validate_coordinates, validate_slug,
+        self, audit_reason, max_chars, max_chars_opt, non_blank, validate_coordinates,
+        validate_slug,
     },
 };
 
@@ -74,9 +78,13 @@ pub struct AdminUseCase {
     product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
     role_repo: Arc<dyn RoleRepositoryTrait + Send + Sync>,
     service_repo: Arc<dyn ServiceRepositoryTrait + Send + Sync>,
+    /// The sectors a type may serve.
+    sector_repo: Arc<dyn CodedRepositoryTrait + Send + Sync>,
     events: Arc<dyn EventBus>,
     /// Password hashing injected via port — infrastructure stays out of use cases.
     password_hasher: Arc<dyn PasswordHasher>,
+    /// A deactivated account's sessions end with it.
+    refresh_repo: Arc<dyn RefreshTokenRepositoryTrait + Send + Sync>,
 }
 
 /// Everything `AdminUseCase` depends on, named so wiring cannot swap two repos
@@ -92,8 +100,10 @@ pub struct AdminDeps {
     pub product_repo: Arc<dyn ProductRepositoryTrait + Send + Sync>,
     pub role_repo: Arc<dyn RoleRepositoryTrait + Send + Sync>,
     pub service_repo: Arc<dyn ServiceRepositoryTrait + Send + Sync>,
+    pub sector_repo: Arc<dyn CodedRepositoryTrait + Send + Sync>,
     pub events: Arc<dyn EventBus>,
     pub password_hasher: Arc<dyn PasswordHasher>,
+    pub refresh_repo: Arc<dyn RefreshTokenRepositoryTrait + Send + Sync>,
 }
 
 impl AdminUseCase {
@@ -109,8 +119,10 @@ impl AdminUseCase {
             product_repo: d.product_repo,
             role_repo: d.role_repo,
             service_repo: d.service_repo,
+            sector_repo: d.sector_repo,
             events: d.events,
             password_hasher: d.password_hasher,
+            refresh_repo: d.refresh_repo,
         }
     }
 
@@ -159,6 +171,7 @@ impl AdminUseCase {
             is_verified: b.is_verified,
             is_active: b.is_active,
             created_on: b.created_on,
+            linked_user_id: b.linked_user_id,
             linked_username: b.linked_username,
             lat: b.lat,
             lng: b.lng,
@@ -402,8 +415,10 @@ impl AdminUseCase {
             .find_by_id_for_admin(id)
             .await?
             .ok_or_else(|| Error::new(ErrorCode::UserNotFound))?;
+        let business_id = self.business_repo.get_business_id_by_user(u.id).await?;
 
         Ok(AdminUserDetailDto {
+            business_id,
             id: u.id,
             username: u.username,
             email: u.email,
@@ -493,6 +508,12 @@ impl AdminUseCase {
         actor.require(PERM_USER_STATUS_UPDATE)?;
         refuse_self(actor, user_id)?;
         self.user_repo.toggle_active(user_id, is_active).await?;
+        if !is_active {
+            // Its sessions end for good: turned on again, the account logs
+            // in again, on no device that was signed in before.
+            self.user_repo.end_sessions(user_id).await?;
+            self.refresh_repo.revoke_user(user_id).await?;
+        }
         self.publish(
             actor,
             Entity::User,
@@ -532,7 +553,8 @@ impl AdminUseCase {
         input: CategoryInput,
     ) -> Result<AdminCategoryDto> {
         actor.require(PERM_CATEGORY_MANAGE)?;
-        let input = validate_category(input, Some(&category_type))?;
+        let known = self.sector_repo.list_all().await?;
+        let input = validate_category(input, Some(&category_type), &known)?;
         let slug = self.settle_category_slug(&input, None).await?;
         let id = self
             .category_repo
@@ -544,6 +566,7 @@ impl AdminUseCase {
                 color: input.color,
                 description: input.description,
                 display_order: input.display_order,
+                sector: sector_of(&input.sector),
                 created_by: actor.user_id,
             })
             .await?;
@@ -557,7 +580,8 @@ impl AdminUseCase {
         input: CategoryInput,
     ) -> Result<AdminCategoryDto> {
         actor.require(PERM_CATEGORY_MANAGE)?;
-        let input = validate_category(input, None)?;
+        let known = self.sector_repo.list_all().await?;
+        let input = validate_category(input, None, &known)?;
         let slug = self.settle_category_slug(&input, Some(id)).await?;
         self.category_repo
             .update(
@@ -569,6 +593,7 @@ impl AdminUseCase {
                     color: input.color,
                     description: input.description,
                     display_order: input.display_order,
+                    sector: sector_of(&input.sector),
                     updated_by: actor.user_id,
                 },
             )
@@ -937,15 +962,14 @@ impl AdminUseCase {
         &self,
         actor: &Actor,
         page: i64,
-        provider_id: Option<i32>,
-        search: Option<&str>,
+        filter: &AdminProductFilter,
     ) -> Result<AdminPagedResponse<AdminProductDto>> {
         actor.require(PERM_LISTING_MODERATE)?;
         let (page, offset) = paginate(page, ADMIN_PAGE_SIZE);
-        let total = self.product_repo.count_admin(provider_id, search).await?;
+        let total = self.product_repo.count_admin(filter).await?;
         let items = self
             .product_repo
-            .list_admin(provider_id, search, ADMIN_PAGE_SIZE, offset)
+            .list_admin(filter, ADMIN_PAGE_SIZE, offset)
             .await?;
         Ok(AdminPagedResponse {
             items: items.into_iter().map(AdminProductDto::from).collect(),
@@ -981,6 +1005,7 @@ impl AdminUseCase {
         let UpdateProductInput {
             product_id: id,
             category_id,
+            commodity_id,
             name,
             description,
             price,
@@ -990,9 +1015,11 @@ impl AdminUseCase {
             name,
             description,
             unit,
+            commodity_id,
         } = validate_product(
             self.product_repo.as_ref(),
             category_id,
+            commodity_id,
             name,
             description,
             price,
@@ -1004,6 +1031,7 @@ impl AdminUseCase {
             .update_admin(UpdateProductAdmin {
                 id,
                 category_id,
+                commodity_id,
                 name,
                 description,
                 price,
@@ -1266,6 +1294,7 @@ fn to_location_dto(l: Location) -> AdminLocationDto {
         lng: l.lng,
         display_order: l.display_order,
         is_active: l.is_active,
+        is_demo: l.is_demo,
     }
 }
 
@@ -1279,7 +1308,9 @@ fn to_category_dto(c: CategoryAdmin) -> AdminCategoryDto {
         color: c.color,
         description: c.description,
         display_order: c.display_order,
+        sector: c.sector,
         is_active: c.is_active,
+        is_demo: c.is_demo,
         created_on: c.created_on,
         updated_on: c.updated_on,
         created_by_name: c.created_by_name,
@@ -1298,15 +1329,25 @@ fn validate_location(label: &str, lat: f64, lng: f64) -> Result<String> {
     Ok(label)
 }
 
+/// A validated sector code as stored: none for every sector.
+fn sector_of(sector: &str) -> Option<String> {
+    (!sector.is_empty()).then(|| sector.to_owned())
+}
+
 /// Trims every field and reports every bad one at once. A blank slug is made
 /// from the name on save, so it is refused only when the name gives none.
 /// `category_type` is checked on create only: a category never changes type.
-fn validate_category(input: CategoryInput, category_type: Option<&str>) -> Result<CategoryInput> {
+fn validate_category(
+    input: CategoryInput,
+    category_type: Option<&str>,
+    known: &[CodedEntry],
+) -> Result<CategoryInput> {
     let name = input.name.trim().to_owned();
     let slug = input.slug.trim().to_owned();
     let icon = non_blank(input.icon);
     let color = non_blank(input.color);
     let description = non_blank(input.description);
+    let sector = input.sector.trim().to_owned();
     Validation::new()
         .check(name.is_empty(), "name", ErrorCode::NameRequired)
         .rule("name", max_chars(&name, CATEGORY_NAME_MAX))
@@ -1335,6 +1376,11 @@ fn validate_category(input: CategoryInput, category_type: Option<&str>) -> Resul
             "category_type",
             ErrorCode::InvalidCategoryType,
         )
+        .check(
+            validation::sector(&sector, known).is_err(),
+            "sector",
+            ErrorCode::InvalidSector,
+        )
         .finish()?;
     Ok(CategoryInput {
         name,
@@ -1343,6 +1389,7 @@ fn validate_category(input: CategoryInput, category_type: Option<&str>) -> Resul
         color,
         description,
         display_order: input.display_order,
+        sector,
     })
 }
 

@@ -1,5 +1,5 @@
-//! /admin/products: every provider's products, optionally for one provider or
-//! by name, with hide / show and delete; /admin/products/{id}: one product,
+//! /admin/supplies: every provider's products, optionally for one provider or
+//! by name, with hide / show and delete; /admin/supplies/{id}: one product,
 //! to edit, hide / show or delete.
 //!
 //! Hiding and deleting ask for confirmation and a reason. The row's link
@@ -11,17 +11,19 @@
 
 use application::{
     authz::Actor,
-    outputs::{AdminPagedResponse, AdminProductDto, CategoryDto},
+    outputs::{AdminPagedResponse, AdminProductDto, CategoryDto, CommodityDto},
 };
 use axum::{extract::State, http::StatusCode, response::Response};
-use domain::{Error, ErrorCode};
+use domain::{models::product::AdminProductFilter, Error, ErrorCode};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     app_state::AppState,
     cookies::{Flash, TakeFlash},
     extract::{ApiForm, ApiPath, ApiQuery},
+    labels::sector_label,
     middleware::auth::Viewer,
+    pages::admin::sector_href,
     pages::{
         admin::{
             is_refusal, render_admin, url, ListPosition, ListReturn, Outcome, ProviderFilter,
@@ -31,7 +33,7 @@ use crate::{
         forms::{reason, FormErrors},
         listing::{parse_opt, Pagination},
         parse_id,
-        product_form::{product_categories, ProductForm},
+        product_form::{product_categories, product_commodities, ProductForm},
         see_other,
     },
 };
@@ -42,6 +44,9 @@ pub struct ListQuery {
     pub page: String,
     pub provider_id: String,
     pub q: String,
+    /// Those for one commodity, or of one supply type.
+    pub commodity_id: String,
+    pub category_id: String,
     /// The product whose hide confirmation is open.
     pub hide: String,
     /// The product whose delete confirmation is open.
@@ -54,6 +59,13 @@ pub struct ProductRow {
     /// The product's admin page.
     pub href: String,
     pub provider_href: String,
+    /// The list narrowed to its supply type.
+    pub category_href: String,
+    /// Its sector's name, "every sector" for none.
+    pub sector_label: String,
+    pub sector_href: Option<String>,
+    /// The list narrowed to the commodity it is for.
+    pub commodity_href: Option<String>,
     pub hide_href: String,
     pub delete_href: String,
     pub status_action: String,
@@ -66,6 +78,8 @@ pub struct ProductsPage {
     pub pagination: Option<Pagination>,
     /// Set when the list is one provider's.
     pub filter: Option<ProviderFilter>,
+    /// Set when the list is one commodity's or one supply type's.
+    pub narrowed: Option<ProviderFilter>,
     pub search: SearchBox,
     /// The hidden fields of every row action: land back here.
     pub keep: ListReturn,
@@ -73,7 +87,36 @@ pub struct ProductsPage {
     pub flash: Option<Flash>,
 }
 
-/// GET /admin/products
+/// The bar above a list narrowed to one commodity (else one supply type):
+/// its name from the rows, its admin page, and the way back to every supply.
+fn narrowed(
+    rows: &[ProductRow],
+    commodity_id: Option<i32>,
+    category_id: Option<i32>,
+    list: &str,
+) -> Result<Option<ProviderFilter>, Error> {
+    let first = rows.first().map(|r| &r.product);
+    if let Some(id) = commodity_id {
+        return Ok(Some(ProviderFilter {
+            icon: "fa-leaf",
+            name: first.and_then(|p| p.commodity.clone()),
+            href: url("admin_commodity", &[("id", &id.to_string())])?,
+            clear_href: list.to_owned(),
+        }));
+    }
+    category_id
+        .map(|id| {
+            Ok(ProviderFilter {
+                icon: "fa-tags",
+                name: first.map(|p| p.category.clone()),
+                href: url("admin_category", &[("id", &id.to_string())])?,
+                clear_href: list.to_owned(),
+            })
+        })
+        .transpose()
+}
+
+/// GET /admin/supplies
 pub async fn list(
     Viewer(viewer): Viewer,
     flash: TakeFlash,
@@ -87,7 +130,12 @@ pub async fn list(
         page: q.page.clone(),
         provider_id: q.provider_id.clone(),
         q: q.q.clone(),
+        commodity_id: q.commodity_id.clone(),
+        category_id: q.category_id.clone(),
+        ..ListPosition::default()
     };
+    let commodity_id = parse_opt::<i32>(&q.commodity_id).filter(|c| *c > 0);
+    let category_id = parse_opt::<i32>(&q.category_id).filter(|c| *c > 0);
     let AdminPagedResponse {
         items,
         total,
@@ -100,8 +148,12 @@ pub async fn list(
         .list_products_admin(
             &actor,
             position.page(),
-            position.provider_id(),
-            position.search(),
+            &AdminProductFilter {
+                provider_id: position.provider_id(),
+                category_id,
+                commodity_id,
+                search: position.search().map(str::to_owned),
+            },
         )
         .await?;
     let position = ListPosition {
@@ -110,6 +162,7 @@ pub async fn list(
     };
     let hide = parse_opt::<i32>(&q.hide);
     let delete = parse_opt::<i32>(&q.delete);
+    let sectors = state.usecases.sector.named().await?;
     let mut confirm = None;
     let mut rows = Vec::with_capacity(items.len());
     for product in items {
@@ -130,6 +183,23 @@ pub async fn list(
         }
         rows.push(ProductRow {
             href: url("admin_product", &[("id", &id)])?,
+            category_href: ListPosition {
+                category_id: product.category_id.to_string(),
+                ..ListPosition::default()
+            }
+            .href("admin_products", &[])?,
+            sector_label: sector_label(&state, &sectors, product.sector.as_deref()),
+            sector_href: sector_href(&sectors, product.sector.as_deref())?,
+            commodity_href: product
+                .commodity_id
+                .map(|c| {
+                    ListPosition {
+                        commodity_id: c.to_string(),
+                        ..ListPosition::default()
+                    }
+                    .href("admin_products", &[])
+                })
+                .transpose()?,
             provider_href: url(
                 "admin_provider",
                 &[("id", &product.business_id.to_string())],
@@ -142,8 +212,10 @@ pub async fn list(
     }
     let path = url("admin_products", &[])?;
     let name = rows.first().map(|r| r.product.business_name.clone());
+    let narrowed = narrowed(&rows, commodity_id, category_id, &path)?;
     let body = ProductsPage {
         total,
+        narrowed,
         filter: position.provider_filter("admin_products", name)?,
         search: position.search_box("admin_products")?,
         pagination: position.pagination(&path, page, total_pages),
@@ -168,6 +240,7 @@ pub async fn list(
 pub struct ProductPage {
     pub product: AdminProductDto,
     pub categories: Vec<CategoryDto>,
+    pub commodities: Vec<CommodityDto>,
     pub form: ProductForm,
     pub errors: FormErrors,
     pub update_action: String,
@@ -202,6 +275,7 @@ async fn product_page(
         form: outcome.form.unwrap_or_else(|| {
             ProductForm::stored(
                 product.category_id,
+                product.commodity_id,
                 &product.name,
                 product.price,
                 product.unit.as_deref(),
@@ -209,6 +283,7 @@ async fn product_page(
             )
         }),
         categories: product_categories(state).await?,
+        commodities: product_commodities(state).await?,
         errors: outcome.errors,
         update_action: path.clone(),
         status_action: url("admin_product_status", &[("id", &id_text)])?,
@@ -242,7 +317,7 @@ fn redirect_to(id: i32, flash: Flash) -> Result<Response, Error> {
     Ok(response)
 }
 
-/// GET /admin/products/{id}
+/// GET /admin/supplies/{id}
 pub async fn show(
     Viewer(viewer): Viewer,
     flash: TakeFlash,
@@ -262,7 +337,7 @@ pub async fn show(
     Ok(response)
 }
 
-/// POST /admin/products/{id}
+/// POST /admin/supplies/{id}
 pub async fn update(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
@@ -307,7 +382,7 @@ pub struct StatusForm {
     pub q: String,
 }
 
-/// POST /admin/products/{id}/status
+/// POST /admin/supplies/{id}/status
 pub async fn change_status(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
@@ -334,6 +409,7 @@ pub async fn change_status(
             page: form.page,
             provider_id: form.provider_id,
             q: form.q,
+            ..ListPosition::default()
         }
         .back_to("admin_products", flash);
     }
@@ -352,7 +428,7 @@ pub struct DeleteForm {
     pub q: String,
 }
 
-/// POST /admin/products/{id}/delete: back to the list it was sent from, else
+/// POST /admin/supplies/{id}/delete: back to the list it was sent from, else
 /// to the provider's products.
 pub async fn delete(
     Viewer(viewer): Viewer,
@@ -374,6 +450,7 @@ pub async fn delete(
             page: form.page,
             provider_id: form.provider_id,
             q: form.q,
+            ..ListPosition::default()
         }
     } else {
         provider_products(business_id)

@@ -5,6 +5,7 @@
 {% import "atoms/icon.html" as atoms %}
 {% macro list_filters(f) -%}
 <form class="list-search" method="get" action="{{ f.action }}" role="search" x-data="collapse">
+  {% for h in f.hidden %}<input type="hidden" name="{{ h.0 }}" value="{{ h.1 }}">{% endfor %}
   <div class="list-search__row">
     <label class="list-search__input">
       {{ atoms::icon(name="fa-magnifying-glass", class="list-search__icon") }}

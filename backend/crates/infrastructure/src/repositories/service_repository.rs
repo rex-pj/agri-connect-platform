@@ -26,16 +26,16 @@ use crate::{
     db_types::DateTimeWithTimeZone,
     entities::{
         business::{self, Entity as Business},
-        category::{self, Entity as Category},
         service::{self, Entity as ServiceEntity},
+        service_type::{self as category, Entity as Category},
     },
     search::{
         search_condition, text_contains, ADMIN_SERVICE_SEARCH_COLUMNS,
         SERVICE_LISTING_SEARCH_COLUMNS,
     },
     sql::{
-        business_location, businesses_of, distance, geography_from_text, output, within, DbFn,
-        QueryAs,
+        business_location, businesses_of, category_in_sector, distance, geography_from_text,
+        output, within, DbFn, QueryAs,
     },
 };
 
@@ -57,6 +57,7 @@ struct AdminServiceRow {
     price_note: Option<String>,
     category: String,
     category_id: i32,
+    sector: Option<String>,
     business_id: i32,
     business_name: String,
     is_active: bool,
@@ -89,8 +90,9 @@ fn base_admin_service_query() -> sea_orm::Select<ServiceEntity> {
         .column(service::Column::Description)
         .column(service::Column::PriceNote)
         .column_as(category::Column::Name, QueryAs::Category)
-        .column(service::Column::CategoryId)
+        .column_as(service::Column::ServiceTypeId, QueryAs::CategoryId)
         .column(service::Column::BusinessId)
+        .column_as(category::Column::Sector, QueryAs::Sector)
         .column_as(business::Column::Name, QueryAs::BusinessName)
         .column(service::Column::IsActive)
         .column(service::Column::ImageFileId)
@@ -99,7 +101,7 @@ fn base_admin_service_query() -> sea_orm::Select<ServiceEntity> {
         .column(service::Column::CreatedOn)
         .column(service::Column::UpdatedOn)
         .join(JoinType::InnerJoin, service::Relation::Business.def())
-        .join(JoinType::InnerJoin, service::Relation::Category.def())
+        .join(JoinType::InnerJoin, service::Relation::ServiceType.def())
         .filter(service::Column::DeletedAt.is_null())
         .filter(business::Column::DeletedAt.is_null())
 }
@@ -112,12 +114,12 @@ fn base_provider_service_query() -> sea_orm::Select<ServiceEntity> {
         .column(service::Column::Description)
         .column(service::Column::PriceNote)
         .column_as(category::Column::Name, QueryAs::Category)
-        .column(service::Column::CategoryId)
+        .column_as(service::Column::ServiceTypeId, QueryAs::CategoryId)
         .column_as(category::Column::Icon, QueryAs::CategoryIcon)
         .column(service::Column::IsActive)
         .column(service::Column::ImageFileId)
         .column(service::Column::CreatedOn)
-        .join(JoinType::InnerJoin, service::Relation::Category.def())
+        .join(JoinType::InnerJoin, service::Relation::ServiceType.def())
         .filter(service::Column::DeletedAt.is_null())
 }
 
@@ -135,6 +137,7 @@ fn map_admin_row(r: AdminServiceRow) -> AdminService {
         price_note: r.price_note,
         category: r.category,
         category_id: r.category_id,
+        sector: r.sector,
         business_id: r.business_id,
         business_name: r.business_name,
         is_active: r.is_active,
@@ -192,7 +195,7 @@ struct GeoServiceRow {
 pub(crate) fn live_public(query: Select<ServiceEntity>) -> Select<ServiceEntity> {
     query
         .join(JoinType::InnerJoin, service::Relation::Business.def())
-        .join(JoinType::InnerJoin, service::Relation::Category.def())
+        .join(JoinType::InnerJoin, service::Relation::ServiceType.def())
         .filter(service::Column::IsActive.eq(true))
         .filter(service::Column::DeletedAt.is_null())
         .filter(category::Column::IsActive.eq(true))
@@ -208,7 +211,7 @@ fn base_public_query() -> Select<ServiceEntity> {
             .column(service::Column::Name)
             .column(service::Column::Description)
             .column(service::Column::PriceNote)
-            .column(service::Column::CategoryId)
+            .column_as(service::Column::ServiceTypeId, QueryAs::CategoryId)
             .column_as(category::Column::Name, QueryAs::Category)
             .column_as(category::Column::Slug, QueryAs::CategorySlug)
             .column_as(category::Column::Icon, QueryAs::CategoryIcon)
@@ -241,7 +244,10 @@ fn public_filtered(
     filter: &PublicServiceFilter,
 ) -> Select<ServiceEntity> {
     if let Some(id) = filter.category_id {
-        query = query.filter(service::Column::CategoryId.eq(id));
+        query = query.filter(service::Column::ServiceTypeId.eq(id));
+    }
+    if let Some(sector) = filter.sector.as_deref() {
+        query = query.filter(category_in_sector(sector));
     }
     if let Some(text) = filter.text.as_deref().filter(|t| !t.trim().is_empty()) {
         query = query.filter(text_contains(SERVICE_LISTING_SEARCH_COLUMNS, text));
@@ -272,7 +278,7 @@ fn map_public_row(r: PublicServiceRow, distance_m: Option<f64>) -> PublicService
 fn new_service_model(service: NewService) -> service::ActiveModel {
     service::ActiveModel {
         business_id: Set(service.business_id),
-        category_id: Set(service.category_id),
+        service_type_id: Set(service.category_id),
         name: Set(service.name),
         description: Set(service.description),
         price_note: Set(service.price_note),
@@ -393,7 +399,7 @@ impl ServiceRepositoryTrait for ServiceRepository {
     async fn update(&self, service: UpdateService) -> Result<bool, Error> {
         ServiceEntity::update_many()
             .col_expr(
-                service::Column::CategoryId,
+                service::Column::ServiceTypeId,
                 Expr::value(service.category_id),
             )
             .col_expr(service::Column::Name, Expr::value(service.name))
@@ -454,7 +460,6 @@ impl ServiceRepositoryTrait for ServiceRepository {
         Category::find_by_id(category_id)
             .select_only()
             .column(category::Column::Name)
-            .filter(category::Column::Type.eq(domain::constants::CATEGORY_TYPE_SERVICE))
             .filter(category::Column::IsActive.eq(true))
             .into_tuple::<String>()
             .one(self.db.as_ref())
@@ -489,7 +494,7 @@ impl ServiceRepositoryTrait for ServiceRepository {
         let id = service.id;
         ServiceEntity::update_many()
             .col_expr(
-                service::Column::CategoryId,
+                service::Column::ServiceTypeId,
                 Expr::value(service.category_id),
             )
             .col_expr(service::Column::Name, Expr::value(service.name))
@@ -620,8 +625,16 @@ impl ServiceRepositoryTrait for ServiceRepository {
             .map_err(|e| Error::internal(format!("service find_public (id={id}): {e}")))
     }
 
-    async fn featured_candidates(&self, limit: i64) -> Result<Vec<PublicService>, Error> {
-        base_public_query()
+    async fn featured_candidates(
+        &self,
+        limit: i64,
+        sector: Option<&str>,
+    ) -> Result<Vec<PublicService>, Error> {
+        let filter = PublicServiceFilter {
+            sector: sector.map(str::to_owned),
+            ..PublicServiceFilter::default()
+        };
+        public_filtered(base_public_query(), &filter)
             .filter(business::Column::IsVerified.eq(true))
             .order_by(
                 Expr::col((service::Entity, service::Column::ImageFileId)).is_null(),
@@ -649,6 +662,7 @@ impl ServiceRepositoryTrait for ServiceRepository {
         let within = within(business_location(), geography_from_text(point_wkt), radius);
         let filter = PublicServiceFilter {
             category_id,
+            sector: None,
             text: None,
         };
         // Nearest first, taking turns: each provider's first service before

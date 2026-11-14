@@ -1,4 +1,4 @@
-//! /admin/explore: the provider list, creating and editing a provider,
+//! /admin/providers: the provider list, creating and editing a provider,
 //! verification and account assignment.
 //! Database tests need TEST_DATABASE_URL and `--include-ignored`.
 
@@ -44,10 +44,10 @@ async fn verification_is_an_explicit_state_and_withdrawal_is_audited() {
     let e = env_with_origin().await;
     let admin = install_admin(&e).await;
     let id = unclaimed_business(&e).await;
-    let detail = format!("/admin/explore/{id}");
+    let detail = format!("/admin/providers/{id}");
     let action = format!("{detail}/verification");
 
-    let list = body_text(send(&e.router, get_page("/admin/explore", Some(&admin))).await).await;
+    let list = body_text(send(&e.router, get_page("/admin/providers", Some(&admin))).await).await;
     assert!(list.contains(&format!(r#"href="{detail}""#)));
 
     // Sent twice: still verified, audited once.
@@ -100,7 +100,7 @@ async fn turning_a_provider_off_hides_it_from_the_public_and_is_audited() {
     let e = env_with_origin().await;
     let admin = install_admin(&e).await;
     let id = unclaimed_business(&e).await;
-    let detail = format!("/admin/explore/{id}");
+    let detail = format!("/admin/providers/{id}");
     let action = format!("{detail}/status");
     let public = || async { body_text(send(&e.router, get_page("/providers", None)).await).await };
     assert!(public().await.contains("Máy cày Út Hiền"));
@@ -163,13 +163,13 @@ async fn a_new_account_needs_a_valid_email_and_password_and_can_then_sign_in() {
     let e = env_with_origin().await;
     let admin = install_admin(&e).await;
     let id = unclaimed_business(&e).await;
-    let action = format!("/admin/explore/{id}/account");
+    let action = format!("/admin/providers/{id}/account");
 
     // The form starts with the business phone as the username.
     let page = body_text(
         send(
             &e.router,
-            get_page(&format!("/admin/explore/{id}"), Some(&admin)),
+            get_page(&format!("/admin/providers/{id}"), Some(&admin)),
         )
         .await,
     )
@@ -246,7 +246,7 @@ async fn an_account_manages_one_business_and_admins_cannot_be_linked() {
     let admin = install_admin(&e).await;
     register_provider(&e.state, "nongdan", "0901234567").await;
     let id = unclaimed_business(&e).await;
-    let action = format!("/admin/explore/{id}/account");
+    let action = format!("/admin/providers/{id}/account");
 
     // "nongdan" already manages the business it registered.
     let res = send(
@@ -273,7 +273,7 @@ async fn an_account_manages_one_business_and_admins_cannot_be_linked() {
     let provider = sign_in(&e, "nongdan", "matkhau123").await;
     let res = send(
         &e.router,
-        get_page(&format!("/admin/explore/{id}"), Some(&provider)),
+        get_page(&format!("/admin/providers/{id}"), Some(&provider)),
     )
     .await;
     assert_eq!(res.status(), StatusCode::FORBIDDEN);
@@ -309,7 +309,7 @@ async fn the_json_api_sets_verification_explicitly() {
 async fn an_admin_lists_a_provider_in_the_field_and_edits_its_profile() {
     let e = env_with_origin().await;
     let admin = install_admin(&e).await;
-    let list = body_text(send(&e.router, get_page("/admin/explore", Some(&admin))).await).await;
+    let list = body_text(send(&e.router, get_page("/admin/providers", Some(&admin))).await).await;
     assert!(
         list.contains(r##"href="#them-nha-cung-cap""##),
         "the create sheet is offered"
@@ -319,7 +319,7 @@ async fn an_admin_lists_a_provider_in_the_field_and_edits_its_profile() {
     let res = send(
         &e.router,
         post_form(
-            "/admin/explore",
+            "/admin/providers",
             &[("name", "Drone Ba Tu"), ("phone", "12345")],
             Some(&admin),
         ),
@@ -333,7 +333,7 @@ async fn an_admin_lists_a_provider_in_the_field_and_edits_its_profile() {
     let res = send(
         &e.router,
         post_form(
-            "/admin/explore",
+            "/admin/providers",
             &[
                 ("name", "Drone Ba Tu"),
                 ("phone", "0912345678"),
@@ -348,7 +348,7 @@ async fn an_admin_lists_a_provider_in_the_field_and_edits_its_profile() {
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
     let detail = res.headers()[header::LOCATION].to_str().unwrap().to_owned();
     let id = scalar(&e, "SELECT id::text AS id FROM businesses", "id").await;
-    assert_eq!(detail, format!("/admin/explore/{id}"));
+    assert_eq!(detail, format!("/admin/providers/{id}"));
     assert_eq!(
         scalar(
             &e,
@@ -398,7 +398,7 @@ async fn an_admin_lists_a_provider_in_the_field_and_edits_its_profile() {
     let res = send(
         &e.router,
         post_form(
-            "/admin/explore",
+            "/admin/providers",
             &[("name", "X"), ("phone", "0912345678")],
             Some(&provider),
         ),

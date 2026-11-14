@@ -119,18 +119,18 @@ async fn deactivation_signs_the_user_out_and_is_audited_with_its_reason() {
         "signed out at once"
     );
 
-    let audit: String = e
-        .t
-        .db
-        .query_one(Statement::from_string(
-            e.t.db.get_database_backend(),
-            "SELECT action || ': ' || reason AS line FROM audit_logs WHERE entity_type = 'user'",
-        ))
-        .await
-        .unwrap()
-        .unwrap()
-        .try_get("", "line")
-        .unwrap();
+    let audit: String =
+        e.t.db
+            .query_one(Statement::from_string(
+                e.t.db.get_database_backend(),
+                "SELECT action || ': ' || reason AS line FROM audit_logs \
+             WHERE entity_type = 'user' AND action = 'deactivate_user'",
+            ))
+            .await
+            .unwrap()
+            .unwrap()
+            .try_get("", "line")
+            .unwrap();
     assert_eq!(audit, "deactivate_user: tài khoản giả");
 
     let res = send(

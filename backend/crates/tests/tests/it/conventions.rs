@@ -388,6 +388,7 @@ fn every_use_case_taking_an_actor_checks_a_permission_first() {
         "list_services",
         "get_service",
         "count_own_calls",
+        "own_business_id",
         "list_own_reviews",
     ];
     let sig = regex::Regex::new(r"pub async fn (\w+)\(\s*&self,\s*actor: &Actor").unwrap();
@@ -492,8 +493,13 @@ fn user_facing_text_lives_in_the_locale_files() {
     )
     .unwrap();
     // Category and location seeds (rows an admin edits afterwards, so they are
-    // data, not wording), and the slug rule that folds `đ` to `d`.
-    const ALLOWED: &[&str] = &["application/src/catalogue.rs", "application/src/slug.rs"];
+    // data, not wording), the slug rule that folds `đ` to `d`, and the search
+    // synonyms (words matched against, never shown).
+    const ALLOWED: &[&str] = &[
+        "application/src/catalogue.rs",
+        "application/src/slug.rs",
+        "domain/src/search_terms.rs",
+    ];
     let mut found = Vec::new();
     for name in ["domain", "application", "infrastructure", "web"] {
         for (file, src) in sources(name) {

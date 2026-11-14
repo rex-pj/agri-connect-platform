@@ -30,10 +30,8 @@ use domain::{
 };
 
 use crate::{
-    entities::{catalogue_state, location, partner_contract, province, search_event, ward},
-    sql::{
-        advisory_xact_lock, make_point, preset_point, scalar, within, DbFn, Geo, PgType, QueryAs,
-    },
+    entities::{catalogue_state, province, ward},
+    sql::{advisory_xact_lock, make_point, scalar, within, DbFn, Geo, PgType, QueryAs},
 };
 
 /// The dataset: `V version`, then `P` (province) and `W` (ward) lines, tab
@@ -48,10 +46,6 @@ const LOAD_LOCK_ID: i64 = 0x6167_7269_5f61_6475; // "agri_adu"
 
 /// Wards per INSERT: 8 values each, far under Postgres' 65 535 parameters.
 const WARDS_PER_STATEMENT: usize = 100;
-
-/// An older row's preset is a town centre, inside some ward; this only
-/// keeps a preset placed offshore by mistake from being given a far one.
-const BACKFILL_SNAP_M: f64 = 50_000.0;
 
 /// The datum of every stored shape.
 const SRID: i32 = 4326;
@@ -400,81 +394,6 @@ async fn load(txn: &DatabaseTransaction, data: &Dataset<'_>) -> Result<(u64, u64
     Ok((province_count, ward_count))
 }
 
-/// Rows written when areas were location presets get the ward of their
-/// preset's point (contracts its province too). Only rows with no ward yet.
-async fn backfill(txn: &DatabaseTransaction) -> Result<u64, Error> {
-    let ward_of_preset = |preset_id: SimpleExpr| {
-        scalar(
-            Query::select()
-                .expr(ward_code_at(preset_point(), BACKFILL_SNAP_M))
-                .from(location::Entity)
-                .and_where(Expr::col((location::Entity, location::Column::Id)).eq(preset_id))
-                .to_owned(),
-        )
-    };
-    let contract_location: SimpleExpr = Expr::col((
-        partner_contract::Entity,
-        partner_contract::Column::LocationId,
-    ))
-    .into();
-    let contracts = run(
-        txn,
-        "backfill contracts",
-        &Query::update()
-            .table(partner_contract::Entity)
-            .value(
-                partner_contract::Column::WardCode,
-                ward_of_preset(contract_location),
-            )
-            .and_where(partner_contract::Column::ProvinceCode.is_null())
-            .and_where(partner_contract::Column::LocationId.is_not_null())
-            .to_owned(),
-    )
-    .await?;
-    run(
-        txn,
-        "backfill contract provinces",
-        &Query::update()
-            .table(partner_contract::Entity)
-            .value(
-                partner_contract::Column::ProvinceCode,
-                scalar(
-                    Query::select()
-                        .column((ward::Entity, ward::Column::ProvinceCode))
-                        .from(ward::Entity)
-                        .and_where(
-                            Expr::col((ward::Entity, ward::Column::Code)).equals((
-                                partner_contract::Entity,
-                                partner_contract::Column::WardCode,
-                            )),
-                        )
-                        .to_owned(),
-                ),
-            )
-            .and_where(partner_contract::Column::ProvinceCode.is_null())
-            .and_where(partner_contract::Column::WardCode.is_not_null())
-            .to_owned(),
-    )
-    .await?;
-    let search_location: SimpleExpr =
-        Expr::col((search_event::Entity, search_event::Column::LocationId)).into();
-    let searches = run(
-        txn,
-        "backfill searches",
-        &Query::update()
-            .table(search_event::Entity)
-            .value(
-                search_event::Column::WardCode,
-                ward_of_preset(search_location),
-            )
-            .and_where(search_event::Column::WardCode.is_null())
-            .and_where(search_event::Column::LocationId.is_not_null())
-            .to_owned(),
-    )
-    .await?;
-    Ok(contracts + searches)
-}
-
 trait IntoIdenDyn {
     fn into_iden_dyn(self) -> sea_orm::sea_query::DynIden;
 }
@@ -506,7 +425,6 @@ impl AdminUnitRepositoryTrait for AdminUnitRepository {
             });
         }
         let (provinces, wards) = load(&txn, &data).await?;
-        let backfilled = backfill(&txn).await?;
         // Older versions' keys go: one row says which dataset is in.
         run(
             &txn,
@@ -533,7 +451,6 @@ impl AdminUnitRepositoryTrait for AdminUnitRepository {
             loaded: true,
             provinces,
             wards,
-            backfilled,
         })
     }
 

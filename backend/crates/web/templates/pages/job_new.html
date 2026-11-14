@@ -19,7 +19,7 @@
 <div class="detail-body">
   {% if page.flash == "job_posted" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="job.posted")) }}{% endif %}
   <section class="detail-card">
-    <form class="auth-form" method="post" action="{{ page.action }}" novalidate>
+    <form class="form-stack" method="post" action="{{ page.action }}" novalidate>
       {% if page.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=page.errors.message) }}{% endif %}
       {{ field::select(id="job-category", name="category_id", label=t(key="job.category"), options=page.categories, value_key="id", label_key="name", value=f.category_id, error=e.category_id | default(value=""), required=true, placeholder=t(key="job.choose_category")) }}
       <fieldset class="form-field">
@@ -36,7 +36,7 @@
       </fieldset>
       {{ field::textarea(id="job-description", name="description", label=t(key="job.description"), value=f.description, error=e.description | default(value=""), placeholder=t(key="job.description_placeholder"), maxlength=limits.job_description_max, rows=3) }}
       {{ field::input(id="job-name", name="requester_name", label=t(key="form.full_name"), value=f.requester_name, error=e.requester_name | default(value=""), required=true, placeholder=t(key="contact.name_placeholder"), autocomplete="name", maxlength=page.name_max) }}
-      {{ field::input(id="job-phone", name="requester_phone", label=t(key="form.phone"), type="tel", value=f.requester_phone, error=e.requester_phone | default(value=""), required=true, inputmode="tel", pattern="0[0-9]{9}", autocomplete="tel", hint=t(key="job.phone_hint")) }}
+      {{ field::input(id="job-phone", name="requester_phone", label=t(key="form.phone"), type="tel", value=f.requester_phone, error=e.requester_phone | default(value=""), required=true, inputmode="tel", pattern=limits.phone_pattern, autocomplete="tel", hint=t(key="job.phone_hint")) }}
       <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-bullhorn") }} {{ t(key="job.submit") }}</button>
     </form>
   </section>

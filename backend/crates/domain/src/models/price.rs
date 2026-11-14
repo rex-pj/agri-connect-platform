@@ -1,20 +1,23 @@
 use chrono::NaiveDate;
 
-/// A crop whose farm-gate price is followed: a rice variety or a fruit
-/// (`CROP_KINDS`), priced per `unit` ("kg").
+/// Farm produce whose farm-gate price is followed ("nông sản"): a variety or
+/// grade of one commodity ("Lúa ST25", "Heo hơi"), priced per `unit` ("kg").
 pub struct Crop {
     pub id: i32,
     pub name: String,
-    pub kind: String,
+    /// The commodity it is of (the board groups by it).
+    pub commodity_id: i32,
     pub unit: String,
     pub display_order: i32,
     pub is_active: bool,
+    /// Demo data (`DemoDataRepositoryTrait`), not a real entry yet.
+    pub is_demo: bool,
 }
 
 /// A crop's boxes, as stored (create and edit alike).
 pub struct CropFields {
     pub name: String,
-    pub kind: String,
+    pub commodity_id: i32,
     pub unit: String,
     pub display_order: i32,
 }
@@ -24,7 +27,6 @@ pub struct CropPrice {
     pub id: i32,
     pub crop_id: i32,
     pub crop_name: String,
-    pub crop_kind: String,
     pub unit: String,
     pub location_id: i32,
     pub location_label: String,

@@ -31,8 +31,14 @@ pub trait PriceRepositoryTrait {
     /// False when there is no such price.
     async fn delete_price(&self, id: i32) -> Result<bool, Error>;
 
-    /// Every price, the newest day first; a page of them and the total.
-    async fn list_prices(&self, limit: u64, offset: u64) -> Result<(Vec<CropPrice>, i64), Error>;
+    /// Every price (or one crop's), the newest day first; a page of them and
+    /// the total.
+    async fn list_prices(
+        &self,
+        crop_id: Option<i32>,
+        limit: u64,
+        offset: u64,
+    ) -> Result<(Vec<CropPrice>, i64), Error>;
 
     /// The prices observed on or after `since`, of shown crops in shown
     /// areas, the newest day first.

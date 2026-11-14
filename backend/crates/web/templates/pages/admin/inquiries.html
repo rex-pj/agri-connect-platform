@@ -28,7 +28,7 @@
         <tbody>
           {% for r in b.rows %}
           {% set q = r.inquiry %}
-          <tr>
+          <tr{% if q.status == "closed" or q.status == "spam" %} class="table-light text-body-secondary"{% endif %}>
             <td class="fw-semibold">{{ q.requester_name }}{% if q.status == "new" %} {{ inquiry::label(status=q.status, badge=true) }}{% endif %}<a class="d-block small text-decoration-none" href="tel:{{ q.requester_phone }}">{{ atoms::icon(name="fa-phone", class="me-1") }}{{ q.requester_phone | phone }}</a><span class="d-block small text-muted"><time datetime="{{ q.created_on | utc_iso }}">{{ q.created_on | vn_datetime }}</time></span></td>
             <td><a class="text-decoration-none" href="{{ r.provider_href }}">{{ q.business_name }}</a></td>
             <td>{{ q.topic }}</td>

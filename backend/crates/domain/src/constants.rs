@@ -7,15 +7,13 @@ pub const ROLE_PARTNER: &str = "partner";
 /// What kind of company a partner is. Keep in sync with the `partners.kind` CHECK.
 pub const PARTNER_KINDS: &[&str] = &["brand", "dealer", "cooperative", "exporter"];
 
-/// What a crop is, for the price page's sections. Keep in sync with the
-/// `crops.kind` CHECK.
-pub const CROP_KIND_RICE: &str = "rice";
-pub const CROP_KIND_FRUIT: &str = "fruit";
-pub const CROP_KINDS: &[&str] = &[CROP_KIND_RICE, CROP_KIND_FRUIT];
-
 // ── Business rules ────────────────────────────────────────────────────────────
 // Must match the CHECK constraints in the baseline migration; a value added here
 // but not there fails at insert time.
+/// The two kinds of type a listing is filed under, each its own table: a
+/// service type (`service_types`: what a provider is hired for) and a supply
+/// type (`supply_types`: what a provider sells, "vật tư"). The code calls
+/// either a category; the kind picks the table.
 pub const CATEGORY_TYPE_SERVICE: &str = "service";
 pub const CATEGORY_TYPE_PRODUCT: &str = "product";
 pub const CATEGORY_TYPES: &[&str] = &[CATEGORY_TYPE_SERVICE, CATEGORY_TYPE_PRODUCT];

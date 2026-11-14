@@ -7,7 +7,10 @@ use domain::{
     repositories::refresh_token_repository_trait::RefreshTokenRepositoryTrait,
     Error,
 };
-use sea_orm::{sea_query::Expr, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
+use sea_orm::{
+    sea_query::Expr, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
+    QuerySelect, Set,
+};
 use uuid::Uuid;
 
 use crate::entities::refresh_token::{self, Entity as RefreshTokens};
@@ -91,6 +94,17 @@ impl RefreshTokenRepositoryTrait for RefreshTokenRepository {
             .await
             .map(|_| ())
             .map_err(fail("revoke_family"))
+    }
+
+    async fn family_live(&self, family_id: Uuid) -> Result<bool, Error> {
+        RefreshTokens::find()
+            .filter(refresh_token::Column::FamilyId.eq(family_id))
+            .filter(refresh_token::Column::RevokedAt.is_null())
+            .limit(1)
+            .count(self.db.as_ref())
+            .await
+            .map(|n| n > 0)
+            .map_err(fail("family_live"))
     }
 
     async fn revoke_user(&self, user_id: i32) -> Result<(), Error> {

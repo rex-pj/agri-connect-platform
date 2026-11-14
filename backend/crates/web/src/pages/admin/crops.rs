@@ -1,5 +1,8 @@
-//! /admin/crops and /admin/crops/{id}: the crops the price page follows (a
-//! rice variety, a fruit), with a create sheet, and one crop's edit form and
+//! The price board's second tab (`/admin/prices?tab=crops`, where the former
+//! `/admin/crops` list moves for good) and /admin/crops/{id}: the farm
+//! produce the price page
+//! follows (a rice variety, a fruit grade, live pigs), each of one commodity
+//! (cây trồng, vật nuôi, kept on /admin/commodities), with a create sheet, and one crop's edit form and
 //! visibility. A crop is never deleted (its prices would go with it): it is
 //! hidden, which takes it and its prices off the public page.
 //!
@@ -8,12 +11,13 @@
 //! carry both (`?hide={id}` opens the confirmation there); sent with
 //! `back=list`, they land back on the list.
 
-use application::{authz::Actor, inputs::CropInput, outputs::CropDto};
-use axum::{extract::State, http::StatusCode, response::Response};
-use domain::{
-    constants::{CROP_KINDS, CROP_KIND_FRUIT, CROP_KIND_RICE},
-    Error, ErrorCode,
+use application::{
+    authz::Actor,
+    inputs::CropInput,
+    outputs::{CommodityDto, CropDto, CropPriceDto},
 };
+use axum::{extract::State, http::StatusCode, response::Response};
+use domain::{Error, ErrorCode};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -23,11 +27,12 @@ use crate::{
     middleware::auth::Viewer,
     pages::{
         admin::{
-            is_refusal, render_admin, url, Asked, ListPosition, ListReturn, Outcome, RowConfirm,
-            BACK_TO_LIST,
+            is_refusal, prices, render_admin, url, AdminTab, Asked, ListPosition, ListReturn,
+            Outcome, RowConfirm, BACK_TO_LIST,
         },
         forms::{reason, whole_number, FormErrors},
-        parse_id, see_other,
+        listing::parse_opt,
+        moved_permanently, parse_id, see_other,
     },
 };
 
@@ -36,25 +41,33 @@ use crate::{
 #[serde(default)]
 pub struct CropForm {
     pub name: String,
-    pub kind: String,
+    /// The commodity's id, as sent.
+    pub commodity_id: String,
     pub unit: String,
     pub display_order: String,
 }
 
 impl CropForm {
-    /// A fresh form: a fruit sold by the kilogram.
+    /// A fresh form: no commodity chosen yet, sold by the kilogram.
     fn fresh(state: &AppState) -> Self {
         Self {
-            kind: CROP_KIND_FRUIT.to_owned(),
             unit: state.locale().text("crop_form.unit_default"),
             ..Self::default()
+        }
+    }
+
+    /// A fresh form for a crop of `commodity` (its own page's sheet).
+    pub fn for_commodity(state: &AppState, commodity: i32) -> Self {
+        Self {
+            commodity_id: commodity.to_string(),
+            ..Self::fresh(state)
         }
     }
 
     fn input(&self) -> Result<CropInput, Error> {
         Ok(CropInput {
             name: self.name.clone(),
-            kind: self.kind.clone(),
+            commodity_id: parse_opt(&self.commodity_id),
             unit: self.unit.clone(),
             display_order: whole_number(&self.display_order, "display_order")?,
         })
@@ -63,43 +76,16 @@ impl CropForm {
     fn from_dto(c: &CropDto) -> Self {
         Self {
             name: c.name.clone(),
-            kind: c.kind.clone(),
+            commodity_id: c.commodity_id.to_string(),
             unit: c.unit.clone(),
             display_order: c.display_order.to_string(),
         }
     }
 }
 
-/// A crop kind for the select: its code and its word.
-#[derive(Serialize)]
-pub struct KindOption {
-    pub value: &'static str,
-    pub label: String,
-}
-
-fn kind_label(state: &AppState, kind: &str) -> String {
-    let key = if kind == CROP_KIND_RICE {
-        "prices.rice"
-    } else {
-        "prices.fruit"
-    };
-    state.locale().text(key)
-}
-
-fn kind_options(state: &AppState) -> Vec<KindOption> {
-    CROP_KINDS
-        .iter()
-        .map(|k| KindOption {
-            value: k,
-            label: kind_label(state, k),
-        })
-        .collect()
-}
-
 #[derive(Serialize)]
 pub struct CropRow {
     pub crop: CropDto,
-    pub kind_label: String,
     pub href: String,
     pub status_action: String,
     pub hide_href: String,
@@ -107,18 +93,22 @@ pub struct CropRow {
 
 #[derive(Serialize)]
 pub struct CropsPage {
+    pub tabs: Vec<AdminTab>,
     pub rows: Vec<CropRow>,
-    pub kinds: Vec<KindOption>,
+    /// The shown commodities the form offers.
+    pub commodities: Vec<CommodityDto>,
+    /// Where the commodities are kept.
+    pub commodities_href: String,
     pub form: CropForm,
     pub errors: FormErrors,
     pub create_action: String,
-    pub prices_href: String,
     pub confirm: Option<RowConfirm>,
     pub keep: ListReturn,
     pub flash: Option<Flash>,
 }
 
-struct ListView {
+/// The list around the create sheet.
+pub struct ListView {
     form: CropForm,
     errors: FormErrors,
     asked: Asked,
@@ -126,9 +116,33 @@ struct ListView {
     status: StatusCode,
 }
 
-async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Response, Error> {
-    let crops = state.usecases.price.list_crops(actor).await?;
-    let position = ListPosition::default();
+impl ListView {
+    /// The list as first shown: a fresh form, maybe a row's hide
+    /// confirmation open (`hide`), maybe a flash.
+    pub fn asked(hide: &str, flash: Option<Flash>, state: &AppState) -> Self {
+        Self {
+            form: CropForm::fresh(state),
+            errors: FormErrors::default(),
+            asked: Asked::new(hide, ""),
+            flash,
+            status: StatusCode::OK,
+        }
+    }
+}
+
+/// Where the list lives: the price board's crops tab.
+fn list_position() -> ListPosition {
+    ListPosition {
+        tab: prices::TAB_CROPS.to_owned(),
+        ..ListPosition::default()
+    }
+}
+
+pub async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Response, Error> {
+    let prices = &state.usecases.price;
+    let (crops, commodities) =
+        tokio::try_join!(prices.list_crops(actor), prices.commodity_choices(actor))?;
+    let position = list_position();
     let mut confirm = None;
     let mut rows = Vec::with_capacity(crops.len());
     for crop in crops {
@@ -142,21 +156,21 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
             });
         }
         rows.push(CropRow {
-            kind_label: kind_label(state, &crop.kind),
             href: url("admin_crop", &[("id", &id)])?,
             status_action,
-            hide_href: position.href("admin_crops", &[("hide", &id)])?,
+            hide_href: position.href("admin_prices", &[("hide", &id)])?,
             crop,
         });
     }
-    let path = url("admin_crops", &[])?;
+    let path = url("admin_prices", &[])?;
     let body = CropsPage {
+        tabs: prices::tabs(state, true)?,
         rows,
-        kinds: kind_options(state),
+        commodities,
+        commodities_href: url("admin_commodities", &[])?,
         form: view.form,
         errors: view.errors,
-        create_action: path.clone(),
-        prices_href: url("admin_prices", &[])?,
+        create_action: url("admin_crops", &[])?,
         confirm,
         keep: ListReturn::new(position),
         flash: view.flash,
@@ -178,26 +192,12 @@ pub struct ListQuery {
     pub hide: String,
 }
 
-/// GET /admin/crops
-pub async fn list(
-    Viewer(viewer): Viewer,
-    flash: TakeFlash,
-    State(state): State<AppState>,
-    ApiQuery(q): ApiQuery<ListQuery>,
-) -> Result<Response, Error> {
-    let Some(actor) = viewer else {
-        return see_other(&url("login", &[])?);
-    };
-    let view = ListView {
-        form: CropForm::fresh(&state),
-        errors: FormErrors::default(),
-        asked: Asked::new(&q.hide, ""),
-        flash: flash.0,
-        status: StatusCode::OK,
-    };
-    let mut response = list_page(&state, &actor, view).await?;
-    flash.clear_on(&mut response);
-    Ok(response)
+/// GET /admin/crops → /admin/prices?tab=crops (the list moved there for
+/// good; a hide confirmation asked for stays asked).
+pub async fn list(ApiQuery(q): ApiQuery<ListQuery>) -> Result<Response, Error> {
+    let hide = parse_opt::<i32>(&q.hide).map(|id| id.to_string());
+    let extra: Vec<(&str, &str)> = hide.iter().map(|h| ("hide", h.as_str())).collect();
+    moved_permanently(&list_position().href("admin_prices", &extra)?)
 }
 
 /// POST /admin/crops
@@ -233,7 +233,16 @@ pub async fn create(
 #[derive(Serialize)]
 pub struct CropPage {
     pub crop: CropDto,
-    pub kinds: Vec<KindOption>,
+    /// Its commodity's admin page.
+    pub commodity_href: String,
+    /// Its latest prices (one list page), every one of them, and the price
+    /// sheet with it chosen.
+    pub prices: Vec<CropPriceDto>,
+    pub prices_total: i64,
+    pub prices_href: String,
+    pub enter_price_href: String,
+    pub commodities: Vec<CommodityDto>,
+    pub commodities_href: String,
     pub form: CropForm,
     pub errors: FormErrors,
     pub update_action: String,
@@ -249,17 +258,32 @@ async fn crop_page(
     id: i32,
     outcome: Outcome<CropForm>,
 ) -> Result<Response, Error> {
-    let crop = state.usecases.price.get_crop(actor, id).await?;
+    let prices = &state.usecases.price;
+    let (crop, commodities, recent) = tokio::try_join!(
+        prices.get_crop(actor, id),
+        prices.commodity_choices(actor),
+        prices.list_prices(actor, Some(id), 1),
+    )?;
     let id_text = id.to_string();
+    let of_crop = ListPosition {
+        crop_id: id_text.clone(),
+        ..ListPosition::default()
+    };
     let path = url("admin_crop", &[("id", &id_text)])?;
     let body = CropPage {
         form: outcome.form.unwrap_or_else(|| CropForm::from_dto(&crop)),
+        commodity_href: url("admin_commodity", &[("id", &crop.commodity_id.to_string())])?,
+        prices: recent.items,
+        prices_total: recent.total,
+        prices_href: of_crop.href("admin_prices", &[])?,
+        enter_price_href: format!("{}#nhap-gia", of_crop.href("admin_prices", &[])?),
         crop,
-        kinds: kind_options(state),
+        commodities,
+        commodities_href: url("admin_commodities", &[])?,
         errors: outcome.errors,
         update_action: path.clone(),
         status_action: url("admin_crop_status", &[("id", &id_text)])?,
-        list_href: url("admin_crops", &[])?,
+        list_href: list_position().href("admin_prices", &[])?,
         confirm_open: outcome.confirm_open,
         flash: outcome.flash,
     };
@@ -358,7 +382,7 @@ pub async fn change_status(
         Flash::CropHidden
     };
     if form.back == BACK_TO_LIST {
-        return ListPosition::default().back_to("admin_crops", flash);
+        return list_position().back_to("admin_prices", flash);
     }
     redirect_to(id, flash)
 }

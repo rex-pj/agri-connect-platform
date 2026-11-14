@@ -24,6 +24,7 @@ impl ProductsHandler {
             .browse_products(
                 ProductFilter {
                     category_id: q.category_id,
+                    commodity_id: q.commodity_id,
                     name: q.name,
                     min_price: q.min_price,
                     max_price: q.max_price,

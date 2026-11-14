@@ -33,6 +33,7 @@ async fn inquiry_to(e: &Env, business_id: i32) -> i32 {
             requester_phone: "0912345678".into(),
             note: Some("Ao 500 m2, cần trong tuần".into()),
             service_id: None,
+            product_id: None,
         })
         .await
         .unwrap()
@@ -182,7 +183,15 @@ async fn without_the_permission_there_is_no_inbox() {
 async fn a_new_request_is_emailed_to_the_provider_and_not_audited() {
     let e = env_with_origin().await;
     register_provider(&e.state, "nongdan", "0901234567").await;
-    let id = inquiry_to(&e, business_of(&e, "nongdan").await).await;
+    let business = business_of(&e, "nongdan").await;
+
+    // An address nobody confirmed is never written to: a sign-up with a
+    // stranger's address must not make us email them.
+    inquiry_to(&e, business).await;
+    assert!(e.mail.inquiries(1).await.is_empty());
+
+    integration_tests::confirm_email(&e, "nongdan").await;
+    let id = inquiry_to(&e, business).await;
 
     let sent = e.mail.inquiries(1).await;
     assert_eq!(sent.len(), 1);
@@ -215,18 +224,23 @@ async fn without_a_live_account_the_business_address_is_used_or_nobody() {
     let e = env_with_origin().await;
     register_provider(&e.state, "nongdan", "0901234567").await;
     let business = business_of(&e, "nongdan").await;
+    integration_tests::confirm_email(&e, "nongdan").await;
     e.t.db
-        .execute_unprepared("UPDATE users SET is_active = FALSE")
+        .execute_unprepared(&format!(
+            "UPDATE users SET is_active = FALSE;              UPDATE businesses SET email = 'vuon@example.vn' WHERE id = {business}"
+        ))
         .await
         .unwrap();
 
-    // Deactivated account, no business address: nobody to tell.
+    // Its account is deactivated: nobody to tell, not even the address the
+    // account typed for the business.
     inquiry_to(&e, business).await;
     assert!(e.mail.inquiries(1).await.is_empty());
 
+    // A business with no account (an admin listed it): its own address.
     e.t.db
         .execute_unprepared(&format!(
-            "UPDATE businesses SET email = 'vuon@example.vn' WHERE id = {business}"
+            "UPDATE businesses SET owner_id = NULL WHERE id = {business}"
         ))
         .await
         .unwrap();

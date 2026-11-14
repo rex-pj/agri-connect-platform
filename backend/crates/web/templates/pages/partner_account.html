@@ -1,0 +1,13 @@
+{% extends "layouts/partner.html" %}
+{% import "organisms/account_sections.html" as account %}
+{#- A partner account's own account, in the partner frame: no farmer tabs,
+    the report one tap away in the account menu and the card.
+    `page` is web::pages::account::AccountPage. -#}
+{% block title %}{{ t(key="nav.account") }} — {{ site.name }}{% endblock title %}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
+{% block main %}
+{{ account::account_header(p=page) }}
+<div class="detail-body">
+  {{ account::account_sections(p=page, limits=limits, logout=url_for(name="logout")) }}
+</div>
+{% endblock main %}

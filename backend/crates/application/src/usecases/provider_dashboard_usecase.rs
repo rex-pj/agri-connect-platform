@@ -111,6 +111,14 @@ impl ProviderDashboardUseCase {
         self.inquiry_repo.count_for_owner(actor.user_id).await
     }
 
+    /// The business the actor manages, if any: a public page of it offers
+    /// its owner the way to edit it. A session is enough: it is their own.
+    pub async fn own_business_id(&self, actor: &Actor) -> Result<Option<i32>> {
+        self.business_repo
+            .get_business_id_by_user(actor.user_id)
+            .await
+    }
+
     /// Taps on the actor's call buttons in the last `CALL_STATS_DAYS` days;
     /// `None` when the account manages no business. A session is enough: it
     /// is the provider's own number.
@@ -236,6 +244,7 @@ impl ProviderDashboardUseCase {
         let fields = validate_product(
             self.product_repo.as_ref(),
             input.category_id,
+            input.commodity_id,
             input.name,
             input.description,
             input.price,
@@ -258,6 +267,7 @@ impl ProviderDashboardUseCase {
             .create(NewProduct {
                 business_id,
                 category_id: input.category_id,
+                commodity_id: fields.commodity_id,
                 name: fields.name,
                 description: fields.description,
                 price: input.price,
@@ -291,6 +301,7 @@ impl ProviderDashboardUseCase {
         let fields = validate_product(
             self.product_repo.as_ref(),
             input.category_id,
+            input.commodity_id,
             input.name,
             input.description,
             input.price,
@@ -304,6 +315,7 @@ impl ProviderDashboardUseCase {
                 id: input.product_id,
                 owner_user: actor.user_id,
                 category_id: input.category_id,
+                commodity_id: fields.commodity_id,
                 name: fields.name,
                 description: fields.description,
                 price: input.price,

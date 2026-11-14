@@ -3,23 +3,29 @@
 {% import "atoms/alert.html" as alerts %}
 {% import "atoms/status_badge.html" as status %}
 {% import "molecules/admin_header.html" as header %}
+{% import "molecules/admin_tabs.html" as tabs %}
 {% import "molecules/row_action.html" as row %}
 {% import "molecules/sheet_header.html" as sheet_head %}
 {% import "organisms/category_fields.html" as fields %}
 {% import "organisms/confirm_sheet.html" as confirm %}
-{#- `page.body` is web::pages::admin::categories::CategoriesPage: every
-    category (hidden ones too) and the create form, a sheet opened by the
+{#- `page.body` is web::pages::admin::categories::CategoriesPage: the
+    types of one kind (a tab per kind: service types, supply types;
+    plain links), hidden ones too, and the create form of that kind, a sheet opened by the
     header's "add" (an anchored section without JS), which comes back open
     with its messages when a rule is broken. "Ẩn" reloads the list with that
     row's confirmation open (`b.confirm`, in its own `dialog` scope); row
     actions send `back=list` (`b.keep`) so they land here again. -#}
-{% block title %}{{ t(key="admin_menu.categories") }} — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ t(key="admin_menu.catalogue") }} — {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
 {% set n = b.rows | length %}
+{% if b.kind == "service" %}{% set heading = t(key="admin_menu.service_types") %}{% else %}{% set heading = t(key="admin_menu.supply_types") %}{% endif %}
+{% set adding = t(key="admin.add_category") %}
+{% set hide_note = t(key="admin.hide_category_note") %}
 <div x-data="dialog" data-open="{% if b.errors.message or b.errors.fields %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
-{{ header::admin_header(title=t(key="admin_menu.categories"), icon="fa-tags", sub=t(key="admin.categories_sub", count=n), action_href="#them-danh-muc", action_icon="fa-plus", action_label=t(key="admin.add_category"), action_opens=true) }}
+{{ header::admin_header(title=heading, icon="fa-tags", sub=t(key="admin.categories_sub"), action_href="#them-danh-muc", action_icon="fa-plus", action_label=adding, action_opens=true) }}
 <div class="admin-body">
+  {{ tabs::admin_tabs(tabs=b.tabs, label=t(key="admin_menu.catalogue")) }}
   {% if b.flash == "category_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.category_hidden")) }}{% endif %}
   {% if b.flash == "category_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.category_shown")) }}{% endif %}
 
@@ -27,14 +33,14 @@
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0 admin-table">
         <thead class="admin-table-head">
-          <tr><th>{{ t(key="admin_menu.categories") }}</th><th>{{ t(key="category_form.type") }}</th><th class="text-center">{{ t(key="form.display_order") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th>{{ t(key="admin.col_updated") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
+          <tr><th>{{ heading }}</th><th>{{ t(key="sector.label") }}</th><th class="text-center">{{ t(key="form.display_order") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th>{{ t(key="admin.col_updated") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
         </thead>
         <tbody>
           {% for r in b.rows %}
           {% set c = r.category %}
           <tr{% if not c.is_active %} class="table-light text-body-secondary"{% endif %}>
-            <td>{% if c.icon %}{{ atoms::icon(name=c.icon, class="text-success me-2") }}{% endif %}<a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ c.name }}</a><code class="d-block small text-muted">{{ c.slug }}</code></td>
-            <td>{% if c.category_type == "service" %}<span class="badge text-bg-info">{{ t(key="category_type.service") }}</span>{% else %}<span class="badge text-bg-warning">{{ t(key="category_type.product") }}</span>{% endif %}</td>
+            <td>{% if c.icon %}{{ atoms::icon(name=c.icon, class="text-success me-2") }}{% endif %}<a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ c.name }}</a>{% if c.is_demo %} {{ status::demo() }}{% endif %}<code class="d-block small text-muted">{{ c.slug }}</code></td>
+            <td>{{ r.sector_label }}</td>
             <td class="text-center">{{ c.display_order }}</td>
             <td class="text-center">{{ status::visibility(on=c.is_active) }}</td>
             <td class="small text-muted"><time datetime="{{ c.updated_on | utc_iso }}">{{ c.updated_on | vn_datetime }}</time>{% if c.updated_by_name %}<span class="d-block">{{ c.updated_by_name }}</span>{% endif %}</td>
@@ -57,17 +63,17 @@
 
   {% if b.confirm %}
   <div x-data="dialog" data-open="true" x-on:keydown.escape.window="hide">
-    {{ confirm::confirm_sheet(id="xac-nhan", title=t(key="admin.hide_category_title", name=b.confirm.name), icon="fa-eye-slash", action=b.confirm.action, button=t(key="admin.confirm_hide"), reason_max=limits.audit_reason_max, note=t(key="admin.hide_category_note"), hidden_name="is_active", hidden_value="false", keep=b.keep) }}
+    {{ confirm::confirm_sheet(id="xac-nhan", title=t(key="admin.hide_category_title", name=b.confirm.name), icon="fa-eye-slash", action=b.confirm.action, button=t(key="admin.confirm_hide"), reason_max=limits.audit_reason_max, note=hide_note, hidden_name="is_active", hidden_value="false", keep=b.keep) }}
   </div>
   {% endif %}
 
   <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
   <section class="contact-sheet" id="them-danh-muc" aria-labelledby="them-danh-muc-title" :class="sheetClass">
-    {{ sheet_head::sheet_header(id="them-danh-muc", title=t(key="admin.add_category"), icon="fa-tags") }}
+    {{ sheet_head::sheet_header(id="them-danh-muc", title=adding, icon="fa-tags") }}
     <form class="contact-sheet__form" method="post" action="{{ b.create_action }}" novalidate>
       {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
-      {{ fields::category_fields(form=b.form, errors=b.errors, limits=b.limits, prefix="new", with_type=true, first=true) }}
-      <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-plus") }} {{ t(key="admin.add_category") }}</button>
+      {{ fields::category_fields(form=b.form, errors=b.errors, limits=b.limits, sectors=b.sectors, prefix="new", with_type=true, first=true) }}
+      <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-plus") }} {{ adding }}</button>
     </form>
   </section>
 </div>

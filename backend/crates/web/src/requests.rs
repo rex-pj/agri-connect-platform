@@ -18,6 +18,8 @@ pub struct CreateAdminRequest {
     pub email: String,
     pub password: String,
     pub full_name: Option<String>,
+    /// SETUP_TOKEN, when the server has one.
+    pub setup_token: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -47,6 +49,13 @@ pub struct ResetPasswordRequest {
 }
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
+
+/// GET /api/admin/prices: a page, maybe of one crop's prices.
+#[derive(Deserialize)]
+pub struct AdminPricesQuery {
+    pub page: Option<i64>,
+    pub crop_id: Option<i32>,
+}
 
 #[derive(Deserialize)]
 pub struct AdminPageQuery {
@@ -95,6 +104,9 @@ pub struct CreateCategoryRequest {
     pub color: Option<String>,
     pub description: Option<String>,
     pub display_order: i16,
+    /// A sector's code (`/api/admin/sectors`); absent or empty: every sector.
+    #[serde(default)]
+    pub sector: String,
 }
 
 /// `text`: the category form's name or slug as typed; `id`: the category being
@@ -114,6 +126,9 @@ pub struct UpdateCategoryRequest {
     pub color: Option<String>,
     pub description: Option<String>,
     pub display_order: i16,
+    /// Absent or empty: every sector (a PUT replaces it like the rest).
+    #[serde(default)]
+    pub sector: String,
 }
 
 #[derive(Deserialize)]
@@ -188,6 +203,9 @@ pub struct ReviewReplyRequest {
 #[derive(Deserialize)]
 pub struct CreateProductRequest {
     pub category_id: i32,
+    /// The commodity it is for; missing: every one.
+    #[serde(default)]
+    pub commodity_id: Option<i32>,
     pub name: String,
     pub description: Option<String>,
     pub price: Option<i64>,
@@ -197,6 +215,9 @@ pub struct CreateProductRequest {
 #[derive(Deserialize)]
 pub struct UpdateProductRequest {
     pub category_id: i32,
+    /// The commodity it is for; missing: every one.
+    #[serde(default)]
+    pub commodity_id: Option<i32>,
     pub name: String,
     pub description: Option<String>,
     pub price: Option<i64>,
@@ -255,6 +276,9 @@ pub struct AdminUpdateServiceRequest {
 #[derive(Deserialize)]
 pub struct AdminUpdateProductRequest {
     pub category_id: i32,
+    /// The commodity it is for; missing: every one.
+    #[serde(default)]
+    pub commodity_id: Option<i32>,
     pub name: String,
     pub description: Option<String>,
     pub price: Option<i64>,
@@ -266,6 +290,8 @@ pub struct AdminUpdateProductRequest {
 #[derive(Deserialize)]
 pub struct ProductBrowseQuery {
     pub category_id: Option<i32>,
+    /// The supplies for this commodity, and those for every one.
+    pub commodity_id: Option<i32>,
     pub name: Option<String>,
     pub min_price: Option<i64>,
     pub max_price: Option<i64>,
@@ -294,9 +320,20 @@ pub struct ProvidersQuery {
     pub service_id: Option<i32>,
     // ── browse fields ─────────────────────────────────────────────────────
     pub name: Option<String>,
+    /// A shown sector's code (`/api/explore/sectors`): its categories and those of
+    /// every sector, unless a category or a text is given (as the pages).
+    pub sector: Option<String>,
     /// Accepted values: "verified_first" (default) | "newest" | "name_asc"
     pub sort: Option<String>,
     pub page: Option<i64>,
+}
+
+/// `?sector=`: the featured data and the alerts of one sector (and of
+/// every sector); none or blank for all.
+#[derive(Deserialize, Default)]
+#[serde(default)]
+pub struct SectorQuery {
+    pub sector: String,
 }
 
 #[derive(Deserialize)]
@@ -313,6 +350,9 @@ pub struct InquiryRequest {
     pub requester_phone: String,
     pub note: Option<String>,
     pub service_id: Option<i32>,
+    /// The supply the request is about, when it is about one.
+    #[serde(default)]
+    pub product_id: Option<i32>,
 }
 
 /// POST /api/explore/reviews: a farmer's review of a provider they reached
@@ -426,13 +466,59 @@ pub struct SponsorRequest {
 #[derive(Deserialize)]
 pub struct PriceBoardQuery {
     pub location_id: Option<i32>,
+    /// A shown sector's code (`/api/explore/sectors`): its commodities only.
+    pub sector: Option<String>,
+}
+
+/// POST /api/admin/sectors or /api/admin/alert-kinds, PUT of one.
+#[derive(Deserialize)]
+pub struct CodedRequest {
+    pub name: String,
+    #[serde(default)]
+    pub icon: Option<String>,
+    #[serde(default)]
+    pub display_order: i16,
+}
+
+impl From<CodedRequest> for application::inputs::CodedInput {
+    fn from(r: CodedRequest) -> Self {
+        Self {
+            name: r.name,
+            icon: r.icon,
+            display_order: r.display_order,
+        }
+    }
+}
+
+/// POST /api/admin/commodities, PUT /api/admin/commodities/{id}.
+#[derive(Deserialize)]
+pub struct CommodityRequest {
+    pub name: String,
+    /// A sector's code (`/api/admin/sectors`).
+    pub sector: String,
+    #[serde(default)]
+    pub icon: Option<String>,
+    #[serde(default)]
+    pub display_order: i16,
+}
+
+impl From<CommodityRequest> for application::inputs::CommodityInput {
+    fn from(r: CommodityRequest) -> Self {
+        Self {
+            name: r.name,
+            sector: r.sector,
+            icon: r.icon,
+            display_order: r.display_order,
+        }
+    }
 }
 
 /// POST /api/admin/crops, PUT /api/admin/crops/{id}.
 #[derive(Deserialize)]
 pub struct CropRequest {
     pub name: String,
-    pub kind: String,
+    /// The commodity it is of.
+    pub commodity_id: Option<i32>,
     pub unit: String,
     #[serde(default)]
     pub display_order: i32,
@@ -442,7 +528,7 @@ impl From<CropRequest> for application::inputs::CropInput {
     fn from(r: CropRequest) -> Self {
         Self {
             name: r.name,
-            kind: r.kind,
+            commodity_id: r.commodity_id,
             unit: r.unit,
             display_order: r.display_order,
         }

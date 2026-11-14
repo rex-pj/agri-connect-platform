@@ -55,6 +55,7 @@ pub(crate) async fn account_for_role(
                     password_hash,
                     role: role.into(),
                     full_name: None,
+                    email_verified: true,
                 })
                 .await?
         }

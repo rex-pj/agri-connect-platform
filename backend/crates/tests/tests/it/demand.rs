@@ -46,7 +46,7 @@ async fn provider_at_cai_lay(e: &Env, username: &str, phone: &str) -> (i32, i32,
     let (category, _) = categories_of(e, "service").await.remove(0);
     let name = scalar(
         e,
-        &format!("SELECT name AS v FROM categories WHERE id = {category}"),
+        &format!("SELECT name AS v FROM service_types WHERE id = {category}"),
     )
     .await;
     let req = Request::post("/api/provider/services")
@@ -114,14 +114,6 @@ async fn the_report_counts_real_leads_by_area_and_hides_small_figures() {
     inquiry(&e, business, service, "0912345678", "new").await;
     inquiry(&e, business, service, "0912345678", "contacted").await;
     inquiry(&e, business, service, "0999999999", "spam").await;
-    // A demo shop's taps never count.
-    let (demo, demo_service, _) = provider_at_cai_lay(&e, "mau", "0907654321").await;
-    exec(
-        &e,
-        &format!("UPDATE businesses SET is_demo = TRUE WHERE id = {demo}"),
-    )
-    .await;
-    taps(&e, demo, demo_service, "call", 30).await;
 
     let res = send(&e.router, get_page("/admin/demand", Some(&admin))).await;
     assert_eq!(res.status(), StatusCode::OK);
@@ -156,7 +148,8 @@ async fn the_report_counts_real_leads_by_area_and_hides_small_figures() {
         serde_json::Value::Null,
         "2 requests: hidden"
     );
-    assert_eq!(row["weeks"][7]["value"], 10, "no spam, no demo");
+    assert_eq!(row["weeks"][7]["value"], 10, "no spam");
+    assert_eq!(json["with_demo"], false, "no demo data loaded");
     assert_eq!(
         row["total"]["value"], 10,
         "two hidden parts give neither away"
@@ -243,10 +236,16 @@ async fn searches_are_recorded_without_who_and_unmet_ones_are_listed() {
         [10, 0, 0, 0],
     )
     .await;
-    // A tab switch is the same search; a page without words is none.
+    // A tab switch is the same search, and so is narrowing it to a sector; a
+    // page without words is none.
     send(
         &e.router,
         get_page("/search?q=may+xoi+lua&tab=products", None),
+    )
+    .await;
+    send(
+        &e.router,
+        get_page("/search?q=may+xoi+lua&sector=crop", None),
     )
     .await;
     send(&e.router, get_page("/search?q=", None)).await;

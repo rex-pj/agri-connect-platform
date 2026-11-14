@@ -1,5 +1,5 @@
 //! The reads behind the demand report. The two lead sources are joined to
-//! their business (demo data left out) and to the service or product they
+//! their business (in the report's `DemoScope`) and to the service or product they
 //! were about, for its category, in one query each.
 
 use std::sync::Arc;
@@ -7,15 +7,17 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sea_orm::{
-    sea_query::{Expr, Func, Query, SelectStatement},
-    ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter,
-    QuerySelect, Set,
+    sea_query::{Condition, Expr, Func, Query, SelectStatement},
+    ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, FromQueryResult, PaginatorTrait,
+    QueryFilter, QuerySelect, Set,
 };
 use tracing::error;
 
 use domain::{
     constants::{CALL_CHANNEL_ZALO, INQUIRY_STATUS_SPAM},
-    models::demand::{BusinessArea, LeadChannel, LeadEvent, NewSearch, SearchEvent, SoleCategory},
+    models::demand::{
+        BusinessArea, DemoScope, LeadChannel, LeadEvent, NewSearch, SearchEvent, SoleCategory,
+    },
     repositories::demand_repository_trait::DemandRepositoryTrait,
     Error,
 };
@@ -26,6 +28,7 @@ use crate::{
         business::{self, Entity as Business},
         call_click, inquiry, product, search_event,
         service::{self, Entity as ServiceEntity},
+        service_type,
     },
     repositories::{admin_unit_repository::ward_code_at, service_repository::live_public},
     sql::{business_location, QueryAs},
@@ -79,6 +82,7 @@ struct AreaRow {
     name: String,
     phone: String,
     address: Option<String>,
+    is_demo: bool,
 }
 
 #[derive(FromQueryResult)]
@@ -87,13 +91,24 @@ struct SoleRow {
     category_id: i32,
 }
 
-/// `SELECT … FROM <table>` joined to its real business and, for the
+/// `businesses.is_demo` as `scope` counts it: one value, or any.
+fn business_in(scope: DemoScope) -> Condition {
+    match scope.only() {
+        Some(demo) => {
+            Condition::all().add(Expr::col((business::Entity, business::Column::IsDemo)).eq(demo))
+        }
+        None => Condition::all(),
+    }
+}
+
+/// `SELECT … FROM <table>` joined to its business in `scope` and, for the
 /// category, to the service and product it names.
 fn with_business_and_category<T, B, S, P>(
     table: T,
     business_id: B,
     service_id: S,
     product_id: P,
+    scope: DemoScope,
 ) -> SelectStatement
 where
     T: sea_orm::Iden + Copy + 'static,
@@ -105,8 +120,8 @@ where
         .from(table)
         .expr_as(
             Func::coalesce([
-                Expr::col((service::Entity, service::Column::CategoryId)).into(),
-                Expr::col((product::Entity, product::Column::CategoryId)).into(),
+                Expr::col((service::Entity, service::Column::ServiceTypeId)).into(),
+                Expr::col((product::Entity, product::Column::SupplyTypeId)).into(),
             ]),
             QueryAs::CategoryId,
         )
@@ -122,7 +137,7 @@ where
             product::Entity,
             Expr::col((product::Entity, product::Column::Id)).equals((table, product_id)),
         )
-        .and_where(Expr::col((business::Entity, business::Column::IsDemo)).eq(false))
+        .cond_where(business_in(scope))
         .to_owned()
 }
 
@@ -132,12 +147,14 @@ impl DemandRepositoryTrait for DemandRepository {
         &self,
         from: DateTime<Utc>,
         to: DateTime<Utc>,
+        scope: DemoScope,
     ) -> Result<Vec<LeadEvent>, Error> {
         let taps = with_business_and_category(
             call_click::Entity,
             call_click::Column::BusinessId,
             call_click::Column::ServiceId,
             call_click::Column::ProductId,
+            scope,
         )
         .column((call_click::Entity, call_click::Column::CreatedOn))
         .column((call_click::Entity, call_click::Column::BusinessId))
@@ -150,6 +167,7 @@ impl DemandRepositoryTrait for DemandRepository {
             inquiry::Column::BusinessId,
             inquiry::Column::ServiceId,
             inquiry::Column::ProductId,
+            scope,
         )
         .column((inquiry::Entity, inquiry::Column::CreatedOn))
         .column((inquiry::Entity, inquiry::Column::BusinessId))
@@ -186,16 +204,21 @@ impl DemandRepositoryTrait for DemandRepository {
         Ok(events)
     }
 
-    async fn business_areas(&self, snap_m: f64) -> Result<Vec<BusinessArea>, Error> {
+    async fn business_areas(
+        &self,
+        snap_m: f64,
+        scope: DemoScope,
+    ) -> Result<Vec<BusinessArea>, Error> {
         let rows = Business::find()
             .select_only()
             .column_as(business::Column::Id, QueryAs::BusinessId)
             .column(business::Column::Name)
             .column(business::Column::Phone)
             .column(business::Column::Address)
+            .column(business::Column::IsDemo)
             .expr_as(ward_code_at(business_location(), snap_m), QueryAs::WardCode)
             .filter(Expr::expr(business_location()).is_not_null())
-            .filter(business::Column::IsDemo.eq(false))
+            .filter(business_in(scope))
             .filter(business::Column::DeletedAt.is_null())
             .into_model::<AreaRow>()
             .all(self.db.as_ref())
@@ -207,13 +230,14 @@ impl DemandRepositoryTrait for DemandRepository {
         Ok(rows
             .into_iter()
             .filter_map(|r| {
-                let (name, phone, address) = (r.name, r.phone, r.address);
+                let (name, phone, address, is_demo) = (r.name, r.phone, r.address, r.is_demo);
                 r.ward_code.map(|ward_code| BusinessArea {
                     name,
                     phone,
                     address,
                     business_id: r.business_id,
                     ward_code,
+                    is_demo,
                 })
             })
             .collect())
@@ -223,7 +247,7 @@ impl DemandRepositoryTrait for DemandRepository {
         live_public(ServiceEntity::find())
             .select_only()
             .column(service::Column::BusinessId)
-            .column_as(service::Column::CategoryId.min(), QueryAs::CategoryId)
+            .column_as(service::Column::ServiceTypeId.min(), QueryAs::CategoryId)
             .group_by(service::Column::BusinessId)
             .having(service::Column::Id.count().eq(1))
             .into_model::<SoleRow>()
@@ -244,9 +268,28 @@ impl DemandRepositoryTrait for DemandRepository {
     }
 
     async fn record_search(&self, s: NewSearch) -> Result<(), Error> {
+        // One id sequence for both type tables: the id says which it is.
+        let is_service = match s.category_id {
+            Some(id) => {
+                service_type::Entity::find_by_id(id)
+                    .count(self.db.as_ref())
+                    .await
+                    .map_err(|e| {
+                        error!("demand record_search error: {e}");
+                        Error::internal("Failed to record the search.")
+                    })?
+                    > 0
+            }
+            None => false,
+        };
+        let (service_type_id, supply_type_id) = match s.category_id {
+            Some(id) if is_service => (Some(id), None),
+            other => (None, other),
+        };
         search_event::Entity::insert(search_event::ActiveModel {
             query: Set(s.query),
-            category_id: Set(s.category_id),
+            service_type_id: Set(service_type_id),
+            supply_type_id: Set(supply_type_id),
             ward_code: Set(s.ward_code),
             results: Set(i32::try_from(s.results).unwrap_or(i32::MAX)),
             ..Default::default()
@@ -264,10 +307,15 @@ impl DemandRepositoryTrait for DemandRepository {
         &self,
         from: DateTime<Utc>,
         to: DateTime<Utc>,
+        scope: DemoScope,
     ) -> Result<Vec<SearchEvent>, Error> {
-        search_event::Entity::find()
+        let mut query = search_event::Entity::find()
             .filter(search_event::Column::CreatedOn.gte(from))
-            .filter(search_event::Column::CreatedOn.lt(to))
+            .filter(search_event::Column::CreatedOn.lt(to));
+        if let Some(demo) = scope.only() {
+            query = query.filter(search_event::Column::IsDemo.eq(demo));
+        }
+        query
             .all(self.db.as_ref())
             .await
             .map(|rows| {
@@ -275,7 +323,7 @@ impl DemandRepositoryTrait for DemandRepository {
                     .map(|r| SearchEvent {
                         at: r.created_on.with_timezone(&Utc),
                         query: r.query,
-                        category_id: r.category_id,
+                        category_id: r.service_type_id.or(r.supply_type_id),
                         ward_code: r.ward_code,
                         results: i64::from(r.results),
                     })

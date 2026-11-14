@@ -7,7 +7,7 @@ use application::{
     catalogue::CATALOGUE,
     constants::{
         DEFAULT_UPLOAD_MAX_BYTES, IMAGE_JPEG_QUALITY, IMAGE_MAIN_MAX_SIDE, IMAGE_MAX_PIXELS,
-        IMAGE_THUMB_MAX_SIDE, REFRESH_TOKEN_DEFAULT_DAYS,
+        IMAGE_THUMB_MAX_SIDE, REFRESH_TOKEN_DEFAULT_DAYS, SETUP_TOKEN_MIN_CHARS,
     },
     events::{
         AuditLogSubscriber, FileCleanupSubscriber, InProcessEventBus,
@@ -16,7 +16,10 @@ use application::{
     ports::{EmailService, EventBus, FileStorage, PasswordHasher, TokenService, ZaloGateway},
     usecases::{
         admin_usecase::{AdminDeps, AdminUseCase},
+        alert_usecase::AlertUseCase,
         auth_usecase::{AuthDeps, AuthUseCase},
+        coded_usecase::{CodedUseCase, ALERT_KIND_LIST, SECTOR_LIST},
+        commodity_usecase::CommodityUseCase,
         demand_usecase::{DemandDeps, DemandReportUseCase},
         explore_usecase::{ExploreDeps, ExploreUseCase},
         health_usecase::HealthUseCase,
@@ -42,16 +45,29 @@ use infrastructure::{
     image_processor::{ImageRules, RasterImageProcessor},
     jwt_token_service::JwtTokenService,
     repositories::{
-        admin_unit_repository::AdminUnitRepository, audit_log_repository::AuditLogRepository,
-        business_repository::BusinessRepository, call_repository::CallRepository,
-        category_repository::CategoryRepository, demand_repository::DemandRepository,
-        file_repository::FileRepository, health_repository::HealthRepository,
-        inquiry_repository::InquiryRepository, job_repository::JobRepository,
-        location_repository::LocationRepository, partner_repository::PartnerRepository,
-        permission_repository::PermissionRepository, price_repository::PriceRepository,
-        product_repository::ProductRepository, refresh_token_repository::RefreshTokenRepository,
-        review_repository::ReviewRepository, role_repository::RoleRepository,
-        service_repository::ServiceRepository, user_repository::UserRepository,
+        admin_unit_repository::AdminUnitRepository,
+        alert_repository::AlertRepository,
+        audit_log_repository::AuditLogRepository,
+        business_repository::BusinessRepository,
+        call_repository::CallRepository,
+        category_repository::CategoryRepository,
+        coded_repository::{AlertKindRepository, SectorRepository},
+        commodity_repository::CommodityRepository,
+        demand_repository::DemandRepository,
+        file_repository::FileRepository,
+        health_repository::HealthRepository,
+        inquiry_repository::InquiryRepository,
+        job_repository::JobRepository,
+        location_repository::LocationRepository,
+        partner_repository::PartnerRepository,
+        permission_repository::PermissionRepository,
+        price_repository::PriceRepository,
+        product_repository::ProductRepository,
+        refresh_token_repository::RefreshTokenRepository,
+        review_repository::ReviewRepository,
+        role_repository::RoleRepository,
+        service_repository::ServiceRepository,
+        user_repository::UserRepository,
     },
     zalo_gateway::ZaloGraphGateway,
 };
@@ -62,8 +78,9 @@ use tracing::{info, warn};
 use crate::{
     app_state::{AppState, UseCases},
     constants::{
-        DB_MAX_CONNECTIONS, DEFAULT_APP_URL, DEFAULT_BIND_ADDR, DEFAULT_UPLOAD_DIR, ZALO_GRAPH_URL,
-        ZALO_TIMEOUT_SECS,
+        DB_MAX_CONNECTIONS, DEFAULT_APP_URL, DEFAULT_BIND_ADDR, DEFAULT_UPLOAD_DIR,
+        HEALTHCHECK_TIMEOUT_SECS, RATE_LIMIT_PRUNE_EVERY_SECS, SESSION_PURGE_EVERY_SECS,
+        SMTP_PORT_DEFAULT, ZALO_GRAPH_URL, ZALO_TIMEOUT_SECS,
     },
     locale::{Lang, Locale, Locales},
     middleware::{origin::origin_of, rate_limit::Limiters},
@@ -101,6 +118,25 @@ fn required_env(name: &'static str) -> Result<String, StartupError> {
 
 fn optional_env(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|v| !v.trim().is_empty())
+}
+
+/// `APP_ENV=prod`: what must never be left to a development fallback
+/// (reset links in the log, a setup page open to the first visitor) is then
+/// required at startup.
+fn is_production() -> bool {
+    optional_env("APP_ENV").as_deref() == Some("prod")
+}
+
+/// `SETUP_TOKEN`: what the first-admin form must be given. Unset: the form is
+/// open to whoever reaches it first, which production refuses (see `start`).
+fn setup_token() -> Result<Option<String>, StartupError> {
+    match optional_env("SETUP_TOKEN").map(|t| t.trim().to_owned()) {
+        Some(t) if t.chars().count() < SETUP_TOKEN_MIN_CHARS => Err(StartupError::InvalidEnv {
+            name: "SETUP_TOKEN",
+            reason: format!("must be at least {SETUP_TOKEN_MIN_CHARS} characters"),
+        }),
+        token => Ok(token),
+    }
 }
 
 fn load_env_files() {
@@ -157,6 +193,8 @@ fn email_texts(locale: &Locale, site_name: &str) -> EmailTexts {
         site_name: site_name.to_owned(),
         reset_subject: locale.text("email.reset_subject"),
         reset_body: locale.text("email.reset_body"),
+        verify_subject: locale.text("email.verify_subject"),
+        verify_body: locale.text("email.verify_body"),
         inquiry_subject: locale.text("email.inquiry_subject"),
         inquiry_body: locale.text("email.inquiry_body"),
         inquiry_note: locale.text("email.inquiry_note"),
@@ -170,12 +208,20 @@ fn email_service(
     texts: EmailTexts,
 ) -> Result<Arc<dyn EmailService>, StartupError> {
     let Some(host) = optional_env("SMTP_HOST") else {
+        if is_production() {
+            return Err(StartupError::InvalidEnv {
+                name: "SMTP_HOST",
+                reason: "required in production: without it password-reset links are written \
+                         to the log, where anyone who reads it can take an account over"
+                    .into(),
+            });
+        }
         warn!("SMTP_HOST not set; password-reset emails will be written to the log, not sent");
         return Ok(Arc::new(LogEmailService::new(app_url)));
     };
 
     let port = match optional_env("SMTP_PORT") {
-        None => 587,
+        None => SMTP_PORT_DEFAULT,
         Some(p) => p
             .parse()
             .map_err(|e: std::num::ParseIntError| StartupError::InvalidEnv {
@@ -228,14 +274,17 @@ fn router_config(app_url: &str, limiters: Limiters) -> Result<RouterConfig, Star
         .collect::<Result<Vec<_>, _>>()?;
     let https = optional_env("HTTPS_ENABLED").as_deref() == Some("true");
 
-    let mut allowed_origins = Vec::new();
-    for url in std::iter::once(app_url).chain(cors_list.iter().map(String::as_str)) {
-        let origin = origin_of(url).ok_or_else(|| StartupError::InvalidEnv {
+    let origin = |url: &str| {
+        origin_of(url).ok_or_else(|| StartupError::InvalidEnv {
             name: "APP_URL/CORS_ORIGINS",
             reason: format!("{url:?} is not scheme://host[:port]"),
-        })?;
-        allowed_origins.push(origin);
-    }
+        })
+    };
+    let allowed_origins = vec![origin(app_url)?];
+    let api_origins = cors_list
+        .iter()
+        .map(|url| origin(url))
+        .collect::<Result<Vec<_>, _>>()?;
 
     let trusted_proxy_hops = match optional_env("TRUSTED_PROXY_HOPS") {
         None => 0,
@@ -252,6 +301,7 @@ fn router_config(app_url: &str, limiters: Limiters) -> Result<RouterConfig, Star
         https,
         trusted_proxy_hops,
         allowed_origins,
+        api_origins,
         limiters,
     })
 }
@@ -378,6 +428,8 @@ pub struct Wiring {
     pub zalo: Option<Arc<dyn ZaloGateway>>,
     /// REFRESH_TOKEN_DAYS.
     pub refresh_days: i64,
+    /// SETUP_TOKEN: the first-admin form asks for it when set.
+    pub setup_token: Option<String>,
 }
 
 /// The templates of every language over `locales`, with the site identity.
@@ -397,21 +449,28 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
         uploads,
         zalo,
         refresh_days,
+        setup_token,
     } = wiring;
     let db = dbs.primary;
     let business_repo = Arc::new(BusinessRepository::new(Arc::clone(&db)));
     let product_repo = Arc::new(ProductRepository::new(Arc::clone(&db)));
     let category_repo = Arc::new(CategoryRepository::new(Arc::clone(&db)));
+    let commodity_repo = Arc::new(CommodityRepository::new(Arc::clone(&db)));
+    let sector_repo = Arc::new(SectorRepository::new(Arc::clone(&db)));
+    let alert_kind_repo = Arc::new(AlertKindRepository::new(Arc::clone(&db)));
     let inquiry_repo = Arc::new(InquiryRepository::new(Arc::clone(&db)));
     let location_repo = Arc::new(LocationRepository::new(Arc::clone(&db)));
     let review_repo = Arc::new(ReviewRepository::new(Arc::clone(&db)));
     let service_repo = Arc::new(ServiceRepository::new(Arc::clone(&db)));
     let call_repo = Arc::new(CallRepository::new(Arc::clone(&db)));
     let file_repo = Arc::new(FileRepository::new(Arc::clone(&db)));
-    // Read-only, and checked on many requests: the natural first user of a replica.
-    let permission_repo = Arc::new(PermissionRepository::new(Arc::clone(&dbs.read)));
+    // On the primary, never the read pool: this is who the caller is and what
+    // they may do on every request, and a lagging replica would keep a
+    // revoked permission, a deactivated account or an ended session alive.
+    let permission_repo = Arc::new(PermissionRepository::new(Arc::clone(&db)));
     let role_repo = Arc::new(RoleRepository::new(Arc::clone(&db)));
     let user_repo = Arc::new(UserRepository::new(Arc::clone(&db)));
+    let refresh_repo = Arc::new(RefreshTokenRepository::new(Arc::clone(&db)));
     let audit_log_repo = Arc::new(AuditLogRepository::new(Arc::clone(&db)));
     let catalogue_repo = Arc::new(CatalogueRepository::new(Arc::clone(&db)));
     let admin_unit_repo = Arc::new(AdminUnitRepository::new(Arc::clone(&db)));
@@ -497,22 +556,24 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
             product_repo: product_repo.clone(),
             role_repo: role_repo.clone(),
             service_repo: service_repo.clone(),
+            sector_repo: sector_repo.clone(),
             events: events.clone(),
             password_hasher: password_hasher.clone(),
+            refresh_repo: refresh_repo.clone(),
         }),
         auth: AuthUseCase::new(AuthDeps {
             user_repo: user_repo.clone(),
             permission_repo: permission_repo.clone(),
-            refresh_repo: Arc::new(RefreshTokenRepository::new(Arc::clone(&db))),
+            refresh_repo,
             email,
             password_hasher: password_hasher.clone(),
             token_svc: token_service.clone(),
+            events: events.clone(),
             refresh_days,
+            setup_token,
         }),
         permission: PermissionUseCase::new(PermissionDeps {
-            // The primary, not the read pool: the role page reads its own
-            // grant changes right after saving them.
-            permission_repo: Arc::new(PermissionRepository::new(Arc::clone(&db))),
+            permission_repo,
             user_repo: user_repo.clone(),
             role_repo: role_repo.clone(),
             grants_repo: role_repo.clone(),
@@ -534,9 +595,24 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
             location_repo.clone(),
             events.clone(),
         ),
+        commodity: CommodityUseCase::new(
+            commodity_repo.clone(),
+            sector_repo.clone(),
+            events.clone(),
+        ),
+        sector: CodedUseCase::new(SECTOR_LIST, sector_repo.clone(), events.clone()),
+        alert_kind: CodedUseCase::new(ALERT_KIND_LIST, alert_kind_repo.clone(), events.clone()),
+        alert: AlertUseCase::new(
+            Arc::new(AlertRepository::new(Arc::clone(&db))),
+            admin_unit_repo.clone(),
+            sector_repo,
+            alert_kind_repo,
+            events.clone(),
+        ),
         price: PriceUseCase::new(
             Arc::new(PriceRepository::new(Arc::clone(&db))),
             location_repo,
+            commodity_repo.clone(),
             events.clone(),
         ),
         zalo: ZaloUseCase::new(zalo),
@@ -650,6 +726,7 @@ pub async fn start() -> Result<(), StartupError> {
         uploads: uploads()?,
         zalo: zalo_gateway()?,
         refresh_days: refresh_days()?,
+        setup_token: setup_token()?,
     })?;
 
     // Roles and permissions must exist before the first request, or the first
@@ -658,16 +735,30 @@ pub async fn start() -> Result<(), StartupError> {
     // The demand report and partner areas place every point in a ward.
     state.usecases.setup.seed_admin_units().await?;
 
+    // A public server with no admin and an open setup form belongs to the
+    // first stranger who finds it.
+    let auth = &state.usecases.auth;
+    if is_production() && !auth.setup_token_required() && auth.needs_first_admin().await? {
+        return Err(StartupError::InvalidEnv {
+            name: "SETUP_TOKEN",
+            reason: "required in production until the first admin exists".into(),
+        });
+    }
+
     let sessions = state.usecases.clone();
     tokio::spawn(async move {
         // Expired refresh tokens are dead weight; nothing reads them again.
-        let mut tick = tokio::time::interval(std::time::Duration::from_secs(3600));
+        let mut tick =
+            tokio::time::interval(std::time::Duration::from_secs(SESSION_PURGE_EVERY_SECS));
         loop {
             tick.tick().await;
             match sessions.auth.purge_expired_sessions().await {
                 Ok(0) => {}
-                Ok(n) => info!(deleted = n, "purged expired refresh tokens"),
-                Err(e) => warn!(error = %e, "could not purge expired refresh tokens"),
+                Ok(n) => info!(
+                    deleted = n,
+                    "purged expired refresh tokens and emailed links"
+                ),
+                Err(e) => warn!(error = %e, "could not purge expired refresh tokens and links"),
             }
         }
     });
@@ -676,7 +767,8 @@ pub async fn start() -> Result<(), StartupError> {
     let pruned = limiters.clone();
     tokio::spawn(async move {
         // Bounded memory: one entry per client seen in the last few minutes.
-        let mut tick = tokio::time::interval(std::time::Duration::from_secs(300));
+        let mut tick =
+            tokio::time::interval(std::time::Duration::from_secs(RATE_LIMIT_PRUNE_EVERY_SECS));
         loop {
             tick.tick().await;
             pruned.forget_idle();
@@ -709,8 +801,8 @@ pub async fn start() -> Result<(), StartupError> {
 /// or shell), and both the container healthcheck and the deploy gate need one.
 pub async fn healthcheck(probe: &str) -> Result<(), String> {
     let path = match probe {
-        "live" => "/health/live",
-        "ready" => "/health/ready",
+        "live" => crate::routes::HEALTH_LIVE_PATH,
+        "ready" => crate::routes::HEALTH_READY_PATH,
         other => return Err(format!("unknown probe {other:?}; use live or ready")),
     };
     let bind = optional_env("BIND_ADDR").unwrap_or_else(|| DEFAULT_BIND_ADDR.to_owned());
@@ -724,10 +816,13 @@ pub async fn healthcheck(probe: &str) -> Result<(), String> {
 
     let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
         .build_http::<axum::body::Body>();
-    let response = tokio::time::timeout(std::time::Duration::from_secs(5), client.get(uri))
-        .await
-        .map_err(|_| "no answer within 5 s".to_owned())?
-        .map_err(|e| format!("request failed: {e}"))?;
+    let response = tokio::time::timeout(
+        std::time::Duration::from_secs(HEALTHCHECK_TIMEOUT_SECS),
+        client.get(uri),
+    )
+    .await
+    .map_err(|_| format!("no answer within {HEALTHCHECK_TIMEOUT_SECS} s"))?
+    .map_err(|e| format!("request failed: {e}"))?;
     if response.status().is_success() {
         Ok(())
     } else {

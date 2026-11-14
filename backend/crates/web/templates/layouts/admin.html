@@ -8,8 +8,11 @@
     logout), permission-filtered menu, content. On a
     phone the menu is a drawer under the header, opened by a button (Alpine
     `collapse`) and closed by the button, the dimmed page or Escape; without
-    JS it simply sits above the content. The menu keeps its scroll position
-    from page to page (Alpine `menuScroll`). Pages set `page.admin` (AdminNav)
+    JS it simply sits above the content. Each group folds (a `<details>`, so
+    without JS too). Alpine `adminMenu` remembers the folded groups and the
+    scroll position from page to page, and adds the search box: typing keeps
+    the entries that match (their name, their group's, the lists on their
+    tabs; accents ignored), Enter opens the first. Pages set `page.admin` (AdminNav)
     and `page.body`, and fill `content`. Never indexed. -#}
 {% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
 {% block body %}
@@ -25,12 +28,20 @@
       {{ account::account_menu(menu=page.admin.account, label=page.admin.username, label_class="d-none d-sm-inline") }}
     </div>
   </header>
-  <nav class="ash-sidebar" id="admin-menu" aria-label="{{ t(key="account_menu.admin") }}" x-data="menuScroll" x-on:pagehide.window="remember" :class="panelClass">
+  <nav class="ash-sidebar" id="admin-menu" aria-label="{{ t(key="account_menu.admin") }}" x-data="adminMenu" x-on:pagehide.window="remember" :class="panelClass">
+    <div class="ash-search" x-ref="searchBox" x-cloak>
+      <input type="search" class="form-control" placeholder="{{ t(key="admin_layout.search") }}" aria-label="{{ t(key="admin_layout.search") }}" autocomplete="off" x-on:input="search" x-on:keydown.enter.prevent="openFirst">
+    </div>
+    <p class="ash-no-match" role="status" x-show="nothingFound" x-cloak>{{ t(key="admin_layout.no_match") }}</p>
     {% for group in page.admin.groups %}
-    {% if group.label %}<p class="ash-group-label">{{ group.label }}</p>{% endif %}
+    {% if group.label %}
+    <details class="ash-group" open data-group="{{ group.key }}" x-show="groupShown" :open="groupOpen" x-on:toggle="groupToggled">
+      <summary class="ash-group-label"><span>{{ group.label }}</span>{{ atoms::icon(name="fa-chevron-down", class="ash-group-chevron") }}</summary>
+    {% endif %}
     {% for item in group.items %}
-    <a class="ash-link{% if group.label %} ash-link--sub{% endif %}{% if item.active %} ash-link--active{% endif %}" href="{{ item.href }}"{% if item.active %} aria-current="page"{% endif %}>{{ atoms::icon(name=item.icon, class="ash-icon") }} {{ item.label }}</a>
+    <a class="ash-link{% if group.label %} ash-link--sub{% endif %}{% if item.active %} ash-link--active{% endif %}" href="{{ item.href }}" data-keywords="{{ item.keywords }}"{% if item.active %} aria-current="page"{% endif %} x-show="linkShown">{{ atoms::icon(name=item.icon, class="ash-icon") }} {{ item.label }}</a>
     {% endfor %}
+    {% if group.label %}</details>{% endif %}
     {% endfor %}
   </nav>
   <button type="button" class="ash-backdrop d-md-none" tabindex="-1" aria-hidden="true" x-show="open" x-cloak x-on:click="close"></button>

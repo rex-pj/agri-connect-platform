@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     app_state::AppState,
-    constants::{EXPLORE_DEFAULT_RADIUS_M, EXPLORE_RADII_M},
+    constants::{km, EXPLORE_DEFAULT_RADIUS_M, EXPLORE_RADII_M},
     extract::ApiQuery,
     pages::{
         cards::{rated_providers, rated_services, tile, CategoryTile, ProviderCard, ServiceCard},
@@ -119,7 +119,7 @@ pub struct ExplorePage {
 
 const TAB_SERVICES: &str = "services";
 pub(super) const TAB_PROVIDERS: &str = "providers";
-const TAB_PRODUCTS: &str = "products";
+pub(super) const TAB_PRODUCTS: &str = "products";
 
 fn url(name: &str, params: &[(&str, &str)]) -> Result<String, Error> {
     routes::url(name, params).map_err(|e| Error::internal(format!("explore links: {e}")))
@@ -201,7 +201,11 @@ pub async fn show(
             Vec::new(),
             Vec::new(),
             Vec::new(),
-            rated_services(&state, explore.get_explore_data().await?.featured_services).await?,
+            rated_services(
+                &state,
+                explore.get_explore_data(None).await?.featured_services,
+            )
+            .await?,
         ),
         Some(p) => {
             let (lat, lng) = p.coordinates();
@@ -270,6 +274,7 @@ pub async fn show(
     })
     .collect();
 
+    // Every sector's: the page has no sector switch, so none narrows it.
     let mut service_tiles = Vec::with_capacity(service_categories.len());
     for c in &service_categories {
         let active = service_id == Some(c.id);
@@ -298,20 +303,20 @@ pub async fn show(
             _ => None,
         },
         locations,
-        radius_km: radius / 1000,
+        radius_km: km(radius),
         results_max: GEO_RESULTS_MAX,
         wider: EXPLORE_RADII_M
             .iter()
             .find(|&&r| r > radius)
             .map(|&r| RadiusLink {
-                label: format!("{} km", r / 1000),
+                label: state.locale().text_with("explore.km", &[("km", &km(r))]),
                 href: link(r, service_id),
                 active: false,
             }),
         radius_links: EXPLORE_RADII_M
             .iter()
             .map(|&r| RadiusLink {
-                label: format!("{} km", r / 1000),
+                label: state.locale().text_with("explore.km", &[("km", &km(r))]),
                 href: link(r, service_id),
                 active: r == radius,
             })

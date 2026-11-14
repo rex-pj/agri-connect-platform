@@ -107,6 +107,8 @@ pub struct BusinessAdminDetail {
     pub is_verified: bool,
     pub is_active: bool,
     pub created_on: DateTime<Utc>,
+    /// The managing account, for the link to it.
+    pub linked_user_id: Option<i32>,
     pub linked_username: Option<String>,
     pub lat: Option<f64>,
     pub lng: Option<f64>,

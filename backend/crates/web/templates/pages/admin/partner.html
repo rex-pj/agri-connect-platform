@@ -31,14 +31,14 @@
     <p class="admin-status">{{ t(key="partner.in_force_line", count=p.contracts_in_force) }} · <strong>{{ p.monthly_revenue | vnd }}</strong> {{ t(key="partner.per_month") }}</p>
     <form class="form-stack" method="post" action="{{ b.profile_action }}#ho-so" novalidate>
       {% if b.profile_errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.profile_errors.message) }}{% endif %}
-      {{ fields::partner_fields(form=b.profile, errors=b.profile_errors, kinds=b.kinds, prefix="pt") }}
+      {{ fields::partner_fields(form=b.profile, errors=b.profile_errors, kinds=b.kinds, phone_pattern=limits.phone_pattern, prefix="pt") }}
       <button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="common.save") }}</button>
     </form>
   </section>
 
   <section class="admin-section" aria-labelledby="status-title" x-data="dialog" x-on:keydown.escape.window="hide">
     <h2 class="admin-section__title" id="status-title">{{ t(key="admin.activity") }}</h2>
-    <p class="admin-status">{{ status::account(on=p.is_active) }}<span>{% if p.is_active %}{{ t(key="partner.on") }}{% else %}{{ t(key="partner.off") }}{% endif %}</span></p>
+    <p class="admin-status">{{ status::account(on=p.is_active) }}{% if p.is_demo %}{{ status::demo() }}{% endif %}<span>{% if p.is_active %}{{ t(key="partner.on") }}{% else %}{{ t(key="partner.off") }}{% endif %}</span></p>
     <div class="admin-actions">
       {% if p.is_active %}
       <a class="btn btn-outline-warning" href="#tat-doi-tac" x-on:click.prevent="show">{{ atoms::icon(name="fa-ban") }} {{ t(key="partner.turn_off") }}</a>
@@ -57,7 +57,7 @@
   {% set account_open = b.account_errors.message or b.account_errors.fields %}
   <section class="admin-section" aria-labelledby="tk-title" x-data="dialog" data-open="{% if account_open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
     <h2 class="admin-section__title" id="tk-title">{{ t(key="partner.account") }}</h2>
-    <p class="small text-muted">{% if p.account_username %}{{ t(key="admin.linked_before") }} <strong>{{ p.account_username }}</strong>{{ t(key="partner.linked_after") }}{% else %}{{ t(key="partner.no_account") }}{% endif %}</p>
+    <p class="small text-muted">{% if p.account_username %}{{ t(key="admin.linked_before") }} {% if b.account_href %}<a class="fw-bold" href="{{ b.account_href }}">{{ p.account_username }}</a>{% else %}<strong>{{ p.account_username }}</strong>{% endif %}{{ t(key="partner.linked_after") }}{% else %}{{ t(key="partner.no_account") }}{% endif %}</p>
     <div class="admin-actions"><a class="btn btn-outline-success" href="#gan-tai-khoan" x-on:click.prevent="show">{{ atoms::icon(name="fa-user-plus") }} {{ t(key="admin.assign") }}</a></div>
     <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
     <section class="contact-sheet" id="gan-tai-khoan" aria-labelledby="gan-tai-khoan-title" :class="sheetClass">

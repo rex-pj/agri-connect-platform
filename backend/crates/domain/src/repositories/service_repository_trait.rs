@@ -96,7 +96,11 @@ pub trait ServiceRepositoryTrait {
     /// Candidates for "featured": public services of verified providers,
     /// those with a photo first, then the newest, at most `limit`. The caller
     /// keeps one per provider.
-    async fn featured_candidates(&self, limit: i64) -> Result<Vec<PublicService>, Error>;
+    async fn featured_candidates(
+        &self,
+        limit: i64,
+        sector: Option<&str>,
+    ) -> Result<Vec<PublicService>, Error>;
 
     /// Services whose business lies within `radius` metres of `point_wkt`,
     /// nearest first, at most `limit`.

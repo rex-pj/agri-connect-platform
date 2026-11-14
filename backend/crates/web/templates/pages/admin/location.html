@@ -33,7 +33,7 @@
 
   <section class="admin-section" aria-labelledby="status-title" x-data="dialog" x-on:keydown.escape.window="hide">
     <h2 class="admin-section__title" id="status-title">{{ t(key="admin.visibility") }}</h2>
-    <p class="admin-status">{{ status::visibility(on=l.is_active) }}<span>{% if l.is_active %}{{ t(key="admin.location_on") }}{% else %}{{ t(key="admin.location_off") }}{% endif %}</span></p>
+    <p class="admin-status">{{ status::visibility(on=l.is_active) }}{% if l.is_demo %}{{ status::demo() }}{% endif %}<span>{% if l.is_active %}{{ t(key="admin.location_on") }}{% else %}{{ t(key="admin.location_off") }}{% endif %}</span></p>
     <div class="admin-actions">
       {% if l.is_active %}
       <a class="btn btn-outline-warning" href="#an-khu-vuc" x-on:click.prevent="show">{{ atoms::icon(name="fa-eye-slash") }} {{ t(key="admin.hide_location") }}</a>

@@ -6,10 +6,11 @@
 {% import "molecules/rating_line.html" as rating %}
 {% import "atoms/tag.html" as tag %}
 {% macro provider_card(p) -%}
+{% set href = url_for(name="provider", id=p.id, slug=p.name | slugify) %}
 <article class="card h-100 provider-card hover-lift{% if p.is_verified %} provider-card--verified{% endif %}">
   <div class="card-body d-flex flex-column p-3 gap-2">
     <div class="d-flex align-items-start gap-2">
-      <h3 class="card-title fs-6 fw-bold mb-0 flex-grow-1">{{ p.name }}</h3>
+      <h3 class="card-title fs-6 fw-bold mb-0 flex-grow-1"><a class="text-decoration-none text-dark" href="{{ href }}">{{ p.name }}</a></h3>
       {% if p.is_verified %}{{ badge::badge(text=t(key="status.verified"), icon="fa-circle-check", class="flex-shrink-0") }}{% endif %}
     </div>
     {% if p.rating %}<p class="small mb-0">{{ rating::rating_line(r=p.rating, compact=true) }}</p>{% endif %}
@@ -27,7 +28,7 @@
     {% endif %}
     <div class="mt-auto pt-3 border-top d-grid gap-2">
       {{ call::call_button(phone=p.phone, kind="provider", id=p.id, class="btn btn-success btn-call") }}
-      <a class="btn btn-outline-success" href="{{ url_for(name="provider", id=p.id, slug=p.name | slugify) }}">{{ t(key="card.details") }} {{ atoms::icon(name="fa-chevron-right") }}</a>
+      <a class="btn btn-outline-success" href="{{ href }}">{{ t(key="card.details") }} {{ atoms::icon(name="fa-chevron-right") }}</a>
     </div>
   </div>
 </article>

@@ -6,10 +6,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
     pub partner_id: i32,
-    /// The older preset of a contract made before provinces and wards; the
-    /// first load of the dataset gives it `province_code` and `ward_code`.
-    pub location_id: Option<i32>,
-    pub province_code: Option<String>,
+    pub province_code: String,
     pub ward_code: Option<String>,
     pub starts_on: Date,
     pub ends_on: Date,

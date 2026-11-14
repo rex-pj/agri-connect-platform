@@ -33,13 +33,13 @@ async fn the_switch_keeps_the_choice_and_goes_back_to_the_page() {
         &router(),
         post_form(
             "/language",
-            &[("lang", "en"), ("back", "/products?q=g")],
+            &[("lang", "en"), ("back", "/supplies?q=g")],
             None,
         ),
     )
     .await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
-    assert_eq!(location(&res), "/products?q=g");
+    assert_eq!(location(&res), "/supplies?q=g");
     let cookie = res.headers()[header::SET_COOKIE].to_str().unwrap();
     assert!(
         cookie.starts_with("lang=en;") && cookie.contains("SameSite=Lax"),

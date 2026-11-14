@@ -43,6 +43,4 @@ pub struct AdminUnitSync {
     pub loaded: bool,
     pub provinces: u64,
     pub wards: u64,
-    /// Older rows given a ward from their location preset's point.
-    pub backfilled: u64,
 }

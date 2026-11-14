@@ -10,7 +10,7 @@
 {% macro business_fields(form, errors, limits, prefix, first=false) -%}
 {% set e = errors.fields %}
 {{ field::input(id=prefix ~ "-name", name="name", label=t(key="dashboard.business_name"), value=form.name, error=e.name | default(value=""), required=true, maxlength=limits.business_name_max, first=first) }}
-{{ field::input(id=prefix ~ "-phone", name="phone", label=t(key="form.phone"), type="tel", value=form.phone, error=e.phone | default(value=""), required=true, inputmode="tel", pattern="0[0-9]{9}", autocomplete="tel") }}
+{{ field::input(id=prefix ~ "-phone", name="phone", label=t(key="form.phone"), type="tel", value=form.phone, error=e.phone | default(value=""), required=true, inputmode="tel", pattern=limits.phone_pattern, autocomplete="tel") }}
 {{ field::input(id=prefix ~ "-address", name="address", label=t(key="form.address"), value=form.address, error=e.address | default(value=""), maxlength=limits.business_address_max, autocomplete="street-address") }}
 {{ field::textarea(id=prefix ~ "-description", name="description", label=t(key="form.about"), value=form.description, error=e.description | default(value=""), maxlength=limits.business_description_max, rows=3) }}
 <fieldset class="form-field">
@@ -20,11 +20,11 @@
   <div class="row g-2">
     <div class="col-6">
       <label class="form-label small" for="{{ prefix }}-lat">{{ t(key="form.lat") }}</label>
-      <input class="form-control{% if e.lat %} is-invalid{% endif %}" id="{{ prefix }}-lat" name="lat" value="{{ form.lat }}" inputmode="decimal" placeholder="10.4048"{% if e.lat %} aria-invalid="true" aria-describedby="{{ prefix }}-coord-error"{% endif %}>
+      <input class="form-control{% if e.lat %} is-invalid{% endif %}" id="{{ prefix }}-lat" name="lat" value="{{ form.lat }}" inputmode="decimal" placeholder="{{ t(key="form.lat_placeholder") }}"{% if e.lat %} aria-invalid="true" aria-describedby="{{ prefix }}-coord-error"{% endif %}>
     </div>
     <div class="col-6">
       <label class="form-label small" for="{{ prefix }}-lng">{{ t(key="form.lng") }}</label>
-      <input class="form-control{% if e.lat %} is-invalid{% endif %}" id="{{ prefix }}-lng" name="lng" value="{{ form.lng }}" inputmode="decimal" placeholder="106.1180"{% if e.lat %} aria-invalid="true" aria-describedby="{{ prefix }}-coord-error"{% endif %}>
+      <input class="form-control{% if e.lat %} is-invalid{% endif %}" id="{{ prefix }}-lng" name="lng" value="{{ form.lng }}" inputmode="decimal" placeholder="{{ t(key="form.lng_placeholder") }}"{% if e.lat %} aria-invalid="true" aria-describedby="{{ prefix }}-coord-error"{% endif %}>
     </div>
   </div>
   {% if e.lat %}<div class="invalid-feedback d-block" id="{{ prefix }}-coord-error">{{ e.lat }}</div>{% endif %}

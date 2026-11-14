@@ -1,5 +1,6 @@
 {% extends "layouts/app.html" %}
 {% import "atoms/icon.html" as atoms %}
+{% import "molecules/manage_link.html" as manage %}
 {% import "molecules/call_button.html" as call %}
 {% import "molecules/zalo_button.html" as zalo %}
 {% import "atoms/alert.html" as alerts %}
@@ -22,7 +23,7 @@
 {% set icon = p.category_icon | default(value="fa-tag") %}
 <div class="product-detail">
   <div class="product-detail__photo">
-    <a class="back-link back-link--overlay" href="{{ url_for(name="products") }}">{{ atoms::icon(name="fa-arrow-left") }} {{ t(key="nav.products") }}</a>
+    <a class="back-link back-link--overlay" href="{{ page.category_href }}">{{ atoms::icon(name="fa-arrow-left") }} {{ p.category }}</a>
     {% if p.image_file_id %}
     <img src="{{ file_url(id=p.image_file_id) }}" alt="{{ p.name }}">
     {% else %}
@@ -33,6 +34,7 @@
     {{ hero::page_hero(title=p.name, badge_icon=icon, badge_text=p.category, variant="compact") }}
     <div class="detail-body" x-data="dialog" data-open="{% if page.contact.open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
       {% if page.sent %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="contact.sent")) }}<p class="small mb-3">{{ t(key="review.after_contact") }} <a href="{{ page.rating.href }}">{{ t(key="review.write") }}</a></p>{% endif %}
+      {{ manage::manage_link(link=page.manage) }}
 
       <section class="detail-card">
         <div class="detail-price">
@@ -44,6 +46,7 @@
           {% endif %}
         </div>
         <p class="detail-price__note">{{ t(key="product.price_note") }}</p>
+        {% if p.commodity %}{% set for_href = url_for(name="products") ~ "?commodity=" ~ p.commodity_id %}<p class="mb-0 mt-2">{{ atoms::icon(name="fa-leaf", class="text-success me-1") }}{{ t(key="product.for_commodity") }} <a class="fw-semibold" href="{{ for_href }}">{{ p.commodity }}</a></p>{% endif %}
         <div class="provider-actions mt-3">
           {{ call::call_button(phone=p.vendor_phone, kind="product", id=p.id, class="btn btn-success btn-lg btn-call") }}
           {{ zalo::zalo_button(phone=p.vendor_phone, kind="product", id=p.id, class="btn btn-outline-primary btn-lg") }}

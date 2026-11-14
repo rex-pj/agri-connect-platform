@@ -1,13 +1,452 @@
 {
-  "_comment": "Demo listings. Every business is loaded with is_demo = TRUE so 'remove demo data' can never touch a real listing. Services and products name their business and category slug; a slug an admin renamed makes its rows silently drop out, and the returned counts show it.",
+  "_comment": "Demo data: a starting catalogue (commodities farmers raise, service and supply types, area presets of the Mekong Delta, crops whose price farmers ask about) and listings in it. Every row is loaded with is_demo = TRUE, so removing the demo data never touches a real row; a demo commodity, type, area or crop that real data uses by then is kept and becomes real. Services name a service type slug, products a supply type slug and maybe the commodity they are for, crops their commodity; a slug or name an admin changed makes its rows silently drop out, and the returned counts show it.",
+  "sectors": [
+    { "code": "crop", "name": "Trồng trọt", "icon": "fa-seedling", "display_order": 1 },
+    { "code": "livestock", "name": "Chăn nuôi", "icon": "fa-cow", "display_order": 2 },
+    { "code": "aquatic", "name": "Thuỷ hải sản", "icon": "fa-fish", "display_order": 3 }
+  ],
+  "alert_kinds": [
+    { "code": "disease", "name": "Dịch bệnh", "icon": "fa-virus", "display_order": 1 },
+    { "code": "salinity", "name": "Xâm nhập mặn", "icon": "fa-droplet", "display_order": 2 },
+    { "code": "weather", "name": "Thời tiết", "icon": "fa-cloud-showers-heavy", "display_order": 3 }
+  ],
+  "commodities": [
+    {
+      "name": "Lúa",
+      "sector": "crop",
+      "icon": "fa-solid fa-wheat-awn",
+      "display_order": 1
+    },
+    {
+      "name": "Sầu riêng",
+      "sector": "crop",
+      "icon": "fa-solid fa-seedling",
+      "display_order": 2
+    },
+    {
+      "name": "Xoài",
+      "sector": "crop",
+      "icon": "fa-solid fa-apple-whole",
+      "display_order": 3
+    },
+    {
+      "name": "Bưởi",
+      "sector": "crop",
+      "icon": "fa-solid fa-lemon",
+      "display_order": 4
+    },
+    {
+      "name": "Thanh long",
+      "sector": "crop",
+      "icon": "fa-solid fa-apple-whole",
+      "display_order": 5
+    },
+    {
+      "name": "Chanh",
+      "sector": "crop",
+      "icon": "fa-solid fa-lemon",
+      "display_order": 6
+    },
+    {
+      "name": "Mít",
+      "sector": "crop",
+      "icon": "fa-solid fa-tree",
+      "display_order": 7
+    },
+    {
+      "name": "Rau màu",
+      "sector": "crop",
+      "icon": "fa-solid fa-carrot",
+      "display_order": 8
+    },
+    {
+      "name": "Heo",
+      "sector": "livestock",
+      "icon": "fa-solid fa-piggy-bank",
+      "display_order": 9
+    },
+    {
+      "name": "Bò",
+      "sector": "livestock",
+      "icon": "fa-solid fa-cow",
+      "display_order": 10
+    },
+    {
+      "name": "Gà",
+      "sector": "livestock",
+      "icon": "fa-solid fa-egg",
+      "display_order": 11
+    },
+    {
+      "name": "Vịt",
+      "sector": "livestock",
+      "icon": "fa-solid fa-feather",
+      "display_order": 12
+    },
+    {
+      "name": "Tôm",
+      "sector": "aquatic",
+      "icon": "fa-solid fa-shrimp",
+      "display_order": 13
+    },
+    {
+      "name": "Cá tra",
+      "sector": "aquatic",
+      "icon": "fa-solid fa-fish",
+      "display_order": 14
+    }
+  ],
+  "service_types": [
+    {
+      "name": "Nạo vét",
+      "slug": "muc-bun",
+      "icon": "fa-solid fa-water",
+      "color": "#1E40AF",
+      "description": "Múc bùn kênh mương, ruộng trũng; sên vét, cải tạo ao nuôi giữa hai vụ",
+      "display_order": 1
+    },
+    {
+      "name": "Phun thuốc",
+      "slug": "phun-thuoc",
+      "icon": "fa-solid fa-spray-can-sparkles",
+      "color": "#065F46",
+      "description": "Phun thuốc bảo vệ thực vật bằng drone hoặc bình đeo vai",
+      "sector": "crop",
+      "display_order": 2
+    },
+    {
+      "name": "Sửa máy",
+      "slug": "sua-may-no",
+      "icon": "fa-solid fa-wrench",
+      "color": "#92400E",
+      "description": "Sửa máy nổ, máy bơm, máy gặt, máy sục khí",
+      "display_order": 3
+    },
+    {
+      "name": "Thú y",
+      "slug": "thu-y",
+      "icon": "fa-solid fa-syringe",
+      "color": "#7C2D12",
+      "description": "Tiêm phòng, chữa bệnh heo, bò, gà, vịt tại nhà",
+      "sector": "livestock",
+      "display_order": 4
+    },
+    {
+      "name": "Giấy tờ xuất khẩu",
+      "slug": "giay-to-xuat-khau",
+      "icon": "fa-solid fa-certificate",
+      "color": "#155E75",
+      "description": "Mã số vùng trồng, mã số cơ sở nuôi, VietGAHP, tem truy xuất nguồn gốc",
+      "display_order": 5
+    },
+    {
+      "name": "Xét nghiệm",
+      "slug": "xet-nghiem",
+      "icon": "fa-solid fa-flask-vial",
+      "color": "#6D28D9",
+      "description": "Kiểm nghiệm dư lượng thuốc, kim loại nặng, chất cấm trước khi bán, xuất khẩu",
+      "display_order": 6
+    }
+  ],
+  "supply_types": [
+    {
+      "name": "Giống",
+      "slug": "giong",
+      "icon": "fa-solid fa-seedling",
+      "color": "#065F46",
+      "description": "Lúa giống, cây giống, con giống đã kiểm dịch",
+      "display_order": 1
+    },
+    {
+      "name": "Phân bón",
+      "slug": "phan-bon",
+      "icon": "fa-solid fa-leaf",
+      "color": "#7F1D1D",
+      "description": "Phân NPK, phân đạm, phân hữu cơ, vôi",
+      "sector": "crop",
+      "display_order": 2
+    },
+    {
+      "name": "Thuốc bảo vệ thực vật",
+      "slug": "thuoc-bvtv",
+      "icon": "fa-solid fa-bug-slash",
+      "color": "#14532D",
+      "description": "Thuốc trừ sâu, trừ bệnh, diệt cỏ",
+      "sector": "crop",
+      "display_order": 3
+    },
+    {
+      "name": "Thức ăn",
+      "slug": "thuc-an",
+      "icon": "fa-solid fa-bowl-food",
+      "color": "#A16207",
+      "description": "Cám heo, cám gà vịt, thức ăn cá, tôm",
+      "display_order": 4
+    },
+    {
+      "name": "Thuốc thú y",
+      "slug": "thuoc-thu-y",
+      "icon": "fa-solid fa-capsules",
+      "color": "#9A3412",
+      "description": "Vắc-xin, thuốc trị bệnh, men tiêu hoá cho vật nuôi",
+      "sector": "livestock",
+      "display_order": 5
+    },
+    {
+      "name": "Nông cụ, máy",
+      "slug": "nong-cu",
+      "icon": "fa-solid fa-tractor",
+      "color": "#1E3A8A",
+      "description": "Bình phun, liềm, cuốc, máy bơm, máy cắt",
+      "display_order": 6
+    }
+  ],
+  "locations": [
+    {
+      "label": "Đồng Tháp — Cai Lậy",
+      "lat": 10.417,
+      "lng": 106.083,
+      "display_order": 1
+    },
+    {
+      "label": "Đồng Tháp — Cái Bè",
+      "lat": 10.333,
+      "lng": 106.033,
+      "display_order": 2
+    },
+    {
+      "label": "Đồng Tháp — Mỹ Tho",
+      "lat": 10.3581,
+      "lng": 106.3642,
+      "display_order": 3
+    },
+    {
+      "label": "Đồng Tháp — Gò Công",
+      "lat": 10.367,
+      "lng": 106.667,
+      "display_order": 4
+    },
+    {
+      "label": "Đồng Tháp — Cao Lãnh",
+      "lat": 10.4672,
+      "lng": 105.6303,
+      "display_order": 5
+    },
+    {
+      "label": "Đồng Tháp — Sa Đéc",
+      "lat": 10.3,
+      "lng": 105.7667,
+      "display_order": 6
+    },
+    {
+      "label": "Đồng Tháp — Hồng Ngự",
+      "lat": 10.833,
+      "lng": 105.283,
+      "display_order": 7
+    },
+    {
+      "label": "An Giang — Long Xuyên",
+      "lat": 10.3736,
+      "lng": 105.4458,
+      "display_order": 8
+    },
+    {
+      "label": "An Giang — Châu Đốc",
+      "lat": 10.7,
+      "lng": 105.133,
+      "display_order": 9
+    },
+    {
+      "label": "An Giang — Rạch Giá",
+      "lat": 9.9847,
+      "lng": 105.0992,
+      "display_order": 10
+    },
+    {
+      "label": "An Giang — Hà Tiên",
+      "lat": 10.3858,
+      "lng": 104.4898,
+      "display_order": 11
+    },
+    {
+      "label": "Cần Thơ — Ninh Kiều",
+      "lat": 10.033,
+      "lng": 105.783,
+      "display_order": 12
+    },
+    {
+      "label": "Cần Thơ — Vị Thanh",
+      "lat": 9.783,
+      "lng": 105.467,
+      "display_order": 13
+    },
+    {
+      "label": "Cần Thơ — Sóc Trăng",
+      "lat": 9.6028,
+      "lng": 105.9736,
+      "display_order": 14
+    },
+    {
+      "label": "Vĩnh Long — Bến Tre",
+      "lat": 10.2308,
+      "lng": 106.3253,
+      "display_order": 15
+    },
+    {
+      "label": "Vĩnh Long — Trà Vinh",
+      "lat": 9.933,
+      "lng": 106.35,
+      "display_order": 16
+    },
+    {
+      "label": "Tây Ninh — Tân An",
+      "lat": 10.5333,
+      "lng": 106.4167,
+      "display_order": 17
+    },
+    {
+      "label": "Cà Mau — An Xuyên",
+      "lat": 9.2239,
+      "lng": 105.1756,
+      "display_order": 18
+    },
+    {
+      "label": "Cà Mau — Bạc Liêu",
+      "lat": 9.283,
+      "lng": 105.717,
+      "display_order": 19
+    },
+    {
+      "label": "TP. Hồ Chí Minh — Sài Gòn",
+      "lat": 10.7756,
+      "lng": 106.7019,
+      "display_order": 20
+    }
+  ],
+  "crops": [
+    {
+      "name": "Lúa IR 50404",
+      "commodity": "Lúa",
+      "unit": "kg",
+      "display_order": 1
+    },
+    {
+      "name": "Lúa OM 5451",
+      "commodity": "Lúa",
+      "unit": "kg",
+      "display_order": 2
+    },
+    {
+      "name": "Lúa OM 18",
+      "commodity": "Lúa",
+      "unit": "kg",
+      "display_order": 3
+    },
+    {
+      "name": "Lúa Đài Thơm 8",
+      "commodity": "Lúa",
+      "unit": "kg",
+      "display_order": 4
+    },
+    {
+      "name": "Lúa ST25",
+      "commodity": "Lúa",
+      "unit": "kg",
+      "display_order": 5
+    },
+    {
+      "name": "Sầu riêng Ri6",
+      "commodity": "Sầu riêng",
+      "unit": "kg",
+      "display_order": 10
+    },
+    {
+      "name": "Sầu riêng Monthong",
+      "commodity": "Sầu riêng",
+      "unit": "kg",
+      "display_order": 11
+    },
+    {
+      "name": "Xoài cát Hòa Lộc",
+      "commodity": "Xoài",
+      "unit": "kg",
+      "display_order": 12
+    },
+    {
+      "name": "Bưởi da xanh",
+      "commodity": "Bưởi",
+      "unit": "kg",
+      "display_order": 13
+    },
+    {
+      "name": "Thanh long ruột đỏ",
+      "commodity": "Thanh long",
+      "unit": "kg",
+      "display_order": 14
+    },
+    {
+      "name": "Chanh không hạt",
+      "commodity": "Chanh",
+      "unit": "kg",
+      "display_order": 15
+    },
+    {
+      "name": "Mít Thái",
+      "commodity": "Mít",
+      "unit": "kg",
+      "display_order": 16
+    },
+    {
+      "name": "Rau muống",
+      "commodity": "Rau màu",
+      "unit": "kg",
+      "display_order": 17
+    },
+    {
+      "name": "Heo hơi",
+      "commodity": "Heo",
+      "unit": "kg",
+      "display_order": 18
+    },
+    {
+      "name": "Bò hơi",
+      "commodity": "Bò",
+      "unit": "kg",
+      "display_order": 19
+    },
+    {
+      "name": "Gà ta",
+      "commodity": "Gà",
+      "unit": "kg",
+      "display_order": 20
+    },
+    {
+      "name": "Trứng gà",
+      "commodity": "Gà",
+      "unit": "quả",
+      "display_order": 21
+    },
+    {
+      "name": "Tôm thẻ 100 con/kg",
+      "commodity": "Tôm",
+      "unit": "kg",
+      "display_order": 22
+    },
+    {
+      "name": "Cá tra",
+      "commodity": "Cá tra",
+      "unit": "kg",
+      "display_order": 23
+    }
+  ],
   "businesses": [
     {
       "name": "Dịch vụ Nguyễn Văn An",
       "phone": "0901234567",
       "description": "Chuyên múc bùn và sửa máy nổ vùng Cai Lậy, kinh nghiệm 10 năm.",
       "address": "Phường Nhị Quý, Đồng Tháp",
-      "lng": 106.075,
       "lat": 10.41,
+      "lng": 106.075,
       "is_verified": true
     },
     {
@@ -15,8 +454,8 @@
       "phone": "0912345678",
       "description": "Phun thuốc bảo vệ thực vật bằng drone, phủ đều toàn ruộng.",
       "address": "Phường Thanh Hòa, Đồng Tháp",
-      "lng": 106.095,
       "lat": 10.42,
+      "lng": 106.095,
       "is_verified": true
     },
     {
@@ -24,29 +463,71 @@
       "phone": "0923456789",
       "description": "Tổng hợp dịch vụ nông nghiệp: múc bùn, phun thuốc, sửa máy.",
       "address": "Phường Mỹ Phước Tây, Đồng Tháp",
-      "lng": 106.07,
       "lat": 10.425,
+      "lng": 106.07,
       "is_verified": false
     },
     {
       "name": "Cơ sở Năm Hùng",
       "phone": "0901111001",
-      "description": "Chuyên kinh doanh gạo ST25 và nông sản đặc sản Mekong.",
+      "description": "Lúa giống xác nhận ST25, OM 18 và cây giống xoài cho bà con Cai Lậy.",
       "address": "12 Lê Lợi, phường Cai Lậy, Đồng Tháp",
+      "lat": 10.414,
+      "lng": 106.087,
       "is_verified": true
     },
     {
       "name": "Vườn Tư Phát",
       "phone": "0901111002",
-      "description": "Vườn sầu riêng Ri6 chuẩn xuất khẩu, bán buôn và lẻ.",
+      "description": "Vườn ươm cây giống sầu riêng Ri6, Monthong ghép mắt, sạch bệnh.",
       "address": "Xã Ngũ Hiệp, Đồng Tháp",
+      "lat": 10.372,
+      "lng": 106.128,
       "is_verified": true
     },
     {
       "name": "Đại lý Phân bón Thành",
       "phone": "0904444001",
       "description": "Đại lý cấp 1 phân bón Bình Điền, NPK, Urea và phân hữu cơ.",
-      "address": "88 Hùng Vương, phường Cai Lậy, Đồng Tháp",
+      "address": "88 Trần Hưng Đạo, phường Long Xuyên, An Giang",
+      "lat": 10.375,
+      "lng": 105.44,
+      "is_verified": false
+    },
+    {
+      "name": "Trung tâm Dịch vụ Nông nghiệp Mỹ Phước Tây",
+      "phone": "0935550101",
+      "description": "Làm hồ sơ mã số vùng trồng và tem truy xuất nguồn gốc cho vườn sầu riêng xuất khẩu.",
+      "address": "Phường Mỹ Phước Tây, Đồng Tháp",
+      "lat": 10.43,
+      "lng": 106.065,
+      "is_verified": true
+    },
+    {
+      "name": "Thú y Bảy Lộc",
+      "phone": "0909300201",
+      "description": "Tiêm phòng, chữa bệnh heo, gà vịt tận nhà vùng Cái Bè; trực 24/7 khi có dịch.",
+      "address": "Xã Cái Bè, Đồng Tháp",
+      "lat": 10.338,
+      "lng": 106.033,
+      "is_verified": true
+    },
+    {
+      "name": "Đại lý thức ăn Tư Hạnh",
+      "phone": "0909300202",
+      "description": "Cám heo, cám gà vịt, thức ăn cá tra; giao tận trại trong ngày.",
+      "address": "Phường Long Xuyên, An Giang",
+      "lat": 10.386,
+      "lng": 105.435,
+      "is_verified": true
+    },
+    {
+      "name": "Trại giống tôm Út Lành",
+      "phone": "0909300203",
+      "description": "Tôm thẻ giống sạch bệnh, sên vét ao trước vụ thả nuôi.",
+      "address": "Phường Bạc Liêu, Cà Mau",
+      "lat": 9.285,
+      "lng": 105.724,
       "is_verified": false
     }
   ],
@@ -92,36 +573,75 @@
       "name": "Sửa máy nông nghiệp",
       "description": "Bảo dưỡng định kỳ và sửa chữa các loại máy nông nghiệp.",
       "price_note": "150.000–500.000 ₫"
+    },
+    {
+      "business": "Trung tâm Dịch vụ Nông nghiệp Mỹ Phước Tây",
+      "category_slug": "giay-to-xuat-khau",
+      "name": "Hồ sơ mã số vùng trồng",
+      "description": "Khảo sát vườn, lập hồ sơ và theo dõi cấp mã số vùng trồng sầu riêng.",
+      "price_note": "Từ 3 triệu đồng/vườn"
+    },
+    {
+      "business": "Trung tâm Dịch vụ Nông nghiệp Mỹ Phước Tây",
+      "category_slug": "giay-to-xuat-khau",
+      "name": "Tem truy xuất nguồn gốc",
+      "description": "Nhật ký canh tác điện tử và tem QR cho từng lô hàng.",
+      "price_note": "Theo số lượng tem"
+    },
+    {
+      "business": "Thú y Bảy Lộc",
+      "category_slug": "thu-y",
+      "name": "Tiêm phòng heo, gà vịt tại nhà",
+      "description": "Tiêm vắc-xin dịch tả, tai xanh, cúm gia cầm; khám heo bệnh.",
+      "price_note": "Từ 15.000 ₫/con, tuỳ loại vắc-xin"
+    },
+    {
+      "business": "Trại giống tôm Út Lành",
+      "category_slug": "muc-bun",
+      "name": "Sên vét ao tôm",
+      "description": "Sên bùn đáy, gia cố bờ, bón vôi trước vụ thả.",
+      "price_note": "Liên hệ, theo diện tích ao"
+    },
+    {
+      "business": "Trại giống tôm Út Lành",
+      "category_slug": "giay-to-xuat-khau",
+      "name": "Làm hồ sơ mã số cơ sở nuôi",
+      "description": "Hướng dẫn hồ sơ, ghi chép nhật ký nuôi để được cấp mã số xuất khẩu.",
+      "price_note": "Trọn gói 1.500.000 ₫"
     }
   ],
   "products": [
     {
       "business": "Cơ sở Năm Hùng",
-      "category_slug": "nong-san",
-      "name": "Gạo ST25",
-      "description": "Gạo ngon nhất thế giới, sản xuất tại Sóc Trăng. Hạt dài, thơm tự nhiên, cơm dẻo.",
-      "price": 28000,
+      "category_slug": "giong",
+      "commodity": "Lúa",
+      "name": "Lúa giống ST25 cấp xác nhận",
+      "description": "Lúa giống ST25 cấp xác nhận, nảy mầm trên 85%, bao 10 kg có tem truy xuất.",
+      "price": 25000,
       "unit": "kg"
     },
     {
       "business": "Vườn Tư Phát",
-      "category_slug": "nong-san",
-      "name": "Sầu riêng Ri6",
-      "description": "Sầu riêng Cai Lậy chín cây, múi vàng, hạt lép, ngọt béo, thu hoạch đúng mùa.",
-      "price": 85000,
-      "unit": "kg"
+      "category_slug": "giong",
+      "commodity": "Sầu riêng",
+      "name": "Cây giống sầu riêng Ri6",
+      "description": "Cây ghép mắt cao 60–80 cm, gốc khoẻ, sạch bệnh, giao tận vườn vùng Cai Lậy.",
+      "price": 70000,
+      "unit": "cây"
     },
     {
       "business": "Cơ sở Năm Hùng",
-      "category_slug": "nong-san",
-      "name": "Xoài cát Hoà Lộc",
-      "description": "Xoài đặc sản Cái Bè, Đồng Tháp, trái lớn, thịt vàng, ít xơ, vị ngọt thanh.",
-      "price": 45000,
-      "unit": "kg"
+      "category_slug": "giong",
+      "commodity": "Xoài",
+      "name": "Cây giống xoài cát Hòa Lộc",
+      "description": "Cây ghép đúng giống xoài cát Hòa Lộc, cao 50–70 cm, bầu đất lớn.",
+      "price": 35000,
+      "unit": "cây"
     },
     {
       "business": "Đại lý Phân bón Thành",
       "category_slug": "thuoc-bvtv",
+      "commodity": "Lúa",
       "name": "Thuốc trừ sâu Actara 25WG",
       "description": "Thiamethoxam 25%, đặc trị rầy nâu và bọ trĩ trên lúa. Gói 100g.",
       "price": 85000,
@@ -130,6 +650,7 @@
     {
       "business": "Đại lý Phân bón Thành",
       "category_slug": "thuoc-bvtv",
+      "commodity": "Lúa",
       "name": "Thuốc diệt cỏ Sofit 300EC",
       "description": "Pretilachlor 300g/L, kiểm soát cỏ dại ruộng lúa gieo sạ. Chai 1L.",
       "price": 120000,
@@ -170,10 +691,998 @@
     {
       "business": "Đại lý Phân bón Thành",
       "category_slug": "nong-cu",
+      "commodity": "Lúa",
       "name": "Liềm cắt lúa thép",
       "description": "Lưỡi thép carbon, cán gỗ chắc, răng cưa sắc bén cho gặt thủ công.",
       "price": 55000,
       "unit": "cái"
+    },
+    {
+      "business": "Đại lý thức ăn Tư Hạnh",
+      "category_slug": "thuc-an",
+      "commodity": "Heo",
+      "name": "Cám heo thịt 25 kg",
+      "description": "Thức ăn hỗn hợp cho heo thịt từ 30 kg đến xuất chuồng.",
+      "price": 385000,
+      "unit": "bao"
+    },
+    {
+      "business": "Đại lý thức ăn Tư Hạnh",
+      "category_slug": "thuc-an",
+      "commodity": "Cá tra",
+      "name": "Thức ăn cá tra 40 đạm",
+      "description": "Thức ăn viên nổi cho cá tra giai đoạn nhỏ.",
+      "price": 17500,
+      "unit": "kg"
+    },
+    {
+      "business": "Thú y Bảy Lộc",
+      "category_slug": "thuoc-thu-y",
+      "commodity": "Heo",
+      "name": "Men tiêu hoá cho heo",
+      "description": "Men vi sinh giúp heo ăn khoẻ, giảm tiêu chảy.",
+      "price": 45000,
+      "unit": "gói"
+    },
+    {
+      "business": "Trại giống tôm Út Lành",
+      "category_slug": "giong",
+      "commodity": "Tôm",
+      "name": "Tôm thẻ giống PL12",
+      "description": "Tôm thẻ chân trắng giống sạch bệnh, đã kiểm dịch.",
+      "price": 120,
+      "unit": "con"
+    }
+  ],
+  "calls": [
+    {
+      "business": "Dịch vụ Nguyễn Văn An",
+      "service": "Múc bùn kênh mương",
+      "channel": "call",
+      "weekly": [
+        6,
+        7,
+        6,
+        8,
+        7,
+        9,
+        8,
+        10
+      ]
+    },
+    {
+      "business": "Dịch vụ Nguyễn Văn An",
+      "service": "Sửa máy nổ, máy bơm",
+      "channel": "zalo",
+      "weekly": [
+        2,
+        1,
+        3,
+        2,
+        2,
+        3,
+        2,
+        3
+      ]
+    },
+    {
+      "business": "Dịch vụ Trần Thị Bình",
+      "service": "Phun thuốc bằng drone",
+      "channel": "call",
+      "weekly": [
+        8,
+        9,
+        10,
+        9,
+        11,
+        12,
+        11,
+        13
+      ]
+    },
+    {
+      "business": "Dịch vụ Trần Thị Bình",
+      "service": "Phun thuốc bằng drone",
+      "channel": "zalo",
+      "weekly": [
+        3,
+        3,
+        4,
+        3,
+        4,
+        5,
+        4,
+        5
+      ]
+    },
+    {
+      "business": "Cơ sở Lê Văn Cường",
+      "channel": "call",
+      "weekly": [
+        1,
+        2,
+        1,
+        1,
+        2,
+        1,
+        2,
+        1
+      ]
+    },
+    {
+      "business": "Cơ sở Năm Hùng",
+      "product": "Lúa giống ST25 cấp xác nhận",
+      "channel": "call",
+      "weekly": [
+        2,
+        3,
+        2,
+        3,
+        2,
+        3,
+        3,
+        4
+      ]
+    },
+    {
+      "business": "Vườn Tư Phát",
+      "product": "Cây giống sầu riêng Ri6",
+      "channel": "call",
+      "weekly": [
+        1,
+        1,
+        2,
+        1,
+        2,
+        2,
+        3,
+        3
+      ]
+    },
+    {
+      "business": "Trung tâm Dịch vụ Nông nghiệp Mỹ Phước Tây",
+      "service": "Hồ sơ mã số vùng trồng",
+      "channel": "zalo",
+      "weekly": [
+        0,
+        1,
+        0,
+        1,
+        1,
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "business": "Đại lý Phân bón Thành",
+      "product": "Phân NPK 16-16-8 Bình Điền",
+      "channel": "call",
+      "weekly": [
+        3,
+        4,
+        3,
+        5,
+        4,
+        6,
+        5,
+        6
+      ]
+    },
+    {
+      "business": "Đại lý Phân bón Thành",
+      "product": "Thuốc trừ sâu Actara 25WG",
+      "channel": "call",
+      "weekly": [
+        1,
+        2,
+        1,
+        2,
+        2,
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "business": "Thú y Bảy Lộc",
+      "service": "Tiêm phòng heo, gà vịt tại nhà",
+      "channel": "call",
+      "weekly": [
+        5,
+        6,
+        6,
+        7,
+        6,
+        8,
+        7,
+        9
+      ]
+    },
+    {
+      "business": "Trại giống tôm Út Lành",
+      "service": "Sên vét ao tôm",
+      "channel": "zalo",
+      "weekly": [
+        2,
+        3,
+        2,
+        4,
+        3,
+        4,
+        5,
+        5
+      ]
+    }
+  ],
+  "inquiries": [
+    {
+      "business": "Dịch vụ Trần Thị Bình",
+      "service": "Phun thuốc bằng drone",
+      "topic": "Phun thuốc bằng drone",
+      "name": "Út Hiền",
+      "phone": "0987100001",
+      "note": "3 công lúa, phun rầy nâu tuần này.",
+      "status": "closed",
+      "days_ago": 48
+    },
+    {
+      "business": "Dịch vụ Trần Thị Bình",
+      "service": "Phun thuốc bằng drone",
+      "topic": "Phun thuốc bằng drone",
+      "name": "Bảy Lợi",
+      "phone": "0987100002",
+      "note": "Vườn sầu riêng 1 ha, phun dưỡng bông.",
+      "status": "contacted",
+      "days_ago": 33
+    },
+    {
+      "business": "Dịch vụ Trần Thị Bình",
+      "service": "Phun thuốc bằng drone",
+      "topic": "Phun thuốc bằng drone",
+      "name": "Út Hiền",
+      "phone": "0987100001",
+      "note": "Vụ sau phun tiếp 3 công.",
+      "status": "contacted",
+      "days_ago": 12
+    },
+    {
+      "business": "Dịch vụ Trần Thị Bình",
+      "service": "Phun thuốc bằng drone",
+      "topic": "Phun thuốc bằng drone",
+      "name": "Hai Tâm",
+      "phone": "0987100003",
+      "note": "Hỏi giá phun 5 công.",
+      "status": "new",
+      "days_ago": 2
+    },
+    {
+      "business": "Dịch vụ Nguyễn Văn An",
+      "service": "Múc bùn kênh mương",
+      "topic": "Múc bùn kênh mương",
+      "name": "Tư Sang",
+      "phone": "0987100004",
+      "note": "Mương 200 m sau nhà.",
+      "status": "closed",
+      "days_ago": 40
+    },
+    {
+      "business": "Dịch vụ Nguyễn Văn An",
+      "service": "Múc bùn kênh mương",
+      "topic": "Múc bùn kênh mương",
+      "name": "Năm Đời",
+      "phone": "0987100005",
+      "note": "Nạo vét ao cá.",
+      "status": "contacted",
+      "days_ago": 19
+    },
+    {
+      "business": "Dịch vụ Nguyễn Văn An",
+      "service": "Sửa máy nổ, máy bơm",
+      "topic": "Sửa máy nổ, máy bơm",
+      "name": "Ba Khánh",
+      "phone": "0987100006",
+      "note": "Máy bơm không lên nước.",
+      "status": "new",
+      "days_ago": 5
+    },
+    {
+      "business": "Dịch vụ Nguyễn Văn An",
+      "topic": "Hỏi giá",
+      "name": "Khách lạ",
+      "phone": "0987100099",
+      "note": "Quảng cáo vay tiền.",
+      "status": "spam",
+      "days_ago": 9
+    },
+    {
+      "business": "Cơ sở Lê Văn Cường",
+      "service": "Phun thuốc thủ công",
+      "topic": "Phun thuốc thủ công",
+      "name": "Sáu Nhỏ",
+      "phone": "0987100007",
+      "note": "2 công rau màu.",
+      "status": "contacted",
+      "days_ago": 26
+    },
+    {
+      "business": "Cơ sở Năm Hùng",
+      "product": "Lúa giống ST25 cấp xác nhận",
+      "topic": "Lúa giống ST25 cấp xác nhận",
+      "name": "Chị Lan",
+      "phone": "0987100008",
+      "note": "Lấy 20 kg giống, giao Mỹ Tho.",
+      "status": "closed",
+      "days_ago": 22
+    },
+    {
+      "business": "Đại lý Phân bón Thành",
+      "product": "Phân NPK 16-16-8 Bình Điền",
+      "topic": "Phân NPK 16-16-8 Bình Điền",
+      "name": "Chín Quý",
+      "phone": "0987100009",
+      "note": "10 bao NPK, giao tận ruộng.",
+      "status": "closed",
+      "days_ago": 30
+    },
+    {
+      "business": "Đại lý Phân bón Thành",
+      "product": "Phân Urea 46%",
+      "topic": "Phân Urea 46%",
+      "name": "Mười Thắng",
+      "phone": "0987100010",
+      "note": "Giá sỉ 20 bao?",
+      "status": "new",
+      "days_ago": 4
+    },
+    {
+      "business": "Trung tâm Dịch vụ Nông nghiệp Mỹ Phước Tây",
+      "service": "Hồ sơ mã số vùng trồng",
+      "topic": "Hồ sơ mã số vùng trồng",
+      "name": "Bảy Lợi",
+      "phone": "0987100002",
+      "note": "Vườn 1 ha cần mã số trước vụ.",
+      "status": "contacted",
+      "days_ago": 15
+    }
+  ],
+  "reviews": [
+    {
+      "business": "Dịch vụ Trần Thị Bình",
+      "phone": "0987100001",
+      "name": "Út Hiền",
+      "rating": 5,
+      "comment": "Phun đều, đúng giờ, giá hợp lý.",
+      "reply": "Cảm ơn chú Út, vụ sau em phun tiếp.",
+      "visible": true,
+      "days_ago": 45
+    },
+    {
+      "business": "Dịch vụ Trần Thị Bình",
+      "phone": "0987100002",
+      "name": "Bảy Lợi",
+      "rating": 4,
+      "comment": "Drone phun nhanh, hơi trễ hẹn một chút.",
+      "visible": true,
+      "days_ago": 30
+    },
+    {
+      "business": "Dịch vụ Nguyễn Văn An",
+      "phone": "0987100004",
+      "name": "Tư Sang",
+      "rating": 5,
+      "comment": "Múc sạch, dọn gọn.",
+      "visible": true,
+      "days_ago": 37
+    },
+    {
+      "business": "Dịch vụ Nguyễn Văn An",
+      "phone": "0987100005",
+      "name": "Năm Đời",
+      "rating": 3,
+      "comment": "Làm được nhưng giá hơi cao.",
+      "visible": false,
+      "days_ago": 16
+    },
+    {
+      "business": "Đại lý Phân bón Thành",
+      "phone": "0987100009",
+      "name": "Chín Quý",
+      "rating": 4,
+      "comment": "Phân đúng loại, giao tận nơi.",
+      "reply": "Cảm ơn anh, có hàng mới em báo.",
+      "visible": true,
+      "days_ago": 27
+    }
+  ],
+  "searches": [
+    {
+      "query": "phun thuoc drone",
+      "category_slug": "phun-thuoc",
+      "location": "Đồng Tháp — Cai Lậy",
+      "results": 2,
+      "weekly": [
+        3,
+        4,
+        3,
+        5,
+        4,
+        6,
+        5,
+        6
+      ]
+    },
+    {
+      "query": "muc bun",
+      "category_slug": "muc-bun",
+      "location": "Đồng Tháp — Cai Lậy",
+      "results": 2,
+      "weekly": [
+        2,
+        2,
+        3,
+        2,
+        3,
+        3,
+        2,
+        4
+      ]
+    },
+    {
+      "query": "may cay",
+      "location": "Đồng Tháp — Cai Lậy",
+      "results": 0,
+      "weekly": [
+        1,
+        1,
+        2,
+        1,
+        1,
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "query": "thue may gat",
+      "location": "Đồng Tháp — Cái Bè",
+      "results": 0,
+      "weekly": [
+        0,
+        1,
+        1,
+        0,
+        1,
+        1,
+        2,
+        1
+      ]
+    },
+    {
+      "query": "ma so vung trong",
+      "category_slug": "giay-to-xuat-khau",
+      "location": "Đồng Tháp — Cai Lậy",
+      "results": 1,
+      "weekly": [
+        1,
+        0,
+        1,
+        1,
+        1,
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "query": "phan bon",
+      "category_slug": "phan-bon",
+      "location": "An Giang — Long Xuyên",
+      "results": 1,
+      "weekly": [
+        2,
+        2,
+        1,
+        3,
+        2,
+        3,
+        2,
+        3
+      ]
+    },
+    {
+      "query": "thu y heo",
+      "category_slug": "thu-y",
+      "location": "Đồng Tháp — Cái Bè",
+      "results": 1,
+      "weekly": [
+        2,
+        3,
+        3,
+        4,
+        3,
+        5,
+        4,
+        5
+      ]
+    },
+    {
+      "query": "ca tra giong",
+      "category_slug": null,
+      "location": "An Giang — Long Xuyên",
+      "results": 0,
+      "weekly": [
+        1,
+        2,
+        2,
+        3,
+        2,
+        3,
+        3,
+        4
+      ]
+    }
+  ],
+  "prices": [
+    {
+      "crop": "Lúa OM 18",
+      "location": "Đồng Tháp — Cai Lậy",
+      "points": [
+        [
+          1,
+          7200,
+          7400
+        ],
+        [
+          8,
+          7000,
+          7200
+        ],
+        [
+          15,
+          6900,
+          7100
+        ]
+      ]
+    },
+    {
+      "crop": "Lúa ST25",
+      "location": "Đồng Tháp — Cai Lậy",
+      "points": [
+        [
+          2,
+          9000,
+          9500
+        ],
+        [
+          9,
+          9200,
+          9600
+        ]
+      ]
+    },
+    {
+      "crop": "Lúa IR 50404",
+      "location": "An Giang — Long Xuyên",
+      "points": [
+        [
+          1,
+          6300,
+          6500
+        ],
+        [
+          8,
+          6400,
+          6600
+        ]
+      ]
+    },
+    {
+      "crop": "Lúa OM 5451",
+      "location": "An Giang — Châu Đốc",
+      "points": [
+        [
+          3,
+          6800,
+          7000
+        ]
+      ]
+    },
+    {
+      "crop": "Sầu riêng Ri6",
+      "location": "Đồng Tháp — Cai Lậy",
+      "points": [
+        [
+          1,
+          62000,
+          68000
+        ],
+        [
+          6,
+          58000,
+          65000
+        ],
+        [
+          13,
+          55000,
+          60000
+        ]
+      ]
+    },
+    {
+      "crop": "Sầu riêng Monthong",
+      "location": "Đồng Tháp — Cái Bè",
+      "points": [
+        [
+          2,
+          85000,
+          92000
+        ],
+        [
+          9,
+          88000,
+          95000
+        ]
+      ]
+    },
+    {
+      "crop": "Xoài cát Hòa Lộc",
+      "location": "Đồng Tháp — Cao Lãnh",
+      "points": [
+        [
+          4,
+          38000,
+          45000
+        ]
+      ]
+    },
+    {
+      "crop": "Bưởi da xanh",
+      "location": "Vĩnh Long — Bến Tre",
+      "points": [
+        [
+          5,
+          32000,
+          38000
+        ],
+        [
+          12,
+          30000,
+          36000
+        ]
+      ]
+    },
+    {
+      "crop": "Thanh long ruột đỏ",
+      "location": "Đồng Tháp — Mỹ Tho",
+      "points": [
+        [
+          20,
+          14000,
+          18000
+        ]
+      ]
+    },
+    {
+      "crop": "Rau muống",
+      "location": "Cần Thơ — Ninh Kiều",
+      "points": [
+        [
+          1,
+          6000,
+          8000
+        ],
+        [
+          8,
+          7000,
+          9000
+        ]
+      ]
+    },
+    {
+      "crop": "Heo hơi",
+      "location": "Đồng Tháp — Cao Lãnh",
+      "points": [
+        [
+          1,
+          61000,
+          63000
+        ],
+        [
+          8,
+          60000,
+          62000
+        ],
+        [
+          15,
+          59000,
+          61000
+        ]
+      ]
+    },
+    {
+      "crop": "Bò hơi",
+      "location": "An Giang — Châu Đốc",
+      "points": [
+        [
+          2,
+          82000,
+          86000
+        ],
+        [
+          9,
+          82000,
+          85000
+        ]
+      ]
+    },
+    {
+      "crop": "Gà ta",
+      "location": "Đồng Tháp — Cai Lậy",
+      "points": [
+        [
+          1,
+          75000,
+          80000
+        ],
+        [
+          8,
+          76000,
+          80000
+        ]
+      ]
+    },
+    {
+      "crop": "Trứng gà",
+      "location": "Cần Thơ — Ninh Kiều",
+      "points": [
+        [
+          1,
+          2400,
+          2700
+        ],
+        [
+          8,
+          2500,
+          2800
+        ]
+      ]
+    },
+    {
+      "crop": "Tôm thẻ 100 con/kg",
+      "location": "Cà Mau — Bạc Liêu",
+      "points": [
+        [
+          1,
+          98000,
+          102000
+        ],
+        [
+          8,
+          95000,
+          99000
+        ]
+      ]
+    },
+    {
+      "crop": "Cá tra",
+      "location": "An Giang — Long Xuyên",
+      "points": [
+        [
+          1,
+          27000,
+          28500
+        ],
+        [
+          8,
+          27500,
+          28500
+        ]
+      ]
+    }
+  ],
+  "jobs": [
+    {
+      "category_slug": "phun-thuoc",
+      "location": "Đồng Tháp — Cai Lậy",
+      "days_ago": 1,
+      "description": "Phun thuốc rầy 4 công lúa, cần làm trong tuần.",
+      "name": "Sáu Phước",
+      "phone": "0987200001",
+      "status": "open"
+    },
+    {
+      "category_slug": "muc-bun",
+      "location": "Đồng Tháp — Cai Lậy",
+      "days_ago": 3,
+      "description": "Nạo vét mương vườn sầu riêng khoảng 150 m.",
+      "name": "Tám Hòa",
+      "phone": "0987200002",
+      "status": "open"
+    },
+    {
+      "category_slug": "sua-may-no",
+      "location": "Đồng Tháp — Cái Bè",
+      "days_ago": 2,
+      "description": "Máy nổ D8 khó nổ, cần thợ tới vườn.",
+      "name": "Chín Hên",
+      "phone": "0987200003",
+      "status": "open"
+    },
+    {
+      "category_slug": "phun-thuoc",
+      "location": "Đồng Tháp — Cai Lậy",
+      "days_ago": 12,
+      "description": "Phun dưỡng bông sầu riêng 2 ha.",
+      "name": "Hai Đức",
+      "phone": "0987200004",
+      "status": "closed"
+    },
+    {
+      "category_slug": "muc-bun",
+      "location": "An Giang — Long Xuyên",
+      "days_ago": 4,
+      "description": "Bán sim số đẹp liên hệ ngay.",
+      "name": "Quảng cáo",
+      "phone": "0987200099",
+      "status": "spam"
+    },
+    {
+      "category_slug": "thu-y",
+      "location": "Đồng Tháp — Cái Bè",
+      "days_ago": 1,
+      "description": "Tiêm phòng tai xanh 30 con heo thịt, cần trong tuần.",
+      "name": "Hai Thành",
+      "phone": "0987200101",
+      "status": "open"
+    },
+    {
+      "category_slug": "muc-bun",
+      "location": "Cà Mau — Bạc Liêu",
+      "days_ago": 2,
+      "description": "Sên vét 2 ao tôm 3.000 m², chuẩn bị thả vụ mới.",
+      "name": "Ba Hùng",
+      "phone": "0987200102",
+      "status": "open"
+    }
+  ],
+  "partners": [
+    {
+      "name": "Drone Nông nghiệp Miền Tây",
+      "kind": "dealer",
+      "contact_name": "Anh Khoa",
+      "phone": "0903900101",
+      "email": "khoa@drone-mientay.example",
+      "contracts": [
+        {
+          "area": {
+            "province_of": "Dịch vụ Trần Thị Bình"
+          },
+          "categories": [
+            "phun-thuoc"
+          ],
+          "starts_in_days": -60,
+          "ends_in_days": 305,
+          "monthly_fee": 5000000,
+          "note": "Tài trợ đội phun drone đã mua máy.",
+          "sponsored": [
+            "Dịch vụ Trần Thị Bình"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Phân bón Bình Điền",
+      "kind": "brand",
+      "contact_name": "Chị Ngọc",
+      "phone": "0903900202",
+      "email": "ngoc@binhdien.example",
+      "contracts": [
+        {
+          "area": {
+            "province_of": "Đại lý Phân bón Thành"
+          },
+          "categories": [
+            "phan-bon",
+            "thuoc-bvtv"
+          ],
+          "starts_in_days": -30,
+          "ends_in_days": 335,
+          "monthly_fee": 8000000,
+          "note": "Báo cáo nhu cầu phân bón An Giang.",
+          "sponsored": [
+            "Đại lý Phân bón Thành"
+          ]
+        },
+        {
+          "area": {
+            "province_of": "Dịch vụ Nguyễn Văn An"
+          },
+          "categories": [
+            "phan-bon"
+          ],
+          "starts_in_days": -120,
+          "ends_in_days": -10,
+          "monthly_fee": 6000000,
+          "note": "Hợp đồng thử đã hết hạn.",
+          "sponsored": []
+        }
+      ]
+    },
+    {
+      "name": "HTX Sầu riêng Ngũ Hiệp",
+      "kind": "cooperative",
+      "contact_name": "Chú Sáu",
+      "phone": "0903900303",
+      "email": "htx@saurieng.example",
+      "contracts": [
+        {
+          "area": {
+            "ward_of": "Trung tâm Dịch vụ Nông nghiệp Mỹ Phước Tây"
+          },
+          "categories": [
+            "giay-to-xuat-khau"
+          ],
+          "starts_in_days": -45,
+          "ends_in_days": 320,
+          "monthly_fee": 2000000,
+          "note": "Danh bạ dịch vụ xuất khẩu cho xã viên.",
+          "sponsored": [
+            "Trung tâm Dịch vụ Nông nghiệp Mỹ Phước Tây"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Xuất khẩu Trái cây Mekong",
+      "kind": "exporter",
+      "contact_name": "Anh Phúc",
+      "phone": "0903900404",
+      "email": "phuc@mekongfruit.example",
+      "contracts": [
+        {
+          "area": {
+            "province_of": "Vườn Tư Phát"
+          },
+          "categories": [
+            "xet-nghiem"
+          ],
+          "starts_in_days": 15,
+          "ends_in_days": 380,
+          "monthly_fee": 4000000,
+          "note": "Bắt đầu từ vụ sau.",
+          "sponsored": []
+        }
+      ]
+    }
+  ],
+  "alerts": [
+    {
+      "kind": "disease",
+      "sector": "livestock",
+      "province_of": "Thú y Bảy Lộc",
+      "title": "Dịch tả heo châu Phi tại Đồng Tháp",
+      "body": "Không mua heo không rõ nguồn gốc, không cho heo ăn thức ăn thừa chưa nấu chín. Thấy heo sốt, bỏ ăn thì báo ngay thú y xã.",
+      "starts_in_days": -3,
+      "ends_in_days": 25
+    },
+    {
+      "kind": "salinity",
+      "sector": "crop",
+      "province_of": null,
+      "title": "Mặn lên sâu các cửa sông",
+      "body": "Lấy nước tưới lúc triều thấp, đo độ mặn trước khi bơm vào ruộng, vườn; trữ nước ngọt cho sầu riêng, bưởi.",
+      "starts_in_days": -1,
+      "ends_in_days": 14
+    },
+    {
+      "kind": "weather",
+      "sector": "aquatic",
+      "province_of": "Trại giống tôm Út Lành",
+      "title": "Nắng nóng, ao tôm dễ thiếu oxy",
+      "body": "Chạy quạt nước ban đêm và sáng sớm, giảm cho ăn khi trời oi, giữ mực nước ao trên 1,2 m.",
+      "starts_in_days": 0,
+      "ends_in_days": 7
     }
   ]
 }

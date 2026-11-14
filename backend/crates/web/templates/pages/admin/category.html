@@ -15,7 +15,8 @@
 {% set c = b.category %}
 {% set kind = t(key="admin.product_category") %}{% if c.category_type == "service" %}{% set kind = t(key="admin.service_category") %}{% endif %}
 {% set icon = "fa-tags" %}{% if c.icon %}{% set icon = c.icon %}{% endif %}
-{{ header::admin_header(title=c.name, icon=icon, sub=kind, back_href=url_for(name="admin_categories"), back_label=t(key="admin_menu.categories")) }}
+{% set listings = t(key="admin.category_supplies") %}{% if c.category_type == "service" %}{% set listings = t(key="admin.category_services") %}{% endif %}
+{{ header::admin_header(title=c.name, icon=icon, sub=kind, back_href=b.list_href, back_label=t(key="admin_menu.categories"), action_href=b.listings_href, action_icon="fa-list", action_label=listings, action_class="btn-outline-secondary") }}
 <div class="admin-body" x-data="dialog" data-open="{% if b.confirm_open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
   {% if b.flash == "category_created" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.category_created")) }}{% endif %}
   {% if b.flash == "category_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.saved")) }}{% endif %}
@@ -26,7 +27,7 @@
   <section class="admin-section" aria-labelledby="edit-title">
     <h2 class="admin-section__title" id="edit-title">{{ t(key="admin.info") }}</h2>
     <form class="form-stack" method="post" action="{{ b.update_action }}" novalidate>
-      {{ fields::category_fields(form=b.form, errors=b.errors, limits=b.limits, prefix="edit", category_id=b.category.id) }}
+      {{ fields::category_fields(form=b.form, errors=b.errors, limits=b.limits, sectors=b.sectors, prefix="edit", category_id=b.category.id) }}
       <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button></div>
     </form>
     <p class="small text-muted">{{ t(key="admin.created_label") }} <time datetime="{{ c.created_on | utc_iso }}">{{ c.created_on | vn_datetime }}</time>{% if c.created_by_name %} · {{ c.created_by_name }}{% endif %} — {{ t(key="admin.col_updated") }} <time datetime="{{ c.updated_on | utc_iso }}">{{ c.updated_on | vn_datetime }}</time>{% if c.updated_by_name %} · {{ c.updated_by_name }}{% endif %}</p>
@@ -34,7 +35,7 @@
 
   <section class="admin-section" aria-labelledby="status-title">
     <h2 class="admin-section__title" id="status-title">{{ t(key="admin.visibility") }}</h2>
-    <p class="admin-status">{{ status::visibility(on=c.is_active) }}<span>{% if c.is_active %}{{ t(key="admin.category_on") }}{% else %}{{ t(key="admin.category_off") }}{% endif %}</span></p>
+    <p class="admin-status">{{ status::visibility(on=c.is_active) }}{% if c.is_demo %}{{ status::demo() }}{% endif %}<span>{% if c.is_active %}{{ t(key="admin.category_on") }}{% else %}{{ t(key="admin.category_off") }}{% endif %}</span></p>
     <div class="admin-actions">
       {% if c.is_active %}
       <a class="btn btn-outline-warning" href="#an-danh-muc" x-on:click.prevent="show">{{ atoms::icon(name="fa-eye-slash") }} {{ t(key="admin.hide_category") }}</a>
@@ -48,7 +49,8 @@
   </section>
 
   {% if c.is_active %}
-  {{ confirm::confirm_sheet(id="an-danh-muc", title=t(key="admin.hide_category_title", name=c.name), icon="fa-eye-slash", action=b.status_action, button=t(key="admin.confirm_hide"), reason_max=limits.audit_reason_max, note=t(key="admin.hide_category_note"), hidden_name="is_active", hidden_value="false") }}
+  {% set hide_note = t(key="admin.hide_category_note") %}
+  {{ confirm::confirm_sheet(id="an-danh-muc", title=t(key="admin.hide_category_title", name=c.name), icon="fa-eye-slash", action=b.status_action, button=t(key="admin.confirm_hide"), reason_max=limits.audit_reason_max, note=hide_note, hidden_name="is_active", hidden_value="false") }}
   {% endif %}
 </div>
 {% endblock content %}

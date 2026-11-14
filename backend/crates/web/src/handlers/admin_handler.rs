@@ -221,6 +221,7 @@ impl AdminHandler {
                     color: req.color,
                     description: req.description,
                     display_order: req.display_order,
+                    sector: req.sector,
                 },
             )
             .await?;
@@ -248,6 +249,7 @@ impl AdminHandler {
                     color: req.color,
                     description: req.description,
                     display_order: req.display_order,
+                    sector: req.sector,
                 },
             )
             .await?;
@@ -449,8 +451,11 @@ impl AdminHandler {
             .list_products_admin(
                 &actor,
                 q.page.unwrap_or(1),
-                q.provider_id,
-                q.name.as_deref(),
+                &domain::models::product::AdminProductFilter {
+                    provider_id: q.provider_id,
+                    search: q.name,
+                    ..Default::default()
+                },
             )
             .await?;
         Ok(Json(result))
@@ -483,6 +488,7 @@ impl AdminHandler {
                 UpdateProductInput {
                     product_id: id,
                     category_id: req.category_id,
+                    commodity_id: req.commodity_id,
                     name: req.name,
                     description: req.description,
                     price: req.price,

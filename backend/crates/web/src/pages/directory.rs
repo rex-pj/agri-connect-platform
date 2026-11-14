@@ -13,7 +13,7 @@ use crate::{
     extract::ApiQuery,
     pages::{
         cards::{rated_providers, ProviderCard},
-        listing::{past_the_end, FilterForm, Pagination},
+        listing::{past_the_end, FilterForm, Pagination, SectorLink},
         search::TabLink,
         services::{
             borrowed, near_me_href, near_me_sub, url, view_tabs, ListQuery, ListState,
@@ -27,6 +27,8 @@ use crate::{
 #[derive(Serialize)]
 pub struct DirectoryPage {
     pub filters: FilterForm,
+    /// A typed search's sector links, in place of the visitor's switch.
+    pub sectors: Vec<SectorLink>,
     pub providers: Vec<ProviderCard>,
     pub total: i64,
     pub pagination: Option<Pagination>,
@@ -48,8 +50,10 @@ pub async fn list(
 ) -> Result<Response, Error> {
     let explore = &state.usecases.explore;
     let categories = explore.get_categories(Some(CATEGORY_TYPE_SERVICE)).await?;
-    let list = ListState::parse(&q, &categories);
-    let result = explore.browse_providers(list.params()).await?;
+    let list = ListState::parse(&q, &categories, &shell.sectors);
+    let result = explore
+        .browse_providers(list.params(shell.sector.as_deref()))
+        .await?;
     if let Some(search) = list.search(result.total, visitor(&shell, ip.as_ref().map(|e| &e.0))) {
         state.usecases.demand.record_search(search);
     }
@@ -62,6 +66,7 @@ pub async fn list(
     let page = DirectoryPage {
         pagination: Pagination::new(&path, &borrowed(&kept), result.page, result.total_pages),
         filtered: list.filtered(),
+        sectors: list.sector_links(&shell.sectors, &path),
         filters: list.form(
             state.locale(),
             &path,

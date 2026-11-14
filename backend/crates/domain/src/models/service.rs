@@ -8,6 +8,8 @@ pub struct AdminService {
     pub price_note: Option<String>,
     pub category: String,
     pub category_id: i32,
+    /// Its type's sector; `None`: every sector.
+    pub sector: Option<String>,
     pub business_id: i32,
     pub business_name: String,
     pub is_active: bool,
@@ -96,6 +98,8 @@ pub struct PublicService {
 #[derive(Debug, Clone, Default)]
 pub struct PublicServiceFilter {
     pub category_id: Option<i32>,
+    /// Only categories of this sector, and those of every sector.
+    pub sector: Option<String>,
     /// Matched against the service's name and description and the
     /// business's name, ignoring case and diacritics.
     pub text: Option<String>,

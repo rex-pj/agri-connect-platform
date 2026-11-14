@@ -132,7 +132,7 @@ async fn a_partner_pays_for_an_area_reads_its_report_and_sponsors_a_shop() {
     assert!(res.status().is_client_error());
     let html = body_text(res).await;
     assert!(html.contains("Ngày kết thúc phải sau hoặc bằng ngày bắt đầu."));
-    assert!(html.contains("Chọn ít nhất một danh mục."));
+    assert!(html.contains("Chọn ít nhất một loại dịch vụ hoặc vật tư."));
     let category_box = format!("cat.{category}");
     let res = send(
         &e.router,
@@ -243,6 +243,20 @@ async fn a_partner_pays_for_an_area_reads_its_report_and_sponsors_a_shop() {
     assert!(own.contains("Dai ly Drone"));
     assert!(!own.contains("bottom-nav"), "its own frame: no farmer tabs");
     assert!(own.contains("Đồng Tháp — Xã Bình Phú"));
+    assert!(
+        own.contains(r#"href="/account""#),
+        "the account menu leads to the password change"
+    );
+    let profile = body_text(send(&e.router, get_page("/account", Some(&partner))).await).await;
+    assert!(profile.contains(r#"id="security""#));
+    assert!(
+        !profile.contains("bottom-nav"),
+        "the profile stays in the partner frame"
+    );
+    assert!(
+        profile.contains(r#"href="/partner""#),
+        "the way back to the report"
+    );
     assert!(!own.contains("Long Xuyên"), "only the areas it pays for");
     let res = send(&e.router, get_page("/admin/demand", Some(&partner))).await;
     assert_eq!(res.status(), StatusCode::FORBIDDEN);

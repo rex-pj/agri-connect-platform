@@ -20,12 +20,15 @@ use crate::{
     app_state::AppState,
     cookies::{Flash, TakeFlash},
     extract::{ApiForm, ApiPath, ApiQuery},
+    labels::sector_label,
     middleware::auth::Viewer,
+    pages::admin::sector_href,
     pages::{
         admin::{
             is_refusal, render_admin, url, Asked, ListPosition, ListReturn, Outcome,
             ProviderFilter, RowConfirm, SearchBox, BACK_TO_LIST,
         },
+        canonical_url,
         forms::{reason, FormErrors},
         listing::Pagination,
         parse_id, see_other,
@@ -50,6 +53,11 @@ pub struct ServiceRow {
     pub service: AdminServiceDto,
     pub href: String,
     pub provider_href: String,
+    /// Its type's sector's name, "every sector" for none.
+    pub sector_label: String,
+    pub sector_href: Option<String>,
+    /// Its service type's admin page.
+    pub category_href: String,
     pub hide_href: String,
     pub delete_href: String,
     pub status_action: String,
@@ -108,6 +116,7 @@ async fn list_page(
     };
     let mut confirm = None;
     let mut rows = Vec::with_capacity(items.len());
+    let sectors = state.usecases.sector.named().await?;
     for service in items {
         let id = service.id.to_string();
         let status_action = url("admin_service_status", &[("id", &id)])?;
@@ -127,6 +136,12 @@ async fn list_page(
         }
         rows.push(ServiceRow {
             href: url("admin_service", &[("id", &id)])?,
+            sector_label: sector_label(state, &sectors, service.sector.as_deref()),
+            sector_href: sector_href(&sectors, service.sector.as_deref())?,
+            category_href: url(
+                "admin_category",
+                &[("id", &service.category_id.to_string())],
+            )?,
             hide_href: position.href("admin_services", &[("hide", &id)])?,
             delete_href: position.href("admin_services", &[("delete", &id)])?,
             status_action,
@@ -188,6 +203,7 @@ pub async fn list(
         page: q.page,
         provider_id: q.provider_id,
         q: q.q,
+        ..ListPosition::default()
     };
     let asked = Asked::new(&q.hide, &q.delete);
     let mut response = list_page(
@@ -277,6 +293,8 @@ pub struct ServicePage {
     pub status_action: String,
     pub delete_action: String,
     pub provider_href: String,
+    /// Its public page, while it is shown (like a product's).
+    pub public_href: Option<String>,
     /// The provider's services, where a deletion lands.
     pub provider_services_href: String,
     pub flash: Option<Flash>,
@@ -308,6 +326,10 @@ async fn service_page(
         status_action: url("admin_service_status", &[("id", &id_text)])?,
         delete_action: url("admin_service_delete", &[("id", &id_text)])?,
         provider_href: url("admin_provider", &[("id", &business)])?,
+        public_href: service
+            .is_active
+            .then(|| canonical_url("service", service.id, &service.name))
+            .transpose()?,
         provider_services_href: ListPosition {
             provider_id: business,
             ..ListPosition::default()
@@ -426,6 +448,7 @@ pub async fn change_status(
             page: form.page,
             provider_id: form.provider_id,
             q: form.q,
+            ..ListPosition::default()
         }
         .back_to("admin_services", flash);
     }
@@ -466,6 +489,7 @@ pub async fn delete(
             page: form.page,
             provider_id: form.provider_id,
             q: form.q,
+            ..ListPosition::default()
         }
     } else {
         ListPosition {

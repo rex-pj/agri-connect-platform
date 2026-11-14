@@ -10,7 +10,7 @@ use crate::{
     extract::{ApiJson, ApiPath, ApiQuery},
     middleware::auth::MaybeActor,
     requests::{
-        AdminPageQuery, CropRequest, DeleteWithReasonBody, PriceBoardQuery, PriceRequest,
+        AdminPricesQuery, CropRequest, DeleteWithReasonBody, PriceBoardQuery, PriceRequest,
         ToggleActiveRequest,
     },
 };
@@ -18,13 +18,24 @@ use crate::{
 pub struct PriceHandler;
 
 impl PriceHandler {
-    /// GET /api/explore/prices — `location_id?`: each crop's latest fresh
-    /// price per area, with the areas that have one.
+    /// GET /api/explore/prices — `location_id?`, `sector?`: each crop's latest
+    /// fresh price per area, by commodity, with the areas that have one.
     pub async fn board(
         State(state): State<AppState>,
         ApiQuery(q): ApiQuery<PriceBoardQuery>,
     ) -> Result<impl IntoResponse, Error> {
-        Ok(Json(state.usecases.price.board(q.location_id).await?))
+        let sector = state
+            .usecases
+            .sector
+            .chosen(q.sector.as_deref().unwrap_or_default())
+            .await?;
+        Ok(Json(
+            state
+                .usecases
+                .price
+                .board(q.location_id, sector.as_deref())
+                .await?,
+        ))
     }
 
     /// GET /api/admin/crops — every crop, hidden ones too.
@@ -90,15 +101,22 @@ impl PriceHandler {
         Ok(StatusCode::NO_CONTENT)
     }
 
-    /// GET /api/admin/prices — every price entered, newest day first (`page?`).
+    /// GET /api/admin/prices — every price entered, newest day first
+    /// (`page?`, `crop_id?`).
     pub async fn list_prices(
         MaybeActor(actor): MaybeActor,
         State(state): State<AppState>,
-        ApiQuery(q): ApiQuery<AdminPageQuery>,
+        ApiQuery(q): ApiQuery<AdminPricesQuery>,
     ) -> Result<impl IntoResponse, Error> {
         let actor = require_actor(actor)?;
         let page = q.page.unwrap_or(1);
-        Ok(Json(state.usecases.price.list_prices(&actor, page).await?))
+        Ok(Json(
+            state
+                .usecases
+                .price
+                .list_prices(&actor, q.crop_id, page)
+                .await?,
+        ))
     }
 
     /// POST /api/admin/prices — `{crop_id, location_id, observed_on,

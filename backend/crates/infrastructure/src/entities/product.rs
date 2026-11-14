@@ -6,7 +6,9 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
     pub business_id: i32,
-    pub category_id: i32,
+    pub supply_type_id: i32,
+    /// The commodity it is for (lúa giống ST25: rice); `None`: every one.
+    pub commodity_id: Option<i32>,
     pub name: String,
     pub description: Option<String>,
     pub price: Option<i64>,
@@ -29,11 +31,17 @@ pub enum Relation {
     )]
     Business,
     #[sea_orm(
-        belongs_to = "super::category::Entity",
-        from = "Column::CategoryId",
-        to = "super::category::Column::Id"
+        belongs_to = "super::supply_type::Entity",
+        from = "Column::SupplyTypeId",
+        to = "super::supply_type::Column::Id"
     )]
-    Category,
+    SupplyType,
+    #[sea_orm(
+        belongs_to = "super::commodity::Entity",
+        from = "Column::CommodityId",
+        to = "super::commodity::Column::Id"
+    )]
+    Commodity,
 }
 
 impl Related<super::business::Entity> for Entity {
@@ -42,9 +50,9 @@ impl Related<super::business::Entity> for Entity {
     }
 }
 
-impl Related<super::category::Entity> for Entity {
+impl Related<super::supply_type::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Category.def()
+        Relation::SupplyType.def()
     }
 }
 

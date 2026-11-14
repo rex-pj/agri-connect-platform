@@ -23,7 +23,7 @@
 {#- A refusal belongs to the form named by `b.failed` (the profile form has
     its own `b.profile_errors`), else it is shown on top. -#}
 {% set account_failed = b.failed == "account" %}
-{{ header::admin_header(title=p.name, icon="fa-store", sub=p.phone, back_href=url_for(name="admin_explore"), back_label=t(key="admin_menu.providers"), action_href=b.public_href, action_icon="fa-arrow-up-right-from-square", action_label=t(key="admin.public_page"), action_class="btn-outline-secondary") }}
+{{ header::admin_header(title=p.name, icon="fa-store", sub=p.phone, back_href=url_for(name="admin_providers"), back_label=t(key="admin_menu.providers"), action_href=b.public_href, action_icon="fa-arrow-up-right-from-square", action_label=t(key="admin.public_page"), action_class="btn-outline-secondary") }}
 <div class="admin-body">
   {% if b.flash == "provider_verified" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.provider_verified")) }}{% endif %}
   {% if b.flash == "provider_unverified" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.provider_unverified")) }}{% endif %}
@@ -104,7 +104,7 @@
 
   <section class="admin-section" aria-labelledby="tai-khoan-title" x-data="dialog" data-open="{% if account_failed %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
     <h2 class="admin-section__title" id="tai-khoan-title">{{ t(key="admin.managing_account") }}</h2>
-    <p class="small text-muted">{% if p.linked_username %}{{ t(key="admin.linked_before") }} <strong>{{ p.linked_username }}</strong>{{ t(key="admin.linked_after") }}{% else %}{{ t(key="admin.no_account") }}{% endif %}</p>
+    <p class="small text-muted">{% if p.linked_username %}{{ t(key="admin.linked_before") }} {% if b.linked_user_href %}<a class="fw-bold" href="{{ b.linked_user_href }}">{{ p.linked_username }}</a>{% else %}<strong>{{ p.linked_username }}</strong>{% endif %}{{ t(key="admin.linked_after") }}{% else %}{{ t(key="admin.no_account") }}{% endif %}</p>
     {% if b.can_assign %}
     {% set e = b.errors.fields %}
     <div class="admin-actions"><a class="btn btn-outline-success" href="#gan-tai-khoan" x-on:click.prevent="show">{{ atoms::icon(name="fa-user-plus") }} {{ t(key="admin.assign") }}</a></div>
@@ -142,7 +142,7 @@
     </div>
     {% if p.products %}
     <ul class="list-unstyled mb-0">
-      {% for x in p.products %}<li class="py-2 border-bottom"><a class="fw-semibold text-decoration-none" href="{{ url_for(name="product", id=x.id, slug=x.name | slugify) }}">{{ x.name }}</a> <span class="ac-tag">{{ x.category }}</span>{% if x.price %} <span class="small text-muted">· {{ x.price | vnd }}{% if x.unit %}/{{ x.unit }}{% endif %}</span>{% endif %}{% if not x.is_active %} {{ status::visibility(on=false) }}{% endif %}</li>{% endfor %}
+      {% for x in p.products %}<li class="py-2 border-bottom">{% if b.products_href %}<a class="fw-semibold text-decoration-none" href="{{ url_for(name="admin_product", id=x.id) }}">{{ x.name }}</a>{% else %}<span class="fw-semibold">{{ x.name }}</span>{% endif %} <span class="ac-tag">{{ x.category }}</span>{% if x.price %} <span class="small text-muted">· {{ x.price | vnd }}{% if x.unit %}/{{ x.unit }}{% endif %}</span>{% endif %}{% if not x.is_active %} {{ status::visibility(on=false) }}{% endif %}</li>{% endfor %}
     </ul>
     {% else %}<p class="small text-muted">{{ t(key="admin.provider_no_products") }}</p>{% endif %}
   </section>

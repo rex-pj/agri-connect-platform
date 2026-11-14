@@ -20,6 +20,8 @@ pub struct Model {
     pub updated_by: Option<i32>,
     pub deleted_at: Option<DateTimeWithTimeZone>,
     pub sessions_valid_after: Option<DateTimeWithTimeZone>,
+    /// When the link sent to `email` was opened; none until then.
+    pub email_verified_at: Option<DateTimeWithTimeZone>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

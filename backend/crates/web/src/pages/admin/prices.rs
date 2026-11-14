@@ -1,9 +1,12 @@
-//! /admin/prices: every crop price entered, the newest day first, paged,
-//! with the "enter a price" sheet (crop, area, day, low and high, a note on
+//! /admin/prices: the price board's admin page, two tabs. The first lists
+//! every crop price entered (or one crop's, `?crop_id=`), the newest day
+//! first, paged, each row linking to its crop and its area, with the "enter a
+//! price" sheet (crop, area, day, low and high, a note on
 //! where it was heard). Entering the same crop, area and day again replaces
 //! that day's price, so a correction is just entering it again. Deleting
 //! asks for confirmation and a reason: the row's link reloads the list with
-//! `?delete={id}`, which renders that confirmation open.
+//! `?delete={id}`, which renders that confirmation open. The second
+//! (`?tab=crops`) is the produce the board follows (`crops::list_page`).
 
 use application::{
     authz::Actor,
@@ -23,7 +26,10 @@ use crate::{
     extract::{ApiForm, ApiPath, ApiQuery},
     middleware::auth::Viewer,
     pages::{
-        admin::{is_refusal, render_admin, url, Asked, ListPosition, RowConfirm},
+        admin::{
+            crops, is_refusal, render_admin, url, AdminTab, Asked, ListPosition, ProviderFilter,
+            RowConfirm,
+        },
         forms::{reason, vnd_amount, FormErrors},
         listing::{parse_opt, Pagination},
         parse_id, see_other,
@@ -52,6 +58,14 @@ impl PriceForm {
         })
     }
 
+    /// A fresh form for `crop` (the crop page's "enter today's price").
+    fn today_for(crop: Option<i32>) -> Result<Self, Error> {
+        Ok(Self {
+            crop_id: crop.map(|c| c.to_string()).unwrap_or_default(),
+            ..Self::today()?
+        })
+    }
+
     /// What the use case takes. A price box that is not a number is a field
     /// error now; a high box left blank means one price (high = low).
     fn input(&self) -> Result<PriceInput, Error> {
@@ -74,16 +88,54 @@ pub struct ListQuery {
     pub page: String,
     /// The price whose delete confirmation is open.
     pub delete: String,
+    /// Only this crop's prices.
+    pub crop_id: String,
+    /// `crops`: the second tab, the produce followed.
+    pub tab: String,
+    /// The crop whose hide confirmation is open (crops tab).
+    pub hide: String,
+}
+
+/// The value of `?tab=` for the produce followed.
+pub const TAB_CROPS: &str = "crops";
+
+/// The page's two tabs, `crops_tab` telling which is shown.
+pub fn tabs(state: &AppState, crops_tab: bool) -> Result<Vec<AdminTab>, Error> {
+    let path = url("admin_prices", &[])?;
+    Ok(vec![
+        AdminTab {
+            label: state.locale().text("admin_prices.tab_prices"),
+            href: path.clone(),
+            count: None,
+            current: !crops_tab,
+        },
+        AdminTab {
+            label: state.locale().text("admin_prices.tab_crops"),
+            href: ListPosition {
+                tab: TAB_CROPS.to_owned(),
+                ..ListPosition::default()
+            }
+            .href("admin_prices", &[])?,
+            count: None,
+            current: crops_tab,
+        },
+    ])
 }
 
 #[derive(Serialize)]
 pub struct PriceRow {
     pub price: CropPriceDto,
+    /// The crop's and the area's admin pages.
+    pub crop_href: String,
+    pub area_href: String,
     pub delete_href: String,
 }
 
 #[derive(Serialize)]
 pub struct PricesPage {
+    pub tabs: Vec<AdminTab>,
+    /// The crop the list is narrowed to, and the way back to every price.
+    pub filter: Option<ProviderFilter>,
     pub total: i64,
     pub rows: Vec<PriceRow>,
     pub pagination: Option<Pagination>,
@@ -92,7 +144,6 @@ pub struct PricesPage {
     pub form: PriceForm,
     pub errors: FormErrors,
     pub create_action: String,
-    pub crops_href: String,
     /// How long a price stays public (`PRICE_FRESH_DAYS`).
     pub fresh_days: i64,
     pub confirm: Option<RowConfirm>,
@@ -115,7 +166,7 @@ struct ListView {
 async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Response, Error> {
     let prices = &state.usecases.price;
     let (listed, choices) = tokio::try_join!(
-        prices.list_prices(actor, view.position.page()),
+        prices.list_prices(actor, crop_filter(&view.position), view.position.page()),
         prices.price_choices(actor),
     )?;
     let AdminPagedResponse {
@@ -141,12 +192,29 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
             });
         }
         rows.push(PriceRow {
+            crop_href: url("admin_crop", &[("id", &price.crop_id.to_string())])?,
+            area_href: url("admin_location", &[("id", &price.location_id.to_string())])?,
             delete_href: position.href("admin_prices", &[("delete", &id)])?,
             price,
         });
     }
     let path = url("admin_prices", &[])?;
+    let filter = match crop_filter(&position) {
+        Some(id) => Some(ProviderFilter {
+            icon: "fa-seedling",
+            name: choices
+                .crops
+                .iter()
+                .find(|c| c.id == id)
+                .map(|c| c.name.clone()),
+            href: url("admin_crop", &[("id", &id.to_string())])?,
+            clear_href: path.clone(),
+        }),
+        None => None,
+    };
     let body = PricesPage {
+        tabs: tabs(state, false)?,
+        filter,
         total,
         pagination: position.pagination(&path, page, total_pages),
         rows,
@@ -155,7 +223,6 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
         form: view.form,
         errors: view.errors,
         create_action: path.clone(),
-        crops_href: url("admin_crops", &[])?,
         fresh_days: PRICE_FRESH_DAYS,
         confirm,
         keep: position,
@@ -171,6 +238,11 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
     )
 }
 
+/// The crop the list is narrowed to.
+fn crop_filter(position: &ListPosition) -> Option<i32> {
+    parse_opt::<i32>(&position.crop_id).filter(|c| *c > 0)
+}
+
 /// GET /admin/prices
 pub async fn list(
     Viewer(viewer): Viewer,
@@ -181,12 +253,24 @@ pub async fn list(
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
+    if q.tab == TAB_CROPS {
+        let mut response = crops::list_page(
+            &state,
+            &actor,
+            crops::ListView::asked(&q.hide, flash.0, &state),
+        )
+        .await?;
+        flash.clear_on(&mut response);
+        return Ok(response);
+    }
+    let position = ListPosition {
+        page: q.page,
+        crop_id: q.crop_id,
+        ..ListPosition::default()
+    };
     let view = ListView {
-        position: ListPosition {
-            page: q.page,
-            ..ListPosition::default()
-        },
-        form: PriceForm::today()?,
+        form: PriceForm::today_for(crop_filter(&position))?,
+        position,
         errors: FormErrors::default(),
         asked: Asked::new("", &q.delete),
         flash: flash.0,
@@ -233,8 +317,9 @@ pub async fn create(
 #[serde(default)]
 pub struct DeleteForm {
     pub reason: String,
-    /// The list page to land back on.
+    /// The list page to land back on, and its crop filter.
     pub page: String,
+    pub crop_id: String,
 }
 
 /// POST /admin/prices/{id}/delete
@@ -255,6 +340,7 @@ pub async fn delete(
         .await?;
     ListPosition {
         page: form.page,
+        crop_id: form.crop_id,
         ..ListPosition::default()
     }
     .back_to("admin_prices", Flash::PriceDeleted)

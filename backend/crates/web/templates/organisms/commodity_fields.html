@@ -1,0 +1,22 @@
+{#- The boxes of a commodity (cây trồng, vật nuôi), shared by the create sheet and the
+    edit form. `form` is web::pages::admin::commodities::CommodityForm (as
+    typed), `errors` its FormErrors, `sectors` web::labels::CodeOption (a
+    commodity is in exactly one). `first`: the name box takes the focus when
+    its sheet opens. -#}
+{% import "molecules/form_field.html" as field %}
+{% macro commodity_fields(form, errors, sectors, name_max, icon_max, prefix, first=false) -%}
+{% set e = errors.fields %}
+{{ field::input(id=prefix ~ "-name", name="name", label=t(key="commodity_form.name"), value=form.name, error=e.name | default(value=""), required=true, maxlength=name_max, placeholder=t(key="commodity_form.name_placeholder"), first=first) }}
+<div class="form-field">
+  <label class="form-label fw-semibold" for="{{ prefix }}-sector">{{ t(key="sector.label") }}</label>
+  <select class="form-select{% if e.sector %} is-invalid{% endif %}" id="{{ prefix }}-sector" name="sector" required{% if e.sector %} aria-invalid="true" aria-describedby="{{ prefix }}-sector-error"{% endif %}>
+    <option value="">{{ t(key="commodity_form.sector_choose") }}</option>
+    {% for s in sectors %}<option value="{{ s.value }}"{% if form.sector == s.value %} selected{% endif %}>{{ s.label }}</option>{% endfor %}
+  </select>
+  {% if e.sector %}<div class="invalid-feedback" id="{{ prefix }}-sector-error">{{ e.sector }}</div>{% endif %}
+</div>
+<div class="row g-2">
+  <div class="col-7">{{ field::input(id=prefix ~ "-icon", name="icon", label=t(key="commodity_form.icon"), value=form.icon, error=e.icon | default(value=""), maxlength=icon_max, placeholder=t(key="commodity_form.icon_placeholder")) }}</div>
+  <div class="col-5">{{ field::input(id=prefix ~ "-order", name="display_order", label=t(key="form.display_order"), value=form.display_order, type="number", inputmode="numeric", error=e.display_order | default(value="")) }}</div>
+</div>
+{%- endmacro commodity_fields %}

@@ -80,7 +80,6 @@ impl PriceRepository {
                     id: r.id,
                     crop_id: r.crop_id,
                     crop_name: crop.name.clone(),
-                    crop_kind: crop.kind.clone(),
                     unit: crop.unit.clone(),
                     location_id: r.location_id,
                     location_label: area.label.clone(),
@@ -98,10 +97,11 @@ fn to_crop(c: crop::Model) -> Crop {
     Crop {
         id: c.id,
         name: c.name,
-        kind: c.kind,
+        commodity_id: c.commodity_id,
         unit: c.unit,
         display_order: c.display_order,
         is_active: c.is_active,
+        is_demo: c.is_demo,
     }
 }
 
@@ -129,7 +129,7 @@ impl PriceRepositoryTrait for PriceRepository {
     async fn create_crop(&self, f: &CropFields) -> Result<i32, Error> {
         CropEntity::insert(crop::ActiveModel {
             name: Set(f.name.clone()),
-            kind: Set(f.kind.clone()),
+            commodity_id: Set(f.commodity_id),
             unit: Set(f.unit.clone()),
             display_order: Set(f.display_order),
             is_active: Set(true),
@@ -144,7 +144,7 @@ impl PriceRepositoryTrait for PriceRepository {
     async fn update_crop(&self, id: i32, f: &CropFields) -> Result<bool, Error> {
         CropEntity::update_many()
             .col_expr(crop::Column::Name, Expr::value(f.name.clone()))
-            .col_expr(crop::Column::Kind, Expr::value(f.kind.clone()))
+            .col_expr(crop::Column::CommodityId, Expr::value(f.commodity_id))
             .col_expr(crop::Column::Unit, Expr::value(f.unit.clone()))
             .col_expr(crop::Column::DisplayOrder, Expr::value(f.display_order))
             .filter(crop::Column::Id.eq(id))
@@ -201,6 +201,8 @@ impl PriceRepositoryTrait for PriceRepository {
                 crop_price::Column::Note,
                 crop_price::Column::CreatedBy,
             ])
+            // An admin's price for a demo row's day is real from then on.
+            .value(crop_price::Column::IsDemo, Expr::value(false))
             .value(crop_price::Column::CreatedOn, Expr::current_timestamp())
             .to_owned(),
         )
@@ -218,13 +220,25 @@ impl PriceRepositoryTrait for PriceRepository {
             .map_err(Self::fail("delete_price"))
     }
 
-    async fn list_prices(&self, limit: u64, offset: u64) -> Result<(Vec<CropPrice>, i64), Error> {
+    async fn list_prices(
+        &self,
+        crop_id: Option<i32>,
+        limit: u64,
+        offset: u64,
+    ) -> Result<(Vec<CropPrice>, i64), Error> {
         let db = self.db.as_ref();
-        let total = PriceEntity::find()
+        let of_crop = || {
+            let query = PriceEntity::find();
+            match crop_id {
+                Some(id) => query.filter(crop_price::Column::CropId.eq(id)),
+                None => query,
+            }
+        };
+        let total = of_crop()
             .count(db)
             .await
             .map_err(Self::fail("count prices"))?;
-        let rows = PriceEntity::find()
+        let rows = of_crop()
             .order_by_desc(crop_price::Column::ObservedOn)
             .order_by_desc(crop_price::Column::Id)
             .limit(limit)

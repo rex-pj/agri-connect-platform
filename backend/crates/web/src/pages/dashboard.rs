@@ -1,6 +1,6 @@
 //! The provider's own area: /provider/dashboard (business profile, the
-//! service and product lists), /provider/products/new and
-//! /provider/products/{id}/edit. The service forms are in `own_services`.
+//! service and product lists), /provider/supplies/new and
+//! /provider/supplies/{id}/edit. The service forms are in `own_services`.
 //!
 //! Product forms are `multipart/form-data` because they carry the photo;
 //! they work without JS. The photo is checked before anything is saved
@@ -16,7 +16,9 @@ use application::{
         PERM_OWN_SERVICE_DELETE, PERM_OWN_SERVICE_UPDATE,
     },
     constants::{CALL_STATS_DAYS, SERVICES_PER_BUSINESS_MAX},
-    outputs::{CategoryDto, ProviderProductDto, ProviderProfileDto, ProviderServiceDto},
+    outputs::{
+        CategoryDto, CommodityDto, ProviderProductDto, ProviderProfileDto, ProviderServiceDto,
+    },
     ports::ProcessedImage,
 };
 use axum::{extract::State, http::StatusCode, response::Response};
@@ -34,7 +36,7 @@ use crate::{
         canonical_url,
         forms::FormErrors,
         parse_id,
-        product_form::{product_categories, ProductForm},
+        product_form::{product_categories, product_commodities, ProductForm},
         profile_form::ProfileForm,
         see_other,
     },
@@ -303,6 +305,7 @@ pub struct ProductPage {
     /// `None` on the create page.
     pub product: Option<ProviderProductDto>,
     pub categories: Vec<CategoryDto>,
+    pub commodities: Vec<CommodityDto>,
     pub form: ProductForm,
     pub errors: FormErrors,
     pub action: String,
@@ -339,6 +342,7 @@ async fn product_page(
                 .map(|p| {
                     ProductForm::stored(
                         p.category_id,
+                        p.commodity_id,
                         &p.name,
                         p.price,
                         p.unit.as_deref(),
@@ -351,6 +355,7 @@ async fn product_page(
     });
     let body = ProductPage {
         categories: product_categories(state).await?,
+        commodities: product_commodities(state).await?,
         product,
         form,
         errors,
@@ -391,7 +396,7 @@ async fn refused(
     product_page(state, shell, actor, product, Some((form, errors)), status).await
 }
 
-/// GET /provider/products/new
+/// GET /provider/supplies/new
 pub async fn new_product(
     shell: Shell,
     Viewer(viewer): Viewer,
@@ -403,7 +408,7 @@ pub async fn new_product(
     product_page(&state, &shell, &actor, None, None, StatusCode::OK).await
 }
 
-/// POST /provider/products/new (multipart)
+/// POST /provider/supplies/new (multipart)
 pub async fn create_product(
     shell: Shell,
     Viewer(viewer): Viewer,
@@ -438,7 +443,7 @@ pub async fn create_product(
     to_dashboard(Flash::ProductCreated)
 }
 
-/// GET /provider/products/{id}/edit
+/// GET /provider/supplies/{id}/edit
 pub async fn edit_product(
     shell: Shell,
     Viewer(viewer): Viewer,
@@ -457,7 +462,7 @@ pub async fn edit_product(
     product_page(&state, &shell, &actor, Some(product), None, StatusCode::OK).await
 }
 
-/// POST /provider/products/{id}/edit (multipart)
+/// POST /provider/supplies/{id}/edit (multipart)
 pub async fn update_product(
     shell: Shell,
     Viewer(viewer): Viewer,
@@ -501,7 +506,7 @@ pub async fn update_product(
     to_dashboard(Flash::ProductSaved)
 }
 
-/// POST /provider/products/{id}/delete
+/// POST /provider/supplies/{id}/delete
 pub async fn delete_product(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,

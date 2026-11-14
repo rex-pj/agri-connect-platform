@@ -3,7 +3,8 @@ use std::sync::Arc;
 use application::{
     ports::TokenService,
     usecases::{
-        admin_usecase::AdminUseCase, auth_usecase::AuthUseCase,
+        admin_usecase::AdminUseCase, alert_usecase::AlertUseCase, auth_usecase::AuthUseCase,
+        coded_usecase::CodedUseCase, commodity_usecase::CommodityUseCase,
         demand_usecase::DemandReportUseCase, explore_usecase::ExploreUseCase,
         health_usecase::HealthUseCase, job_usecase::JobUseCase, media_usecase::MediaUseCase,
         partner_usecase::PartnerUseCase, permission_usecase::PermissionUseCase,
@@ -25,6 +26,12 @@ pub struct UseCases {
     pub media: MediaUseCase,
     pub product: ProductUseCase,
     pub admin: AdminUseCase,
+    pub alert: AlertUseCase,
+    pub commodity: CommodityUseCase,
+    /// The sectors the platform serves.
+    pub sector: CodedUseCase,
+    /// The kinds of alert.
+    pub alert_kind: CodedUseCase,
     pub auth: AuthUseCase,
     pub demand: DemandReportUseCase,
     pub partner: PartnerUseCase,

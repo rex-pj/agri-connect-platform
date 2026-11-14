@@ -8,8 +8,8 @@ use async_trait::async_trait;
 use chrono::{NaiveDate, Utc};
 use sea_orm::{
     sea_query::{Expr, OnConflict},
-    ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, QueryOrder, Set,
-    TransactionTrait,
+    ColumnTrait, ConnectionTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, QueryOrder,
+    QuerySelect, Set, TransactionTrait,
 };
 use tracing::error;
 
@@ -26,20 +26,59 @@ use crate::entities::{
     business,
     partner::{self, Entity as PartnerEntity},
     partner_contract::{self, Entity as ContractEntity},
-    partner_contract_category::{self, Entity as ContractCategory},
+    partner_contract_service_type, partner_contract_supply_type,
     partner_sponsored::{self, Entity as Sponsored},
-    user,
+    service_type, user,
 };
 
-/// A contract's area. The first load of the provinces and wards gives every
-/// older contract one (`AdminUnitRepository::sync`, before the server
-/// starts), so a contract without a province is one whose preset lay in no
-/// ward: an empty code, which no place matches.
+/// A contract's area: its province, and maybe one ward of it.
 fn area_of(c: &partner_contract::Model) -> ContractArea {
     ContractArea {
-        province_code: c.province_code.clone().unwrap_or_default(),
+        province_code: c.province_code.clone(),
         ward_code: c.ward_code.clone(),
     }
+}
+
+/// Files a contract's types: the ids of service types in one table, the rest
+/// (supply types: one id sequence for both) in the other.
+async fn write_contract_types<C: ConnectionTrait>(
+    db: &C,
+    contract_id: i32,
+    ids: &[i32],
+) -> Result<(), DbErr> {
+    let services: Vec<i32> = service_type::Entity::find()
+        .select_only()
+        .column(service_type::Column::Id)
+        .filter(service_type::Column::Id.is_in(ids.iter().copied()))
+        .into_tuple()
+        .all(db)
+        .await?;
+    let supplies: Vec<i32> = ids
+        .iter()
+        .copied()
+        .filter(|id| !services.contains(id))
+        .collect();
+    if !services.is_empty() {
+        partner_contract_service_type::Entity::insert_many(services.into_iter().map(|id| {
+            partner_contract_service_type::ActiveModel {
+                contract_id: Set(contract_id),
+                service_type_id: Set(id),
+            }
+        }))
+        .exec(db)
+        .await?;
+    }
+    if !supplies.is_empty() {
+        partner_contract_supply_type::Entity::insert_many(supplies.into_iter().map(|id| {
+            partner_contract_supply_type::ActiveModel {
+                contract_id: Set(contract_id),
+                supply_type_id: Set(id),
+            }
+        }))
+        .exec(db)
+        .await?;
+    }
+    Ok(())
 }
 
 pub struct PartnerRepository {
@@ -77,6 +116,7 @@ impl PartnerRepository {
             .into_iter()
             .map(|p| Partner {
                 account_username: p.account_id.and_then(|id| names.get(&id).cloned()),
+                account_id: p.account_id,
                 id: p.id,
                 name: p.name,
                 kind: p.kind,
@@ -84,6 +124,7 @@ impl PartnerRepository {
                 phone: p.phone,
                 email: p.email,
                 is_active: p.is_active,
+                is_demo: p.is_demo,
                 created_on: p.created_on.with_timezone(&Utc),
             })
             .collect())
@@ -94,17 +135,25 @@ impl PartnerRepository {
         let db = self.db.as_ref();
         let ids: Vec<i32> = rows.iter().map(|c| c.id).collect();
         let mut categories: HashMap<i32, Vec<i32>> = HashMap::new();
-        for c in ContractCategory::find()
-            .filter(partner_contract_category::Column::ContractId.is_in(ids.clone()))
-            .order_by_asc(partner_contract_category::Column::CategoryId)
+        let services = partner_contract_service_type::Entity::find()
+            .filter(partner_contract_service_type::Column::ContractId.is_in(ids.clone()))
             .all(db)
             .await
-            .map_err(Self::fail("contract categories"))?
-        {
-            categories
-                .entry(c.contract_id)
-                .or_default()
-                .push(c.category_id);
+            .map_err(Self::fail("contract service types"))?
+            .into_iter()
+            .map(|c| (c.contract_id, c.service_type_id));
+        let supplies = partner_contract_supply_type::Entity::find()
+            .filter(partner_contract_supply_type::Column::ContractId.is_in(ids.clone()))
+            .all(db)
+            .await
+            .map_err(Self::fail("contract supply types"))?
+            .into_iter()
+            .map(|c| (c.contract_id, c.supply_type_id));
+        for (contract_id, category_id) in services.chain(supplies) {
+            categories.entry(contract_id).or_default().push(category_id);
+        }
+        for ids in categories.values_mut() {
+            ids.sort_unstable();
         }
         let sponsored_rows = Sponsored::find()
             .filter(partner_sponsored::Column::ContractId.is_in(ids))
@@ -278,7 +327,7 @@ impl PartnerRepositoryTrait for PartnerRepository {
         let txn = self.db.begin().await.map_err(&fail)?;
         let id = ContractEntity::insert(partner_contract::ActiveModel {
             partner_id: Set(c.partner_id),
-            province_code: Set(Some(c.area.province_code.clone())),
+            province_code: Set(c.area.province_code.clone()),
             ward_code: Set(c.area.ward_code.clone()),
             starts_on: Set(c.starts_on),
             ends_on: Set(c.ends_on),
@@ -291,15 +340,9 @@ impl PartnerRepositoryTrait for PartnerRepository {
         .await
         .map_err(&fail)?
         .last_insert_id;
-        ContractCategory::insert_many(c.category_ids.iter().map(|category_id| {
-            partner_contract_category::ActiveModel {
-                contract_id: Set(id),
-                category_id: Set(*category_id),
-            }
-        }))
-        .exec(&txn)
-        .await
-        .map_err(&fail)?;
+        write_contract_types(&txn, id, &c.category_ids)
+            .await
+            .map_err(&fail)?;
         txn.commit().await.map_err(&fail)?;
         Ok(id)
     }
@@ -344,20 +387,19 @@ impl PartnerRepositoryTrait for PartnerRepository {
         if !updated {
             return Ok(false);
         }
-        ContractCategory::delete_many()
-            .filter(partner_contract_category::Column::ContractId.eq(contract_id))
+        partner_contract_service_type::Entity::delete_many()
+            .filter(partner_contract_service_type::Column::ContractId.eq(contract_id))
             .exec(&txn)
             .await
             .map_err(&fail)?;
-        ContractCategory::insert_many(c.category_ids.iter().map(|category_id| {
-            partner_contract_category::ActiveModel {
-                contract_id: Set(contract_id),
-                category_id: Set(*category_id),
-            }
-        }))
-        .exec(&txn)
-        .await
-        .map_err(&fail)?;
+        partner_contract_supply_type::Entity::delete_many()
+            .filter(partner_contract_supply_type::Column::ContractId.eq(contract_id))
+            .exec(&txn)
+            .await
+            .map_err(&fail)?;
+        write_contract_types(&txn, contract_id, &c.category_ids)
+            .await
+            .map_err(&fail)?;
         txn.commit().await.map_err(&fail)?;
         Ok(true)
     }

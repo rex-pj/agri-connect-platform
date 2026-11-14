@@ -11,8 +11,8 @@ use uuid::Uuid;
 
 use domain::{
     models::product::{
-        AdminProduct, NewProduct, ProductFilter, ProductSort, ProductView, ProviderProduct,
-        UpdateProduct, UpdateProductAdmin,
+        AdminProduct, AdminProductFilter, NewProduct, ProductFilter, ProductSort, ProductView,
+        ProviderProduct, UpdateProduct, UpdateProductAdmin,
     },
     repositories::product_repository_trait::ProductRepositoryTrait,
 };
@@ -25,12 +25,13 @@ use crate::search::{
 use crate::{
     db_types::DateTimeWithTimeZone,
     entities::{
-        business,
-        category::{self, Entity as Category},
+        business, commodity,
         product::{self, Entity as ProductEntity},
+        supply_type::{self as category, Entity as Category},
     },
     sql::{
-        business_location, businesses_of, distance, geography_from_text, output, within, QueryAs,
+        business_location, businesses_of, distance, geography_from_text, output, supply_in_sector,
+        supply_sector, within, QueryAs,
     },
 };
 
@@ -52,7 +53,11 @@ struct ProductViewRow {
     price: Option<i64>,
     unit: Option<String>,
     category: String,
+    category_id: i32,
+    category_slug: String,
     category_icon: Option<String>,
+    commodity_id: Option<i32>,
+    commodity: Option<String>,
     vendor_name: String,
     vendor_phone: String,
     vendor_verified: bool,
@@ -77,6 +82,9 @@ struct AdminProductRow {
     unit: Option<String>,
     category: String,
     category_id: i32,
+    commodity: Option<String>,
+    commodity_id: Option<i32>,
+    sector: Option<String>,
     business_id: i32,
     business_name: String,
     is_active: bool,
@@ -94,6 +102,8 @@ struct ProviderProductRow {
     unit: Option<String>,
     category: String,
     category_id: i32,
+    commodity_id: Option<i32>,
+    commodity: Option<String>,
     is_active: bool,
     created_on: DateTimeWithTimeZone,
     image_file_id: Option<Uuid>,
@@ -108,7 +118,11 @@ fn base_product_view_query() -> sea_orm::Select<ProductEntity> {
         .column(product::Column::Price)
         .column(product::Column::Unit)
         .column_as(category::Column::Name, QueryAs::Category)
+        .column_as(product::Column::SupplyTypeId, QueryAs::CategoryId)
+        .column_as(category::Column::Slug, QueryAs::CategorySlug)
         .column_as(category::Column::Icon, QueryAs::CategoryIcon)
+        .column(product::Column::CommodityId)
+        .column_as(commodity::Column::Name, QueryAs::Commodity)
         .column_as(business::Column::Name, QueryAs::VendorName)
         .column_as(business::Column::Phone, QueryAs::VendorPhone)
         .column_as(business::Column::IsVerified, QueryAs::VendorVerified)
@@ -116,7 +130,8 @@ fn base_product_view_query() -> sea_orm::Select<ProductEntity> {
         .column(product::Column::CreatedOn)
         .column(product::Column::ImageFileId)
         .join(JoinType::InnerJoin, product::Relation::Business.def())
-        .join(JoinType::InnerJoin, product::Relation::Category.def())
+        .join(JoinType::InnerJoin, product::Relation::SupplyType.def())
+        .join(JoinType::LeftJoin, product::Relation::Commodity.def())
         .filter(business::Column::IsActive.eq(true))
         .filter(business::Column::DeletedAt.is_null())
         .filter(category::Column::IsActive.eq(true))
@@ -131,11 +146,14 @@ fn base_provider_product_query() -> sea_orm::Select<ProductEntity> {
         .column(product::Column::Price)
         .column(product::Column::Unit)
         .column_as(category::Column::Name, QueryAs::Category)
-        .column(product::Column::CategoryId)
+        .column_as(product::Column::SupplyTypeId, QueryAs::CategoryId)
+        .column(product::Column::CommodityId)
+        .column_as(commodity::Column::Name, QueryAs::Commodity)
         .column(product::Column::IsActive)
         .column(product::Column::CreatedOn)
         .column(product::Column::ImageFileId)
-        .join(JoinType::InnerJoin, product::Relation::Category.def())
+        .join(JoinType::InnerJoin, product::Relation::SupplyType.def())
+        .join(JoinType::LeftJoin, product::Relation::Commodity.def())
 }
 
 fn base_admin_product_query() -> sea_orm::Select<ProductEntity> {
@@ -147,15 +165,19 @@ fn base_admin_product_query() -> sea_orm::Select<ProductEntity> {
         .column(product::Column::Price)
         .column(product::Column::Unit)
         .column_as(category::Column::Name, QueryAs::Category)
-        .column(product::Column::CategoryId)
+        .column_as(product::Column::SupplyTypeId, QueryAs::CategoryId)
+        .column_as(commodity::Column::Name, QueryAs::Commodity)
+        .column(product::Column::CommodityId)
         .column(product::Column::BusinessId)
         .column_as(business::Column::Name, QueryAs::BusinessName)
         .column(product::Column::IsActive)
         .column(product::Column::CreatedOn)
         .column(product::Column::UpdatedOn)
         .column(product::Column::ImageFileId)
+        .expr_as(supply_sector(), QueryAs::Sector)
         .join(JoinType::InnerJoin, product::Relation::Business.def())
-        .join(JoinType::InnerJoin, product::Relation::Category.def())
+        .join(JoinType::InnerJoin, product::Relation::SupplyType.def())
+        .join(JoinType::LeftJoin, product::Relation::Commodity.def())
         .filter(product::Column::DeletedAt.is_null())
         .filter(business::Column::DeletedAt.is_null())
 }
@@ -164,17 +186,11 @@ fn base_admin_product_query() -> sea_orm::Select<ProductEntity> {
 impl ProductRepositoryTrait for ProductRepository {
     async fn list_admin(
         &self,
-        provider_id: Option<i32>,
-        search: Option<&str>,
+        filter: &AdminProductFilter,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<AdminProduct>, Error> {
-        let mut query = base_admin_product_query()
-            .filter(search_condition(ADMIN_PRODUCT_SEARCH_COLUMNS, search));
-        if let Some(bid) = provider_id {
-            query = query.filter(product::Column::BusinessId.eq(bid));
-        }
-        query
+        apply_admin_filter(base_admin_product_query(), filter)
             .order_by_desc(product::Column::CreatedOn)
             .order_by_desc(product::Column::Id)
             .limit(limit as u64)
@@ -189,20 +205,12 @@ impl ProductRepositoryTrait for ProductRepository {
             })
     }
 
-    async fn count_admin(
-        &self,
-        provider_id: Option<i32>,
-        search: Option<&str>,
-    ) -> Result<i64, Error> {
-        let mut query = ProductEntity::find()
+    async fn count_admin(&self, filter: &AdminProductFilter) -> Result<i64, Error> {
+        let query = ProductEntity::find()
             .join(JoinType::InnerJoin, product::Relation::Business.def())
             .filter(product::Column::DeletedAt.is_null())
-            .filter(business::Column::DeletedAt.is_null())
-            .filter(search_condition(ADMIN_PRODUCT_SEARCH_COLUMNS, search));
-        if let Some(bid) = provider_id {
-            query = query.filter(product::Column::BusinessId.eq(bid));
-        }
-        query
+            .filter(business::Column::DeletedAt.is_null());
+        apply_admin_filter(query, filter)
             .count(self.db.as_ref())
             .await
             .map(|c| c as i64)
@@ -300,7 +308,7 @@ impl ProductRepositoryTrait for ProductRepository {
         let query = apply_filter(
             ProductEntity::find()
                 .join(JoinType::InnerJoin, product::Relation::Business.def())
-                .join(JoinType::InnerJoin, product::Relation::Category.def())
+                .join(JoinType::InnerJoin, product::Relation::SupplyType.def())
                 .filter(product::Column::IsActive.eq(true))
                 .filter(product::Column::DeletedAt.is_null())
                 .filter(business::Column::IsActive.eq(true))
@@ -319,8 +327,12 @@ impl ProductRepositoryTrait for ProductRepository {
             })
     }
 
-    async fn featured(&self, limit: i64) -> Result<Vec<ProductView>, Error> {
-        base_product_view_query()
+    async fn featured(&self, limit: i64, sector: Option<&str>) -> Result<Vec<ProductView>, Error> {
+        let mut query = base_product_view_query();
+        if let Some(sector) = sector {
+            query = query.filter(supply_in_sector(sector));
+        }
+        query
             .filter(product::Column::IsActive.eq(true))
             .filter(product::Column::DeletedAt.is_null())
             .order_by_desc(product::Column::CreatedOn)
@@ -400,7 +412,6 @@ impl ProductRepositoryTrait for ProductRepository {
 
     async fn check_category_is_product(&self, category_id: i32) -> Result<bool, Error> {
         Category::find_by_id(category_id)
-            .filter(category::Column::Type.eq("product"))
             .filter(category::Column::IsActive.eq(true))
             .count(self.db.as_ref())
             .await
@@ -411,10 +422,23 @@ impl ProductRepositoryTrait for ProductRepository {
             })
     }
 
+    async fn check_commodity_is_shown(&self, commodity_id: i32) -> Result<bool, Error> {
+        commodity::Entity::find_by_id(commodity_id)
+            .filter(commodity::Column::IsActive.eq(true))
+            .count(self.db.as_ref())
+            .await
+            .map(|c| c > 0)
+            .map_err(|e| {
+                error!("product check_commodity_is_shown error: {e}");
+                Error::internal("Failed to check commodity.")
+            })
+    }
+
     async fn create(&self, product: NewProduct) -> Result<i32, Error> {
         let new_product = product::ActiveModel {
             business_id: Set(product.business_id),
-            category_id: Set(product.category_id),
+            supply_type_id: Set(product.category_id),
+            commodity_id: Set(product.commodity_id),
             name: Set(product.name),
             description: Set(product.description),
             price: Set(product.price),
@@ -473,8 +497,12 @@ impl ProductRepositoryTrait for ProductRepository {
 
         ProductEntity::update_many()
             .col_expr(
-                product::Column::CategoryId,
+                product::Column::SupplyTypeId,
                 Expr::value(product.category_id),
+            )
+            .col_expr(
+                product::Column::CommodityId,
+                Expr::value(product.commodity_id),
             )
             .col_expr(product::Column::Name, Expr::value(product.name))
             .col_expr(
@@ -500,8 +528,12 @@ impl ProductRepositoryTrait for ProductRepository {
     async fn update_admin(&self, product: UpdateProductAdmin) -> Result<bool, Error> {
         ProductEntity::update_many()
             .col_expr(
-                product::Column::CategoryId,
+                product::Column::SupplyTypeId,
                 Expr::value(product.category_id),
+            )
+            .col_expr(
+                product::Column::CommodityId,
+                Expr::value(product.commodity_id),
             )
             .col_expr(product::Column::Name, Expr::value(product.name))
             .col_expr(
@@ -631,6 +663,9 @@ fn map_admin_row(r: AdminProductRow) -> AdminProduct {
         unit: r.unit,
         category: r.category,
         category_id: r.category_id,
+        commodity: r.commodity,
+        commodity_id: r.commodity_id,
+        sector: r.sector,
         business_id: r.business_id,
         business_name: r.business_name,
         is_active: r.is_active,
@@ -648,7 +683,11 @@ fn map_view_row(r: ProductViewRow, distance_m: Option<f64>) -> ProductView {
         price: r.price,
         unit: r.unit,
         category: r.category,
+        category_id: r.category_id,
+        category_slug: r.category_slug,
         category_icon: r.category_icon,
+        commodity_id: r.commodity_id,
+        commodity: r.commodity,
         vendor_name: r.vendor_name,
         vendor_phone: r.vendor_phone,
         vendor_verified: r.vendor_verified,
@@ -668,17 +707,47 @@ fn map_provider_row(r: ProviderProductRow) -> ProviderProduct {
         unit: r.unit,
         category: r.category,
         category_id: r.category_id,
+        commodity_id: r.commodity_id,
+        commodity: r.commodity,
         is_active: r.is_active,
         created_on: r.created_on.with_timezone(&Utc),
         image_file_id: r.image_file_id,
     }
 }
 
+/// The admin's list criteria, shared by `list_admin` and `count_admin`.
+fn apply_admin_filter<Q: QueryFilter>(mut query: Q, filter: &AdminProductFilter) -> Q {
+    query = query.filter(search_condition(
+        ADMIN_PRODUCT_SEARCH_COLUMNS,
+        filter.search.as_deref(),
+    ));
+    if let Some(id) = filter.provider_id {
+        query = query.filter(product::Column::BusinessId.eq(id));
+    }
+    if let Some(id) = filter.category_id {
+        query = query.filter(product::Column::SupplyTypeId.eq(id));
+    }
+    if let Some(id) = filter.commodity_id {
+        query = query.filter(product::Column::CommodityId.eq(id));
+    }
+    query
+}
+
 /// The public search criteria, shared by `browse` and `count_browse` so the
 /// page count can never disagree with the page contents.
 fn apply_filter<Q: QueryFilter>(mut query: Q, filter: &ProductFilter) -> Q {
     if let Some(id) = filter.category_id {
-        query = query.filter(product::Column::CategoryId.eq(id));
+        query = query.filter(product::Column::SupplyTypeId.eq(id));
+    }
+    if let Some(id) = filter.commodity_id {
+        query = query.filter(
+            sea_orm::Condition::any()
+                .add(product::Column::CommodityId.eq(id))
+                .add(product::Column::CommodityId.is_null()),
+        );
+    }
+    if let Some(sector) = filter.sector.as_deref() {
+        query = query.filter(supply_in_sector(sector));
     }
     if let Some(id) = filter.business_id {
         query = query.filter(product::Column::BusinessId.eq(id));

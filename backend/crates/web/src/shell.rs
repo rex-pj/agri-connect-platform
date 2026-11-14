@@ -8,6 +8,7 @@
 use application::{
     authz::Actor,
     catalogue::{PERM_ADMIN_DASHBOARD_VIEW, PERM_OWN_LISTING_CREATE, PERM_PARTNER_REPORT_READ},
+    outputs::CodedDto,
 };
 use axum::{
     extract::FromRequestParts,
@@ -19,11 +20,13 @@ use serde::Serialize;
 use crate::{
     app_state::AppState,
     cookies::request_cookie,
+    labels::sector_options,
     locale::{Lang, Locale, Locales},
     middleware::{
         auth::Viewer,
         language::{preferred_language, LANG_COOKIE},
     },
+    pages::sector::chosen_sector,
     routes,
 };
 
@@ -39,6 +42,10 @@ pub struct Tab {
     #[serde(flatten)]
     pub link: Link,
     pub active: bool,
+    /// Lit on a phone only: this tab stands in for the active page's own tab,
+    /// which the phone's bar does not show (the shops directory is the second
+    /// tab of the services list; the price board is reached from home).
+    pub active_on_phone: bool,
     /// Only on the wide top bar: a phone's tab bar has room for five.
     pub wide_only: bool,
     /// Only on a phone's tab bar: the wide top bar has the account button.
@@ -77,6 +84,49 @@ pub struct Shell {
     pub here: String,
     /// Offered once to a browser that prefers another language we have.
     pub language_offer: Option<LanguageOffer>,
+    /// The sector this visitor chose (`pages::sector`); `None`: every sector.
+    pub sector: Option<String>,
+    /// The sector switch's choices, "every sector" first, the chosen one
+    /// marked; none while no sector is shown.
+    pub sectors: Vec<SectorChoice>,
+}
+
+/// One button of the sector switch (`molecules/sector_switch.html`).
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct SectorChoice {
+    /// The code, empty for every sector.
+    pub value: String,
+    pub label: String,
+    pub icon: String,
+    pub current: bool,
+}
+
+/// The icon of the switch's "every sector" button.
+const EVERY_SECTOR_ICON: &str = "fa-border-all";
+
+/// The switch's choices among the shown `sectors` for a visitor who chose
+/// `sector`: none at all while there is no sector to choose.
+pub fn sector_choices(
+    locale: &Locale,
+    sectors: &[CodedDto],
+    sector: Option<&str>,
+) -> Vec<SectorChoice> {
+    if sectors.is_empty() {
+        return Vec::new();
+    }
+    std::iter::once(SectorChoice {
+        value: String::new(),
+        label: locale.text("sector.all"),
+        icon: EVERY_SECTOR_ICON.to_owned(),
+        current: sector.is_none(),
+    })
+    .chain(sector_options(sectors).into_iter().map(|o| SectorChoice {
+        current: sector == Some(o.value.as_str()),
+        value: o.value,
+        label: o.label,
+        icon: o.icon,
+    }))
+    .collect()
 }
 
 /// "This site is in Vietnamese. Read it in English?" with its two answers,
@@ -141,16 +191,61 @@ const PROVIDER_AREA: Dest = dest("provider_dashboard", "fa-store", "account_menu
 const PARTNER_AREA: Dest = dest("partner_report", "fa-handshake", "account_menu.partner");
 const ACCOUNT: Dest = dest("account", "fa-circle-user", "nav.account");
 
-/// Where "my area" is for this visitor: the admin panel, the partner's
-/// report, the provider
-/// dashboard, or the account page (which asks anonymous visitors to log in).
-fn area_of(actor: Option<&Actor>) -> Dest {
-    match actor {
-        Some(a) if a.can(PERM_ADMIN_DASHBOARD_VIEW) => ADMIN_AREA,
-        Some(a) if a.can(PERM_PARTNER_REPORT_READ) => PARTNER_AREA,
-        Some(a) if a.can(PERM_OWN_LISTING_CREATE) => PROVIDER_AREA,
-        _ => ACCOUNT,
+/// Whose area a signed-in visitor works in, decided by permissions (never a
+/// role name): it picks the "my area" link and the frame of the pages every
+/// account shares (the profile, an error page).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Area {
+    Admin,
+    Partner,
+    Provider,
+    /// Anonymous, or an account with none of the above.
+    Visitor,
+}
+
+impl Area {
+    pub fn of(actor: Option<&Actor>) -> Self {
+        match actor {
+            Some(a) if a.can(PERM_ADMIN_DASHBOARD_VIEW) => Self::Admin,
+            Some(a) if a.can(PERM_PARTNER_REPORT_READ) => Self::Partner,
+            Some(a) if a.can(PERM_OWN_LISTING_CREATE) => Self::Provider,
+            _ => Self::Visitor,
+        }
     }
+
+    fn dest(self) -> Dest {
+        match self {
+            Self::Admin => ADMIN_AREA,
+            Self::Partner => PARTNER_AREA,
+            Self::Provider => PROVIDER_AREA,
+            Self::Visitor => ACCOUNT,
+        }
+    }
+
+    /// Whether `path` is a page of this area: the admin panel (and the demo
+    /// data page it frames), the partner's report, the provider's pages. An
+    /// error there is shown in the area's frame, with the way back to it.
+    pub fn covers(self, path: &str) -> bool {
+        let under = |route: &str| {
+            let base = url(route);
+            path == base || path.starts_with(&format!("{base}/"))
+        };
+        match self {
+            Self::Admin => under("admin") || under("setup_seed"),
+            Self::Partner => under(PARTNER_AREA.route),
+            Self::Provider => {
+                path.starts_with(&section_of(PROVIDER_AREA.route, &url(PROVIDER_AREA.route)))
+            }
+            Self::Visitor => false,
+        }
+    }
+}
+
+/// Where "my area" is for this visitor: the admin panel, the partner's
+/// report, the provider dashboard, or the account page (which asks anonymous
+/// visitors to log in).
+fn area_of(actor: Option<&Actor>) -> Dest {
+    Area::of(actor).dest()
 }
 
 /// "My area" as a worded link.
@@ -167,9 +262,9 @@ pub fn home_area_href(actor: Option<&Actor>) -> String {
 /// is reached from the account menu and the footer, so admins get the plain
 /// account tab here.
 fn area_tab(actor: Option<&Actor>) -> Dest {
-    match actor {
-        Some(a) if a.can(PERM_ADMIN_DASHBOARD_VIEW) => ACCOUNT,
-        _ => area_of(actor),
+    match Area::of(actor) {
+        Area::Admin => ACCOUNT,
+        area => area.dest(),
     }
 }
 
@@ -183,7 +278,7 @@ pub fn provider_cta(locale: &Locale, actor: Option<&Actor>) -> Option<ProviderCt
             "provider_cta.visitor_title",
             "provider_cta.visitor_sub",
         ),
-        Some(a) if !a.can(PERM_ADMIN_DASHBOARD_VIEW) && a.can(PERM_OWN_LISTING_CREATE) => (
+        Some(_) if Area::of(actor) == Area::Provider => (
             PROVIDER_AREA,
             "provider_cta.provider_title",
             "provider_cta.provider_sub",
@@ -202,6 +297,16 @@ fn is_active(path: &str, href: &str) -> bool {
         path == "/"
     } else {
         path.starts_with(href)
+    }
+}
+
+/// The section a tab covers. The provider's tab leads to the dashboard but
+/// lights on every page of the provider area (inbox, jobs, reviews, forms),
+/// which all live under the dashboard's parent path.
+fn section_of(route: &str, href: &str) -> String {
+    match href.rsplit_once('/') {
+        Some((parent, _)) if route == PROVIDER_AREA.route => format!("{parent}/"),
+        _ => href.to_owned(),
     }
 }
 
@@ -253,6 +358,8 @@ impl Shell {
             path: path.to_owned(),
             here,
             language_offer: None,
+            sector: None,
+            sectors: Vec::new(),
             tabs: tabs(locale, path, area_of(None)),
             profile: None,
             provider_cta: None,
@@ -263,26 +370,32 @@ impl Shell {
 }
 
 fn tabs(locale: &Locale, path: &str, area: Dest) -> Vec<Tab> {
-    [
-        dest("home", "fa-house", "nav.home"),
-        dest("explore", "fa-location-dot", "nav.near_me"),
-        dest("services", "fa-border-all", "nav.services"),
-        dest("products", "fa-bag-shopping", "nav.products"),
+    // (tab, the tab a phone lights instead when this one is wide only).
+    let all: [(Dest, Option<&'static str>); 7] = [
+        (dest("home", "fa-house", "nav.home"), None),
+        (dest("explore", "fa-location-dot", "nav.near_me"), None),
+        (dest("services", "fa-border-all", "nav.services"), None),
+        (dest("products", "fa-bag-shopping", "nav.products"), None),
         // The provider directory; on a phone it is the second tab of /services.
-        dest("providers", "fa-store", "nav.shops"),
+        (dest("providers", "fa-store", "nav.shops"), Some("services")),
         // Crop prices; on a phone the home page's price strip leads there.
-        dest("prices", "fa-chart-line", "nav.prices"),
-        area,
-    ]
-    .into_iter()
-    .map(|d| d.link(locale))
-    .map(|link| Tab {
-        active: is_active(path, &link.href),
-        wide_only: link.href == url("providers") || link.href == url("prices"),
-        phone_only: link.href == url("account"),
-        link,
-    })
-    .collect()
+        (dest("prices", "fa-chart-line", "nav.prices"), Some("home")),
+        (area, None),
+    ];
+    let active = |d: &Dest| is_active(path, &section_of(d.route, &url(d.route)));
+    let stand_in = all
+        .iter()
+        .find(|(d, phone)| phone.is_some() && active(d))
+        .and_then(|(_, phone)| *phone);
+    all.iter()
+        .map(|(d, phone)| Tab {
+            active: active(d),
+            active_on_phone: stand_in == Some(d.route),
+            wide_only: phone.is_some(),
+            phone_only: d.route == ACCOUNT.route,
+            link: d.link(locale),
+        })
+        .collect()
 }
 
 /// `q` from a raw query string, `+` and `%XX` decoded.
@@ -335,6 +448,9 @@ impl FromRequestParts<AppState> for Shell {
             actor.as_ref(),
         );
         shell.language_offer = language_offer(&parts.headers, &state.locales);
+        let sectors = state.usecases.sector.shown().await?;
+        shell.sector = chosen_sector(&parts.headers, &sectors);
+        shell.sectors = sector_choices(state.locale(), &sectors, shell.sector.as_deref());
         Ok(shell)
     }
 }
@@ -434,9 +550,82 @@ mod tests {
                 .collect::<Vec<_>>()
         };
         assert_eq!(active("/"), ["/"]);
-        assert_eq!(active("/products/category/4/phan-bon"), ["/products"]);
+        assert_eq!(active("/supplies/category/4/phan-bon"), ["/supplies"]);
         assert_eq!(active("/providers/1/x"), ["/providers"]);
         assert_eq!(active("/services/3/phun-thuoc"), ["/services"]);
+    }
+
+    #[test]
+    fn the_provider_tab_lights_on_every_page_of_the_provider_area() {
+        let vi = vi();
+        let provider = actor(&[PERM_OWN_LISTING_CREATE]);
+        for path in [
+            "/provider/dashboard",
+            "/provider/inquiries",
+            "/provider/jobs",
+            "/provider/reviews",
+            "/provider/services/3/edit",
+        ] {
+            let shell = Shell::new(&vi, path, None, provider.as_ref());
+            let lit: Vec<_> = shell
+                .tabs
+                .iter()
+                .filter(|t| t.active)
+                .map(|t| t.link.href.as_str())
+                .collect();
+            assert_eq!(lit, ["/provider/dashboard"], "{path}");
+        }
+        // A public provider page belongs to the directory, not the dashboard.
+        let shell = Shell::new(&vi, "/providers/1/x", None, provider.as_ref());
+        assert!(!shell
+            .tabs
+            .iter()
+            .any(|t| t.active && t.link.href == "/provider/dashboard"));
+    }
+
+    #[test]
+    fn a_phone_lights_a_stand_in_for_a_wide_only_tab() {
+        let vi = vi();
+        let on_phone = |path: &str| {
+            Shell::new(&vi, path, None, None)
+                .tabs
+                .iter()
+                .filter(|t| (t.active && !t.wide_only) || t.active_on_phone)
+                .map(|t| t.link.href.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(on_phone("/providers"), ["/services"]);
+        assert_eq!(on_phone("/providers/1/x"), ["/services"]);
+        assert_eq!(on_phone("/prices"), ["/"]);
+        assert_eq!(on_phone("/services"), ["/services"]);
+        assert_eq!(on_phone("/search"), Vec::<String>::new());
+    }
+
+    #[test]
+    fn the_area_follows_permissions() {
+        let admin = actor(&[PERM_ADMIN_DASHBOARD_VIEW, PERM_OWN_LISTING_CREATE]);
+        assert_eq!(Area::of(admin.as_ref()), Area::Admin);
+        let partner = actor(&[PERM_PARTNER_REPORT_READ]);
+        assert_eq!(Area::of(partner.as_ref()), Area::Partner);
+        let provider = actor(&[PERM_OWN_LISTING_CREATE]);
+        assert_eq!(Area::of(provider.as_ref()), Area::Provider);
+        assert_eq!(Area::of(actor(&[]).as_ref()), Area::Visitor);
+        assert_eq!(Area::of(None), Area::Visitor);
+    }
+
+    #[test]
+    fn each_area_covers_its_own_pages_only() {
+        assert!(Area::Admin.covers("/admin/users/3"));
+        assert!(Area::Admin.covers("/admin"));
+        assert!(Area::Admin.covers("/setup/seed"));
+        assert!(!Area::Admin.covers("/administration"));
+        assert!(!Area::Admin.covers("/account"));
+        assert!(Area::Partner.covers("/partner"));
+        assert!(Area::Partner.covers("/partner/report.csv"));
+        assert!(!Area::Partner.covers("/partners"));
+        assert!(Area::Provider.covers("/provider/services/3/edit"));
+        assert!(!Area::Provider.covers("/providers/1/x"));
+        assert!(!Area::Visitor.covers("/"));
     }
 
     #[test]

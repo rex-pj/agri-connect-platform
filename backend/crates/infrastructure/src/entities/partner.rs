@@ -16,6 +16,8 @@ pub struct Model {
     pub updated_on: DateTimeWithTimeZone,
     pub created_by: Option<i32>,
     pub updated_by: Option<i32>,
+    /// Demo data, removed with it (contracts and sponsored shops follow).
+    pub is_demo: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

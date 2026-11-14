@@ -40,12 +40,32 @@ fn local_path(back: &str) -> Option<&str> {
 }
 
 /// `back` when it is a path on this site, else home.
-fn back_to(back: &str) -> Result<String, Error> {
+pub(super) fn back_to(back: &str) -> Result<String, Error> {
     match local_path(back) {
         Some(path) => Ok(path.to_owned()),
         None => {
             routes::url("home", &[]).map_err(|e| Error::internal(format!("language links: {e}")))
         }
+    }
+}
+
+/// A visitor's preference (language, sector), kept a year: `value` set, or
+/// `None` to forget it. The same attributes for every preference.
+pub(super) fn remember(
+    response: &mut Response,
+    policy: &CookiePolicy,
+    name: &str,
+    value: Option<&str>,
+) {
+    let secure = if policy.secure { "; Secure" } else { "" };
+    let (value, max_age) = match value {
+        Some(v) => (v, LANG_COOKIE_MAX_AGE_SECS),
+        None => ("", 0),
+    };
+    let cookie =
+        format!("{name}={value}; Path=/; Max-Age={max_age}; HttpOnly; SameSite=Lax{secure}");
+    if let Ok(value) = HeaderValue::from_str(&cookie) {
+        response.headers_mut().append(header::SET_COOKIE, value);
     }
 }
 
@@ -56,14 +76,7 @@ pub async fn switch(
     let lang =
         Lang::parse(form.lang.trim()).ok_or_else(|| Error::new(ErrorCode::InvalidRequestBody))?;
     let mut response = see_other(&back_to(&form.back)?)?;
-    let secure = if policy.secure { "; Secure" } else { "" };
-    let cookie = format!(
-        "{LANG_COOKIE}={}; Path=/; Max-Age={LANG_COOKIE_MAX_AGE_SECS}; HttpOnly; SameSite=Lax{secure}",
-        lang.code()
-    );
-    if let Ok(value) = HeaderValue::from_str(&cookie) {
-        response.headers_mut().append(header::SET_COOKIE, value);
-    }
+    remember(&mut response, &policy, LANG_COOKIE, Some(lang.code()));
     Ok(response)
 }
 

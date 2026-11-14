@@ -1,5 +1,6 @@
 {% extends "layouts/app.html" %}
 {% import "molecules/page_hero.html" as hero %}
+{% import "molecules/sector_switch.html" as sector %}
 {% import "molecules/geo_cta.html" as geo %}
 {% import "molecules/empty_state.html" as empty %}
 {% import "molecules/pagination_nav.html" as paging %}
@@ -16,6 +17,7 @@
 
 {{ tabs::tab_nav(tabs=page.tabs, label=t(key="list.view_by")) }}
 
+{% if page.sectors %}{{ sector::sector_links(sectors=page.sectors) }}{% else %}{{ sector::sector_switch(sectors=shell.sectors, back=shell.here) }}{% endif %}
 <div class="list-tools">{{ filters::list_filters(f=page.filters) }}</div>
 
 <section class="list-results">

@@ -6,6 +6,7 @@ use crate::{
         BusinessAdminDetail, BusinessAdminView, BusinessBrowse, BusinessDetail, BusinessGeoResult,
         BusinessProfile, ProfileUpdate, ProviderSort,
     },
+    models::service::PublicServiceFilter,
 };
 
 #[async_trait]
@@ -18,22 +19,23 @@ pub trait BusinessRepositoryTrait {
         limit: i64,
     ) -> Result<Vec<BusinessGeoResult>, Error>;
 
+    /// The directory: `filter.category_id` a service category it offers live,
+    /// `sector` providers with nothing yet or something live in that sector.
     async fn browse(
         &self,
-        service_id: Option<i32>,
-        name: Option<String>,
+        filter: &PublicServiceFilter,
         sort: ProviderSort,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<BusinessBrowse>, Error>;
 
-    async fn count_browse(
-        &self,
-        service_id: Option<i32>,
-        name: Option<String>,
-    ) -> Result<i64, Error>;
+    async fn count_browse(&self, filter: &PublicServiceFilter) -> Result<i64, Error>;
 
-    async fn featured(&self, limit: i64) -> Result<Vec<BusinessBrowse>, Error>;
+    async fn featured(
+        &self,
+        limit: i64,
+        sector: Option<&str>,
+    ) -> Result<Vec<BusinessBrowse>, Error>;
 
     async fn find_detail(&self, id: i32) -> Result<Option<BusinessDetail>, Error>;
 

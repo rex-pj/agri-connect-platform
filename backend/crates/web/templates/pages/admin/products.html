@@ -1,4 +1,5 @@
 {% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
 {% import "atoms/alert.html" as alerts %}
 {% import "atoms/admin_thumb.html" as thumb %}
 {% import "atoms/status_badge.html" as status %}
@@ -22,13 +23,14 @@
   {% if b.flash == "product_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.product_shown")) }}{% endif %}
   {% if b.flash == "product_deleted" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="dashboard.product_deleted")) }}{% endif %}
   {% if b.filter %}{{ filter::admin_filter(f=b.filter) }}{% endif %}
+  {% if b.narrowed %}{{ filter::admin_filter(f=b.narrowed) }}{% endif %}
 
   {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.products")) }}
   <div class="admin-card">
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0 admin-table">
         <thead class="admin-table-head">
-          <tr><th>{{ t(key="admin_menu.products") }}</th><th>{{ t(key="common.provider") }}</th><th>{{ t(key="service_form.price") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
+          <tr><th>{{ t(key="admin_menu.products") }}</th><th>{{ t(key="admin.col_classification") }}</th><th>{{ t(key="service_form.price") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
         </thead>
         <tbody>
           {% for r in b.rows %}
@@ -37,10 +39,10 @@
             <td>
               <div class="d-flex align-items-center gap-2">
                 {{ thumb::admin_thumb(file_id=p.image_file_id) }}
-                <div><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ p.name }}</a><span class="d-block small text-muted">{{ p.category }}</span></div>
+                <div><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ p.name }}</a><a class="d-block small text-decoration-none text-body-secondary" href="{{ r.provider_href }}">{{ atoms::icon(name="fa-store", class="me-1") }}{{ p.business_name }}</a></div>
               </div>
             </td>
-            <td><a class="text-decoration-none" href="{{ r.provider_href }}">{{ p.business_name }}</a></td>
+            <td class="small"><span class="d-block"><span class="text-muted">{{ t(key="admin.label_type") }}:</span> <a class="fw-semibold text-decoration-none" href="{{ r.category_href }}">{{ p.category }}</a></span><span class="d-block"><span class="text-muted">{{ t(key="admin.label_sector") }}:</span> {% if r.sector_href %}<a class="text-decoration-none" href="{{ r.sector_href }}">{{ r.sector_label }}</a>{% else %}{{ r.sector_label }}{% endif %}</span>{% if p.commodity %}<span class="d-block"><span class="text-muted">{{ t(key="admin.label_for") }}:</span> <a class="text-decoration-none" href="{{ r.commodity_href }}">{{ p.commodity }}</a></span>{% endif %}</td>
             <td class="text-nowrap">{% if p.price %}{{ p.price | vnd }}{% if p.unit %}/{{ p.unit }}{% endif %}{% else %}<span class="text-muted">—</span>{% endif %}</td>
             <td class="text-center">{{ status::visibility(on=p.is_active) }}</td>
             <td class="text-end">

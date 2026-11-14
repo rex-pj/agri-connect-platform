@@ -1,7 +1,8 @@
 //! The typed names of every table, column and database function the
 //! migrations use, and the few Postgres statements sea-query 0.32 cannot
-//! build (named CHECK constraints, operator-class indexes, triggers and
-//! functions), each assembled from those names so no migration spells SQL.
+//! build (named CHECK constraints, operator-class indexes, sequences,
+//! triggers and functions), each assembled from those names so no migration
+//! spells SQL.
 //!
 //! A variant here names a column some migration created: renaming one would
 //! rewrite history, so a renamed column gets a new variant instead.
@@ -48,6 +49,18 @@ pub enum Users {
     UpdatedBy,
     DeletedAt,
     SessionsValidAfter,
+    EmailVerifiedAt,
+}
+
+#[derive(DeriveIden, Clone, Copy)]
+pub enum EmailVerificationTokens {
+    Table,
+    Id,
+    UserId,
+    TokenHash,
+    ExpiresAt,
+    UsedAt,
+    CreatedOn,
 }
 
 #[derive(DeriveIden, Clone, Copy)]
@@ -90,21 +103,108 @@ pub enum CatalogueState {
 }
 
 #[derive(DeriveIden, Clone, Copy)]
-pub enum Categories {
+pub enum Provinces {
     Table,
-    Id,
+    Code,
     Name,
-    Slug,
-    Type,
+    FullName,
+    UnitType,
+    Center,
+    IsActive,
+}
+
+#[derive(DeriveIden, Clone, Copy)]
+pub enum Wards {
+    Table,
+    Code,
+    ProvinceCode,
+    Name,
+    FullName,
+    UnitType,
+    Center,
+    Boundary,
+    IsActive,
+}
+
+/// A sector the platform serves: crops, livestock, aquaculture, as the
+/// admin keeps them; named elsewhere by its `code` (columns: `CodedLists`).
+#[derive(DeriveIden, Clone, Copy)]
+pub enum Sectors {
+    Table,
+}
+
+/// A kind of alert (disease, salt water, weather), as the admin keeps them;
+/// `alerts.kind` names it by its `code` (columns: `CodedLists`).
+#[derive(DeriveIden, Clone, Copy)]
+pub enum AlertKinds {
+    Table,
+}
+
+/// The columns `sectors` and `alert_kinds` share: short lists the admin
+/// keeps, each entry named elsewhere by a code made from its name once.
+#[derive(DeriveIden, Clone, Copy)]
+pub enum CodedLists {
+    Id,
+    Code,
+    Name,
     Icon,
-    Color,
-    Description,
     DisplayOrder,
     IsActive,
+    IsDemo,
     CreatedOn,
     UpdatedOn,
     CreatedBy,
     UpdatedBy,
+}
+
+/// What a farmer raises (cây trồng, vật nuôi): rice, durian, pigs, shrimp. It fixes
+/// its sector; the price board's items and a supply's use point to it.
+#[derive(DeriveIden, Clone, Copy)]
+pub enum Commodities {
+    Table,
+    Id,
+    Name,
+    Sector,
+    Icon,
+    DisplayOrder,
+    IsActive,
+    IsDemo,
+    CreatedOn,
+    UpdatedOn,
+    CreatedBy,
+    UpdatedBy,
+}
+
+/// The columns `service_types` and `supply_types` share: the kinds of work
+/// a provider is hired for, and the kinds of supplies one sells. Two tables,
+/// one id sequence (`Sequences::CatalogueTypeIds`), so a bare id names one
+/// row of either.
+#[derive(DeriveIden, Clone, Copy)]
+pub enum OfferTypes {
+    Id,
+    Name,
+    Slug,
+    Icon,
+    Color,
+    Description,
+    DisplayOrder,
+    Sector,
+    IsActive,
+    IsDemo,
+    CreatedOn,
+    UpdatedOn,
+    CreatedBy,
+    UpdatedBy,
+}
+
+#[derive(DeriveIden, Clone, Copy)]
+pub enum ServiceTypes {
+    Table,
+}
+
+#[derive(DeriveIden, Clone, Copy)]
+pub enum SupplyTypes {
+    Table,
 }
 
 #[derive(DeriveIden, Clone, Copy)]
@@ -133,11 +233,12 @@ pub enum Services {
     Table,
     Id,
     BusinessId,
-    CategoryId,
+    ServiceTypeId,
     Name,
     Description,
     PriceNote,
     IsActive,
+    ImageFileId,
     CreatedOn,
     UpdatedOn,
     CreatedBy,
@@ -150,18 +251,19 @@ pub enum Products {
     Table,
     Id,
     BusinessId,
-    CategoryId,
+    SupplyTypeId,
+    CommodityId,
     Name,
     Description,
     Price,
     Unit,
     IsActive,
+    ImageFileId,
     CreatedOn,
     UpdatedOn,
     CreatedBy,
     UpdatedBy,
     DeletedAt,
-    ImageFileId,
 }
 
 #[derive(DeriveIden, Clone, Copy)]
@@ -192,11 +294,11 @@ pub enum Reviews {
     ReviewerName,
     ReviewerPhoneHash,
     IsVisible,
+    Reply,
+    RepliedAt,
     CreatedOn,
     UpdatedOn,
     UpdatedBy,
-    Reply,
-    RepliedAt,
 }
 
 #[derive(DeriveIden, Clone, Copy)]
@@ -208,6 +310,7 @@ pub enum Locations {
     Lng,
     DisplayOrder,
     IsActive,
+    IsDemo,
 }
 
 #[derive(DeriveIden, Clone, Copy)]
@@ -253,7 +356,12 @@ pub enum RefreshTokens {
 #[derive(DeriveIden, Clone, Copy)]
 pub enum CallClicks {
     Table,
+    Id,
+    BusinessId,
+    ServiceId,
+    ProductId,
     Channel,
+    CreatedOn,
 }
 
 #[derive(DeriveIden, Clone, Copy)]
@@ -261,11 +369,12 @@ pub enum SearchEvents {
     Table,
     Id,
     Query,
-    CategoryId,
-    LocationId,
+    ServiceTypeId,
+    SupplyTypeId,
+    WardCode,
     Results,
     CreatedOn,
-    WardCode,
+    IsDemo,
 }
 
 #[derive(DeriveIden, Clone, Copy)]
@@ -279,6 +388,7 @@ pub enum Partners {
     Email,
     AccountId,
     IsActive,
+    IsDemo,
     CreatedOn,
     UpdatedOn,
     CreatedBy,
@@ -290,22 +400,28 @@ pub enum PartnerContracts {
     Table,
     Id,
     PartnerId,
-    LocationId,
+    ProvinceCode,
+    WardCode,
     StartsOn,
     EndsOn,
     MonthlyFee,
     Note,
     CreatedOn,
     CreatedBy,
-    ProvinceCode,
-    WardCode,
 }
 
 #[derive(DeriveIden, Clone, Copy)]
-pub enum PartnerContractCategories {
+pub enum PartnerContractServiceTypes {
     Table,
     ContractId,
-    CategoryId,
+    ServiceTypeId,
+}
+
+#[derive(DeriveIden, Clone, Copy)]
+pub enum PartnerContractSupplyTypes {
+    Table,
+    ContractId,
+    SupplyTypeId,
 }
 
 #[derive(DeriveIden, Clone, Copy)]
@@ -315,15 +431,18 @@ pub enum PartnerSponsored {
     BusinessId,
 }
 
+/// A farm produce item on the price board ("Lúa ST25", "Heo hơi"): a
+/// variety or grade of one commodity.
 #[derive(DeriveIden, Clone, Copy)]
 pub enum Crops {
     Table,
     Id,
+    CommodityId,
     Name,
-    Kind,
     Unit,
     DisplayOrder,
     IsActive,
+    IsDemo,
 }
 
 #[derive(DeriveIden, Clone, Copy)]
@@ -338,13 +457,14 @@ pub enum CropPrices {
     Note,
     CreatedOn,
     CreatedBy,
+    IsDemo,
 }
 
 #[derive(DeriveIden, Clone, Copy)]
 pub enum JobPosts {
     Table,
     Id,
-    CategoryId,
+    ServiceTypeId,
     LocationId,
     Location,
     Description,
@@ -352,6 +472,33 @@ pub enum JobPosts {
     RequesterPhone,
     Status,
     CreatedOn,
+    IsDemo,
+}
+
+#[derive(DeriveIden, Clone, Copy)]
+pub enum Alerts {
+    Table,
+    Id,
+    Kind,
+    Sector,
+    ProvinceCode,
+    Title,
+    Body,
+    StartsOn,
+    EndsOn,
+    IsActive,
+    IsDemo,
+    CreatedOn,
+    UpdatedOn,
+    CreatedBy,
+    UpdatedBy,
+}
+
+/// Sequences created on their own (not a column's SERIAL).
+#[derive(DeriveIden, Clone, Copy)]
+pub enum Sequences {
+    /// The one id sequence of `service_types` and `supply_types`.
+    CatalogueTypeIds,
 }
 
 // ── Database vocabulary: functions, types, index methods ──────────────────────
@@ -361,10 +508,19 @@ pub enum JobPosts {
 pub enum DbFn {
     /// `now()`: the transaction's timestamp (column defaults).
     Now,
+    /// `nextval(sequence)`: a shared sequence's next value (column defaults).
+    Nextval,
     /// Our IMMUTABLE wrapper of `unaccent`, usable in an index.
     FUnaccent,
     /// Sets `NEW.updated_on`; called by every `updated_on` trigger.
     FnSetUpdatedOn,
+    /// Refuses a service or supply type whose id or slug the other table
+    /// already has; called by both tables' `distinct` triggers.
+    FnOfferTypeDistinct,
+    /// `btrim(text)`: the text without its surrounding spaces (checks).
+    Btrim,
+    /// `num_nonnulls(a, b, …)`: how many of its arguments are set (checks).
+    NumNonnulls,
 }
 
 /// Extensions the schema needs.
@@ -414,7 +570,45 @@ pub const VN_PHONE_PATTERN: &str = "^0[0-9]{9}$";
 
 /// `column ~ VN_PHONE_PATTERN`.
 pub fn is_vn_phone<C: IntoIden + 'static>(column: C) -> SimpleExpr {
-    Expr::col(column).binary(PgBinOper::Regex, Expr::val(VN_PHONE_PATTERN))
+    matches(column, VN_PHONE_PATTERN)
+}
+
+/// A slug or a code (`application::validation::SLUG_PATTERN`): lower-case
+/// letters and digits in groups joined by single hyphens.
+pub const SLUG_PATTERN: &str = "^[a-z0-9]+(-[a-z0-9]+)*$";
+
+/// A SHA-256 as `hashing::sha256_hex` writes it: 64 lower-case hex digits.
+pub const SHA256_HEX_PATTERN: &str = "^[0-9a-f]{64}$";
+
+/// `column ~ pattern`.
+pub fn matches<C: IntoIden + 'static>(column: C, pattern: &str) -> SimpleExpr {
+    Expr::col(column).binary(PgBinOper::Regex, Expr::val(pattern))
+}
+
+/// `btrim(column) <> ''`: a NOT NULL text that says something. NOT NULL
+/// alone lets an empty name through.
+pub fn not_blank<C: IntoIden + 'static>(column: C) -> SimpleExpr {
+    Expr::expr(Func::cust(DbFn::Btrim).arg(Expr::col(column))).ne("")
+}
+
+/// `column = lower(column)`: stored folded, so its UNIQUE ignores case.
+pub fn is_lower<C: IntoIden + Copy + 'static>(column: C) -> SimpleExpr {
+    Expr::col(column).eq(Func::lower(Expr::col(column)))
+}
+
+/// `num_nonnulls(a, b) <= 1`: two optional references of which a row names
+/// at most one.
+pub fn at_most_one<A, B>(a: A, b: B) -> SimpleExpr
+where
+    A: IntoIden + 'static,
+    B: IntoIden + 'static,
+{
+    Expr::expr(
+        Func::cust(DbFn::NumNonnulls)
+            .arg(Expr::col(a))
+            .arg(Expr::col(b)),
+    )
+    .lte(1)
 }
 
 // ── Column shorthands (the baseline's column kinds) ───────────────────────────
@@ -579,6 +773,40 @@ pub fn add_unique(table: &dyn Iden, name: &str, columns: &[&dyn Iden]) -> String
     )
 }
 
+/// `ALTER TABLE table ADD CONSTRAINT name FOREIGN KEY (columns) REFERENCES to
+/// (to_columns) ON DELETE …`: a reference over several columns, so the row
+/// pointed to must agree with this one on all of them (an inquiry's service
+/// is one of the inquiry's own business). `clear`: the columns set to NULL
+/// when that row is deleted (`ON DELETE SET NULL (clear)`, which the builder
+/// cannot write); none: the delete is refused.
+pub fn add_reference(
+    table: &dyn Iden,
+    name: &str,
+    columns: &[&dyn Iden],
+    to: &dyn Iden,
+    to_columns: &[&dyn Iden],
+    clear: &[&dyn Iden],
+) -> String {
+    let list = |columns: &[&dyn Iden]| -> String {
+        let columns: Vec<String> = columns.iter().map(|c| quoted(*c)).collect();
+        columns.join(", ")
+    };
+    let on_delete = if clear.is_empty() {
+        "RESTRICT".to_owned()
+    } else {
+        format!("SET NULL ({})", list(clear))
+    };
+    format!(
+        "ALTER TABLE {} ADD CONSTRAINT {} FOREIGN KEY ({}) REFERENCES {} ({}) ON DELETE {}",
+        quoted(table),
+        quoted(&Alias::new(name)),
+        list(columns),
+        quoted(to),
+        list(to_columns),
+        on_delete
+    )
+}
+
 /// `CREATE INDEX name ON table USING method ((expr) opclass)`: an expression
 /// index with an operator class, which the index builder cannot attach.
 pub fn create_opclass_index(
@@ -605,6 +833,20 @@ pub fn create_updated_on_trigger(table: &dyn Iden) -> String {
         quoted(&Alias::new(format!("trg_{}_updated_on", table.to_string()))),
         quoted(table),
         DbFn::FnSetUpdatedOn.to_string()
+    )
+}
+
+/// The trigger of `table` that keeps its ids and slugs apart from `other`'s:
+/// `trg_<table>_distinct`.
+pub fn create_distinct_trigger(table: &dyn Iden, other: &dyn Iden) -> String {
+    format!(
+        "CREATE TRIGGER {} BEFORE INSERT OR UPDATE OF {}, {} ON {} FOR EACH ROW EXECUTE FUNCTION {}('{}')",
+        quoted(&Alias::new(format!("trg_{}_distinct", table.to_string()))),
+        quoted(&OfferTypes::Id),
+        quoted(&OfferTypes::Slug),
+        quoted(table),
+        DbFn::FnOfferTypeDistinct.to_string(),
+        other.to_string()
     )
 }
 
@@ -652,6 +894,36 @@ pub const SET_UPDATED_ON: FunctionDef = FunctionDef {
     body: "\nBEGIN\n    NEW.updated_on = NOW();\n    RETURN NEW;\nEND;\n",
 };
 
+/// `service_types` and `supply_types` are two tables whose rows are named by
+/// one id and one slug (a contract's category, a category page's address).
+/// A UNIQUE covers one table only, so this refuses a row whose id or slug
+/// the other table (the trigger's argument) has. The lock makes two writers
+/// take turns, so neither misses the other's uncommitted row; types are
+/// written by an admin, a few times a year. Raised as a unique violation:
+/// the application answers it like the tables' own UNIQUE (`slug_taken`).
+pub const OFFER_TYPE_DISTINCT: FunctionDef = FunctionDef {
+    name: DbFn::FnOfferTypeDistinct,
+    args: "",
+    returns: "TRIGGER",
+    language: "plpgsql",
+    attributes: "",
+    body: "
+DECLARE
+    clash BOOLEAN;
+BEGIN
+    PERFORM pg_advisory_xact_lock(hashtext('catalogue_type_ids'));
+    EXECUTE format('SELECT EXISTS (SELECT 1 FROM %I WHERE id = $1 OR slug = $2)', TG_ARGV[0])
+        INTO clash USING NEW.id, NEW.slug;
+    IF clash THEN
+        RAISE EXCEPTION 'id % or slug % of % violates unique constraint \"uq_catalogue_types_distinct\": % has it',
+            NEW.id, NEW.slug, TG_TABLE_NAME, TG_ARGV[0]
+            USING ERRCODE = 'unique_violation', CONSTRAINT = 'uq_catalogue_types_distinct';
+    END IF;
+    RETURN NEW;
+END;
+",
+};
+
 /// `unaccent()` is only STABLE (its dictionary could change), so it cannot
 /// appear in an index. This wrapper pins the dictionary and is declared
 /// IMMUTABLE; changing unaccent.rules would require a REINDEX of the folded
@@ -664,6 +936,21 @@ pub const F_UNACCENT: FunctionDef = FunctionDef {
     attributes: "IMMUTABLE PARALLEL SAFE STRICT",
     body: " SELECT public.unaccent('public.unaccent'::regdictionary, $1) ",
 };
+
+/// `CREATE SEQUENCE name AS integer`: an id sequence several tables draw from.
+pub fn create_sequence(name: Sequences) -> String {
+    format!("CREATE SEQUENCE {} AS integer", quoted(&name))
+}
+
+/// `INT PRIMARY KEY DEFAULT nextval('sequence')`: an id from a shared sequence.
+pub fn sequence_id<C: IntoIden>(c: C, sequence: Sequences) -> ColumnDef {
+    ColumnDef::new(c)
+        .integer()
+        .not_null()
+        .primary_key()
+        .default(Func::cust(DbFn::Nextval).arg(sequence.to_string()))
+        .to_owned()
+}
 
 /// `CREATE EXTENSION IF NOT EXISTS ext`.
 pub fn create_extension(ext: Ext) -> String {

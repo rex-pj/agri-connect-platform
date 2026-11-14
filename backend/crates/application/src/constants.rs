@@ -13,6 +13,16 @@ pub const FEATURED_SERVICES_COUNT: usize = 6;
 // ── Authentication ─────────────────────────────────────────────────────────────
 pub const JWT_EXPIRY_HOURS: i64 = 1;
 pub const PASSWORD_RESET_EXPIRY_HOURS: i64 = 1;
+/// Reset links of one account that may be valid at once; a request beyond it
+/// sends nothing until one runs out.
+pub const PASSWORD_RESET_LINKS_MAX: u64 = 3;
+/// SETUP_TOKEN is typed once by whoever deploys; a shorter one is guessable.
+pub const SETUP_TOKEN_MIN_CHARS: usize = 16;
+/// How long the link that confirms an email address works.
+pub const EMAIL_VERIFICATION_EXPIRY_HOURS: i64 = 24;
+/// Confirmation links of one account that may be valid at once: within a
+/// day, an address is written to at most this often before it is confirmed.
+pub const EMAIL_VERIFICATION_LINKS_MAX: u64 = 3;
 pub const LOGIN_FAIL_MAX_ATTEMPTS: i32 = 5;
 pub const LOGIN_LOCK_MINUTES: i64 = 15;
 
@@ -48,6 +58,10 @@ pub const RADIUS_DEFAULT_M: f64 = 10_000.0;
 /// Most results one near-me search returns (providers or services), nearest
 /// first: enough for a district without a page that never ends.
 pub const GEO_RESULTS_MAX: i64 = 50;
+/// One visitor's taps on the same business and channel within this long are
+/// one lead: a second tap is a redial, and without it a script could write
+/// the figures partners pay for.
+pub const CALL_REPEAT_SECS: u64 = 3_600;
 /// The window the call counts cover (admin dashboard, provider dashboard).
 pub const CALL_STATS_DAYS: i64 = 30;
 
@@ -82,10 +96,26 @@ pub const CONTRACT_NOTE_MAX: usize = 500;
 /// How many sponsored services a near-me page shows above its results.
 pub const SPONSORED_SHOWN: usize = 2;
 
+// ── Coded lists (sectors, alert kinds) ───────────────────────────────────────
+pub const CODED_NAME_MAX: usize = 100;
+pub const CODED_ICON_MAX: usize = 100;
+/// A code's length (`sectors.code`, `alert_kinds.code`): the slug of its
+/// name, cut.
+pub const CODED_CODE_MAX: usize = 40;
+
+// ── Commodities (cây trồng, vật nuôi) ──────────────────────────────────────────────────
+pub const COMMODITY_NAME_MAX: usize = 100;
+pub const COMMODITY_ICON_MAX: usize = 100;
+
 // ── Crop prices ───────────────────────────────────────────────────────────────
 pub const CROP_NAME_MAX: usize = 100;
 pub const CROP_UNIT_MAX: usize = 20;
 pub const PRICE_NOTE_MAX: usize = 200;
+/// An alert's title and body, short enough to read on a phone at a glance.
+pub const ALERT_TITLE_MAX: usize = 120;
+pub const ALERT_BODY_MAX: usize = 600;
+/// Alerts shown on the home page at once, the newest first.
+pub const ALERTS_SHOWN: u64 = 3;
 /// The highest price per unit an admin can enter, in đồng: a typo with an
 /// extra zero or two is refused rather than published.
 pub const PRICE_PER_UNIT_MAX: i64 = 10_000_000;

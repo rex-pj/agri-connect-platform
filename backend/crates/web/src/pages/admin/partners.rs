@@ -14,22 +14,27 @@ use application::{
     authz::Actor,
     inputs::{ContractInput, PartnerInput},
     outputs::{
-        AreaGroupDto, NamedDto, PartnerDetailDto, PartnerDto, PartnerKpiDto, SponsorCandidateDto,
+        AreaGroupDto, CategoryDto, CodedDto, NamedDto, PartnerDetailDto, PartnerDto, PartnerKpiDto,
+        SponsorCandidateDto,
     },
 };
 use axum::{extract::State, http::StatusCode, response::Response};
 use chrono::NaiveDate;
-use domain::{constants::PARTNER_KINDS, Error, ErrorCode};
+use domain::{
+    constants::{CATEGORY_TYPE_PRODUCT, CATEGORY_TYPE_SERVICE, PARTNER_KINDS},
+    Error, ErrorCode,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     app_state::AppState,
     cookies::{Flash, TakeFlash},
     extract::{ApiForm, ApiPath},
+    labels::sector_name,
     locale::Locale,
     middleware::auth::Viewer,
     pages::{
-        admin::{is_refusal, render_admin, url, Outcome},
+        admin::{is_refusal, render_admin, url, user_href, Outcome},
         forms::{reason, FormErrors},
         parse_id, see_other,
     },
@@ -141,6 +146,40 @@ impl ContractForm {
 pub struct KindOption {
     pub label: String,
     pub value: &'static str,
+}
+
+/// The contract form's category boxes, by sector (in the order of
+/// `sectors`, then those of every sector), each sector headed once.
+fn category_options(
+    locale: &Locale,
+    sectors: &[CodedDto],
+    mut categories: Vec<CategoryDto>,
+) -> Vec<CategoryOption> {
+    let rank = |c: &CategoryDto| {
+        c.sector
+            .as_deref()
+            .and_then(|s| sectors.iter().position(|x| x.code == s))
+            .unwrap_or(sectors.len())
+    };
+    // Stable: within a sector the categories keep their display order.
+    categories.sort_by_key(rank);
+    let mut last: Option<Option<String>> = None;
+    categories
+        .into_iter()
+        .map(|c| {
+            let group = (last.as_ref() != Some(&c.sector)).then(|| match c.sector.as_deref() {
+                Some(s) => sector_name(sectors, s),
+                None => locale.text("sector.all"),
+            });
+            last = Some(c.sector.clone());
+            CategoryOption {
+                field: format!("{CATEGORY_PREFIX}{}", c.id),
+                id: c.id,
+                name: c.name,
+                group,
+            }
+        })
+        .collect()
 }
 
 /// A kind's name in the visitor's language.
@@ -292,11 +331,16 @@ pub struct CategoryOption {
     pub id: i32,
     pub name: String,
     pub field: String,
+    /// The sector heading to show before this box: set on the first of each
+    /// sector, so a partner's categories read by sector.
+    pub group: Option<String>,
 }
 
 #[derive(Serialize)]
 pub struct PartnerPage {
     pub partner: PartnerDto,
+    /// The report account's admin page, when the visitor may read accounts.
+    pub account_href: Option<String>,
     pub kind_label: String,
     /// The one-time message after a change, worded.
     pub flash_text: Option<String>,
@@ -327,10 +371,16 @@ async fn partner_page(
 ) -> Result<Response, Error> {
     let partners = &state.usecases.partner;
     let PartnerDetailDto { partner, contracts } = partners.get_partner(actor, id).await?;
-    let (areas, categories) = tokio::try_join!(
+    // What a lead is counted under: services and supplies, never a produce
+    // group of the price board.
+    let explore = &state.usecases.explore;
+    let (areas, mut categories, supplies, sectors) = tokio::try_join!(
         partners.area_choices(actor),
-        state.usecases.explore.get_categories(None),
+        explore.get_categories(Some(CATEGORY_TYPE_SERVICE)),
+        explore.get_categories(Some(CATEGORY_TYPE_PRODUCT)),
+        state.usecases.sector.named(),
     )?;
+    categories.extend(supplies);
     let id_text = id.to_string();
     // The messages go with the form that was refused.
     let refused = |typed: bool| {
@@ -391,6 +441,7 @@ async fn partner_page(
     let refused_form = profile.is_some() || account.is_some() || contract.is_some() || any_edit;
     let path = url("admin_partner", &[("id", &id_text)])?;
     let body = PartnerPage {
+        account_href: user_href(actor, partner.account_id)?,
         profile_errors: refused(profile.is_some()),
         account_errors: refused(account.is_some()),
         contract_errors: refused(contract.is_some()),
@@ -411,14 +462,7 @@ async fn partner_page(
         contracts: rows,
         kinds: kinds(state.locale()),
         areas,
-        categories: categories
-            .into_iter()
-            .map(|c| CategoryOption {
-                field: format!("{CATEGORY_PREFIX}{}", c.id),
-                id: c.id,
-                name: c.name,
-            })
-            .collect(),
+        categories: category_options(state.locale(), &sectors, categories),
         profile_action: path.clone(),
         status_action: url("admin_partner_status", &[("id", &id_text)])?,
         account_action: url("admin_partner_account", &[("id", &id_text)])?,

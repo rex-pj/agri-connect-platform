@@ -9,6 +9,7 @@ use serde::Serialize;
 use crate::{
     locale::Locale,
     pages::{moved_permanently, see_other},
+    shell::SectorChoice,
 };
 
 /// Pages shown either side of the current one before an ellipsis.
@@ -66,6 +67,80 @@ pub struct CategoryChip {
     pub icon: String,
 }
 
+/// The categories a visitor of `sector` is offered: that sector's and those
+/// of every sector; all of them when no sector is chosen. The same rule as
+/// the lists' `category_in_sector`, for what the page picks from.
+pub fn in_sector(categories: &[CategoryDto], sector: Option<&str>) -> Vec<CategoryDto> {
+    categories
+        .iter()
+        .filter(|c| serves(c, sector))
+        .cloned()
+        .collect()
+}
+
+/// Whether `category` is offered to a visitor of `sector` (`in_sector`).
+pub fn serves(category: &CategoryDto, sector: Option<&str>) -> bool {
+    match (sector, category.sector.as_deref()) {
+        (Some(chosen), Some(own)) => chosen == own,
+        _ => true,
+    }
+}
+
+/// The sector a list is narrowed to: none once a category is chosen (it is
+/// the filter, and a shared link still shows its rows) or a text is typed (a
+/// search finds everything, unless its own `sector=` narrows it:
+/// `typed_sector`); else the visitor's. The one rule for every list.
+pub fn list_sector(sector: Option<&str>, category: Option<i32>, search: &str) -> Option<String> {
+    sector
+        .filter(|_| category.is_none() && search.trim().is_empty())
+        .map(str::to_owned)
+}
+
+/// One link of `sector_switch::sector_links`: the same search in one sector.
+#[derive(Debug, Serialize)]
+pub struct SectorLink {
+    pub label: String,
+    pub icon: String,
+    pub href: String,
+    pub current: bool,
+}
+
+/// The sector a typed search is narrowed to by its `sector=` (`raw`): one of
+/// the shown sectors, and only while `search` has words. Lenient, like every
+/// typed query value: blank or unknown is every sector. Never the cookie: a
+/// search is narrowed only by what its own address says.
+pub fn typed_sector(choices: &[SectorChoice], raw: &str, search: &str) -> Option<String> {
+    let raw = raw.trim();
+    (!search.trim().is_empty() && !raw.is_empty())
+        .then(|| choices.iter().find(|s| s.value == raw))
+        .flatten()
+        .map(|s| s.value.clone())
+}
+
+/// The links that narrow the typed search at `path` to one sector, "every
+/// sector" first, `sector` marked; `kept` are its other parameters (without
+/// `sector` and the page).
+pub fn sector_links(
+    choices: &[SectorChoice],
+    path: &str,
+    kept: &[(&str, &str)],
+    sector: Option<&str>,
+) -> Vec<SectorLink> {
+    choices
+        .iter()
+        .map(|s| {
+            let mut params = kept.to_vec();
+            params.push(("sector", s.value.as_str()));
+            SectorLink {
+                label: s.label.clone(),
+                icon: s.icon.clone(),
+                href: with_query(path, &params),
+                current: sector.unwrap_or_default() == s.value,
+            }
+        })
+        .collect()
+}
+
 pub fn chips(categories: &[CategoryDto]) -> Vec<CategoryChip> {
     categories
         .iter()
@@ -109,6 +184,9 @@ pub struct FilterForm {
     pub active: usize,
     /// The list with the filters cleared but the search text kept.
     pub reset_href: String,
+    /// Narrowings the form has no box for, sent back as they are (the
+    /// supplies' commodity), as (name, value).
+    pub hidden: Vec<(&'static str, String)>,
 }
 
 /// The category `id` among `categories` (already narrowed to one type), or

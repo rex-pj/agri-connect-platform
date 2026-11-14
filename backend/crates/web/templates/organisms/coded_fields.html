@@ -1,0 +1,16 @@
+{#- The boxes of an entry of a coded list (a sector, an alert kind), shared
+    by the create sheet and the edit form. `form` is
+    web::pages::admin::coded::CodedForm (as typed), `errors` its FormErrors,
+    `words` the list's (web::pages::admin::coded::CodedWords). Its code is
+    made from the name when it is added and never changes, so only the name,
+    icon and order are edited. `first`: the name box takes the focus when its
+    sheet opens. -#}
+{% import "molecules/form_field.html" as field %}
+{% macro coded_fields(form, errors, words, name_max, icon_max, prefix, first=false) -%}
+{% set e = errors.fields %}
+{{ field::input(id=prefix ~ "-name", name="name", label=words.name, value=form.name, error=e.name | default(value=""), required=true, maxlength=name_max, placeholder=words.name_placeholder, first=first) }}
+<div class="row g-2">
+  <div class="col-7">{{ field::input(id=prefix ~ "-icon", name="icon", label=t(key="coded_form.icon"), value=form.icon, error=e.icon | default(value=""), maxlength=icon_max, placeholder=words.icon_placeholder, autocomplete="off") }}</div>
+  <div class="col-5">{{ field::input(id=prefix ~ "-order", name="display_order", label=t(key="form.display_order"), value=form.display_order, type="number", inputmode="numeric", error=e.display_order | default(value="")) }}</div>
+</div>
+{%- endmacro coded_fields %}

@@ -41,9 +41,9 @@ async fn provider(e: &Env) -> (i32, String) {
     let id: i32 = row.try_get("", "id").unwrap();
     e.t.db
         .execute_unprepared(&format!(
-            "INSERT INTO services (business_id, category_id, name, price_note)
-             SELECT {id}, id, 'Múc bùn ao', '300.000 ₫/giờ' FROM categories
-             WHERE type = 'service' ORDER BY display_order LIMIT 1"
+            "INSERT INTO services (business_id, service_type_id, name, price_note)
+             SELECT {id}, id, 'Múc bùn ao', '300.000 ₫/giờ' FROM service_types
+             ORDER BY display_order LIMIT 1"
         ))
         .await
         .unwrap();

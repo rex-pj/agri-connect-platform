@@ -13,6 +13,7 @@ use domain::{
 };
 use infrastructure::{
     catalogue_repository::CatalogueRepository,
+    demo_data_repository::DemoDataRepository,
     search::{contains, contains_pattern, SearchColumn},
 };
 use integration_tests::{state, TestDb};
@@ -24,6 +25,10 @@ async fn seeded() -> TestDb {
     let t = TestDb::create().await;
     CatalogueRepository::new(Arc::new(t.db.clone()))
         .apply(&CATALOGUE)
+        .await
+        .unwrap();
+    DemoDataRepository::new(Arc::new(t.db.clone()))
+        .load_catalogue()
         .await
         .unwrap();
     let insert = |sql: &str, values: Vec<sea_orm::Value>| {
@@ -43,15 +48,15 @@ async fn seeded() -> TestDb {
     }
     // The directory lists only businesses offering at least one active service.
     t.db.execute_unprepared(
-        "INSERT INTO services (business_id, category_id, name)
+        "INSERT INTO services (business_id, service_type_id, name)
          SELECT b.id, c.id, 'Dịch vụ' FROM businesses b,
-           (SELECT id FROM categories WHERE type = 'service' LIMIT 1) c",
+           (SELECT id FROM service_types LIMIT 1) c",
     )
     .await
     .unwrap();
     t.db.execute(insert(
-        "INSERT INTO products (business_id, category_id, name, description, price, unit)
-         SELECT b.id, c.id, $1, $2, 420000, 'bao' FROM businesses b, categories c
+        "INSERT INTO products (business_id, supply_type_id, name, description, price, unit)
+         SELECT b.id, c.id, $1, $2, 420000, 'bao' FROM businesses b, supply_types c
          WHERE b.name LIKE 'Đại lý%' AND c.slug = 'phan-bon'",
         vec!["Phân Urê Phú Mỹ".into(), "Đạm 46%, bao 50 kg".into()],
     ))
@@ -66,6 +71,7 @@ async fn providers(t: &TestDb, query: &str) -> Vec<String> {
         .explore
         .browse_providers(BrowseParams {
             service_id: None,
+            sector: None,
             name: Some(query.into()),
             sort: ProviderSort::default(),
             page: 1,

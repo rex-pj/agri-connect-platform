@@ -3,6 +3,7 @@ import { Box, Button, Icon, Page, Text, useNavigate } from "zmp-ui";
 
 import { api } from "../api";
 import { PriceLine } from "../components/price-line";
+import { dayMonth } from "../format";
 import { T } from "../texts";
 
 /** How many prices the home page shows (each crop's newest), as the website. */
@@ -19,15 +20,17 @@ function newestQuotes(board) {
     .slice(0, HOME_PRICES_SHOWN);
 }
 
-/** The three errands (near me, prices, a job), the service categories, today's prices. */
+/** The alerts in force, the three errands (near me, prices, a job), the service categories, today's prices. */
 export default function HomePage() {
   const navigate = useNavigate();
   const [categories, setCategories] = useState([]);
   const [board, setBoard] = useState(null);
+  const [alerts, setAlerts] = useState([]);
 
   useEffect(() => {
     api.categories().then(setCategories).catch(() => setCategories([]));
     api.prices().then(setBoard).catch(() => setBoard(null));
+    api.alerts().then(setAlerts).catch(() => setAlerts([]));
   }, []);
 
   const quotes = newestQuotes(board);
@@ -38,6 +41,21 @@ export default function HomePage() {
         <Text.Title size="large">{T.homeTitle}</Text.Title>
         <Text size="small">{T.homeSub}</Text>
       </Box>
+
+      {alerts.length > 0 && (
+        <section className="alerts" aria-label={T.alertsLabel}>
+          {alerts.map((a) => (
+            <div key={a.id} className="alert" role="alert">
+              <strong>{a.title}</strong>
+              <Text size="small">{a.body}</Text>
+              <Text size="xSmall" className="muted">
+                {a.province_name ? `${a.province_name} · ` : ""}
+                {T.alertUntil(dayMonth(a.ends_on))}
+              </Text>
+            </div>
+          ))}
+        </section>
+      )}
 
       <Box className="errands">
         <Button size="large" fullWidth prefixIcon={<Icon icon="zi-location-solid" />} onClick={() => navigate("/near")}>

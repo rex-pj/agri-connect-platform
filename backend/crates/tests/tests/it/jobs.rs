@@ -115,7 +115,7 @@ async fn a_job_reaches_the_providers_nearby_that_offer_it() {
     .await;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     let html = body_text(res).await;
-    assert!(html.contains("chọn khu vực") && html.contains("ghi việc cần làm"));
+    assert!(html.contains("chọn khu vực") && html.contains("ghi việc cần mướn"));
 
     // A job by Cai Lậy: back to the form with the flash.
     let job = [
@@ -125,6 +125,12 @@ async fn a_job_reaches_the_providers_nearby_that_offer_it() {
         ("requester_name", "Chu Ba"),
         ("requester_phone", "0912345678"),
     ];
+    // Every provider here confirmed its address: who is told is a matter of
+    // distance and of what they offer.
+    e.t.db
+        .execute_unprepared("UPDATE users SET email_verified_at = now()")
+        .await
+        .unwrap();
     let res = send(&e.router, post_form("/jobs", &job, None)).await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
     assert_eq!(res.headers()[header::LOCATION], "/jobs/new");
@@ -155,7 +161,7 @@ async fn a_job_reaches_the_providers_nearby_that_offer_it() {
         assert_eq!(res.status(), StatusCode::OK, "{page}");
         let html = body_text(res).await;
         assert!(
-            html.contains("Phun thuoc 3 cong lua") || html.contains("1 việc đang tìm thợ"),
+            html.contains("Phun thuoc 3 cong lua") || html.contains("1 tin đang tìm người"),
             "{page}"
         );
     }
@@ -167,7 +173,9 @@ async fn a_job_reaches_the_providers_nearby_that_offer_it() {
     }
     let res = send(&e.router, post_form("/jobs", &job, None)).await;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
-    assert!(body_text(res).await.contains("nhiều việc chưa xong"));
+    assert!(body_text(res)
+        .await
+        .contains("nhiều tin cần mướn chưa xong"));
 
     // The admin marks the first spam: it leaves the provider's page.
     let first = scalar(&e, "SELECT MIN(id)::text AS v FROM job_posts").await;
@@ -199,7 +207,7 @@ async fn a_job_reaches_the_providers_nearby_that_offer_it() {
 
     // The way in: the home page's card, the form itself.
     let html = body_text(send(&e.router, get_page("/", None)).await).await;
-    assert!(html.contains("Chưa tìm được thợ?"));
+    assert!(html.contains("Chưa tìm được nhà cung cấp?"));
     let res = send(&e.router, get_page("/jobs/new", None)).await;
     assert_eq!(res.status(), StatusCode::OK);
 }

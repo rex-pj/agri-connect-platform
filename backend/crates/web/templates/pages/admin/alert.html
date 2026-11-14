@@ -1,0 +1,50 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "atoms/status_badge.html" as status %}
+{% import "molecules/admin_header.html" as header %}
+{% import "organisms/alert_fields.html" as fields %}
+{% import "organisms/confirm_sheet.html" as confirm %}
+{#- One alert: its edit form and whether it is on. `page.body` is
+    web::pages::admin::alerts::AlertPage. Turning it off goes through a
+    confirmation with a reason (in its section's `dialog` scope); turning it
+    on again is one button. An alert is never deleted. -#}
+{% block title %}{{ page.body.alert.title }} — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+{% set a = b.alert %}
+{{ header::admin_header(title=a.title, icon="fa-triangle-exclamation", sub=b.reach, back_href=b.list_href, back_label=t(key="admin_menu.alerts")) }}
+<div class="admin-body">
+  {% if b.flash == "alert_created" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="alert.created")) }}{% endif %}
+  {% if b.flash == "alert_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.saved")) }}{% endif %}
+  {% if b.flash == "alert_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="alert.hidden")) }}{% endif %}
+  {% if b.flash == "alert_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="alert.shown")) }}{% endif %}
+  {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
+
+  <section class="admin-section" aria-labelledby="edit-title">
+    <h2 class="admin-section__title" id="edit-title">{{ t(key="admin.info") }}</h2>
+    <form class="form-stack" method="post" action="{{ b.update_action }}" novalidate>
+      {{ fields::alert_fields(form=b.form, errors=b.errors, choices=b.choices, title_max=limits.alert_title_max, body_max=limits.alert_body_max, prefix="edit") }}
+      <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button></div>
+    </form>
+  </section>
+
+  <section class="admin-section" aria-labelledby="status-title" x-data="dialog" x-on:keydown.escape.window="hide">
+    <h2 class="admin-section__title" id="status-title">{{ t(key="admin.visibility") }}</h2>
+    <p class="admin-status">{{ status::visibility(on=a.live) }}{% if a.is_demo %}{{ status::demo() }}{% endif %}<span>{% if a.live %}{{ t(key="alert.on") }}{% elif a.is_active %}{{ t(key="alert.outside_dates") }}{% else %}{{ t(key="alert.off") }}{% endif %}</span></p>
+    <div class="admin-actions">
+      {% if a.is_active %}
+      <a class="btn btn-outline-warning" href="#tat-canh-bao" x-on:click.prevent="show">{{ atoms::icon(name="fa-eye-slash") }} {{ t(key="alert.hide") }}</a>
+      {% else %}
+      <form method="post" action="{{ b.status_action }}">
+        <input type="hidden" name="is_active" value="true">
+        <button type="submit" class="btn btn-outline-success">{{ atoms::icon(name="fa-eye") }} {{ t(key="admin.show_again") }}</button>
+      </form>
+      {% endif %}
+    </div>
+    {% if a.is_active %}
+    {{ confirm::confirm_sheet(id="tat-canh-bao", title=t(key="alert.hide_title", name=a.title), icon="fa-eye-slash", action=b.status_action, button=t(key="admin.confirm_hide"), reason_max=limits.audit_reason_max, effect="hide", what=t(key="alert.what"), hidden_name="is_active", hidden_value="false") }}
+    {% endif %}
+  </section>
+</div>
+{% endblock content %}

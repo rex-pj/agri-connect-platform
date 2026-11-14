@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use domain::models::{
+    catalogue::{DemoCounts, PlatformCounts},
     inquiry::InquiryForOwner,
     product::{AdminProduct, ProductView, ProviderProduct},
     review::{OwnReview, PublicReview, ReviewAdmin},
@@ -26,6 +27,7 @@ pub struct AdminLocationDto {
     pub lng: f64,
     pub display_order: i32,
     pub is_active: bool,
+    pub is_demo: bool,
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -49,6 +51,9 @@ pub struct MeResponse {
     /// Used by frontend layouts to gate access without a separate role endpoint.
     pub role: String,
     pub created_on: String,
+    /// The link sent to `email` was opened; until then nothing but that
+    /// link and a password reset is emailed to it.
+    pub email_verified: bool,
 }
 
 // ── Products (shared between public and provider views) ───────────────────────
@@ -61,7 +66,12 @@ pub struct ProductDto {
     pub price: Option<i64>,
     pub unit: Option<String>,
     pub category: String,
+    pub category_id: i32,
+    pub category_slug: String,
     pub category_icon: Option<String>,
+    /// The commodity it is for ("Lúa") and its id; `None`: every one.
+    pub commodity_id: Option<i32>,
+    pub commodity: Option<String>,
     pub vendor_name: String,
     pub vendor_phone: String,
     /// The seller carries the verified badge.
@@ -84,7 +94,11 @@ impl From<ProductView> for ProductDto {
             price: p.price,
             unit: p.unit,
             category: p.category,
+            category_id: p.category_id,
+            category_slug: p.category_slug,
             category_icon: p.category_icon,
+            commodity_id: p.commodity_id,
+            commodity: p.commodity,
             vendor_name: p.vendor_name,
             vendor_phone: p.vendor_phone,
             vendor_verified: p.vendor_verified,
@@ -233,6 +247,38 @@ pub struct CategoryDto {
     pub color: Option<String>,
     pub description: Option<String>,
     pub display_order: i16,
+    /// The sector it serves; `None`: every sector.
+    pub sector: Option<String>,
+}
+
+impl From<domain::models::category::Category> for CategoryDto {
+    fn from(c: domain::models::category::Category) -> Self {
+        Self {
+            id: c.id,
+            name: c.name,
+            slug: c.slug,
+            icon: c.icon,
+            color: c.color,
+            description: c.description,
+            display_order: c.display_order,
+            sector: c.sector,
+        }
+    }
+}
+
+impl From<domain::models::category::CategoryAdmin> for CategoryDto {
+    fn from(c: domain::models::category::CategoryAdmin) -> Self {
+        Self {
+            id: c.id,
+            name: c.name,
+            slug: c.slug,
+            icon: c.icon,
+            color: c.color,
+            description: c.description,
+            display_order: c.display_order,
+            sector: c.sector,
+        }
+    }
 }
 
 // ── Provider dashboard ────────────────────────────────────────────────────────
@@ -299,6 +345,9 @@ pub struct ProviderProductDto {
     pub unit: Option<String>,
     pub category: String,
     pub category_id: i32,
+    pub commodity_id: Option<i32>,
+    /// The commodity it is for; `None`: every one.
+    pub commodity: Option<String>,
     pub is_active: bool,
     pub created_on: DateTime<Utc>,
     pub image_file_id: Option<Uuid>,
@@ -314,6 +363,8 @@ impl From<ProviderProduct> for ProviderProductDto {
             unit: p.unit,
             category: p.category,
             category_id: p.category_id,
+            commodity_id: p.commodity_id,
+            commodity: p.commodity,
             is_active: p.is_active,
             created_on: p.created_on,
             image_file_id: p.image_file_id,
@@ -381,6 +432,7 @@ pub struct AdminProviderDetailDto {
     pub is_verified: bool,
     pub is_active: bool,
     pub created_on: DateTime<Utc>,
+    pub linked_user_id: Option<i32>,
     pub linked_username: Option<String>,
     pub lat: Option<f64>,
     pub lng: Option<f64>,
@@ -413,6 +465,8 @@ pub struct AdminUserDetailDto {
     pub role_name: String,
     pub is_active: bool,
     pub created_on: DateTime<Utc>,
+    /// The business this account manages, if any.
+    pub business_id: Option<i32>,
 }
 
 #[derive(Serialize)]
@@ -446,7 +500,9 @@ pub struct AdminCategoryDto {
     pub color: Option<String>,
     pub description: Option<String>,
     pub display_order: i16,
+    pub sector: Option<String>,
     pub is_active: bool,
+    pub is_demo: bool,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
     pub created_by_name: Option<String>,
@@ -596,6 +652,12 @@ pub struct AdminProductDto {
     pub unit: Option<String>,
     pub category: String,
     pub category_id: i32,
+    /// The commodity it is for; `None`: every one.
+    pub commodity_id: Option<i32>,
+    pub commodity: Option<String>,
+    /// Its sector's code: its commodity's, else its type's; `None`: every
+    /// sector.
+    pub sector: Option<String>,
     pub business_id: i32,
     pub business_name: String,
     pub is_active: bool,
@@ -614,6 +676,9 @@ impl From<AdminProduct> for AdminProductDto {
             unit: p.unit,
             category: p.category,
             category_id: p.category_id,
+            commodity: p.commodity,
+            commodity_id: p.commodity_id,
+            sector: p.sector,
             business_id: p.business_id,
             business_name: p.business_name,
             is_active: p.is_active,
@@ -634,6 +699,8 @@ pub struct AdminServiceDto {
     pub price_note: Option<String>,
     pub category: String,
     pub category_id: i32,
+    /// Its type's sector code; `None`: every sector.
+    pub sector: Option<String>,
     pub business_id: i32,
     pub business_name: String,
     pub is_active: bool,
@@ -654,6 +721,7 @@ impl From<AdminService> for AdminServiceDto {
             price_note: s.price_note,
             category: s.category,
             category_id: s.category_id,
+            sector: s.sector,
             business_id: s.business_id,
             business_name: s.business_name,
             is_active: s.is_active,
@@ -713,9 +781,13 @@ pub struct SetupStatusDto {
     pub database_connected: bool,
     /// True when demo listings are loaded (`businesses.is_demo`).
     pub is_seeded: bool,
-    pub demo_business_count: i64,
+    /// Every business, demo or real.
     pub business_count: i64,
     pub user_count: i64,
+    /// What removing the demo data deletes.
+    pub demo: DemoCounts,
+    /// What the platform runs on: kept when the demo data goes.
+    pub platform: PlatformCounts,
 }
 
 // ── Roles ─────────────────────────────────────────────────────────────────────
@@ -747,6 +819,8 @@ pub struct GrantDto {
     pub code: String,
     pub name: String,
     pub granted: bool,
+    /// Whether this role may hold it at all (`catalogue::grantable`).
+    pub grantable: bool,
 }
 
 #[derive(Serialize)]
@@ -818,6 +892,8 @@ pub struct DemandWeekDto {
 pub struct DemandRowDto {
     pub category_id: Option<i32>,
     pub category: Option<String>,
+    /// The category's sector code; `None`: every sector, or no category.
+    pub sector: Option<String>,
     pub weeks: Vec<Figure>,
     pub total: Figure,
     pub calls: Figure,
@@ -862,6 +938,9 @@ pub struct DemandReportDto {
     pub steady_areas: usize,
     pub min_count: i64,
     pub steady_weekly_leads: i64,
+    /// Demo businesses are among those counted (the admin's report while
+    /// demo data is loaded): the page says so.
+    pub with_demo: bool,
 }
 
 /// Words farmers searched for and found nothing, and how often.
@@ -882,6 +961,8 @@ pub struct PartnerDto {
     pub phone: Option<String>,
     pub email: Option<String>,
     pub is_active: bool,
+    pub is_demo: bool,
+    pub account_id: Option<i32>,
     pub account_username: Option<String>,
     pub created_on: DateTime<Utc>,
     /// Contracts in force today, and what they bring in a month.
@@ -990,14 +1071,69 @@ pub struct RatingDto {
 
 // ── Crop prices ───────────────────────────────────────────────────────────────
 
+/// What a farmer raises (cây trồng, vật nuôi), in one sector.
+#[derive(Debug, Clone, Serialize)]
+pub struct CommodityDto {
+    pub id: i32,
+    pub name: String,
+    pub sector: String,
+    pub icon: Option<String>,
+    pub display_order: i16,
+    pub is_active: bool,
+    pub is_demo: bool,
+}
+
+impl From<domain::models::commodity::Commodity> for CommodityDto {
+    fn from(c: domain::models::commodity::Commodity) -> Self {
+        Self {
+            id: c.id,
+            name: c.name,
+            sector: c.sector,
+            icon: c.icon,
+            display_order: c.display_order,
+            is_active: c.is_active,
+            is_demo: c.is_demo,
+        }
+    }
+}
+
+/// A sector or an alert kind as the pages, forms and JSON API show it.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct CodedDto {
+    pub id: i32,
+    pub code: String,
+    pub name: String,
+    pub icon: Option<String>,
+    pub display_order: i16,
+    pub is_active: bool,
+    pub is_demo: bool,
+}
+
+impl From<domain::models::coded::CodedEntry> for CodedDto {
+    fn from(s: domain::models::coded::CodedEntry) -> Self {
+        Self {
+            id: s.id,
+            code: s.code,
+            name: s.name,
+            icon: s.icon,
+            display_order: s.display_order,
+            is_active: s.is_active,
+            is_demo: s.is_demo,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct CropDto {
     pub id: i32,
     pub name: String,
-    pub kind: String,
+    /// Its commodity, and that commodity's name.
+    pub commodity_id: i32,
+    pub commodity: Option<String>,
     pub unit: String,
     pub display_order: i32,
     pub is_active: bool,
+    pub is_demo: bool,
 }
 
 /// A stored price (the admin's list).
@@ -1036,7 +1172,8 @@ pub struct PriceQuoteDto {
 pub struct CropBoardDto {
     pub crop_id: i32,
     pub name: String,
-    pub kind: String,
+    /// Its commodity (one of the board's `commodities`).
+    pub commodity_id: i32,
     pub unit: String,
     pub quotes: Vec<PriceQuoteDto>,
 }
@@ -1045,6 +1182,8 @@ pub struct CropBoardDto {
 /// area), the areas that have one, and the day it was put together.
 #[derive(Debug, Clone, Serialize)]
 pub struct PriceBoardDto {
+    /// The commodities with a crop on the board, in their order.
+    pub commodities: Vec<CommodityDto>,
     pub crops: Vec<CropBoardDto>,
     pub areas: Vec<NamedDto>,
     pub today: chrono::NaiveDate,
@@ -1095,4 +1234,32 @@ pub struct ZaloLocationDto {
 #[derive(Debug, Clone, Serialize)]
 pub struct ZaloPhoneDto {
     pub phone: String,
+}
+
+/// An alert (the admin's list and form, the home page).
+#[derive(Debug, Clone, Serialize)]
+pub struct AlertDto {
+    pub id: i32,
+    pub kind: String,
+    /// Its kind's name and icon.
+    pub kind_name: String,
+    pub kind_icon: Option<String>,
+    pub sector: Option<String>,
+    pub province_code: Option<String>,
+    pub province_name: Option<String>,
+    pub title: String,
+    pub body: String,
+    pub starts_on: chrono::NaiveDate,
+    pub ends_on: chrono::NaiveDate,
+    pub is_active: bool,
+    pub is_demo: bool,
+    /// In force today: on, and today between its dates.
+    pub live: bool,
+}
+
+/// A choice named by its code (a province).
+#[derive(Debug, Clone, Serialize)]
+pub struct NamedCodeDto {
+    pub code: String,
+    pub name: String,
 }

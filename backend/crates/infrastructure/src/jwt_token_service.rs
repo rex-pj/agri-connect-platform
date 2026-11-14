@@ -9,6 +9,7 @@ use chrono::{Duration, Utc};
 use domain::{Error, ErrorCode, Result};
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 /// HS256 is only as strong as its key; anything shorter than the hash output
 /// is brute-forceable offline from a single captured token.
@@ -24,6 +25,10 @@ struct Claims {
     /// Absent from tokens minted before it was added: 0, i.e. "very old".
     #[serde(default)]
     iat: i64,
+    /// The browser session (refresh-token family); absent from tokens of
+    /// the JSON login and from tokens minted before it was added.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    sid: Option<String>,
 }
 
 pub struct JwtTokenService {
@@ -46,13 +51,14 @@ impl JwtTokenService {
 }
 
 impl TokenService for JwtTokenService {
-    fn mint(&self, user_id: i32, username: &str) -> Result<String> {
+    fn mint(&self, user_id: i32, username: &str, session: Option<Uuid>) -> Result<String> {
         let now = Utc::now();
         let claims = Claims {
             sub: user_id,
             username: username.to_owned(),
             exp: (now + Duration::hours(JWT_EXPIRY_HOURS)).timestamp(),
             iat: now.timestamp(),
+            sid: session.map(|s| s.to_string()),
         };
         encode(&Header::new(Algorithm::HS256), &claims, &self.encoding)
             .map_err(|e| Error::internal(format!("jwt encode: {e}")))
@@ -68,11 +74,19 @@ impl TokenService for JwtTokenService {
         let data = decode::<Claims>(token, &self.decoding, &validation)
             .map_err(|e| Error::new(ErrorCode::InvalidToken).with_detail(e.to_string()))?;
 
+        // A `sid` that is not a session id is a token we never minted.
+        let session = data
+            .claims
+            .sid
+            .map(|s| Uuid::parse_str(&s))
+            .transpose()
+            .map_err(|e| Error::new(ErrorCode::InvalidToken).with_detail(e.to_string()))?;
         Ok(SessionClaims {
             user_id: data.claims.sub,
             username: data.claims.username,
             expires_at: data.claims.exp,
             issued_at: data.claims.iat,
+            session,
         })
     }
 }
@@ -91,15 +105,20 @@ mod tests {
     #[test]
     fn minted_token_round_trips() -> Result<()> {
         let svc = JwtTokenService::new(SECRET)?;
-        let token = svc.mint(7, "an")?;
+        let token = svc.mint(7, "an", None)?;
         let claims = svc.verify(&token)?;
         assert_eq!((claims.user_id, claims.username.as_str()), (7, "an"));
+        assert_eq!(claims.session, None);
+
+        let session = Uuid::new_v4();
+        let claims = svc.verify(&svc.mint(7, "an", Some(session))?)?;
+        assert_eq!(claims.session, Some(session));
         Ok(())
     }
 
     #[test]
     fn token_signed_with_another_key_is_invalid() -> Result<()> {
-        let token = JwtTokenService::new(SECRET)?.mint(1, "x")?;
+        let token = JwtTokenService::new(SECRET)?.mint(1, "x", None)?;
         let other = JwtTokenService::new("another-secret-that-is-also-32-bytes-long")?;
         assert_eq!(
             other.verify(&token).err().map(|e| e.code()),
@@ -138,6 +157,7 @@ mod tests {
             username: "x".into(),
             exp: Utc::now().timestamp() - 1,
             iat: Utc::now().timestamp() - 3601,
+            sid: None,
         };
         let token = encode(&Header::new(Algorithm::HS256), &claims, &svc.encoding)
             .map_err(|e| Error::internal(e.to_string()))?;

@@ -7,7 +7,10 @@
 //! status (`cannot_change_own_account`, from the use case).
 
 use application::{
-    catalogue::{PERM_ROLE_READ, PERM_USER_ROLE_UPDATE, PERM_USER_STATUS_UPDATE},
+    catalogue::{
+        PERM_PARTNER_MANAGE, PERM_PROVIDER_READ, PERM_ROLE_READ, PERM_USER_ROLE_UPDATE,
+        PERM_USER_STATUS_UPDATE,
+    },
     outputs::{AdminPagedResponse, AdminUserDetailDto, AdminUserDto, PermissionDto, RoleDto},
 };
 use axum::{extract::State, http::StatusCode, response::Response};
@@ -94,6 +97,10 @@ pub struct UserPage {
     pub can_change_status: bool,
     /// The user's role grid, when the visitor may read roles.
     pub role_href: Option<String>,
+    /// The business this account manages, when the visitor may open it.
+    pub business_href: Option<String>,
+    /// The partner whose report account this is, likewise.
+    pub partner_href: Option<String>,
     pub role_action: String,
     pub status_action: String,
     pub errors: FormErrors,
@@ -139,12 +146,32 @@ async fn user_page(
     } else {
         None
     };
+    // What the account manages, each linked when the visitor may open it.
+    let business_href = match user.business_id {
+        Some(b) if actor.can(PERM_PROVIDER_READ) => {
+            Some(url("admin_provider", &[("id", &b.to_string())])?)
+        }
+        _ => None,
+    };
+    let partner_href = if actor.can(PERM_PARTNER_MANAGE) {
+        state
+            .usecases
+            .partner
+            .partner_of_account(actor, id)
+            .await?
+            .map(|p| url("admin_partner", &[("id", &p.to_string())]))
+            .transpose()?
+    } else {
+        None
+    };
     let id_text = id.to_string();
     let body = UserPage {
         permissions,
         roles,
         can_change_status: actor.can(PERM_USER_STATUS_UPDATE),
         role_href,
+        business_href,
+        partner_href,
         role_action: url("admin_user_role", &[("id", &id_text)])?,
         status_action: url("admin_user_status", &[("id", &id_text)])?,
         user,

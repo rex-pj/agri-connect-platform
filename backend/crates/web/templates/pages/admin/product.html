@@ -30,7 +30,7 @@
     <a href="{{ file_url(id=p.image_file_id) }}" aria-label="{{ t(key="admin.view_photo", name=p.name) }}"><img class="rounded object-fit-cover" width="96" height="96" src="{{ file_url(id=p.image_file_id, variant="thumb") }}" alt=""></a>
     {% endif %}
     <form class="form-stack" method="post" action="{{ b.update_action }}" novalidate>
-      {{ fields::product_fields(form=b.form, errors=b.errors.fields, categories=b.categories, limits=limits, prefix="edit") }}
+      {{ fields::product_fields(form=b.form, errors=b.errors.fields, categories=b.categories, commodities=b.commodities, limits=limits, prefix="edit") }}
       <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button></div>
     </form>
   </section>

@@ -16,8 +16,8 @@ use domain::{
     models::{
         role::UserRole,
         user::{
-            ExistingUser, NewResetToken, NewUser, ResetToken, UserAdmin, UserAdminDetail,
-            UserByEmail, UserCredentials, UserMe,
+            ExistingUser, NewResetToken, NewUser, UserAdmin, UserAdminDetail, UserByEmail,
+            UserCredentials, UserMe,
         },
     },
     repositories::user_repository_trait::UserRepositoryTrait,
@@ -31,6 +31,7 @@ use crate::sql::{advisory_xact_lock, null, username_of, PgType, QueryAs};
 use crate::{
     db_types::DateTimeWithTimeZone,
     entities::{
+        email_verification_token::{self, Entity as EmailVerificationToken},
         password_reset_token::{self, Entity as PasswordResetToken},
         role::{self, Entity as Role},
         user::{self, Entity as UserEntity},
@@ -65,6 +66,7 @@ struct UserMeRow {
     full_name: Option<String>,
     role_code: String,
     created_on: DateTimeWithTimeZone,
+    email_verified: bool,
 }
 
 #[derive(FromQueryResult)]
@@ -136,6 +138,7 @@ pub(crate) async fn insert_user<C: ConnectionTrait>(db: &C, user: NewUser) -> Re
         password_hash: Set(user.password_hash),
         role_id: Set(role_model.id),
         full_name: Set(user.full_name),
+        email_verified_at: Set(user.email_verified.then(|| Utc::now().fixed_offset())),
         is_active: Set(true),
         ..Default::default()
     };
@@ -440,6 +443,10 @@ impl UserRepositoryTrait for UserRepository {
             .column(user::Column::FullName)
             .column(user::Column::CreatedOn)
             .column_as(role::Column::Code, QueryAs::RoleCode)
+            .expr_as(
+                Expr::col((user::Entity, user::Column::EmailVerifiedAt)).is_not_null(),
+                QueryAs::EmailVerified,
+            )
             .join(JoinType::InnerJoin, user::Relation::Role.def())
             .filter(user::Column::Id.eq(user_id))
             .filter(user::Column::IsActive.eq(true))
@@ -454,6 +461,7 @@ impl UserRepositoryTrait for UserRepository {
                     full_name: r.full_name,
                     role: r.role_code,
                     created_on: r.created_on.with_timezone(&Utc),
+                    email_verified: r.email_verified,
                 })
             })
             .map_err(|e| {
@@ -581,7 +589,51 @@ impl UserRepositoryTrait for UserRepository {
             })
     }
 
-    async fn claim_reset_token(&self, token_hash: &str) -> Result<Option<ResetToken>, Error> {
+    async fn count_live_reset_tokens(
+        &self,
+        user_id: i32,
+        now: chrono::DateTime<Utc>,
+    ) -> Result<u64, Error> {
+        PasswordResetToken::find()
+            .filter(password_reset_token::Column::UserId.eq(user_id))
+            .filter(password_reset_token::Column::ExpiresAt.gt(now.fixed_offset()))
+            .count(self.db.as_ref())
+            .await
+            .map_err(|e| {
+                error!("count_live_reset_tokens error: {e}");
+                Error::internal("System error.")
+            })
+    }
+
+    async fn reset_token_live(&self, token_hash: &str) -> Result<bool, Error> {
+        PasswordResetToken::find()
+            .filter(password_reset_token::Column::Token.eq(token_hash))
+            .filter(password_reset_token::Column::UsedAt.is_null())
+            .filter(
+                Expr::col((PasswordResetToken, password_reset_token::Column::ExpiresAt))
+                    .gt(Expr::current_timestamp()),
+            )
+            .count(self.db.as_ref())
+            .await
+            .map(|n| n > 0)
+            .map_err(|e| {
+                error!("reset_token_live error: {e}");
+                Error::internal("System error.")
+            })
+    }
+
+    async fn reset_password_with_token(
+        &self,
+        token_hash: &str,
+        password_hash: &str,
+    ) -> Result<Option<i32>, Error> {
+        let fail = |e: DbErr| {
+            error!("reset_password_with_token error: {e}");
+            Error::internal("Failed to update password.")
+        };
+        // The link is spent and the password stored together, or neither: a
+        // failure in between must not burn the link.
+        let txn = self.db.begin().await.map_err(fail)?;
         // One UPDATE … RETURNING: two requests with the same link cannot
         // both claim it.
         let claimed = PasswordResetToken::update_many()
@@ -595,33 +647,129 @@ impl UserRepositoryTrait for UserRepository {
                 Expr::col((PasswordResetToken, password_reset_token::Column::ExpiresAt))
                     .gt(Expr::current_timestamp()),
             )
-            .exec_with_returning(self.db.as_ref())
+            .exec_with_returning(&txn)
             .await
-            .map_err(|e| {
-                error!("claim_reset_token error: {e}");
-                Error::internal("System error.")
-            })?;
-        Ok(claimed.into_iter().next().map(|t| ResetToken {
-            id: t.id,
-            user_id: t.user_id,
-        }))
-    }
-
-    async fn retire_reset_tokens(&self, user_id: i32) -> Result<(), Error> {
+            .map_err(fail)?;
+        let Some(token) = claimed.into_iter().next() else {
+            return Ok(None);
+        };
+        let updated = UserEntity::update_many()
+            .col_expr(
+                user::Column::PasswordHash,
+                Expr::value(password_hash.to_owned()),
+            )
+            .filter(user::Column::Id.eq(token.user_id))
+            .filter(user::Column::DeletedAt.is_null())
+            .exec(&txn)
+            .await
+            .map_err(fail)?;
+        if updated.rows_affected == 0 {
+            // The account is gone: nothing was reset, the link stays unspent.
+            return Ok(None);
+        }
+        // Any other link still in the inbox stops working too.
         PasswordResetToken::update_many()
             .col_expr(
                 password_reset_token::Column::UsedAt,
                 Expr::current_timestamp().into(),
             )
-            .filter(password_reset_token::Column::UserId.eq(user_id))
+            .filter(password_reset_token::Column::UserId.eq(token.user_id))
             .filter(password_reset_token::Column::UsedAt.is_null())
+            .exec(&txn)
+            .await
+            .map_err(fail)?;
+        txn.commit().await.map_err(fail)?;
+        Ok(Some(token.user_id))
+    }
+
+    async fn delete_expired_links(&self, before: chrono::DateTime<Utc>) -> Result<u64, Error> {
+        let fail = |e: DbErr| {
+            error!("delete_expired_links error: {e}");
+            Error::internal("System error.")
+        };
+        let resets = PasswordResetToken::delete_many()
+            .filter(password_reset_token::Column::ExpiresAt.lt(before.fixed_offset()))
             .exec(self.db.as_ref())
             .await
-            .map(|_| ())
+            .map_err(fail)?;
+        let confirmations = EmailVerificationToken::delete_many()
+            .filter(email_verification_token::Column::ExpiresAt.lt(before.fixed_offset()))
+            .exec(self.db.as_ref())
+            .await
+            .map_err(fail)?;
+        Ok(resets.rows_affected + confirmations.rows_affected)
+    }
+
+    async fn create_email_verification(&self, t: NewResetToken) -> Result<(), Error> {
+        EmailVerificationToken::insert(email_verification_token::ActiveModel {
+            user_id: Set(t.user_id),
+            token_hash: Set(t.token_hash),
+            expires_at: Set(t.expires_at.fixed_offset()),
+            ..Default::default()
+        })
+        .exec(self.db.as_ref())
+        .await
+        .map(|_| ())
+        .map_err(|e| {
+            error!("create_email_verification error: {e}");
+            Error::internal("Failed to create the confirmation link.")
+        })
+    }
+
+    async fn count_live_email_verifications(
+        &self,
+        user_id: i32,
+        now: chrono::DateTime<Utc>,
+    ) -> Result<u64, Error> {
+        EmailVerificationToken::find()
+            .filter(email_verification_token::Column::UserId.eq(user_id))
+            .filter(email_verification_token::Column::ExpiresAt.gt(now.fixed_offset()))
+            .count(self.db.as_ref())
+            .await
             .map_err(|e| {
-                error!("retire_reset_tokens error: {e}");
-                Error::internal("Failed to retire reset tokens.")
+                error!("count_live_email_verifications error: {e}");
+                Error::internal("System error.")
             })
+    }
+
+    async fn claim_email_verification(&self, token_hash: &str) -> Result<Option<i32>, Error> {
+        let fail = |e: DbErr| {
+            error!("claim_email_verification error: {e}");
+            Error::internal("System error.")
+        };
+        // The link is spent and the address stamped together, or neither.
+        let txn = self.db.begin().await.map_err(fail)?;
+        let claimed = EmailVerificationToken::update_many()
+            .col_expr(
+                email_verification_token::Column::UsedAt,
+                Expr::current_timestamp().into(),
+            )
+            .filter(email_verification_token::Column::TokenHash.eq(token_hash))
+            .filter(email_verification_token::Column::UsedAt.is_null())
+            .filter(
+                Expr::col((
+                    EmailVerificationToken,
+                    email_verification_token::Column::ExpiresAt,
+                ))
+                .gt(Expr::current_timestamp()),
+            )
+            .exec_with_returning(&txn)
+            .await
+            .map_err(fail)?;
+        let Some(token) = claimed.into_iter().next() else {
+            return Ok(None);
+        };
+        UserEntity::update_many()
+            .col_expr(
+                user::Column::EmailVerifiedAt,
+                Expr::current_timestamp().into(),
+            )
+            .filter(user::Column::Id.eq(token.user_id))
+            .exec(&txn)
+            .await
+            .map_err(fail)?;
+        txn.commit().await.map_err(fail)?;
+        Ok(Some(token.user_id))
     }
 
     async fn record_failed_login(

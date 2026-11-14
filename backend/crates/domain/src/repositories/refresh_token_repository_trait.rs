@@ -19,6 +19,10 @@ pub trait RefreshTokenRepositoryTrait {
 
     async fn revoke_family(&self, family_id: Uuid) -> Result<(), Error>;
 
+    /// Whether the session `family_id` still stands: it has a token that was
+    /// not revoked (logout, a password change, a deactivation, a reuse).
+    async fn family_live(&self, family_id: Uuid) -> Result<bool, Error>;
+
     /// Every session of the user, e.g. after a password reset.
     async fn revoke_user(&self, user_id: i32) -> Result<(), Error>;
 

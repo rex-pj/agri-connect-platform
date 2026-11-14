@@ -2,7 +2,7 @@
 //! set, otherwise the log fallback, announced with a WARN at startup.
 
 use application::{
-    constants::PASSWORD_RESET_EXPIRY_HOURS,
+    constants::{EMAIL_VERIFICATION_EXPIRY_HOURS, PASSWORD_RESET_EXPIRY_HOURS},
     ports::{EmailService, InquiryNotice, JobNotice},
 };
 use async_trait::async_trait;
@@ -23,6 +23,10 @@ fn reset_url(app_url: &str, token: &str) -> String {
     site_url(app_url, &format!("/reset-password?token={token}"))
 }
 
+fn verify_url(app_url: &str, token: &str) -> String {
+    site_url(app_url, &format!("/verify-email?token={token}"))
+}
+
 /// The wording of every email, from the locale file (`[text.email]`), with
 /// `{name}` placeholders; `startup.rs` reads it there and passes it in.
 #[derive(Debug, Clone)]
@@ -33,6 +37,10 @@ pub struct EmailTexts {
     pub reset_subject: String,
     /// `{url}`, `{hours}`, `{site}`.
     pub reset_body: String,
+    /// `{site}`.
+    pub verify_subject: String,
+    /// `{url}`, `{hours}`, `{site}`.
+    pub verify_body: String,
     /// `{site}`.
     pub inquiry_subject: String,
     /// `{business}`, `{name}`, `{phone}`, `{topic}`, `{note}`, `{inbox}`,
@@ -172,6 +180,25 @@ impl EmailService for SmtpEmailService {
         }
     }
 
+    async fn send_email_verification(&self, to_email: &str, token: &str) {
+        let url = verify_url(&self.app_url, token);
+        let site = self.texts.site_name.as_str();
+        // Plain text with no user-supplied content, as the reset email.
+        let body = fill(
+            &self.texts.verify_body,
+            &[
+                ("url", &url),
+                ("hours", &EMAIL_VERIFICATION_EXPIRY_HOURS.to_string()),
+                ("site", site),
+            ],
+        );
+        let subject = fill(&self.texts.verify_subject, &[("site", site)]);
+        match self.send(to_email, &subject, body).await {
+            Ok(()) => info!(to = to_email, "email-confirmation email sent"),
+            Err(e) => error!(to = to_email, error = %e, "email-confirmation email failed"),
+        }
+    }
+
     async fn send_new_inquiry(&self, to_email: &str, notice: &InquiryNotice) {
         let body = inquiry_body(&self.texts, &self.app_url, notice);
         let subject = fill(
@@ -213,6 +240,10 @@ impl EmailService for LogEmailService {
         warn!(to = to_email, url = %reset_url(&self.app_url, token), "SMTP not configured; password-reset link logged instead of sent");
     }
 
+    async fn send_email_verification(&self, to_email: &str, token: &str) {
+        warn!(to = to_email, url = %verify_url(&self.app_url, token), "SMTP not configured; email-confirmation link logged instead of sent");
+    }
+
     async fn send_new_inquiry(&self, to_email: &str, notice: &InquiryNotice) {
         // The farmer's phone number stays out of the log.
         warn!(
@@ -241,6 +272,8 @@ mod tests {
             site_name: "Site".into(),
             reset_subject: "Reset - {site}".into(),
             reset_body: "{url} ({hours} h) {site}".into(),
+            verify_subject: "Confirm - {site}".into(),
+            verify_body: "{url} ({hours} h) {site}".into(),
             inquiry_subject: "Call back - {site}".into(),
             inquiry_body:
                 "Hi {business}\nName: {name}\nPhone: {phone}\nNeeds: {topic}\n{note}{inbox}\n{site}"

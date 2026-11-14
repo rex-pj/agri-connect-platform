@@ -1,56 +1,14 @@
 {% extends "layouts/app.html" %}
-{% import "atoms/icon.html" as atoms %}
-{% import "atoms/alert.html" as alerts %}
-{% import "molecules/form_field.html" as field %}
-{#- The signed-in visitor's account. `page` is web::pages::account::AccountPage.
-    The role names are for display only; nothing here decides access. -#}
+{% import "organisms/account_sections.html" as account %}
+{#- The signed-in visitor's account in the app frame (providers, anyone
+    without an area of their own). Partners see the same in their frame
+    (`pages/partner_account.html`), admins in the panel
+    (`pages/admin/account.html`). `page` is web::pages::account::AccountPage. -#}
 {% block title %}{{ t(key="nav.account") }} — {{ site.name }}{% endblock title %}
 {% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
 {% block main %}
-{% set me = page.me %}
-{#- The icon of the visitor's area (decided by permissions), not of a role name. -#}
-{% if page.area %}{% set role_icon = page.area.icon %}{% else %}{% set role_icon = "fa-user" %}{% endif %}
-<header class="acct-header">
-  <span class="acct-avatar">{{ atoms::icon(name="fa-circle-user") }}</span>
-  <div>
-    <h1 class="acct-name">{{ me.full_name | default(value=me.username) }}</h1>
-    {% if me.full_name %}<p class="acct-sub">@{{ me.username }}</p>{% endif %}
-    <span class="acct-role">{{ atoms::icon(name=role_icon, class="me-1") }}{{ page.role_name }}</span>
-  </div>
-</header>
-
+{{ account::account_header(p=page) }}
 <div class="detail-body">
-  <section class="detail-card">
-    <h2 class="detail-card__title">{{ atoms::icon(name="fa-id-card", class="me-1") }} {{ t(key="account.info") }}</h2>
-    <dl class="acct-rows">
-      {% if me.full_name %}<div class="acct-row"><dt>{{ t(key="form.full_name") }}</dt><dd>{{ me.full_name }}</dd></div>{% endif %}
-      <div class="acct-row"><dt>{{ t(key="form.username") }}</dt><dd>{{ me.username }}</dd></div>
-      <div class="acct-row"><dt>{{ t(key="form.email") }}</dt><dd>{{ me.email }}</dd></div>
-      <div class="acct-row"><dt>{{ t(key="account.role") }}</dt><dd>{{ page.role_name }}</dd></div>
-      <div class="acct-row"><dt>{{ t(key="account.joined") }}</dt><dd><time datetime="{{ me.created_on | utc_iso }}">{{ me.created_on | vn_datetime }}</time></dd></div>
-    </dl>
-    {% if page.area %}<a class="btn btn-outline-success w-100 mt-2" href="{{ page.area.href }}">{{ atoms::icon(name=page.area.icon) }} {{ page.area.label }}</a>{% endif %}
-  </section>
-
-  <section class="detail-card" id="security">
-    <h2 class="detail-card__title">{{ atoms::icon(name="fa-lock", class="me-1") }} {{ t(key="account.security") }}</h2>
-    {% if page.password_changed %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="account.password_changed")) }}{% endif %}
-    <form class="auth-form mt-2" method="post" action="{{ url_for(name="account_password") }}">
-      {% if page.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=page.errors.message) }}{% endif %}
-      {{ field::input(id="cp_cur", name="current_password", label=t(key="form.current_password"), type="password", error=page.errors.fields.current_password | default(value=""), required=true, autocomplete="current-password") }}
-      {{ field::input(id="cp_new", name="new_password", label=t(key="form.new_password"), type="password", error=page.errors.fields.new_password | default(value=""), required=true, autocomplete="new-password", minlength=limits.password_min_chars) }}
-      {{ field::input(id="cp_new2", name="password2", label=t(key="form.new_password_again"), type="password", error=page.errors.fields.password2 | default(value=""), required=true, autocomplete="new-password") }}
-      <p class="small text-muted mb-0">{{ t(key="account.password_note") }}</p>
-      <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-key") }} {{ t(key="account.change_password") }}</button>
-    </form>
-  </section>
-
-  <section class="detail-card">
-    <h2 class="detail-card__title">{{ atoms::icon(name="fa-right-from-bracket", class="me-1") }} {{ t(key="common.logout") }}</h2>
-    <p class="small text-muted">{{ t(key="account.logout_note") }}</p>
-    <form method="post" action="{{ url_for(name="logout") }}">
-      <button type="submit" class="btn btn-outline-danger btn-lg w-100">{{ atoms::icon(name="fa-right-from-bracket") }} {{ t(key="common.logout") }}</button>
-    </form>
-  </section>
+  {{ account::account_sections(p=page, limits=limits, logout=url_for(name="logout")) }}
 </div>
 {% endblock main %}

@@ -2,19 +2,26 @@ use async_trait::async_trait;
 
 use crate::{
     error::Error,
-    models::catalogue::{DemoRemoval, DemoReport},
+    models::catalogue::{DemoCounts, DemoRemoval, DemoReport},
 };
 
-/// Sample listings for testing. Every row it writes is flagged `is_demo`, so
-/// `remove` can never touch a real listing.
+/// Demo data for trying the platform out: a starting catalogue (commodities,
+/// service and supply types, area presets, crops) and listings in it. Every commodity, type, area, crop and
+/// business it writes is flagged `is_demo`, and everything else it writes
+/// belongs to one of those businesses, so `remove` never touches a real row
+/// nor the platform data (roles, permissions, provinces, wards).
 #[async_trait]
 pub trait DemoDataRepositoryTrait {
-    /// Number of demo businesses currently present.
-    async fn count(&self) -> Result<i64, Error>;
+    /// The demo rows present now.
+    async fn count(&self) -> Result<DemoCounts, Error>;
 
+    /// Loads the demo catalogue and listings. A demo commodity, type, area or
+    /// crop already present (same name, slug, label or name) is reused.
     async fn load(&self) -> Result<DemoReport, Error>;
 
-    /// Deletes every demo business; services and products follow by cascade.
-    /// Returns the photos of the deleted products, still in storage.
+    /// Deletes every demo business (what belongs to one follows by cascade),
+    /// then every demo commodity, type, area and crop no real row uses; the ones
+    /// real data uses are kept and lose the flag. Returns the photos of the
+    /// deleted services and products, still in storage.
     async fn remove(&self) -> Result<DemoRemoval, Error>;
 }

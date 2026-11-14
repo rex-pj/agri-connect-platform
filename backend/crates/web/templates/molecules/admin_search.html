@@ -3,7 +3,7 @@
     `placeholder` says what is searched. With a search, a link clears it. -#}
 {% import "atoms/icon.html" as atoms %}
 {% macro admin_search(s, placeholder) -%}
-<form class="mb-3" method="get" action="{{ s.action }}" role="search">
+<form method="get" action="{{ s.action }}" role="search">
   {% if s.provider_id %}<input type="hidden" name="provider_id" value="{{ s.provider_id }}">{% endif %}
   <label class="visually-hidden" for="admin-q">{{ t(key="admin_search.label") }}</label>
   <div class="input-group">

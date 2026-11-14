@@ -42,7 +42,13 @@ async fn the_home_page_features_services_then_products_with_working_links() {
     let e = Env::new().await;
     let admin = first_admin(&e.state).await;
     e.state.usecases.setup.load_demo(&admin).await.unwrap();
-    let featured = e.state.usecases.explore.get_explore_data().await.unwrap();
+    let featured = e
+        .state
+        .usecases
+        .explore
+        .get_explore_data(None)
+        .await
+        .unwrap();
     let product = featured.featured_products.first().expect("demo products");
     let service = featured.featured_services.first().expect("demo services");
     // One place per provider, and only verified ones.
@@ -62,20 +68,22 @@ async fn the_home_page_features_services_then_products_with_working_links() {
 
     let html = html(&e.router, page(None)).await;
     assert!(html.contains("<title>Agri-Connect — Nền tảng nông nghiệp"));
-    assert!(html.contains(r#"<meta name="description" content="Tìm dịch vụ nông nghiệp"#));
+    assert!(html.contains(r#"<meta name="description" content="Tìm dịch vụ và vật tư"#));
     assert!(html.contains("Dịch vụ nổi bật"));
-    // Two verified providers in the demo: two cards stretched across the row.
-    assert!(html.contains("service-grid--2"));
+    // Four verified providers with services in the demo (every sector): no
+    // narrowing modifier.
+    assert_eq!(featured_count, 4);
+    assert!(!html.contains("service-grid--1") && !html.contains("service-grid--2"));
     assert!(!html.contains("provider-card hover-lift"), "no shop block");
     let service_href = format!("/services/{}/{}", service.id, slugify(&service.name));
     assert!(html.contains(&service_href), "missing {service_href}");
     assert!(html.contains(&format!("tel:{}", service.business_phone)));
     // Canonical detail links end in the slug.
-    let product_href = format!("/products/{}/{}", product.id, slugify(&product.name));
+    let product_href = format!("/supplies/{}/{}", product.id, slugify(&product.name));
     assert!(html.contains(&product_href), "missing {product_href}");
     // Service category tiles first, then product ones, then the shortcuts.
     let service_tile = html.find("/services/category/").expect("service tiles");
-    let product_tile = html.find("/products/category/").expect("product tiles");
+    let product_tile = html.find("/supplies/category/").expect("product tiles");
     assert!(service_tile < product_tile, "services lead");
     assert!(html.contains(r#"href="/explore""#) && html.contains(r#"href="/providers""#));
     assert!(!html.contains("Nền tảng đang khởi động"));
@@ -88,7 +96,7 @@ async fn an_empty_platform_shows_a_way_forward() {
     let e = Env::new().await;
     let html = html(&e.router, page(None)).await;
     assert!(html.contains("Nền tảng đang khởi động"));
-    assert!(html.contains("Tìm thợ gần tôi"));
+    assert!(html.contains("Tìm nhà cung cấp gần tôi"));
     e.t.cleanup().await;
 }
 

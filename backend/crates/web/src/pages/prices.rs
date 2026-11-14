@@ -1,19 +1,21 @@
-//! GET /prices: today's farm-gate prices, rice then fruit, each crop with its
-//! latest price per area (only prices at most `PRICE_FRESH_DAYS` old) and
+//! GET /prices: today's farm-gate prices, a section per commodity (cây /
+//! con the admin keeps: rice, durian, live pigs, shrimp…) of the visitor's
+//! sector, each item with its latest price per area (only prices at most `PRICE_FRESH_DAYS` old) and
 //! how it moved since the one before. A GET form narrows it to one area; it
 //! sends itself on change with JS (`autoSubmit`).
 
-use application::outputs::{CropBoardDto, NamedDto, PriceQuoteDto};
+use application::outputs::{CommodityDto, CropBoardDto, NamedDto, PriceQuoteDto};
 use axum::{extract::State, response::Response};
 use chrono::NaiveDate;
-use domain::{
-    constants::{CROP_KIND_FRUIT, CROP_KIND_RICE},
-    Error,
-};
+use domain::Error;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    app_state::AppState, extract::ApiQuery, pages::listing::parse_opt, routes, shell::Shell,
+    app_state::AppState,
+    extract::ApiQuery,
+    pages::listing::{parse_opt, with_query},
+    routes,
+    shell::Shell,
     views::render_page,
 };
 
@@ -59,12 +61,14 @@ pub struct CropCard {
     pub lines: Vec<PriceLine>,
 }
 
-/// Rice or fruit: its title and its crops with a price.
+/// A commodity: its title, its icon, its items with a price, and the way to
+/// the supplies for it.
 #[derive(Debug, Serialize)]
 pub struct PriceSection {
     pub title: String,
-    pub icon: &'static str,
+    pub icon: String,
     pub crops: Vec<CropCard>,
+    pub supplies_href: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -85,18 +89,15 @@ fn url(name: &str) -> Result<String, Error> {
     routes::url(name, &[]).map_err(|e| Error::internal(format!("price links: {e}")))
 }
 
-/// The crops of `kind` as cards; `None` when there are none.
+/// The produce of `group` as cards; `None` when there is none.
 fn section(
-    state: &AppState,
+    group: &CommodityDto,
     crops: &[CropBoardDto],
-    kind: &str,
-    title_key: &str,
-    icon: &'static str,
     today: NaiveDate,
-) -> Option<PriceSection> {
+) -> Result<Option<PriceSection>, Error> {
     let cards: Vec<CropCard> = crops
         .iter()
-        .filter(|c| c.kind == kind)
+        .filter(|c| c.commodity_id == group.id)
         .map(|c| CropCard {
             name: c.name.clone(),
             unit: c.unit.clone(),
@@ -108,11 +109,15 @@ fn section(
                 .collect(),
         })
         .collect();
-    (!cards.is_empty()).then(|| PriceSection {
-        title: state.locale().text(title_key),
-        icon,
+    if cards.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(PriceSection {
+        title: group.name.clone(),
+        icon: group.icon.clone().unwrap_or_else(|| "fa-tag".to_owned()),
         crops: cards,
-    })
+        supplies_href: with_query(&url("products")?, &[("commodity", &group.id.to_string())]),
+    }))
 }
 
 /// GET /prices
@@ -122,7 +127,11 @@ pub async fn show(
     ApiQuery(q): ApiQuery<PricesQuery>,
 ) -> Result<Response, Error> {
     let area = parse_opt::<i32>(&q.area);
-    let board = state.usecases.price.board(area).await?;
+    let board = state
+        .usecases
+        .price
+        .board(area, shell.sector.as_deref())
+        .await?;
     let area_name = area.and_then(|id| {
         board
             .areas
@@ -130,27 +139,11 @@ pub async fn show(
             .find(|a| a.id == id)
             .map(|a| a.name.clone())
     });
-    let sections = [
-        section(
-            &state,
-            &board.crops,
-            CROP_KIND_RICE,
-            "prices.rice",
-            "fa-wheat-awn",
-            board.today,
-        ),
-        section(
-            &state,
-            &board.crops,
-            CROP_KIND_FRUIT,
-            "prices.fruit",
-            "fa-lemon",
-            board.today,
-        ),
-    ]
-    .into_iter()
-    .flatten()
-    .collect();
+    // One section per commodity with a price, in the commodities' order.
+    let mut sections = Vec::new();
+    for g in &board.commodities {
+        sections.extend(section(g, &board.crops, board.today)?);
+    }
     let page = PricesPage {
         sections,
         area_id: area,

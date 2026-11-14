@@ -11,6 +11,9 @@ use domain::Result;
 pub trait EmailService: Send + Sync {
     async fn send_password_reset(&self, to_email: &str, token: &str);
 
+    /// The link that confirms `to_email` is its account's address.
+    async fn send_email_verification(&self, to_email: &str, token: &str);
+
     /// Tells a provider a farmer asked to be called back.
     async fn send_new_inquiry(&self, to_email: &str, notice: &InquiryNotice);
 
@@ -59,11 +62,16 @@ pub struct SessionClaims {
     /// When it was minted, Unix seconds; 0 for tokens minted before the
     /// claim existed (they are older than any cut-off).
     pub issued_at: i64,
+    /// The browser session (refresh-token family) the token belongs to, so
+    /// logging out ends it at once; none for a token from the JSON login,
+    /// which has no session to end and lives its hour.
+    pub session: Option<uuid::Uuid>,
 }
 
 /// Mint and verify signed session tokens.
 pub trait TokenService: Send + Sync {
-    fn mint(&self, user_id: i32, username: &str) -> Result<String>;
+    /// `session`: the browser session the token is part of, if any.
+    fn mint(&self, user_id: i32, username: &str, session: Option<uuid::Uuid>) -> Result<String>;
 
     /// Fails with `invalid_token` for a bad signature, a malformed token or an
     /// expired one; callers cannot tell those apart, by design.

@@ -157,7 +157,7 @@ async fn a_renewal_survives_an_error_page() {
     let (_, tokens) = login(&e).await;
 
     // The first page after the access token expired is a dead link.
-    let req = Request::get("/products/999999/khong-con")
+    let req = Request::get("/supplies/999999/khong-con")
         .header(header::ACCEPT, "text/html")
         .header(header::COOKIE, format!("refresh_token={}", tokens.refresh))
         .body(Body::empty())
@@ -298,7 +298,45 @@ async fn logout_ends_the_session_and_clears_both_cookies() {
                 .unwrap(),
             None
         );
+        // The access token goes with its session, not an hour later.
+        let req = Request::get("/api/users/me")
+            .header(header::COOKIE, format!("auth_token={}", tokens.access))
+            .body(Body::empty())
+            .unwrap();
+        let res = send(&e.router, req).await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED, "{path}");
     }
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn an_account_turned_off_and_on_again_logs_in_again() {
+    let e = Env::new().await;
+    let (user_id, tokens) = login(&e).await;
+    let admin = integration_tests::first_admin(&e.state).await;
+    let auth = &e.state.usecases.auth;
+    for is_active in [false, true] {
+        e.state
+            .usecases
+            .admin
+            .toggle_user_active(&admin, user_id, is_active, None)
+            .await
+            .unwrap();
+    }
+    assert_eq!(auth.refresh_session(&tokens.refresh).await.unwrap(), None);
+    let claims = integration_tests::token_service()
+        .verify(&tokens.access)
+        .unwrap();
+    assert_eq!(
+        auth.session_actor(&claims).await.err().map(|e| e.code()),
+        Some(domain::ErrorCode::InvalidToken)
+    );
+    // The password still works: a new session is a new log-in.
+    assert!(auth
+        .login("nongdan".into(), "matkhau123".into())
+        .await
+        .is_ok());
     e.cleanup().await;
 }
 

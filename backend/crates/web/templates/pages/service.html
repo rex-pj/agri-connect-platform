@@ -1,5 +1,6 @@
 {% extends "layouts/app.html" %}
 {% import "atoms/icon.html" as atoms %}
+{% import "molecules/manage_link.html" as manage %}
 {% import "molecules/call_button.html" as call %}
 {% import "molecules/zalo_button.html" as zalo %}
 {% import "atoms/alert.html" as alerts %}
@@ -20,7 +21,7 @@
 {% set icon = s.category_icon | default(value="fa-tag") %}
 <div class="product-detail">
   <div class="product-detail__photo">
-    <a class="back-link back-link--overlay" href="{{ url_for(name="services") }}">{{ atoms::icon(name="fa-arrow-left") }} {{ t(key="nav.services") }}</a>
+    <a class="back-link back-link--overlay" href="{{ page.category_href }}">{{ atoms::icon(name="fa-arrow-left") }} {{ s.category }}</a>
     {% if s.image_file_id %}
     <img src="{{ file_url(id=s.image_file_id) }}" alt="{{ s.name }}">
     {% else %}
@@ -35,6 +36,7 @@
     {% endif %}
     <div class="detail-body" x-data="dialog" data-open="{% if page.contact.open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
       {% if page.sent %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="contact.sent")) }}<p class="small mb-3">{{ t(key="review.after_contact") }} <a href="{{ page.rating.href }}">{{ t(key="review.write") }}</a></p>{% endif %}
+      {{ manage::manage_link(link=page.manage) }}
 
       <section class="detail-card">
         <div class="detail-price">

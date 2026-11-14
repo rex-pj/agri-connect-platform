@@ -15,15 +15,16 @@
 
 use std::{
     collections::{HashMap, HashSet},
-    sync::{Arc, Mutex},
-    time::Instant,
+    sync::Arc,
 };
 
 use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveDate, TimeZone, Utc};
 use domain::{
     models::{
         category::CategoryAdmin,
-        demand::{BusinessArea, LeadChannel, LeadEvent, NewSearch, SearchEvent, SoleCategory},
+        demand::{
+            BusinessArea, DemoScope, LeadChannel, LeadEvent, NewSearch, SearchEvent, SoleCategory,
+        },
     },
     repositories::{
         admin_unit_repository_trait::AdminUnitRepositoryTrait,
@@ -48,6 +49,7 @@ use crate::{
     outputs::{
         DemandAreaDto, DemandReportDto, DemandRowDto, DemandWeekDto, Figure, UnmetSearchDto,
     },
+    repeats::RepeatFilter,
 };
 
 /// What a report may show: every area and category (`None`), or only these
@@ -58,6 +60,8 @@ pub struct ReportScope {
     pub areas: Option<Vec<AreaKey>>,
     pub categories: Option<Vec<i32>>,
     pub focus: Option<AreaKey>,
+    /// Real data only by default; the admin's report counts demo data too.
+    pub demo: DemoScope,
 }
 
 #[derive(Clone)]
@@ -68,7 +72,7 @@ pub struct DemandReportUseCase {
     admin_unit_repo: Arc<dyn AdminUnitRepositoryTrait + Send + Sync>,
     /// Fingerprints of recent searches (hashed, in memory only) and when
     /// they were made: a repeat within `SEARCH_REPEAT_SECS` counts once.
-    recent_searches: Arc<Mutex<HashMap<String, Instant>>>,
+    recent_searches: RepeatFilter,
 }
 
 /// Everything `DemandReportUseCase` depends on, named so wiring cannot swap
@@ -87,7 +91,7 @@ impl DemandReportUseCase {
             category_repo: d.category_repo,
             location_repo: d.location_repo,
             admin_unit_repo: d.admin_unit_repo,
-            recent_searches: Arc::new(Mutex::new(HashMap::new())),
+            recent_searches: RepeatFilter::default(),
         }
     }
 
@@ -96,25 +100,10 @@ impl DemandReportUseCase {
         actor.require(PERM_REPORT_DEMAND_READ)?;
         let scope = ReportScope {
             focus: area,
+            demo: DemoScope::All,
             ..ReportScope::default()
         };
         self.build(Utc::now(), &scope).await
-    }
-
-    /// True the first time `fingerprint` is seen within `SEARCH_REPEAT_SECS`;
-    /// older ones are forgotten as it goes, so the memory stays small.
-    fn first_in_window(&self, fingerprint: String) -> bool {
-        let window = std::time::Duration::from_secs(SEARCH_REPEAT_SECS);
-        let now = Instant::now();
-        let Ok(mut recent) = self.recent_searches.lock() else {
-            return true;
-        };
-        recent.retain(|_, seen| now.duration_since(*seen) < window);
-        if recent.contains_key(&fingerprint) {
-            return false;
-        }
-        recent.insert(fingerprint, now);
-        true
     }
 
     /// The report as a scope allows; the caller has checked who may see it.
@@ -126,9 +115,10 @@ impl DemandReportUseCase {
         let weeks = report_weeks(now)?;
         let (from, to) = window(&weeks)?;
         let (events, searches, areas, sole, categories, units) = tokio::try_join!(
-            self.demand_repo.lead_events(from, to),
-            self.demand_repo.search_events(from, to),
-            self.demand_repo.business_areas(ADMIN_UNIT_SNAP_M),
+            self.demand_repo.lead_events(from, to, scope.demo),
+            self.demand_repo.search_events(from, to, scope.demo),
+            self.demand_repo
+                .business_areas(ADMIN_UNIT_SNAP_M, scope.demo),
             self.demand_repo.sole_categories(),
             self.category_repo.list_admin(),
             AdminUnits::load(self.admin_unit_repo.as_ref()),
@@ -178,7 +168,8 @@ impl DemandReportUseCase {
             query.as_deref().unwrap_or_default(),
             input.category_id
         ));
-        if !self.first_in_window(fingerprint) {
+        let window = std::time::Duration::from_secs(SEARCH_REPEAT_SECS);
+        if !self.recent_searches.first_in_window(fingerprint, window) {
             return;
         }
         let this = self.clone();
@@ -242,7 +233,7 @@ pub fn report_weeks(now: DateTime<Utc>) -> Result<Vec<DemandWeekDto>> {
             let starts_on = this_monday - Duration::weeks(back);
             DemandWeekDto {
                 starts_on,
-                ends_on: starts_on + Duration::days(6),
+                ends_on: starts_on + Duration::weeks(1) - Duration::days(1),
             }
         })
         .collect())
@@ -361,6 +352,7 @@ fn aggregate(input: Input<'_>) -> DemandReportDto {
         scope,
     } = input;
     let filter = AreaFilter { units, scope };
+    let with_demo = areas.iter().any(|a| a.is_demo);
     let first_day = weeks.first().map(|w| w.starts_on);
     let ward_of: HashMap<i32, String> = areas
         .into_iter()
@@ -430,7 +422,9 @@ fn aggregate(input: Input<'_>) -> DemandReportDto {
     for c in ordered {
         if let Some(cell) = by_category.get(&Some(c.id)) {
             all.add(cell);
-            rows.push(row(Some(c.id), Some(c.name.clone()), cell));
+            let mut r = row(Some(c.id), Some(c.name.clone()), cell);
+            r.sector = c.sector.clone();
+            rows.push(r);
         }
     }
     if let Some(cell) = by_category.get(&None) {
@@ -465,6 +459,7 @@ fn aggregate(input: Input<'_>) -> DemandReportDto {
         steady_areas,
         min_count: DEMAND_REPORT_MIN_COUNT,
         steady_weekly_leads: STEADY_WEEKLY_LEADS,
+        with_demo,
     }
 }
 
@@ -576,6 +571,7 @@ fn row(category_id: Option<i32>, category: Option<String>, cell: &Cell) -> Deman
     DemandRowDto {
         category_id,
         category,
+        sector: None,
         total: if by_week.value.is_none() || by_channel.value.is_none() {
             Figure { value: None }
         } else {
@@ -592,7 +588,7 @@ fn row(category_id: Option<i32>, category: Option<String>, cell: &Cell) -> Deman
 /// The week index of a Vietnam date in the report, if it falls in it.
 fn week_of(at: DateTime<Utc>, first_day: NaiveDate) -> Option<usize> {
     let day = at.with_timezone(&vn().ok()?).date_naive();
-    usize::try_from((day - first_day).num_days() / 7)
+    usize::try_from((day - first_day).num_weeks())
         .ok()
         .filter(|i| *i < DEMAND_WEEKS && day >= first_day)
 }
@@ -687,7 +683,9 @@ mod tests {
             color: None,
             description: None,
             display_order: 0,
+            sector: None,
             is_active: true,
+            is_demo: false,
             created_on: Utc::now(),
             updated_on: Utc::now(),
             created_by_name: None,
@@ -702,6 +700,7 @@ mod tests {
             name: "shop".into(),
             phone: "0912345678".into(),
             address: None,
+            is_demo: false,
         }
     }
 
@@ -848,6 +847,7 @@ mod tests {
                 areas: Some(vec![ward("28400")]),
                 categories: Some(vec![8]),
                 focus: None,
+                demo: DemoScope::Real,
             },
         );
         assert_eq!(values(&partner), vec!["w28400"]);
@@ -867,6 +867,7 @@ mod tests {
                 areas: Some(vec![province("91")]),
                 categories: Some(vec![8]),
                 focus: None,
+                demo: DemoScope::Real,
             },
         );
         assert_eq!(values(&whole), vec!["p91", "w30001"]);

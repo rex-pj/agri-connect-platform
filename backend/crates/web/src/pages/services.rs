@@ -17,21 +17,22 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     app_state::AppState,
-    constants::EXPLORE_DEFAULT_RADIUS_M,
+    constants::{km, EXPLORE_DEFAULT_RADIUS_M},
     extract::{ApiPath, ApiQuery},
     locale::Locale,
     pages::{
         cards::{rated_services, ServiceCard},
         explore::TAB_PROVIDERS,
         listing::{
-            category_sub, chips, find_category, parse_opt, past_the_end, redirect_to_canonical,
-            with_query, FilterForm, Pagination, SortChip,
+            category_sub, chips, find_category, in_sector, list_sector, parse_opt, past_the_end,
+            redirect_to_canonical, sector_links, typed_sector, with_query, FilterForm, Pagination,
+            SectorLink, SortChip,
         },
         parse_id,
         search::TabLink,
     },
     routes,
-    shell::Shell,
+    shell::{SectorChoice, Shell},
     views::render_page,
 };
 
@@ -43,6 +44,8 @@ pub struct ListQuery {
     pub service_id: String,
     pub sort: String,
     pub page: String,
+    /// One sector's results of a typed search (`typed_sector`).
+    pub sector: String,
 }
 
 /// A list page's search text, service-category filter, sort and page, as
@@ -53,27 +56,32 @@ pub(super) struct ListState {
     pub service_id: Option<i32>,
     pub sort: ProviderSort,
     pub page: i64,
+    /// The sector the typed search is narrowed to by its own `sector=`.
+    pub sector: Option<String>,
 }
 
 impl ListState {
     /// The search this list is, for the demand report: its words and
-    /// category on the first page (later pages are the same search).
+    /// category on the first page (later pages are the same search, and so
+    /// is narrowing it to a sector: the report takes what all sectors hold).
     pub fn search(&self, results: i64, visitor: Visitor) -> Option<SearchInput> {
-        (self.page <= 1 && (!self.search.is_empty() || self.service_id.is_some())).then(|| {
-            SearchInput {
-                query: self.search.clone(),
-                category_id: self.service_id,
-                place: SearchPlace::Anywhere,
-                results,
-                visitor,
-            }
+        (self.page <= 1
+            && self.sector.is_none()
+            && (!self.search.is_empty() || self.service_id.is_some()))
+        .then(|| SearchInput {
+            query: self.search.clone(),
+            category_id: self.service_id,
+            place: SearchPlace::Anywhere,
+            results,
+            visitor,
         })
     }
 
     /// A category that is not among `categories` (hidden, or a product's) is
-    /// no filter at all.
-    pub fn parse(q: &ListQuery, categories: &[CategoryDto]) -> Self {
+    /// no filter at all. `sectors` are the shell's choices.
+    pub fn parse(q: &ListQuery, categories: &[CategoryDto], sectors: &[SectorChoice]) -> Self {
         Self {
+            sector: typed_sector(sectors, &q.sector, &q.q),
             search: q.q.trim().to_owned(),
             service_id: parse_opt::<i32>(&q.service_id)
                 .filter(|id| categories.iter().any(|c| c.id == *id)),
@@ -82,9 +90,16 @@ impl ListState {
         }
     }
 
-    pub fn params(&self) -> BrowseParams {
+    /// The use case's parameters; `sector` (the visitor's) narrows the
+    /// services to that sector's categories and those of every sector, a
+    /// typed search only by its own `sector=`.
+    pub fn params(&self, sector: Option<&str>) -> BrowseParams {
         BrowseParams {
             service_id: self.service_id,
+            sector: self
+                .sector
+                .clone()
+                .or_else(|| list_sector(sector, self.service_id, &self.search)),
             name: (!self.search.is_empty()).then(|| self.search.clone()),
             sort: self.sort,
             page: self.page,
@@ -105,7 +120,22 @@ impl ListState {
                 self.service_id.map(|id| id.to_string()).unwrap_or_default(),
             ),
             ("sort", sort.to_owned()),
+            ("sector", self.sector.clone().unwrap_or_default()),
         ]
+    }
+
+    /// The links that narrow a typed search at `path` to one sector; none
+    /// without words (the page then shows the visitor's switch).
+    pub fn sector_links(&self, sectors: &[SectorChoice], path: &str) -> Vec<SectorLink> {
+        if self.search.is_empty() {
+            return Vec::new();
+        }
+        let kept = self.kept();
+        let kept: Vec<_> = borrowed(&kept)
+            .into_iter()
+            .filter(|(k, _)| *k != "sector")
+            .collect();
+        sector_links(sectors, path, &kept, self.sector.as_deref())
     }
 
     fn active(&self) -> usize {
@@ -124,7 +154,13 @@ impl ListState {
         placeholder_key: &str,
     ) -> FilterForm {
         FilterForm {
-            reset_href: with_query(path, &[("q", self.search.as_str())]),
+            reset_href: with_query(
+                path,
+                &[
+                    ("q", self.search.as_str()),
+                    ("sector", self.sector.as_deref().unwrap_or_default()),
+                ],
+            ),
             action: path.to_owned(),
             placeholder: locale.text(placeholder_key),
             q: self.search.clone(),
@@ -142,6 +178,7 @@ impl ListState {
                 })
                 .collect(),
             active: self.active(),
+            hidden: self.sector.iter().map(|s| ("sector", s.clone())).collect(),
         }
     }
 }
@@ -169,7 +206,7 @@ pub(super) fn near_me_href(view: &str, service_id: Option<i32>) -> Result<String
 
 /// The near-me banner's line (`key`), with the radius near-me starts at.
 pub(super) fn near_me_sub(locale: &Locale, key: &str) -> String {
-    locale.text_with(key, &[("km", &(EXPLORE_DEFAULT_RADIUS_M / 1000))])
+    locale.text_with(key, &[("km", &km(EXPLORE_DEFAULT_RADIUS_M))])
 }
 
 pub(super) fn view_tabs(
@@ -218,6 +255,8 @@ pub struct ServicesPage {
     pub geo_sub: String,
     pub category: Option<CategoryDto>,
     pub filters: Option<FilterForm>,
+    /// A typed search's sector links, in place of the visitor's switch.
+    pub sectors: Vec<SectorLink>,
     pub services: Vec<ServiceCard>,
     pub total: i64,
     pub pagination: Option<Pagination>,
@@ -241,8 +280,10 @@ pub async fn list(
 ) -> Result<Response, Error> {
     let explore = &state.usecases.explore;
     let categories = explore.get_categories(Some(CATEGORY_TYPE_SERVICE)).await?;
-    let list = ListState::parse(&q, &categories);
-    let result = explore.browse_services(list.params()).await?;
+    let list = ListState::parse(&q, &categories, &shell.sectors);
+    let result = explore
+        .browse_services(list.params(shell.sector.as_deref()))
+        .await?;
     if let Some(search) = list.search(result.total, visitor(&shell, ip.as_ref().map(|e| &e.0))) {
         state.usecases.demand.record_search(search);
     }
@@ -262,10 +303,13 @@ pub async fn list(
         category: None,
         pagination: Pagination::new(&path, &borrowed(&kept), result.page, result.total_pages),
         filtered: list.filtered(),
+        sectors: list.sector_links(&shell.sectors, &path),
         filters: Some(list.form(
             state.locale(),
             &path,
-            &categories,
+            // The chips offer the visitor's sector; a shared link to
+            // another sector's category still works (parsed from all).
+            &in_sector(&categories, shell.sector.as_deref()),
             "services.search_placeholder",
         )),
         total: result.total,
@@ -300,6 +344,8 @@ pub async fn category(
     let result = explore
         .browse_services(BrowseParams {
             service_id: Some(id),
+            // The category is chosen: its sector is no filter.
+            sector: None,
             name: None,
             sort: ProviderSort::default(),
             page: page_number,
@@ -327,6 +373,7 @@ pub async fn category(
         geo_sub: near_me_sub(state.locale(), "geo.sub_category"),
         pagination: Pagination::new(&canonical, &[], result.page, result.total_pages),
         filtered: false,
+        sectors: Vec::new(),
         filters: None,
         category: Some(category),
         total: result.total,

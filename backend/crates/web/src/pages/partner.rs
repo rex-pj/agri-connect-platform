@@ -11,6 +11,7 @@ use serde::Serialize;
 use crate::{
     app_state::AppState,
     extract::ApiQuery,
+    labels::{sector_options, CodeOption},
     middleware::auth::Viewer,
     pages::{
         admin::demand::{area_options, csv_response, focus_value, AreaOption},
@@ -33,6 +34,8 @@ fn url(name: &str, params: &[(&str, &str)]) -> Result<String, Error> {
 #[derive(Serialize)]
 pub struct PartnerPage {
     pub own: PartnerReportDto,
+    /// Every sector, to name a row's.
+    pub sectors: Vec<CodeOption>,
     pub area: String,
     pub areas: Vec<AreaOption>,
     pub action: String,
@@ -49,9 +52,13 @@ pub async fn show(
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
-    let own = state.usecases.partner.own_report(&actor, q.focus()).await?;
+    let (own, sectors) = tokio::try_join!(
+        state.usecases.partner.own_report(&actor, q.focus()),
+        state.usecases.sector.named(),
+    )?;
     let area = focus_value(q.focus());
     let page = PartnerPage {
+        sectors: sector_options(&sectors),
         areas: area_options(state.locale(), &own.report),
         csv_href: with_query(&url("partner_report_csv", &[])?, &[("area", &area)]),
         action: url("partner_report", &[])?,
@@ -70,6 +77,14 @@ pub async fn csv(
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
-    let own = state.usecases.partner.own_report(&actor, q.focus()).await?;
-    Ok(csv_response(state.locale(), &own.report, PARTNER_CSV_NAME))
+    let (own, sectors) = tokio::try_join!(
+        state.usecases.partner.own_report(&actor, q.focus()),
+        state.usecases.sector.named(),
+    )?;
+    Ok(csv_response(
+        state.locale(),
+        &sectors,
+        &own.report,
+        PARTNER_CSV_NAME,
+    ))
 }

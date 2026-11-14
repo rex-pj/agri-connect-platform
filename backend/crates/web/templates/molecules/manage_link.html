@@ -1,0 +1,7 @@
+{#- On a public page, the way to where its record is edited, for the one
+    who may: the admin panel's page, or the owner's form
+    (web::pages::manage). `link` is a `shell::Link`; nothing when `None`. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro manage_link(link) -%}
+{% if link %}<a class="btn btn-outline-secondary w-100" href="{{ link.href }}">{{ atoms::icon(name=link.icon) }} {{ link.label }}</a>{% endif %}
+{%- endmacro manage_link %}

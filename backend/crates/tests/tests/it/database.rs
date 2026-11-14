@@ -64,9 +64,6 @@ async fn fresh_database_gets_the_catalogue_once() {
         first.permissions_inserted,
         CATALOGUE.permissions.len() as u64
     );
-    assert_eq!(first.categories_inserted, CATALOGUE.categories.len() as u64);
-    assert_eq!(first.locations_inserted, CATALOGUE.locations.len() as u64);
-    assert_eq!(first.crops_inserted, CATALOGUE.crops.len() as u64);
     let grants: usize = CATALOGUE
         .permissions
         .iter()
@@ -84,14 +81,17 @@ async fn fresh_database_gets_the_catalogue_once() {
         ),
         (0, 0, 0)
     );
-    assert_eq!(
-        (
-            second.categories_inserted,
-            second.locations_inserted,
-            second.crops_inserted
-        ),
-        (0, 0, 0)
-    );
+    // The catalogue, areas and crops are demo data: startup writes none.
+    for table in [
+        "commodities",
+        "service_types",
+        "supply_types",
+        "locations",
+        "crops",
+    ] {
+        let n = count(&t.db, &format!("SELECT COUNT(*) AS n FROM {table}")).await;
+        assert_eq!(n, 0, "{table}");
+    }
     assert!(second.unknown_permissions.is_empty());
 
     t.cleanup().await;
@@ -131,9 +131,6 @@ async fn a_permission_added_later_reaches_its_default_roles() {
     let later = Catalogue {
         roles: CATALOGUE.roles,
         permissions: EXTENDED,
-        categories: &[],
-        locations: &[],
-        crops: &[],
     };
     let report = repo.apply(&later).await.unwrap();
     assert_eq!(
@@ -152,35 +149,7 @@ async fn a_permission_added_later_reaches_its_default_roles() {
 
 #[tokio::test]
 #[ignore = "needs TEST_DATABASE_URL"]
-async fn admin_edits_to_categories_survive_restarts() {
-    let t = TestDb::create().await;
-    let repo = CatalogueRepository::new(Arc::new(t.db.clone()));
-    repo.apply(&CATALOGUE).await.unwrap();
-
-    t.db.execute_unprepared("UPDATE categories SET slug = 'bun-ao' WHERE slug = 'muc-bun'")
-        .await
-        .unwrap();
-    repo.apply(&CATALOGUE).await.unwrap();
-
-    assert_eq!(
-        count(
-            &t.db,
-            "SELECT COUNT(*) AS n FROM categories WHERE slug = 'muc-bun'"
-        )
-        .await,
-        0
-    );
-    assert_eq!(
-        count(&t.db, "SELECT COUNT(*) AS n FROM categories").await,
-        CATALOGUE.categories.len() as i64
-    );
-
-    t.cleanup().await;
-}
-
-#[tokio::test]
-#[ignore = "needs TEST_DATABASE_URL"]
-async fn demo_data_loads_once_and_removal_spares_real_listings() {
+async fn demo_data_loads_once_and_removal_keeps_what_real_data_uses() {
     let t = TestDb::create().await;
     let db = Arc::new(t.db.clone());
     CatalogueRepository::new(db.clone())
@@ -197,23 +166,84 @@ async fn demo_data_loads_once_and_removal_spares_real_listings() {
     let admin = integration_tests::first_admin(&state).await;
     let report = state.usecases.setup.load_demo(&admin).await.unwrap();
     assert_eq!(
-        (report.businesses, report.services, report.products),
-        (6, 6, 10)
+        (
+            report.commodities,
+            report.categories,
+            report.locations,
+            report.crops
+        ),
+        (14, 12, 20, 19)
     );
     assert_eq!(
-        DemoDataRepository::new(db.clone()).count().await.unwrap(),
-        6
+        (report.businesses, report.services, report.products),
+        (10, 11, 14)
     );
+    let counts = DemoDataRepository::new(db.clone()).count().await.unwrap();
+    assert_eq!(
+        (
+            counts.commodities,
+            counts.categories,
+            counts.locations,
+            counts.crops
+        ),
+        (14, 12, 20, 19)
+    );
+    assert_eq!(
+        (counts.businesses, counts.services, counts.products),
+        (10, 11, 14)
+    );
+    let status = state.usecases.setup.demo_status(&admin).await.unwrap();
+    assert_eq!((status.demo.businesses, status.business_count), (10, 11));
 
     let again = state.usecases.setup.load_demo(&admin).await.unwrap_err();
     assert_eq!(again.code(), ErrorCode::DemoAlreadyLoaded);
 
-    assert_eq!(state.usecases.setup.remove_demo(&admin).await.unwrap(), 6);
+    // Real data that uses the demo catalogue: a real shop's service of a demo
+    // service type, a price of a demo crop in a demo area.
+    t.db.execute_unprepared(
+        "INSERT INTO services (business_id, service_type_id, name)
+           SELECT b.id, c.id, 'Múc bùn' FROM businesses b, service_types c
+           WHERE NOT b.is_demo AND c.slug = 'muc-bun';
+         INSERT INTO crop_prices (crop_id, location_id, observed_on, price_low, price_high)
+           SELECT cr.id, l.id, CURRENT_DATE, 7000, 7200 FROM crops cr, locations l
+           WHERE cr.name = 'Lúa ST25' AND l.label = 'Đồng Tháp — Cai Lậy'",
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(state.usecases.setup.remove_demo(&admin).await.unwrap(), 10);
     assert_eq!(
         count(&t.db, "SELECT COUNT(*) AS n FROM businesses").await,
         1
     );
     assert_eq!(count(&t.db, "SELECT COUNT(*) AS n FROM products").await, 0);
+    // What real data uses stays, and is real from then on; the rest is gone:
+    // the service's type, the price's area and crop, and that crop's
+    // commodity.
+    for (table, n) in [
+        ("commodities", 1),
+        ("service_types", 1),
+        ("supply_types", 0),
+        ("locations", 1),
+        ("crops", 1),
+    ] {
+        let all = count(&t.db, &format!("SELECT COUNT(*) AS n FROM {table}")).await;
+        assert_eq!(all, n, "{table}");
+        let demo = count(
+            &t.db,
+            &format!("SELECT COUNT(*) AS n FROM {table} WHERE is_demo"),
+        )
+        .await;
+        assert_eq!(demo, 0, "{table}");
+    }
+    assert_eq!(
+        count(&t.db, "SELECT COUNT(*) AS n FROM crop_prices").await,
+        1
+    );
+
+    let status = state.usecases.setup.demo_status(&admin).await.unwrap();
+    assert!(!status.is_seeded);
+    assert_eq!(status.platform.roles, CATALOGUE.roles.len() as u64);
 
     t.cleanup().await;
 }
@@ -310,6 +340,204 @@ async fn registration_reports_every_bad_field_at_once() {
         body.field_errors["password"],
         ["Mật khẩu phải có ít nhất 8 ký tự."]
     );
+
+    t.cleanup().await;
+}
+
+/// Runs `sql`, which must be refused by the constraint `constraint`.
+async fn refused(db: &DatabaseConnection, sql: &str, constraint: &str) {
+    match db.execute_unprepared(sql).await {
+        Ok(_) => panic!("{constraint} let this through: {sql}"),
+        Err(e) => assert!(
+            e.to_string().contains(constraint),
+            "{sql}\nwas refused, but not by {constraint}: {e}"
+        ),
+    }
+}
+
+/// What the application checks before a write, the schema holds on its own:
+/// a row cannot contradict the rows it points to.
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn the_schema_refuses_rows_that_contradict_each_other() {
+    let t = TestDb::create().await;
+    let db = &t.db;
+    db.execute_unprepared(
+        "INSERT INTO businesses (id, name, phone)
+           VALUES (1, 'Vườn A', '0901111111'), (2, 'Vườn B', '0902222222');
+         INSERT INTO service_types (id, name, slug) VALUES (1, 'Múc bùn', 'muc-bun');
+         INSERT INTO supply_types (id, name, slug) VALUES (2, 'Phân bón', 'phan-bon');
+         INSERT INTO services (id, business_id, service_type_id, name)
+           VALUES (1, 1, 1, 'Múc bùn'), (2, 2, 1, 'Múc bùn');
+         INSERT INTO products (id, business_id, supply_type_id, name)
+           VALUES (1, 1, 2, 'NPK'), (2, 2, 2, 'NPK');
+         INSERT INTO inquiries (id, business_id, service_id, topic, requester_name, requester_phone)
+           VALUES (1, 1, 1, 'Múc bùn', 'Chú Tư', '0987654321'),
+                  (2, 2, 2, 'Múc bùn', 'Chú Tư', '0987654321');
+         INSERT INTO provinces (code, name, full_name, unit_type, center) VALUES
+           ('82', 'Đồng Tháp', 'Tỉnh Đồng Tháp', 'province', 'SRID=4326;POINT(106 10)'),
+           ('91', 'An Giang', 'Tỉnh An Giang', 'province', 'SRID=4326;POINT(105 10)');
+         INSERT INTO wards (code, province_code, name, full_name, unit_type, center, boundary)
+           VALUES ('28439', '82', 'Bình Phú', 'Xã Bình Phú', 'commune', 'SRID=4326;POINT(106 10)',
+             'SRID=4326;MULTIPOLYGON(((105.9 9.9, 106.1 9.9, 106.1 10.1, 105.9 10.1, 105.9 9.9)))');
+         INSERT INTO partners (id, name, kind) VALUES (1, 'Đại lý', 'dealer');
+         SELECT setval('inquiries_id_seq', 2);
+         SELECT setval('catalogue_type_ids', 2)",
+    )
+    .await
+    .unwrap();
+
+    for (sql, constraint) in [
+        // A contact request, a tap and a review name only their own
+        // business's service, supply and request.
+        (
+            "INSERT INTO inquiries (business_id, service_id, topic, requester_name, requester_phone)
+               VALUES (1, 2, 'Múc bùn', 'Chú Tư', '0987654321')",
+            "fk_inquiries_service",
+        ),
+        (
+            "INSERT INTO inquiries (business_id, product_id, topic, requester_name, requester_phone)
+               VALUES (1, 2, 'NPK', 'Chú Tư', '0987654321')",
+            "fk_inquiries_product",
+        ),
+        (
+            "INSERT INTO inquiries
+               (business_id, service_id, product_id, topic, requester_name, requester_phone)
+               VALUES (1, 1, 1, 'NPK', 'Chú Tư', '0987654321')",
+            "chk_inquiries_about_one",
+        ),
+        (
+            "INSERT INTO call_clicks (business_id, service_id) VALUES (1, 2)",
+            "fk_call_clicks_service",
+        ),
+        (
+            "INSERT INTO call_clicks (business_id, product_id) VALUES (1, 2)",
+            "fk_call_clicks_product",
+        ),
+        (
+            "INSERT INTO call_clicks (business_id, service_id, product_id) VALUES (1, 1, 1)",
+            "chk_call_clicks_about_one",
+        ),
+        (
+            "INSERT INTO reviews (business_id, inquiry_id, rating, reviewer_name, reviewer_phone_hash)
+               VALUES (1, 2, 5, 'Chú Tư', encode(sha256('0987654321'), 'hex'))",
+            "fk_reviews_inquiry",
+        ),
+        (
+            "INSERT INTO reviews (business_id, rating, reviewer_name, reviewer_phone_hash)
+               VALUES (1, 5, 'Chú Tư', '0987654321')",
+            "chk_reviews_phone_hash",
+        ),
+        // A confirmation link is stored as the hash of its token, never raw.
+        (
+            "WITH r AS (INSERT INTO roles (code, name) VALUES ('provider', 'provider')
+                        RETURNING id),
+                  u AS (INSERT INTO users (username, email, password_hash, role_id)
+                        SELECT 'nongdan', 'nongdan@example.vn', 'x', id FROM r RETURNING id)
+             INSERT INTO email_verification_tokens (user_id, token_hash, expires_at)
+               SELECT id, 'lien-ket', now() FROM u",
+            "chk_email_verification_tokens_hash",
+        ),
+        (
+            "INSERT INTO reviews (business_id, rating, reviewer_name, reviewer_phone_hash, reply)
+               VALUES (1, 5, 'Chú Tư', encode(sha256('0987654321'), 'hex'), 'Cảm ơn')",
+            "chk_reviews_reply",
+        ),
+        // A contract's ward is a ward of its province.
+        (
+            "INSERT INTO partner_contracts
+               (partner_id, province_code, ward_code, starts_on, ends_on, monthly_fee)
+               VALUES (1, '91', '28439', CURRENT_DATE, CURRENT_DATE, 0)",
+            "fk_partner_contracts_ward",
+        ),
+        // One id and one slug across the two type tables.
+        (
+            "INSERT INTO supply_types (name, slug) VALUES ('Múc bùn', 'muc-bun')",
+            "uq_catalogue_types_distinct",
+        ),
+        (
+            "INSERT INTO supply_types (id, name, slug) VALUES (1, 'Giống', 'giong')",
+            "uq_catalogue_types_distinct",
+        ),
+        (
+            "UPDATE service_types SET slug = 'phan-bon' WHERE id = 1",
+            "uq_catalogue_types_distinct",
+        ),
+        (
+            "INSERT INTO service_types (name, slug) VALUES ('Sửa máy', 'Sửa máy')",
+            "chk_service_types_slug",
+        ),
+        (
+            "INSERT INTO search_events (service_type_id, supply_type_id, results) VALUES (1, 2, 0)",
+            "chk_search_events_one_type",
+        ),
+        // Text that must say something; a code in its one spelling.
+        (
+            "INSERT INTO businesses (name, phone) VALUES ('  ', '0903333333')",
+            "chk_businesses_name_not_blank",
+        ),
+        (
+            "INSERT INTO sectors (code, name) VALUES ('Trồng trọt', 'Trồng trọt')",
+            "chk_sectors_code",
+        ),
+        (
+            "INSERT INTO locations (label, lat, lng) VALUES ('Cai Lậy', 106.03, 10.41)",
+            "chk_locations_point",
+        ),
+        (
+            "INSERT INTO provinces (code, name, full_name, unit_type, center)
+               VALUES ('p82', 'X', 'Tỉnh X', 'province', 'SRID=4326;POINT(106 10)')",
+            "chk_provinces_code",
+        ),
+    ] {
+        refused(db, sql, constraint).await;
+    }
+
+    CatalogueRepository::new(Arc::new(t.db.clone()))
+        .apply(&CATALOGUE)
+        .await
+        .unwrap();
+    refused(
+        db,
+        "INSERT INTO users (username, email, password_hash, role_id)
+           SELECT 'NongDan', 'nongdan@example.vn', 'x', id FROM roles WHERE code = 'provider'",
+        "chk_users_username_lower",
+    )
+    .await;
+
+    // A new review waits for an admin; deleting a service keeps the request.
+    db.execute_unprepared(
+        "INSERT INTO reviews (business_id, inquiry_id, rating, reviewer_name, reviewer_phone_hash)
+           VALUES (1, 1, 5, 'Chú Tư', encode(sha256('0987654321'), 'hex'));
+         DELETE FROM services WHERE id = 1",
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        count(db, "SELECT COUNT(*) AS n FROM reviews WHERE is_visible").await,
+        0
+    );
+    assert_eq!(
+        count(
+            db,
+            "SELECT COUNT(*) AS n FROM inquiries
+               WHERE id = 1 AND business_id = 1 AND service_id IS NULL"
+        )
+        .await,
+        1
+    );
+    // A business goes with everything sent to it.
+    db.execute_unprepared("DELETE FROM businesses WHERE id = 1")
+        .await
+        .unwrap();
+    for table in ["inquiries", "reviews"] {
+        let left = count(
+            db,
+            &format!("SELECT COUNT(*) AS n FROM {table} WHERE business_id = 1"),
+        )
+        .await;
+        assert_eq!(left, 0, "{table}");
+    }
 
     t.cleanup().await;
 }

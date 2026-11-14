@@ -37,7 +37,13 @@ impl AuthHandler {
         let result = state
             .usecases
             .auth
-            .create_first_admin(req.username, req.email, req.password, req.full_name)
+            .create_first_admin(
+                req.username,
+                req.email,
+                req.password,
+                req.full_name,
+                req.setup_token,
+            )
             .await?;
 
         Ok(Json(result))

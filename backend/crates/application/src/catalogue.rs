@@ -1,4 +1,6 @@
-//! Reference data the app needs to run, seeded idempotently at every startup.
+//! The platform data that comes from code: roles and permissions, seeded
+//! idempotently at every startup. Categories, area presets and crops are demo
+//! data (`infrastructure/src/demo/data.json`); an admin adds the real ones.
 //!
 //! Permission keys are the single source for authorization: use cases check
 //! these constants, and the seeder creates exactly these rows. A key renamed
@@ -7,10 +9,8 @@
 //! default roles.
 
 use domain::{
-    constants::{CROP_KIND_FRUIT, CROP_KIND_RICE, ROLE_ADMIN, ROLE_PARTNER, ROLE_PROVIDER},
-    models::catalogue::{
-        Catalogue, CategorySeed, CropSeed, LocationSeed, PermissionSeed, RoleSeed,
-    },
+    constants::{ROLE_ADMIN, ROLE_PARTNER, ROLE_PROVIDER},
+    models::catalogue::{Catalogue, PermissionSeed, RoleSeed},
 };
 
 // ── Permission keys ───────────────────────────────────────────────────────────
@@ -38,6 +38,7 @@ pub const PERM_PARTNER_MANAGE: &str = "partner.manage";
 pub const PERM_PARTNER_REPORT_READ: &str = "partner.report.read";
 pub const PERM_PRICE_MANAGE: &str = "price.manage";
 pub const PERM_JOB_MODERATE: &str = "job.moderate";
+pub const PERM_ALERT_MANAGE: &str = "alert.manage";
 pub const PERM_SYSTEM_DEMO_MANAGE: &str = "system.demo.manage";
 pub const PERM_OWN_PROFILE_UPDATE: &str = "own.profile.update";
 pub const PERM_OWN_LISTING_CREATE: &str = "own.listing.create";
@@ -55,12 +56,32 @@ const PROVIDER: &[&str] = &[ROLE_PROVIDER];
 const PARTNER: &[&str] = &[ROLE_PARTNER];
 
 pub static ROLES: &[RoleSeed] = &[
-    RoleSeed { code: ROLE_ADMIN },
-    RoleSeed { code: ROLE_PARTNER },
+    RoleSeed {
+        code: ROLE_ADMIN,
+        any_permission: true,
+    },
+    RoleSeed {
+        code: ROLE_PARTNER,
+        any_permission: false,
+    },
     RoleSeed {
         code: ROLE_PROVIDER,
+        any_permission: false,
     },
 ];
+
+/// Whether the role `role_code` may be granted `key`: any permission for a
+/// role with `any_permission`, else only one meant for that role. A role or
+/// a key the catalogue does not know is granted nothing.
+pub fn grantable(role_code: &str, key: &str) -> bool {
+    let Some(role) = ROLES.iter().find(|r| r.code == role_code) else {
+        return false;
+    };
+    PERMISSIONS
+        .iter()
+        .find(|p| p.key == key)
+        .is_some_and(|p| role.any_permission || p.default_roles.contains(&role.code))
+}
 
 pub static PERMISSIONS: &[PermissionSeed] = &[
     PermissionSeed {
@@ -156,6 +177,10 @@ pub static PERMISSIONS: &[PermissionSeed] = &[
         default_roles: ADMIN,
     },
     PermissionSeed {
+        key: PERM_ALERT_MANAGE,
+        default_roles: ADMIN,
+    },
+    PermissionSeed {
         key: PERM_SYSTEM_DEMO_MANAGE,
         default_roles: ADMIN,
     },
@@ -201,334 +226,14 @@ pub static PERMISSIONS: &[PermissionSeed] = &[
     },
 ];
 
-pub static CATEGORIES: &[CategorySeed] = &[
-    CategorySeed {
-        name: "Múc bùn",
-        slug: "muc-bun",
-        kind: "service",
-        icon: "fa-solid fa-water",
-        color: "#1E40AF",
-        description: "Nạo vét kênh mương, ao hồ, ruộng lúa",
-        display_order: 1,
-    },
-    CategorySeed {
-        name: "Phun thuốc",
-        slug: "phun-thuoc",
-        kind: "service",
-        icon: "fa-solid fa-spray-can-sparkles",
-        color: "#065F46",
-        description: "Phun thuốc bảo vệ thực vật, drone phun",
-        display_order: 2,
-    },
-    CategorySeed {
-        name: "Sửa máy nổ",
-        slug: "sua-may-no",
-        kind: "service",
-        icon: "fa-solid fa-wrench",
-        color: "#92400E",
-        description: "Bảo dưỡng, sửa chữa máy bơm, máy gặt",
-        display_order: 3,
-    },
-    CategorySeed {
-        name: "Nông sản",
-        slug: "nong-san",
-        kind: "product",
-        icon: "fa-solid fa-wheat-awn",
-        color: "#065F46",
-        description: "Gạo, trái cây, nông sản các loại",
-        display_order: 1,
-    },
-    CategorySeed {
-        name: "Thuốc BVTV",
-        slug: "thuoc-bvtv",
-        kind: "product",
-        icon: "fa-solid fa-bug-slash",
-        color: "#14532D",
-        description: "Thuốc trừ sâu, diệt cỏ, bảo vệ thực vật",
-        display_order: 2,
-    },
-    CategorySeed {
-        name: "Nông cụ",
-        slug: "nong-cu",
-        kind: "product",
-        icon: "fa-solid fa-trowel",
-        color: "#92400E",
-        description: "Dụng cụ canh tác, bình xịt, liềm, cuốc",
-        display_order: 3,
-    },
-    CategorySeed {
-        name: "Máy móc",
-        slug: "may-moc",
-        kind: "product",
-        icon: "fa-solid fa-tractor",
-        color: "#1E3A8A",
-        description: "Máy bơm, máy gặt, drone phun thuốc",
-        display_order: 4,
-    },
-    CategorySeed {
-        name: "Phân bón",
-        slug: "phan-bon",
-        kind: "product",
-        icon: "fa-solid fa-seedling",
-        color: "#7F1D1D",
-        description: "Phân NPK, phân hữu cơ, vôi bột",
-        display_order: 5,
-    },
-    // Export compliance: what a durian or fruit grower must have done to
-    // sell abroad, the directory cooperatives and exporters sponsor. Listed
-    // last, so the ids of the categories above never move.
-    CategorySeed {
-        name: "Mã số vùng trồng",
-        slug: "ma-so-vung-trong",
-        kind: "service",
-        icon: "fa-solid fa-certificate",
-        color: "#1E40AF",
-        description: "Hồ sơ cấp mã số vùng trồng, cơ sở đóng gói xuất khẩu",
-        display_order: 4,
-    },
-    CategorySeed {
-        name: "Xét nghiệm dư lượng",
-        slug: "xet-nghiem-du-luong",
-        kind: "service",
-        icon: "fa-solid fa-flask-vial",
-        color: "#6D28D9",
-        description: "Kiểm nghiệm dư lượng thuốc, kim loại nặng, chất cấm trước khi xuất",
-        display_order: 5,
-    },
-    CategorySeed {
-        name: "Truy xuất nguồn gốc",
-        slug: "truy-xuat-nguon-goc",
-        kind: "service",
-        icon: "fa-solid fa-qrcode",
-        color: "#065F46",
-        description: "Nhật ký canh tác, tem truy xuất, chứng nhận GAP",
-        display_order: 6,
-    },
-];
-
-// Location presets after the 2025 reorganisation (Nghị quyết 202/2025/QH15,
-// in force 1 July 2025): 34 provinces, no district level. In the Mekong Delta:
-//   Đồng Tháp ← Tiền Giang + Đồng Tháp     Vĩnh Long ← Vĩnh Long + Bến Tre + Trà Vinh
-//   Tây Ninh  ← Long An + Tây Ninh         Cần Thơ   ← Cần Thơ + Hậu Giang + Sóc Trăng
-//   An Giang  ← An Giang + Kiên Giang      Cà Mau    ← Cà Mau + Bạc Liêu
-//   TP. Hồ Chí Minh ← TP.HCM + Bình Dương + Bà Rịa–Vũng Tàu
-// A label is "province — ward or commune" with the unit's current name (it
-// holds the centre of the former town of that name); the point is that
-// town's centre. Only units whose current name and position were both
-// checked are listed; admins add the others. Cai Lậy first: the launch area.
-pub static LOCATIONS: &[LocationSeed] = &[
-    LocationSeed {
-        label: "Đồng Tháp — Cai Lậy",
-        lat: 10.4170,
-        lng: 106.0830,
-        display_order: 1,
-    },
-    LocationSeed {
-        label: "Đồng Tháp — Cái Bè",
-        lat: 10.3330,
-        lng: 106.0330,
-        display_order: 2,
-    },
-    LocationSeed {
-        label: "Đồng Tháp — Mỹ Tho",
-        lat: 10.3581,
-        lng: 106.3642,
-        display_order: 3,
-    },
-    LocationSeed {
-        label: "Đồng Tháp — Gò Công",
-        lat: 10.3670,
-        lng: 106.6670,
-        display_order: 4,
-    },
-    LocationSeed {
-        label: "Đồng Tháp — Cao Lãnh",
-        lat: 10.4672,
-        lng: 105.6303,
-        display_order: 5,
-    },
-    LocationSeed {
-        label: "Đồng Tháp — Sa Đéc",
-        lat: 10.3000,
-        lng: 105.7667,
-        display_order: 6,
-    },
-    LocationSeed {
-        label: "Đồng Tháp — Hồng Ngự",
-        lat: 10.8330,
-        lng: 105.2830,
-        display_order: 7,
-    },
-    LocationSeed {
-        label: "An Giang — Long Xuyên",
-        lat: 10.3736,
-        lng: 105.4458,
-        display_order: 8,
-    },
-    LocationSeed {
-        label: "An Giang — Châu Đốc",
-        lat: 10.7000,
-        lng: 105.1330,
-        display_order: 9,
-    },
-    LocationSeed {
-        label: "An Giang — Rạch Giá",
-        lat: 9.9847,
-        lng: 105.0992,
-        display_order: 10,
-    },
-    LocationSeed {
-        label: "An Giang — Hà Tiên",
-        lat: 10.3858,
-        lng: 104.4898,
-        display_order: 11,
-    },
-    LocationSeed {
-        label: "Cần Thơ — Ninh Kiều",
-        lat: 10.0330,
-        lng: 105.7830,
-        display_order: 12,
-    },
-    LocationSeed {
-        label: "Cần Thơ — Vị Thanh",
-        lat: 9.7830,
-        lng: 105.4670,
-        display_order: 13,
-    },
-    LocationSeed {
-        label: "Cần Thơ — Sóc Trăng",
-        lat: 9.6028,
-        lng: 105.9736,
-        display_order: 14,
-    },
-    LocationSeed {
-        label: "Vĩnh Long — Bến Tre",
-        lat: 10.2308,
-        lng: 106.3253,
-        display_order: 15,
-    },
-    LocationSeed {
-        label: "Vĩnh Long — Trà Vinh",
-        lat: 9.9330,
-        lng: 106.3500,
-        display_order: 16,
-    },
-    LocationSeed {
-        label: "Tây Ninh — Tân An",
-        lat: 10.5333,
-        lng: 106.4167,
-        display_order: 17,
-    },
-    LocationSeed {
-        label: "Cà Mau — An Xuyên",
-        lat: 9.2239,
-        lng: 105.1756,
-        display_order: 18,
-    },
-    LocationSeed {
-        label: "Cà Mau — Bạc Liêu",
-        lat: 9.2830,
-        lng: 105.7170,
-        display_order: 19,
-    },
-    LocationSeed {
-        label: "TP. Hồ Chí Minh — Sài Gòn",
-        lat: 10.7756,
-        lng: 106.7019,
-        display_order: 20,
-    },
-];
-
-/// The crops the price page starts with: the rice varieties and fruits of
-/// the Mekong Delta whose farm-gate price farmers ask about, per kilogram.
-pub static CROPS: &[CropSeed] = &[
-    CropSeed {
-        name: "Lúa IR 50404",
-        kind: CROP_KIND_RICE,
-        unit: "kg",
-        display_order: 1,
-    },
-    CropSeed {
-        name: "Lúa OM 5451",
-        kind: CROP_KIND_RICE,
-        unit: "kg",
-        display_order: 2,
-    },
-    CropSeed {
-        name: "Lúa OM 18",
-        kind: CROP_KIND_RICE,
-        unit: "kg",
-        display_order: 3,
-    },
-    CropSeed {
-        name: "Lúa Đài Thơm 8",
-        kind: CROP_KIND_RICE,
-        unit: "kg",
-        display_order: 4,
-    },
-    CropSeed {
-        name: "Lúa ST25",
-        kind: CROP_KIND_RICE,
-        unit: "kg",
-        display_order: 5,
-    },
-    CropSeed {
-        name: "Sầu riêng Ri6",
-        kind: CROP_KIND_FRUIT,
-        unit: "kg",
-        display_order: 10,
-    },
-    CropSeed {
-        name: "Sầu riêng Monthong",
-        kind: CROP_KIND_FRUIT,
-        unit: "kg",
-        display_order: 11,
-    },
-    CropSeed {
-        name: "Xoài cát Hòa Lộc",
-        kind: CROP_KIND_FRUIT,
-        unit: "kg",
-        display_order: 12,
-    },
-    CropSeed {
-        name: "Bưởi da xanh",
-        kind: CROP_KIND_FRUIT,
-        unit: "kg",
-        display_order: 13,
-    },
-    CropSeed {
-        name: "Thanh long ruột đỏ",
-        kind: CROP_KIND_FRUIT,
-        unit: "kg",
-        display_order: 14,
-    },
-    CropSeed {
-        name: "Chanh không hạt",
-        kind: CROP_KIND_FRUIT,
-        unit: "kg",
-        display_order: 15,
-    },
-    CropSeed {
-        name: "Mít Thái",
-        kind: CROP_KIND_FRUIT,
-        unit: "kg",
-        display_order: 16,
-    },
-];
-
 pub static CATALOGUE: Catalogue = Catalogue {
     roles: ROLES,
     permissions: PERMISSIONS,
-    categories: CATEGORIES,
-    locations: LOCATIONS,
-    crops: CROPS,
 };
 
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
-
-    use domain::constants::{CATEGORY_TYPES, CROP_KINDS};
 
     use super::*;
 
@@ -543,6 +248,25 @@ mod tests {
                 "permission key {} is not a dotted lowercase key",
                 p.key
             );
+        }
+    }
+
+    #[test]
+    fn only_administrators_can_be_granted_any_permission() {
+        assert!(grantable(ROLE_ADMIN, PERM_USER_READ));
+        assert!(grantable(ROLE_ADMIN, PERM_OWN_SERVICE_CREATE));
+        assert!(grantable(ROLE_PROVIDER, PERM_OWN_SERVICE_CREATE));
+        assert!(!grantable(ROLE_PROVIDER, PERM_USER_READ));
+        assert!(!grantable(ROLE_PROVIDER, PERM_PARTNER_REPORT_READ));
+        assert!(grantable(ROLE_PARTNER, PERM_PARTNER_REPORT_READ));
+        assert!(!grantable(ROLE_PARTNER, PERM_PARTNER_MANAGE));
+        assert!(!grantable("khach", PERM_OWN_SERVICE_CREATE));
+        assert!(!grantable(ROLE_ADMIN, "no.such.key"));
+        // Every default grant is one the role may hold.
+        for p in PERMISSIONS {
+            for role in p.default_roles {
+                assert!(grantable(role, p.key), "{role} cannot hold {}", p.key);
+            }
         }
     }
 
@@ -562,42 +286,6 @@ mod tests {
         // who already knows it exists; the role grid would show it unchecked.
         for p in PERMISSIONS {
             assert!(!p.default_roles.is_empty(), "{} has no default role", p.key);
-        }
-    }
-
-    #[test]
-    fn categories_use_known_types_and_unique_slugs() {
-        let mut slugs = HashSet::new();
-        for c in CATEGORIES {
-            assert!(
-                CATEGORY_TYPES.contains(&c.kind),
-                "{} has unknown type {}",
-                c.slug,
-                c.kind
-            );
-            assert!(slugs.insert(c.slug), "duplicate slug {}", c.slug);
-        }
-    }
-
-    #[test]
-    fn location_labels_are_unique() {
-        let mut labels = HashSet::new();
-        for l in LOCATIONS {
-            assert!(labels.insert(l.label), "duplicate location {}", l.label);
-        }
-    }
-
-    #[test]
-    fn crops_use_known_kinds_and_unique_names() {
-        let mut names = HashSet::new();
-        for c in CROPS {
-            assert!(
-                CROP_KINDS.contains(&c.kind),
-                "{} has unknown kind {}",
-                c.name,
-                c.kind
-            );
-            assert!(names.insert(c.name), "duplicate crop {}", c.name);
         }
     }
 }

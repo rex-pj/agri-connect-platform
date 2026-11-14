@@ -9,6 +9,11 @@ pub struct AdminProduct {
     pub unit: Option<String>,
     pub category: String,
     pub category_id: i32,
+    /// The commodity it is for; `None`: every one.
+    pub commodity_id: Option<i32>,
+    pub commodity: Option<String>,
+    /// Its sector: its commodity's, else its type's; `None`: every sector.
+    pub sector: Option<String>,
     pub business_id: i32,
     pub business_name: String,
     pub image_file_id: Option<Uuid>,
@@ -24,8 +29,14 @@ pub struct ProductView {
     pub price: Option<i64>,
     pub unit: Option<String>,
     pub category: String,
+    /// The category's id and slug, for the link to its list.
+    pub category_id: i32,
+    pub category_slug: String,
     /// Font Awesome class of the category, for the no-image placeholder.
     pub category_icon: Option<String>,
+    /// The commodity it is for ("Lúa"), and its id; `None`: every one.
+    pub commodity_id: Option<i32>,
+    pub commodity: Option<String>,
     pub vendor_name: String,
     pub vendor_phone: String,
     /// The seller carries the verified badge.
@@ -47,6 +58,8 @@ pub struct ProviderProduct {
     pub category: String,
     pub image_file_id: Option<Uuid>,
     pub category_id: i32,
+    pub commodity_id: Option<i32>,
+    pub commodity: Option<String>,
     pub is_active: bool,
     pub created_on: DateTime<Utc>,
 }
@@ -54,6 +67,7 @@ pub struct ProviderProduct {
 pub struct NewProduct {
     pub business_id: i32,
     pub category_id: i32,
+    pub commodity_id: Option<i32>,
     pub name: String,
     pub description: Option<String>,
     pub price: Option<i64>,
@@ -67,6 +81,7 @@ pub struct UpdateProduct {
     pub id: i32,
     pub owner_user: i32,
     pub category_id: i32,
+    pub commodity_id: Option<i32>,
     pub name: String,
     pub description: Option<String>,
     pub price: Option<i64>,
@@ -78,6 +93,7 @@ pub struct UpdateProduct {
 pub struct UpdateProductAdmin {
     pub id: i32,
     pub category_id: i32,
+    pub commodity_id: Option<i32>,
     pub name: String,
     pub description: Option<String>,
     pub price: Option<i64>,
@@ -85,10 +101,26 @@ pub struct UpdateProductAdmin {
     pub updated_by: i32,
 }
 
+/// The admin's supply list criteria; every one set narrows it.
+#[derive(Debug, Default, Clone)]
+pub struct AdminProductFilter {
+    pub provider_id: Option<i32>,
+    /// One supply type's.
+    pub category_id: Option<i32>,
+    /// Those for one commodity.
+    pub commodity_id: Option<i32>,
+    pub search: Option<String>,
+}
+
 /// Public product search criteria; every field narrows the result.
 #[derive(Debug, Default)]
 pub struct ProductFilter {
     pub category_id: Option<i32>,
+    /// Only supplies for this commodity, and those for every one.
+    pub commodity_id: Option<i32>,
+    /// Only supplies of this sector: for a commodity of it, or for none and of
+    /// a type of it or of every sector.
+    pub sector: Option<String>,
     /// One seller's products (their public page).
     pub business_id: Option<i32>,
     pub name: Option<String>,

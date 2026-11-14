@@ -27,10 +27,11 @@ use domain::{
 
 use crate::{
     constants::{
-        FEATURED_PRODUCTS_COUNT, FEATURED_PROVIDERS_COUNT, FEATURED_SERVICES_COUNT,
-        GEO_RESULTS_MAX, NOTE_MAX_LEN, PAGE_SIZE, RADIUS_MAX_M, RADIUS_MIN_M,
-        REQUESTER_NAME_MAX_LEN, SERVICES_PER_BUSINESS_MAX, TOPIC_MAX_LEN,
+        CALL_REPEAT_SECS, FEATURED_PRODUCTS_COUNT, FEATURED_PROVIDERS_COUNT,
+        FEATURED_SERVICES_COUNT, GEO_RESULTS_MAX, NOTE_MAX_LEN, PAGE_SIZE, RADIUS_MAX_M,
+        RADIUS_MIN_M, REQUESTER_NAME_MAX_LEN, SERVICES_PER_BUSINESS_MAX, TOPIC_MAX_LEN,
     },
+    hashing::sha256_hex,
     inputs::{BrowseParams, CallInput, ContactInput, GeoSearchParams, Visitor},
     outputs::{
         BrowseResponse, BusinessBrowseDto, BusinessDetailDto, BusinessSearchDto, CategoryDto,
@@ -39,6 +40,7 @@ use crate::{
     },
     pagination::{paginate, total_pages},
     ports::EventBus,
+    repeats::RepeatFilter,
     validation::{non_blank, point_wkt, validate_coordinates, validate_phone},
 };
 
@@ -55,6 +57,9 @@ pub struct ExploreUseCase {
     call_repo: Arc<dyn CallRepositoryTrait + Send + Sync>,
     /// Announces new inquiries (the provider is emailed).
     events: Arc<dyn EventBus>,
+    /// Call and Zalo taps counted lately: a repeat within `CALL_REPEAT_SECS`
+    /// is not another lead.
+    recent_taps: RepeatFilter,
 }
 
 /// Everything `ExploreUseCase` depends on, named so wiring cannot swap two
@@ -81,6 +86,7 @@ impl ExploreUseCase {
             service_repo: d.service_repo,
             call_repo: d.call_repo,
             events: d.events,
+            recent_taps: RepeatFilter::default(),
         }
     }
 
@@ -116,16 +122,15 @@ impl ExploreUseCase {
     pub async fn browse_providers(&self, params: BrowseParams) -> Result<BrowseResponse> {
         let (page, offset) = paginate(params.page, PAGE_SIZE);
 
+        let filter = PublicServiceFilter {
+            category_id: params.service_id,
+            sector: params.sector,
+            text: params.name,
+        };
         let (providers, total) = tokio::try_join!(
-            self.business_repo.browse(
-                params.service_id,
-                params.name.clone(),
-                params.sort,
-                PAGE_SIZE,
-                offset
-            ),
             self.business_repo
-                .count_browse(params.service_id, params.name),
+                .browse(&filter, params.sort, PAGE_SIZE, offset),
+            self.business_repo.count_browse(&filter),
         )?;
 
         Ok(BrowseResponse {
@@ -145,6 +150,7 @@ impl ExploreUseCase {
         let (page, offset) = paginate(params.page, PAGE_SIZE);
         let filter = PublicServiceFilter {
             category_id: params.service_id,
+            sector: params.sector,
             text: params.name,
         };
         let (items, total) = tokio::try_join!(
@@ -222,8 +228,17 @@ impl ExploreUseCase {
             _ => return Err(Error::new(ErrorCode::InvalidCallTarget)),
         };
         // An admin, provider or partner trying a button is not demand.
-        if matches!(input.visitor, Visitor::SignedIn) {
+        let Visitor::Anonymous { key } = &input.visitor else {
             return Ok(());
+        };
+        // The same visitor ringing the same business again is the same lead.
+        // A visitor with no address to tell apart is always counted.
+        if !key.is_empty() {
+            let fingerprint = sha256_hex(format!("{key}|{business_id}|{channel}"));
+            let window = std::time::Duration::from_secs(CALL_REPEAT_SECS);
+            if !self.recent_taps.first_in_window(fingerprint, window) {
+                return Ok(());
+            }
         }
         self.call_repo
             .record(NewCallClick {
@@ -265,14 +280,17 @@ impl ExploreUseCase {
         })
     }
 
-    pub async fn get_explore_data(&self) -> Result<ExploreData> {
+    /// The featured services, providers and products; `sector` keeps those of
+    /// that sector and of every sector, as the lists do.
+    pub async fn get_explore_data(&self, sector: Option<&str>) -> Result<ExploreData> {
         // Enough candidates that even providers listing the most services
         // cannot crowd out the others before one per provider is kept.
         let candidates = FEATURED_SERVICES_COUNT as i64 * SERVICES_PER_BUSINESS_MAX as i64;
         let (featured_businesses, featured_product_views, service_candidates) = tokio::try_join!(
-            self.business_repo.featured(FEATURED_PROVIDERS_COUNT),
-            self.product_repo.featured(FEATURED_PRODUCTS_COUNT),
-            self.service_repo.featured_candidates(candidates),
+            self.business_repo
+                .featured(FEATURED_PROVIDERS_COUNT, sector),
+            self.product_repo.featured(FEATURED_PRODUCTS_COUNT, sector),
+            self.service_repo.featured_candidates(candidates, sector),
         )?;
 
         Ok(ExploreData {
@@ -304,7 +322,8 @@ impl ExploreUseCase {
 
     /// The single home of the inquiry rules; every contact form posts here.
     /// A chosen service must be one the provider shows publicly; its name is
-    /// the topic when none was typed.
+    /// the topic when none was typed. A request sent from a supply's page is
+    /// stored as about that supply.
     pub async fn contact_request(&self, input: ContactInput) -> Result<InquiryCreatedDto> {
         let requester_name = input.requester_name.trim().to_owned();
         let requester_phone = input.requester_phone.trim().to_owned();
@@ -359,11 +378,26 @@ impl ExploreUseCase {
             return Err(Error::new(ErrorCode::ProviderNotFound));
         }
 
+        // The supply the form was on, when it is still this provider's. The
+        // farmer chose no supply in the form, so one that is gone since is
+        // left out, never an error; a chosen service is what the request is
+        // about.
+        let product_id = match input.product_id.filter(|_| input.service_id.is_none()) {
+            Some(id) => self
+                .product_repo
+                .find_by_id(id)
+                .await?
+                .filter(|p| p.business_id == input.business_id)
+                .map(|p| p.id),
+            None => None,
+        };
+
         let id = self
             .inquiry_repo
             .create(NewInquiry {
                 business_id: input.business_id,
                 service_id: input.service_id,
+                product_id,
                 topic,
                 requester_name,
                 requester_phone,
@@ -388,18 +422,7 @@ impl ExploreUseCase {
     pub async fn get_categories(&self, type_filter: Option<&str>) -> Result<Vec<CategoryDto>> {
         let categories = self.category_repo.list(type_filter).await?;
 
-        Ok(categories
-            .into_iter()
-            .map(|c| CategoryDto {
-                id: c.id,
-                name: c.name,
-                slug: c.slug,
-                icon: c.icon,
-                color: c.color,
-                description: c.description,
-                display_order: c.display_order,
-            })
-            .collect())
+        Ok(categories.into_iter().map(CategoryDto::from).collect())
     }
 
     pub async fn get_locations(&self) -> Result<Vec<LocationDto>> {

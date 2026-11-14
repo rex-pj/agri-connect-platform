@@ -23,8 +23,8 @@ use axum::{
 use domain::repositories::catalogue_repository_trait::CatalogueRepositoryTrait;
 use infrastructure::{
     bcrypt_password_hasher::BcryptPasswordHasher, catalogue_repository::CatalogueRepository,
-    email_service::LogEmailService, file_storage::ObjectFileStorage,
-    jwt_token_service::JwtTokenService,
+    demo_data_repository::DemoDataRepository, email_service::LogEmailService,
+    file_storage::ObjectFileStorage, jwt_token_service::JwtTokenService,
 };
 use migration::{Migrator, MigratorTrait};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, Statement};
@@ -54,9 +54,23 @@ pub fn email_service() -> Arc<dyn EmailService> {
 pub struct RecordingEmail {
     inquiries: std::sync::Mutex<Vec<(String, InquiryNotice)>>,
     jobs: std::sync::Mutex<Vec<(String, JobNotice)>>,
+    verifications: std::sync::Mutex<Vec<(String, String)>>,
 }
 
 impl RecordingEmail {
+    /// (recipient, token) of every "confirm your address" email so far,
+    /// waiting (up to 2 s) until `at_least` arrived.
+    pub async fn verifications(&self, at_least: usize) -> Vec<(String, String)> {
+        for _ in 0..100 {
+            let sent = self.verifications.lock().unwrap().clone();
+            if sent.len() >= at_least {
+                return sent;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        self.verifications.lock().unwrap().clone()
+    }
+
     /// (recipient, notice) of every "new inquiry" email so far. They are sent
     /// in the background, so this waits (up to 2 s) until `at_least` arrived.
     pub async fn inquiries(&self, at_least: usize) -> Vec<(String, InquiryNotice)> {
@@ -87,6 +101,13 @@ impl RecordingEmail {
 #[async_trait::async_trait]
 impl EmailService for RecordingEmail {
     async fn send_password_reset(&self, _to_email: &str, _token: &str) {}
+
+    async fn send_email_verification(&self, to_email: &str, token: &str) {
+        self.verifications
+            .lock()
+            .unwrap()
+            .push((to_email.to_owned(), token.to_owned()));
+    }
 
     async fn send_new_inquiry(&self, to_email: &str, notice: &InquiryNotice) {
         self.inquiries
@@ -145,6 +166,16 @@ pub fn state_with_email(
     uploads: Uploads,
     email: Arc<dyn EmailService>,
 ) -> AppState {
+    state_with(db, uploads, email, None)
+}
+
+/// As `state_with_email`, on a server whose SETUP_TOKEN is `setup_token`.
+pub fn state_with(
+    db: DatabaseConnection,
+    uploads: Uploads,
+    email: Arc<dyn EmailService>,
+    setup_token: Option<String>,
+) -> AppState {
     build_state(Wiring {
         dbs: web::startup::Databases::single(db),
         token_service: token_service(),
@@ -154,6 +185,7 @@ pub fn state_with_email(
         uploads,
         zalo: None,
         refresh_days: REFRESH_TOKEN_DEFAULT_DAYS,
+        setup_token,
     })
     .unwrap()
 }
@@ -268,11 +300,16 @@ fn drop_sql(name: &str) -> String {
     format!("DROP DATABASE IF EXISTS {name} WITH (FORCE)")
 }
 
-/// Once per test process: drops test databases left by killed runs. Names
-/// carry their creation time (`agri_test_{secs}_{pid}_{n}`, the template
-/// `agri_test_{secs}_{pid}_template`), so a database a
-/// concurrent run is still using is never touched. Names from before the time
-/// was added (`agri_test_{pid}_{n}`) read as ancient and are dropped too.
+/// The template every test database is copied from, one per migration set
+/// (`build.rs` fingerprints the migrations), shared by every run.
+const TEMPLATE_NAME: &str = concat!("agri_test_template_", env!("MIGRATIONS_FINGERPRINT"));
+
+/// Once per test process: drops test databases left by killed runs, and the
+/// templates of other migration sets. Other names carry their creation time
+/// (`agri_test_{secs}_{pid}_{n}`, a template being built
+/// `agri_test_{secs}_{pid}_template`), so a database a concurrent run is still
+/// using is never touched. Names from before the time was added
+/// (`agri_test_{pid}_{n}`) read as ancient and are dropped too.
 async fn sweep_stale(admin: &DatabaseConnection) {
     if SWEPT.swap(true, Ordering::SeqCst) {
         return;
@@ -287,6 +324,12 @@ async fn sweep_stale(admin: &DatabaseConnection) {
     let cutoff = unix_now().saturating_sub(STALE_TEST_DB_SECS);
     for row in rows {
         let name: String = row.try_get("", "datname").unwrap();
+        if name.starts_with("agri_test_template_") {
+            if name != TEMPLATE_NAME {
+                admin.execute_unprepared(&drop_sql(&name)).await.unwrap();
+            }
+            continue;
+        }
         let created = name
             .strip_prefix(TEST_DB_PREFIX)
             .and_then(|rest| rest.split('_').next())
@@ -307,54 +350,97 @@ fn database_url(url: &str, name: &str) -> String {
     format!("{server}/{name}{query}")
 }
 
-/// The migrated database every test database is copied from, made once per
-/// test process: copying it is several times faster than migrating each
-/// database from scratch. Named like a test database
-/// (`agri_test_{secs}_{pid}_template`), so a later run's sweep drops it once
-/// it is stale; a process cannot drop it when it exits.
-async fn template(url: &str, admin: &DatabaseConnection) -> &'static str {
-    static TEMPLATE: OnceCell<String> = OnceCell::const_new();
+/// The migrated database every test database is copied from: copying it is
+/// several times faster than migrating each database from scratch. It is kept
+/// between runs (a process cannot drop anything when it exits, so one per run
+/// would pile up) and rebuilt only when the migrations change. It is built
+/// under a run's own name and renamed when complete, so a run killed half-way
+/// never leaves a half-migrated template, and two runs building it at once
+/// both end up on the one that was renamed first.
+async fn template(url: &str, admin: &DatabaseConnection) {
+    static TEMPLATE: OnceCell<()> = OnceCell::const_new();
     TEMPLATE
         .get_or_init(|| async {
-            let name = format!(
+            if database_exists(admin, TEMPLATE_NAME).await {
+                return;
+            }
+            let building = format!(
                 "{TEST_DB_PREFIX}{}_{}_template",
                 unix_now(),
                 std::process::id()
             );
             // A previous attempt in this process may have panicked half-way.
-            admin.execute_unprepared(&drop_sql(&name)).await.unwrap();
             admin
-                .execute_unprepared(&format!("CREATE DATABASE {name}"))
+                .execute_unprepared(&drop_sql(&building))
                 .await
                 .unwrap();
-            let db = Database::connect(database_url(url, &name)).await.unwrap();
+            admin
+                .execute_unprepared(&format!("CREATE DATABASE {building}"))
+                .await
+                .unwrap();
+            let db = Database::connect(database_url(url, &building))
+                .await
+                .unwrap();
             Migrator::up(&db, None).await.unwrap();
-            // Postgres refuses to copy a database anyone is connected to.
+            // Postgres refuses to rename or copy a database anyone is connected to.
             db.close().await.unwrap();
-            name
+            let renamed = while_busy(
+                admin,
+                &format!("ALTER DATABASE {building} RENAME TO {TEMPLATE_NAME}"),
+            )
+            .await;
+            if let Err(e) = renamed {
+                // Another run renamed its own first: use that one.
+                admin
+                    .execute_unprepared(&drop_sql(&building))
+                    .await
+                    .unwrap();
+                assert!(
+                    database_exists(admin, TEMPLATE_NAME).await,
+                    "cannot rename {building} to {TEMPLATE_NAME}: {e}"
+                );
+            }
         })
-        .await
+        .await;
 }
 
-/// How long a copy waits for the template's last session to go: closing a
-/// pool returns before the server has ended its sessions.
+async fn database_exists(admin: &DatabaseConnection, name: &str) -> bool {
+    admin
+        .query_one(Statement::from_sql_and_values(
+            admin.get_database_backend(),
+            "SELECT 1 FROM pg_database WHERE datname = $1",
+            [name.into()],
+        ))
+        .await
+        .unwrap()
+        .is_some()
+}
+
+/// How long a rename or copy waits for the template's last session to go:
+/// closing a pool returns before the server has ended its sessions.
 const TEMPLATE_BUSY_RETRIES: u32 = 50;
 const TEMPLATE_BUSY_WAIT: Duration = Duration::from_millis(100);
 
-async fn copy_template(admin: &DatabaseConnection, template: &str, name: &str) {
-    let sql = format!("CREATE DATABASE {name} TEMPLATE {template}");
-    for attempt in 0.. {
-        match admin.execute_unprepared(&sql).await {
-            Ok(_) => return,
-            Err(e)
-                if attempt < TEMPLATE_BUSY_RETRIES
-                    && e.to_string().contains("is being accessed by other users") =>
-            {
+/// Runs `sql`, again while the database it needs is still in use.
+async fn while_busy(admin: &DatabaseConnection, sql: &str) -> Result<(), sea_orm::DbErr> {
+    for _ in 0..TEMPLATE_BUSY_RETRIES {
+        match admin.execute_unprepared(sql).await {
+            Err(e) if e.to_string().contains("is being accessed by other users") => {
                 tokio::time::sleep(TEMPLATE_BUSY_WAIT).await;
             }
-            Err(e) => panic!("cannot copy {template} into {name}: {e}"),
+            done => return done.map(drop),
         }
     }
+    admin.execute_unprepared(sql).await.map(drop)
+}
+
+async fn copy_template(admin: &DatabaseConnection, name: &str) {
+    while_busy(
+        admin,
+        &format!("CREATE DATABASE {name} TEMPLATE {TEMPLATE_NAME}"),
+    )
+    .await
+    .unwrap_or_else(|e| panic!("cannot copy {TEMPLATE_NAME} into {name}: {e}"));
 }
 
 impl TestDb {
@@ -370,7 +456,7 @@ impl TestDb {
 
         let admin = Database::connect(&url).await.unwrap();
         sweep_stale(&admin).await;
-        let template = template(&url, &admin).await;
+        template(&url, &admin).await;
         // Armed before CREATE: a panic from here on still drops the database.
         let guard = DropGuard {
             url: url.clone(),
@@ -378,7 +464,7 @@ impl TestDb {
             armed: true,
         };
         admin.execute_unprepared(&drop_sql(&name)).await.unwrap();
-        copy_template(&admin, template, &name).await;
+        copy_template(&admin, &name).await;
 
         let db = Database::connect(database_url(&url, &name)).await.unwrap();
 
@@ -414,6 +500,7 @@ pub async fn first_admin(state: &AppState) -> application::authz::Actor {
             "quantri@example.vn".into(),
             "matkhau123".into(),
             None,
+            None,
         )
         .await
         .unwrap_or_else(|e| panic!("create_first_admin: {e}"));
@@ -447,6 +534,12 @@ impl Env {
         let t = TestDb::create().await;
         CatalogueRepository::new(Arc::new(t.db.clone()))
             .apply(&CATALOGUE)
+            .await
+            .unwrap();
+        // Categories, areas and crops are demo data: tests start from the
+        // demo catalogue (flagged `is_demo`), with no demo listings.
+        DemoDataRepository::new(Arc::new(t.db.clone()))
+            .load_catalogue()
             .await
             .unwrap();
         let mail = Arc::new(RecordingEmail::default());
@@ -552,15 +645,19 @@ pub async fn put_photo(env: &Env, product_id: i32, token: &str) -> String {
         .to_owned()
 }
 
-/// (id, slug) of the catalogue's categories of `kind` ("product", "service"),
-/// in display order.
+/// (id, slug) of the catalogue's types of `kind` ("product": supply types,
+/// "service": service types), in display order.
 pub async fn categories_of(env: &Env, kind: &str) -> Vec<(i32, String)> {
+    let table = if kind == "service" {
+        "service_types"
+    } else {
+        "supply_types"
+    };
     env.t
         .db
-        .query_all(sea_orm::Statement::from_sql_and_values(
+        .query_all(sea_orm::Statement::from_string(
             env.t.db.get_database_backend(),
-            "SELECT id, slug FROM categories WHERE type = $1 ORDER BY display_order",
-            [kind.into()],
+            format!("SELECT id, slug FROM {table} ORDER BY display_order, id"),
         ))
         .await
         .unwrap()
@@ -771,4 +868,18 @@ pub fn post_multipart_form(
         )
         .body(Body::from(body))
         .unwrap()
+}
+
+/// Marks `username`'s email address as confirmed, as opening the link sent
+/// to it does: for tests about what a confirmed account is emailed.
+pub async fn confirm_email(env: &Env, username: &str) {
+    env.t
+        .db
+        .execute(sea_orm::Statement::from_sql_and_values(
+            env.t.db.get_database_backend(),
+            "UPDATE users SET email_verified_at = now() WHERE username = $1",
+            [username.into()],
+        ))
+        .await
+        .unwrap();
 }

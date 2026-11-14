@@ -49,12 +49,12 @@ fn rice() -> String {
 async fn every_other_spelling_of_the_url_moves_permanently_to_the_canonical_one() {
     let e = Env::new().await;
     let (_, id) = seeded(&e, &rice()).await;
-    let canonical = format!("/products/{id}/{SLUG}");
+    let canonical = format!("/supplies/{id}/{SLUG}");
 
     for uri in [
-        format!("/products/{id}"),
-        format!("/products/{id}/ten-cu-truoc-khi-doi"),
-        format!("/products/0{id}/{SLUG}"),
+        format!("/supplies/{id}"),
+        format!("/supplies/{id}/ten-cu-truoc-khi-doi"),
+        format!("/supplies/0{id}/{SLUG}"),
     ] {
         let res = send(&e.router, page(&uri)).await;
         // 301, not 308: the status old crawlers and link previews understand.
@@ -70,7 +70,7 @@ async fn the_detail_page_shows_price_description_and_a_call_button() {
     let e = Env::new().await;
     let (_, id) = seeded(&e, &rice()).await;
 
-    let res = send(&e.router, page(&format!("/products/{id}/{SLUG}"))).await;
+    let res = send(&e.router, page(&format!("/supplies/{id}/{SLUG}"))).await;
     assert_eq!(res.status(), StatusCode::OK);
     assert_eq!(res.headers()[header::CONTENT_SECURITY_POLICY], PAGE_CSP);
     let html = text(res).await;
@@ -101,7 +101,7 @@ async fn a_product_with_a_photo_shows_the_full_size_image() {
     let (token, id) = seeded(&e, &rice()).await;
     let file = put_photo(&e, id, &token).await;
 
-    let html = text(send(&e.router, page(&format!("/products/{id}/{SLUG}"))).await).await;
+    let html = text(send(&e.router, page(&format!("/supplies/{id}/{SLUG}"))).await).await;
     assert!(!html.contains("Chưa có ảnh"));
     // The main image, not the thumbnail the cards use.
     assert!(html.contains(&format!(r#"src="/files/{file}""#)), "{html}");
@@ -113,7 +113,7 @@ async fn a_product_with_a_photo_shows_the_full_size_image() {
 async fn without_a_description_the_meta_tag_says_who_sells_it() {
     let e = Env::new().await;
     let (_, id) = seeded(&e, r#"{"name":"Sầu riêng"}"#).await;
-    let html = text(send(&e.router, page(&format!("/products/{id}/sau-rieng"))).await).await;
+    let html = text(send(&e.router, page(&format!("/supplies/{id}/sau-rieng"))).await).await;
     assert!(html.contains("Mua Sầu riêng từ Vườn nongdan trên Agri-Connect."));
     assert!(html.contains("Liên hệ giá"));
     e.cleanup().await;
@@ -132,17 +132,14 @@ async fn missing_hidden_and_mistyped_products_are_a_404_page() {
         .unwrap();
 
     for uri in [
-        format!("/products/{id}/{SLUG}"), // deactivated
-        "/products/999999/x".to_owned(),
-        "/products/khong-phai-so".to_owned(),
-        "/products/99999999999999/x".to_owned(), // overflows i32
+        format!("/supplies/{id}/{SLUG}"), // deactivated
+        "/supplies/999999/x".to_owned(),
+        "/supplies/khong-phai-so".to_owned(),
+        "/supplies/99999999999999/x".to_owned(), // overflows i32
     ] {
         let res = send(&e.router, page(&uri)).await;
         assert_eq!(res.status(), StatusCode::NOT_FOUND, "{uri}");
-        assert!(
-            text(res).await.contains("Không tìm thấy sản phẩm."),
-            "{uri}"
-        );
+        assert!(text(res).await.contains("Không tìm thấy vật tư."), "{uri}");
     }
     e.cleanup().await;
 }
@@ -152,9 +149,12 @@ async fn missing_hidden_and_mistyped_products_are_a_404_page() {
 async fn the_page_shows_what_else_the_seller_does() {
     let e = Env::new().await;
     let (token, id) = seeded(&e, &rice()).await;
-    let uri = format!("/products/{id}/{SLUG}");
+    let uri = format!("/supplies/{id}/{SLUG}");
     let before = text(send(&e.router, page(&uri)).await).await;
-    assert!(!before.contains("Cửa hàng này còn làm"), "nothing else yet");
+    assert!(
+        !before.contains("Nhà cung cấp này còn làm"),
+        "nothing else yet"
+    );
 
     let category = integration_tests::categories_of(&e, "service").await[0].0;
     let req = Request::post("/api/provider/services")
@@ -171,7 +171,7 @@ async fn the_page_shows_what_else_the_seller_does() {
         .unwrap();
 
     let after = text(send(&e.router, page(&uri)).await).await;
-    assert!(after.contains("Cửa hàng này còn làm"));
+    assert!(after.contains("Nhà cung cấp này còn làm"));
     assert!(after.contains(&format!(r#"href="/services/{service}/xay-xat-lua""#)));
     e.cleanup().await;
 }
@@ -181,7 +181,7 @@ async fn the_page_shows_what_else_the_seller_does() {
 async fn the_contact_form_asks_about_this_product_and_lands_back_on_it() {
     let e = env_with_origin().await;
     let (_, id) = seeded(&e, &rice()).await;
-    let canonical = format!("/products/{id}/{SLUG}");
+    let canonical = format!("/supplies/{id}/{SLUG}");
     let business = business::Entity::find()
         .filter(business::Column::Name.eq("Vườn nongdan"))
         .one(&e.t.db)
@@ -229,6 +229,38 @@ async fn the_contact_form_asks_about_this_product_and_lands_back_on_it() {
     assert_eq!(res.headers()[header::LOCATION], canonical.as_str());
     let stored = inquiry::Entity::find().one(&e.t.db).await.unwrap().unwrap();
     assert_eq!(stored.topic, NAME);
+    assert_eq!(
+        (stored.product_id, stored.service_id),
+        (Some(id), None),
+        "the request is stored as about this supply"
+    );
+
+    // A supply of another business, or one that is gone, is left out: the
+    // farmer chose none in the form, so the request still goes through.
+    let res = send(
+        &e.router,
+        post_form(
+            "/contact",
+            &[
+                ("business_id", business.as_str()),
+                ("product_id", "999999"),
+                ("return_to", "product"),
+                ("topic", NAME),
+                ("requester_phone", "0912345679"),
+                ("requester_name", "Chú Sáu"),
+            ],
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let unlinked = inquiry::Entity::find()
+        .filter(inquiry::Column::RequesterPhone.eq("0912345679"))
+        .one(&e.t.db)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(unlinked.product_id, None);
     e.cleanup().await;
 }
 
@@ -237,7 +269,7 @@ async fn the_contact_form_asks_about_this_product_and_lands_back_on_it() {
 async fn the_sellers_page_lists_their_products() {
     let e = Env::new().await;
     let (_, id) = seeded(&e, &rice()).await;
-    let res = send(&e.router, page(&format!("/products/{id}/{SLUG}"))).await;
+    let res = send(&e.router, page(&format!("/supplies/{id}/{SLUG}"))).await;
     let html = text(res).await;
     let provider = html
         .split(r#"href="/providers/"#)
@@ -247,7 +279,7 @@ async fn the_sellers_page_lists_their_products() {
         .to_owned();
 
     let shop = text(send(&e.router, page(&format!("/providers/{provider}"))).await).await;
-    assert!(shop.contains("Sản phẩm đang bán"));
-    assert!(shop.contains(&format!(r#"href="/products/{id}/{SLUG}""#)));
+    assert!(shop.contains("Vật tư đang bán"));
+    assert!(shop.contains(&format!(r#"href="/supplies/{id}/{SLUG}""#)));
     e.cleanup().await;
 }

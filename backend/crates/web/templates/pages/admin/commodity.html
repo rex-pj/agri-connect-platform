@@ -1,0 +1,76 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "atoms/status_badge.html" as status %}
+{% import "molecules/admin_header.html" as header %}
+{% import "organisms/commodity_fields.html" as fields %}
+{% import "organisms/crop_fields.html" as crop_fields %}
+{% import "molecules/sheet_header.html" as sheet_head %}
+{% import "organisms/confirm_sheet.html" as confirm %}
+{#- One commodity: its edit form and visibility. `page.body` is
+    web::pages::admin::commodities::CommodityPage. Hiding goes through a confirmation
+    with a reason (in its section's `dialog` scope); showing again is one
+    button. A commodity is never deleted: crops and supplies point to it. -#}
+{% block title %}{{ page.body.commodity.name }} — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+{% set c = b.commodity %}
+{{ header::admin_header(title=c.name, icon="fa-leaf", back_href=b.list_href, back_label=t(key="admin_menu.commodities")) }}
+<div class="admin-body">
+  {% if b.flash == "commodity_created" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin_commodities.created")) }}{% endif %}
+  {% if b.flash == "commodity_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.saved")) }}{% endif %}
+  {% if b.flash == "commodity_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin_commodities.hidden")) }}{% endif %}
+  {% if b.flash == "commodity_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin_commodities.shown")) }}{% endif %}
+  {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
+
+  <section class="admin-section" aria-labelledby="related-title" x-data="dialog" x-on:keydown.escape.window="hide">
+    <h2 class="admin-section__title" id="related-title">{{ t(key="admin_commodities.crops_title") }}</h2>
+    {% if b.crops %}
+    <ul class="list-unstyled d-flex flex-wrap gap-2 mb-0">
+      {% for l in b.crops %}<li><a class="btn btn-sm {% if l.crop.is_active %}btn-outline-success{% else %}btn-outline-secondary{% endif %}" href="{{ l.href }}">{{ atoms::icon(name="fa-seedling", class="me-1") }}{{ l.crop.name }}</a></li>{% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-muted">{{ t(key="admin_commodities.no_crops") }}</p>
+    {% endif %}
+    <div class="admin-actions">
+      <a class="btn btn-success" href="#them-mat-hang" x-on:click.prevent="show">{{ atoms::icon(name="fa-plus") }} {{ t(key="admin_crops.add") }}</a>
+      {% if b.supplies_total is number %}<a class="btn btn-outline-secondary" href="{{ b.supplies_href }}">{{ atoms::icon(name="fa-bag-shopping") }} {{ t(key="admin_commodities.supplies", count=b.supplies_total) }}</a>{% endif %}
+      <a class="btn btn-outline-secondary" href="{{ b.board_href }}">{{ atoms::icon(name="fa-chart-line") }} {{ t(key="admin_commodities.board") }}</a>
+    </div>
+    <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
+    <section class="contact-sheet" id="them-mat-hang" aria-labelledby="them-mat-hang-title" :class="sheetClass">
+      {{ sheet_head::sheet_header(id="them-mat-hang", title=t(key="admin_crops.add"), icon="fa-seedling") }}
+      <form class="contact-sheet__form" method="post" action="{{ b.crop_create_action }}" novalidate>
+        {{ crop_fields::crop_fields(form=b.crop_form, errors=b.errors, commodities=b.crop_commodities, commodities_href=b.list_href, name_max=limits.crop_name_max, unit_max=limits.crop_unit_max, prefix="crop", first=true) }}
+        <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-plus") }} {{ t(key="admin_crops.add") }}</button>
+      </form>
+    </section>
+  </section>
+
+  <section class="admin-section" aria-labelledby="edit-title">
+    <h2 class="admin-section__title" id="edit-title">{{ t(key="admin.info") }}</h2>
+    <form class="form-stack" method="post" action="{{ b.update_action }}" novalidate>
+      {{ fields::commodity_fields(form=b.form, errors=b.errors, sectors=b.sectors, name_max=limits.commodity_name_max, icon_max=limits.commodity_icon_max, prefix="edit") }}
+      <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button></div>
+    </form>
+  </section>
+
+  <section class="admin-section" aria-labelledby="status-title" x-data="dialog" x-on:keydown.escape.window="hide">
+    <h2 class="admin-section__title" id="status-title">{{ t(key="admin.visibility") }}</h2>
+    <p class="admin-status">{{ status::visibility(on=c.is_active) }}{% if c.is_demo %}{{ status::demo() }}{% endif %}<span>{% if c.is_active %}{{ t(key="admin_commodities.on") }}{% else %}{{ t(key="admin_commodities.off") }}{% endif %}</span></p>
+    <div class="admin-actions">
+      {% if c.is_active %}
+      <a class="btn btn-outline-warning" href="#an-cay-con" x-on:click.prevent="show">{{ atoms::icon(name="fa-eye-slash") }} {{ t(key="admin_commodities.hide") }}</a>
+      {% else %}
+      <form method="post" action="{{ b.status_action }}">
+        <input type="hidden" name="is_active" value="true">
+        <button type="submit" class="btn btn-outline-success">{{ atoms::icon(name="fa-eye") }} {{ t(key="admin.show_again") }}</button>
+      </form>
+      {% endif %}
+    </div>
+    {% if c.is_active %}
+    {{ confirm::confirm_sheet(id="an-cay-con", title=t(key="admin_commodities.hide_title", name=c.name), icon="fa-eye-slash", action=b.status_action, button=t(key="admin.confirm_hide"), reason_max=limits.audit_reason_max, effect="hide", what=t(key="admin_commodities.what"), hidden_name="is_active", hidden_value="false") }}
+    {% endif %}
+  </section>
+</div>
+{% endblock content %}

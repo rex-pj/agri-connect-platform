@@ -13,6 +13,7 @@ pub mod inputs;
 pub mod outputs;
 pub mod pagination;
 pub mod ports;
+pub mod repeats;
 pub mod slug;
 pub mod usecases;
 pub mod validation;

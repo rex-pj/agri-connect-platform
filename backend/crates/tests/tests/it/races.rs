@@ -14,12 +14,14 @@ async fn two_setup_forms_at_once_make_one_admin() {
             "quantri1".into(),
             "a@example.vn".into(),
             "matkhau123".into(),
+            None,
             None
         ),
         auth.create_first_admin(
             "quantri2".into(),
             "b@example.vn".into(),
             "matkhau123".into(),
+            None,
             None
         ),
     );

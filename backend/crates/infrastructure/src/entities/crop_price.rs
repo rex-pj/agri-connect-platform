@@ -13,6 +13,8 @@ pub struct Model {
     pub note: Option<String>,
     pub created_on: DateTimeWithTimeZone,
     pub created_by: Option<i32>,
+    /// Demo data, removed with it; an admin's entry for the same day is real.
+    pub is_demo: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -19,7 +19,7 @@
     {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
     {% if product_id %}<input type="hidden" name="product_id" value="{{ product_id }}">{% endif %}
     {% if contact.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=contact.message) }}{% endif %}
-    {{ field::input(id="cs_phone", name="requester_phone", label=t(key="form.phone"), type="tel", value=contact.values.requester_phone, error=contact.errors.requester_phone | default(value=""), required=true, placeholder="0901234567", pattern="0[0-9]{9}", inputmode="numeric", autocomplete="tel", first=true) }}
+    {{ field::input(id="cs_phone", name="requester_phone", label=t(key="form.phone"), type="tel", value=contact.values.requester_phone, error=contact.errors.requester_phone | default(value=""), required=true, placeholder=t(key="form.phone_placeholder"), pattern=limits.phone_pattern, inputmode="numeric", autocomplete="tel", first=true) }}
     {% if provider.services and not product_id %}
     {#- The service's name becomes the topic on the server; a topic or
         service error is about this one box. -#}

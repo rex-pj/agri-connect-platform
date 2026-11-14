@@ -1,4 +1,4 @@
-//! /admin/products, /admin/services, /admin/inquiries and /admin/reviews:
+//! /admin/supplies, /admin/services, /admin/inquiries and /admin/reviews:
 //! moderation through page forms that land back on the same list page.
 //! Database tests need TEST_DATABASE_URL and `--include-ignored`.
 
@@ -59,14 +59,14 @@ async fn a_product_is_hidden_and_deleted_behind_confirmations_on_its_list_page()
         &format!(r#"{{"category_id":{category},"name":"Sầu riêng Ri6"}}"#),
     )
     .await;
-    let list = format!("/admin/products?provider_id={business}");
+    let list = format!("/admin/supplies?provider_id={business}");
 
     let html = page(&e, &list, &admin).await;
-    assert!(html.contains("Vườn nongdan · 1 sản phẩm"));
+    assert!(html.contains("Vườn nongdan · 1 vật tư"));
     assert!(!html.contains(r#"id="xac-nhan""#), "no confirmation yet");
     let html = page(&e, &format!("{list}&hide={id}"), &admin).await;
     assert!(html.contains(r#"data-open="true""#));
-    assert!(html.contains("Ẩn sản phẩm Sầu riêng Ri6?"));
+    assert!(html.contains("Ẩn vật tư Sầu riêng Ri6?"));
     assert!(
         html.contains(&format!(r#"name="provider_id" value="{business}""#)),
         "the confirmation keeps the list position"
@@ -75,7 +75,7 @@ async fn a_product_is_hidden_and_deleted_behind_confirmations_on_its_list_page()
     let res = send(
         &e.router,
         post_form(
-            &format!("/admin/products/{id}/status"),
+            &format!("/admin/supplies/{id}/status"),
             &[
                 ("is_active", "false"),
                 ("reason", "ảnh không thật"),
@@ -101,7 +101,7 @@ async fn a_product_is_hidden_and_deleted_behind_confirmations_on_its_list_page()
     let res = send(
         &e.router,
         post_form(
-            &format!("/admin/products/{id}/delete"),
+            &format!("/admin/supplies/{id}/delete"),
             &[
                 ("reason", "trùng"),
                 ("back", "list"),
@@ -112,10 +112,10 @@ async fn a_product_is_hidden_and_deleted_behind_confirmations_on_its_list_page()
     )
     .await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
-    assert_eq!(res.headers()[header::LOCATION], "/admin/products");
+    assert_eq!(res.headers()[header::LOCATION], "/admin/supplies");
     assert!(page(&e, &list, &admin)
         .await
-        .contains("Chưa có sản phẩm nào."));
+        .contains("Chưa có vật tư nào."));
     e.cleanup().await;
 }
 
@@ -245,8 +245,10 @@ async fn inquiry_status_and_review_visibility_are_set_from_their_lists() {
     let review = one_i32(
         &e,
         &format!(
-            "INSERT INTO reviews (business_id, rating, comment, reviewer_name, reviewer_phone_hash) \
-             VALUES ({business}, 2, 'Làm ẩu', 'Chú Tư', 'h') RETURNING id"
+            "INSERT INTO reviews (business_id, inquiry_id, rating, comment, reviewer_name, \
+             reviewer_phone_hash, is_visible) \
+             VALUES ({business}, {inquiry}, 2, 'Làm ẩu', 'Chú Tư', \
+             encode(sha256('0987654321'), 'hex'), TRUE) RETURNING id"
         ),
     )
     .await;
@@ -338,7 +340,7 @@ async fn moderation_pages_need_their_permissions() {
     setup(&e).await;
     let provider = sign_in(&e, "nongdan", "matkhau123").await;
     for path in [
-        "/admin/products",
+        "/admin/supplies",
         "/admin/services",
         "/admin/inquiries",
         "/admin/reviews",
@@ -361,9 +363,9 @@ async fn a_product_is_edited_hidden_and_deleted_on_its_own_admin_page() {
         &format!(r#"{{"category_id":{category},"name":"Sầu riêng Ri6","price":85000}}"#),
     )
     .await;
-    let own = format!("/admin/products/{id}");
+    let own = format!("/admin/supplies/{id}");
 
-    let list = page(&e, "/admin/products", &admin).await;
+    let list = page(&e, "/admin/supplies", &admin).await;
     assert!(
         list.contains(&format!(r#"href="{own}""#)),
         "rows open the page"
@@ -433,7 +435,7 @@ async fn a_product_is_edited_hidden_and_deleted_on_its_own_admin_page() {
     .await;
     assert_eq!(
         res.headers()[header::LOCATION],
-        format!("/admin/products?provider_id={business}").as_str()
+        format!("/admin/supplies?provider_id={business}").as_str()
     );
     e.cleanup().await;
 }
@@ -453,7 +455,7 @@ async fn admin_lists_find_records_by_name_without_diacritics() {
         .await;
     }
 
-    let html = page(&e, "/admin/products?q=sau+rieng", &admin).await;
+    let html = page(&e, "/admin/supplies?q=sau+rieng", &admin).await;
     assert!(html.contains("Sầu riêng Ri6") && !html.contains("Phân bón NPK"));
     assert!(
         html.contains(r#"name="q" value="sau rieng""#),
@@ -463,7 +465,7 @@ async fn admin_lists_find_records_by_name_without_diacritics() {
     let id = one_i32(&e, "SELECT id FROM products WHERE name = 'Sầu riêng Ri6'").await;
     let html = page(
         &e,
-        &format!("/admin/products?q=sau+rieng&hide={id}"),
+        &format!("/admin/supplies?q=sau+rieng&hide={id}"),
         &admin,
     )
     .await;
@@ -471,7 +473,7 @@ async fn admin_lists_find_records_by_name_without_diacritics() {
     let res = send(
         &e.router,
         post_form(
-            &format!("/admin/products/{id}/status"),
+            &format!("/admin/supplies/{id}/status"),
             &[("is_active", "false"), ("back", "list"), ("q", "sau rieng")],
             Some(&admin),
         ),
@@ -479,23 +481,23 @@ async fn admin_lists_find_records_by_name_without_diacritics() {
     .await;
     assert_eq!(
         res.headers()[header::LOCATION],
-        "/admin/products?q=sau+rieng"
+        "/admin/supplies?q=sau+rieng"
     );
 
     // The shop's products by the shop's name; nothing found says so.
-    assert!(page(&e, "/admin/products?q=vuon+nongdan", &admin)
+    assert!(page(&e, "/admin/supplies?q=vuon+nongdan", &admin)
         .await
         .contains("Phân bón NPK"));
-    assert!(page(&e, "/admin/products?q=khong-co", &admin)
+    assert!(page(&e, "/admin/supplies?q=khong-co", &admin)
         .await
         .contains("Không có kết quả cho “khong-co”"));
     // Accounts by username, shops by name.
     let users = page(&e, "/admin/users?q=NONGDAN", &admin).await;
     assert!(users.contains("nongdan"));
-    assert!(page(&e, "/admin/explore?q=vuon", &admin)
+    assert!(page(&e, "/admin/providers?q=vuon", &admin)
         .await
         .contains("Vườn nongdan"));
-    assert!(!page(&e, "/admin/explore?q=khong-co", &admin)
+    assert!(!page(&e, "/admin/providers?q=khong-co", &admin)
         .await
         .contains("Vườn nongdan"));
     e.cleanup().await;

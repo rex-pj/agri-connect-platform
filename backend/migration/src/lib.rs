@@ -1,30 +1,16 @@
-//! Schema migrations. DDL only; reference data is seeded at startup from the
-//! catalogue in `application`, demo data only on request.
+//! Schema migrations. DDL only; platform data (roles, permissions, provinces
+//! and wards) is seeded at startup, demo data (the catalogue, areas, crops,
+//! listings) only on request.
 //!
-//! Append-only: an applied migration is never removed, and its schema never
-//! changes (rewriting one to the builder must produce the same catalog). sea-orm
-//! refuses to start against a database whose recorded migrations have no file,
-//! and editing one leaves existing databases on the old definition.
+//! Append-only from the baseline on: an applied migration is never removed,
+//! and its schema never changes. sea-orm refuses to start against a database
+//! whose recorded migrations have no file, and editing one leaves existing
+//! databases on the old definition.
 
 pub use sea_orm_migration::prelude::*;
 
-mod m20261013_000001_baseline;
-mod m20261014_000002_search;
-mod m20261014_000003_files;
-mod m20261015_000004_refresh_tokens;
-mod m20261016_000005_session_epoch;
-mod m20261017_000006_one_business_per_owner;
-mod m20261017_000007_service_images;
-mod m20261018_000008_service_search;
-mod m20261020_000009_call_clicks;
-mod m20261027_000010_user_search;
-mod m20261107_000011_call_channel;
-mod m20261108_000012_review_replies;
-mod m20261109_000013_search_events;
-mod m20261110_000014_partners;
-mod m20261111_000015_crop_prices;
-mod m20261112_000016_job_posts;
-mod m20261113_000017_admin_units;
+mod m20261120_000001_baseline;
+mod m20261121_000002_email_verification;
 pub mod schema;
 pub mod search;
 
@@ -34,23 +20,8 @@ pub struct Migrator;
 impl MigratorTrait for Migrator {
     fn migrations() -> Vec<Box<dyn MigrationTrait>> {
         vec![
-            Box::new(m20261013_000001_baseline::Migration),
-            Box::new(m20261014_000002_search::Migration),
-            Box::new(m20261014_000003_files::Migration),
-            Box::new(m20261015_000004_refresh_tokens::Migration),
-            Box::new(m20261016_000005_session_epoch::Migration),
-            Box::new(m20261017_000006_one_business_per_owner::Migration),
-            Box::new(m20261017_000007_service_images::Migration),
-            Box::new(m20261018_000008_service_search::Migration),
-            Box::new(m20261020_000009_call_clicks::Migration),
-            Box::new(m20261027_000010_user_search::Migration),
-            Box::new(m20261107_000011_call_channel::Migration),
-            Box::new(m20261108_000012_review_replies::Migration),
-            Box::new(m20261109_000013_search_events::Migration),
-            Box::new(m20261110_000014_partners::Migration),
-            Box::new(m20261111_000015_crop_prices::Migration),
-            Box::new(m20261112_000016_job_posts::Migration),
-            Box::new(m20261113_000017_admin_units::Migration),
+            Box::new(m20261120_000001_baseline::Migration),
+            Box::new(m20261121_000002_email_verification::Migration),
         ]
     }
 }

@@ -6,7 +6,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
     pub business_id: i32,
-    pub category_id: i32,
+    pub service_type_id: i32,
     pub name: String,
     pub description: Option<String>,
     pub price_note: Option<String>,
@@ -28,11 +28,11 @@ pub enum Relation {
     )]
     Business,
     #[sea_orm(
-        belongs_to = "super::category::Entity",
-        from = "Column::CategoryId",
-        to = "super::category::Column::Id"
+        belongs_to = "super::service_type::Entity",
+        from = "Column::ServiceTypeId",
+        to = "super::service_type::Column::Id"
     )]
-    Category,
+    ServiceType,
 }
 
 impl Related<super::business::Entity> for Entity {
@@ -41,9 +41,9 @@ impl Related<super::business::Entity> for Entity {
     }
 }
 
-impl Related<super::category::Entity> for Entity {
+impl Related<super::service_type::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Category.def()
+        Relation::ServiceType.def()
     }
 }
 

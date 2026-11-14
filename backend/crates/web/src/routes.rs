@@ -9,6 +9,29 @@
 /// linked one cannot differ.
 pub const FILE_PATH: &str = "/files/{id}";
 pub const FILE_THUMB_PATH: &str = "/files/{id}/thumb";
+const FILES_PREFIX: &str = "/files/";
+
+/// The bundled assets: the router's pattern and the prefix `asset_url`
+/// links under.
+pub const STATIC_ROUTE: &str = "/static/{*path}";
+pub const STATIC_PREFIX: &str = "/static/";
+
+/// The probes: the router's paths and the `healthcheck` command's.
+pub const HEALTH_LIVE_PATH: &str = "/health/live";
+pub const HEALTH_READY_PATH: &str = "/health/ready";
+const HEALTH_PREFIX: &str = "/health/";
+
+/// The JSON API.
+pub const API_PREFIX: &str = "/api/";
+
+/// Requests for an asset, an uploaded file, the favicon or a probe: never a
+/// page, never a session.
+pub fn is_asset_path(path: &str) -> bool {
+    path.starts_with(STATIC_PREFIX)
+        || path.starts_with(FILES_PREFIX)
+        || path.starts_with(HEALTH_PREFIX)
+        || path == crate::views::FAVICON_PATH
+}
 
 pub const ROUTES: &[(&str, &str)] = &[
     ("home", "/"),
@@ -17,13 +40,15 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("register", "/register"),
     ("forgot_password", "/forgot-password"),
     ("reset_password", "/reset-password"),
+    ("verify_email", "/verify-email"),
     ("setup", "/setup"),
     ("setup_seed", "/setup/seed"),
     ("account", "/account"),
     ("account_security", "/account#security"),
     ("account_password", "/account/password"),
+    ("account_email_verification", "/account/email-verification"),
     ("explore", "/explore"),
-    ("products", "/products"),
+    ("products", "/supplies"),
     ("services", "/services"),
     ("prices", "/prices"),
     ("job_new", "/jobs/new"),
@@ -31,9 +56,9 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("search", "/search"),
     ("provider_dashboard", "/provider/dashboard"),
     ("provider_profile", "/provider/profile"),
-    ("provider_product_new", "/provider/products/new"),
-    ("provider_product_edit", "/provider/products/{id}/edit"),
-    ("provider_product_delete", "/provider/products/{id}/delete"),
+    ("provider_product_new", "/provider/supplies/new"),
+    ("provider_product_edit", "/provider/supplies/{id}/edit"),
+    ("provider_product_delete", "/provider/supplies/{id}/delete"),
     ("provider_service_new", "/provider/services/new"),
     ("provider_service_edit", "/provider/services/{id}/edit"),
     ("provider_service_delete", "/provider/services/{id}/delete"),
@@ -42,8 +67,8 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("provider_reviews", "/provider/reviews"),
     ("provider_jobs", "/provider/jobs"),
     ("provider_review_reply", "/provider/reviews/{id}/reply"),
-    ("product", "/products/{id}/{slug}"),
-    ("product_category", "/products/category/{id}/{slug}"),
+    ("product", "/supplies/{id}/{slug}"),
+    ("product_category", "/supplies/category/{id}/{slug}"),
     ("service_category", "/services/category/{id}/{slug}"),
     ("service", "/services/{id}/{slug}"),
     ("providers", "/providers"),
@@ -52,6 +77,7 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("contact", "/contact"),
     ("review_submit", "/reviews"),
     ("language", "/language"),
+    ("sector", "/sector"),
     ("admin", "/admin"),
     ("admin_dashboard", "/admin/dashboard"),
     ("admin_users", "/admin/users"),
@@ -65,14 +91,14 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("admin_category", "/admin/categories/{id}"),
     ("admin_category_status", "/admin/categories/{id}/status"),
     ("admin_category_slug", "/api/admin/categories/slug"),
-    ("admin_explore", "/admin/explore"),
-    ("admin_provider", "/admin/explore/{id}"),
+    ("admin_providers", "/admin/providers"),
+    ("admin_provider", "/admin/providers/{id}"),
     (
         "admin_provider_verification",
-        "/admin/explore/{id}/verification",
+        "/admin/providers/{id}/verification",
     ),
-    ("admin_provider_account", "/admin/explore/{id}/account"),
-    ("admin_provider_status", "/admin/explore/{id}/status"),
+    ("admin_provider_account", "/admin/providers/{id}/account"),
+    ("admin_provider_status", "/admin/providers/{id}/status"),
     ("admin_inquiries", "/admin/inquiries"),
     ("admin_inquiry_status", "/admin/inquiries/{id}/status"),
     ("admin_reviews", "/admin/reviews"),
@@ -106,17 +132,29 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("admin_job_status", "/admin/jobs/{id}/status"),
     ("admin_prices", "/admin/prices"),
     ("admin_price_delete", "/admin/prices/{id}/delete"),
+    ("admin_alert_kinds", "/admin/alert-kinds"),
+    ("admin_alert_kind", "/admin/alert-kinds/{id}"),
+    ("admin_alert_kind_status", "/admin/alert-kinds/{id}/status"),
+    ("admin_sectors", "/admin/sectors"),
+    ("admin_sector", "/admin/sectors/{id}"),
+    ("admin_sector_status", "/admin/sectors/{id}/status"),
+    ("admin_commodities", "/admin/commodities"),
+    ("admin_commodity", "/admin/commodities/{id}"),
+    ("admin_commodity_status", "/admin/commodities/{id}/status"),
     ("admin_crops", "/admin/crops"),
     ("admin_crop", "/admin/crops/{id}"),
     ("admin_crop_status", "/admin/crops/{id}/status"),
+    ("admin_alerts", "/admin/alerts"),
+    ("admin_alert", "/admin/alerts/{id}"),
+    ("admin_alert_status", "/admin/alerts/{id}/status"),
     ("admin_locations", "/admin/locations"),
     ("admin_location", "/admin/locations/{id}"),
     ("admin_location_status", "/admin/locations/{id}/status"),
     ("admin_location_delete", "/admin/locations/{id}/delete"),
-    ("admin_products", "/admin/products"),
-    ("admin_product", "/admin/products/{id}"),
-    ("admin_product_status", "/admin/products/{id}/status"),
-    ("admin_product_delete", "/admin/products/{id}/delete"),
+    ("admin_products", "/admin/supplies"),
+    ("admin_product", "/admin/supplies/{id}"),
+    ("admin_product_status", "/admin/supplies/{id}/status"),
+    ("admin_product_delete", "/admin/supplies/{id}/delete"),
     ("admin_services", "/admin/services"),
     ("admin_service", "/admin/services/{id}"),
     ("admin_service_status", "/admin/services/{id}/status"),
@@ -197,11 +235,21 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_asset_prefixes_are_the_routes_own() {
+        assert!(STATIC_ROUTE.starts_with(STATIC_PREFIX));
+        assert!(FILE_PATH.starts_with(FILES_PREFIX));
+        assert!(HEALTH_LIVE_PATH.starts_with(HEALTH_PREFIX));
+        assert!(HEALTH_READY_PATH.starts_with(HEALTH_PREFIX));
+        assert!(is_asset_path(crate::views::FAVICON_PATH));
+        assert!(!is_asset_path("/admin/dashboard"));
+    }
+
+    #[test]
     fn static_and_parameterised_routes() {
         assert_eq!(url("home", &[]), Ok("/".to_owned()));
         assert_eq!(
             url("product", &[("id", "12"), ("slug", "gao-st25")]),
-            Ok("/products/12/gao-st25".to_owned())
+            Ok("/supplies/12/gao-st25".to_owned())
         );
     }
 

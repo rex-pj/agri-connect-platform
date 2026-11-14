@@ -1,11 +1,11 @@
-//! Applies the reference catalogue (roles, permissions, default grants,
-//! categories, location presets, crops) in one transaction.
+//! Applies the platform catalogue (roles, permissions, default grants) in one
+//! transaction, and counts the platform data.
 
 use std::{collections::HashSet, sync::Arc};
 
 use async_trait::async_trait;
 use domain::{
-    models::catalogue::{Catalogue, SeedReport},
+    models::catalogue::{Catalogue, PlatformCounts, SeedReport},
     repositories::catalogue_repository_trait::CatalogueRepositoryTrait,
     Error, Result,
 };
@@ -16,7 +16,7 @@ use sea_orm::{
 };
 
 use crate::{
-    entities::{catalogue_state, category, crop, location, permission, role, role_permission},
+    entities::{catalogue_state, permission, province, role, role_permission, ward},
     sql::advisory_xact_lock,
 };
 
@@ -88,16 +88,12 @@ async fn grant(txn: &DatabaseTransaction, role: &str, key: &str) -> Result<u64> 
         .map_err(db_error("grant"))
 }
 
-/// True when `entity`'s table has no row yet.
-async fn is_empty<E: EntityTrait>(txn: &DatabaseTransaction, step: &'static str) -> Result<bool>
+/// Number of rows in `entity`'s table.
+async fn rows<E: EntityTrait, C: ConnectionTrait>(db: &C, step: &'static str) -> Result<u64>
 where
     E::Model: Sync,
 {
-    E::find()
-        .count(txn)
-        .await
-        .map(|n| n == 0)
-        .map_err(db_error(step))
+    E::find().count(db).await.map_err(db_error(step))
 }
 
 #[async_trait]
@@ -186,60 +182,21 @@ impl CatalogueRepositoryTrait for CatalogueRepository {
             .filter(|code| !known.contains(code.as_str()))
             .collect();
 
-        // Categories, presets and crops are admin-editable: seed an empty table
-        // only, or a renamed slug would come back as a duplicate at the next boot.
-        if is_empty::<category::Entity>(&txn, "category count").await? {
-            for c in catalogue.categories {
-                category::Entity::insert(category::ActiveModel {
-                    name: Set(c.name.to_owned()),
-                    slug: Set(c.slug.to_owned()),
-                    r#type: Set(c.kind.to_owned()),
-                    icon: Set(Some(c.icon.to_owned())),
-                    color: Set(Some(c.color.to_owned())),
-                    description: Set(Some(c.description.to_owned())),
-                    display_order: Set(c.display_order),
-                    ..Default::default()
-                })
-                .exec_without_returning(&txn)
-                .await
-                .map_err(db_error("category"))?;
-                report.categories_inserted += 1;
-            }
-        }
-
-        if is_empty::<location::Entity>(&txn, "location count").await? {
-            for l in catalogue.locations {
-                location::Entity::insert(location::ActiveModel {
-                    label: Set(l.label.to_owned()),
-                    lat: Set(l.lat),
-                    lng: Set(l.lng),
-                    display_order: Set(l.display_order),
-                    ..Default::default()
-                })
-                .exec_without_returning(&txn)
-                .await
-                .map_err(db_error("location"))?;
-                report.locations_inserted += 1;
-            }
-        }
-
-        if is_empty::<crop::Entity>(&txn, "crop count").await? {
-            for c in catalogue.crops {
-                crop::Entity::insert(crop::ActiveModel {
-                    name: Set(c.name.to_owned()),
-                    kind: Set(c.kind.to_owned()),
-                    unit: Set(c.unit.to_owned()),
-                    display_order: Set(c.display_order),
-                    ..Default::default()
-                })
-                .exec_without_returning(&txn)
-                .await
-                .map_err(db_error("crop"))?;
-                report.crops_inserted += 1;
-            }
-        }
-
         txn.commit().await.map_err(db_error("commit"))?;
         Ok(report)
+    }
+
+    async fn platform_counts(&self) -> Result<PlatformCounts> {
+        let db = self.db.as_ref();
+        let (roles, provinces, wards) = tokio::try_join!(
+            rows::<role::Entity, _>(db, "role count"),
+            rows::<province::Entity, _>(db, "province count"),
+            rows::<ward::Entity, _>(db, "ward count"),
+        )?;
+        Ok(PlatformCounts {
+            roles,
+            provinces,
+            wards,
+        })
     }
 }

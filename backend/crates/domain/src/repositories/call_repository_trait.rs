@@ -7,9 +7,9 @@ use crate::{error::Error, models::call::NewCallClick};
 pub trait CallRepositoryTrait {
     async fn record(&self, click: NewCallClick) -> Result<(), Error>;
 
-    /// Taps since `since` through any channel on real (not demo) shops: one
-    /// business's, or every
-    /// business's.
+    /// Taps since `since` through any channel: one business's, or every
+    /// business's (the admin's total, demo shops included while demo data
+    /// is loaded, like the demand report).
     async fn count_since(
         &self,
         business_id: Option<i32>,

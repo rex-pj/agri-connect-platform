@@ -8,7 +8,29 @@ pub enum LeadChannel {
     Inquiry,
 }
 
-/// One lead of a real (not demo) business: a call or Zalo tap, or a contact
+/// Which rows a report counts. Demo data never reaches a real partner's
+/// report; a demo partner's counts only demo data; the admin's counts
+/// everything there is, demo data while it is loaded (the page says so).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum DemoScope {
+    #[default]
+    Real,
+    Demo,
+    All,
+}
+
+impl DemoScope {
+    /// The one `is_demo` value counted, or `None` for both.
+    pub fn only(self) -> Option<bool> {
+        match self {
+            Self::Real => Some(false),
+            Self::Demo => Some(true),
+            Self::All => None,
+        }
+    }
+}
+
+/// One lead of a business in the report's `DemoScope`: a call or Zalo tap, or a contact
 /// request that is not spam. Never who sent it, except a request's phone,
 /// which only tells two requests from the same person apart.
 #[derive(Debug, Clone)]
@@ -31,6 +53,7 @@ pub struct BusinessArea {
     pub name: String,
     pub phone: String,
     pub address: Option<String>,
+    pub is_demo: bool,
 }
 
 /// A business with exactly one live service, and that service's category:

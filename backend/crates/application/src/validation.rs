@@ -1,7 +1,7 @@
 //! Field rules shared by use cases. Each returns a coded `Error`; callers that
 //! validate a whole form feed them into `domain::Validation`.
 
-use domain::{Error, ErrorCode, Result};
+use domain::{models::coded::CodedEntry, Error, ErrorCode, Result};
 
 use crate::constants::{
     AUDIT_REASON_MAX, EMAIL_MAX, LAT_MAX, LAT_MIN, LNG_MAX, LNG_MIN, PASSWORD_MAX_BYTES,
@@ -17,10 +17,45 @@ pub fn audit_reason(reason: Option<String>) -> Option<String> {
     (!reason.is_empty()).then(|| reason.chars().take(AUDIT_REASON_MAX).collect())
 }
 
+/// A code as sent, one of `known` (the entries stored: the admin forms take
+/// a hidden one too, the public choices only the shown ones): `None` for
+/// blank, `invalid` for any other.
+pub fn coded(text: &str, known: &[CodedEntry], invalid: ErrorCode) -> Result<Option<String>> {
+    let text = text.trim();
+    if text.is_empty() {
+        return Ok(None);
+    }
+    known
+        .iter()
+        .find(|s| s.code == text)
+        .map(|s| Some(s.code.clone()))
+        .ok_or_else(|| Error::new(invalid))
+}
+
+/// A sector code as sent (`coded`): `None` for blank (every sector),
+/// `invalid_sector` for one not in `known`.
+pub fn sector(text: &str, known: &[CodedEntry]) -> Result<Option<String>> {
+    coded(text, known, ErrorCode::InvalidSector)
+}
+
+/// Digits of a Vietnamese mobile number as kept: 0 and nine more.
+pub const VN_PHONE_DIGITS: usize = 10;
+/// Vietnam's calling code, as an international number starts.
+pub const VN_CALLING_CODE: &str = "84";
+
+/// `is_valid_vn_phone` as an HTML `pattern`: the forms stop a wrong number
+/// before it is sent (the rule above still decides).
+pub const VN_PHONE_PATTERN: &str = "0[0-9]{9}";
+
+/// `validate_slug` as an HTML `pattern`.
+pub const SLUG_PATTERN: &str = "[a-z0-9]+(-[a-z0-9]+)*";
+
 /// 10-digit Vietnamese mobile number starting with 0. Mirrors the
 /// `chk_*_phone` CHECK constraints in the baseline migration.
 pub fn is_valid_vn_phone(phone: &str) -> bool {
-    phone.len() == 10 && phone.starts_with('0') && phone.chars().all(|c| c.is_ascii_digit())
+    phone.len() == VN_PHONE_DIGITS
+        && phone.starts_with('0')
+        && phone.chars().all(|c| c.is_ascii_digit())
 }
 
 pub fn validate_phone(phone: &str) -> Result<()> {

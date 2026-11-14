@@ -1,4 +1,4 @@
-//! /admin/explore and /admin/explore/{id}: the provider list with a create
+//! /admin/providers and /admin/providers/{id}: the provider list with a create
 //! form, and one provider's details, profile, verification badge and
 //! managing account.
 //!
@@ -33,7 +33,7 @@ use crate::{
     extract::{ApiForm, ApiPath, ApiQuery},
     middleware::auth::Viewer,
     pages::{
-        admin::{is_refusal, render_admin, url, ListPosition, Outcome, SearchBox},
+        admin::{is_refusal, render_admin, url, user_href, ListPosition, Outcome, SearchBox},
         canonical_url,
         forms::{reason, FormErrors},
         listing::Pagination,
@@ -85,7 +85,7 @@ async fn list_page(
         .admin
         .list_providers(actor, position.page(), position.search())
         .await?;
-    let path = url("admin_explore", &[])?;
+    let path = url("admin_providers", &[])?;
     let mut rows = Vec::with_capacity(items.len());
     for provider in items {
         let href = url("admin_provider", &[("id", &provider.id.to_string())])?;
@@ -103,7 +103,7 @@ async fn list_page(
         total,
         rows,
         pagination: position.pagination(&path, page, total_pages),
-        search: position.search_box("admin_explore")?,
+        search: position.search_box("admin_providers")?,
         create,
     };
     render_admin(
@@ -116,7 +116,7 @@ async fn list_page(
     )
 }
 
-/// GET /admin/explore
+/// GET /admin/providers
 pub async fn list(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
@@ -128,7 +128,7 @@ pub async fn list(
     list_page(&state, &actor, &position, None, StatusCode::OK).await
 }
 
-/// POST /admin/explore
+/// POST /admin/providers
 pub async fn create(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
@@ -181,6 +181,8 @@ pub struct ProviderPage {
     pub provider: AdminProviderDetailDto,
     /// The public page, to see what farmers see.
     pub public_href: String,
+    /// The managing account's admin page, when the visitor may read accounts.
+    pub linked_user_href: Option<String>,
     pub can_verify: bool,
     pub can_assign: bool,
     pub can_change_status: bool,
@@ -253,6 +255,7 @@ async fn provider_page(
         inquiries_href: list_of(PERM_INQUIRY_READ, "admin_inquiries")?,
         reviews_href: list_of(PERM_REVIEW_MODERATE, "admin_reviews")?,
         public_href: canonical_url("provider", id, &provider.name)?,
+        linked_user_href: user_href(actor, provider.linked_user_id)?,
         provider,
         can_verify: actor.can(PERM_PROVIDER_VERIFY),
         can_assign: actor.can(PERM_PROVIDER_ACCOUNT_ASSIGN),
@@ -298,7 +301,7 @@ fn redirect_to(id: i32, flash: Flash) -> Result<Response, Error> {
     Ok(response)
 }
 
-/// GET /admin/explore/{id}
+/// GET /admin/providers/{id}
 pub async fn show(
     Viewer(viewer): Viewer,
     flash: TakeFlash,
@@ -318,7 +321,7 @@ pub async fn show(
     Ok(response)
 }
 
-/// POST /admin/explore/{id}: the profile form.
+/// POST /admin/providers/{id}: the profile form.
 pub async fn update(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
@@ -351,7 +354,7 @@ pub struct VerificationForm {
     pub reason: String,
 }
 
-/// POST /admin/explore/{id}/verification
+/// POST /admin/providers/{id}/verification
 pub async fn set_verification(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
@@ -384,7 +387,7 @@ pub struct StatusForm {
     pub reason: String,
 }
 
-/// POST /admin/explore/{id}/status
+/// POST /admin/providers/{id}/status
 pub async fn change_status(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
@@ -409,7 +412,7 @@ pub async fn change_status(
     redirect_to(id, flash)
 }
 
-/// POST /admin/explore/{id}/account
+/// POST /admin/providers/{id}/account
 pub async fn assign_account(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,

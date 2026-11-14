@@ -103,6 +103,7 @@ impl ProviderDashboardHandler {
                 &actor,
                 CreateProductInput {
                     category_id: req.category_id,
+                    commodity_id: req.commodity_id,
                     name: req.name,
                     description: req.description,
                     price: req.price,
@@ -132,6 +133,7 @@ impl ProviderDashboardHandler {
                 UpdateProductInput {
                     product_id: id,
                     category_id: req.category_id,
+                    commodity_id: req.commodity_id,
                     name: req.name,
                     description: req.description,
                     price: req.price,

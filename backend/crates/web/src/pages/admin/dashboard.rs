@@ -124,7 +124,7 @@ pub struct DashboardPage {
     pub min_count: i64,
     pub report_href: Option<String>,
     /// Demo businesses still listed; only for those who may remove them.
-    pub demo_count: Option<i64>,
+    pub demo_count: Option<u64>,
 }
 
 /// GET /admin
@@ -209,7 +209,7 @@ pub async fn show(
     // Asking only when allowed: the banner's button leads to that page.
     let demo_count = if actor.can(PERM_SYSTEM_DEMO_MANAGE) {
         let status = state.usecases.setup.demo_status(&actor).await?;
-        (status.demo_business_count > 0).then_some(status.demo_business_count)
+        (status.demo.businesses > 0).then_some(status.demo.businesses)
     } else {
         None
     };

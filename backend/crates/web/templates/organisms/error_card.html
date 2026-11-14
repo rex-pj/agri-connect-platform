@@ -1,7 +1,9 @@
-{#- Full-page error: status, localised message, a way home, and a reference
-    the user can quote so support can find the request in the logs. -#}
+{#- Full-page error: status, localised message, the way back, and a
+    reference the user can quote so support can find the request in the
+    logs. `back` is a `shell::Link`: home, or the visitor's own area (admin
+    panel, partner report, provider dashboard) when the error is inside it. -#}
 {% import "atoms/icon.html" as atoms %}
-{% macro error_card(status, message, request_id="") -%}
+{% macro error_card(status, message, back, request_id="") -%}
 <section class="error-page">
   <div class="error-card">
     <div class="error-card__icon">
@@ -9,7 +11,7 @@
     </div>
     <h1 class="error-card__code">{{ status }}</h1>
     <p class="error-card__message">{{ message }}</p>
-    <a class="btn-pill" href="{{ url_for(name='home') }}">{{ atoms::icon(name="fa-house") }} {{ t(key="common.back_home") }}</a>
+    <a class="btn-pill" href="{{ back.href }}">{{ atoms::icon(name=back.icon) }} {{ back.label }}</a>
     {% if request_id and status >= 500 %}
     <p class="error-card__ref">{{ t(key="error_page.reference", id=request_id) }}</p>
     {% endif %}

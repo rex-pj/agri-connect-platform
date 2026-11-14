@@ -109,3 +109,81 @@ async fn a_password_change_keeps_this_device_and_signs_out_the_others() {
     sign_in(&e, "nongdan", "matkhaumoi1").await;
     e.cleanup().await;
 }
+
+/// The bottom tab that is lit on `page` (wide or phone), by its link.
+fn lit_tab(page: &str) -> Option<&str> {
+    page.split("<a class=\"bottom-nav__tab")
+        .skip(1)
+        .find(|tab| {
+            tab.starts_with(" bottom-nav__tab--active")
+                && !tab.starts_with(" bottom-nav__tab--active-phone")
+        })
+        .and_then(|tab| tab.split("href=\"").nth(1))
+        .and_then(|rest| rest.split('"').next())
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn an_admin_keeps_the_panel_on_the_profile_and_on_an_error() {
+    let e = env_with_origin().await;
+    let admin = install_admin(&e).await;
+
+    let page = body_text(send(&e.router, get_page("/account", Some(&admin))).await).await;
+    assert!(page.contains("ash-sidebar"), "the admin frame");
+    assert!(!page.contains("bottom-nav"), "not the farmers' tabs");
+    assert!(page.contains(r#"action="/admin/logout""#));
+    assert!(page.contains(r#"id="security""#));
+
+    let res = send(&e.router, get_page("/admin/users/999999", Some(&admin))).await;
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+    let page = body_text(res).await;
+    assert!(
+        page.contains("ash-sidebar"),
+        "a missing record keeps the panel"
+    );
+    assert!(
+        page.contains(r#"class="btn-pill" href="/admin/dashboard""#),
+        "the way back is the panel"
+    );
+
+    // Outside the panel, an error is an app page, still signed in.
+    let page = body_text(send(&e.router, get_page("/supplies/999999/x", Some(&admin))).await).await;
+    assert!(page.contains("bottom-nav"));
+    assert!(
+        page.contains(r#"action="/logout""#),
+        "the account menu, signed in"
+    );
+    assert!(page.contains(r#"class="btn-pill" href="/""#));
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn the_provider_area_keeps_its_tab_lit_and_its_way_back() {
+    let e = env_with_origin().await;
+    installed(&e).await;
+    let provider = sign_in(&e, "nongdan", "matkhau123").await;
+
+    for path in [
+        "/provider/dashboard",
+        "/provider/reviews",
+        "/provider/supplies/new",
+    ] {
+        let page = body_text(send(&e.router, get_page(path, Some(&provider))).await).await;
+        assert_eq!(lit_tab(&page), Some("/provider/dashboard"), "{path}");
+    }
+
+    let res = send(
+        &e.router,
+        get_page("/provider/services/999999/edit", Some(&provider)),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+    let page = body_text(res).await;
+    assert!(
+        page.contains(r#"class="btn-pill" href="/provider/dashboard""#),
+        "back to the dashboard, not home"
+    );
+    assert_eq!(lit_tab(&page), Some("/provider/dashboard"));
+    e.cleanup().await;
+}

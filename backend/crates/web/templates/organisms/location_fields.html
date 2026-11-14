@@ -18,11 +18,11 @@
   <div class="row g-2">
     <div class="col-6">
       <label class="form-label small" for="{{ prefix }}-lat">{{ t(key="form.lat") }}</label>
-      <input class="form-control{% if errors.fields.lat %} is-invalid{% endif %}" id="{{ prefix }}-lat" name="lat" value="{{ form.lat }}" inputmode="decimal" required placeholder="10.4048"{% if errors.fields.lat %} aria-invalid="true" aria-describedby="{{ prefix }}-coord-error"{% endif %}>
+      <input class="form-control{% if errors.fields.lat %} is-invalid{% endif %}" id="{{ prefix }}-lat" name="lat" value="{{ form.lat }}" inputmode="decimal" required placeholder="{{ t(key="form.lat_placeholder") }}"{% if errors.fields.lat %} aria-invalid="true" aria-describedby="{{ prefix }}-coord-error"{% endif %}>
     </div>
     <div class="col-6">
       <label class="form-label small" for="{{ prefix }}-lng">{{ t(key="form.lng") }}</label>
-      <input class="form-control{% if errors.fields.lat %} is-invalid{% endif %}" id="{{ prefix }}-lng" name="lng" value="{{ form.lng }}" inputmode="decimal" required placeholder="106.1180"{% if errors.fields.lat %} aria-invalid="true" aria-describedby="{{ prefix }}-coord-error"{% endif %}>
+      <input class="form-control{% if errors.fields.lat %} is-invalid{% endif %}" id="{{ prefix }}-lng" name="lng" value="{{ form.lng }}" inputmode="decimal" required placeholder="{{ t(key="form.lng_placeholder") }}"{% if errors.fields.lat %} aria-invalid="true" aria-describedby="{{ prefix }}-coord-error"{% endif %}>
     </div>
   </div>
   {% if errors.fields.lat %}<div class="invalid-feedback d-block" id="{{ prefix }}-coord-error">{{ errors.fields.lat }}</div>{% endif %}

@@ -51,6 +51,7 @@ async fn inquiry_to(e: &Env, business_id: i32) -> i32 {
             requester_phone: FARMER.into(),
             note: None,
             service_id: None,
+            product_id: None,
         })
         .await
         .unwrap()

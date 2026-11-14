@@ -58,6 +58,7 @@ impl InquiryRepositoryTrait for InquiryRepository {
         let new_inquiry = inquiry::ActiveModel {
             business_id: Set(inquiry.business_id),
             service_id: Set(inquiry.service_id),
+            product_id: Set(inquiry.product_id),
             topic: Set(inquiry.topic),
             requester_name: Set(inquiry.requester_name),
             requester_phone: Set(inquiry.requester_phone),

@@ -70,7 +70,7 @@ async fn a_category_form_reports_every_broken_rule_and_keeps_what_was_typed() {
     let html = body_text(res).await;
     assert!(html.contains("Vui lòng nhập tên."));
     assert!(html.contains("Đường dẫn chỉ gồm chữ thường không dấu"));
-    assert!(html.contains("Loại danh mục không hợp lệ."));
+    assert!(html.contains("Vui lòng chọn dịch vụ hay vật tư."));
     assert!(html.contains(r#"value="Bơm Nước""#), "typed slug kept");
     assert!(
         html.contains(">Tưới tiêu</textarea>"),
@@ -120,7 +120,7 @@ async fn a_category_form_reports_every_broken_rule_and_keeps_what_was_typed() {
     .await;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     let html = body_text(res).await;
-    assert!(html.contains("Đường dẫn này đã được dùng cho danh mục khác."));
+    assert!(html.contains("Đường dẫn này đã được dùng cho loại khác."));
     assert!(
         html.contains(r#"id="new-slug-error""#),
         "shown under the slug"
@@ -133,7 +133,10 @@ async fn slug_of(e: &Env, detail: &str) -> String {
     e.t.db
         .query_one(Statement::from_string(
             e.t.db.get_database_backend(),
-            format!("SELECT slug FROM categories WHERE id = {id}"),
+            format!(
+                "SELECT slug FROM service_types WHERE id = {id}
+                 UNION ALL SELECT slug FROM supply_types WHERE id = {id}"
+            ),
         ))
         .await
         .unwrap()
@@ -204,7 +207,7 @@ async fn a_blank_slug_is_made_from_the_name_and_never_repeats_one() {
     .await;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     let html = body_text(res).await;
-    assert!(html.contains("Đường dẫn này đã được dùng cho danh mục khác."));
+    assert!(html.contains("Đường dẫn này đã được dùng cho loại khác."));
     assert!(html.contains(r#"id="edit-slug-error""#));
     assert_eq!(slug_of(&e, &third).await, "muc-bun-3", "nothing saved");
     e.cleanup().await;
@@ -232,7 +235,7 @@ async fn a_category_is_created_edited_and_hidden_from_the_public_pages() {
         }
     }
     let html = page(&e, &detail, &cookie).await;
-    assert!(html.contains("Đã thêm danh mục."), "flash shown once");
+    assert!(html.contains("Đã thêm loại."), "flash shown once");
     assert!(html.contains(r#"value="bom-nuoc""#));
     assert!(page(&e, "/admin/categories", &admin)
         .await
@@ -283,10 +286,14 @@ async fn a_category_is_created_edited_and_hidden_from_the_public_pages() {
         ),
     )
     .await;
-    assert_eq!(location_of(&res), "/admin/categories");
+    assert_eq!(
+        location_of(&res),
+        "/admin/categories?type=service",
+        "on the category's own tab"
+    );
     let html = page(&e, &format!("/admin/categories?hide={id}"), &admin).await;
     assert!(html.contains(r#"data-open="true""#));
-    assert!(html.contains("Ẩn danh mục Bơm nước tưới?"));
+    assert!(html.contains("Ẩn Bơm nước tưới?"));
     assert!(
         html.contains(r#"name="back" value="list""#),
         "the confirmation lands back on the list"

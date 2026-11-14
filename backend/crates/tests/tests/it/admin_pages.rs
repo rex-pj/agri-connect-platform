@@ -55,11 +55,11 @@ async fn the_dashboard_and_its_menu_follow_permissions() {
     let page = body_text(send(&e.router, get_page("/admin/dashboard", Some(&admin))).await).await;
     assert!(page.contains(r#"<meta name="robots" content="noindex, nofollow">"#));
     assert!(page.contains("Tổng nhà cung cấp"));
-    for item in ["Nhà cung cấp", "Vai trò", "Quyền hạn", "Dữ liệu mẫu"] {
+    for item in ["Nhà cung cấp", "Vai trò &amp; quyền", "Dữ liệu mẫu"] {
         assert!(page.contains(item), "admin menu has {item}");
     }
     assert!(
-        page.contains(r#"aria-current="page">"#),
+        page.contains("ash-link--active") && page.contains(r#" aria-current="page""#),
         "the dashboard entry is current"
     );
     assert!(
@@ -87,6 +87,32 @@ async fn the_dashboard_warns_while_demo_listings_are_live() {
     let page = body_text(send(&e.router, get_page("/admin/dashboard", Some(&admin))).await).await;
     assert!(page.contains("nhà cung cấp mẫu hiển thị lẫn với dữ liệu thật"));
     assert!(page.contains(r#"href="/setup/seed""#));
+
+    // The demo data page keeps the two apart: the demo data (the starting
+    // catalogue, each kind linked to its page, and the listings), and the
+    // platform data it never touches.
+    let seed = body_text(send(&e.router, get_page("/setup/seed", Some(&admin))).await).await;
+    assert!(seed.contains("Cây trồng, vật nuôi mẫu") && seed.contains("Khu vực mẫu"));
+    assert!(seed.contains("Dịch vụ mẫu") && seed.contains("Vật tư mẫu"));
+    assert!(seed.contains("Phường, xã, đặc khu"));
+    assert!(seed.contains("Dữ liệu nền tảng (luôn giữ lại)"));
+    for page in [
+        "/admin/commodities",
+        "/admin/categories",
+        "/admin/locations",
+    ] {
+        assert!(seed.contains(&format!(r#"href="{page}""#)), "{page}");
+    }
+    // Each list marks its demo rows.
+    for page in [
+        "/admin/commodities",
+        "/admin/categories",
+        "/admin/locations",
+        "/admin/prices?tab=crops",
+    ] {
+        let html = body_text(send(&e.router, get_page(page, Some(&admin))).await).await;
+        assert!(html.contains("fa-flask"), "{page} marks its demo rows");
+    }
     e.cleanup().await;
 }
 
@@ -112,26 +138,34 @@ async fn a_grant_on_the_grid_takes_effect_on_the_next_request_and_is_audited() {
     .await;
     assert!(grid.contains(r#"name="perm.own.listing.create" checked"#));
     assert!(
-        grid.contains(r#"name="perm.admin.dashboard.view">"#),
-        "not granted yet"
+        grid.contains(r#"name="perm.admin.dashboard.view" disabled>"#),
+        "an admin's permission cannot be ticked for the provider role"
     );
 
-    // Give providers the dashboard, keeping what they had.
-    let mut fields = current_grid(&e, "provider").await;
-    fields.push("perm.admin.dashboard.view".into());
+    // A forged form cannot grant it either: providers are every sign-up.
+    let held = current_grid(&e, "provider").await;
+    let mut forged = held.clone();
+    forged.push("perm.admin.dashboard.view".into());
+    let form: Vec<(&str, &str)> = forged.iter().map(|f| (f.as_str(), "on")).collect();
+    let res = send(&e.router, post_form(&path, &form, Some(&admin))).await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(current_grid(&e, "provider").await, held);
+    let res = send(&e.router, get_page("/provider/jobs", Some(&provider))).await;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    // Take the jobs page away from providers, keeping the rest.
+    let fields: Vec<String> = held
+        .into_iter()
+        .filter(|f| f != "perm.own.job.read")
+        .collect();
     let mut form: Vec<(&str, &str)> = fields.iter().map(|f| (f.as_str(), "on")).collect();
     form.push(("reason", "thử nghiệm"));
     let res = send(&e.router, post_form(&path, &form, Some(&admin))).await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
 
     // The provider's existing session sees it at once: no re-login.
-    let res = send(&e.router, get_page("/admin/dashboard", Some(&provider))).await;
-    assert_eq!(res.status(), StatusCode::OK);
-    let page = body_text(res).await;
-    assert!(
-        page.contains("Dashboard") && !page.contains("Vai trò"),
-        "menu shows only what was granted"
-    );
+    let res = send(&e.router, get_page("/provider/jobs", Some(&provider))).await;
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
 
     let audit: String =
         e.t.db
@@ -144,17 +178,15 @@ async fn a_grant_on_the_grid_takes_effect_on_the_next_request_and_is_audited() {
             .unwrap()
             .try_get("", "line")
             .unwrap();
-    assert_eq!(
-        audit,
-        "change_role_permissions +admin.dashboard.view: thử nghiệm"
-    );
+    assert_eq!(audit, "change_role_permissions -own.job.read: thử nghiệm");
 
-    // Taking it away closes the page again.
-    fields.retain(|f| f != "perm.admin.dashboard.view");
+    // Giving it back opens the page again.
+    let mut fields = fields;
+    fields.push("perm.own.job.read".into());
     let form: Vec<(&str, &str)> = fields.iter().map(|f| (f.as_str(), "on")).collect();
     send(&e.router, post_form(&path, &form, Some(&admin))).await;
-    let res = send(&e.router, get_page("/admin/dashboard", Some(&provider))).await;
-    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    let res = send(&e.router, get_page("/provider/jobs", Some(&provider))).await;
+    assert_eq!(res.status(), StatusCode::OK);
     e.cleanup().await;
 }
 
@@ -202,7 +234,14 @@ async fn the_grid_refuses_self_lockout_unknown_keys_and_non_managers() {
 async fn the_permission_matrix_lists_every_key_per_role() {
     let e = env_with_origin().await;
     let admin = install_admin(&e).await;
-    let page = body_text(send(&e.router, get_page("/admin/permissions", Some(&admin))).await).await;
+    let page = body_text(
+        send(
+            &e.router,
+            get_page("/admin/roles?tab=permissions", Some(&admin)),
+        )
+        .await,
+    )
+    .await;
     assert!(page.contains("<code class=\"d-block small\">own.listing.create</code>"));
     let provider_role = role_id(&e, "provider").await;
     assert!(page.contains(&format!(

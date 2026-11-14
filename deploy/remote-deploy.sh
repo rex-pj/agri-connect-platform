@@ -50,6 +50,12 @@ umask 077
 tmp="$(mktemp)"
 {
   echo "JWT_SECRET=$(secret agri-jwt-secret)"
+  # Needed until the first admin exists; harmless afterwards.
+  setup_token="$(optional_secret agri-setup-token)"
+  if [ -n "$setup_token" ]; then
+    echo "SETUP_TOKEN=$setup_token"
+  fi
+  # Required: the server refuses to start in production without SMTP_HOST.
   smtp_host="$(optional_secret agri-smtp-host)"
   if [ -n "$smtp_host" ]; then
     echo "SMTP_HOST=$smtp_host"

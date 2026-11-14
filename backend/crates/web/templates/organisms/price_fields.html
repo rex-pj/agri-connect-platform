@@ -9,8 +9,8 @@
 {{ field::select(id=prefix ~ "-area", name="location_id", label=t(key="prices.area"), options=areas, value_key="id", label_key="name", value=form.location_id, error=e.location_id | default(value=""), required=true, placeholder=t(key="partner.choose_area")) }}
 {{ field::input(id=prefix ~ "-day", name="observed_on", label=t(key="price_form.day"), type="date", value=form.observed_on, error=e.observed_on | default(value=""), required=true) }}
 <div class="row g-2">
-  <div class="col-6">{{ field::input(id=prefix ~ "-low", name="price_low", label=t(key="price_form.low"), value=form.price_low, error=e.price_low | default(value=""), required=true, inputmode="numeric", placeholder="6200") }}</div>
-  <div class="col-6">{{ field::input(id=prefix ~ "-high", name="price_high", label=t(key="price_form.high"), value=form.price_high, error=e.price_high | default(value=""), inputmode="numeric", placeholder="6400", hint=t(key="price_form.high_hint")) }}</div>
+  <div class="col-6">{{ field::input(id=prefix ~ "-low", name="price_low", label=t(key="price_form.low"), value=form.price_low, error=e.price_low | default(value=""), required=true, inputmode="numeric", placeholder=t(key="price_form.low_placeholder")) }}</div>
+  <div class="col-6">{{ field::input(id=prefix ~ "-high", name="price_high", label=t(key="price_form.high"), value=form.price_high, error=e.price_high | default(value=""), inputmode="numeric", placeholder=t(key="price_form.high_placeholder"), hint=t(key="price_form.high_hint")) }}</div>
 </div>
 {{ field::input(id=prefix ~ "-note", name="note", label=t(key="price_form.note"), value=form.note, error=e.note | default(value=""), maxlength=note_max, placeholder=t(key="price_form.note_placeholder")) }}
 {%- endmacro price_fields %}

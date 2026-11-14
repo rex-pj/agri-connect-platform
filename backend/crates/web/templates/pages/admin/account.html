@@ -1,0 +1,14 @@
+{% extends "layouts/admin.html" %}
+{% import "molecules/admin_header.html" as header %}
+{% import "organisms/account_sections.html" as account %}
+{#- An admin's own account, inside the panel: the account menu's "profile"
+    no longer leaves it. `page.body` is web::pages::account::AccountPage
+    (no `area`: the panel's menu is the way back). -#}
+{% block title %}{{ t(key="nav.account") }} — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+{{ header::admin_header(title=b.me.full_name | default(value=b.me.username), icon="fa-circle-user", sub=b.role_name) }}
+<div class="admin-body">
+  {{ account::account_sections(p=b, limits=limits, logout=url_for(name="admin_logout"), card="admin-section", title_class="admin-section__title") }}
+</div>
+{% endblock content %}

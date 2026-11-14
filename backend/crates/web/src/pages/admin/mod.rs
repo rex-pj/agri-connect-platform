@@ -2,7 +2,11 @@
 //! Its menu shows only what the visitor's permissions open; the pages still
 //! check access themselves through the use cases.
 
+pub mod alert_kinds;
+pub mod alerts;
 pub mod categories;
+pub mod coded;
+pub mod commodities;
 pub mod crops;
 pub mod dashboard;
 pub mod demand;
@@ -15,20 +19,24 @@ pub mod products;
 pub mod providers;
 pub mod reviews;
 pub mod roles;
+pub mod sectors;
 pub mod services;
 pub mod users;
 
 use application::{
     authz::Actor,
     catalogue::{
-        PERM_ADMIN_DASHBOARD_VIEW, PERM_CATEGORY_MANAGE, PERM_INQUIRY_READ, PERM_JOB_MODERATE,
-        PERM_LISTING_MODERATE, PERM_LOCATION_MANAGE, PERM_PARTNER_MANAGE, PERM_PRICE_MANAGE,
-        PERM_PROVIDER_READ, PERM_REPORT_DEMAND_READ, PERM_REVIEW_MODERATE, PERM_ROLE_READ,
-        PERM_SERVICE_MANAGE, PERM_SYSTEM_DEMO_MANAGE, PERM_USER_READ,
+        PERM_ADMIN_DASHBOARD_VIEW, PERM_ALERT_MANAGE, PERM_CATEGORY_MANAGE, PERM_INQUIRY_READ,
+        PERM_JOB_MODERATE, PERM_LISTING_MODERATE, PERM_LOCATION_MANAGE, PERM_PARTNER_MANAGE,
+        PERM_PRICE_MANAGE, PERM_PROVIDER_READ, PERM_REPORT_DEMAND_READ, PERM_REVIEW_MODERATE,
+        PERM_ROLE_READ, PERM_SERVICE_MANAGE, PERM_SYSTEM_DEMO_MANAGE, PERM_USER_READ,
     },
 };
 use axum::{http::StatusCode, response::Response};
-use domain::{Error, ErrorCode};
+use domain::{
+    constants::{CATEGORY_TYPE_PRODUCT, CATEGORY_TYPE_SERVICE},
+    Error, ErrorCode,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -51,12 +59,18 @@ pub struct NavItem {
     pub icon: &'static str,
     pub label: String,
     pub active: bool,
+    /// What else the menu's search finds this entry by: the names of the
+    /// lists behind it (its tabs). Never shown.
+    pub keywords: String,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct NavGroup {
     /// `None` for top-level entries (the dashboard).
     pub label: Option<String>,
+    /// The group's stable name (its label's text key), under which the
+    /// browser remembers that it was folded.
+    pub key: Option<&'static str>,
     pub items: Vec<NavItem>,
 }
 
@@ -77,9 +91,13 @@ const ACCOUNT_LINKS: &[(&str, &str, &str)] = &[("account", "fa-id-card", "accoun
 /// (route, icon, label text key, permission that opens it).
 type Entry = (&'static str, &'static str, &'static str, &'static str);
 
-/// Grouped by the job and ordered by how often it comes up: what farmers sent
-/// in (and the day's prices), the listings, the B2B figures, the reference
-/// data set once, then accounts and access.
+/// Grouped by which way the thing flows, so that what belongs together sits
+/// together: what farmers sent in (to answer), what the admin publishes to
+/// them (prices, alerts), the listings, the B2B figures, the reference data
+/// the rest is filed under, then accounts and access. The classification is
+/// one entry: the sectors and what hangs on them (commodities, service types,
+/// supply types) are the tabs of one screen (`catalogue_tabs`). Pages without
+/// an entry light their owner's (`MENU_OWNERS`).
 const MENU: &[(Option<&str>, &[Entry])] = &[
     (
         None,
@@ -91,7 +109,7 @@ const MENU: &[(Option<&str>, &[Entry])] = &[
         )],
     ),
     (
-        Some("admin_menu.daily"),
+        Some("admin_menu.inbox"),
         &[
             (
                 "admin_inquiries",
@@ -111,11 +129,22 @@ const MENU: &[(Option<&str>, &[Entry])] = &[
                 "admin_menu.reviews",
                 PERM_REVIEW_MODERATE,
             ),
+        ],
+    ),
+    (
+        Some("admin_menu.published"),
+        &[
             (
                 "admin_prices",
                 "fa-chart-line",
                 "admin_menu.prices",
                 PERM_PRICE_MANAGE,
+            ),
+            (
+                "admin_alerts",
+                "fa-triangle-exclamation",
+                "admin_menu.alerts",
+                PERM_ALERT_MANAGE,
             ),
         ],
     ),
@@ -123,7 +152,7 @@ const MENU: &[(Option<&str>, &[Entry])] = &[
         Some("admin_menu.directory"),
         &[
             (
-                "admin_explore",
+                "admin_providers",
                 "fa-store",
                 "admin_menu.providers",
                 PERM_PROVIDER_READ,
@@ -163,9 +192,9 @@ const MENU: &[(Option<&str>, &[Entry])] = &[
         Some("admin_menu.setup"),
         &[
             (
-                "admin_categories",
-                "fa-tags",
-                "admin_menu.categories",
+                "admin_sectors",
+                "fa-sitemap",
+                "admin_menu.catalogue",
                 PERM_CATEGORY_MANAGE,
             ),
             (
@@ -173,12 +202,6 @@ const MENU: &[(Option<&str>, &[Entry])] = &[
                 "fa-map-location-dot",
                 "admin_menu.locations",
                 PERM_LOCATION_MANAGE,
-            ),
-            (
-                "admin_crops",
-                "fa-seedling",
-                "admin_menu.crops",
-                PERM_PRICE_MANAGE,
             ),
         ],
     ),
@@ -198,12 +221,6 @@ const MENU: &[(Option<&str>, &[Entry])] = &[
                 PERM_ROLE_READ,
             ),
             (
-                "admin_permissions",
-                "fa-key",
-                "admin_menu.permissions",
-                PERM_ROLE_READ,
-            ),
-            (
                 "setup_seed",
                 "fa-database",
                 "admin_menu.demo_data",
@@ -213,12 +230,126 @@ const MENU: &[(Option<&str>, &[Entry])] = &[
     ),
 ];
 
+/// Pages with no menu entry of their own, and the entry that lights for them:
+/// a crop is kept on the price board's second tab, and the classification's
+/// entry leads to its first tab, the sectors.
+const MENU_OWNERS: &[(&str, &str)] = &[
+    ("admin_crops", "admin_prices"),
+    ("admin_alert_kinds", "admin_alerts"),
+    ("admin_commodities", "admin_sectors"),
+    ("admin_categories", "admin_sectors"),
+];
+
+/// What the menu's search also finds an entry by: the lists kept on its tabs,
+/// which have no entry of their own (menu route, text keys).
+const MENU_KEYWORDS: &[(&str, &[&str])] = &[
+    (
+        "admin_prices",
+        &["admin_menu.price_board", "admin_menu.crops"],
+    ),
+    ("admin_alerts", &["alert.tab_kinds"]),
+    (
+        "admin_sectors",
+        &[
+            "admin_menu.sectors",
+            "admin_menu.commodities",
+            "admin_menu.service_types",
+            "admin_menu.supply_types",
+        ],
+    ),
+    ("admin_roles", &["admin_menu.permissions"]),
+];
+
+/// The search words of the menu entry leading to `route`.
+fn keywords(locale: &Locale, route: &str) -> String {
+    MENU_KEYWORDS
+        .iter()
+        .filter(|(entry, _)| *entry == route)
+        .flat_map(|(_, keys)| keys.iter().map(|key| locale.text(key)))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// A tab of the classification screen: the sectors, then what is filed under
+/// a sector.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CatalogueTab {
+    Sectors,
+    Commodities,
+    ServiceTypes,
+    SupplyTypes,
+}
+
+/// The classification's tabs, the same on its four lists, `current` marked:
+/// each list keeps its own address.
+pub fn catalogue_tabs(state: &AppState, current: CatalogueTab) -> Result<Vec<AdminTab>, Error> {
+    let categories = url("admin_categories", &[])?;
+    let of_type = |kind: &str| with_query(&categories, &[("type", kind)]);
+    let tabs = [
+        (
+            CatalogueTab::Sectors,
+            "admin_menu.sectors",
+            url("admin_sectors", &[])?,
+        ),
+        (
+            CatalogueTab::Commodities,
+            "admin_menu.commodities",
+            url("admin_commodities", &[])?,
+        ),
+        (
+            CatalogueTab::ServiceTypes,
+            "admin_menu.service_types",
+            of_type(CATEGORY_TYPE_SERVICE),
+        ),
+        (
+            CatalogueTab::SupplyTypes,
+            "admin_menu.supply_types",
+            of_type(CATEGORY_TYPE_PRODUCT),
+        ),
+    ];
+    Ok(tabs
+        .into_iter()
+        .map(|(tab, label, href)| AdminTab {
+            label: state.locale().text(label),
+            href,
+            count: None,
+            current: tab == current,
+        })
+        .collect())
+}
+
+/// The admin page of the sector `code` names; none for every sector.
+pub fn sector_href(
+    sectors: &[application::outputs::CodedDto],
+    code: Option<&str>,
+) -> Result<Option<String>, Error> {
+    code.and_then(|c| sectors.iter().find(|s| s.code == c))
+        .map(|s| url("admin_sector", &[("id", &s.id.to_string())]))
+        .transpose()
+}
+
+/// `path` itself, or the address of the menu entry that owns it.
+fn menu_path(path: &str) -> String {
+    MENU_OWNERS
+        .iter()
+        .find_map(|(page, owner)| {
+            let href = routes::url(page, &[]).ok()?;
+            (path == href || path.starts_with(&format!("{href}/")))
+                .then(|| routes::url(owner, &[]).ok())
+                .flatten()
+        })
+        .unwrap_or_else(|| path.to_owned())
+}
+
 impl AdminNav {
     pub fn new(locale: &Locale, actor: &Actor, path: &str) -> Self {
+        let lit = menu_path(path);
+        let path = lit.as_str();
         let groups = MENU
             .iter()
             .map(|(label, entries)| NavGroup {
                 label: label.map(|key| locale.text(key)),
+                key: *label,
                 items: entries
                     .iter()
                     .filter(|(_, _, _, perm)| actor.can(perm))
@@ -229,6 +360,7 @@ impl AdminNav {
                             href,
                             icon,
                             label: locale.text(label),
+                            keywords: keywords(locale, route),
                         })
                     })
                     .collect(),
@@ -288,6 +420,17 @@ pub fn render_admin<T: Serialize>(
 
 pub fn url(name: &str, params: &[(&str, &str)]) -> Result<String, Error> {
     routes::url(name, params).map_err(|e| Error::internal(format!("admin links: {e}")))
+}
+
+/// The admin page of an account linked to a record (a provider's managing
+/// account, a partner's report account), when the visitor may read accounts.
+pub fn user_href(actor: &Actor, user_id: Option<i32>) -> Result<Option<String>, Error> {
+    match user_id {
+        Some(id) if actor.can(PERM_USER_READ) => {
+            Some(url("admin_user", &[("id", &id.to_string())])).transpose()
+        }
+        _ => Ok(None),
+    }
 }
 
 /// A refusal the admin can act on from the page (a broken rule, a conflict):
@@ -372,6 +515,17 @@ impl Asked {
     }
 }
 
+/// A tab of an admin page that shows one of several lists
+/// (`molecules/admin_tabs.html`): a link, its word, maybe a count, and
+/// whether it is the one shown.
+#[derive(Debug, Serialize)]
+pub struct AdminTab {
+    pub label: String,
+    pub href: String,
+    pub count: Option<usize>,
+    pub current: bool,
+}
+
 /// The row confirmation open on this render of a list (`?hide=` or
 /// `?delete=`): which kind, the record's name for the title, and where its
 /// form posts.
@@ -391,6 +545,13 @@ pub struct RowConfirm {
 pub struct ListPosition {
     pub page: String,
     pub provider_id: String,
+    /// A list narrowed to one crop (the price list).
+    pub crop_id: String,
+    /// A list narrowed to one commodity, or one service or supply type.
+    pub commodity_id: String,
+    pub category_id: String,
+    /// Which list of a page with tabs (`?tab=`).
+    pub tab: String,
     /// The name search box (`q`), kept like the page and the provider.
     pub q: String,
 }
@@ -400,6 +561,18 @@ impl ListPosition {
     /// filter).
     pub fn query(&self) -> Vec<(&'static str, String)> {
         let mut q = Vec::new();
+        if !self.tab.trim().is_empty() {
+            q.push(("tab", self.tab.trim().to_owned()));
+        }
+        if let Some(c) = parse_opt::<i32>(&self.crop_id).filter(|c| *c > 0) {
+            q.push(("crop_id", c.to_string()));
+        }
+        if let Some(c) = parse_opt::<i32>(&self.commodity_id).filter(|c| *c > 0) {
+            q.push(("commodity_id", c.to_string()));
+        }
+        if let Some(c) = parse_opt::<i32>(&self.category_id).filter(|c| *c > 0) {
+            q.push(("category_id", c.to_string()));
+        }
         if let Some(p) = parse_opt::<i32>(&self.provider_id).filter(|p| *p > 0) {
             q.push(("provider_id", p.to_string()));
         }
@@ -475,6 +648,7 @@ impl ListPosition {
         self.provider_id()
             .map(|id| {
                 Ok(ProviderFilter {
+                    icon: "fa-store",
                     name,
                     href: url("admin_provider", &[("id", &id.to_string())])?,
                     clear_href: url(route, &[])?,
@@ -503,6 +677,8 @@ pub struct SearchBox {
 /// and the whole list.
 #[derive(Debug, Serialize)]
 pub struct ProviderFilter {
+    /// Font Awesome class of what the list is narrowed to.
+    pub icon: &'static str,
     pub name: Option<String>,
     pub href: String,
     pub clear_href: String,
@@ -527,19 +703,21 @@ mod tests {
             page: "1".into(),
             provider_id: " 7 ".into(),
             q: "  ".into(),
+            ..ListPosition::default()
         };
         assert_eq!(
             p.href("admin_products", &[("hide", "9")]).ok().as_deref(),
-            Some("/admin/products?provider_id=7&hide=9")
+            Some("/admin/supplies?provider_id=7&hide=9")
         );
         let p = ListPosition {
             page: "2".into(),
             provider_id: "7".into(),
             q: " phan bon ".into(),
+            ..ListPosition::default()
         };
         assert_eq!(
             p.href("admin_products", &[]).ok().as_deref(),
-            Some("/admin/products?provider_id=7&q=phan+bon&page=2"),
+            Some("/admin/supplies?provider_id=7&q=phan+bon&page=2"),
             "the search is kept, trimmed and encoded"
         );
     }
@@ -572,11 +750,8 @@ mod tests {
         let roles = vi.text("admin_menu.roles");
         assert_eq!(
             labels,
-            [
-                vi.text("admin_menu.dashboard"),
-                roles.clone(),
-                vi.text("admin_menu.permissions")
-            ]
+            [vi.text("admin_menu.dashboard"), roles.clone()],
+            "roles and their permissions are one entry"
         );
         assert_eq!(nav.groups.len(), 2, "the empty groups are hidden");
         let active: Vec<&str> = nav
@@ -590,6 +765,58 @@ mod tests {
             })
             .collect();
         assert_eq!(active, [roles], "a sub-page keeps its section active");
+
+        // A crop has no entry of its own: the price board's lights.
+        let nav = AdminNav::new(
+            &vi,
+            &actor(&[PERM_ADMIN_DASHBOARD_VIEW, PERM_PRICE_MANAGE]),
+            "/admin/crops/3",
+        );
+        let active: Vec<&str> = nav
+            .groups
+            .iter()
+            .flat_map(|g| {
+                g.items
+                    .iter()
+                    .filter(|i| i.active)
+                    .map(|i| i.label.as_str())
+            })
+            .collect();
+        assert_eq!(active, [vi.text("admin_menu.prices")]);
+        let keys: Vec<Option<&str>> = nav.groups.iter().map(|g| g.key).collect();
+        assert_eq!(
+            keys,
+            [None, Some("admin_menu.published")],
+            "the dashboard is in no group; a group folds under its key"
+        );
+        let found_by_tab_lists = nav
+            .groups
+            .iter()
+            .flat_map(|g| &g.items)
+            .any(|i| i.keywords.contains(&vi.text("admin_menu.crops")));
+        assert!(
+            found_by_tab_lists,
+            "the search finds an entry by the lists on its tabs"
+        );
+
+        // The classification is one entry, lit on each of its four lists.
+        for path in [
+            "/admin/sectors",
+            "/admin/commodities/4",
+            "/admin/categories",
+        ] {
+            let nav = AdminNav::new(&vi, &actor(&[PERM_CATEGORY_MANAGE]), path);
+            let entries: Vec<(&str, bool)> = nav
+                .groups
+                .iter()
+                .flat_map(|g| g.items.iter().map(|i| (i.label.as_str(), i.active)))
+                .collect();
+            assert_eq!(
+                entries,
+                [(vi.text("admin_menu.catalogue").as_str(), true)],
+                "{path}"
+            );
+        }
         assert_eq!(
             nav.account.logout.as_deref(),
             Some("/admin/logout"),

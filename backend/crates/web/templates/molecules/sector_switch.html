@@ -14,7 +14,7 @@
 <form class="sector-switch" method="post" action="{{ url_for(name="sector") }}" aria-label="{{ t(key="sector.label") }}">
   <input type="hidden" name="back" value="{{ back }}">
   {% for s in sectors %}
-  <button type="submit" class="sector-switch__btn" name="sector" value="{{ s.value }}" aria-pressed="{% if s.current %}true{% else %}false{% endif %}">{{ atoms::icon(name=s.icon) }} {{ s.label }}</button>
+  <button type="submit" class="chip" name="sector" value="{{ s.value }}" aria-pressed="{% if s.current %}true{% else %}false{% endif %}">{{ atoms::icon(name=s.icon) }} {{ s.label }}</button>
   {% endfor %}
 </form>
 {% endif %}
@@ -28,7 +28,7 @@
 {% if sectors %}
 <nav class="sector-switch" aria-label="{{ t(key="sector.label") }}">
   {% for s in sectors %}
-  <a class="sector-switch__btn text-decoration-none" href="{{ s.href }}"{% if s.current %} aria-current="true"{% endif %}>{{ atoms::icon(name=s.icon) }} {{ s.label }}</a>
+  <a class="chip" href="{{ s.href }}"{% if s.current %} aria-current="true"{% endif %}>{{ atoms::icon(name=s.icon) }} {{ s.label }}</a>
   {% endfor %}
 </nav>
 {% endif %}

@@ -32,8 +32,9 @@
 </section>
 {% else %}
 <div x-data="tabs" data-tab="{{ page.tab }}">
-  {{ sector::sector_links(sectors=page.sectors) }}
+  {#- Tabs first, then the sector links, as on the list pages. -#}
   {% if page.tabs %}{{ tabs::tab_nav(tabs=page.tabs, label=t(key="search.tabs_label")) }}{% endif %}
+  {{ sector::sector_links(sectors=page.sectors) }}
   <p class="list-tools small text-muted mb-0"><strong>{{ page.total }}</strong> {{ t(key="search.unit") }} {{ t(key="list.for_query", q=page.q) }}</p>
 
   {% if page.services %}

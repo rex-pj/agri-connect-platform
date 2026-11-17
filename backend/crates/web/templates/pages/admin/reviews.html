@@ -35,7 +35,7 @@
           <tr{% if not v.is_visible %} class="table-light text-body-secondary"{% endif %}>
             <td class="fw-semibold">{{ v.reviewer_name }}<span class="d-block small text-muted fw-normal"><time datetime="{{ v.created_on | utc_iso }}">{{ v.created_on | vn_datetime }}</time></span></td>
             <td><a class="text-decoration-none" href="{{ r.provider_href }}">{{ v.business_name }}</a></td>
-            <td>{{ stars::stars(rating=v.rating) }}{% if v.comment %}<span class="d-block small">{{ v.comment }}</span>{% endif %}{% if v.reply %}<span class="d-block small text-muted">{{ atoms::icon(name="fa-reply") }} {{ v.reply }}</span>{% endif %}</td>
+            <td>{{ stars::stars(rating=v.rating) }}{% if v.comment %}<span class="d-block small">{{ v.comment }}</span>{% endif %}{% if v.reply %}<span class="d-block small text-muted">{{ atoms::icon(name="fa-reply") }} {{ v.reply }}</span>{% endif %}{% for sign in v.suspect %}<span class="d-block small text-danger">{{ atoms::icon(name="fa-triangle-exclamation") }} {% if sign == "own_phone" %}{{ t(key="admin.review_suspect_own_phone") }}{% else %}{{ t(key="admin.review_suspect_quick") }}{% endif %}</span>{% endfor %}</td>
             <td class="text-center">{{ status::visibility(on=v.is_visible) }}{% if not v.is_visible %}<span class="d-block small text-muted">{% if v.updated_by_name %}{{ v.updated_by_name }}{% else %}{{ t(key="review.waiting") }}{% endif %}</span>{% endif %}</td>
             <td class="text-end">
               <div class="row-actions">

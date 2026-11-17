@@ -574,3 +574,121 @@ async fn the_schema_refuses_rows_that_contradict_each_other() {
 
     t.cleanup().await;
 }
+
+/// `url` signed in as `user` / `password` instead of its own account.
+fn as_user(url: &str, user: &str, password: &str) -> String {
+    let (scheme, rest) = url.split_once("://").unwrap();
+    let host = rest.rsplit_once('@').map_or(rest, |(_, host)| host);
+    format!("{scheme}://{user}:{password}@{host}")
+}
+
+/// `deploy/db-init/roles.psql` with its psql variables filled in, one
+/// statement per item: what the database container runs on first start.
+fn role_statements(vars: &[(&str, &str)]) -> Vec<String> {
+    let mut sql: String = include_str!("../../../../../deploy/db-init/roles.psql")
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("--"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    for (name, value) in vars {
+        sql = sql
+            .replace(&format!(":\"{name}\""), &format!("\"{value}\""))
+            .replace(&format!(":'{name}'"), &format!("'{value}'"));
+    }
+    assert!(
+        !sql.contains(":\"") && !sql.contains(":'"),
+        "a variable is left: {sql}"
+    );
+    sql.split(';')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL (a superuser, as CI's)"]
+async fn the_app_role_cannot_change_the_schema() {
+    let url = std::env::var("TEST_DATABASE_URL").unwrap();
+    let id = format!(
+        "{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+    );
+    let name = format!("{}roles_{id}", integration_tests::TEST_DB_PREFIX);
+    let (owner, app) = (format!("agri_owner_{id}"), format!("agri_app_{id}"));
+    let superuser = sea_orm::Database::connect(&url).await.unwrap();
+    superuser
+        .execute_unprepared(&format!("CREATE DATABASE {name}"))
+        .await
+        .unwrap();
+    let in_db = sea_orm::Database::connect(integration_tests::database_url(&url, &name))
+        .await
+        .unwrap();
+    for statement in role_statements(&[
+        ("owner_role", &owner),
+        ("owner_pw", "owner-pw"),
+        ("app_role", &app),
+        ("app_pw", "app-pw"),
+        ("db_name", &name),
+    ]) {
+        in_db
+            .execute_unprepared(&statement)
+            .await
+            .unwrap_or_else(|e| panic!("{statement}: {e}"));
+    }
+    in_db.close().await.unwrap();
+
+    // The owner migrates, as the server does at startup.
+    let db_url = integration_tests::database_url(&url, &name);
+    let owner_db = sea_orm::Database::connect(as_user(&db_url, &owner, "owner-pw"))
+        .await
+        .unwrap();
+    {
+        use migration::MigratorTrait;
+        migration::Migrator::up(&owner_db, None).await.unwrap();
+    }
+    owner_db.close().await.unwrap();
+
+    // The app role does everything the server does: seeds, loads the demo
+    // data (most tables, the shared type sequence), signs a provider up.
+    let app_db = sea_orm::Database::connect(as_user(&db_url, &app, "app-pw"))
+        .await
+        .unwrap();
+    let state = integration_tests::state(app_db.clone());
+    state
+        .usecases
+        .setup
+        .seed_catalogue(&CATALOGUE)
+        .await
+        .unwrap();
+    state.usecases.setup.seed_admin_units().await.unwrap();
+    DemoDataRepository::new(Arc::new(app_db.clone()))
+        .load()
+        .await
+        .unwrap();
+    integration_tests::register_provider(&state, "nongdan", "0901234567").await;
+
+    // But it never changes the schema.
+    for ddl in [
+        "CREATE TABLE intruder (id int)",
+        "DROP TABLE users",
+        "ALTER TABLE users ADD COLUMN x int",
+        "TRUNCATE users CASCADE",
+    ] {
+        assert!(app_db.execute_unprepared(ddl).await.is_err(), "{ddl}");
+    }
+    app_db.close().await.unwrap();
+
+    superuser
+        .execute_unprepared(&format!("DROP DATABASE {name} WITH (FORCE)"))
+        .await
+        .unwrap();
+    superuser
+        .execute_unprepared(&format!("DROP ROLE \"{app}\"; DROP ROLE \"{owner}\""))
+        .await
+        .unwrap();
+}

@@ -1,16 +1,14 @@
 #!/bin/sh
 # Runs once, when the data directory is empty (postgres image convention).
-# The app connects as agri_app, which owns the database but is not a
-# superuser; extensions are created here because creating them needs one.
+# Creates the two roles and the extensions (roles.psql): agri_owner owns the
+# schema and runs the migrations, agri_app reads and writes rows and nothing
+# more. The .psql file is not a .sql one, so the image does not run it again
+# on its own.
 set -eu
 
-psql -v ON_ERROR_STOP=1 -v app_pw="$APP_DB_PASSWORD" \
-    --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<'SQL'
-CREATE ROLE agri_app LOGIN PASSWORD :'app_pw';
-ALTER DATABASE agri_connect OWNER TO agri_app;
-ALTER SCHEMA public OWNER TO agri_app;
-CREATE EXTENSION IF NOT EXISTS postgis;
-CREATE EXTENSION IF NOT EXISTS unaccent;
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
-CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
-SQL
+psql -v ON_ERROR_STOP=1 \
+    -v owner_role=agri_owner -v owner_pw="$OWNER_DB_PASSWORD" \
+    -v app_role=agri_app -v app_pw="$APP_DB_PASSWORD" \
+    -v db_name="$POSTGRES_DB" \
+    --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+    -f /docker-entrypoint-initdb.d/roles.psql

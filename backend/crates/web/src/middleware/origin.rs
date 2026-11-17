@@ -19,7 +19,7 @@ use axum::{
 };
 use domain::{Error, ErrorCode};
 
-use crate::{cookies::request_cookie, middleware::auth::SESSION_COOKIE, session::REFRESH_COOKIE};
+use crate::cookies::request_cookie;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum OriginDecision {
@@ -35,6 +35,8 @@ pub struct Origins {
     pub own: Vec<String>,
     /// Other sites that may call the API: only without a session cookie.
     pub api: Vec<String>,
+    /// The names of the session cookies (`CookiePolicy`).
+    pub session_cookies: [&'static str; 2],
 }
 
 /// Pure so the rule is testable without a router. `has_session`: the request
@@ -75,7 +77,8 @@ pub async fn enforce(origins: std::sync::Arc<Origins>, req: Request, next: Next)
         .headers()
         .get(header::ORIGIN)
         .and_then(|v| v.to_str().ok());
-    let has_session = [SESSION_COOKIE, REFRESH_COOKIE]
+    let has_session = origins
+        .session_cookies
         .iter()
         .any(|name| request_cookie(req.headers(), name).is_some());
     match decide(req.method(), origin, &origins, has_session) {
@@ -96,6 +99,7 @@ mod tests {
         Origins {
             own: vec!["https://agri.vn".to_owned()],
             api: vec![MINI_APP.to_owned()],
+            session_cookies: ["auth_token", "refresh_token"],
         }
     }
 

@@ -27,7 +27,9 @@ services:
       - /etc/agri-connect/web.env
     environment:
       BIND_ADDR: 0.0.0.0:8080
+      # Rows only; the schema belongs to agri_owner, used just to migrate.
       DATABASE_URL: postgres://agri_app:${APP_DB_PASSWORD}@db:5432/agri_connect
+      MIGRATION_DATABASE_URL: postgres://agri_owner:${OWNER_DB_PASSWORD}@db:5432/agri_connect
       APP_ENV: prod
       APP_URL: https://${DOMAIN}
       # Product images. The VM service account reaches it through the metadata
@@ -50,6 +52,7 @@ services:
     environment:
       POSTGRES_DB: agri_connect
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      OWNER_DB_PASSWORD: ${OWNER_DB_PASSWORD}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD}
     volumes:
       # On the separate persistent disk, so the data outlives the VM.

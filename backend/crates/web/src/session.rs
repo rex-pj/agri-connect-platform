@@ -36,10 +36,36 @@ pub const REFRESH_COOKIE: &str = "refresh_token";
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CookiePolicy {
     /// `Secure`: only behind TLS, or plain-HTTP development could not log in.
+    /// Behind TLS the two session cookies also take the `__Host-` prefix:
+    /// the browser then keeps them only as set by this very host (Secure,
+    /// `Path=/`, no `Domain`), so no other site under the domain can plant
+    /// a session of its choosing.
     pub secure: bool,
 }
 
+/// The session cookies behind TLS: the plain names with the __Host- prefix.
+const HOST_SESSION_COOKIE: &str = "__Host-auth_token";
+const HOST_REFRESH_COOKIE: &str = "__Host-refresh_token";
+
 impl CookiePolicy {
+    /// The access token's cookie: `__Host-auth_token` behind TLS.
+    pub fn session_name(&self) -> &'static str {
+        if self.secure {
+            HOST_SESSION_COOKIE
+        } else {
+            SESSION_COOKIE
+        }
+    }
+
+    /// The refresh token's cookie: `__Host-refresh_token` behind TLS.
+    pub fn refresh_name(&self) -> &'static str {
+        if self.secure {
+            HOST_REFRESH_COOKIE
+        } else {
+            REFRESH_COOKIE
+        }
+    }
+
     fn cookie(&self, name: &str, value: &str, max_age_secs: i64) -> Option<HeaderValue> {
         let secure = if self.secure { "; Secure" } else { "" };
         HeaderValue::from_str(&format!(
@@ -55,11 +81,11 @@ impl CookiePolicy {
             .max(0);
         let pairs = [
             (
-                SESSION_COOKIE,
+                self.session_name(),
                 tokens.access.as_str(),
                 chrono::Duration::hours(JWT_EXPIRY_HOURS).num_seconds(),
             ),
-            (REFRESH_COOKIE, tokens.refresh.as_str(), refresh_secs),
+            (self.refresh_name(), tokens.refresh.as_str(), refresh_secs),
         ];
         for (name, value, age) in pairs {
             if let Some(v) = self.cookie(name, value, age) {
@@ -70,7 +96,7 @@ impl CookiePolicy {
 
     /// Expires both cookies.
     pub fn clear(&self, response: &mut Response) {
-        for name in [SESSION_COOKIE, REFRESH_COOKIE] {
+        for name in [self.session_name(), self.refresh_name()] {
             if let Some(v) = self.cookie(name, "", 0) {
                 response.headers_mut().append(header::SET_COOKIE, v);
             }
@@ -84,9 +110,14 @@ fn needs_session(path: &str) -> bool {
     !crate::routes::is_asset_path(path)
 }
 
-/// `Cookie` with `auth_token` and `refresh_token` replaced by the new pair,
-/// every other cookie kept as it was.
-fn with_session_cookies(headers: &HeaderMap, tokens: &SessionTokens) -> Option<HeaderValue> {
+/// `Cookie` with the two session cookies replaced by the new pair, every
+/// other cookie kept as it was.
+fn with_session_cookies(
+    headers: &HeaderMap,
+    policy: CookiePolicy,
+    tokens: &SessionTokens,
+) -> Option<HeaderValue> {
+    let (session, refresh) = (policy.session_name(), policy.refresh_name());
     let mut pairs: Vec<String> = headers
         .get_all(header::COOKIE)
         .iter()
@@ -95,12 +126,12 @@ fn with_session_cookies(headers: &HeaderMap, tokens: &SessionTokens) -> Option<H
         .map(str::trim)
         .filter(|p| {
             let name = p.split_once('=').map_or(*p, |(k, _)| k);
-            !p.is_empty() && name != SESSION_COOKIE && name != REFRESH_COOKIE
+            !p.is_empty() && name != session && name != refresh
         })
         .map(str::to_owned)
         .collect();
-    pairs.push(format!("{SESSION_COOKIE}={}", tokens.access));
-    pairs.push(format!("{REFRESH_COOKIE}={}", tokens.refresh));
+    pairs.push(format!("{session}={}", tokens.access));
+    pairs.push(format!("{refresh}={}", tokens.refresh));
     HeaderValue::from_str(&pairs.join("; ")).ok()
 }
 
@@ -113,8 +144,8 @@ pub async fn renew(
     let headers = req.headers();
     // API clients send a bearer token and manage their own sessions.
     let bearer = headers.contains_key(header::AUTHORIZATION);
-    let refresh = request_cookie(headers, REFRESH_COOKIE).map(str::to_owned);
-    let access_ok = request_cookie(headers, SESSION_COOKIE)
+    let refresh = request_cookie(headers, policy.refresh_name()).map(str::to_owned);
+    let access_ok = request_cookie(headers, policy.session_name())
         .is_some_and(|t| state.token_service.verify(t).is_ok());
     let Some(refresh) =
         refresh.filter(|_| !bearer && !access_ok && needs_session(req.uri().path()))
@@ -124,7 +155,7 @@ pub async fn renew(
 
     match state.usecases.auth.renew_session(&refresh).await {
         Ok(Renewal::Renewed(tokens)) => {
-            if let Some(cookie) = with_session_cookies(req.headers(), &tokens) {
+            if let Some(cookie) = with_session_cookies(req.headers(), policy, &tokens) {
                 req.headers_mut().insert(header::COOKIE, cookie);
             }
             let mut response = next.run(req).await;
@@ -152,8 +183,12 @@ pub async fn renew(
     }
 }
 
-async fn end_session(state: &AppState, headers: &HeaderMap) -> Result<(), Error> {
-    match request_cookie(headers, REFRESH_COOKIE) {
+async fn end_session(
+    state: &AppState,
+    policy: CookiePolicy,
+    headers: &HeaderMap,
+) -> Result<(), Error> {
+    match request_cookie(headers, policy.refresh_name()) {
         Some(raw) => state.usecases.auth.end_session(raw).await,
         None => Ok(()),
     }
@@ -165,7 +200,7 @@ async fn logout_to(
     headers: &HeaderMap,
     route: &str,
 ) -> Result<Response, Error> {
-    end_session(state, headers).await?;
+    end_session(state, policy, headers).await?;
     let target = routes::url(route, &[]).map_err(|e| Error::internal(format!("logout: {e}")))?;
     let mut response = see_other(&target)?;
     policy.clear(&mut response);
@@ -211,7 +246,7 @@ mod tests {
             header::COOKIE,
             HeaderValue::from_static("lang=vi; auth_token=old; refresh_token=spent; flash=x"),
         );
-        let rewritten = with_session_cookies(&h, &tokens());
+        let rewritten = with_session_cookies(&h, CookiePolicy::default(), &tokens());
         assert_eq!(
             rewritten.as_ref().and_then(|v| v.to_str().ok()),
             Some("lang=vi; flash=x; auth_token=new.jwt; refresh_token=newrefresh")
@@ -232,9 +267,9 @@ mod tests {
         assert!(set.iter().all(|c| c.contains("HttpOnly")
             && c.contains("SameSite=Lax")
             && c.ends_with("; Secure")));
-        assert!(set
-            .first()
-            .is_some_and(|c| c.starts_with("auth_token=new.jwt;") && c.contains("Max-Age=3600")));
+        assert!(set.first().is_some_and(
+            |c| c.starts_with("__Host-auth_token=new.jwt;") && c.contains("Max-Age=3600")
+        ));
 
         let mut plain = ().into_response();
         CookiePolicy { secure: false }.clear(&mut plain);
@@ -244,6 +279,43 @@ mod tests {
             .iter()
             .filter_map(|v| v.to_str().ok())
             .all(|c| c.contains("Max-Age=0") && !c.contains("Secure")));
+    }
+
+    #[test]
+    fn behind_tls_the_session_cookies_are_host_only() {
+        let tls = CookiePolicy { secure: true };
+        assert_eq!(
+            (tls.session_name(), tls.refresh_name()),
+            ("__Host-auth_token", "__Host-refresh_token")
+        );
+        assert_eq!(HOST_SESSION_COOKIE, format!("__Host-{SESSION_COOKIE}"));
+        assert_eq!(HOST_REFRESH_COOKIE, format!("__Host-{REFRESH_COOKIE}"));
+        let plain = CookiePolicy::default();
+        assert_eq!(
+            (plain.session_name(), plain.refresh_name()),
+            ("auth_token", "refresh_token")
+        );
+        let mut res = ().into_response();
+        tls.set(&mut res, &tokens());
+        for cookie in res.headers().get_all(header::SET_COOKIE) {
+            let cookie = cookie.to_str().unwrap_or_default();
+            // What a browser requires of a __Host- cookie.
+            assert!(cookie.starts_with("__Host-"), "{cookie}");
+            assert!(cookie.contains("; Path=/;") && cookie.ends_with("; Secure"));
+            assert!(!cookie.contains("Domain"), "{cookie}");
+        }
+        // The request's other cookies are kept, the old pair replaced.
+        let mut h = HeaderMap::new();
+        h.insert(
+            header::COOKIE,
+            HeaderValue::from_static("lang=vi; __Host-auth_token=old; __Host-refresh_token=spent"),
+        );
+        assert_eq!(
+            with_session_cookies(&h, tls, &tokens())
+                .as_ref()
+                .and_then(|v| v.to_str().ok()),
+            Some("lang=vi; __Host-auth_token=new.jwt; __Host-refresh_token=newrefresh")
+        );
     }
 
     #[test]

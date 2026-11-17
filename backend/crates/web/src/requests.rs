@@ -578,16 +578,18 @@ pub struct JobRequest {
     pub requester_phone: String,
 }
 
-impl From<JobRequest> for application::inputs::JobInput {
-    fn from(r: JobRequest) -> Self {
-        Self {
-            category_id: r.category_id,
-            location_id: r.location_id,
-            lat: r.lat,
-            lng: r.lng,
-            description: r.description,
-            requester_name: r.requester_name,
-            requester_phone: r.requester_phone,
+impl JobRequest {
+    /// The use case's input, posted by `client` (`client_key`).
+    pub fn into_input(self, client: String) -> application::inputs::JobInput {
+        application::inputs::JobInput {
+            category_id: self.category_id,
+            location_id: self.location_id,
+            lat: self.lat,
+            lng: self.lng,
+            description: self.description,
+            requester_name: self.requester_name,
+            requester_phone: self.requester_phone,
+            client,
         }
     }
 }

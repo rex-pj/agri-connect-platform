@@ -28,12 +28,15 @@ use crate::{
     catalogue::{PERM_JOB_MODERATE, PERM_OWN_JOB_READ},
     constants::{
         ADMIN_PAGE_SIZE, JOBS_SHOWN, JOB_DESCRIPTION_MAX, JOB_NOTIFY_RADIUS_M,
-        JOB_POSTS_OPEN_PER_PHONE, JOB_POST_DAYS, JOB_POST_KEEP_DAYS, REQUESTER_NAME_MAX_LEN,
+        JOB_POSTS_OPEN_PER_PHONE, JOB_POSTS_PER_CLIENT_PER_DAY, JOB_POST_CLIENT_WINDOW_SECS,
+        JOB_POST_DAYS, JOB_POST_KEEP_DAYS, REQUESTER_NAME_MAX_LEN,
     },
+    hashing::sha256_hex,
     inputs::JobInput,
     outputs::{AdminPagedResponse, JobPostDto},
     pagination::{admin_total_pages, paginate_admin, total_or_count},
     ports::EventBus,
+    repeats::WindowCounter,
     validation::{audit_reason, max_chars, point_wkt, validate_coordinates, validate_phone},
 };
 
@@ -43,6 +46,8 @@ pub struct JobUseCase {
     category_repo: Arc<dyn CategoryRepositoryTrait + Send + Sync>,
     location_repo: Arc<dyn LocationRepositoryTrait + Send + Sync>,
     events: Arc<dyn EventBus>,
+    /// Posts per client in the last day, in memory only (never who).
+    posts_by_client: WindowCounter,
 }
 
 impl JobUseCase {
@@ -57,11 +62,30 @@ impl JobUseCase {
             category_repo,
             location_repo,
             events,
+            posts_by_client: WindowCounter::default(),
         }
     }
 
-    /// A farmer's post; its id. Every bad box is reported at once.
+    /// Forgets the clients whose day has passed (bounded memory); called
+    /// with the other in-memory filters.
+    pub fn forget_old_posters(&self) {
+        self.posts_by_client
+            .forget_older_than(std::time::Duration::from_secs(JOB_POST_CLIENT_WINDOW_SECS));
+    }
+
+    /// A farmer's post; its id. Every bad box is reported at once. One
+    /// client posts at most `JOB_POSTS_PER_CLIENT_PER_DAY` a day, whatever
+    /// phones it types (`job_post_daily_limit`).
     pub async fn post(&self, input: JobInput) -> Result<i32> {
+        let window = std::time::Duration::from_secs(JOB_POST_CLIENT_WINDOW_SECS);
+        // Hashed: the counter never holds an address.
+        let client_key = (!input.client.is_empty()).then(|| sha256_hex(&input.client));
+        if client_key
+            .as_deref()
+            .is_some_and(|k| self.posts_by_client.count(k, window) >= JOB_POSTS_PER_CLIENT_PER_DAY)
+        {
+            return Err(Error::new(ErrorCode::JobPostDailyLimit));
+        }
         let description = input.description.trim().to_owned();
         let requester_name = input.requester_name.trim().to_owned();
         let requester_phone = input.requester_phone.trim().to_owned();
@@ -133,6 +157,9 @@ impl JobUseCase {
                 requester_phone,
             })
             .await?;
+        if let Some(key) = client_key {
+            self.posts_by_client.hit(key, window);
+        }
         // A visitor's event: no actor, not audited; the subscriber emails.
         self.events
             .publish(DomainEvent {

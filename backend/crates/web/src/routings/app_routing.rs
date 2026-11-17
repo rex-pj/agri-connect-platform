@@ -88,6 +88,12 @@ pub struct AppRouting;
 
 impl AppRouting {
     pub fn build(state: AppState, config: RouterConfig) -> Router {
+        // The cookies' names and attributes follow HTTPS_ENABLED; every
+        // reader of the session cookie takes them from the state.
+        let cookies = session::CookiePolicy {
+            secure: config.https,
+        };
+        let state = AppState { cookies, ..state };
         let error_renderer = middleware::from_fn_with_state(state.clone(), render_errors);
         let hops = config.trusted_proxy_hops;
         // Rate limits: one budget per router area, keyed on the client address.
@@ -98,6 +104,7 @@ impl AppRouting {
         let origins = Arc::new(origin::Origins {
             own: config.allowed_origins.clone(),
             api: config.api_origins.clone(),
+            session_cookies: [cookies.session_name(), cookies.refresh_name()],
         });
 
         let cors = if config.cors_origins.is_empty() {
@@ -930,9 +937,7 @@ impl AppRouting {
                 state.clone(),
                 session::renew,
             ))
-            .layer(Extension(session::CookiePolicy {
-                secure: config.https,
-            }))
+            .layer(Extension(cookies))
             // Inside the renderer so a refused cross-site request gets a coded body.
             .layer(middleware::from_fn(move |req, next| {
                 origin::enforce(origins.clone(), req, next)

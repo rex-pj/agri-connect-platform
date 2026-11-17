@@ -211,6 +211,9 @@ pub struct JobInput {
     pub description: String,
     pub requester_name: String,
     pub requester_phone: String,
+    /// Who posts, to cap posts per client (`JOB_POSTS_PER_CLIENT_PER_DAY`):
+    /// the address, kept in memory as a hash only; empty for none known.
+    pub client: String,
 }
 
 /// An alert as typed (admin create and edit): a date that did not parse is

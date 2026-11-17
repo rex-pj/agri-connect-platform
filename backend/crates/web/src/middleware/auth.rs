@@ -15,14 +15,14 @@ use crate::{app_state::AppState, cookies::request_cookie};
 pub const SESSION_COOKIE: &str = "auth_token";
 
 /// The token from `Authorization: Bearer` (a script or app calling the JSON
-/// API) or else from the session cookie (a browser).
-fn session_token(parts: &Parts) -> Option<&str> {
+/// API) or else from the session cookie `cookie` (a browser).
+fn session_token<'a>(parts: &'a Parts, cookie: &str) -> Option<&'a str> {
     let bearer = parts
         .headers
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.strip_prefix("Bearer "));
-    bearer.or_else(|| request_cookie(&parts.headers, SESSION_COOKIE))
+    bearer.or_else(|| request_cookie(&parts.headers, cookie))
 }
 
 /// `None` for an anonymous caller, and for a valid token whose account was
@@ -47,7 +47,7 @@ impl FromRequestParts<AppState> for MaybeActor {
         if let Some(ResolvedActor(actor)) = parts.extensions.get::<ResolvedActor>() {
             return Ok(Self(actor.clone()));
         }
-        let Some(token) = session_token(parts) else {
+        let Some(token) = session_token(parts, state.cookies.session_name()) else {
             return Ok(Self(None));
         };
         let claims = state.token_service.verify(token)?;
@@ -98,18 +98,22 @@ mod tests {
             ("authorization", "Bearer from-header"),
             ("cookie", "auth_token=from-cookie"),
         ]);
-        assert_eq!(session_token(&p), Some("from-header"));
+        assert_eq!(session_token(&p, SESSION_COOKIE), Some("from-header"));
     }
 
     #[test]
     fn cookie_is_found_among_others() {
         let p = parts(&[("cookie", "theme=dark; auth_token=abc.def; lang=vi")]);
-        assert_eq!(session_token(&p), Some("abc.def"));
+        assert_eq!(session_token(&p, SESSION_COOKIE), Some("abc.def"));
     }
 
     #[test]
     fn similar_names_and_empty_values_are_not_sessions() {
         let p = parts(&[("cookie", "xauth_token=nope; auth_token=")]);
-        assert_eq!(session_token(&p), None);
+        assert_eq!(session_token(&p, SESSION_COOKIE), None);
+        // Behind TLS only the __Host- cookie is a session: a plain one
+        // another site under the domain set is not read.
+        let planted = parts(&[("cookie", "auth_token=planted")]);
+        assert_eq!(session_token(&planted, "__Host-auth_token"), None);
     }
 }

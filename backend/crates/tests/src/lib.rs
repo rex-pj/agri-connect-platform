@@ -250,7 +250,7 @@ pub struct TestDb {
 static COUNTER: AtomicU32 = AtomicU32::new(0);
 static SWEPT: AtomicBool = AtomicBool::new(false);
 
-const TEST_DB_PREFIX: &str = "agri_test_";
+pub const TEST_DB_PREFIX: &str = "agri_test_";
 /// A test database older than this belongs to a run that was killed (Ctrl+C)
 /// before it could drop it; no test runs this long.
 const STALE_TEST_DB_SECS: u64 = 60 * 60;
@@ -341,7 +341,7 @@ async fn sweep_stale(admin: &DatabaseConnection) {
 }
 
 /// `url` (TEST_DATABASE_URL) pointing at the database `name` instead.
-fn database_url(url: &str, name: &str) -> String {
+pub fn database_url(url: &str, name: &str) -> String {
     let (base, query) = match url.split_once('?') {
         Some((b, q)) => (b, format!("?{q}")),
         None => (url, String::new()),
@@ -899,3 +899,7 @@ pub async fn place_business(e: &Env, business: i32, lat: f64, lng: f64) {
         .await
         .unwrap();
 }
+
+/// The client a use case is told a login comes from, in tests that call it
+/// directly (the router's requests come from `send`'s peer address).
+pub const CLIENT: &str = "127.0.0.1";

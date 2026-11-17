@@ -85,6 +85,7 @@ error_codes! {
     InvalidEmail              => (BadRequest,      "invalid_email"),
     PasswordTooShort          => (BadRequest,      "password_too_short"),
     PasswordTooLong           => (BadRequest,      "password_too_long"),
+    PasswordTooCommon         => (BadRequest,      "password_too_common"),
     PasswordMismatch          => (BadRequest,      "password_mismatch"),
     ConfirmationRequired      => (BadRequest,      "confirmation_required"),
     InvalidPhone              => (BadRequest,      "invalid_phone"),
@@ -134,6 +135,7 @@ error_codes! {
     InvalidJobStatus          => (BadRequest,      "invalid_job_status"),
     JobPlaceRequired          => (BadRequest,      "job_place_required"),
     JobPostLimit              => (BadRequest,      "job_post_limit"),
+    JobPostDailyLimit         => (TooManyRequests, "job_post_daily_limit"),
 
     // ── Uploads ──────────────────────────────────────────────────────────────
     FileTooLarge              => (PayloadTooLarge, "file_too_large"),

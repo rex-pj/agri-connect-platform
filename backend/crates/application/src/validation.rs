@@ -112,7 +112,23 @@ pub fn validate_password(password: &str) -> Result<()> {
     if password.len() > PASSWORD_MAX_BYTES {
         return Err(Error::new(ErrorCode::PasswordTooLong).with_param("max", PASSWORD_MAX_BYTES));
     }
+    if is_common_password(password) {
+        return Err(Error::new(ErrorCode::PasswordTooCommon));
+    }
     Ok(())
+}
+
+/// Passwords tried first by anyone guessing (`common_passwords.txt`, one per
+/// line, lower case): long enough to pass the length rule, found in a minute.
+const COMMON_PASSWORDS: &str = include_str!("common_passwords.txt");
+
+/// `password` is on the list, whatever its case, or is one character
+/// repeated ("aaaaaaaa").
+fn is_common_password(password: &str) -> bool {
+    let lower = password.to_lowercase();
+    let mut chars = lower.chars();
+    let repeated = chars.next().is_some_and(|first| chars.all(|c| c == first));
+    repeated || COMMON_PASSWORDS.lines().any(|line| line.trim() == lower)
 }
 
 pub fn validate_coordinates(lat: f64, lng: f64) -> Result<()> {
@@ -191,6 +207,32 @@ mod tests {
     use super::*;
 
     #[test]
+    fn common_passwords_are_refused_whatever_their_case() {
+        let code = |p: &str| validate_password(p).err().map(|e| e.code());
+        for common in [
+            "12345678",
+            "Password123",
+            "ANHYEUEM",
+            "aaaaaaaaa",
+            "11111111",
+        ] {
+            assert_eq!(code(common), Some(ErrorCode::PasswordTooCommon), "{common}");
+        }
+        assert_eq!(code("Lua-ST25-Cai-Lay"), None);
+        // The list is lower case with no blank lines, or a line never matches.
+        for line in COMMON_PASSWORDS.lines() {
+            assert!(
+                !line.trim().is_empty() && line == line.to_lowercase(),
+                "{line:?}"
+            );
+            assert!(
+                line.chars().count() >= PASSWORD_MIN_CHARS,
+                "{line} is refused as too short already"
+            );
+        }
+    }
+
+    #[test]
     fn emails_need_a_local_part_and_a_dotted_domain() {
         for ok in ["nongdan@gmail.com", "a.b+c@htx.cailay.vn"] {
             assert!(validate_email(ok).is_ok(), "{ok}");
@@ -267,7 +309,8 @@ mod tests {
 
     #[test]
     fn password_over_bcrypt_limit_is_rejected() {
-        assert!(validate_password(&"a".repeat(PASSWORD_MAX_BYTES)).is_ok());
+        // Two letters taking turns: one letter repeated is refused as common.
+        assert!(validate_password(&"ab".repeat(PASSWORD_MAX_BYTES / 2)).is_ok());
         assert_eq!(
             validate_password(&"a".repeat(PASSWORD_MAX_BYTES + 1))
                 .err()

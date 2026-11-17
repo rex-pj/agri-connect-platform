@@ -32,7 +32,11 @@ async fn login(e: &Env) -> (i32, SessionTokens) {
         .state
         .usecases
         .auth
-        .login("nongdan".into(), "matkhau123".into())
+        .login(
+            "nongdan".into(),
+            "matkhau123".into(),
+            integration_tests::CLIENT,
+        )
         .await
         .unwrap();
     let tokens = e
@@ -280,7 +284,11 @@ async fn logout_ends_the_session_and_clears_both_cookies() {
                 .state
                 .usecases
                 .auth
-                .login("nongdan".into(), "matkhau123".into())
+                .login(
+                    "nongdan".into(),
+                    "matkhau123".into(),
+                    integration_tests::CLIENT,
+                )
                 .await
                 .unwrap();
             e.state
@@ -351,7 +359,11 @@ async fn an_account_turned_off_and_on_again_logs_in_again() {
     );
     // The password still works: a new session is a new log-in.
     assert!(auth
-        .login("nongdan".into(), "matkhau123".into())
+        .login(
+            "nongdan".into(),
+            "matkhau123".into(),
+            integration_tests::CLIENT
+        )
         .await
         .is_ok());
     e.cleanup().await;
@@ -389,7 +401,11 @@ async fn deactivation_and_password_resets_end_sessions() {
 
     // A deactivated account cannot renew either.
     let login = auth
-        .login("nongdan".into(), "matkhaumoi123".into())
+        .login(
+            "nongdan".into(),
+            "matkhaumoi123".into(),
+            integration_tests::CLIENT,
+        )
         .await
         .unwrap();
     let fresh = auth.start_session(login.user_id).await.unwrap();

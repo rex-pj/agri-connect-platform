@@ -265,7 +265,11 @@ async fn the_json_api_lists_and_keeps_the_commodities() {
         .state
         .usecases
         .auth
-        .login("quantri".into(), "matkhau123".into())
+        .login(
+            "quantri".into(),
+            "matkhau123".into(),
+            integration_tests::CLIENT,
+        )
         .await
         .unwrap()
         .token;

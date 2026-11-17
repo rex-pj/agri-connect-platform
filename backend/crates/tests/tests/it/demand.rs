@@ -125,7 +125,11 @@ async fn the_report_counts_real_leads_by_area_and_hides_small_figures() {
         .state
         .usecases
         .auth
-        .login("quantri".into(), "matkhau123".into())
+        .login(
+            "quantri".into(),
+            "matkhau123".into(),
+            integration_tests::CLIENT,
+        )
         .await
         .unwrap()
         .token;

@@ -73,6 +73,7 @@ DOMAIN=$DOMAIN
 GCS_BUCKET=$UPLOAD_BUCKET
 WEB_IMAGE=$1
 POSTGRES_PASSWORD=$(secret agri-postgres-password)
+OWNER_DB_PASSWORD=$(secret agri-owner-db-password)
 APP_DB_PASSWORD=$(secret agri-app-db-password)
 ENV
 }

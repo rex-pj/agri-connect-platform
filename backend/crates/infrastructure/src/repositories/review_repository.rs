@@ -21,7 +21,7 @@ use crate::repositories::unique_or_internal;
 use crate::{
     db_types::DateTimeWithTimeZone,
     entities::{
-        business,
+        business, inquiry,
         review::{self, Entity as Review},
     },
     sql::{businesses_of, null, username_of, PgType, QueryAs},
@@ -50,6 +50,8 @@ struct ReviewAdminRow {
     created_on: DateTimeWithTimeZone,
     updated_on: DateTimeWithTimeZone,
     updated_by_name: Option<String>,
+    request_sent_on: Option<DateTimeWithTimeZone>,
+    from_business_phone: bool,
 }
 
 impl From<ReviewAdminRow> for ReviewAdmin {
@@ -66,6 +68,8 @@ impl From<ReviewAdminRow> for ReviewAdmin {
             created_on: r.created_on.with_timezone(&Utc),
             updated_on: r.updated_on.with_timezone(&Utc),
             updated_by_name: r.updated_by_name,
+            request_sent_on: r.request_sent_on.map(|t| t.with_timezone(&Utc)),
+            from_business_phone: r.from_business_phone,
         }
     }
 }
@@ -89,8 +93,16 @@ fn average_rating() -> SimpleExpr {
     SimpleExpr::from(Func::avg(Expr::col(review::Column::Rating))).cast_as(PgType::Float8)
 }
 
-/// The columns of the admin list and detail, with the business's name.
+/// The columns of the admin list and detail, with the business's name and
+/// what the moderator weighs: when the contact request the review rests on
+/// was sent, and whether it came from the business's own phone.
 fn admin_select() -> Select<Review> {
+    let request = || {
+        review::Entity::belongs_to(inquiry::Entity)
+            .from(review::Column::InquiryId)
+            .to(inquiry::Column::Id)
+            .into()
+    };
     Review::find()
         .select_only()
         .column(review::Column::Id)
@@ -107,7 +119,17 @@ fn admin_select() -> Select<Review> {
             username_of((review::Entity, review::Column::UpdatedBy)),
             QueryAs::UpdatedByName,
         )
+        .column_as(inquiry::Column::CreatedOn, QueryAs::RequestSentOn)
+        .expr_as(
+            Func::coalesce([
+                Expr::col((inquiry::Entity, inquiry::Column::RequesterPhone))
+                    .equals((business::Entity, business::Column::Phone)),
+                Expr::val(false).into(),
+            ]),
+            QueryAs::FromBusinessPhone,
+        )
         .join(JoinType::InnerJoin, review::Relation::Business.def())
+        .join(JoinType::LeftJoin, request())
 }
 
 /// Reviews of the live business `owner_user` manages: a subquery, so the

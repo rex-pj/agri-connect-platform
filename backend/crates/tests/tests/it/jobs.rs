@@ -249,3 +249,36 @@ async fn job_posts_past_keeping_are_deleted_whatever_their_status() {
     assert_eq!(jobs.purge_old_posts(chrono::Utc::now()).await.unwrap(), 0);
     e.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn one_client_posts_a_few_jobs_a_day_whatever_phones_it_types() {
+    let e = env_with_origin().await;
+    let category = categories_of(&e, "service").await[0].0;
+    let area = scalar(&e, "SELECT min(id)::text AS v FROM locations").await;
+    let post_from = |phone: String| {
+        Request::post("/api/explore/jobs")
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(header::ORIGIN, TEST_ORIGIN)
+            .body(Body::from(format!(
+                r#"{{"category_id":{category},"location_id":{area},"description":"Phun thuoc",
+                    "requester_name":"Chu Ba","requester_phone":"{phone}"}}"#
+            )))
+            .unwrap()
+    };
+    let limit = application::constants::JOB_POSTS_PER_CLIENT_PER_DAY;
+    for n in 0..limit {
+        let res = send(&e.router, post_from(format!("09123450{n:02}"))).await;
+        assert_eq!(res.status(), StatusCode::CREATED, "post {n}");
+    }
+    // A new phone does not help: the client is the same.
+    let res = send(&e.router, post_from("0987654321".into())).await;
+    assert_eq!(res.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(json_body(res).await["code"], "job_post_daily_limit");
+    // Another client is not held back by it.
+    let res =
+        integration_tests::send_from(&e.router, post_from("0987654321".into()), [203, 0, 113, 9])
+            .await;
+    assert_eq!(res.status(), StatusCode::CREATED);
+    e.cleanup().await;
+}

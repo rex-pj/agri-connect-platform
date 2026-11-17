@@ -54,6 +54,9 @@ pub struct AppState {
     /// Every language; `locale()` picks the request's.
     pub locales: Arc<Locales>,
     pub views: Arc<Views>,
+    /// The session cookies' names and attributes (`__Host-` behind TLS);
+    /// set by the router from HTTPS_ENABLED.
+    pub cookies: crate::session::CookiePolicy,
 }
 
 impl AppState {

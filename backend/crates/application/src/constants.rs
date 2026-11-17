@@ -31,8 +31,20 @@ pub const EMAIL_VERIFICATION_EXPIRY_HOURS: i64 = 24;
 /// Confirmation links of one account that may be valid at once: within a
 /// day, an address is written to at most this often before it is confirmed.
 pub const EMAIL_VERIFICATION_LINKS_MAX: u64 = 3;
-pub const LOGIN_FAIL_MAX_ATTEMPTS: i32 = 5;
+/// Wrong passwords from one client (address, an IPv6 /64) for one account
+/// before that client is kept out of that account for `LOGIN_LOCK_MINUTES`.
+/// Per client, so a stranger who knows a username cannot lock its owner out.
+pub const LOGIN_FAIL_MAX_ATTEMPTS: u32 = 5;
+/// Wrong passwords for one account from every client together before the
+/// account itself is locked: the backstop against guessing spread over many
+/// addresses, high enough that no single stranger reaches it.
+pub const LOGIN_FAIL_ACCOUNT_MAX_ATTEMPTS: i32 = 50;
 pub const LOGIN_LOCK_MINUTES: i64 = 15;
+/// Job posts from one client (address) within a day; the cap per phone does
+/// not hold alone, since the phone is whatever the poster types.
+pub const JOB_POSTS_PER_CLIENT_PER_DAY: u32 = 5;
+/// The day the cap above counts over.
+pub const JOB_POST_CLIENT_WINDOW_SECS: u64 = 24 * 3600;
 
 // ── Validation ─────────────────────────────────────────────────────────────────
 pub const USERNAME_MIN_LEN: usize = 3;
@@ -70,6 +82,9 @@ pub const GEO_RESULTS_MAX: i64 = 50;
 /// one lead: a second tap is a redial, and without it a script could write
 /// the figures partners pay for.
 pub const CALL_REPEAT_SECS: u64 = 3_600;
+/// A review written this soon after the contact request it rests on is
+/// flagged for the moderator: no job is done and judged that fast.
+pub const REVIEW_SUSPECT_MINUTES: i64 = 60;
 /// The window the call counts cover (admin dashboard, provider dashboard).
 pub const CALL_STATS_DAYS: i64 = 30;
 

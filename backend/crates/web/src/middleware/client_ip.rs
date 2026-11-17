@@ -35,6 +35,15 @@ pub fn client_ip(peer: IpAddr, forwarded_for: Option<&str>, hops: usize) -> IpAd
         .unwrap_or(peer)
 }
 
+/// The text a use case tells one client from another by (wrong passwords,
+/// job posts): the address that client's rate-limit budget is kept under
+/// (an IPv6 client is its /64), or empty when none was resolved. Never
+/// stored; the use cases hash it before keeping it in memory.
+pub fn client_key(ip: Option<&ClientIp>) -> String {
+    ip.map(|ClientIp(ip)| crate::middleware::rate_limit::budget_key(*ip).to_string())
+        .unwrap_or_default()
+}
+
 pub async fn resolve(hops: usize, mut req: Request, next: Next) -> Response {
     let peer = req
         .extensions()

@@ -692,6 +692,8 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
         token_service,
         locales: Arc::clone(views.locales()),
         views,
+        // The router sets it from HTTPS_ENABLED.
+        cookies: crate::session::CookiePolicy::default(),
     })
 }
 
@@ -735,7 +737,10 @@ pub async fn start() -> Result<(), StartupError> {
     let database_url = required_env("DATABASE_URL")?;
     // A failure here stops startup: serving on a schema that does not match
     // the code corrupts data instead of failing loudly.
-    migrate(database_url.clone()).await?;
+    // As the schema's owner when MIGRATION_DATABASE_URL is set (production:
+    // agri_owner), so the role that answers requests never needs the right
+    // to change the schema.
+    migrate(optional_env("MIGRATION_DATABASE_URL").unwrap_or_else(|| database_url.clone())).await?;
     let primary = connect(database_url).await?;
 
     let dbs = match optional_env("DATABASE_READ_URL") {
@@ -840,6 +845,8 @@ pub async fn start() -> Result<(), StartupError> {
             pruned.forget_idle();
             repeats.explore.forget_old_taps();
             repeats.demand.forget_old_searches();
+            repeats.auth.forget_old_failed_logins();
+            repeats.job.forget_old_posters();
         }
     });
 

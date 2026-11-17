@@ -126,14 +126,16 @@ pub async fn login_page(
 }
 
 pub async fn login(
+    ip: Option<Extension<crate::middleware::client_ip::ClientIp>>,
     State(state): State<AppState>,
     Extension(policy): Extension<CookiePolicy>,
     ApiForm(form): ApiForm<LoginForm>,
 ) -> Result<Response, Error> {
+    let client = crate::middleware::client_ip::client_key(ip.as_deref());
     match state
         .usecases
         .auth
-        .login(form.username.clone(), form.password)
+        .login(form.username.clone(), form.password, &client)
         .await
     {
         Ok(login) => signed_in(&state, policy, login.user_id, None).await,

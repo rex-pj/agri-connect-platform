@@ -314,7 +314,11 @@ async fn the_json_api_creates_providers_and_carries_reviews() {
         .state
         .usecases
         .auth
-        .login("quantri".into(), "matkhau123".into())
+        .login(
+            "quantri".into(),
+            "matkhau123".into(),
+            integration_tests::CLIENT,
+        )
         .await
         .unwrap()
         .token;
@@ -448,5 +452,83 @@ async fn the_json_api_creates_providers_and_carries_reviews() {
         shown["items"][0].get("reviewer_phone_hash").is_none(),
         "no phone, not even hashed"
     );
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_review_that_looks_like_the_providers_own_is_flagged() {
+    let e = env_with_origin().await;
+    register_provider(&e.state, "nongdan", "0901234567").await;
+    let business = business_of(&e, "nongdan").await;
+    let provider = sign_in(&e, "nongdan", "matkhau123").await;
+    let admin = install_admin(&e).await;
+
+    // A request from the provider's own phone, answered and reviewed at once.
+    let own = e
+        .state
+        .usecases
+        .explore
+        .contact_request(ContactInput {
+            business_id: business,
+            topic: "Phun thuốc".into(),
+            requester_name: "Khách".into(),
+            requester_phone: "0901234567".into(),
+            note: None,
+            service_id: None,
+            product_id: None,
+        })
+        .await
+        .unwrap()
+        .id;
+    let res = send(
+        &e.router,
+        post_form(
+            &format!("/provider/inquiries/{own}/status"),
+            &[("status", "contacted")],
+            Some(&provider),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let mut form = review_form(business, "5");
+    form[2].1 = "0901234567".into();
+    let res = send(&e.router, post("/reviews", &form, None)).await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+
+    let list = body_text(send(&e.router, get_page("/admin/reviews", Some(&admin))).await).await;
+    assert!(list.contains("gửi từ chính số điện thoại của nhà cung cấp"));
+    assert!(list.contains("Viết chưa tới một giờ sau yêu cầu liên hệ"));
+
+    // A farmer's review a day after the request carries no sign.
+    let farmer = inquiry_to(&e, business).await;
+    send(
+        &e.router,
+        post_form(
+            &format!("/provider/inquiries/{farmer}/status"),
+            &[("status", "closed")],
+            Some(&provider),
+        ),
+    )
+    .await;
+    e.t.db
+        .execute_unprepared(&format!(
+            "UPDATE inquiries SET created_on = now() - interval '1 day' WHERE id = {farmer}"
+        ))
+        .await
+        .unwrap();
+    let res = send(
+        &e.router,
+        post("/reviews", &review_form(business, "4"), None),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let list = body_text(send(&e.router, get_page("/admin/reviews", Some(&admin))).await).await;
+    assert_eq!(
+        list.matches("Viết chưa tới một giờ sau yêu cầu liên hệ")
+            .count(),
+        1
+    );
+    assert_eq!(list.matches("gửi từ chính số điện thoại").count(), 1);
     e.cleanup().await;
 }

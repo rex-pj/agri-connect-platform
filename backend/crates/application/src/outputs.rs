@@ -545,10 +545,16 @@ pub struct AdminReviewDto {
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
     pub updated_by_name: Option<String>,
+    /// Signs the review may be the provider's own, for the moderator to weigh
+    /// before showing it: `own_phone` (the contact request came from the
+    /// business's phone), `quick` (written within `REVIEW_SUSPECT_MINUTES` of
+    /// the request: no job is done that fast). Empty for none.
+    pub suspect: Vec<&'static str>,
 }
 
 impl From<ReviewAdmin> for AdminReviewDto {
     fn from(r: ReviewAdmin) -> Self {
+        let suspect = review_suspicions(&r);
         Self {
             id: r.id,
             business_id: r.business_id,
@@ -561,9 +567,28 @@ impl From<ReviewAdmin> for AdminReviewDto {
             created_on: r.created_on,
             updated_on: r.updated_on,
             updated_by_name: r.updated_by_name,
+            suspect,
         }
     }
 }
+
+/// `AdminReviewDto::suspect` of a review.
+fn review_suspicions(r: &ReviewAdmin) -> Vec<&'static str> {
+    let quick = r.request_sent_on.is_some_and(|sent| {
+        r.created_on - sent < chrono::Duration::minutes(crate::constants::REVIEW_SUSPECT_MINUTES)
+    });
+    [
+        (r.from_business_phone, REVIEW_SUSPECT_OWN_PHONE),
+        (quick, REVIEW_SUSPECT_QUICK),
+    ]
+    .into_iter()
+    .filter_map(|(on, sign)| on.then_some(sign))
+    .collect()
+}
+
+/// The signs in `AdminReviewDto::suspect`; the admin page words each one.
+pub const REVIEW_SUSPECT_OWN_PHONE: &str = "own_phone";
+pub const REVIEW_SUSPECT_QUICK: &str = "quick";
 
 /// A shown review on a provider's public page.
 #[derive(Serialize)]

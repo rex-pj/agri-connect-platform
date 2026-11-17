@@ -18,10 +18,12 @@ impl JobHandler {
     /// POST /api/explore/jobs — `{category_id, location_id?, lat?, lng?,
     /// description, requester_name, requester_phone}`; 201 `{id}`.
     pub async fn post(
+        ip: Option<axum::Extension<crate::middleware::client_ip::ClientIp>>,
         State(state): State<AppState>,
         ApiJson(req): ApiJson<JobRequest>,
     ) -> Result<impl IntoResponse, Error> {
-        let id = state.usecases.job.post(req.into()).await?;
+        let client = crate::middleware::client_ip::client_key(ip.as_deref());
+        let id = state.usecases.job.post(req.into_input(client)).await?;
         Ok((StatusCode::CREATED, Json(IdDto { id })))
     }
 

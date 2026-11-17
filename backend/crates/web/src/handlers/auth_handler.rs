@@ -17,13 +17,15 @@ pub struct AuthHandler;
 impl AuthHandler {
     /// POST /api/auth/tokens
     pub async fn login(
+        ip: Option<axum::Extension<crate::middleware::client_ip::ClientIp>>,
         State(state): State<AppState>,
         ApiJson(req): ApiJson<LoginRequest>,
     ) -> Result<impl IntoResponse, Error> {
+        let client = crate::middleware::client_ip::client_key(ip.as_deref());
         let result = state
             .usecases
             .auth
-            .login(req.username, req.password)
+            .login(req.username, req.password, &client)
             .await?;
 
         Ok(Json(result))

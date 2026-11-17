@@ -112,6 +112,7 @@ Values never pass through GitHub; the VM reads them at deploy time.
 ```bash
 openssl rand -hex 32 | gcloud secrets create agri-jwt-secret --data-file=-
 openssl rand -hex 24 | gcloud secrets create agri-postgres-password --data-file=-
+openssl rand -hex 24 | gcloud secrets create agri-owner-db-password --data-file=-
 openssl rand -hex 24 | gcloud secrets create agri-app-db-password --data-file=-
 # The first-admin form (/setup) asks for this; the server refuses to start in
 # production while there is no admin and no token. Print it once, keep it.
@@ -216,9 +217,11 @@ The app cancels a statement after `DB_STATEMENT_TIMEOUT_SECS` (20) and fails a r
 ## Restore
 
 Practise this once before launch; a backup nobody has restored is a guess. The
-steps below were rehearsed against a local PostgreSQL + PostGIS: the
-restored database had the same roles, grants, rows and indexes, and the
-server started on it without re-seeding anything.
+steps below were rehearsed against a local PostgreSQL + PostGIS with the
+earlier single app role: the restored database had the same roles, grants,
+rows and indexes, and the server started on it without re-seeding anything.
+The two-role version below (agri_owner, agri_app) has not been rehearsed
+yet; do it once before launch.
 
 ```bash
 # 1. Pick a dump.
@@ -226,18 +229,28 @@ gcloud storage ls gs://BACKUP_BUCKET/postgres/
 # 2. Stop the app so nothing writes during the restore.
 sudo docker compose --env-file /etc/agri-connect/compose.env stop web
 # 3. Recreate the database exactly as db-init does: extensions belong to the
-#    postgres superuser, everything else to agri_app.
+#    postgres superuser, the schema to agri_owner, rows to agri_app through
+#    the owner's default privileges. The roles already exist (they belong to
+#    the server, not the database), so only the database-level lines run.
 C="sudo docker compose --env-file /etc/agri-connect/compose.env exec -T db"
 $C psql -U postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE agri_connect WITH (FORCE)" \
-  -c "CREATE DATABASE agri_connect OWNER agri_app"
-$C psql -U postgres -d agri_connect -v ON_ERROR_STOP=1 -c "ALTER SCHEMA public OWNER TO agri_app" \
+  -c "CREATE DATABASE agri_connect OWNER agri_owner"
+$C psql -U postgres -d agri_connect -v ON_ERROR_STOP=1 \
+  -c "ALTER SCHEMA public OWNER TO agri_owner" \
+  -c "REVOKE CREATE ON SCHEMA public FROM PUBLIC" \
+  -c "REVOKE ALL ON DATABASE agri_connect FROM PUBLIC" \
+  -c "GRANT CONNECT, TEMPORARY ON DATABASE agri_connect TO agri_app" \
+  -c "GRANT USAGE ON SCHEMA public TO agri_app" \
+  -c "ALTER DEFAULT PRIVILEGES FOR ROLE agri_owner IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO agri_app" \
+  -c "ALTER DEFAULT PRIVILEGES FOR ROLE agri_owner IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO agri_app" \
   -c "CREATE EXTENSION postgis" -c "CREATE EXTENSION unaccent" -c "CREATE EXTENSION pg_trgm" \
   -c "CREATE EXTENSION pg_stat_statements"
-# 4. Restore the app's objects as agri_app. The dump's CREATE EXTENSION IF NOT
-#    EXISTS lines are no-ops now; --no-comments skips COMMENT ON EXTENSION,
-#    which only the extension owner may run.
+# 4. Restore the app's objects as agri_owner, so agri_app gets its rights on
+#    them. The dump's CREATE EXTENSION IF NOT EXISTS lines are no-ops now;
+#    --no-comments skips COMMENT ON EXTENSION, which only the extension
+#    owner may run.
 gcloud storage cat gs://BACKUP_BUCKET/postgres/agri_connect-YYYYMMDDTHHMMSSZ.dump \
-  | $C pg_restore -U agri_app -d agri_connect --no-owner --no-comments --exit-on-error
+  | $C pg_restore -U agri_owner -d agri_connect --no-owner --no-comments --exit-on-error
 # 5. Start the app; startup migrations and catalogue seeding are idempotent.
 sudo docker compose --env-file /etc/agri-connect/compose.env start web
 ```

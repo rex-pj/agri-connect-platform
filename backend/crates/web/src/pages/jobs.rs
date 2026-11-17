@@ -46,8 +46,9 @@ pub struct JobForm {
 }
 
 impl JobForm {
-    fn input(&self) -> JobInput {
+    fn input(&self, client: String) -> JobInput {
         JobInput {
+            client,
             category_id: parse_opt(&self.category_id),
             location_id: parse_opt(&self.location_id),
             lat: optional_coordinate(&self.lat),
@@ -132,10 +133,12 @@ pub async fn new(
 /// POST /jobs
 pub async fn create(
     shell: Shell,
+    ip: Option<axum::Extension<crate::middleware::client_ip::ClientIp>>,
     State(state): State<AppState>,
     ApiForm(form): ApiForm<JobForm>,
 ) -> Result<Response, Error> {
-    match state.usecases.job.post(form.input()).await {
+    let client = crate::middleware::client_ip::client_key(ip.as_deref());
+    match state.usecases.job.post(form.input(client)).await {
         Ok(_) => {
             let mut response = see_other(&url("job_new")?)?;
             Flash::JobPosted.set_on(&mut response);

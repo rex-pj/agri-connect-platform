@@ -313,7 +313,11 @@ async fn the_json_api_manages_partners_and_reports_their_revenue() {
         .state
         .usecases
         .auth
-        .login("quantri".into(), "matkhau123".into())
+        .login(
+            "quantri".into(),
+            "matkhau123".into(),
+            integration_tests::CLIENT,
+        )
         .await
         .unwrap()
         .token;

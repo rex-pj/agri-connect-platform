@@ -13,6 +13,10 @@ pub struct ReviewAdmin {
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
     pub updated_by_name: Option<String>,
+    /// When the contact request the review rests on was sent.
+    pub request_sent_on: Option<DateTime<Utc>>,
+    /// That request came from the business's own phone number.
+    pub from_business_phone: bool,
 }
 
 /// A farmer's review of a provider they reached through the platform:

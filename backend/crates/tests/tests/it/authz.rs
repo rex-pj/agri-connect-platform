@@ -34,7 +34,11 @@ async fn admin_token(state: &AppState) -> String {
     state
         .usecases
         .auth
-        .login(admin.username.clone(), "matkhau123".into())
+        .login(
+            admin.username.clone(),
+            "matkhau123".into(),
+            integration_tests::CLIENT,
+        )
         .await
         .unwrap_or_else(|e| panic!("login: {e}"))
         .token
@@ -144,7 +148,11 @@ async fn an_admin_cannot_lock_themselves_out() {
         .state
         .usecases
         .auth
-        .login(admin.username.clone(), "matkhau123".into())
+        .login(
+            admin.username.clone(),
+            "matkhau123".into(),
+            integration_tests::CLIENT,
+        )
         .await
         .unwrap_or_else(|err| panic!("{err}"))
         .token;

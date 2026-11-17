@@ -120,7 +120,11 @@ async fn the_frame_follows_the_session() {
         .state
         .usecases
         .auth
-        .login(admin.username, "matkhau123".into())
+        .login(
+            admin.username,
+            "matkhau123".into(),
+            integration_tests::CLIENT,
+        )
         .await
         .unwrap()
         .token;

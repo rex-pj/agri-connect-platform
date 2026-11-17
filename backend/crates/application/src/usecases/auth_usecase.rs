@@ -23,12 +23,14 @@ use crate::{
     authz::Actor,
     constants::{
         BUSINESS_NAME_MAX, EMAIL_VERIFICATION_EXPIRY_HOURS, EMAIL_VERIFICATION_LINKS_MAX,
-        FULL_NAME_MAX, LOGIN_FAIL_MAX_ATTEMPTS, LOGIN_LOCK_MINUTES, PASSWORD_RESET_EXPIRY_HOURS,
-        PASSWORD_RESET_LINKS_MAX, REFRESH_REUSE_GRACE_SECS,
+        FULL_NAME_MAX, LOGIN_FAIL_ACCOUNT_MAX_ATTEMPTS, LOGIN_FAIL_MAX_ATTEMPTS,
+        LOGIN_LOCK_MINUTES, PASSWORD_RESET_EXPIRY_HOURS, PASSWORD_RESET_LINKS_MAX,
+        REFRESH_REUSE_GRACE_SECS,
     },
     hashing::sha256_hex,
     outputs::{LoginResponse, MeResponse},
     ports::{EmailService, EventBus, PasswordHasher, SessionClaims, TokenService},
+    repeats::WindowCounter,
     validation::{
         max_chars, max_chars_opt, non_blank, validate_email, validate_password, validate_phone,
         validate_username,
@@ -52,6 +54,8 @@ pub struct AuthUseCase {
     /// for an unknown username verifies against it, so it takes as long as
     /// one for a known username.
     decoy_hash: Arc<tokio::sync::OnceCell<String>>,
+    /// Wrong passwords per account and client, in memory only.
+    failed_logins: WindowCounter,
 }
 
 /// Everything `AuthUseCase` depends on, named so wiring cannot swap two of
@@ -104,6 +108,7 @@ impl AuthUseCase {
             refresh_days: d.refresh_days,
             setup_token: d.setup_token,
             decoy_hash: Arc::default(),
+            failed_logins: WindowCounter::default(),
         }
     }
 
@@ -164,7 +169,18 @@ impl AuthUseCase {
     /// an unknown username, a deactivated account and a locked one all answer
     /// `invalid_credentials`, after the same password check. Only the right
     /// password is told that the account is deactivated or locked.
-    pub async fn login(&self, username: String, password: String) -> Result<LoginResponse> {
+    ///
+    /// `client` tells callers apart (the address, an IPv6 /64; never
+    /// stored): `LOGIN_FAIL_MAX_ATTEMPTS` wrong passwords keep that client
+    /// out of that account for `LOGIN_LOCK_MINUTES`, while the owner on
+    /// another address still gets in. The account itself is locked only
+    /// after `LOGIN_FAIL_ACCOUNT_MAX_ATTEMPTS` from every client together.
+    pub async fn login(
+        &self,
+        username: String,
+        password: String,
+        client: &str,
+    ) -> Result<LoginResponse> {
         let username = username.trim().to_lowercase();
 
         let Some(credentials) = self
@@ -179,9 +195,12 @@ impl AuthUseCase {
             self.password_hasher.verify(&password, decoy).await?;
             return Err(Error::new(ErrorCode::InvalidCredentials));
         };
+        let client_key = sha256_hex(format!("{}|{client}", credentials.id));
+        let lock_window = std::time::Duration::from_secs(LOGIN_LOCK_MINUTES as u64 * 60);
         let locked = credentials
             .locked_until
-            .is_some_and(|until| until > Utc::now());
+            .is_some_and(|until| until > Utc::now())
+            || self.failed_logins.count(&client_key, lock_window) >= LOGIN_FAIL_MAX_ATTEMPTS;
 
         if !self
             .password_hasher
@@ -191,13 +210,14 @@ impl AuthUseCase {
             // Not counted while locked (each guess would push the lock
             // further) nor for a deactivated account. A failure to record the
             // attempt must not turn a wrong password into a 500, nor reveal
-            // anything; the lockout simply lags one try.
+            // anything; the account-wide lock simply lags one try.
             if credentials.is_active && !locked {
+                self.failed_logins.hit(client_key, lock_window);
                 if let Err(e) = self
                     .user_repo
                     .record_failed_login(
                         credentials.id,
-                        LOGIN_FAIL_MAX_ATTEMPTS,
+                        LOGIN_FAIL_ACCOUNT_MAX_ATTEMPTS,
                         LOGIN_LOCK_MINUTES,
                     )
                     .await
@@ -216,6 +236,7 @@ impl AuthUseCase {
             return Err(Error::new(ErrorCode::AccountLocked));
         }
 
+        self.failed_logins.clear(&client_key);
         if let Err(e) = self.user_repo.reset_failed_login(credentials.id).await {
             tracing::warn!(user_id = credentials.id, error = %e, "could not reset failed-login counter");
         }
@@ -294,6 +315,15 @@ impl AuthUseCase {
         let now = Utc::now();
         Ok(self.refresh_repo.delete_expired(now).await?
             + self.user_repo.delete_expired_links(now).await?)
+    }
+
+    /// Forgets the wrong passwords whose lock window has passed (bounded
+    /// memory); called with the other in-memory filters.
+    pub fn forget_old_failed_logins(&self) {
+        self.failed_logins
+            .forget_older_than(std::time::Duration::from_secs(
+                LOGIN_LOCK_MINUTES as u64 * 60,
+            ));
     }
 
     /// Both tokens for `user_id` in `family_id`. `None` when the account is

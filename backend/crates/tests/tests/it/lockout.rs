@@ -2,7 +2,9 @@
 //! told, and the cap on reset links. Database tests need
 //! TEST_DATABASE_URL and `--include-ignored`.
 
-use application::constants::{LOGIN_FAIL_MAX_ATTEMPTS, PASSWORD_RESET_LINKS_MAX};
+use application::constants::{
+    LOGIN_FAIL_ACCOUNT_MAX_ATTEMPTS, LOGIN_FAIL_MAX_ATTEMPTS, PASSWORD_RESET_LINKS_MAX,
+};
 use domain::ErrorCode;
 use integration_tests::{register_provider, Env};
 use sea_orm::{ConnectionTrait, Statement};
@@ -11,7 +13,7 @@ async fn try_login_as(e: &Env, username: &str, password: &str) -> Result<(), Err
     e.state
         .usecases
         .auth
-        .login(username.into(), password.into())
+        .login(username.into(), password.into(), integration_tests::CLIENT)
         .await
         .map(|_| ())
         .map_err(|err| err.code())
@@ -103,32 +105,76 @@ async fn reset_links_of_one_account_are_capped() {
 
 #[tokio::test]
 #[ignore = "needs TEST_DATABASE_URL"]
-async fn a_lock_that_ran_out_starts_a_fresh_count() {
+async fn a_stranger_guessing_locks_out_only_themselves() {
     let e = Env::new().await;
     register_provider(&e.state, "nongdan", "0901234567").await;
+    const STRANGER: &str = "203.0.113.66";
+    let from = |client: &'static str, password: &'static str| {
+        let auth = e.state.usecases.auth.clone();
+        async move {
+            auth.login("nongdan".into(), password.into(), client)
+                .await
+                .map(|_| ())
+                .map_err(|err| err.code())
+        }
+    };
 
     for _ in 0..LOGIN_FAIL_MAX_ATTEMPTS {
         assert_eq!(
-            try_login(&e, "sai").await,
+            from(STRANGER, "sai").await,
             Err(ErrorCode::InvalidCredentials)
         );
     }
-    // Locked: even the right password is refused for now.
+    // That client is kept out, even with the right password…
     assert_eq!(
-        try_login(&e, "matkhau123").await,
+        from(STRANGER, "matkhau123").await,
         Err(ErrorCode::AccountLocked)
     );
+    // …and its further guesses are not counted.
+    assert_eq!(
+        from(STRANGER, "sai").await,
+        Err(ErrorCode::InvalidCredentials)
+    );
+    assert_eq!(
+        count(&e, "SELECT failed_login_attempts::bigint AS n FROM users").await,
+        i64::from(LOGIN_FAIL_MAX_ATTEMPTS)
+    );
+    // The owner, on their own phone, still gets in; that clears the count.
+    assert_eq!(try_login(&e, "matkhau123").await, Ok(()));
+    assert_eq!(
+        count(&e, "SELECT failed_login_attempts::bigint AS n FROM users").await,
+        0
+    );
+    e.cleanup().await;
+}
 
-    // The lock runs out.
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn guesses_from_many_clients_lock_the_account_itself() {
+    let e = Env::new().await;
+    register_provider(&e.state, "nongdan", "0901234567").await;
+    let auth = &e.state.usecases.auth;
+    // Each client stays under its own limit; together they reach the
+    // account's.
+    let per_client = LOGIN_FAIL_MAX_ATTEMPTS - 1;
+    let clients = LOGIN_FAIL_ACCOUNT_MAX_ATTEMPTS as u32 / per_client + 1;
+    for c in 0..clients {
+        let client = format!("198.51.100.{c}");
+        for _ in 0..per_client {
+            let _ = auth.login("nongdan".into(), "sai".into(), &client).await;
+        }
+    }
+    assert_eq!(
+        try_login(&e, "matkhau123").await,
+        Err(ErrorCode::AccountLocked),
+        "the right password waits for the lock to run out"
+    );
+
+    // The lock runs out: the right password gets in.
     e.t.db
         .execute_unprepared("UPDATE users SET locked_until = now() - interval '1 second'")
         .await
         .unwrap();
-    // One typo after it is one strike, not a new lock.
-    assert_eq!(
-        try_login(&e, "sai").await,
-        Err(ErrorCode::InvalidCredentials)
-    );
     assert_eq!(try_login(&e, "matkhau123").await, Ok(()));
     e.cleanup().await;
 }
@@ -150,7 +196,11 @@ async fn sign_ins_and_password_changes_are_audited() {
         Err(ErrorCode::InvalidCredentials)
     );
     let login = auth
-        .login("nongdan".into(), "matkhau123".into())
+        .login(
+            "nongdan".into(),
+            "matkhau123".into(),
+            integration_tests::CLIENT,
+        )
         .await
         .unwrap();
     auth.change_password(login.user_id, "matkhau123".into(), "matkhaumoi123".into())

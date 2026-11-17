@@ -26,7 +26,7 @@ use crate::{
         PERM_OWN_LISTING_UPDATE, PERM_OWN_PROFILE_UPDATE, PERM_OWN_SERVICE_CREATE,
         PERM_OWN_SERVICE_DELETE, PERM_OWN_SERVICE_UPDATE,
     },
-    constants::{CALL_STATS_DAYS, PAGE_SIZE, SERVICES_PER_BUSINESS_MAX},
+    constants::{CALL_STATS_DAYS, PAGE_SIZE, PRODUCTS_PER_BUSINESS_MAX, SERVICES_PER_BUSINESS_MAX},
     inputs::{CreateProductInput, ServiceInput, UpdateProductInput, UpdateProfileInput},
     outputs::{
         OwnInquiriesResponse, OwnInquiryDto, ProviderProductDto, ProviderProfileDto,
@@ -264,25 +264,33 @@ impl ProviderDashboardUseCase {
         };
         let created = self
             .product_repo
-            .create(NewProduct {
-                business_id,
-                category_id: input.category_id,
-                commodity_id: fields.commodity_id,
-                name: fields.name,
-                description: fields.description,
-                price: input.price,
-                unit: fields.unit,
-                image_file_id,
-                created_by: actor.user_id,
-            })
+            .create_capped(
+                NewProduct {
+                    business_id,
+                    category_id: input.category_id,
+                    commodity_id: fields.commodity_id,
+                    name: fields.name,
+                    description: fields.description,
+                    price: input.price,
+                    unit: fields.unit,
+                    image_file_id,
+                    created_by: actor.user_id,
+                },
+                PRODUCTS_PER_BUSINESS_MAX,
+            )
             .await;
-        let new_id = match (created, image_file_id) {
-            (Ok(id), _) => id,
-            (Err(e), Some(file)) => {
-                self.media.discard(file).await;
-                return Err(e);
+        let new_id = match created {
+            Ok(Some(id)) => id,
+            refused => {
+                if let Some(file) = image_file_id {
+                    self.media.discard(file).await;
+                }
+                return Err(match refused {
+                    Err(e) => e,
+                    Ok(_) => Error::new(ErrorCode::ProductLimitReached)
+                        .with_param("max", PRODUCTS_PER_BUSINESS_MAX),
+                });
             }
-            (Err(e), None) => return Err(e),
         };
 
         self.product_repo

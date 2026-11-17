@@ -10,7 +10,6 @@
   --p800: #064e3b;
   --p700: #065f46;
   --p600: #047857;
-  --p500: #059669;
   --p400: #34d399;
   --p300: #6ee7b7;
   --p200: #a7f3d0;
@@ -36,7 +35,6 @@
   --shadow-card: 0 1px 3px rgba(6, 78, 59, 0.06), 0 4px 14px rgba(6, 78, 59, 0.09);
   --shadow-btn: 0 2px 8px rgba(6, 78, 59, 0.22);
 
-  --header-h: 58px;
   --nav-h: 64px;
   --app-nav-h: 64px;
   --app-search-h: 46px;
@@ -101,9 +99,6 @@ body {
   border-radius: 16px !important;
   border: none !important;
   box-shadow: var(--shadow-card) !important;
-}
-.bg-success {
-  background-color: var(--p700) !important;
 }
 .text-success {
   color: var(--p600) !important;

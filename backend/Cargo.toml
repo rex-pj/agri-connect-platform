@@ -108,7 +108,7 @@ flate2 = { version = "1", default-features = false, features = [
 ] }
 
 unicode-normalization = { version = "0.1", default-features = false, features = [
-    "std", # NFD for slugs: "Gạo Thơm" -> "gao-thom" (pinned by web/src/slugify.fixtures.json)
+    "std", # NFD for slugs: "Gạo Thơm" -> "gao-thom" (pinned by application/src/slugify.fixtures.json)
 ] }
 
 regex = { version = "1", default-features = false, features = [

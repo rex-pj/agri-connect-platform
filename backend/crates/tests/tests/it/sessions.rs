@@ -9,7 +9,24 @@ use axum::{
 use integration_tests::{known_reset_token, register_provider, send, Env};
 use sea_orm::{ConnectionTrait, Statement};
 
-async fn login(e: &Env) -> (i32, application::usecases::auth_usecase::SessionTokens) {
+use application::usecases::auth_usecase::{AuthUseCase, Renewal, SessionTokens};
+
+/// The new pair of a renewal, `None` when there is none for any reason
+/// (`renew_session`, the call the session middleware makes, says which).
+trait RefreshSession {
+    async fn refresh_session(&self, raw: &str) -> domain::Result<Option<SessionTokens>>;
+}
+
+impl RefreshSession for AuthUseCase {
+    async fn refresh_session(&self, raw: &str) -> domain::Result<Option<SessionTokens>> {
+        Ok(match self.renew_session(raw).await? {
+            Renewal::Renewed(tokens) => Some(tokens),
+            Renewal::Raced | Renewal::Ended => None,
+        })
+    }
+}
+
+async fn login(e: &Env) -> (i32, SessionTokens) {
     register_provider(&e.state, "nongdan", "0901234567").await;
     let login = e
         .state

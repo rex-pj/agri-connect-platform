@@ -15,7 +15,7 @@ use crate::{
 pub struct AuthHandler;
 
 impl AuthHandler {
-    /// POST /api/auth/login
+    /// POST /api/auth/tokens
     pub async fn login(
         State(state): State<AppState>,
         ApiJson(req): ApiJson<LoginRequest>,
@@ -29,7 +29,7 @@ impl AuthHandler {
         Ok(Json(result))
     }
 
-    /// POST /api/admin/initialize  — create the very first admin account
+    /// POST /api/admin/setup  — create the very first admin account
     pub async fn create_first_admin(
         State(state): State<AppState>,
         ApiJson(req): ApiJson<CreateAdminRequest>,
@@ -49,7 +49,7 @@ impl AuthHandler {
         Ok(Json(result))
     }
 
-    /// POST /api/auth/register  — provider self-registration
+    /// POST /api/users  — provider self-registration
     pub async fn register(
         State(state): State<AppState>,
         ApiJson(req): ApiJson<RegisterRequest>,

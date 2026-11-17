@@ -145,3 +145,44 @@ async fn no_query_asks_for_one_and_nothing_found_says_so_once() {
     assert!(none.contains(r#"name="q" value="" placeholder="Tìm dịch vụ"#));
     e.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_search_takes_at_least_two_characters() {
+    use integration_tests::{body_text, get_page, json_body};
+
+    let e = Env::new().await;
+    // One letter is in nearly every name and no index can answer it: the
+    // lists and the search page refuse it, with the rule in the message.
+    for path in [
+        "/api/explore/services?name=a",
+        "/api/explore/providers?name=+a+",
+        "/api/explore/products?name=a",
+    ] {
+        let res = send(&e.router, get_page(path, None)).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST, "{path}");
+        let body = json_body(res).await;
+        assert_eq!(body["code"], "search_too_short", "{path}");
+        assert!(
+            body["message"].as_str().unwrap_or_default().contains('2'),
+            "{body}"
+        );
+    }
+    let res = send(&e.router, get_page("/search?q=a", None)).await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    // Two letters search; nothing typed lists everything.
+    for path in [
+        "/api/explore/services?name=ab",
+        "/api/explore/services?name=",
+        "/search?q=ab",
+        "/supplies",
+    ] {
+        let res = send(&e.router, get_page(path, None)).await;
+        assert_eq!(res.status(), StatusCode::OK, "{path}");
+    }
+    // The boxes say so before the form is sent.
+    let page = body_text(send(&e.router, get_page("/services", None)).await).await;
+    assert!(page.contains(r#"minlength="2""#));
+    e.cleanup().await;
+}

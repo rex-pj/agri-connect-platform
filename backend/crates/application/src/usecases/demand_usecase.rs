@@ -22,9 +22,7 @@ use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveDate, TimeZone, Utc
 use domain::{
     models::{
         category::CategoryAdmin,
-        demand::{
-            BusinessArea, DemoScope, LeadChannel, LeadEvent, NewSearch, SearchEvent, SoleCategory,
-        },
+        demand::{DemoScope, LeadChannel, LeadCount, NewSearch, SearchCount, SoleCategory},
     },
     repositories::{
         admin_unit_repository_trait::AdminUnitRepositoryTrait,
@@ -41,8 +39,9 @@ use crate::{
     authz::Actor,
     catalogue::PERM_REPORT_DEMAND_READ,
     constants::{
-        ADMIN_UNIT_SNAP_M, DEMAND_REPORT_MIN_COUNT, DEMAND_WEEKS, SEARCH_QUERY_MAX,
-        SEARCH_REPEAT_SECS, STEADY_WEEKLY_LEADS, UNMET_SEARCHES_SHOWN, VN_UTC_OFFSET_SECS,
+        ADMIN_UNIT_SNAP_M, DEMAND_REPORT_MIN_COUNT, DEMAND_WEEKS, EVENT_KEEP_WEEKS,
+        SEARCH_QUERY_MAX, SEARCH_REPEAT_SECS, STEADY_WEEKLY_LEADS, UNMET_SEARCHES_SHOWN,
+        VN_UTC_OFFSET_SECS,
     },
     hashing::sha256_hex,
     inputs::{SearchInput, SearchPlace, Visitor},
@@ -115,24 +114,56 @@ impl DemandReportUseCase {
         let weeks = report_weeks(now)?;
         let (from, to) = window(&weeks)?;
         let (events, searches, areas, sole, categories, units) = tokio::try_join!(
-            self.demand_repo.lead_events(from, to, scope.demo),
-            self.demand_repo.search_events(from, to, scope.demo),
-            self.demand_repo
-                .business_areas(ADMIN_UNIT_SNAP_M, scope.demo),
+            self.demand_repo.lead_counts(from, to, scope.demo),
+            self.demand_repo.search_counts(from, to, scope.demo),
+            self.demand_repo.business_areas(scope.demo),
             self.demand_repo.sole_categories(),
             self.category_repo.list_admin(),
             AdminUnits::load(self.admin_unit_repo.as_ref()),
         )?;
         Ok(aggregate(Input {
             weeks,
-            events,
-            searches,
-            areas,
-            sole,
+            events: &events,
+            searches: &searches,
+            sole: &sole,
+            // Demo businesses are among those counted: the page says so.
+            with_demo: areas.iter().any(|a| a.is_demo),
             categories,
             units: &units,
             scope,
         }))
+    }
+
+    /// Counts the taps and searches older than `EVENT_KEEP_WEEKS` whole weeks
+    /// into the weekly totals and deletes them, a week at a time, oldest
+    /// first; the rows deleted. Run now and then by the server: nothing
+    /// reads rows that old, and the two tables would otherwise grow for as
+    /// long as the platform runs.
+    pub async fn roll_up_old_events(&self, now: DateTime<Utc>) -> Result<u64> {
+        let this_monday = monday_of(vn_today(now)?);
+        let cutoff = vn_midnight(this_monday - Duration::weeks(EVENT_KEEP_WEEKS as i64))?;
+        let mut deleted = 0;
+        while let Some(oldest) = self.demand_repo.oldest_event_before(cutoff).await? {
+            let starts_on = monday_of(vn_today(oldest)?);
+            let (from, to) = (
+                vn_midnight(starts_on)?,
+                vn_midnight(starts_on + Duration::weeks(1))?,
+            );
+            let rows = self.demand_repo.roll_up_week(starts_on, from, to).await?;
+            // The oldest row is in the week just rolled up: none deleted
+            // means another process did it, and it will finish the rest.
+            if rows == 0 {
+                break;
+            }
+            deleted += rows;
+        }
+        Ok(deleted)
+    }
+
+    /// Forgets the searches whose repeat window has passed (bounded memory).
+    pub fn forget_old_searches(&self) {
+        self.recent_searches
+            .forget_older_than(std::time::Duration::from_secs(SEARCH_REPEAT_SECS));
     }
 
     /// Counts a visitor's search for the report, in the background: a page
@@ -222,11 +253,24 @@ pub fn vn_today(now: DateTime<Utc>) -> Result<NaiveDate> {
     Ok(now.with_timezone(&vn()?).date_naive())
 }
 
+/// The Monday of the week a Vietnam date falls in.
+fn monday_of(day: NaiveDate) -> NaiveDate {
+    day - Duration::days(i64::from(day.weekday().num_days_from_monday()))
+}
+
+/// Midnight in Vietnam at the start of `day`, as an instant.
+fn vn_midnight(day: NaiveDate) -> Result<DateTime<Utc>> {
+    vn()?
+        .from_local_datetime(&day.and_hms_opt(0, 0, 0).unwrap_or_default())
+        .single()
+        .map(|t| t.with_timezone(&Utc))
+        .ok_or_else(|| Error::internal("Report week out of range."))
+}
+
 /// The `DEMAND_WEEKS` whole weeks before the one `now` falls in, oldest
 /// first, as Vietnam dates.
 pub fn report_weeks(now: DateTime<Utc>) -> Result<Vec<DemandWeekDto>> {
-    let today = vn_today(now)?;
-    let this_monday = today - Duration::days(i64::from(today.weekday().num_days_from_monday()));
+    let this_monday = monday_of(vn_today(now)?);
     Ok((1..=DEMAND_WEEKS as i64)
         .rev()
         .map(|back| {
@@ -242,18 +286,10 @@ pub fn report_weeks(now: DateTime<Utc>) -> Result<Vec<DemandWeekDto>> {
 /// The report's instants: Monday 00:00 of its first week to Monday 00:00
 /// after its last, Vietnam time.
 fn window(weeks: &[DemandWeekDto]) -> Result<(DateTime<Utc>, DateTime<Utc>)> {
-    let offset = vn()?;
-    let at_midnight = |d: NaiveDate| -> Result<DateTime<Utc>> {
-        offset
-            .from_local_datetime(&d.and_hms_opt(0, 0, 0).unwrap_or_default())
-            .single()
-            .map(|t| t.with_timezone(&Utc))
-            .ok_or_else(|| Error::internal("Report week out of range."))
-    };
     match (weeks.first(), weeks.last()) {
         (Some(first), Some(last)) => Ok((
-            at_midnight(first.starts_on)?,
-            at_midnight(last.ends_on + Duration::days(1))?,
+            vn_midnight(first.starts_on)?,
+            vn_midnight(last.ends_on + Duration::days(1))?,
         )),
         _ => Err(Error::internal("Empty report window.")),
     }
@@ -299,10 +335,10 @@ impl Cell {
 
 struct Input<'a> {
     weeks: Vec<DemandWeekDto>,
-    events: Vec<LeadEvent>,
-    searches: Vec<SearchEvent>,
-    areas: Vec<BusinessArea>,
-    sole: Vec<SoleCategory>,
+    events: &'a [LeadCount],
+    searches: &'a [SearchCount],
+    sole: &'a [SoleCategory],
+    with_demo: bool,
     categories: Vec<CategoryAdmin>,
     units: &'a AdminUnits,
     scope: &'a ReportScope,
@@ -345,19 +381,13 @@ fn aggregate(input: Input<'_>) -> DemandReportDto {
         weeks,
         events,
         searches,
-        areas,
         sole,
+        with_demo,
         categories,
         units,
         scope,
     } = input;
     let filter = AreaFilter { units, scope };
-    let with_demo = areas.iter().any(|a| a.is_demo);
-    let first_day = weeks.first().map(|w| w.starts_on);
-    let ward_of: HashMap<i32, String> = areas
-        .into_iter()
-        .map(|a| (a.business_id, a.ward_code))
-        .collect();
     let sole_of: HashMap<i32, i32> = sole
         .iter()
         .map(|s| (s.business_id, s.category_id))
@@ -365,27 +395,23 @@ fn aggregate(input: Input<'_>) -> DemandReportDto {
 
     let mut cells: HashMap<(Option<String>, Option<i32>), Cell> = HashMap::new();
     for e in events {
-        let Some(first_day) = first_day else {
-            break;
-        };
-        let Some(index) = week_of(e.at, first_day) else {
-            continue;
-        };
-        let ward = ward_of.get(&e.business_id).cloned();
+        // A lead about nothing in particular is about its shop's one service.
         let category = e
             .category_id
-            .or_else(|| sole_of.get(&e.business_id).copied());
-        let cell = cells.entry((ward, category)).or_default();
-        if let Some(week) = cell.weeks.get_mut(index) {
-            *week += 1;
-        }
+            .or_else(|| sole_of.get(&e.business_id?).copied());
+        let cell = cells.entry((e.ward_code.clone(), category)).or_default();
+        // The database counted the report's window only.
+        let Some(week) = cell.weeks.get_mut(e.week) else {
+            continue;
+        };
+        *week += e.count;
         match e.channel {
-            LeadChannel::Call => cell.calls += 1,
-            LeadChannel::Zalo => cell.zalo += 1,
+            LeadChannel::Call => cell.calls += e.count,
+            LeadChannel::Zalo => cell.zalo += e.count,
             LeadChannel::Inquiry => {
-                cell.inquiries += 1;
-                if let Some(phone) = e.requester_phone {
-                    cell.people.insert(phone);
+                cell.inquiries += e.count;
+                if let Some(phone) = &e.requester_phone {
+                    cell.people.insert(phone.clone());
                 }
             }
         }
@@ -447,7 +473,7 @@ fn aggregate(input: Input<'_>) -> DemandReportDto {
         all_row.total.value = None;
     }
 
-    let (searches, unmet) = search_figures(&searches, first_day, &filter, &in_categories);
+    let (searches, unmet) = search_figures(searches, &filter, &in_categories);
 
     DemandReportDto {
         weeks,
@@ -585,39 +611,25 @@ fn row(category_id: Option<i32>, category: Option<String>, cell: &Cell) -> Deman
     }
 }
 
-/// The week index of a Vietnam date in the report, if it falls in it.
-fn week_of(at: DateTime<Utc>, first_day: NaiveDate) -> Option<usize> {
-    let day = at.with_timezone(&vn().ok()?).date_naive();
-    usize::try_from((day - first_day).num_weeks())
-        .ok()
-        .filter(|i| *i < DEMAND_WEEKS && day >= first_day)
-}
-
 /// Searches by week in the rows' areas and categories, and the words that
 /// found nothing, asked at least `DEMAND_REPORT_MIN_COUNT` times.
 fn search_figures(
-    searches: &[SearchEvent],
-    first_day: Option<NaiveDate>,
+    searches: &[SearchCount],
     filter: &AreaFilter<'_>,
     in_categories: &dyn Fn(&Option<i32>) -> bool,
 ) -> (Vec<Figure>, Vec<UnmetSearchDto>) {
     let mut weekly = [0_i64; DEMAND_WEEKS];
     let mut unmet: HashMap<&str, i64> = HashMap::new();
-    let Some(first_day) = first_day else {
-        return (weekly.iter().map(|v| shown(*v)).collect(), Vec::new());
-    };
     for s in searches {
         if !filter.in_rows(s.ward_code.as_deref()) || !in_categories(&s.category_id) {
             continue;
         }
-        let Some(index) = week_of(s.at, first_day) else {
+        let Some(week) = weekly.get_mut(s.week) else {
             continue;
         };
-        if let Some(week) = weekly.get_mut(index) {
-            *week += 1;
-        }
-        if let (0, Some(q)) = (s.results, s.query.as_deref()) {
-            *unmet.entry(q).or_default() += 1;
+        *week += s.count;
+        if let (true, Some(q)) = (s.unmet, s.query.as_deref()) {
+            *unmet.entry(q).or_default() += s.count;
         }
     }
     let mut unmet: Vec<UnmetSearchDto> = unmet
@@ -663,14 +675,37 @@ mod tests {
             .unwrap_or_default()
     }
 
-    fn event(at: DateTime<Utc>, business_id: i32, category_id: Option<i32>) -> LeadEvent {
-        LeadEvent {
-            at,
-            business_id,
+    /// The report week of an instant, as the database counts it: whole
+    /// weeks from the first Monday midnight (Vietnam) of the report; `None`
+    /// outside the report, which the database never reads.
+    fn week_of(at: DateTime<Utc>) -> Option<usize> {
+        let weeks = report_weeks(now()).unwrap_or_default();
+        let (from, to) = window(&weeks).ok()?;
+        if !(from..to).contains(&at) {
+            return None;
+        }
+        usize::try_from((at - from).num_weeks()).ok()
+    }
+
+    /// One call tap, if `at` is in the report, as the database counts it:
+    /// under the ward of its business (1 is in Cai Lậy, 28439, Đồng Tháp; 3
+    /// in Long Xuyên, 30001, An Giang; 2 has no ward), naming the business
+    /// only when it is about no category.
+    fn event(at: DateTime<Utc>, business_id: i32, category_id: Option<i32>) -> Option<LeadCount> {
+        let ward_code = match business_id {
+            1 => Some("28439".to_owned()),
+            3 => Some("30001".to_owned()),
+            _ => None,
+        };
+        Some(LeadCount {
+            week: week_of(at)?,
+            ward_code,
+            business_id: category_id.is_none().then_some(business_id),
             category_id,
             channel: LeadChannel::Call,
+            count: 1,
             requester_phone: None,
-        }
+        })
     }
 
     fn category(id: i32, name: &str) -> CategoryAdmin {
@@ -693,17 +728,6 @@ mod tests {
         }
     }
 
-    fn placed(business_id: i32, ward_code: &str) -> BusinessArea {
-        BusinessArea {
-            business_id,
-            ward_code: ward_code.into(),
-            name: "shop".into(),
-            phone: "0912345678".into(),
-            address: None,
-            is_demo: false,
-        }
-    }
-
     fn province(code: &str) -> AreaKey {
         AreaKey::Province(code.into())
     }
@@ -717,19 +741,19 @@ mod tests {
         at(2026, 11, 11, 3)
     }
 
-    /// Business 1 is in Cai Lậy (28439, Đồng Tháp), business 3 in Long
-    /// Xuyên (30001, An Giang); business 2 has no ward.
-    fn run(events: Vec<LeadEvent>, scope: &ReportScope) -> DemandReportDto {
+    /// Business 1 has one live service, in category 7.
+    fn run(events: Vec<Option<LeadCount>>, scope: &ReportScope) -> DemandReportDto {
         let units = units();
+        let events: Vec<LeadCount> = events.into_iter().flatten().collect();
         aggregate(Input {
             weeks: report_weeks(now()).unwrap_or_default(),
-            events,
-            searches: Vec::new(),
-            areas: vec![placed(1, "28439"), placed(3, "30001")],
-            sole: vec![SoleCategory {
+            events: &events,
+            searches: &[],
+            sole: &[SoleCategory {
                 business_id: 1,
                 category_id: 7,
             }],
+            with_demo: false,
             categories: vec![category(7, "spray"), category(8, "dredge")],
             units: &units,
             scope,
@@ -911,23 +935,20 @@ mod tests {
 
     #[test]
     fn searches_that_found_nothing_are_listed_once_asked_enough() {
-        let search = |query: &str, results: i64| SearchEvent {
-            at: at(2026, 11, 3, 2),
-            query: Some(query.into()),
+        // As the database counts them: the words only of what found nothing.
+        let search = |query: Option<&str>, count: i64| SearchCount {
+            week: week_of(at(2026, 11, 3, 2)).unwrap_or_default(),
+            query: query.map(str::to_owned),
             category_id: None,
             ward_code: Some("28439".into()),
-            results,
+            unmet: query.is_some(),
+            count,
         };
-        let mut searches = Vec::new();
-        for _ in 0..DEMAND_REPORT_MIN_COUNT {
-            searches.push(search("drone sau rieng", 0));
-        }
-        searches.push(search("may cay", 0));
-        searches.push(search("phun thuoc", 3));
-        let first = report_weeks(now())
-            .unwrap_or_default()
-            .first()
-            .map(|w| w.starts_on);
+        let searches = vec![
+            search(Some("drone sau rieng"), DEMAND_REPORT_MIN_COUNT),
+            search(Some("may cay"), 1),
+            search(None, 1),
+        ];
         let units = units();
         let any = |_: &Option<i32>| true;
         let everywhere = ReportScope::default();
@@ -935,7 +956,7 @@ mod tests {
             units: &units,
             scope: &everywhere,
         };
-        let (weekly, unmet) = search_figures(&searches, first, &filter, &any);
+        let (weekly, unmet) = search_figures(&searches, &filter, &any);
         assert_eq!(weekly.last().and_then(|f| f.value), Some(7));
         let words: Vec<_> = unmet.iter().map(|u| (u.query.as_str(), u.count)).collect();
         assert_eq!(
@@ -953,7 +974,7 @@ mod tests {
             units: &units,
             scope: &elsewhere,
         };
-        let (weekly, _) = search_figures(&searches, first, &filter, &any);
+        let (weekly, _) = search_figures(&searches, &filter, &any);
         assert_eq!(weekly.last().and_then(|f| f.value), Some(0));
     }
 }

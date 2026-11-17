@@ -315,11 +315,7 @@ impl JobRepositoryTrait for JobRepository {
             .map(|rows| rows.into_iter().map(JobPost::from).collect())
     }
 
-    async fn list_admin(&self, limit: i64, offset: i64) -> Result<(Vec<JobPost>, i64), Error> {
-        let total = job_post::Entity::find()
-            .count(self.db.as_ref())
-            .await
-            .map_err(Self::fail("count"))?;
+    async fn list_admin(&self, limit: i64, offset: i64) -> Result<Vec<JobPost>, Error> {
         let mut query = job_select(null_float());
         query
             .limit(u64::try_from(limit).unwrap_or(0))
@@ -327,10 +323,15 @@ impl JobRepositoryTrait for JobRepository {
         let rows = self
             .rows::<JobRow, _>(&*newest_first(&mut query), "list_admin")
             .await?;
-        Ok((
-            rows.into_iter().map(JobPost::from).collect(),
-            i64::try_from(total).unwrap_or(i64::MAX),
-        ))
+        Ok(rows.into_iter().map(JobPost::from).collect())
+    }
+
+    async fn count_admin(&self) -> Result<i64, Error> {
+        job_post::Entity::find()
+            .count(self.db.as_ref())
+            .await
+            .map(|total| i64::try_from(total).unwrap_or(i64::MAX))
+            .map_err(Self::fail("count"))
     }
 
     async fn set_status(&self, id: i32, status: &str) -> Result<bool, Error> {
@@ -341,5 +342,14 @@ impl JobRepositoryTrait for JobRepository {
             .await
             .map(|r| r.rows_affected > 0)
             .map_err(Self::fail("set_status"))
+    }
+
+    async fn delete_older_than(&self, before: DateTime<Utc>) -> Result<u64, Error> {
+        job_post::Entity::delete_many()
+            .filter(job_post::Column::CreatedOn.lt(before))
+            .exec(self.db.as_ref())
+            .await
+            .map(|r| r.rows_affected)
+            .map_err(Self::fail("delete_older_than"))
     }
 }

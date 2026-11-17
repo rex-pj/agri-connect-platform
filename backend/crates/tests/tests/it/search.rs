@@ -143,8 +143,8 @@ async fn the_accented_query_still_works() {
 async fn a_percent_sign_is_a_literal_not_a_wildcard() {
     let t = seeded().await;
     assert_eq!(providers(&t, "50%").await, ["Cửa hàng 50% giảm giá"]);
-    // Unescaped, "%" alone would match every row.
-    assert_eq!(providers(&t, "%").await, ["Cửa hàng 50% giảm giá"]);
+    // Unescaped, "%_" would match every row; as typed, no name holds it.
+    assert!(providers(&t, "%_").await.is_empty());
     t.cleanup().await;
 }
 

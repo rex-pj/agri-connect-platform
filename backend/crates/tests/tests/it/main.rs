@@ -39,6 +39,7 @@ mod provider_page;
 mod races;
 mod reviews;
 mod router_errors;
+mod scale_probe;
 mod search;
 mod search_page;
 mod sectors;

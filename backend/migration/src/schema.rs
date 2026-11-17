@@ -217,6 +217,8 @@ pub enum Businesses {
     Description,
     Address,
     Location,
+    /// The ward its position lies in, kept with the position.
+    WardCode,
     IsVerified,
     IsActive,
     IsDemo,
@@ -377,6 +379,33 @@ pub enum SearchEvents {
     IsDemo,
 }
 
+/// Taps older than the report keeps as rows, counted by week.
+#[derive(DeriveIden, Clone, Copy)]
+pub enum CallClickWeeks {
+    Table,
+    Id,
+    WeekStartsOn,
+    BusinessId,
+    ServiceTypeId,
+    SupplyTypeId,
+    Channel,
+    Taps,
+}
+
+/// Searches older than the report keeps as rows, counted by week.
+#[derive(DeriveIden, Clone, Copy)]
+pub enum SearchEventWeeks {
+    Table,
+    Id,
+    WeekStartsOn,
+    ServiceTypeId,
+    SupplyTypeId,
+    WardCode,
+    Searches,
+    Unmet,
+    IsDemo,
+}
+
 #[derive(DeriveIden, Clone, Copy)]
 pub enum Partners {
     Table,
@@ -534,6 +563,8 @@ pub enum Ext {
 /// Index access methods and operator classes the builder has no name for.
 #[derive(DeriveIden, Clone, Copy)]
 pub enum IndexMethod {
+    /// Block ranges: a few pages for a table written in time order.
+    Brin,
     Gist,
     Gin,
     GinTrgmOps,
@@ -871,15 +902,6 @@ impl FunctionDef {
             self.language,
             self.attributes,
             self.body
-        )
-    }
-
-    pub fn drop_if_exists(&self, cascade: bool) -> String {
-        format!(
-            "DROP FUNCTION IF EXISTS {}({}){}",
-            self.name.to_string(),
-            self.args,
-            if cascade { " CASCADE" } else { "" }
         )
     }
 }

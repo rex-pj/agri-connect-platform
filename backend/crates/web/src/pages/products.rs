@@ -59,7 +59,7 @@ pub struct ProductsPage {
     /// The commodity the list is narrowed to, and the list without it.
     pub commodity: Option<CommodityDto>,
     pub commodity_clear_href: String,
-    /// Set on /products only; the category page has no filter panel.
+    /// Set on /supplies only; the category page has no filter panel.
     pub filters: Option<FilterForm>,
     /// A typed search's sector links, in place of the visitor's switch.
     pub sectors: Vec<SectorLink>,
@@ -90,7 +90,7 @@ fn sort_label(sort: ProductSort) -> &'static str {
     }
 }
 
-/// GET /products
+/// GET /supplies
 pub async fn list(
     shell: Shell,
     State(state): State<AppState>,

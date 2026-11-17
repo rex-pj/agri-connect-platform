@@ -3,7 +3,6 @@
 // already in Vietnamese; these are the app's own words.
 
 export const T = {
-  appName: "Agri-Connect",
   homeTitle: "Tìm nhà cung cấp, xem giá, đăng tin cần mướn",
   homeSub: "Trồng trọt, chăn nuôi, thuỷ hải sản gần bạn ở Đồng bằng sông Cửu Long",
   nearMe: "Tìm nhà cung cấp gần tôi",

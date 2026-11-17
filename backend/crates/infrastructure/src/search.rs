@@ -5,8 +5,8 @@
 use domain::search_terms::query_variants;
 use migration::search::fold;
 use sea_orm::{
-    sea_query::{BinOper, ColumnRef, Expr, IntoColumnRef, SimpleExpr},
-    Condition,
+    sea_query::{BinOper, ColumnRef, Expr, IntoColumnRef, Query, SimpleExpr},
+    Condition, EntityTrait,
 };
 
 use crate::entities::{business, product, service, user};
@@ -56,18 +56,17 @@ pub const BUSINESS_SEARCH_COLUMNS: &[SearchColumn] = &[BusinessName, BusinessDes
 /// A service's own text: matched by the service listing, and by the provider
 /// directory through the provider's live services.
 pub const SERVICE_SEARCH_COLUMNS: &[SearchColumn] = &[ServiceName, ServiceDescription];
-/// Searched by the service listing (/services, /search): the service's text and
-/// the name of the business offering it.
-pub const SERVICE_LISTING_SEARCH_COLUMNS: &[SearchColumn] =
-    &[ServiceName, ServiceDescription, BusinessName];
-/// Searched by the product listing (/products, /search).
+/// The provider's name alone: what a service or supply matches of the
+/// business behind it, and the admin's provider search.
+pub const BUSINESS_NAME_SEARCH_COLUMNS: &[SearchColumn] = &[BusinessName];
+/// Searched by the product listing (/supplies, /search).
 pub const PRODUCT_SEARCH_COLUMNS: &[SearchColumn] = &[ProductName, ProductDescription];
 
-/// The admin lists' name search: a record by its own name, a product or
-/// service also by its business's name.
-pub const ADMIN_BUSINESS_SEARCH_COLUMNS: &[SearchColumn] = &[BusinessName];
-pub const ADMIN_PRODUCT_SEARCH_COLUMNS: &[SearchColumn] = &[ProductName, BusinessName];
-pub const ADMIN_SERVICE_SEARCH_COLUMNS: &[SearchColumn] = &[ServiceName, BusinessName];
+/// The admin lists' name search: a record by its own name; a product or
+/// service also by its business's name (`admin_service_search`,
+/// `admin_product_search`).
+const PRODUCT_NAME_SEARCH_COLUMNS: &[SearchColumn] = &[ProductName];
+const SERVICE_NAME_SEARCH_COLUMNS: &[SearchColumn] = &[ServiceName];
 pub const ADMIN_USER_SEARCH_COLUMNS: &[SearchColumn] = &[UserUsername, UserFullName, UserEmail];
 
 /// Postgres' default LIKE escape character.
@@ -112,13 +111,78 @@ pub fn text_contains(columns: &[SearchColumn], query: &str) -> Condition {
         })
 }
 
+/// A row of `E` (a service, a supply) matches `query` by its `own` columns
+/// or by the name of its business. Each side is a subquery over its one
+/// table, so each is answered by that table's folded indexes and the list
+/// only looks the ids up; one OR over the joined rows would fold and compare
+/// every row and its business instead.
+fn own_or_business_matches<E: EntityTrait>(
+    id: E::Column,
+    business_id: E::Column,
+    own: &[SearchColumn],
+    query: &str,
+) -> Condition {
+    let by_text = Query::select()
+        .column((E::default(), id))
+        .from(E::default())
+        .cond_where(text_contains(own, query))
+        .to_owned();
+    let by_business = Query::select()
+        .column((business::Entity, business::Column::Id))
+        .from(business::Entity)
+        .cond_where(text_contains(BUSINESS_NAME_SEARCH_COLUMNS, query))
+        .to_owned();
+    Condition::any()
+        .add(Expr::col((E::default(), id)).in_subquery(by_text))
+        .add(Expr::col((E::default(), business_id)).in_subquery(by_business))
+}
+
+/// A service of the listing (/services, /search) matches `query` by its own
+/// text or by the name of the business offering it.
+pub fn service_listing_matches(query: &str) -> Condition {
+    own_or_business_matches::<service::Entity>(
+        service::Column::Id,
+        service::Column::BusinessId,
+        SERVICE_SEARCH_COLUMNS,
+        query,
+    )
+}
+
+/// The admin's service search: by the service's name or its business's;
+/// blank matches everything.
+pub fn admin_service_search(search: Option<&str>) -> Condition {
+    typed(search).map_or_else(Condition::all, |q| {
+        own_or_business_matches::<service::Entity>(
+            service::Column::Id,
+            service::Column::BusinessId,
+            SERVICE_NAME_SEARCH_COLUMNS,
+            q,
+        )
+    })
+}
+
+/// The admin's supply search: by the supply's name or its business's; blank
+/// matches everything.
+pub fn admin_product_search(search: Option<&str>) -> Condition {
+    typed(search).map_or_else(Condition::all, |q| {
+        own_or_business_matches::<product::Entity>(
+            product::Column::Id,
+            product::Column::BusinessId,
+            PRODUCT_NAME_SEARCH_COLUMNS,
+            q,
+        )
+    })
+}
+
+/// What was typed in an optional search box, if anything.
+fn typed(search: Option<&str>) -> Option<&str> {
+    search.map(str::trim).filter(|q| !q.is_empty())
+}
+
 /// `text_contains` for an optional search box: blank or absent matches
 /// everything (an empty condition adds nothing to the WHERE clause).
 pub fn search_condition(columns: &[SearchColumn], search: Option<&str>) -> Condition {
-    match search.map(str::trim).filter(|q| !q.is_empty()) {
-        Some(q) => text_contains(columns, q),
-        None => Condition::all(),
-    }
+    typed(search).map_or_else(Condition::all, |q| text_contains(columns, q))
 }
 
 #[cfg(test)]
@@ -136,10 +200,9 @@ mod tests {
             .iter()
             .chain(PRODUCT_SEARCH_COLUMNS)
             .chain(SERVICE_SEARCH_COLUMNS)
-            .chain(SERVICE_LISTING_SEARCH_COLUMNS)
-            .chain(ADMIN_BUSINESS_SEARCH_COLUMNS)
-            .chain(ADMIN_PRODUCT_SEARCH_COLUMNS)
-            .chain(ADMIN_SERVICE_SEARCH_COLUMNS)
+            .chain(BUSINESS_NAME_SEARCH_COLUMNS)
+            .chain(PRODUCT_NAME_SEARCH_COLUMNS)
+            .chain(SERVICE_NAME_SEARCH_COLUMNS)
             .chain(ADMIN_USER_SEARCH_COLUMNS);
         for column in searched {
             // An unqualified column matches no index, so it fails below too.

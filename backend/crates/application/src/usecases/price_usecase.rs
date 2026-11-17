@@ -36,7 +36,7 @@ use crate::{
         AdminPagedResponse, CommodityDto, CropBoardDto, CropDto, CropPriceDto, NamedDto,
         PriceBoardDto, PriceChoicesDto, PriceQuoteDto,
     },
-    pagination::{paginate, total_pages},
+    pagination::{admin_total_pages, paginate_admin, total_or_count},
     ports::EventBus,
     usecases::demand_usecase::vn_today,
     validation::{audit_reason, max_chars, max_chars_opt, non_blank},
@@ -189,8 +189,8 @@ impl PriceUseCase {
         page: i64,
     ) -> Result<AdminPagedResponse<CropPriceDto>> {
         actor.require(PERM_PRICE_MANAGE)?;
-        let (page, offset) = paginate(page, ADMIN_PAGE_SIZE);
-        let (rows, total) = self
+        let (page, offset) = paginate_admin(page);
+        let rows = self
             .price_repo
             .list_prices(
                 crop,
@@ -198,12 +198,16 @@ impl PriceUseCase {
                 u64::try_from(offset).unwrap_or(0),
             )
             .await?;
+        let total = total_or_count(offset, rows.len(), ADMIN_PAGE_SIZE, || {
+            self.price_repo.count_prices(crop)
+        })
+        .await?;
         Ok(AdminPagedResponse {
             items: rows.into_iter().map(price_dto).collect(),
             total,
             page,
             per_page: ADMIN_PAGE_SIZE,
-            total_pages: total_pages(total, ADMIN_PAGE_SIZE),
+            total_pages: admin_total_pages(total),
         })
     }
 
@@ -319,8 +323,10 @@ impl PriceUseCase {
     pub async fn board(&self, area: Option<i32>, sector: Option<&str>) -> Result<PriceBoardDto> {
         let today = vn_today(Utc::now())?;
         let (prices, crops, commodities) = tokio::try_join!(
-            self.price_repo
-                .public_prices_since(today - Duration::days(PRICE_HISTORY_DAYS)),
+            self.price_repo.latest_public_prices(
+                today - Duration::days(PRICE_HISTORY_DAYS),
+                PRICES_COMPARED as u64,
+            ),
             self.price_repo.list_crops(),
             self.commodity_repo.list_all(),
         )?;
@@ -354,6 +360,10 @@ impl PriceUseCase {
     }
 }
 
+/// How many prices of a crop in an area the board reads: the latest, and
+/// the one before it for the move.
+const PRICES_COMPARED: usize = 2;
+
 /// The middle of a range, what the move between two prices compares.
 fn middle(p: &CropPrice) -> i64 {
     (p.price_low + p.price_high) / 2
@@ -373,11 +383,10 @@ fn build_board(
     let fresh_from = today - Duration::days(PRICE_FRESH_DAYS);
     // (crop, area) → [latest, previous], in the newest-first order given:
     // the move is the latest against the one before.
-    const COMPARED: usize = 2;
     let mut pairs: HashMap<(i32, i32), Vec<&CropPrice>> = HashMap::new();
     for p in prices {
         let seen = pairs.entry((p.crop_id, p.location_id)).or_default();
-        if seen.len() < COMPARED {
+        if seen.len() < PRICES_COMPARED {
             seen.push(p);
         }
     }

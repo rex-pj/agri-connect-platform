@@ -9,7 +9,8 @@ use domain::{
 use crate::{
     constants::PAGE_SIZE,
     outputs::{ProductBrowseResponse, ProductDto},
-    pagination::{paginate, total_pages},
+    pagination::{paginate_public, public_total_pages, total_or_count},
+    validation::search_text,
 };
 
 // ── Use case ──────────────────────────────────────────────────────────────────
@@ -30,19 +31,27 @@ impl ProductUseCase {
         sort: ProductSort,
         page: i64,
     ) -> Result<ProductBrowseResponse> {
-        let (page, offset) = paginate(page, PAGE_SIZE);
+        let (page, offset) = paginate_public(page);
+        let filter = ProductFilter {
+            name: search_text(filter.name)?,
+            ..filter
+        };
 
-        let (products, total) = tokio::try_join!(
-            self.product_repo.browse(&filter, sort, PAGE_SIZE, offset),
-            self.product_repo.count_browse(&filter),
-        )?;
+        let products = self
+            .product_repo
+            .browse(&filter, sort, PAGE_SIZE, offset)
+            .await?;
+        let total = total_or_count(offset, products.len(), PAGE_SIZE, || {
+            self.product_repo.count_browse(&filter)
+        })
+        .await?;
 
         Ok(ProductBrowseResponse {
             items: products.into_iter().map(ProductDto::from).collect(),
             total,
             page,
             per_page: PAGE_SIZE,
-            total_pages: total_pages(total, PAGE_SIZE),
+            total_pages: public_total_pages(total),
         })
     }
 

@@ -9,7 +9,8 @@ use axum::{
 };
 use integration_tests::{
     body_text, categories_of, env_with_origin, get_page, install_admin, json_body,
-    load_admin_units, post_form, register_provider, send, sign_in, Env, TEST_ORIGIN,
+    load_admin_units, place_business, post_form, register_provider, send, sign_in, Env,
+    TEST_ORIGIN,
 };
 use sea_orm::{ConnectionTrait, Statement};
 
@@ -24,10 +25,6 @@ async fn scalar(e: &Env, sql: &str) -> String {
         .unwrap()
         .try_get("", "v")
         .unwrap()
-}
-
-async fn exec(e: &Env, sql: &str) {
-    e.t.db.execute_unprepared(sql).await.unwrap();
 }
 
 /// A provider with one service in the first service category, placed at
@@ -51,14 +48,7 @@ async fn provider_at(e: &Env, username: &str, phone: &str, lng: f64, lat: f64) -
     .await
     .parse()
     .unwrap();
-    exec(
-        e,
-        &format!(
-            "UPDATE businesses SET location = \
-             ST_GeographyFromText('SRID=4326;POINT({lng} {lat})') WHERE id = {business}"
-        ),
-    )
-    .await;
+    place_business(e, business, lat, lng).await;
     (business, category)
 }
 

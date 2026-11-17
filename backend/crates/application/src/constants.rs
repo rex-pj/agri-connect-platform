@@ -2,6 +2,14 @@
 pub const PAGE_SIZE: i64 = 20;
 pub const ADMIN_PAGE_SIZE: i64 = 25;
 pub const MAX_PAGE: i64 = 10_000;
+/// The last page of an admin list: past it an admin narrows the list with
+/// its search box or filter, since every page further costs the database all
+/// the rows before it.
+pub const ADMIN_MAX_PAGE: i64 = 500;
+/// The last page of a public list (services, providers, supplies): a farmer
+/// narrows a search long before it, and every page further costs the
+/// database all the rows before it.
+pub const PUBLIC_MAX_PAGE: i64 = 50;
 
 // ── Featured counts ────────────────────────────────────────────────────────────
 pub const FEATURED_PROVIDERS_COUNT: i64 = 6;
@@ -71,6 +79,11 @@ pub const CALL_STATS_DAYS: i64 = 30;
 pub const VN_UTC_OFFSET_SECS: i32 = 7 * 3600;
 /// How many whole weeks the demand report covers, ending last Sunday.
 pub const DEMAND_WEEKS: usize = 8;
+/// How many whole weeks before this one taps and searches are kept as rows.
+/// Older ones are counted into the weekly totals and deleted. Longer than
+/// anything reads rows for (`DEMAND_WEEKS`, `CALL_STATS_DAYS`), with room to
+/// look into a figure a partner questions.
+pub const EVENT_KEEP_WEEKS: usize = 26;
 /// A figure under this (and above zero) is shown as "fewer than": it could
 /// point at one household.
 pub const DEMAND_REPORT_MIN_COUNT: i64 = 5;
@@ -84,6 +97,8 @@ pub const ADMIN_UNIT_SNAP_M: f64 = 500.0;
 pub const STEADY_WEEKLY_LEADS: i64 = 20;
 /// A stored search keeps at most this many characters of its words.
 pub const SEARCH_QUERY_MAX: usize = 100;
+/// The fewest characters a public search takes (`validation::search_text`).
+pub const SEARCH_QUERY_MIN: usize = 2;
 /// How many searches that found nothing the report lists, most asked first.
 pub const UNMET_SEARCHES_SHOWN: usize = 10;
 /// The same search by the same visitor within this many seconds counts once
@@ -170,6 +185,9 @@ pub const SERVICE_DESCRIPTION_MAX: usize = 2000;
 /// How many services one business may list (hidden ones count), so deleting
 /// and re-adding cannot flood the directory.
 pub const SERVICES_PER_BUSINESS_MAX: u64 = 20;
+/// How many supplies one business may list (hidden ones count): a dealer's
+/// whole shelf, and still a list its owner's page shows at once.
+pub const PRODUCTS_PER_BUSINESS_MAX: u64 = 200;
 pub const PRODUCT_NAME_MAX: usize = 300;
 pub const PRODUCT_UNIT_MAX: usize = 50;
 pub const PRODUCT_DESCRIPTION_MAX: usize = 2000;
@@ -186,6 +204,10 @@ const _: () = assert!(TOPIC_MAX_LEN >= SERVICE_NAME_MAX);
 pub const JOB_DESCRIPTION_MAX: usize = 500;
 /// How long a job post stays open to providers, in days.
 pub const JOB_POST_DAYS: i64 = 7;
+/// How long a job post is kept at all, in days. Providers see one for
+/// `JOB_POST_DAYS`; after this it is deleted, whatever its status, so the
+/// table and the phone numbers in it do not pile up for ever.
+pub const JOB_POST_KEEP_DAYS: i64 = 365;
 /// Open posts one phone may have within `JOB_POST_DAYS`.
 pub const JOB_POSTS_OPEN_PER_PHONE: u64 = 3;
 /// How far from a job a provider is told about it, in metres.

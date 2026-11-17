@@ -10,7 +10,7 @@
     <label class="list-search__input">
       {{ atoms::icon(name="fa-magnifying-glass", class="list-search__icon") }}
       <span class="visually-hidden">{{ f.placeholder }}</span>
-      <input type="search" name="q" value="{{ f.q }}" placeholder="{{ f.placeholder }}" enterkeyhint="search">
+      <input type="search" name="q" value="{{ f.q }}" placeholder="{{ f.placeholder }}" enterkeyhint="search" minlength="{{ limits.search_min }}">
     </label>
     <button type="button" class="list-search__toggle" aria-label="{{ t(key="filters.label") }}" aria-controls="list-filters" x-cloak x-on:click="toggle" :class="buttonClass" :aria-expanded="expanded">
       {{ atoms::icon(name="fa-sliders") }}

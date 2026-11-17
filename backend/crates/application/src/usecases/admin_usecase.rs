@@ -48,7 +48,7 @@ use crate::{
         AdminServiceDto, AdminServiceItemDto, AdminUserDetailDto, AdminUserDto, AreaGroupDto,
         AssignUserDto, ProviderStatusDto, RoleDto, SlugSuggestionDto, VerificationDto,
     },
-    pagination::{paginate, total_pages},
+    pagination::{admin_total_pages, paginate_admin, total_or_count},
     ports::{EventBus, PasswordHasher},
     slug::{numbered, slugify},
     usecases::{
@@ -208,12 +208,15 @@ impl AdminUseCase {
         search: Option<&str>,
     ) -> Result<AdminPagedResponse<AdminProviderDto>> {
         actor.require(PERM_PROVIDER_READ)?;
-        let (page, offset) = paginate(page, ADMIN_PAGE_SIZE);
-        let total = self.business_repo.count_for_admin(search).await?;
+        let (page, offset) = paginate_admin(page);
         let items = self
             .business_repo
             .list_for_admin(search, ADMIN_PAGE_SIZE, offset)
             .await?;
+        let total = total_or_count(offset, items.len(), ADMIN_PAGE_SIZE, || {
+            self.business_repo.count_for_admin(search)
+        })
+        .await?;
 
         Ok(AdminPagedResponse {
             items: items
@@ -237,7 +240,7 @@ impl AdminUseCase {
             total,
             page,
             per_page: ADMIN_PAGE_SIZE,
-            total_pages: total_pages(total, ADMIN_PAGE_SIZE),
+            total_pages: admin_total_pages(total),
         })
     }
 
@@ -437,12 +440,15 @@ impl AdminUseCase {
         search: Option<&str>,
     ) -> Result<AdminPagedResponse<AdminUserDto>> {
         actor.require(PERM_USER_READ)?;
-        let (page, offset) = paginate(page, ADMIN_PAGE_SIZE);
-        let total = self.user_repo.count_for_admin(search).await?;
+        let (page, offset) = paginate_admin(page);
         let items = self
             .user_repo
             .list_for_admin(search, ADMIN_PAGE_SIZE, offset)
             .await?;
+        let total = total_or_count(offset, items.len(), ADMIN_PAGE_SIZE, || {
+            self.user_repo.count_for_admin(search)
+        })
+        .await?;
 
         Ok(AdminPagedResponse {
             items: items
@@ -464,7 +470,7 @@ impl AdminUseCase {
             total,
             page,
             per_page: ADMIN_PAGE_SIZE,
-            total_pages: total_pages(total, ADMIN_PAGE_SIZE),
+            total_pages: admin_total_pages(total),
         })
     }
 
@@ -701,12 +707,15 @@ impl AdminUseCase {
         provider_id: Option<i32>,
     ) -> Result<AdminPagedResponse<AdminInquiryDto>> {
         actor.require(PERM_INQUIRY_READ)?;
-        let (page, offset) = paginate(page, ADMIN_PAGE_SIZE);
-        let total = self.inquiry_repo.count_admin(provider_id).await?;
+        let (page, offset) = paginate_admin(page);
         let items = self
             .inquiry_repo
             .list_admin(provider_id, ADMIN_PAGE_SIZE, offset)
             .await?;
+        let total = total_or_count(offset, items.len(), ADMIN_PAGE_SIZE, || {
+            self.inquiry_repo.count_admin(provider_id)
+        })
+        .await?;
 
         Ok(AdminPagedResponse {
             items: items
@@ -727,7 +736,7 @@ impl AdminUseCase {
             total,
             page,
             per_page: ADMIN_PAGE_SIZE,
-            total_pages: total_pages(total, ADMIN_PAGE_SIZE),
+            total_pages: admin_total_pages(total),
         })
     }
 
@@ -783,19 +792,22 @@ impl AdminUseCase {
         provider_id: Option<i32>,
     ) -> Result<AdminPagedResponse<AdminReviewDto>> {
         actor.require(PERM_REVIEW_MODERATE)?;
-        let (page, offset) = paginate(page, ADMIN_PAGE_SIZE);
-        let total = self.review_repo.count_admin(provider_id).await?;
+        let (page, offset) = paginate_admin(page);
         let items = self
             .review_repo
             .list_admin(provider_id, ADMIN_PAGE_SIZE, offset)
             .await?;
+        let total = total_or_count(offset, items.len(), ADMIN_PAGE_SIZE, || {
+            self.review_repo.count_admin(provider_id)
+        })
+        .await?;
 
         Ok(AdminPagedResponse {
             items: items.into_iter().map(AdminReviewDto::from).collect(),
             total,
             page,
             per_page: ADMIN_PAGE_SIZE,
-            total_pages: total_pages(total, ADMIN_PAGE_SIZE),
+            total_pages: admin_total_pages(total),
         })
     }
 
@@ -965,18 +977,21 @@ impl AdminUseCase {
         filter: &AdminProductFilter,
     ) -> Result<AdminPagedResponse<AdminProductDto>> {
         actor.require(PERM_LISTING_MODERATE)?;
-        let (page, offset) = paginate(page, ADMIN_PAGE_SIZE);
-        let total = self.product_repo.count_admin(filter).await?;
+        let (page, offset) = paginate_admin(page);
         let items = self
             .product_repo
             .list_admin(filter, ADMIN_PAGE_SIZE, offset)
             .await?;
+        let total = total_or_count(offset, items.len(), ADMIN_PAGE_SIZE, || {
+            self.product_repo.count_admin(filter)
+        })
+        .await?;
         Ok(AdminPagedResponse {
             items: items.into_iter().map(AdminProductDto::from).collect(),
             total,
             page,
             per_page: ADMIN_PAGE_SIZE,
-            total_pages: total_pages(total, ADMIN_PAGE_SIZE),
+            total_pages: admin_total_pages(total),
         })
     }
 
@@ -1096,18 +1111,21 @@ impl AdminUseCase {
         search: Option<&str>,
     ) -> Result<AdminPagedResponse<AdminServiceDto>> {
         actor.require(PERM_SERVICE_MANAGE)?;
-        let (page, offset) = paginate(page, ADMIN_PAGE_SIZE);
-        let total = self.service_repo.count_admin(provider_id, search).await?;
+        let (page, offset) = paginate_admin(page);
         let items = self
             .service_repo
             .list_admin(provider_id, search, ADMIN_PAGE_SIZE, offset)
             .await?;
+        let total = total_or_count(offset, items.len(), ADMIN_PAGE_SIZE, || {
+            self.service_repo.count_admin(provider_id, search)
+        })
+        .await?;
         Ok(AdminPagedResponse {
             items: items.into_iter().map(AdminServiceDto::from).collect(),
             total,
             page,
             per_page: ADMIN_PAGE_SIZE,
-            total_pages: total_pages(total, ADMIN_PAGE_SIZE),
+            total_pages: admin_total_pages(total),
         })
     }
 

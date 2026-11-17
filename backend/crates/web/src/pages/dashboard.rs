@@ -15,7 +15,7 @@ use application::{
         PERM_OWN_LISTING_DELETE, PERM_OWN_PROFILE_UPDATE, PERM_OWN_SERVICE_CREATE,
         PERM_OWN_SERVICE_DELETE, PERM_OWN_SERVICE_UPDATE,
     },
-    constants::{CALL_STATS_DAYS, SERVICES_PER_BUSINESS_MAX},
+    constants::{CALL_STATS_DAYS, PRODUCTS_PER_BUSINESS_MAX, SERVICES_PER_BUSINESS_MAX},
     outputs::{
         CategoryDto, CommodityDto, ProviderProductDto, ProviderProfileDto, ProviderServiceDto,
     },
@@ -125,6 +125,9 @@ pub struct DashboardPage {
     pub services_first: bool,
     pub can_edit_profile: bool,
     pub can_create: bool,
+    /// The business lists as many supplies as it may (`products_max`).
+    pub products_full: bool,
+    pub products_max: u64,
     /// The link to the inquiry inbox, when the actor may read it.
     pub inbox: Option<InboxLink>,
     /// The link to the reviews of the business, with how many there are;
@@ -184,6 +187,7 @@ async fn dashboard_page(
         }
     }
     let full = service_rows.len() as u64 >= SERVICES_PER_BUSINESS_MAX;
+    let products_full = rows.len() as u64 >= PRODUCTS_PER_BUSINESS_MAX;
     let services_first = !service_rows.is_empty() || rows.is_empty();
     let services = ServicesSection {
         can_create: actor.can(PERM_OWN_SERVICE_CREATE) && !full,
@@ -245,7 +249,9 @@ async fn dashboard_page(
         services,
         services_first,
         can_edit_profile: actor.can(PERM_OWN_PROFILE_UPDATE),
-        can_create: actor.can(PERM_OWN_LISTING_CREATE),
+        can_create: actor.can(PERM_OWN_LISTING_CREATE) && !products_full,
+        products_full,
+        products_max: PRODUCTS_PER_BUSINESS_MAX,
         inbox,
         reviews,
         jobs,

@@ -434,10 +434,8 @@ impl PartnerUseCase {
         let contract = self.contract_of(partner_id, contract_id).await?;
         let taken: HashSet<i32> = contract.sponsored.iter().map(|s| s.business_id).collect();
         let scope = self.sponsor_scope(partner_id).await?;
-        let (areas, units) = tokio::try_join!(
-            self.demand_repo.business_areas(ADMIN_UNIT_SNAP_M, scope),
-            self.units()
-        )?;
+        let (areas, units) =
+            tokio::try_join!(self.demand_repo.business_areas(scope), self.units())?;
         let mut candidates: Vec<SponsorCandidateDto> = areas
             .into_iter()
             .filter(|a| in_area(&contract.area, &a.ward_code, &units))
@@ -464,10 +462,8 @@ impl PartnerUseCase {
         actor.require(PERM_PARTNER_MANAGE)?;
         let contract = self.contract_of(partner_id, contract_id).await?;
         let scope = self.sponsor_scope(partner_id).await?;
-        let (areas, units) = tokio::try_join!(
-            self.demand_repo.business_areas(ADMIN_UNIT_SNAP_M, scope),
-            self.units()
-        )?;
+        let (areas, units) =
+            tokio::try_join!(self.demand_repo.business_areas(scope), self.units())?;
         let inside = areas
             .iter()
             .any(|a| a.business_id == business_id && in_area(&contract.area, &a.ward_code, &units));

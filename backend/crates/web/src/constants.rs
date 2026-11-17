@@ -35,7 +35,19 @@ pub const MEMBER_WRITE_RATE_LIMIT_PER_MIN: NonZeroU32 = per_minute(120);
 pub const ZALO_CHAT_URL: &str = "https://zalo.me/";
 
 // ── Database ──────────────────────────────────────────────────────────────────
+/// Connections in the pool when `DB_MAX_CONNECTIONS` is unset. A page takes a
+/// few at once (its lists side by side), so this is a handful of pages in
+/// flight, not twenty.
 pub const DB_MAX_CONNECTIONS: u32 = 20;
+/// How long a request waits for a free connection before it fails, in
+/// seconds: a full pool answers "try again" at once instead of queueing
+/// every visitor behind the slow ones.
+pub const DB_ACQUIRE_TIMEOUT_SECS: u64 = 5;
+/// The longest one statement may run when `DB_STATEMENT_TIMEOUT_SECS` is
+/// unset, in seconds. Under `REQUEST_TIMEOUT_SECS`: a query whose request
+/// was given up on must not keep its connection busy. Migrations run on
+/// their own connection without it.
+pub const DB_STATEMENT_TIMEOUT_SECS: u64 = 20;
 
 // ── Server ────────────────────────────────────────────────────────────────────
 /// Used when BIND_ADDR is unset. 0.0.0.0 so the container port mapping works.
@@ -98,7 +110,13 @@ pub const fn km(metres: i64) -> i64 {
 pub const SMTP_PORT_DEFAULT: u16 = 587;
 /// How often expired refresh tokens are deleted, in seconds.
 pub const SESSION_PURGE_EVERY_SECS: u64 = 3_600;
-/// How often the rate limiters forget idle clients, in seconds.
+/// How often taps and searches older than `EVENT_KEEP_WEEKS` are counted
+/// into the weekly totals and deleted, and job posts older than
+/// `JOB_POST_KEEP_DAYS` deleted, in seconds. A day is soon enough, and the
+/// first run is at startup.
+pub const EVENT_ROLL_UP_EVERY_SECS: u64 = 86_400;
+/// How often the rate limiters forget idle clients, and the repeat filters
+/// the taps and searches past their window, in seconds.
 pub const RATE_LIMIT_PRUNE_EVERY_SECS: u64 = 300;
 /// How long the `healthcheck` command waits for the server, in seconds.
 pub const HEALTHCHECK_TIMEOUT_SECS: u64 = 5;

@@ -10,8 +10,8 @@ use application::constants::{
     BUSINESS_DESCRIPTION_MAX, BUSINESS_NAME_MAX, CODED_ICON_MAX, CODED_NAME_MAX,
     COMMODITY_ICON_MAX, COMMODITY_NAME_MAX, CROP_NAME_MAX, CROP_UNIT_MAX, FULL_NAME_MAX,
     JOB_DESCRIPTION_MAX, PASSWORD_MIN_CHARS, PASSWORD_RESET_EXPIRY_HOURS, PRICE_NOTE_MAX,
-    PRODUCT_DESCRIPTION_MAX, PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX, USERNAME_MAX_LEN,
-    USERNAME_MIN_LEN, VN_UTC_OFFSET_SECS,
+    PRODUCT_DESCRIPTION_MAX, PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX, SEARCH_QUERY_MIN,
+    USERNAME_MAX_LEN, USERNAME_MIN_LEN, VN_UTC_OFFSET_SECS,
 };
 use application::validation::{is_valid_vn_phone, SLUG_PATTERN, VN_PHONE_PATTERN};
 use axum::{
@@ -109,6 +109,8 @@ struct FieldLimits {
     product_unit_max: usize,
     product_description_max: usize,
     audit_reason_max: usize,
+    /// `SEARCH_QUERY_MIN`, for a public search box's `minlength`.
+    search_min: usize,
     coded_name_max: usize,
     coded_icon_max: usize,
     commodity_name_max: usize,
@@ -142,6 +144,7 @@ const FIELD_LIMITS: FieldLimits = FieldLimits {
     product_unit_max: PRODUCT_UNIT_MAX,
     product_description_max: PRODUCT_DESCRIPTION_MAX,
     audit_reason_max: AUDIT_REASON_MAX,
+    search_min: SEARCH_QUERY_MIN,
     coded_name_max: CODED_NAME_MAX,
     coded_icon_max: CODED_ICON_MAX,
     commodity_name_max: COMMODITY_NAME_MAX,
@@ -525,14 +528,6 @@ pub fn format_phone(phone: &str) -> String {
         format!("{} {} {}", &p[..4], &p[4..7], &p[7..])
     } else {
         p.to_owned()
-    }
-}
-
-/// The day and month in Vietnam at `instant`: `07/11`.
-pub fn format_vn_day(instant: DateTime<Utc>) -> String {
-    match FixedOffset::east_opt(VN_UTC_OFFSET_SECS) {
-        Some(offset) => instant.with_timezone(&offset).format("%d/%m").to_string(),
-        None => instant.format("%d/%m").to_string(),
     }
 }
 

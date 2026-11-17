@@ -33,7 +33,7 @@
     <div class="app-nav__search-inner">
       <form class="app-nav__search" action="{{ shell.search_url }}" method="get" role="search">
         <span class="app-nav__search-icon">{{ atoms::icon(name="fa-magnifying-glass") }}</span>
-        <input class="app-nav__search-input" type="search" name="q" value="{{ shell.search_query }}" placeholder="{{ t(key="nav_bar.search_placeholder") }}" aria-label="{{ t(key="common.search") }}" enterkeyhint="search" required x-ref="input" :tabindex="tabIndex">
+        <input class="app-nav__search-input" type="search" name="q" value="{{ shell.search_query }}" placeholder="{{ t(key="nav_bar.search_placeholder") }}" aria-label="{{ t(key="common.search") }}" enterkeyhint="search" minlength="{{ limits.search_min }}" required x-ref="input" :tabindex="tabIndex">
         <button type="submit" class="app-nav__search-btn" aria-label="{{ t(key="common.search") }}" :tabindex="tabIndex">{{ atoms::icon(name="fa-arrow-right") }}</button>
       </form>
     </div>

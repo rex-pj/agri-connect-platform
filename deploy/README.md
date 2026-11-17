@@ -193,6 +193,26 @@ The first deploy: *Actions → Deploy → Run workflow*.
 | Run a backup now | `sudo systemctl start agri-backup.service && journalctl -u agri-backup -n 20` |
 | Roll back | re-run *Deploy* for an older commit from the Actions tab |
 
+## Slow queries
+
+Postgres starts with `pg_stat_statements` loaded and with memory settings for the e2-small VM (`compose.yaml`; on a larger VM set `PG_SHARED_BUFFERS`, `PG_EFFECTIVE_CACHE_SIZE`, `PG_WORK_MEM`, `PG_MAINTENANCE_WORK_MEM` in `/etc/agri-connect/compose.env`: about a quarter of the memory for the first, half for the second). A database created before this needs the extension once, as the superuser (new ones get it from `db-init`):
+
+```bash
+C="sudo docker compose --env-file /etc/agri-connect/compose.env exec -T db"
+$C psql -U postgres -d agri_connect -c "CREATE EXTENSION IF NOT EXISTS pg_stat_statements"
+```
+
+Decide an index or a cache from what it measures, never from a guess: an index is paid on every write of its table.
+
+```bash
+# What the database spends its time on.
+$C psql -U postgres -d agri_connect -c "SELECT round(total_exec_time) AS ms, calls, round(mean_exec_time::numeric, 1) AS mean_ms, left(query, 100) AS query FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 15"
+# Indexes nothing has read since the statistics were last reset: candidates to drop.
+$C psql -U postgres -d agri_connect -c "SELECT relname, indexrelname, pg_size_pretty(pg_relation_size(indexrelid)) AS size FROM pg_stat_user_indexes WHERE idx_scan = 0 ORDER BY pg_relation_size(indexrelid) DESC"
+```
+
+The app cancels a statement after `DB_STATEMENT_TIMEOUT_SECS` (20) and fails a request that waits more than 5 s for a connection (`DB_MAX_CONNECTIONS`, 20): both show in the `web` log as a database error with the request's id.
+
 ## Restore
 
 Practise this once before launch; a backup nobody has restored is a guess. The
@@ -211,7 +231,8 @@ C="sudo docker compose --env-file /etc/agri-connect/compose.env exec -T db"
 $C psql -U postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE agri_connect WITH (FORCE)" \
   -c "CREATE DATABASE agri_connect OWNER agri_app"
 $C psql -U postgres -d agri_connect -v ON_ERROR_STOP=1 -c "ALTER SCHEMA public OWNER TO agri_app" \
-  -c "CREATE EXTENSION postgis" -c "CREATE EXTENSION unaccent" -c "CREATE EXTENSION pg_trgm"
+  -c "CREATE EXTENSION postgis" -c "CREATE EXTENSION unaccent" -c "CREATE EXTENSION pg_trgm" \
+  -c "CREATE EXTENSION pg_stat_statements"
 # 4. Restore the app's objects as agri_app. The dump's CREATE EXTENSION IF NOT
 #    EXISTS lines are no-ops now; --no-comments skips COMMENT ON EXTENSION,
 #    which only the extension owner may run.

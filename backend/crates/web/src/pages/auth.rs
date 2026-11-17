@@ -2,9 +2,8 @@
 //! post back to themselves (Post/Redirect/Get), on the standalone auth layout.
 //!
 //! - Signing in starts a browser session (`web::session`) and lands where the
-//!   visitor's permissions point (bug 0.1: it used to be the admin dashboard
-//!   for everyone).
-//! - /login sends a fresh installation to /setup (bug 0.2).
+//!   visitor's permissions point.
+//! - /login sends a fresh installation to /setup.
 //! - Passwords are never echoed back into a re-shown form.
 
 use application::authz::Actor;

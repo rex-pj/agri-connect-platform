@@ -29,9 +29,14 @@ use domain::{
     Error,
 };
 
+use application::constants::ADMIN_UNIT_SNAP_M;
+
 use crate::{
-    entities::{catalogue_state, province, ward},
-    sql::{advisory_xact_lock, make_point, scalar, within, DbFn, Geo, PgType, QueryAs},
+    entities::{business, catalogue_state, province, ward},
+    sql::{
+        advisory_xact_lock, business_location, make_point, scalar, within, DbFn, Geo, PgType,
+        QueryAs,
+    },
 };
 
 /// The dataset: `V version`, then `P` (province) and `W` (ward) lines, tab
@@ -43,6 +48,14 @@ const DATASET_KEY_PREFIX: &str = "admin_units.";
 
 /// Two processes starting together load the dataset once.
 const LOAD_LOCK_ID: i64 = 0x6167_7269_5f61_6475; // "agri_adu"
+
+/// Recorded in `catalogue_state` with the dataset's version once every
+/// business has the ward of its position in it.
+const PLACED_KEY_PREFIX: &str = "business_wards.";
+
+/// Businesses placed per UPDATE: each is a lookup through the boundary
+/// index, so a statement stays well inside the statement timeout.
+const BUSINESSES_PER_STATEMENT: usize = 500;
 
 /// Wards per INSERT: 8 values each, far under Postgres' 65 535 parameters.
 const WARDS_PER_STATEMENT: usize = 100;
@@ -404,54 +417,103 @@ impl<T: sea_orm::Iden + 'static> IntoIdenDyn for T {
     }
 }
 
+/// Whether the one-time step `key` is recorded.
+async fn recorded(txn: &DatabaseTransaction, key: &str) -> Result<bool, Error> {
+    catalogue_state::Entity::find_by_id(key.to_owned())
+        .one(txn)
+        .await
+        .map(|row| row.is_some())
+        .map_err(AdminUnitRepository::fail("version"))
+}
+
+/// Records the step `key`, the one row of its `prefix`: older versions' keys go.
+async fn record(txn: &DatabaseTransaction, prefix: &str, key: String) -> Result<(), Error> {
+    run(
+        txn,
+        "forget older versions",
+        &Query::delete()
+            .from_table(catalogue_state::Entity)
+            .and_where(catalogue_state::Column::Key.like(format!("{prefix}%")))
+            .to_owned(),
+    )
+    .await?;
+    run(
+        txn,
+        "record version",
+        &Query::insert()
+            .into_table(catalogue_state::Entity)
+            .columns([catalogue_state::Column::Key])
+            .values_panic([Expr::val(key).into()])
+            .to_owned(),
+    )
+    .await?;
+    Ok(())
+}
+
+/// Gives every business with a position the ward it lies in (`ward_code_at`,
+/// as a profile edit writes it), a batch per statement.
+async fn place_businesses(txn: &DatabaseTransaction) -> Result<u64, Error> {
+    let ids: Vec<i32> = business::Entity::find()
+        .select_only()
+        .column(business::Column::Id)
+        .filter(Expr::expr(business_location()).is_not_null())
+        .order_by_asc(business::Column::Id)
+        .into_tuple()
+        .all(txn)
+        .await
+        .map_err(AdminUnitRepository::fail("businesses to place"))?;
+    let mut placed = 0;
+    for chunk in ids.chunks(BUSINESSES_PER_STATEMENT) {
+        placed += run(
+            txn,
+            "place businesses",
+            &Query::update()
+                .table(business::Entity)
+                .value(
+                    business::Column::WardCode,
+                    ward_code_at(business_location(), ADMIN_UNIT_SNAP_M),
+                )
+                .and_where(
+                    Expr::col((business::Entity, business::Column::Id)).is_in(chunk.to_vec()),
+                )
+                .to_owned(),
+        )
+        .await?;
+    }
+    Ok(placed)
+}
+
 #[async_trait]
 impl AdminUnitRepositoryTrait for AdminUnitRepository {
     async fn sync(&self) -> Result<AdminUnitSync, Error> {
         let text = inflate()?;
         let data = parse(&text)?;
         let key = format!("{DATASET_KEY_PREFIX}{}", data.version);
+        let placed_key = format!("{PLACED_KEY_PREFIX}{}", data.version);
         let txn = self.db.begin().await.map_err(Self::fail("begin"))?;
         run(&txn, "lock", &advisory_xact_lock(LOAD_LOCK_ID)).await?;
-        let done = catalogue_state::Entity::find_by_id(key.clone())
-            .one(&txn)
-            .await
-            .map_err(Self::fail("version"))?
-            .is_some();
-        if done {
-            txn.commit().await.map_err(Self::fail("commit"))?;
-            return Ok(AdminUnitSync {
-                version: data.version.to_owned(),
-                ..AdminUnitSync::default()
-            });
-        }
-        let (provinces, wards) = load(&txn, &data).await?;
-        // Older versions' keys go: one row says which dataset is in.
-        run(
-            &txn,
-            "forget older versions",
-            &Query::delete()
-                .from_table(catalogue_state::Entity)
-                .and_where(catalogue_state::Column::Key.like(format!("{DATASET_KEY_PREFIX}%")))
-                .to_owned(),
-        )
-        .await?;
-        run(
-            &txn,
-            "record version",
-            &Query::insert()
-                .into_table(catalogue_state::Entity)
-                .columns([catalogue_state::Column::Key])
-                .values_panic([Expr::val(key).into()])
-                .to_owned(),
-        )
-        .await?;
-        txn.commit().await.map_err(Self::fail("commit"))?;
-        Ok(AdminUnitSync {
+        let mut sync = AdminUnitSync {
             version: data.version.to_owned(),
-            loaded: true,
-            provinces,
-            wards,
-        })
+            ..AdminUnitSync::default()
+        };
+        if !recorded(&txn, &key).await? {
+            let (provinces, wards) = load(&txn, &data).await?;
+            record(&txn, DATASET_KEY_PREFIX, key).await?;
+            sync = AdminUnitSync {
+                loaded: true,
+                provinces,
+                wards,
+                ..sync
+            };
+        }
+        // Once per dataset, and once for a database older than the column:
+        // boundaries moved, so the ward of a position may have too.
+        if sync.loaded || !recorded(&txn, &placed_key).await? {
+            place_businesses(&txn).await?;
+            record(&txn, PLACED_KEY_PREFIX, placed_key).await?;
+        }
+        txn.commit().await.map_err(Self::fail("commit"))?;
+        Ok(sync)
     }
 
     async fn provinces(&self) -> Result<Vec<Province>, Error> {

@@ -59,7 +59,11 @@ pub trait ProductRepositoryTrait {
     /// A shown commodity: what a supply may say it is for.
     async fn check_commodity_is_shown(&self, commodity_id: i32) -> Result<bool, Error>;
 
-    async fn create(&self, product: NewProduct) -> Result<i32, Error>;
+    /// Creates the supply unless its business already lists `cap` of them
+    /// (hidden ones count): `None` then. Counted and inserted in one
+    /// transaction with the business locked, so two requests cannot both
+    /// take the last place.
+    async fn create_capped(&self, product: NewProduct, cap: u64) -> Result<Option<i32>, Error>;
 
     async fn find_provider_product_by_id(&self, id: i32) -> Result<Option<ProviderProduct>, Error>;
 

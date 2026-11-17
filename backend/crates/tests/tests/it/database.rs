@@ -471,6 +471,39 @@ async fn the_schema_refuses_rows_that_contradict_each_other() {
             "INSERT INTO search_events (service_type_id, supply_type_id, results) VALUES (1, 2, 0)",
             "chk_search_events_one_type",
         ),
+        // The weekly totals keep the rules of the rows they were counted from.
+        (
+            "INSERT INTO call_click_weeks
+               (week_starts_on, business_id, service_type_id, supply_type_id, channel, taps)
+               VALUES ('2026-01-05', 1, 1, 2, 'call', 3)",
+            "chk_call_click_weeks_one_type",
+        ),
+        (
+            "INSERT INTO call_click_weeks (week_starts_on, business_id, channel, taps)
+               VALUES ('2026-01-05', 1, 'fax', 3)",
+            "chk_call_click_weeks_channel",
+        ),
+        (
+            "INSERT INTO call_click_weeks (week_starts_on, business_id, channel, taps)
+               VALUES ('2026-01-05', 1, 'call', 0)",
+            "chk_call_click_weeks_taps",
+        ),
+        (
+            "INSERT INTO search_event_weeks
+               (week_starts_on, service_type_id, supply_type_id, searches, unmet)
+               VALUES ('2026-01-05', 1, 2, 3, 0)",
+            "chk_search_event_weeks_one_type",
+        ),
+        (
+            "INSERT INTO search_event_weeks (week_starts_on, searches, unmet)
+               VALUES ('2026-01-05', 3, 4)",
+            "chk_search_event_weeks_counts",
+        ),
+        // A business is in a ward there is.
+        (
+            "UPDATE businesses SET ward_code = '99999' WHERE id = 1",
+            "businesses_ward_code_fkey",
+        ),
         // Text that must say something; a code in its one spelling.
         (
             "INSERT INTO businesses (name, phone) VALUES ('  ', '0903333333')",

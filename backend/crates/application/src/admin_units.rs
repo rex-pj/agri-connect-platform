@@ -193,11 +193,6 @@ impl AdminUnits {
         }
     }
 
-    /// A ward's own name, without its province ("Phường Cai Lậy").
-    pub fn ward_name(&self, code: &str) -> Option<&str> {
-        self.wards.get(code).map(|w| w.full_name.as_str())
-    }
-
     /// The contract area an area names, if it is an active province or an
     /// active ward of an active province.
     pub fn contract_area(&self, area: &AreaKey) -> Option<ContractArea> {

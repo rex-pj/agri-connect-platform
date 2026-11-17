@@ -12,7 +12,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use application::validation::point_wkt;
+use application::{constants::ADMIN_UNIT_SNAP_M, validation::point_wkt};
 use async_trait::async_trait;
 use domain::{
     models::catalogue::{DemoCounts, DemoRemoval, DemoReport},
@@ -33,9 +33,10 @@ use crate::{
     entities::{
         alert, alert_kind, business, call_click, commodity, crop, crop_price, inquiry, job_post,
         location, partner, partner_contract, partner_contract_service_type,
-        partner_contract_supply_type, product, review, search_event, sector, service, service_type,
-        supply_type,
+        partner_contract_supply_type, product, review, search_event, search_event_week, sector,
+        service, service_type, supply_type,
     },
+    repositories::admin_unit_repository::ward_code_at,
     sql::{geography_from_text, null, Geo},
 };
 
@@ -460,15 +461,20 @@ async fn insert_businesses(txn: &DatabaseTransaction, rows: &[DemoBusiness]) -> 
             business::Column::Description.into_iden(),
             business::Column::Address.into_iden(),
             Geo::Location.into_iden(),
+            business::Column::WardCode.into_iden(),
             business::Column::IsVerified.into_iden(),
             business::Column::IsActive.into_iden(),
             business::Column::IsDemo.into_iden(),
         ])
         .to_owned();
     for b in rows {
-        let location = match (b.lat, b.lng) {
-            (Some(lat), Some(lng)) => geography_from_text(&point_wkt(lat, lng)),
-            _ => null(),
+        // The ward with the position, as a profile edit writes it.
+        let (location, ward) = match (b.lat, b.lng) {
+            (Some(lat), Some(lng)) => {
+                let point = || geography_from_text(&point_wkt(lat, lng));
+                (point(), ward_code_at(point(), ADMIN_UNIT_SNAP_M))
+            }
+            _ => (null(), null()),
         };
         insert
             .values([
@@ -477,6 +483,7 @@ async fn insert_businesses(txn: &DatabaseTransaction, rows: &[DemoBusiness]) -> 
                 Expr::val(b.description.clone()).into(),
                 Expr::val(b.address.clone()).into(),
                 location,
+                ward,
                 Expr::val(b.is_verified).into(),
                 Expr::val(true).into(),
                 Expr::val(true).into(),
@@ -763,6 +770,14 @@ impl DemoDataRepositoryTrait for DemoDataRepository {
             .exec(&txn)
             .await
             .map_err(db_error("remove searches"))?
+            .rows_affected;
+        // Demo searches kept long enough to be counted into weekly totals.
+        // A demo business's tap weeks go with the business (cascade).
+        activity_removed += search_event_week::Entity::delete_many()
+            .filter(search_event_week::Column::IsDemo.eq(true))
+            .exec(&txn)
+            .await
+            .map_err(db_error("remove search weeks"))?
             .rows_affected;
 
         // The demo listings are gone, so whatever still refers to a demo

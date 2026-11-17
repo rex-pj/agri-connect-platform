@@ -12,6 +12,9 @@ pub struct Model {
     pub email: Option<String>,
     pub description: Option<String>,
     pub address: Option<String>,
+    /// The ward the position lies in (`admin_unit_repository::ward_code_at`),
+    /// written with the position.
+    pub ward_code: Option<String>,
     pub is_verified: bool,
     pub is_active: bool,
     pub is_demo: bool,

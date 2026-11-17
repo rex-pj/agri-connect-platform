@@ -25,14 +25,12 @@ use domain::Error;
 use crate::{
     db_types::DateTimeWithTimeZone,
     entities::{
-        business::{self, Entity as Business},
+        business,
         service::{self, Entity as ServiceEntity},
         service_type::{self as category, Entity as Category},
     },
-    search::{
-        search_condition, text_contains, ADMIN_SERVICE_SEARCH_COLUMNS,
-        SERVICE_LISTING_SEARCH_COLUMNS,
-    },
+    repositories::lock_business,
+    search::{admin_service_search, service_listing_matches},
     sql::{
         business_location, businesses_of, category_in_sector, distance, geography_from_text,
         output, within, DbFn, QueryAs,
@@ -250,7 +248,7 @@ fn public_filtered(
         query = query.filter(category_in_sector(sector));
     }
     if let Some(text) = filter.text.as_deref().filter(|t| !t.trim().is_empty()) {
-        query = query.filter(text_contains(SERVICE_LISTING_SEARCH_COLUMNS, text));
+        query = query.filter(service_listing_matches(text));
     }
     query
 }
@@ -297,8 +295,7 @@ impl ServiceRepositoryTrait for ServiceRepository {
         limit: i64,
         offset: i64,
     ) -> Result<Vec<AdminService>, Error> {
-        let mut query = base_admin_service_query()
-            .filter(search_condition(ADMIN_SERVICE_SEARCH_COLUMNS, search));
+        let mut query = base_admin_service_query().filter(admin_service_search(search));
         if let Some(bid) = provider_id {
             query = query.filter(service::Column::BusinessId.eq(bid));
         }
@@ -326,7 +323,7 @@ impl ServiceRepositoryTrait for ServiceRepository {
             .join(JoinType::InnerJoin, service::Relation::Business.def())
             .filter(service::Column::DeletedAt.is_null())
             .filter(business::Column::DeletedAt.is_null())
-            .filter(search_condition(ADMIN_SERVICE_SEARCH_COLUMNS, search));
+            .filter(admin_service_search(search));
         if let Some(bid) = provider_id {
             query = query.filter(service::Column::BusinessId.eq(bid));
         }
@@ -368,15 +365,7 @@ impl ServiceRepositoryTrait for ServiceRepository {
         let fail = |e: sea_orm::DbErr| Error::internal(format!("service create_capped: {e}"));
         let business_id = service.business_id;
         let txn = self.db.begin().await.map_err(fail)?;
-        // The lock makes concurrent creates for one business count in turn.
-        Business::find_by_id(business_id)
-            .select_only()
-            .column(business::Column::Id)
-            .lock_exclusive()
-            .into_tuple::<i32>()
-            .one(&txn)
-            .await
-            .map_err(fail)?;
+        lock_business(&txn, business_id).await.map_err(fail)?;
         let existing = ServiceEntity::find()
             .filter(service::Column::BusinessId.eq(business_id))
             .filter(service::Column::DeletedAt.is_null())

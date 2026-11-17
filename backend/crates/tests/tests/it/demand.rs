@@ -8,7 +8,8 @@ use axum::{
 };
 use integration_tests::{
     body_text, categories_of, env_with_origin, get_page, install_admin, json_body,
-    load_admin_units, register_provider, send, send_from, sign_in, Env, TEST_ORIGIN,
+    load_admin_units, place_business, register_provider, send, send_from, sign_in, Env,
+    TEST_ORIGIN,
 };
 use sea_orm::{ConnectionTrait, Statement};
 
@@ -65,14 +66,7 @@ async fn provider_at_cai_lay(e: &Env, username: &str, phone: &str) -> (i32, i32,
     .await
     .parse()
     .unwrap();
-    exec(
-        e,
-        &format!(
-            "UPDATE businesses SET location = \
-             ST_GeographyFromText('SRID=4326;POINT(106.085 10.415)') WHERE id = {business}"
-        ),
-    )
-    .await;
+    place_business(e, business, 10.415, 106.085).await;
     (business, service, name)
 }
 
@@ -303,5 +297,129 @@ async fn searches_are_recorded_without_who_and_unmet_ones_are_listed() {
     let page = body_text(send(&e.router, get_page("/admin/demand", Some(&admin))).await).await;
     assert!(page.contains("Bà con tìm mà không thấy"));
     assert!(page.contains("“may xoi lua”"));
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn taps_and_searches_older_than_any_report_become_weekly_totals() {
+    let e = env_with_origin().await;
+    let (business, service, _) = provider_at_cai_lay(&e, "thomay", "0911111111").await;
+    // Last week's stay as they are; those of a year ago are past keeping:
+    // three calls and a Zalo tap in one week, one call the week after.
+    taps(&e, business, service, "call", 2).await;
+    for (channel, back, n) in [
+        ("call", "52 weeks", 3),
+        ("zalo", "52 weeks", 1),
+        ("call", "51 weeks", 1),
+    ] {
+        for _ in 0..n {
+            exec(
+                &e,
+                &format!(
+                    "INSERT INTO call_clicks (business_id, service_id, channel, created_on) \
+                     VALUES ({business}, {service}, '{channel}', {LAST_WEEK} - interval '{back}')"
+                ),
+            )
+            .await;
+        }
+    }
+    exec(
+        &e,
+        &format!(
+            "INSERT INTO search_events (query, results, created_on) VALUES \
+             ('may cay', 0, {LAST_WEEK} - interval '52 weeks'), \
+             ('may cay', 0, {LAST_WEEK} - interval '52 weeks'), \
+             ('phun thuoc', 4, {LAST_WEEK} - interval '52 weeks'), \
+             ('phun thuoc', 4, {LAST_WEEK})"
+        ),
+    )
+    .await;
+
+    let demand = &e.state.usecases.demand;
+    let deleted = demand.roll_up_old_events(chrono::Utc::now()).await.unwrap();
+    assert_eq!(deleted, 5 + 3, "the old taps and searches");
+    assert_eq!(
+        scalar(&e, "SELECT count(*)::text AS v FROM call_clicks").await,
+        "2",
+        "what a report still reads stays"
+    );
+    assert_eq!(
+        scalar(&e, "SELECT count(*)::text AS v FROM search_events").await,
+        "1"
+    );
+    // One row per week, business, type and channel, each week a Monday.
+    assert_eq!(
+        scalar(
+            &e,
+            "SELECT string_agg(channel || ':' || taps, ',' ORDER BY week_starts_on, channel) AS v \
+             FROM call_click_weeks WHERE service_type_id IS NOT NULL \
+               AND extract(isodow FROM week_starts_on) = 1"
+        )
+        .await,
+        "call:3,zalo:1,call:1"
+    );
+    assert_eq!(
+        scalar(
+            &e,
+            "SELECT searches || ' of which ' || unmet AS v FROM search_event_weeks"
+        )
+        .await,
+        "3 of which 2",
+        "the words are not kept"
+    );
+    // Nothing left to do: a second run changes nothing.
+    assert_eq!(
+        demand.roll_up_old_events(chrono::Utc::now()).await.unwrap(),
+        0
+    );
+    assert_eq!(
+        scalar(&e, "SELECT sum(taps)::text AS v FROM call_click_weeks").await,
+        "5"
+    );
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_business_keeps_the_ward_of_its_position() {
+    let e = env_with_origin().await;
+    let token = register_provider(&e.state, "nongdan", "0901234567").await;
+    let ward = || async {
+        scalar(
+            &e,
+            "SELECT coalesce(ward_code, '-') AS v FROM businesses WHERE name = 'Vườn nongdan'",
+        )
+        .await
+    };
+    let profile = |position: &str| {
+        Request::put("/api/provider/profile")
+            .header(header::AUTHORIZATION, format!("Bearer {token}"))
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(header::ORIGIN, TEST_ORIGIN)
+            .body(Body::from(format!(
+                r#"{{"name":"Vườn nongdan","phone":"0901234567"{position}}}"#
+            )))
+            .unwrap()
+    };
+    // Placed before the wards are loaded: no ward yet; loading them gives
+    // every business the ward of its position.
+    let by_cai_lay = r#","lat":10.415,"lng":106.085"#;
+    assert_eq!(
+        send(&e.router, profile(by_cai_lay)).await.status(),
+        StatusCode::OK
+    );
+    assert_eq!(ward().await, "-");
+    load_admin_units(&e).await;
+    assert_eq!(ward().await, BINH_PHU);
+
+    // The profile edit writes the ward with the position, and clears both.
+    assert_eq!(send(&e.router, profile("")).await.status(), StatusCode::OK);
+    assert_eq!(ward().await, "-");
+    assert_eq!(
+        send(&e.router, profile(by_cai_lay)).await.status(),
+        StatusCode::OK
+    );
+    assert_eq!(ward().await, BINH_PHU);
     e.cleanup().await;
 }

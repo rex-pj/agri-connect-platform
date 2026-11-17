@@ -23,7 +23,26 @@ pub mod service_repository;
 pub mod user_repository;
 
 use domain::{Error, ErrorCode};
-use sea_orm::{DbErr, SqlErr};
+use sea_orm::{DatabaseTransaction, DbErr, EntityTrait, QuerySelect, SqlErr};
+
+use crate::entities::business;
+
+/// Locks a business's row until `txn` ends, so two requests adding to what
+/// it lists (a service, a supply) count its rows in turn and a cap on them
+/// holds.
+pub(crate) async fn lock_business(
+    txn: &DatabaseTransaction,
+    business_id: i32,
+) -> Result<(), DbErr> {
+    business::Entity::find_by_id(business_id)
+        .select_only()
+        .column(business::Column::Id)
+        .lock_exclusive()
+        .into_tuple::<i32>()
+        .one(txn)
+        .await
+        .map(|_| ())
+}
 
 /// Maps a write that hit a UNIQUE constraint to a field error, so two admins
 /// racing for the same slug get the form message rather than a 500; any other

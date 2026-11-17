@@ -1,4 +1,4 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use chrono::Utc;
 
@@ -38,10 +38,10 @@ use crate::{
         ExploreData, InquiryCreatedDto, LocationDto, ProductDto, PublicServiceDto,
         ServiceBrowseResponse, ServiceDto,
     },
-    pagination::{paginate, total_pages},
+    pagination::{paginate_public, public_total_pages, total_or_count},
     ports::EventBus,
     repeats::RepeatFilter,
-    validation::{non_blank, point_wkt, validate_coordinates, validate_phone},
+    validation::{non_blank, point_wkt, search_text, validate_coordinates, validate_phone},
 };
 
 // ── Use case ──────────────────────────────────────────────────────────────────
@@ -120,25 +120,28 @@ impl ExploreUseCase {
     }
 
     pub async fn browse_providers(&self, params: BrowseParams) -> Result<BrowseResponse> {
-        let (page, offset) = paginate(params.page, PAGE_SIZE);
+        let (page, offset) = paginate_public(params.page);
 
         let filter = PublicServiceFilter {
             category_id: params.service_id,
             sector: params.sector,
-            text: params.name,
+            text: search_text(params.name)?,
         };
-        let (providers, total) = tokio::try_join!(
-            self.business_repo
-                .browse(&filter, params.sort, PAGE_SIZE, offset),
-            self.business_repo.count_browse(&filter),
-        )?;
+        let providers = self
+            .business_repo
+            .browse(&filter, params.sort, PAGE_SIZE, offset)
+            .await?;
+        let total = total_or_count(offset, providers.len(), PAGE_SIZE, || {
+            self.business_repo.count_browse(&filter)
+        })
+        .await?;
 
         Ok(BrowseResponse {
             items: providers.into_iter().map(map_business_browse).collect(),
             total,
             page,
             per_page: PAGE_SIZE,
-            total_pages: total_pages(total, PAGE_SIZE),
+            total_pages: public_total_pages(total),
         })
     }
 
@@ -147,23 +150,26 @@ impl ExploreUseCase {
     /// One page of the service listing; `service_id` in the params is the
     /// category, `name` the typed text (service name, description, business).
     pub async fn browse_services(&self, params: BrowseParams) -> Result<ServiceBrowseResponse> {
-        let (page, offset) = paginate(params.page, PAGE_SIZE);
+        let (page, offset) = paginate_public(params.page);
         let filter = PublicServiceFilter {
             category_id: params.service_id,
             sector: params.sector,
-            text: params.name,
+            text: search_text(params.name)?,
         };
-        let (items, total) = tokio::try_join!(
-            self.service_repo
-                .browse_public(&filter, params.sort, PAGE_SIZE, offset),
-            self.service_repo.count_public(&filter),
-        )?;
+        let items = self
+            .service_repo
+            .browse_public(&filter, params.sort, PAGE_SIZE, offset)
+            .await?;
+        let total = total_or_count(offset, items.len(), PAGE_SIZE, || {
+            self.service_repo.count_public(&filter)
+        })
+        .await?;
         Ok(ServiceBrowseResponse {
             items: items.into_iter().map(PublicServiceDto::from).collect(),
             total,
             page,
             per_page: PAGE_SIZE,
-            total_pages: total_pages(total, PAGE_SIZE),
+            total_pages: public_total_pages(total),
         })
     }
 
@@ -235,7 +241,7 @@ impl ExploreUseCase {
         // A visitor with no address to tell apart is always counted.
         if !key.is_empty() {
             let fingerprint = sha256_hex(format!("{key}|{business_id}|{channel}"));
-            let window = std::time::Duration::from_secs(CALL_REPEAT_SECS);
+            let window = Duration::from_secs(CALL_REPEAT_SECS);
             if !self.recent_taps.first_in_window(fingerprint, window) {
                 return Ok(());
             }
@@ -423,6 +429,12 @@ impl ExploreUseCase {
         let categories = self.category_repo.list(type_filter).await?;
 
         Ok(categories.into_iter().map(CategoryDto::from).collect())
+    }
+
+    /// Forgets the taps whose repeat window has passed (bounded memory).
+    pub fn forget_old_taps(&self) {
+        self.recent_taps
+            .forget_older_than(Duration::from_secs(CALL_REPEAT_SECS));
     }
 
     pub async fn get_locations(&self) -> Result<Vec<LocationDto>> {

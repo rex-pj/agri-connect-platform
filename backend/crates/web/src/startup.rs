@@ -78,9 +78,10 @@ use tracing::{info, warn};
 use crate::{
     app_state::{AppState, UseCases},
     constants::{
-        DB_MAX_CONNECTIONS, DEFAULT_APP_URL, DEFAULT_BIND_ADDR, DEFAULT_UPLOAD_DIR,
-        HEALTHCHECK_TIMEOUT_SECS, RATE_LIMIT_PRUNE_EVERY_SECS, SESSION_PURGE_EVERY_SECS,
-        SMTP_PORT_DEFAULT, ZALO_GRAPH_URL, ZALO_TIMEOUT_SECS,
+        DB_ACQUIRE_TIMEOUT_SECS, DB_MAX_CONNECTIONS, DB_STATEMENT_TIMEOUT_SECS, DEFAULT_APP_URL,
+        DEFAULT_BIND_ADDR, DEFAULT_UPLOAD_DIR, EVENT_ROLL_UP_EVERY_SECS, HEALTHCHECK_TIMEOUT_SECS,
+        RATE_LIMIT_PRUNE_EVERY_SECS, SESSION_PURGE_EVERY_SECS, SMTP_PORT_DEFAULT, ZALO_GRAPH_URL,
+        ZALO_TIMEOUT_SECS,
     },
     locale::{Lang, Locale, Locales},
     middleware::{origin::origin_of, rate_limit::Limiters},
@@ -406,10 +407,48 @@ impl Databases {
     }
 }
 
+/// A whole number of at least 1 from the environment, or `default`.
+fn positive_env<T>(name: &'static str, default: T) -> Result<T, StartupError>
+where
+    T: std::str::FromStr + PartialOrd + From<u8>,
+{
+    match optional_env(name) {
+        None => Ok(default),
+        Some(v) => v
+            .trim()
+            .parse::<T>()
+            .ok()
+            .filter(|n| *n >= T::from(1))
+            .ok_or_else(|| StartupError::InvalidEnv {
+                name,
+                reason: format!("{v:?} is not a whole number of at least 1"),
+            }),
+    }
+}
+
+/// The pool the server answers requests from: bounded, quick to say it is
+/// full, and never busy with one statement for longer than a request lives.
 async fn connect(url: String) -> Result<DatabaseConnection, StartupError> {
+    let statement_timeout = positive_env("DB_STATEMENT_TIMEOUT_SECS", DB_STATEMENT_TIMEOUT_SECS)?;
     let mut options = ConnectOptions::new(url);
-    options.max_connections(DB_MAX_CONNECTIONS);
+    options
+        .max_connections(positive_env("DB_MAX_CONNECTIONS", DB_MAX_CONNECTIONS)?)
+        .acquire_timeout(std::time::Duration::from_secs(DB_ACQUIRE_TIMEOUT_SECS))
+        .map_sqlx_postgres_opts(move |pg| {
+            pg.options([("statement_timeout", format!("{statement_timeout}s"))])
+        });
     Ok(Database::connect(options).await?)
+}
+
+/// Brings the schema up to date on a connection of its own, closed after:
+/// building an index on a large table takes longer than any request may.
+async fn migrate(url: String) -> Result<(), StartupError> {
+    let mut options = ConnectOptions::new(url);
+    options.max_connections(1);
+    let db = Database::connect(options).await?;
+    Migrator::up(&db, None).await?;
+    db.close().await?;
+    Ok(())
 }
 
 /// What `build_state` wires the use cases to: the outside world, chosen by
@@ -693,11 +732,11 @@ pub async fn start() -> Result<(), StartupError> {
     load_env_files();
     init_tracing()?;
 
-    let primary = connect(required_env("DATABASE_URL")?).await?;
-
+    let database_url = required_env("DATABASE_URL")?;
     // A failure here stops startup: serving on a schema that does not match
     // the code corrupts data instead of failing loudly.
-    Migrator::up(&primary, None).await?;
+    migrate(database_url.clone()).await?;
+    let primary = connect(database_url).await?;
 
     let dbs = match optional_env("DATABASE_READ_URL") {
         Some(url) => {
@@ -763,15 +802,44 @@ pub async fn start() -> Result<(), StartupError> {
         }
     });
 
+    let demand = state.usecases.clone();
+    tokio::spawn(async move {
+        // Taps and searches older than any report become weekly totals, and
+        // job posts past keeping are deleted, so those tables stay the size
+        // of a few months however long the server runs.
+        let mut tick =
+            tokio::time::interval(std::time::Duration::from_secs(EVENT_ROLL_UP_EVERY_SECS));
+        loop {
+            tick.tick().await;
+            match demand.demand.roll_up_old_events(chrono::Utc::now()).await {
+                Ok(0) => {}
+                Ok(n) => info!(
+                    deleted = n,
+                    "old taps and searches counted into weekly totals"
+                ),
+                Err(e) => warn!(error = %e, "could not roll up old taps and searches"),
+            }
+            match demand.job.purge_old_posts(chrono::Utc::now()).await {
+                Ok(0) => {}
+                Ok(n) => info!(deleted = n, "old job posts deleted"),
+                Err(e) => warn!(error = %e, "could not delete old job posts"),
+            }
+        }
+    });
+
     let limiters = Limiters::in_process();
     let pruned = limiters.clone();
+    let repeats = state.usecases.clone();
     tokio::spawn(async move {
-        // Bounded memory: one entry per client seen in the last few minutes.
+        // Bounded memory: one entry per client seen in the last few minutes,
+        // and per tap or search still inside its repeat window.
         let mut tick =
             tokio::time::interval(std::time::Duration::from_secs(RATE_LIMIT_PRUNE_EVERY_SECS));
         loop {
             tick.tick().await;
             pruned.forget_idle();
+            repeats.explore.forget_old_taps();
+            repeats.demand.forget_old_searches();
         }
     });
 

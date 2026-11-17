@@ -10,7 +10,7 @@
 
 use std::sync::Arc;
 
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use domain::{
     constants::{CATEGORY_TYPE_SERVICE, JOB_STATUSES},
     events::{Change, DomainEvent, Entity},
@@ -28,11 +28,11 @@ use crate::{
     catalogue::{PERM_JOB_MODERATE, PERM_OWN_JOB_READ},
     constants::{
         ADMIN_PAGE_SIZE, JOBS_SHOWN, JOB_DESCRIPTION_MAX, JOB_NOTIFY_RADIUS_M,
-        JOB_POSTS_OPEN_PER_PHONE, JOB_POST_DAYS, REQUESTER_NAME_MAX_LEN,
+        JOB_POSTS_OPEN_PER_PHONE, JOB_POST_DAYS, JOB_POST_KEEP_DAYS, REQUESTER_NAME_MAX_LEN,
     },
     inputs::JobInput,
     outputs::{AdminPagedResponse, JobPostDto},
-    pagination::{paginate, total_pages},
+    pagination::{admin_total_pages, paginate_admin, total_or_count},
     ports::EventBus,
     validation::{audit_reason, max_chars, point_wkt, validate_coordinates, validate_phone},
 };
@@ -167,15 +167,28 @@ impl JobUseCase {
         page: i64,
     ) -> Result<AdminPagedResponse<JobPostDto>> {
         actor.require(PERM_JOB_MODERATE)?;
-        let (page, offset) = paginate(page, ADMIN_PAGE_SIZE);
-        let (rows, total) = self.job_repo.list_admin(ADMIN_PAGE_SIZE, offset).await?;
+        let (page, offset) = paginate_admin(page);
+        let rows = self.job_repo.list_admin(ADMIN_PAGE_SIZE, offset).await?;
+        let total = total_or_count(offset, rows.len(), ADMIN_PAGE_SIZE, || {
+            self.job_repo.count_admin()
+        })
+        .await?;
         Ok(AdminPagedResponse {
             items: rows.into_iter().map(job_dto).collect(),
             total,
             page,
             per_page: ADMIN_PAGE_SIZE,
-            total_pages: total_pages(total, ADMIN_PAGE_SIZE),
+            total_pages: admin_total_pages(total),
         })
+    }
+
+    /// Deletes the posts older than `JOB_POST_KEEP_DAYS`, whatever their
+    /// status; how many. Run now and then by the server: no page shows a
+    /// post that old, and each holds a farmer's phone number.
+    pub async fn purge_old_posts(&self, now: DateTime<Utc>) -> Result<u64> {
+        self.job_repo
+            .delete_older_than(now - Duration::days(JOB_POST_KEEP_DAYS))
+            .await
     }
 
     /// Opens, closes or marks a post spam (`JOB_STATUSES`).

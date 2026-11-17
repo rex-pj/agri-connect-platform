@@ -1,5 +1,3 @@
-use chrono::{DateTime, Utc};
-
 /// How a farmer reached out: what the demand report counts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LeadChannel {
@@ -30,23 +28,34 @@ impl DemoScope {
     }
 }
 
-/// One lead of a business in the report's `DemoScope`: a call or Zalo tap, or a contact
-/// request that is not spam. Never who sent it, except a request's phone,
-/// which only tells two requests from the same person apart.
+/// Leads in the report's `DemoScope`, counted by the database: the call or
+/// Zalo taps of one report week in one ward about one category, or the
+/// contact requests (not spam) one phone sent there. A report then reads
+/// rows by ward and category, however many businesses and taps there are.
+/// Never who, except a request's phone, which only tells two requests from
+/// the same person apart.
 #[derive(Debug, Clone)]
-pub struct LeadEvent {
-    pub at: DateTime<Utc>,
-    pub business_id: i32,
+pub struct LeadCount {
+    /// The report week it falls in, 0 for the oldest.
+    pub week: usize,
+    /// The ward its business lies in; `None` for a business with no position
+    /// in reach of a ward, or deleted since.
+    pub ward_code: Option<String>,
     /// The category of the service or product it was about; `None` for a tap
     /// on a shop's own page or a request with no service chosen.
     pub category_id: Option<i32>,
+    /// The business, only for leads with no category: such a lead takes the
+    /// category of its business's one live service, when it has just one.
+    pub business_id: Option<i32>,
     pub channel: LeadChannel,
-    /// The requester's phone, for an inquiry only.
+    pub count: i64,
+    /// The requester's phone, for inquiries only.
     pub requester_phone: Option<String>,
 }
 
 /// The ward a business counts under: the one its position lies in (or the
-/// nearest within `ADMIN_UNIT_SNAP_M`). Businesses without one are absent.
+/// nearest within `ADMIN_UNIT_SNAP_M`), kept with the position. Businesses
+/// without one are absent.
 pub struct BusinessArea {
     pub business_id: i32,
     pub ward_code: String,
@@ -73,11 +82,17 @@ pub struct NewSearch {
     pub results: i64,
 }
 
-/// A stored search, as the demand report reads it.
-pub struct SearchEvent {
-    pub at: DateTime<Utc>,
+/// Stored searches as the demand report reads them, counted by the
+/// database: those of one report week, category filter and ward that found
+/// something (`query` is then `None`: only what found nothing is listed by
+/// its words), or those for the same words that found nothing.
+pub struct SearchCount {
+    /// The report week, 0 for the oldest.
+    pub week: usize,
     pub query: Option<String>,
     pub category_id: Option<i32>,
     pub ward_code: Option<String>,
-    pub results: i64,
+    /// They found nothing.
+    pub unmet: bool,
+    pub count: i64,
 }

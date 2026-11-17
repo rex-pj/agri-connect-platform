@@ -883,3 +883,19 @@ pub async fn confirm_email(env: &Env, username: &str) {
         .await
         .unwrap();
 }
+
+/// Puts a business at a position behind the app's back, with the ward the
+/// position lies in, as a profile edit stores it with the position
+/// (`businesses.ward_code`; none before `load_admin_units`).
+pub async fn place_business(e: &Env, business: i32, lat: f64, lng: f64) {
+    let point = format!("ST_GeographyFromText('SRID=4326;POINT({lng} {lat})')");
+    e.t.db
+        .execute_unprepared(&format!(
+            "UPDATE businesses SET location = {point}, ward_code = \
+             (SELECT code FROM wards WHERE is_active AND ST_Covers(boundary, {point}) \
+              ORDER BY code LIMIT 1) \
+             WHERE id = {business}"
+        ))
+        .await
+        .unwrap();
+}

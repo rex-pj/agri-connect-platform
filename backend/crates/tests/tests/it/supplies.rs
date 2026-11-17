@@ -335,3 +335,55 @@ async fn the_json_api_lists_and_keeps_the_commodities() {
     assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
     e.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_business_lists_a_capped_number_of_supplies() {
+    use application::constants::PRODUCTS_PER_BUSINESS_MAX;
+    use axum::{body::Body, http::Request};
+    use integration_tests::{create_product, json_body, register_provider, with_product_category};
+
+    let e = Env::new().await;
+    let token = register_provider(&e.state, "nongdan", "0901234567").await;
+    let body = with_product_category(&e, r#"{"name":"NPK 16-16-8","price":15000}"#).await;
+    let first = create_product(&e, &token, &body).await;
+    // One short of the cap, a hidden one among them: hidden ones count.
+    e.t.db
+        .execute_unprepared(&format!(
+            "INSERT INTO products (business_id, supply_type_id, name, is_active)
+             SELECT p.business_id, p.supply_type_id, 'NPK ' || n, n > 1
+             FROM products p, generate_series(1, {}) AS n WHERE p.id = {first}",
+            PRODUCTS_PER_BUSINESS_MAX - 2
+        ))
+        .await
+        .unwrap();
+    create_product(&e, &token, &body).await;
+
+    let one_more = || {
+        Request::post("/api/provider/products")
+            .header(header::AUTHORIZATION, format!("Bearer {token}"))
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body.clone()))
+            .unwrap()
+    };
+    let res = send(&e.router, one_more()).await;
+    assert_eq!(res.status(), StatusCode::CONFLICT);
+    assert_eq!(json_body(res).await["code"], "product_limit_reached");
+    assert_eq!(
+        scalar(&e, "SELECT count(*)::text AS v FROM products").await,
+        PRODUCTS_PER_BUSINESS_MAX.to_string()
+    );
+
+    // A deleted one frees its place.
+    e.t.db
+        .execute_unprepared(&format!(
+            "UPDATE products SET deleted_at = now() WHERE id = {first}"
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        send(&e.router, one_more()).await.status(),
+        StatusCode::CREATED
+    );
+    e.cleanup().await;
+}

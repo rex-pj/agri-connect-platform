@@ -130,21 +130,21 @@ async fn demo_data_agrees_with_itself_and_leaves_nothing_behind() {
     let repo = DemandRepository::new(Arc::new(e.t.db.clone()));
     let (from, to) = (Utc::now() - Duration::weeks(10), Utc::now());
     assert!(repo
-        .lead_events(from, to, DemoScope::Real)
+        .lead_counts(from, to, DemoScope::Real)
         .await
         .unwrap()
         .is_empty());
     assert!(repo
-        .search_events(from, to, DemoScope::Real)
+        .search_counts(from, to, DemoScope::Real)
         .await
         .unwrap()
         .is_empty());
     assert_eq!(
-        repo.lead_events(from, to, DemoScope::Demo)
+        repo.lead_counts(from, to, DemoScope::Demo)
             .await
             .unwrap()
             .len(),
-        repo.lead_events(from, to, DemoScope::All)
+        repo.lead_counts(from, to, DemoScope::All)
             .await
             .unwrap()
             .len()

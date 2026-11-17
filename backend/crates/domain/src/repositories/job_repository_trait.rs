@@ -36,9 +36,15 @@ pub trait JobRepositoryTrait {
         limit: i64,
     ) -> Result<Vec<JobPost>, Error>;
 
-    /// Every post, newest first; a page and the total.
-    async fn list_admin(&self, limit: i64, offset: i64) -> Result<(Vec<JobPost>, i64), Error>;
+    /// A page of every post, newest first.
+    async fn list_admin(&self, limit: i64, offset: i64) -> Result<Vec<JobPost>, Error>;
+
+    /// How many posts `list_admin` pages through.
+    async fn count_admin(&self) -> Result<i64, Error>;
 
     /// False when there is no such post.
     async fn set_status(&self, id: i32, status: &str) -> Result<bool, Error>;
+
+    /// Deletes the posts made before `before`, whatever their status; how many.
+    async fn delete_older_than(&self, before: DateTime<Utc>) -> Result<u64, Error>;
 }

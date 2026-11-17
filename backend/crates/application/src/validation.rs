@@ -5,7 +5,7 @@ use domain::{models::coded::CodedEntry, Error, ErrorCode, Result};
 
 use crate::constants::{
     AUDIT_REASON_MAX, EMAIL_MAX, LAT_MAX, LAT_MIN, LNG_MAX, LNG_MIN, PASSWORD_MAX_BYTES,
-    PASSWORD_MIN_CHARS, USERNAME_MAX_LEN, USERNAME_MIN_LEN,
+    PASSWORD_MIN_CHARS, SEARCH_QUERY_MIN, USERNAME_MAX_LEN, USERNAME_MIN_LEN,
 };
 
 /// The optional "why" an admin gives for a change, as the audit log keeps it:
@@ -171,6 +171,19 @@ pub fn max_chars_opt(value: &Option<String>, max: usize) -> Result<()> {
 
 pub fn non_blank(value: Option<String>) -> Option<String> {
     value.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty())
+}
+
+/// The words typed in a public search box: trimmed, blank as none, and at
+/// least `SEARCH_QUERY_MIN` characters. A single letter is in nearly every
+/// name, so it finds nothing a farmer could use, and no index can answer it:
+/// the database would compare every row.
+pub fn search_text(typed: Option<String>) -> Result<Option<String>> {
+    match non_blank(typed) {
+        Some(words) if words.chars().count() < SEARCH_QUERY_MIN => {
+            Err(Error::new(ErrorCode::SearchTooShort).with_param("min", SEARCH_QUERY_MIN))
+        }
+        words => Ok(words),
+    }
 }
 
 #[cfg(test)]

@@ -21,11 +21,12 @@ use domain::{
     repositories::business_repository_trait::BusinessRepositoryTrait,
 };
 
+use application::constants::ADMIN_UNIT_SNAP_M;
 use domain::{Error, ErrorCode};
 
-use crate::repositories::unique_or_internal;
+use crate::repositories::{admin_unit_repository::ward_code_at, unique_or_internal};
 use crate::search::{
-    search_condition, text_contains, ADMIN_BUSINESS_SEARCH_COLUMNS, BUSINESS_SEARCH_COLUMNS,
+    search_condition, text_contains, BUSINESS_NAME_SEARCH_COLUMNS, BUSINESS_SEARCH_COLUMNS,
     SERVICE_SEARCH_COLUMNS,
 };
 use crate::{
@@ -530,7 +531,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             )
             .join(JoinType::LeftJoin, business::Relation::Owner.def())
             .filter(business::Column::DeletedAt.is_null())
-            .filter(search_condition(ADMIN_BUSINESS_SEARCH_COLUMNS, search))
+            .filter(search_condition(BUSINESS_NAME_SEARCH_COLUMNS, search))
             .order_by_desc(business::Column::IsVerified)
             .order_by_desc(business::Column::CreatedOn)
             .order_by_desc(business::Column::Id)
@@ -877,7 +878,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
     async fn count_for_admin(&self, search: Option<&str>) -> Result<i64, Error> {
         Business::find()
             .filter(business::Column::DeletedAt.is_null())
-            .filter(search_condition(ADMIN_BUSINESS_SEARCH_COLUMNS, search))
+            .filter(search_condition(BUSINESS_NAME_SEARCH_COLUMNS, search))
             .count(self.db.as_ref())
             .await
             .map(|c| c as i64)
@@ -949,12 +950,18 @@ fn profile_update(profile: &ProfileUpdate, which: SimpleExpr) -> UpdateMany<Busi
         .filter(which)
         .filter(business::Column::DeletedAt.is_null());
 
-    // The location column is not in the entity (PostGIS type).
-    let location = match &profile.location_wkt {
-        Some(wkt) => geography_from_text(wkt),
-        None => null(),
+    // The location column is not in the entity (PostGIS type). Its ward is
+    // written with it, so no report has to look it up again.
+    let (location, ward) = match &profile.location_wkt {
+        Some(wkt) => (
+            geography_from_text(wkt),
+            ward_code_at(geography_from_text(wkt), ADMIN_UNIT_SNAP_M),
+        ),
+        None => (null(), null()),
     };
-    QueryTrait::query(&mut update).value(Geo::Location, location);
+    QueryTrait::query(&mut update)
+        .value(Geo::Location, location)
+        .value(business::Column::WardCode, ward);
     update
 }
 
@@ -965,21 +972,21 @@ fn profile_update(profile: &ProfileUpdate, which: SimpleExpr) -> UpdateMany<Busi
 /// services yet (a new sign-up) is still listed, so farmers can find it.
 /// The business's own name or description contains `q`, or one of its live
 /// services does: a provider who only listed "Phun thuốc" is found by it.
+/// The services are searched once, on their own (through their folded
+/// indexes), and the directory looks each business up in what they found;
+/// asked per business, every service would be folded and compared.
 fn matches_text(q: &str) -> Condition {
-    let service_matches = ServiceEntity::find()
+    let offering = ServiceEntity::find()
         .select_only()
-        .column(service::Column::Id)
+        .column(service::Column::BusinessId)
         .join(JoinType::InnerJoin, service::Relation::ServiceType.def())
-        .filter(
-            Expr::col((service::Entity, service::Column::BusinessId))
-                .equals((business::Entity, business::Column::Id)),
-        )
         .filter(service::Column::IsActive.eq(true))
         .filter(service::Column::DeletedAt.is_null())
         .filter(category::Column::IsActive.eq(true))
         .filter(text_contains(SERVICE_SEARCH_COLUMNS, q))
         .into_query();
-    text_contains(BUSINESS_SEARCH_COLUMNS, q).add(Expr::exists(service_matches))
+    text_contains(BUSINESS_SEARCH_COLUMNS, q)
+        .add(Expr::col((business::Entity, business::Column::Id)).in_subquery(offering))
 }
 
 /// The live services (shown, not deleted, in a shown category) of the

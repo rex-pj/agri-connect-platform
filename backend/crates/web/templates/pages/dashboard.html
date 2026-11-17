@@ -98,6 +98,7 @@
       </li>
       {% endfor %}
     </ul>
+    {% if page.products_full %}<p class="small text-muted mt-2 mb-0">{{ t(key="dashboard.products_full", max=page.products_max) }}</p>{% endif %}
     {% elif page.can_create %}
     {{ empty::empty_state(icon="fa-box-open", title=t(key="dashboard.no_products"), hint=t(key="dashboard.no_products_hint"), action_href=page.new_href, action_icon="fa-plus", action_label=t(key="dashboard.add_product")) }}
     {% else %}

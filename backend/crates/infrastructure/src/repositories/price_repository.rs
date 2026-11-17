@@ -7,9 +7,9 @@ use std::{collections::HashMap, sync::Arc};
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use sea_orm::{
-    sea_query::{Expr, OnConflict},
+    sea_query::{Expr, Func, OnConflict, Order, OverStatement, Query, WindowStatement},
     ColumnTrait, DatabaseConnection, DbErr, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
-    QuerySelect, Set,
+    QuerySelect, Select, Set,
 };
 use tracing::error;
 
@@ -26,6 +26,7 @@ use crate::{
         location,
     },
     repositories::unique_or_internal,
+    sql::{output, DbFn, QueryAs, TableAlias},
 };
 
 pub struct PriceRepository {
@@ -90,6 +91,15 @@ impl PriceRepository {
                 })
             })
             .collect())
+    }
+}
+
+/// Every price, or one crop's: what the admin's list and its count read.
+fn prices_of(crop_id: Option<i32>) -> Select<PriceEntity> {
+    let query = PriceEntity::find();
+    match crop_id {
+        Some(id) => query.filter(crop_price::Column::CropId.eq(id)),
+        None => query,
     }
 }
 
@@ -225,39 +235,59 @@ impl PriceRepositoryTrait for PriceRepository {
         crop_id: Option<i32>,
         limit: u64,
         offset: u64,
-    ) -> Result<(Vec<CropPrice>, i64), Error> {
-        let db = self.db.as_ref();
-        let of_crop = || {
-            let query = PriceEntity::find();
-            match crop_id {
-                Some(id) => query.filter(crop_price::Column::CropId.eq(id)),
-                None => query,
-            }
-        };
-        let total = of_crop()
-            .count(db)
-            .await
-            .map_err(Self::fail("count prices"))?;
-        let rows = of_crop()
+    ) -> Result<Vec<CropPrice>, Error> {
+        let rows = prices_of(crop_id)
             .order_by_desc(crop_price::Column::ObservedOn)
             .order_by_desc(crop_price::Column::Id)
             .limit(limit)
             .offset(offset)
-            .all(db)
+            .all(self.db.as_ref())
             .await
             .map_err(Self::fail("list_prices"))?;
-        let total = i64::try_from(total).unwrap_or(i64::MAX);
-        Ok((self.assemble(rows, false).await?, total))
+        self.assemble(rows, false).await
     }
 
-    async fn public_prices_since(&self, since: NaiveDate) -> Result<Vec<CropPrice>, Error> {
+    async fn count_prices(&self, crop_id: Option<i32>) -> Result<i64, Error> {
+        prices_of(crop_id)
+            .count(self.db.as_ref())
+            .await
+            .map(|total| i64::try_from(total).unwrap_or(i64::MAX))
+            .map_err(Self::fail("count prices"))
+    }
+
+    async fn latest_public_prices(
+        &self,
+        since: NaiveDate,
+        per_area: u64,
+    ) -> Result<Vec<CropPrice>, Error> {
+        // Each crop's prices in each area numbered newest first; the board
+        // reads the first few of each, never the whole window.
+        let numbered = Query::select()
+            .column(crop_price::Column::Id)
+            .expr_window_as(
+                Func::cust(DbFn::RowNumber),
+                WindowStatement::partition_by(crop_price::Column::CropId)
+                    .add_partition_by(Expr::col(crop_price::Column::LocationId).into())
+                    .order_by(crop_price::Column::ObservedOn, Order::Desc)
+                    .order_by(crop_price::Column::Id, Order::Desc)
+                    .to_owned(),
+                QueryAs::Turn,
+            )
+            .from(PriceEntity)
+            .and_where(crop_price::Column::ObservedOn.gte(since))
+            .to_owned();
+        let newest = Query::select()
+            .column(crop_price::Column::Id)
+            .from_subquery(numbered, TableAlias::Ranked)
+            .and_where(Expr::expr(output(QueryAs::Turn)).lte(per_area))
+            .to_owned();
         let rows = PriceEntity::find()
-            .filter(crop_price::Column::ObservedOn.gte(since))
+            .filter(crop_price::Column::Id.in_subquery(newest))
             .order_by_desc(crop_price::Column::ObservedOn)
             .order_by_desc(crop_price::Column::Id)
             .all(self.db.as_ref())
             .await
-            .map_err(Self::fail("public_prices_since"))?;
+            .map_err(Self::fail("latest_public_prices"))?;
         self.assemble(rows, true).await
     }
 }

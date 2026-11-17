@@ -31,16 +31,22 @@ pub trait PriceRepositoryTrait {
     /// False when there is no such price.
     async fn delete_price(&self, id: i32) -> Result<bool, Error>;
 
-    /// Every price (or one crop's), the newest day first; a page of them and
-    /// the total.
+    /// A page of every price (or of one crop's), the newest day first.
     async fn list_prices(
         &self,
         crop_id: Option<i32>,
         limit: u64,
         offset: u64,
-    ) -> Result<(Vec<CropPrice>, i64), Error>;
+    ) -> Result<Vec<CropPrice>, Error>;
 
-    /// The prices observed on or after `since`, of shown crops in shown
-    /// areas, the newest day first.
-    async fn public_prices_since(&self, since: NaiveDate) -> Result<Vec<CropPrice>, Error>;
+    /// How many prices `list_prices` pages through.
+    async fn count_prices(&self, crop_id: Option<i32>) -> Result<i64, Error>;
+
+    /// The newest `per_area` prices of each crop in each area, observed on
+    /// or after `since`, of shown crops in shown areas, the newest day first.
+    async fn latest_public_prices(
+        &self,
+        since: NaiveDate,
+        per_area: u64,
+    ) -> Result<Vec<CropPrice>, Error>;
 }

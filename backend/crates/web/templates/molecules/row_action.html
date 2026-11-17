@@ -1,6 +1,6 @@
 {#- The buttons at the end of an admin table row, in a
     `<div class="row-actions">`, always in this order: show or hide, delete,
-    open (or public, for a record with no admin page). One macro per kind, so
+    open. One macro per kind, so
     every list words, colours and draws them alike: show green, hide amber,
     delete red, open neutral. 44 px squares with the icon only on a narrow
     screen; from 992 px a short word joins the icon (`row-btn__label`), since a
@@ -30,7 +30,3 @@
 {% macro open(href, name) -%}
 <a class="btn btn-outline-secondary row-btn" href="{{ href }}" aria-label="{{ t(key="row.open_label", name=name) }}" title="{{ t(key="row.open_label", name=name) }}">{{ atoms::icon(name="fa-chevron-right") }}<span class="row-btn__label">{{ t(key="row.open") }}</span></a>
 {%- endmacro open %}
-
-{% macro public(href, name) -%}
-<a class="btn btn-outline-secondary row-btn" href="{{ href }}" aria-label="{{ t(key="row.public_label", name=name) }}" title="{{ t(key="row.public_label", name=name) }}">{{ atoms::icon(name="fa-arrow-up-right-from-square") }}<span class="row-btn__label">{{ t(key="row.public") }}</span></a>
-{%- endmacro public %}

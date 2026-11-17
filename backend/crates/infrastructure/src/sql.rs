@@ -11,7 +11,7 @@ use sea_orm::{
     Condition, DeriveColumn, DeriveIden, EnumIter,
 };
 
-use crate::entities::{business, commodity, location, product, service_type, supply_type, user};
+use crate::entities::{business, commodity, product, service_type, supply_type, user};
 
 /// Database functions the query builder has no name for.
 #[derive(DeriveIden, Clone, Copy)]
@@ -36,6 +36,11 @@ pub enum DbFn {
     StY,
     #[sea_orm(iden = "pg_advisory_xact_lock")]
     AdvisoryXactLock,
+    /// `date_part(field, value)`: `EXTRACT` spelled as a function.
+    #[sea_orm(iden = "date_part")]
+    DatePart,
+    #[sea_orm(iden = "floor")]
+    Floor,
     #[sea_orm(iden = "ROW_NUMBER")]
     RowNumber,
     #[sea_orm(iden = "NULLIF")]
@@ -53,8 +58,8 @@ pub enum PgType {
     Geography,
     Geometry,
     Float8,
+    Int4,
     Interval,
-    Text,
 }
 
 /// The PostGIS columns left out of the entities (Sea-ORM cannot decode
@@ -68,11 +73,13 @@ pub enum Geo {
     Boundary,
 }
 
-/// A second reference to a table already in the query (`users` read again
-/// for an author's name).
+/// A name a query gives a table: a second reference to one already in it
+/// (`users` read again for an author's name), or a subquery it selects from
+/// (rows numbered by a window, to keep the first few).
 #[derive(DeriveIden, Clone, Copy)]
 pub enum TableAlias {
     Author,
+    Ranked,
 }
 
 /// The output columns a query names itself; each matches a field of the
@@ -90,7 +97,6 @@ pub enum QueryAs {
     CategoryIcon,
     CategoryId,
     CategorySlug,
-    CategoryType,
     Commodity,
     Count,
     CreatedByName,
@@ -98,14 +104,11 @@ pub enum QueryAs {
     Email,
     EmailVerified,
     Fresh,
-    Granted,
     Lat,
     LinkedUserId,
     LinkedUsername,
     Lng,
-    LocationId,
-    N,
-    Previous,
+    Oldest,
     ProviderTurn,
     RecipientEmail,
     Role,
@@ -113,13 +116,18 @@ pub enum QueryAs {
     RoleName,
     Sector,
     ServiceName,
+    ShopId,
     SvcName,
     Total,
+    Turn,
+    Unmet,
     UpdatedByName,
     VendorName,
     VendorPhone,
     VendorVerified,
     WardCode,
+    Week,
+    Words,
 }
 
 /// `ST_GeographyFromText(wkt)`, the WKT bound as a parameter
@@ -134,14 +142,6 @@ pub fn geography_from_text(wkt: &str) -> SimpleExpr {
 pub fn make_point<L: Into<SimpleExpr>, A: Into<SimpleExpr>>(lng: L, lat: A) -> SimpleExpr {
     SimpleExpr::from(Func::cust(DbFn::StMakePoint).args([lng.into(), lat.into()]))
         .cast_as(PgType::Geography)
-}
-
-/// The geography of a location preset, from its plain lat/lng columns.
-pub fn preset_point() -> SimpleExpr {
-    make_point(
-        Expr::col((location::Entity, location::Column::Lng)),
-        Expr::col((location::Entity, location::Column::Lat)),
-    )
 }
 
 /// `ST_Distance(a, b)` in metres.

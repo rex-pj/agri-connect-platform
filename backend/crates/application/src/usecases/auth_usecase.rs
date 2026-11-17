@@ -245,15 +245,6 @@ impl AuthUseCase {
         })
     }
 
-    /// Exchanges a refresh token for a fresh pair; `None` when there is no
-    /// new pair for any reason (see `renew_session` for which).
-    pub async fn refresh_session(&self, raw: &str) -> Result<Option<SessionTokens>> {
-        Ok(match self.renew_session(raw).await? {
-            Renewal::Renewed(tokens) => Some(tokens),
-            Renewal::Raced | Renewal::Ended => None,
-        })
-    }
-
     /// Exchanges a refresh token for a fresh pair. A spent token shown again
     /// within the grace period is a concurrent request (two tabs) that lost
     /// the race: `Raced`, and the winner's cookies must be left alone. After

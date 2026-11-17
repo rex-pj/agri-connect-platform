@@ -211,3 +211,41 @@ async fn a_job_reaches_the_providers_nearby_that_offer_it() {
     let res = send(&e.router, get_page("/jobs/new", None)).await;
     assert_eq!(res.status(), StatusCode::OK);
 }
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn job_posts_past_keeping_are_deleted_whatever_their_status() {
+    let e = Env::new().await;
+    let category = categories_of(&e, "service").await[0].0;
+    let area = scalar(&e, "SELECT min(id)::text AS v FROM locations").await;
+    let point = "ST_GeographyFromText('SRID=4326;POINT(106.09 10.42)')";
+    e.t.db
+        .execute_unprepared(&format!(
+            "INSERT INTO job_posts
+               (service_type_id, location_id, location, description, requester_name,
+                requester_phone, status, created_on)
+             VALUES
+               ({category}, {area}, {point}, 'Phun thuoc', 'Chu Ba', '0912345678', 'open',
+                now() - interval '13 months'),
+               ({category}, {area}, {point}, 'Muc bun', 'Chu Ba', '0912345678', 'closed',
+                now() - interval '13 months'),
+               ({category}, {area}, {point}, 'Sua may', 'Chu Ba', '0912345678', 'closed',
+                now() - interval '11 months')"
+        ))
+        .await
+        .unwrap();
+
+    let jobs = &e.state.usecases.job;
+    assert_eq!(jobs.purge_old_posts(chrono::Utc::now()).await.unwrap(), 2);
+    assert_eq!(
+        scalar(
+            &e,
+            "SELECT string_agg(description, ',') AS v FROM job_posts"
+        )
+        .await,
+        "Sua may",
+        "a post under a year old stays"
+    );
+    assert_eq!(jobs.purge_old_posts(chrono::Utc::now()).await.unwrap(), 0);
+    e.cleanup().await;
+}

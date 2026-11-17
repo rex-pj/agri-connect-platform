@@ -19,9 +19,8 @@ use domain::{
 
 use domain::Error;
 
-use crate::search::{
-    search_condition, text_contains, ADMIN_PRODUCT_SEARCH_COLUMNS, PRODUCT_SEARCH_COLUMNS,
-};
+use crate::repositories::lock_business;
+use crate::search::{admin_product_search, text_contains, PRODUCT_SEARCH_COLUMNS};
 use crate::{
     db_types::DateTimeWithTimeZone,
     entities::{
@@ -434,7 +433,24 @@ impl ProductRepositoryTrait for ProductRepository {
             })
     }
 
-    async fn create(&self, product: NewProduct) -> Result<i32, Error> {
+    async fn create_capped(&self, product: NewProduct, cap: u64) -> Result<Option<i32>, Error> {
+        let fail = |e: sea_orm::DbErr| {
+            error!("product create error: {e}");
+            Error::internal("Failed to create product.")
+        };
+        let business_id = product.business_id;
+        let txn = self.db.begin().await.map_err(fail)?;
+        lock_business(&txn, business_id).await.map_err(fail)?;
+        let existing = ProductEntity::find()
+            .filter(product::Column::BusinessId.eq(business_id))
+            .filter(product::Column::DeletedAt.is_null())
+            .count(&txn)
+            .await
+            .map_err(fail)?;
+        if existing >= cap {
+            txn.rollback().await.map_err(fail)?;
+            return Ok(None);
+        }
         let new_product = product::ActiveModel {
             business_id: Set(product.business_id),
             supply_type_id: Set(product.category_id),
@@ -448,14 +464,13 @@ impl ProductRepositoryTrait for ProductRepository {
             ..Default::default()
         };
 
-        ProductEntity::insert(new_product)
-            .exec(self.db.as_ref())
+        let id = ProductEntity::insert(new_product)
+            .exec(&txn)
             .await
-            .map(|r| r.last_insert_id)
-            .map_err(|e| {
-                error!("product create error: {e}");
-                Error::internal("Failed to create product.")
-            })
+            .map_err(fail)?
+            .last_insert_id;
+        txn.commit().await.map_err(fail)?;
+        Ok(Some(id))
     }
 
     async fn find_provider_product_by_id(&self, id: i32) -> Result<Option<ProviderProduct>, Error> {
@@ -717,10 +732,7 @@ fn map_provider_row(r: ProviderProductRow) -> ProviderProduct {
 
 /// The admin's list criteria, shared by `list_admin` and `count_admin`.
 fn apply_admin_filter<Q: QueryFilter>(mut query: Q, filter: &AdminProductFilter) -> Q {
-    query = query.filter(search_condition(
-        ADMIN_PRODUCT_SEARCH_COLUMNS,
-        filter.search.as_deref(),
-    ));
+    query = query.filter(admin_product_search(filter.search.as_deref()));
     if let Some(id) = filter.provider_id {
         query = query.filter(product::Column::BusinessId.eq(id));
     }

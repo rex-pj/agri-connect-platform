@@ -6,7 +6,7 @@
     <label class="list-search__input">
       {{ atoms::icon(name="fa-magnifying-glass", class="list-search__icon") }}
       <span class="visually-hidden">{{ t(key="common.search") }}</span>
-      <input type="search" name="q" value="{{ q }}" placeholder="{{ placeholder }}" enterkeyhint="search" required>
+      <input type="search" name="q" value="{{ q }}" placeholder="{{ placeholder }}" enterkeyhint="search" minlength="{{ limits.search_min }}" required>
     </label>
     <button type="submit" class="list-search__submit" aria-label="{{ t(key="common.search") }}">{{ atoms::icon(name="fa-arrow-right") }}</button>
   </div>

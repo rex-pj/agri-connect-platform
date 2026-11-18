@@ -6,7 +6,7 @@
 
 use application::{
     admin_units::AreaKey,
-    outputs::{CodedDto, DemandReportDto, DemandRowDto, Figure},
+    outputs::{CodedDto, DemandAreaDto, DemandReportDto, DemandRowDto, Figure},
 };
 use axum::{
     extract::State,
@@ -46,6 +46,8 @@ pub struct DemandPage {
     pub sectors: Vec<CodeOption>,
     pub area: String,
     pub areas: Vec<AreaOption>,
+    /// Each listed area's own report, in `report.areas`' order.
+    pub area_hrefs: Vec<String>,
     pub csv_href: String,
     pub action: String,
 }
@@ -67,6 +69,16 @@ pub fn area_options(locale: &Locale, report: &DemandReportDto) -> Vec<AreaOption
         .collect()
 }
 
+/// Each area's own report (`?area=`), in the areas' order: what the area
+/// list links to.
+pub fn area_hrefs(areas: &[DemandAreaDto]) -> Result<Vec<String>, Error> {
+    let report = url("admin_demand", &[])?;
+    Ok(areas
+        .iter()
+        .map(|a| with_query(&report, &[("area", &a.value)]))
+        .collect())
+}
+
 /// The filter's value for the area in focus; empty for all of them.
 pub fn focus_value(focus: Option<AreaKey>) -> String {
     focus.map_or_else(String::new, |f| f.value())
@@ -86,12 +98,14 @@ pub async fn show(
         state.usecases.sector.named(),
     )?;
     let areas = area_options(state.locale(), &report);
+    let area_hrefs = area_hrefs(&report.areas)?;
     let path = url("admin_demand", &[])?;
     let area = focus_value(q.focus());
     let body = DemandPage {
         csv_href: with_query(&url("admin_demand_csv", &[])?, &[("area", &area)]),
         area,
         areas,
+        area_hrefs,
         report,
         sectors: sector_options(&sectors),
         action: path.clone(),
@@ -136,7 +150,11 @@ pub fn csv_response(
     filename: &str,
 ) -> Response {
     let few = locale.text_with("demand.fewer_than", &[("min", &report.min_count)]);
-    let cell = |f: &Figure| f.value.map_or_else(|| few.clone(), |v| v.to_string());
+    let cell = |f: &Figure| match (f.value, f.at_least) {
+        (Some(v), _) => v.to_string(),
+        (None, Some(n)) => locale.text_with("demand.at_least", &[("count", &n)]),
+        (None, None) => few.clone(),
+    };
     let mut header_row = vec![locale.text("demand.category"), locale.text("sector.label")];
     for w in &report.weeks {
         header_row.push(w.starts_on.format("%d/%m/%Y").to_string());

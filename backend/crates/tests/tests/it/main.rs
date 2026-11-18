@@ -45,5 +45,6 @@ mod search_page;
 mod sectors;
 mod services_page;
 mod sessions;
+mod settings;
 mod supplies;
 mod zalo;

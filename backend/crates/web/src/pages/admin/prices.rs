@@ -10,7 +10,7 @@
 
 use application::{
     authz::Actor,
-    constants::PRICE_FRESH_DAYS,
+    constants::PRICE_FRESH_DAYS_DEFAULT,
     inputs::PriceInput,
     outputs::{AdminPagedResponse, CropPriceDto, NamedDto},
     usecases::demand_usecase::vn_today,
@@ -144,7 +144,8 @@ pub struct PricesPage {
     pub form: PriceForm,
     pub errors: FormErrors,
     pub create_action: String,
-    /// How long a price stays public (`PRICE_FRESH_DAYS`).
+    /// How long a new commodity's prices stay public; each commodity says
+    /// its own (`price_fresh_days`).
     pub fresh_days: i64,
     pub confirm: Option<RowConfirm>,
     /// The hidden fields of the delete form: land back on this page.
@@ -223,7 +224,7 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
         form: view.form,
         errors: view.errors,
         create_action: path.clone(),
-        fresh_days: PRICE_FRESH_DAYS,
+        fresh_days: i64::from(PRICE_FRESH_DAYS_DEFAULT),
         confirm,
         keep: position,
         flash: view.flash,

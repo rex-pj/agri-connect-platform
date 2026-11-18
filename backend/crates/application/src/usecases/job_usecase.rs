@@ -4,9 +4,11 @@
 //! on their jobs page with the farmer's phone. A post is never public.
 //!
 //! Where is the phone's position when the farmer shared it, else a location
-//! preset. A post is open to providers for `JOB_POST_DAYS`; one phone has at
-//! most `JOB_POSTS_OPEN_PER_PHONE` open at once. The admin closes a post or
-//! marks it spam (`job.moderate`).
+//! preset. A post is open to providers for the `jobs.open_days` setting; one
+//! phone has at most `jobs.open_per_phone` open at once, one client sends at
+//! most `jobs.posts_per_client_per_day` a day, and while the
+//! `access.job_posts_open` switch is off none is taken (`job_posts_paused`).
+//! The admin closes a post or marks it spam (`job.moderate`).
 
 use std::sync::Arc;
 
@@ -27,9 +29,8 @@ use crate::{
     authz::Actor,
     catalogue::{PERM_JOB_MODERATE, PERM_OWN_JOB_READ},
     constants::{
-        ADMIN_PAGE_SIZE, JOBS_SHOWN, JOB_DESCRIPTION_MAX, JOB_NOTIFY_RADIUS_M,
-        JOB_POSTS_OPEN_PER_PHONE, JOB_POSTS_PER_CLIENT_PER_DAY, JOB_POST_CLIENT_WINDOW_SECS,
-        JOB_POST_DAYS, JOB_POST_KEEP_DAYS, REQUESTER_NAME_MAX_LEN,
+        ADMIN_PAGE_SIZE, JOBS_SHOWN, JOB_DESCRIPTION_MAX, JOB_POST_CLIENT_WINDOW_SECS,
+        JOB_POST_KEEP_DAYS, REQUESTER_NAME_MAX_LEN,
     },
     hashing::sha256_hex,
     inputs::JobInput,
@@ -37,6 +38,7 @@ use crate::{
     pagination::{admin_total_pages, paginate_admin, total_or_count},
     ports::EventBus,
     repeats::WindowCounter,
+    settings::SettingsReader,
     validation::{audit_reason, max_chars, point_wkt, validate_coordinates, validate_phone},
 };
 
@@ -46,6 +48,7 @@ pub struct JobUseCase {
     category_repo: Arc<dyn CategoryRepositoryTrait + Send + Sync>,
     location_repo: Arc<dyn LocationRepositoryTrait + Send + Sync>,
     events: Arc<dyn EventBus>,
+    settings: SettingsReader,
     /// Posts per client in the last day, in memory only (never who).
     posts_by_client: WindowCounter,
 }
@@ -56,12 +59,14 @@ impl JobUseCase {
         category_repo: Arc<dyn CategoryRepositoryTrait + Send + Sync>,
         location_repo: Arc<dyn LocationRepositoryTrait + Send + Sync>,
         events: Arc<dyn EventBus>,
+        settings: SettingsReader,
     ) -> Self {
         Self {
             job_repo,
             category_repo,
             location_repo,
             events,
+            settings,
             posts_by_client: WindowCounter::default(),
         }
     }
@@ -74,16 +79,20 @@ impl JobUseCase {
     }
 
     /// A farmer's post; its id. Every bad box is reported at once. One
-    /// client posts at most `JOB_POSTS_PER_CLIENT_PER_DAY` a day, whatever
-    /// phones it types (`job_post_daily_limit`).
+    /// client posts at most the `jobs.posts_per_client_per_day` setting a
+    /// day, whatever phones it types (`job_post_daily_limit`); none while
+    /// job posts are paused (`job_posts_paused`).
     pub async fn post(&self, input: JobInput) -> Result<i32> {
+        let settings = self.settings.load().await?;
+        if !settings.job_posts_open() {
+            return Err(Error::new(ErrorCode::JobPostsPaused));
+        }
         let window = std::time::Duration::from_secs(JOB_POST_CLIENT_WINDOW_SECS);
         // Hashed: the counter never holds an address.
         let client_key = (!input.client.is_empty()).then(|| sha256_hex(&input.client));
-        if client_key
-            .as_deref()
-            .is_some_and(|k| self.posts_by_client.count(k, window) >= JOB_POSTS_PER_CLIENT_PER_DAY)
-        {
+        if client_key.as_deref().is_some_and(|k| {
+            self.posts_by_client.count(k, window) >= settings.job_posts_per_client_per_day()
+        }) {
             return Err(Error::new(ErrorCode::JobPostDailyLimit));
         }
         let description = input.description.trim().to_owned();
@@ -137,12 +146,12 @@ impl JobUseCase {
         let (Some(category_id), Some((lat, lng))) = (category, position) else {
             return Err(Error::new(ErrorCode::ValidationFailed));
         };
-        let since = Utc::now() - Duration::days(JOB_POST_DAYS);
+        let since = Utc::now() - Duration::days(settings.job_post_days());
         if self
             .job_repo
             .count_open_by_phone(&requester_phone, since)
             .await?
-            >= JOB_POSTS_OPEN_PER_PHONE
+            >= settings.job_posts_open_per_phone()
         {
             return Err(Error::field("requester_phone", ErrorCode::JobPostLimit));
         }
@@ -173,31 +182,56 @@ impl JobUseCase {
         Ok(id)
     }
 
-    /// The provider's jobs page: open posts of the last `JOB_POST_DAYS` near
-    /// its business, in the categories of its live services.
+    /// The provider's jobs page: posts still open (`jobs.open_days`) within
+    /// the notice radius of its business, in the categories of its live
+    /// services.
     pub async fn list_own(&self, actor: &Actor) -> Result<Vec<JobPostDto>> {
         actor.require(PERM_OWN_JOB_READ)?;
-        let since = Utc::now() - Duration::days(JOB_POST_DAYS);
+        let settings = self.settings.load().await?;
+        let since = Utc::now() - Duration::days(settings.job_post_days());
         Ok(self
             .job_repo
-            .open_near_owner(actor.user_id, since, JOB_NOTIFY_RADIUS_M, JOBS_SHOWN)
+            .open_near_owner(
+                actor.user_id,
+                since,
+                settings.job_notify_radius_m(),
+                JOBS_SHOWN,
+            )
             .await?
             .into_iter()
             .map(job_dto)
             .collect())
     }
 
-    /// Every post, newest first.
+    /// How many posts are in `status`: the count the list's chip of that
+    /// status shows.
+    pub async fn count_admin(&self, actor: &Actor, status: &str) -> Result<i64> {
+        actor.require(PERM_JOB_MODERATE)?;
+        if !JOB_STATUSES.contains(&status) {
+            return Err(Error::field("status", ErrorCode::InvalidJobStatus));
+        }
+        self.job_repo.count_admin(Some(status)).await
+    }
+
+    /// Every post (`status`: only those in it, one of `JOB_STATUSES`),
+    /// newest first.
     pub async fn list_admin(
         &self,
         actor: &Actor,
         page: i64,
+        status: Option<&str>,
     ) -> Result<AdminPagedResponse<JobPostDto>> {
         actor.require(PERM_JOB_MODERATE)?;
+        if status.is_some_and(|s| !JOB_STATUSES.contains(&s)) {
+            return Err(Error::field("status", ErrorCode::InvalidJobStatus));
+        }
         let (page, offset) = paginate_admin(page);
-        let rows = self.job_repo.list_admin(ADMIN_PAGE_SIZE, offset).await?;
+        let rows = self
+            .job_repo
+            .list_admin(status, ADMIN_PAGE_SIZE, offset)
+            .await?;
         let total = total_or_count(offset, rows.len(), ADMIN_PAGE_SIZE, || {
-            self.job_repo.count_admin()
+            self.job_repo.count_admin(status)
         })
         .await?;
         Ok(AdminPagedResponse {

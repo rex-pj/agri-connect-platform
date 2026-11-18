@@ -28,7 +28,7 @@
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0 admin-table">
         <thead class="admin-table-head">
-          <tr><th>{{ t(key="commodity_form.name") }}</th><th>{{ t(key="sector.label") }}</th><th class="text-center">{{ t(key="form.display_order") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
+          <tr><th>{{ t(key="commodity_form.name") }}</th><th>{{ t(key="sector.label") }}</th><th class="text-center">{{ t(key="form.display_order") }}</th><th class="text-center d-none d-md-table-cell">{{ t(key="commodity_form.fresh_days_col") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
         </thead>
         <tbody>
           {% for r in b.rows %}
@@ -37,6 +37,7 @@
             <td>{% if c.icon %}{{ atoms::icon(name=c.icon, class="text-success me-2") }}{% endif %}<a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ c.name }}</a>{% if c.is_demo %} {{ status::demo() }}{% endif %}</td>
             <td>{{ r.sector_label }}</td>
             <td class="text-center">{{ c.display_order }}</td>
+            <td class="text-center d-none d-md-table-cell">{{ t(key="commodity_form.fresh_days_value", days=c.price_fresh_days) }}</td>
             <td class="text-center">{{ status::visibility(on=c.is_active) }}</td>
             <td class="text-end">
               <div class="row-actions">

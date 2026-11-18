@@ -37,7 +37,7 @@
 </section>
 {% endif %}
 
-<section class="home-section">{{ seller::provider_cta(cta=page.job_cta) }}</section>
+{% if page.job_cta %}<section class="home-section">{{ seller::provider_cta(cta=page.job_cta) }}</section>{% endif %}
 
 {% if page.prices %}
 <section class="home-section">

@@ -1,6 +1,7 @@
 {#- The buttons at the end of an admin table row, in a
     `<div class="row-actions">`, always in this order: show or hide, delete,
-    open. One macro per kind, so
+    open; a record with a status (contact request, job post) has its next
+    steps instead (`step`, then `spam`). One macro per kind, so
     every list words, colours and draws them alike: show green, hide amber,
     delete red, open neutral. 44 px squares with the icon only on a narrow
     screen; from 992 px a short word joins the icon (`row-btn__label`), since a
@@ -26,6 +27,34 @@
 {% macro delete(href, name) -%}
 <a class="btn btn-outline-danger row-btn" href="{{ href }}" aria-label="{{ t(key="row.delete_label", name=name) }}" title="{{ t(key="row.delete_label", name=name) }}">{{ atoms::icon(name="fa-trash") }}<span class="row-btn__label">{{ t(key="row.delete") }}</span></a>
 {%- endmacro delete %}
+
+{#- A one-click move to another status (web::pages::status_steps::Step):
+    `look` "contacted" (blue, never the green of a call button: it records a
+    call already made), "done" or "reopen" (neutral). `primary`: the move
+    the record waits for, filled blue, one per row, so the eye finds it
+    first; the others outlined grey. `keep`: further hidden fields (the list
+    position). -#}
+{% macro step(action, to, look, name, primary=false, keep="") -%}
+{%- if primary %}{% set look_class = "btn-primary row-btn--main" %}{% elif look == "contacted" %}{% set look_class = "btn-outline-primary" %}{% else %}{% set look_class = "btn-outline-secondary" %}{% endif -%}
+<form method="post" action="{{ action }}">
+  <input type="hidden" name="status" value="{{ to }}">
+  {% if keep %}{% for k, v in keep %}{% if v %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}{% endif %}
+  {% if look == "contacted" -%}
+  <button type="submit" class="btn {{ look_class }} row-btn" aria-label="{{ t(key="row.contacted_label", name=name) }}" title="{{ t(key="row.contacted_label", name=name) }}">{{ atoms::icon(name="fa-user-check") }}<span class="row-btn__label">{{ t(key="row.contacted") }}</span></button>
+  {%- elif look == "done" -%}
+  <button type="submit" class="btn {{ look_class }} row-btn" aria-label="{{ t(key="row.done_label", name=name) }}" title="{{ t(key="row.done_label", name=name) }}">{{ atoms::icon(name="fa-check") }}<span class="row-btn__label">{{ t(key="row.done") }}</span></button>
+  {%- else -%}
+  <button type="submit" class="btn {{ look_class }} row-btn" aria-label="{{ t(key="row.reopen_label", name=name) }}" title="{{ t(key="row.reopen_label", name=name) }}">{{ atoms::icon(name="fa-rotate-left") }}<span class="row-btn__label">{{ t(key="row.reopen") }}</span></button>
+  {%- endif %}
+</form>
+{%- endmacro step %}
+
+{#- Marking spam takes a record out of the leads and out of the providers'
+    sight, so it is amber like hiding and a link to the row's confirmation.
+    It is rare, so it never takes a share of a card's width (`row-btn--aside`). -#}
+{% macro spam(href, name) -%}
+<a class="btn btn-outline-warning row-btn row-btn--aside"href="{{ href }}" aria-label="{{ t(key="row.spam_label", name=name) }}" title="{{ t(key="row.spam_label", name=name) }}">{{ atoms::icon(name="fa-ban") }}<span class="row-btn__label">{{ t(key="row.spam") }}</span></a>
+{%- endmacro spam %}
 
 {% macro open(href, name) -%}
 <a class="btn btn-outline-secondary row-btn" href="{{ href }}" aria-label="{{ t(key="row.open_label", name=name) }}" title="{{ t(key="row.open_label", name=name) }}">{{ atoms::icon(name="fa-chevron-right") }}<span class="row-btn__label">{{ t(key="row.open") }}</span></a>

@@ -62,7 +62,7 @@ async fn a_reset_link_sent_twice_at_once_resets_once() {
 #[tokio::test]
 #[ignore = "needs TEST_DATABASE_URL"]
 async fn two_services_added_at_once_never_pass_the_cap() {
-    use application::{constants::SERVICES_PER_BUSINESS_MAX, inputs::ServiceInput};
+    use application::{constants::SERVICES_PER_BUSINESS_DEFAULT, inputs::ServiceInput};
     use integration_tests::{categories_of, token_service};
 
     let e = Env::new().await;
@@ -77,7 +77,7 @@ async fn two_services_added_at_once_never_pass_the_cap() {
         price_note: None,
     };
     let dashboard = &e.state.usecases.provider_dashboard;
-    for n in 1..SERVICES_PER_BUSINESS_MAX {
+    for n in 1..SERVICES_PER_BUSINESS_DEFAULT {
         dashboard
             .create_service(&actor, input(&format!("Dịch vụ {n}")), None)
             .await
@@ -99,7 +99,7 @@ async fn two_services_added_at_once_never_pass_the_cap() {
     );
     assert_eq!(
         dashboard.list_services(&actor).await.unwrap().len() as u64,
-        SERVICES_PER_BUSINESS_MAX
+        SERVICES_PER_BUSINESS_DEFAULT
     );
     e.cleanup().await;
 }

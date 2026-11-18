@@ -383,6 +383,10 @@ pub struct AdminStatsDto {
     /// Taps on the public call and Zalo buttons of real (not demo) shops in
     /// the last `CALL_STATS_DAYS` days.
     pub recent_calls: i64,
+    /// The same taps in the `CALL_STATS_DAYS` days before those: the trend.
+    pub previous_calls: i64,
+    /// Real businesses listed in the last `NEW_BUSINESS_DAYS` days.
+    pub new_businesses: i64,
 }
 
 #[derive(Serialize)]
@@ -547,14 +551,15 @@ pub struct AdminReviewDto {
     pub updated_by_name: Option<String>,
     /// Signs the review may be the provider's own, for the moderator to weigh
     /// before showing it: `own_phone` (the contact request came from the
-    /// business's phone), `quick` (written within `REVIEW_SUSPECT_MINUTES` of
+    /// business's phone), `quick` (written within `listings.review_suspect_minutes` of
     /// the request: no job is done that fast). Empty for none.
     pub suspect: Vec<&'static str>,
 }
 
-impl From<ReviewAdmin> for AdminReviewDto {
-    fn from(r: ReviewAdmin) -> Self {
-        let suspect = review_suspicions(&r);
+impl AdminReviewDto {
+    /// `suspect_minutes`: the `listings.review_suspect_minutes` setting.
+    pub fn new(r: ReviewAdmin, suspect_minutes: i64) -> Self {
+        let suspect = review_suspicions(&r, suspect_minutes);
         Self {
             id: r.id,
             business_id: r.business_id,
@@ -573,10 +578,10 @@ impl From<ReviewAdmin> for AdminReviewDto {
 }
 
 /// `AdminReviewDto::suspect` of a review.
-fn review_suspicions(r: &ReviewAdmin) -> Vec<&'static str> {
-    let quick = r.request_sent_on.is_some_and(|sent| {
-        r.created_on - sent < chrono::Duration::minutes(crate::constants::REVIEW_SUSPECT_MINUTES)
-    });
+fn review_suspicions(r: &ReviewAdmin, suspect_minutes: i64) -> Vec<&'static str> {
+    let quick = r
+        .request_sent_on
+        .is_some_and(|sent| r.created_on - sent < chrono::Duration::minutes(suspect_minutes));
     [
         (r.from_business_phone, REVIEW_SUSPECT_OWN_PHONE),
         (quick, REVIEW_SUSPECT_QUICK),
@@ -895,12 +900,18 @@ pub struct UserPermissionsDto {
 
 // ── Demand report ─────────────────────────────────────────────────────────────
 
-/// A figure of the demand report: its value, or `None` when it is above zero
-/// but under `DEMAND_REPORT_MIN_COUNT` (or would give such a one away), shown
-/// as "fewer than".
+/// A figure of the demand report: its value, or `None` when it is hidden.
+/// Hidden because it is above zero but under `DEMAND_REPORT_MIN_COUNT`: no
+/// `at_least`, shown as "fewer than". Hidden because it would give another
+/// hidden figure away (a sum with exactly one hidden part), whatever its
+/// size: `at_least` is the sum of the shown parts plus one for the hidden
+/// one (never zero, or it would be shown), shown as "at least"; anyone can
+/// add that up from the figures shown, so it gives nothing away, and it is
+/// never the false "fewer than" for a large sum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Figure {
     pub value: Option<i64>,
+    pub at_least: Option<i64>,
 }
 
 /// A week of the report: Monday to Sunday, Vietnam dates.
@@ -941,7 +952,12 @@ pub struct DemandAreaDto {
     pub name: Option<String>,
     /// A ward listed right under its province's row.
     pub nested: bool,
+    /// Its leads by report week, hidden like every figure of the report.
+    pub weeks: Vec<Figure>,
     pub total: Figure,
+    /// How many report weeks reached `STEADY_WEEKLY_LEADS`: how near the
+    /// area is to steady. Such a week is never a hidden figure.
+    pub weeks_at_bar: usize,
     /// Every week reached `STEADY_WEEKLY_LEADS`.
     pub steady: bool,
 }
@@ -1104,6 +1120,7 @@ pub struct CommodityDto {
     pub sector: String,
     pub icon: Option<String>,
     pub display_order: i16,
+    pub price_fresh_days: i16,
     pub is_active: bool,
     pub is_demo: bool,
 }
@@ -1116,6 +1133,7 @@ impl From<domain::models::commodity::Commodity> for CommodityDto {
             sector: c.sector,
             icon: c.icon,
             display_order: c.display_order,
+            price_fresh_days: c.price_fresh_days,
             is_active: c.is_active,
             is_demo: c.is_demo,
         }
@@ -1212,7 +1230,6 @@ pub struct PriceBoardDto {
     pub crops: Vec<CropBoardDto>,
     pub areas: Vec<NamedDto>,
     pub today: chrono::NaiveDate,
-    pub fresh_days: i64,
 }
 
 /// What the price form offers: the shown crops and the shown areas.
@@ -1287,4 +1304,28 @@ pub struct AlertDto {
 pub struct NamedCodeDto {
     pub code: String,
     pub name: String,
+}
+
+/// One setting on the settings page and in the JSON API.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct SettingDto {
+    pub key: &'static str,
+    /// `number`, `switch`, `phone`, `url` or `email`.
+    pub kind: &'static str,
+    /// As text (a switch: `true` / `false`; text: empty when unset).
+    pub value: String,
+    pub default: String,
+    pub min: Option<i64>,
+    pub max: Option<i64>,
+    /// When it was moved off its default; `None` while at it.
+    pub changed_on: Option<DateTime<Utc>>,
+}
+
+/// A section of the settings page: its settings, and how many of them are
+/// off their defaults.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct SettingGroupDto {
+    pub code: &'static str,
+    pub changed: usize,
+    pub settings: Vec<SettingDto>,
 }

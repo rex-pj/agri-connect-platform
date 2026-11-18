@@ -161,7 +161,27 @@ async fn the_report_counts_real_leads_by_area_and_hides_small_figures() {
         .clone();
     assert_eq!(cai_lay["value"], format!("w{BINH_PHU}"));
     assert_eq!(cai_lay["total"]["value"], 10);
+    assert_eq!(cai_lay["weeks"][7]["value"], 10, "its leads by week");
+    assert_eq!(cai_lay["weeks"][0]["value"], 0);
+    assert_eq!(cai_lay["weeks_at_bar"], 0);
     assert_eq!(cai_lay["steady"], false);
+    // The page shows how near it is to steady: its average a week against
+    // the goal (10 leads over 8 weeks: 1), its weeks as squares, each named
+    // by its week and figure, none reached; each area leads to its report.
+    assert!(page.contains("admin-table area-progress"));
+    assert!(page.contains("1/tuần"));
+    assert!(page.contains(r#": 10"></span>"#));
+    assert!(!page.contains("area-progress__week--met"));
+    assert!(page.contains("0/8 tuần"));
+    assert!(page.contains(&format!(r#"href="/admin/demand?area=w{BINH_PHU}""#)));
+    // The category × week table is shaded: the one week with leads is the
+    // darkest, the legend under it.
+    assert!(page.contains("demand-heat demand-heat--4"));
+    assert!(
+        !page.contains("demand-heat demand-heat--0"),
+        "a zero is not shaded"
+    );
+    assert!(page.contains("Màu càng đậm, tuần đó càng nhiều liên hệ."));
     assert_eq!(json["areas"][0]["value"], "p82", "the province first");
     assert_eq!(json["areas"][0]["total"]["value"], 10);
 
@@ -186,8 +206,39 @@ async fn the_report_counts_real_leads_by_area_and_hides_small_figures() {
 
     let dashboard =
         body_text(send(&e.router, get_page("/admin/dashboard", Some(&admin))).await).await;
-    assert!(dashboard.contains("Khu vực đều đặn (8 tuần)"));
+    assert!(dashboard.contains("Khu vực đều đặn"));
+    assert!(dashboard.contains("8 tuần liền, mỗi tuần từ 20 liên hệ"));
     assert!(dashboard.contains(r#"href="/admin/demand""#));
+    assert!(dashboard.contains("Khu vực gần đều đặn"));
+    assert!(
+        dashboard.contains(&format!(r#"href="/admin/demand?area=w{BINH_PHU}""#)),
+        "each area leads to its own report"
+    );
+    assert!(dashboard.contains("admin-table area-progress"));
+    // As on the report: the province a top row, its commune under it by its
+    // own name, the last of its group, never the full "province — ward".
+    let top = dashboard
+        .find(r#"class="area-progress__top""#)
+        .expect("the province");
+    let ward = dashboard
+        .find(r#"class="area-progress__ward area-progress__ward--last""#)
+        .expect("its commune");
+    assert!(top < ward, "the commune follows its province");
+    assert!(!dashboard.contains("Đồng Tháp — "));
+    // The cards say how they moved: one provider listed this week, 8 taps
+    // against none in the 30 days before.
+    // The figure (an arrow and the sign) apart from its words.
+    assert!(dashboard.contains("stat-card__delta--up"));
+    assert!(dashboard.contains("</i> +1</span>") && dashboard.contains("mới trong 7 ngày"));
+    assert!(dashboard.contains("</i> +8</span>") && dashboard.contains("so với 30 ngày trước"));
+    // The weekly leads as columns, each labelled with its figure.
+    assert!(dashboard.contains(r#"<svg class="week-columns""#));
+    assert!(dashboard.contains(r#"week-columns__bar--leads"#));
+    assert!(dashboard.contains(r#"text-anchor="middle">10</text>"#));
+    assert!(
+        dashboard.contains("Xem bảng số liệu"),
+        "the table folded under"
+    );
 
     // A provider cannot read it.
     let provider = sign_in(&e, "nongdan", "matkhau123").await;

@@ -22,4 +22,5 @@ pub mod refresh_token_repository_trait;
 pub mod review_repository_trait;
 pub mod role_repository_trait;
 pub mod service_repository_trait;
+pub mod setting_repository_trait;
 pub mod user_repository_trait;

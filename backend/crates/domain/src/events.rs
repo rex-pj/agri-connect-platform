@@ -27,6 +27,8 @@ pub enum Entity {
     CropPrice,
     JobPost,
     Alert,
+    /// The platform settings (one record: `entity_id` 0).
+    Setting,
 }
 
 impl Entity {
@@ -50,6 +52,7 @@ impl Entity {
             Entity::CropPrice => "crop_price",
             Entity::JobPost => "job_post",
             Entity::Alert => "alert",
+            Entity::Setting => "setting",
         }
     }
 }
@@ -90,6 +93,10 @@ pub enum Change {
     },
     /// It was just made (an inquiry a farmer sent).
     Created,
+    /// Settings changed, each as "key: before → after".
+    SettingsChanged {
+        changes: Vec<String>,
+    },
     /// Something about signing in to an account; the actor is the account.
     Auth(AuthEvent),
 }

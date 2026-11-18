@@ -19,4 +19,5 @@ pub mod review;
 pub mod role;
 pub mod service;
 pub mod session;
+pub mod setting;
 pub mod user;

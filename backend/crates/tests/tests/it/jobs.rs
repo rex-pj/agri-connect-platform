@@ -183,7 +183,7 @@ async fn a_job_reaches_the_providers_nearby_that_offer_it() {
         &e.router,
         post_form(
             &format!("/admin/jobs/{first}/status"),
-            &[("status", "spam")],
+            &[("status", "spam"), ("reason", "tin ảo")],
             Some(&admin),
         ),
     )
@@ -192,6 +192,26 @@ async fn a_job_reaches_the_providers_nearby_that_offer_it() {
     assert_eq!(own_jobs(&e, &near).await.as_array().map(Vec::len), Some(2));
     let res = send(&e.router, get_page("/admin/jobs", Some(&admin))).await;
     assert_eq!(res.status(), StatusCode::OK);
+    let html = body_text(res).await;
+    assert!(html.contains(r#"<span class="badge text-bg-secondary">Rác</span>"#));
+    assert!(
+        html.contains(r#"name="status" value="open""#),
+        "a spam post reopens"
+    );
+    assert!(!html.contains(&format!("/admin/jobs?spam={first}#xac-nhan")));
+    let html =
+        body_text(send(&e.router, get_page("/admin/jobs?state=spam", Some(&admin))).await).await;
+    assert!(!html.contains("Đang tìm người</span>"), "only the spam one");
+    assert_eq!(
+        scalar(
+            &e,
+            &format!(
+                "SELECT reason AS v FROM audit_logs WHERE entity_type = 'job_post'                  AND entity_id = {first}"
+            )
+        )
+        .await,
+        "spam: tin ảo"
+    );
     // A provider cannot moderate.
     let res = send(
         &e.router,
@@ -266,7 +286,7 @@ async fn one_client_posts_a_few_jobs_a_day_whatever_phones_it_types() {
             )))
             .unwrap()
     };
-    let limit = application::constants::JOB_POSTS_PER_CLIENT_PER_DAY;
+    let limit = application::constants::JOB_POSTS_PER_CLIENT_PER_DAY_DEFAULT;
     for n in 0..limit {
         let res = send(&e.router, post_from(format!("09123450{n:02}"))).await;
         assert_eq!(res.status(), StatusCode::CREATED, "post {n}");

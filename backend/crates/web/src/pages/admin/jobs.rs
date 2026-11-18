@@ -1,11 +1,16 @@
 //! /admin/jobs: every job post farmers made, newest first, each with its
-//! state (open, closed, spam). Each row's state is a small form: with JS the
-//! select saves itself (`autoSubmit`), without JS its button does; it lands
-//! back on the same page of the list.
+//! state (open, closed, spam) as a badge. The row ends with the next steps
+//! only (`status_steps`: done, spam, reopen), each one click but spam, whose
+//! link reloads the list with `?spam={id}` and that row's confirmation open
+//! (with a reason for the audit log). Chips narrow the list to one state
+//! (`?state=`); every form lands back on the same page of the list.
 
 use application::outputs::{AdminPagedResponse, JobPostDto};
 use axum::{extract::State, http::StatusCode, response::Response};
-use domain::{constants::JOB_STATUSES, Error, ErrorCode};
+use domain::{
+    constants::{JOB_STATUSES, JOB_STATUS_OPEN},
+    Error, ErrorCode,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -14,43 +19,37 @@ use crate::{
     extract::{ApiForm, ApiPath, ApiQuery},
     middleware::auth::Viewer,
     pages::{
-        admin::{render_admin, url, ListPosition},
-        listing::Pagination,
+        admin::{render_admin, url, AdminTab, ListPosition},
+        forms::reason,
+        listing::{parse_opt, Pagination},
         parse_id, see_other,
+        status_steps::{job_status_key, job_steps, offers_spam, Step},
     },
 };
-
-/// A state for the select: its code and its word.
-#[derive(Serialize)]
-pub struct StatusOption {
-    pub value: &'static str,
-    pub label: String,
-}
-
-/// The word of a job state (`job_status.<code>`), from the one list.
-fn status_options(state: &AppState) -> Vec<StatusOption> {
-    JOB_STATUSES
-        .iter()
-        .map(|s| StatusOption {
-            value: s,
-            label: state.locale().text(match *s {
-                "open" => "job_status.open",
-                "closed" => "job_status.closed",
-                _ => "job_status.spam",
-            }),
-        })
-        .collect()
-}
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct ListQuery {
     pub page: String,
+    /// The state the list is narrowed to.
+    pub state: String,
+    /// The post whose spam confirmation is open.
+    pub spam: String,
 }
 
 #[derive(Serialize)]
 pub struct JobRow {
     pub job: JobPostDto,
+    pub action: String,
+    /// The buttons this row offers, from its state.
+    pub steps: &'static [Step],
+    pub spam_href: String,
+}
+
+/// The spam confirmation open on this render.
+#[derive(Serialize)]
+pub struct Confirm {
+    pub requester: String,
     pub action: String,
 }
 
@@ -59,7 +58,11 @@ pub struct JobsPage {
     pub total: i64,
     pub rows: Vec<JobRow>,
     pub pagination: Option<Pagination>,
-    pub statuses: Vec<StatusOption>,
+    /// The state chips above the list.
+    pub states: Vec<AdminTab>,
+    /// The list is narrowed to one state.
+    pub narrowed: bool,
+    pub confirm: Option<Confirm>,
     pub position: ListPosition,
     pub flash: Option<Flash>,
 }
@@ -74,10 +77,13 @@ pub async fn list(
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
-    let position = ListPosition {
+    let mut position = ListPosition {
         page: q.page,
+        state: q.state,
         ..ListPosition::default()
     };
+    let state_filter = position.state_in(JOB_STATUSES);
+    position.state = state_filter.unwrap_or_default().to_owned();
     let AdminPagedResponse {
         items,
         total,
@@ -87,27 +93,53 @@ pub async fn list(
     } = state
         .usecases
         .job
-        .list_admin(&actor, position.page())
+        .list_admin(&actor, position.page(), state_filter)
         .await?;
     let position = ListPosition {
         page: page.to_string(),
         ..position
     };
-    let rows = items
-        .into_iter()
-        .map(|job| {
-            Ok(JobRow {
-                action: url("admin_job_status", &[("id", &job.id.to_string())])?,
-                job,
-            })
-        })
-        .collect::<Result<Vec<_>, Error>>()?;
+    let spam = parse_opt::<i32>(&q.spam);
+    let mut confirm = None;
+    let mut rows = Vec::with_capacity(items.len());
+    for job in items {
+        let id = job.id.to_string();
+        let action = url("admin_job_status", &[("id", &id)])?;
+        let steps = job_steps(&job.status);
+        if spam == Some(job.id) && offers_spam(steps) {
+            confirm = Some(Confirm {
+                requester: job.requester_name.clone(),
+                action: action.clone(),
+            });
+        }
+        rows.push(JobRow {
+            spam_href: position.href("admin_jobs", &[("spam", &id)])?,
+            action,
+            steps,
+            job,
+        });
+    }
+    let open = state
+        .usecases
+        .job
+        .count_admin(&actor, JOB_STATUS_OPEN)
+        .await?;
+    let locale = state.locale();
+    let states = position.state_chips(
+        "admin_jobs",
+        JOB_STATUSES,
+        locale.text("filters.all"),
+        |s| locale.text(job_status_key(s)),
+        (JOB_STATUS_OPEN, open),
+    )?;
     let path = url("admin_jobs", &[])?;
     let body = JobsPage {
         total,
         rows,
         pagination: position.pagination(&path, page, total_pages),
-        statuses: status_options(&state),
+        states,
+        narrowed: state_filter.is_some(),
+        confirm,
         position,
         flash: flash.0,
     };
@@ -127,8 +159,11 @@ pub async fn list(
 #[serde(default)]
 pub struct StatusForm {
     pub status: String,
-    /// The list page to land back on.
+    /// Why (asked when marking spam), for the audit log.
+    pub reason: String,
+    /// The list page and state to land back on.
     pub page: String,
+    pub state: String,
 }
 
 /// POST /admin/jobs/{id}/status
@@ -145,10 +180,11 @@ pub async fn change_status(
     state
         .usecases
         .job
-        .set_status(&actor, id, &form.status, None)
+        .set_status(&actor, id, &form.status, reason(&form.reason))
         .await?;
     ListPosition {
         page: form.page,
+        state: form.state,
         ..ListPosition::default()
     }
     .back_to("admin_jobs", Flash::JobStatusSaved)

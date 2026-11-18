@@ -12,6 +12,8 @@ pub struct Model {
     pub sector: String,
     pub icon: Option<String>,
     pub display_order: i16,
+    /// Days a price of its crops stays on the board.
+    pub price_fresh_days: i16,
     pub is_active: bool,
     /// Loaded with the demo data, removed with it unless real data uses it.
     pub is_demo: bool,

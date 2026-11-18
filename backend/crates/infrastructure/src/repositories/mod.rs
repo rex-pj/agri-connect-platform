@@ -20,6 +20,7 @@ pub mod refresh_token_repository;
 pub mod review_repository;
 pub mod role_repository;
 pub mod service_repository;
+pub mod setting_repository;
 pub mod user_repository;
 
 use domain::{Error, ErrorCode};

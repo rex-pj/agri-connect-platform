@@ -9,6 +9,7 @@ use application::{
     authz::Actor,
     catalogue::{PERM_ADMIN_DASHBOARD_VIEW, PERM_OWN_LISTING_CREATE, PERM_PARTNER_REPORT_READ},
     outputs::CodedDto,
+    settings::Settings,
 };
 use axum::{
     extract::FromRequestParts,
@@ -89,6 +90,30 @@ pub struct Shell {
     /// The sector switch's choices, "every sector" first, the chosen one
     /// marked; none while no sector is shown.
     pub sectors: Vec<SectorChoice>,
+    /// The platform's own help lines in the footer (the `support.*`
+    /// settings); empty on error pages, which do not read the settings.
+    pub support: SupportLines,
+    /// Farmers may post jobs (`access.job_posts_open`): the ways to the job
+    /// form show.
+    pub job_posts_open: bool,
+}
+
+/// The footer's help lines; one not set is not shown.
+#[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]
+pub struct SupportLines {
+    pub phone: Option<String>,
+    pub zalo_url: Option<String>,
+    pub email: Option<String>,
+}
+
+impl SupportLines {
+    pub fn of(settings: &Settings) -> Self {
+        Self {
+            phone: settings.support_phone().map(str::to_owned),
+            zalo_url: settings.support_zalo_url().map(str::to_owned),
+            email: settings.support_email().map(str::to_owned),
+        }
+    }
 }
 
 /// One button of the sector switch (`molecules/sector_switch.html`).
@@ -341,6 +366,26 @@ impl Shell {
         shell
     }
 
+    /// What the settings change in the frame: the footer's help lines, and
+    /// no invitation to sign up while sign-ups are closed.
+    pub fn apply_settings(&mut self, settings: &Settings) {
+        self.support = SupportLines::of(settings);
+        self.job_posts_open = settings.job_posts_open();
+        if !settings.registration_open() {
+            let register = url("register");
+            if let Some(menu) = self.profile.as_mut() {
+                menu.items.retain(|item| item.href != register);
+            }
+            if self
+                .provider_cta
+                .as_ref()
+                .is_some_and(|c| c.link.href == register)
+            {
+                self.provider_cta = None;
+            }
+        }
+    }
+
     /// For error pages: the frame and the generic account tab, no menu.
     pub fn without_session(locale: &Locale, path: &str, query: Option<&str>) -> Self {
         let search_url = url("search");
@@ -360,6 +405,8 @@ impl Shell {
             language_offer: None,
             sector: None,
             sectors: Vec::new(),
+            support: SupportLines::default(),
+            job_posts_open: true,
             tabs: tabs(locale, path, area_of(None)),
             profile: None,
             provider_cta: None,
@@ -448,7 +495,11 @@ impl FromRequestParts<AppState> for Shell {
             actor.as_ref(),
         );
         shell.language_offer = language_offer(&parts.headers, &state.locales);
-        let sectors = state.usecases.sector.shown().await?;
+        let (sectors, settings) = tokio::try_join!(
+            state.usecases.sector.shown(),
+            state.usecases.settings.current()
+        )?;
+        shell.apply_settings(&settings);
         shell.sector = chosen_sector(&parts.headers, &sectors);
         shell.sectors = sector_choices(state.locale(), &sectors, shell.sector.as_deref());
         Ok(shell)

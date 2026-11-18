@@ -9,6 +9,9 @@ pub struct Commodity {
     /// Font Awesome class.
     pub icon: Option<String>,
     pub display_order: i16,
+    /// Days a price of its crops stays on the board (1 to
+    /// `PRICE_FRESH_DAYS_MAX`).
+    pub price_fresh_days: i16,
     pub is_active: bool,
     /// Demo data (`DemoDataRepositoryTrait`), not a real entry yet.
     pub is_demo: bool,
@@ -20,4 +23,7 @@ pub struct CommodityFields {
     pub sector: String,
     pub icon: Option<String>,
     pub display_order: i16,
+    /// Days a price of its crops stays on the board (1 to
+    /// `PRICE_FRESH_DAYS_MAX`).
+    pub price_fresh_days: i16,
 }

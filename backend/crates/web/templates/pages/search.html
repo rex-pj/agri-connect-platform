@@ -24,10 +24,16 @@
 {% elif page.total == 0 %}
 {{ sector::sector_links(sectors=page.sectors) }}
 <section class="list-results">
-  {% if page.sector_name %}
+  {#- The job post is offered only while job posts are open
+      (`shell.job_posts_open`); else near me takes its place. -#}
+  {% if page.sector_name and shell.job_posts_open %}
   {{ empty::empty_state(icon="fa-magnifying-glass", title=t(key="search.none_in_sector", q=page.q, sector=page.sector_name), hint=t(key="search.none_in_sector_hint"), action_href=page.every_sector_href, action_icon="fa-border-all", action_label=t(key="search.every_sector"), second_href=url_for(name="job_new"), second_icon="fa-bullhorn", second_label=t(key="search.post_job")) }}
-  {% else %}
+  {% elif page.sector_name %}
+  {{ empty::empty_state(icon="fa-magnifying-glass", title=t(key="search.none_in_sector", q=page.q, sector=page.sector_name), hint=t(key="search.none_in_sector_hint"), action_href=page.every_sector_href, action_icon="fa-border-all", action_label=t(key="search.every_sector"), second_href=url_for(name="explore"), second_icon="fa-location-dot", second_label=t(key="nav.near_me")) }}
+  {% elif shell.job_posts_open %}
   {{ empty::empty_state(icon="fa-magnifying-glass", title=t(key="search.none", q=page.q), hint=t(key="search.none_hint"), action_href=url_for(name="job_new"), action_icon="fa-bullhorn", action_label=t(key="search.post_job"), second_href=url_for(name="explore"), second_icon="fa-location-dot", second_label=t(key="nav.near_me")) }}
+  {% else %}
+  {{ empty::empty_state(icon="fa-magnifying-glass", title=t(key="search.none", q=page.q), hint=t(key="search.none_hint_paused"), action_href=url_for(name="explore"), action_icon="fa-location-dot", action_label=t(key="nav.near_me"), second_href=url_for(name="services"), second_icon="fa-border-all", second_label=t(key="nav.services")) }}
   {% endif %}
 </section>
 {% else %}

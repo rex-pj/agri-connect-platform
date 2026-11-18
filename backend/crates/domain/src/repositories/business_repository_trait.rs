@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 
 use crate::{
     error::Error,
@@ -93,4 +94,8 @@ pub trait BusinessRepositoryTrait {
     async fn count_all(&self) -> Result<i64, Error>;
 
     async fn count_verified(&self) -> Result<i64, Error>;
+
+    /// Real (not demo, not deleted) businesses listed since `since`: sign-ups
+    /// and the admin's field listings.
+    async fn count_created_since(&self, since: DateTime<Utc>) -> Result<i64, Error>;
 }

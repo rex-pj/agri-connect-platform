@@ -80,6 +80,11 @@ pub const HOME_CATEGORY_TILES: usize = 4;
 /// How many crop prices the home page shows (each crop's newest).
 pub const HOME_PRICES_SHOWN: usize = 4;
 
+// ── Admin dashboard ───────────────────────────────────────────────────────────
+/// Areas of the demand report listed as nearest to steady (most weeks at
+/// the bar first).
+pub const DASHBOARD_NEAR_AREAS: usize = 5;
+
 // ── Pages ─────────────────────────────────────────────────────────────────────
 /// Search engines show about this much of a meta description.
 pub const META_DESCRIPTION_MAX_CHARS: usize = 150;
@@ -98,7 +103,7 @@ pub const EXPLORE_DEFAULT_RADIUS_M: i64 = RADIUS_DEFAULT_M as i64;
 const _: () = assert!(EXPLORE_RADII_M[1] == EXPLORE_DEFAULT_RADIUS_M);
 
 /// Metres in a kilometre: radii are kept in metres, shown in whole km.
-pub const METRES_PER_KM: i64 = 1_000;
+pub use application::constants::METRES_PER_KM;
 
 /// A distance in metres as whole kilometres, as the pages show it.
 pub const fn km(metres: i64) -> i64 {

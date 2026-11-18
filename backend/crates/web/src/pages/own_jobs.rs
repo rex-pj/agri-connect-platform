@@ -1,9 +1,9 @@
 //! /provider/jobs: jobs farmers posted near the provider's business in the
-//! categories of its live services, open ones of the last `JOB_POST_DAYS`,
+//! categories of its live services, open ones of the last `jobs.open_days`,
 //! newest first; each with its distance and a call button. Linked from the
 //! "a job near you" email and the dashboard.
 
-use application::{constants::JOB_POST_DAYS, outputs::JobPostDto};
+use application::outputs::JobPostDto;
 use axum::{extract::State, response::Response};
 use domain::Error;
 use serde::Serialize;
@@ -33,9 +33,13 @@ pub async fn list(
     let Some(actor) = viewer else {
         return see_other(&url("login")?);
     };
+    let (jobs, settings) = tokio::try_join!(
+        state.usecases.job.list_own(&actor),
+        state.usecases.settings.current()
+    )?;
     let page = OwnJobsPage {
-        jobs: state.usecases.job.list_own(&actor).await?,
-        days: JOB_POST_DAYS,
+        jobs,
+        days: settings.job_post_days(),
         dashboard_href: url("provider_dashboard")?,
     };
     render_page(&state, &shell, "pages/own_jobs.html", &page)

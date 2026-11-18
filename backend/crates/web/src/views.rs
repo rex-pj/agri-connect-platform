@@ -9,10 +9,11 @@ use application::constants::{
     ALERT_BODY_MAX, ALERT_TITLE_MAX, AUDIT_REASON_MAX, BUSINESS_ADDRESS_MAX,
     BUSINESS_DESCRIPTION_MAX, BUSINESS_NAME_MAX, CODED_ICON_MAX, CODED_NAME_MAX,
     COMMODITY_ICON_MAX, COMMODITY_NAME_MAX, CROP_NAME_MAX, CROP_UNIT_MAX, FULL_NAME_MAX,
-    JOB_DESCRIPTION_MAX, PASSWORD_MIN_CHARS, PASSWORD_RESET_EXPIRY_HOURS, PRICE_NOTE_MAX,
-    PRODUCT_DESCRIPTION_MAX, PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX, SEARCH_QUERY_MIN,
+    JOB_DESCRIPTION_MAX, PASSWORD_MIN_CHARS, PASSWORD_RESET_EXPIRY_HOURS, PRICE_FRESH_DAYS_MAX,
+    PRICE_NOTE_MAX, PRODUCT_DESCRIPTION_MAX, PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX, SEARCH_QUERY_MIN,
     USERNAME_MAX_LEN, USERNAME_MIN_LEN, VN_UTC_OFFSET_SECS,
 };
+use application::settings::SETTING_VALUE_MAX;
 use application::validation::{is_valid_vn_phone, SLUG_PATTERN, VN_PHONE_PATTERN};
 use axum::{
     http::{header, HeaderMap, HeaderValue, StatusCode},
@@ -52,15 +53,12 @@ pub const PAGE_CSP: &str = "default-src 'self'; script-src 'self'; style-src 'se
      frame-ancestors 'none'; base-uri 'none'; object-src 'none'";
 
 /// Site identity, from `SITE_NAME` / `SITE_DESCRIPTION` (unset: the locale's
-/// `site.description`), and the platform's own help lines for the footer
-/// (`SITE_SUPPORT_*`); one left unset is not shown.
+/// `site.description`). The footer's help lines are settings
+/// (`Shell::support`).
 #[derive(Debug, Clone, Serialize)]
 pub struct SiteConfig {
     pub name: String,
     pub description: Option<String>,
-    pub support_phone: Option<String>,
-    pub support_zalo_url: Option<String>,
-    pub support_email: Option<String>,
 }
 
 impl Default for SiteConfig {
@@ -68,9 +66,6 @@ impl Default for SiteConfig {
         Self {
             name: "Agri-Connect".to_owned(),
             description: None,
-            support_phone: None,
-            support_zalo_url: None,
-            support_email: None,
         }
     }
 }
@@ -121,6 +116,10 @@ struct FieldLimits {
     alert_body_max: usize,
     price_note_max: usize,
     job_description_max: usize,
+    /// The most days a commodity's prices may stay on the board.
+    price_fresh_days_max: i16,
+    /// The longest text setting (`settings::SETTING_VALUE_MAX`).
+    setting_value_max: usize,
     /// `validation::VN_PHONE_PATTERN`, for a phone box's `pattern`.
     phone_pattern: &'static str,
     /// `validation::SLUG_PATTERN`, for a slug box's `pattern`.
@@ -155,6 +154,8 @@ const FIELD_LIMITS: FieldLimits = FieldLimits {
     alert_body_max: ALERT_BODY_MAX,
     price_note_max: PRICE_NOTE_MAX,
     job_description_max: JOB_DESCRIPTION_MAX,
+    price_fresh_days_max: PRICE_FRESH_DAYS_MAX,
+    setting_value_max: SETTING_VALUE_MAX,
     near_me_km: km(EXPLORE_DEFAULT_RADIUS_M),
 };
 
@@ -781,10 +782,13 @@ mod tests {
     #[test]
     fn the_footer_offers_the_help_lines_that_are_set() -> Result<(), Error> {
         let vi = vi()?;
-        let footer = |site: SiteConfig| -> Result<String, Error> {
+        let footer = |settings: application::settings::Settings| -> Result<String, Error> {
+            let site = SiteConfig::default();
             let mut views = views(site.clone())?;
+            let mut shell = Shell::new(&vi, "/", None, None);
+            shell.apply_settings(&settings);
             let mut ctx = tera::Context::new();
-            ctx.insert("shell", &Shell::new(&vi, "/", None, None));
+            ctx.insert("shell", &shell);
             ctx.insert("site", &site);
             ctx.insert("year", &2026);
             views
@@ -795,7 +799,19 @@ mod tests {
                 )
                 .map_err(|e| Error::internal(chain(&e)))
         };
-        let bare = footer(SiteConfig::default())?;
+        let stored = |pairs: &[(&str, &str)]| {
+            application::settings::Settings::from_stored(
+                &pairs
+                    .iter()
+                    .map(|(key, value)| domain::models::setting::StoredSetting {
+                        key: (*key).to_owned(),
+                        value: (*value).to_owned(),
+                        updated_on: Utc::now(),
+                    })
+                    .collect::<Vec<_>>(),
+            )
+        };
+        let bare = footer(application::settings::Settings::default())?;
         assert!(bare.contains("© 2026 Agri-Connect"));
         assert!(
             bare.contains(&vi.text("account_menu.register_provider")),
@@ -806,11 +822,19 @@ mod tests {
             "no help lines configured"
         );
 
-        let helped = footer(SiteConfig {
-            support_phone: Some("0912345678".to_owned()),
-            support_email: Some("hotro@example.vn".to_owned()),
-            ..SiteConfig::default()
-        })?;
+        let closed = footer(stored(&[(
+            application::settings::REGISTRATION_OPEN,
+            "false",
+        )]))?;
+        assert!(
+            !closed.contains(&vi.text("account_menu.register_provider")),
+            "no invitation to sign up while sign-ups are closed"
+        );
+
+        let helped = footer(stored(&[
+            (application::settings::SUPPORT_PHONE, "0912345678"),
+            (application::settings::SUPPORT_EMAIL, "hotro@example.vn"),
+        ]))?;
         assert!(helped.contains(r#"href="tel:0912345678""#));
         assert!(helped.contains("0912 345 678"));
         assert!(helped.contains("mailto:hotro@example.vn"));

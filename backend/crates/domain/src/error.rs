@@ -136,6 +136,12 @@ error_codes! {
     JobPlaceRequired          => (BadRequest,      "job_place_required"),
     JobPostLimit              => (BadRequest,      "job_post_limit"),
     JobPostDailyLimit         => (TooManyRequests, "job_post_daily_limit"),
+    JobPostsPaused            => (Forbidden,       "job_posts_paused"),
+    RegistrationClosed        => (Forbidden,       "registration_closed"),
+    UnknownSetting            => (BadRequest,      "unknown_setting"),
+    SettingOutOfRange         => (BadRequest,      "setting_out_of_range"),
+    InvalidUrl                => (BadRequest,      "invalid_url"),
+    InvalidFreshDays          => (BadRequest,      "invalid_fresh_days"),
 
     // ── Uploads ──────────────────────────────────────────────────────────────
     FileTooLarge              => (PayloadTooLarge, "file_too_large"),

@@ -50,6 +50,7 @@ use crate::{
     },
     pagination::{admin_total_pages, paginate_admin, total_or_count},
     ports::{EventBus, PasswordHasher},
+    settings::SettingsReader,
     slug::{numbered, slugify},
     usecases::{
         account_rules::account_for_role,
@@ -85,6 +86,8 @@ pub struct AdminUseCase {
     password_hasher: Arc<dyn PasswordHasher>,
     /// A deactivated account's sessions end with it.
     refresh_repo: Arc<dyn RefreshTokenRepositoryTrait + Send + Sync>,
+    /// How soon after its request a review is flagged.
+    settings: SettingsReader,
 }
 
 /// Everything `AdminUseCase` depends on, named so wiring cannot swap two repos
@@ -104,6 +107,7 @@ pub struct AdminDeps {
     pub events: Arc<dyn EventBus>,
     pub password_hasher: Arc<dyn PasswordHasher>,
     pub refresh_repo: Arc<dyn RefreshTokenRepositoryTrait + Send + Sync>,
+    pub settings: SettingsReader,
 }
 
 impl AdminUseCase {
@@ -123,6 +127,7 @@ impl AdminUseCase {
             events: d.events,
             password_hasher: d.password_hasher,
             refresh_repo: d.refresh_repo,
+            settings: d.settings,
         }
     }
 
@@ -699,21 +704,26 @@ impl AdminUseCase {
 
     // ── Inquiries ─────────────────────────────────────────────────────────────
 
-    /// `provider_id`: only that provider's inquiries.
+    /// `provider_id`: only that provider's inquiries; `status`: only those
+    /// in it (one of `INQUIRY_STATUSES`).
     pub async fn list_inquiries(
         &self,
         actor: &Actor,
         page: i64,
         provider_id: Option<i32>,
+        status: Option<&str>,
     ) -> Result<AdminPagedResponse<AdminInquiryDto>> {
         actor.require(PERM_INQUIRY_READ)?;
+        if status.is_some_and(|s| !INQUIRY_STATUSES.contains(&s)) {
+            return Err(Error::field("status", ErrorCode::InvalidInquiryStatus));
+        }
         let (page, offset) = paginate_admin(page);
         let items = self
             .inquiry_repo
-            .list_admin(provider_id, ADMIN_PAGE_SIZE, offset)
+            .list_admin(provider_id, status, ADMIN_PAGE_SIZE, offset)
             .await?;
         let total = total_or_count(offset, items.len(), ADMIN_PAGE_SIZE, || {
-            self.inquiry_repo.count_admin(provider_id)
+            self.inquiry_repo.count_admin(provider_id, status)
         })
         .await?;
 
@@ -740,11 +750,30 @@ impl AdminUseCase {
         })
     }
 
+    /// How many requests are in `status` (one provider's when `provider_id`
+    /// is set): the count the list's chip of that status shows.
+    pub async fn count_inquiries(
+        &self,
+        actor: &Actor,
+        provider_id: Option<i32>,
+        status: &str,
+    ) -> Result<i64> {
+        actor.require(PERM_INQUIRY_READ)?;
+        if !INQUIRY_STATUSES.contains(&status) {
+            return Err(Error::field("status", ErrorCode::InvalidInquiryStatus));
+        }
+        self.inquiry_repo
+            .count_admin(provider_id, Some(status))
+            .await
+    }
+
+    /// `reason`: why, for the audit log (marking spam asks for one).
     pub async fn update_inquiry_status(
         &self,
         actor: &Actor,
         id: i32,
         status: String,
+        reason: Option<String>,
     ) -> Result<AdminInquiryDto> {
         actor.require(PERM_INQUIRY_MANAGE)?;
         if !INQUIRY_STATUSES.contains(&status.as_str()) {
@@ -760,7 +789,7 @@ impl AdminUseCase {
             Change::StatusChanged {
                 status: status.clone(),
             },
-            None,
+            reason,
         )
         .await;
         let inquiry = self
@@ -792,6 +821,7 @@ impl AdminUseCase {
         provider_id: Option<i32>,
     ) -> Result<AdminPagedResponse<AdminReviewDto>> {
         actor.require(PERM_REVIEW_MODERATE)?;
+        let suspect_minutes = self.settings.load().await?.review_suspect_minutes();
         let (page, offset) = paginate_admin(page);
         let items = self
             .review_repo
@@ -803,7 +833,10 @@ impl AdminUseCase {
         .await?;
 
         Ok(AdminPagedResponse {
-            items: items.into_iter().map(AdminReviewDto::from).collect(),
+            items: items
+                .into_iter()
+                .map(|r| AdminReviewDto::new(r, suspect_minutes))
+                .collect(),
             total,
             page,
             per_page: ADMIN_PAGE_SIZE,
@@ -819,6 +852,7 @@ impl AdminUseCase {
         reason: Option<String>,
     ) -> Result<AdminReviewDto> {
         actor.require(PERM_REVIEW_MODERATE)?;
+        let suspect_minutes = self.settings.load().await?.review_suspect_minutes();
         self.review_repo
             .toggle_visible(id, is_visible, actor.user_id)
             .await?;
@@ -835,7 +869,7 @@ impl AdminUseCase {
         self.review_repo
             .find_by_id_admin(id)
             .await?
-            .map(AdminReviewDto::from)
+            .map(|r| AdminReviewDto::new(r, suspect_minutes))
             .ok_or_else(|| Error::new(ErrorCode::ReviewNotFound))
     }
 

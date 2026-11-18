@@ -79,6 +79,20 @@ async fn a_provider_sees_and_handles_the_requests_sent_to_them() {
         "the farmer's note"
     );
     assert!(html.contains("noindex"));
+    // The next steps as buttons (no select); spam asks first, with no reason box.
+    assert!(!html.contains("<select"));
+    assert!(html.contains(r#"name="status" value="contacted""#));
+    assert!(html.contains(&format!("/provider/inquiries?spam={id}#xac-nhan")));
+    let html = body_text(
+        send(
+            &e.router,
+            get_page(&format!("/provider/inquiries?spam={id}"), Some(&cookie)),
+        )
+        .await,
+    )
+    .await;
+    assert!(html.contains("Đánh dấu rác yêu cầu của Nguyễn Văn A?"));
+    assert!(!html.contains(r#"name="reason""#));
 
     let res = send(
         &e.router,

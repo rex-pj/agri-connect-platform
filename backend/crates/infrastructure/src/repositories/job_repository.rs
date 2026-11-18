@@ -9,7 +9,7 @@ use chrono::{DateTime, Utc};
 use sea_orm::{
     sea_query::{Expr, IntoIden, Order, Query, SelectStatement, SimpleExpr},
     ColumnTrait, ConnectionTrait, DatabaseConnection, DbErr, EntityTrait, FromQueryResult,
-    PaginatorTrait, QueryFilter, StatementBuilder,
+    PaginatorTrait, QueryFilter, QueryTrait, StatementBuilder,
 };
 use tracing::error;
 
@@ -315,8 +315,16 @@ impl JobRepositoryTrait for JobRepository {
             .map(|rows| rows.into_iter().map(JobPost::from).collect())
     }
 
-    async fn list_admin(&self, limit: i64, offset: i64) -> Result<Vec<JobPost>, Error> {
+    async fn list_admin(
+        &self,
+        status: Option<&str>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<JobPost>, Error> {
         let mut query = job_select(null_float());
+        if let Some(status) = status {
+            query.and_where(Expr::col((job_post::Entity, job_post::Column::Status)).eq(status));
+        }
         query
             .limit(u64::try_from(limit).unwrap_or(0))
             .offset(u64::try_from(offset).unwrap_or(0));
@@ -326,8 +334,9 @@ impl JobRepositoryTrait for JobRepository {
         Ok(rows.into_iter().map(JobPost::from).collect())
     }
 
-    async fn count_admin(&self) -> Result<i64, Error> {
+    async fn count_admin(&self, status: Option<&str>) -> Result<i64, Error> {
         job_post::Entity::find()
+            .apply_if(status, |q, s| q.filter(job_post::Column::Status.eq(s)))
             .count(self.db.as_ref())
             .await
             .map(|total| i64::try_from(total).unwrap_or(i64::MAX))

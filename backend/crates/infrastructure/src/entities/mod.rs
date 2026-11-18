@@ -20,6 +20,7 @@ pub mod partner_contract_supply_type;
 pub mod partner_sponsored;
 pub mod password_reset_token;
 pub mod permission;
+pub mod platform_setting;
 pub mod product;
 pub mod province;
 pub mod refresh_token;

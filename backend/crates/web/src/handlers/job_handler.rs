@@ -9,7 +9,7 @@ use crate::{
     app_state::AppState,
     extract::{ApiJson, ApiPath, ApiQuery},
     middleware::auth::MaybeActor,
-    requests::{AdminPageQuery, JobRequest, JobStatusRequest},
+    requests::{JobRequest, JobStatusRequest, StatusListQuery},
 };
 
 pub struct JobHandler;
@@ -36,15 +36,21 @@ impl JobHandler {
         Ok(Json(state.usecases.job.list_own(&actor).await?))
     }
 
-    /// GET /api/admin/jobs — every post, newest first (`page?`).
+    /// GET /api/admin/jobs — every post, newest first (`page?`, `status?`).
     pub async fn list_admin(
         MaybeActor(actor): MaybeActor,
         State(state): State<AppState>,
-        ApiQuery(q): ApiQuery<AdminPageQuery>,
+        ApiQuery(q): ApiQuery<StatusListQuery>,
     ) -> Result<impl IntoResponse, Error> {
         let actor = require_actor(actor)?;
         let page = q.page.unwrap_or(1);
-        Ok(Json(state.usecases.job.list_admin(&actor, page).await?))
+        Ok(Json(
+            state
+                .usecases
+                .job
+                .list_admin(&actor, page, q.status.as_deref())
+                .await?,
+        ))
     }
 
     /// PATCH /api/admin/jobs/{id}/status — `{status, reason?}`; 204.

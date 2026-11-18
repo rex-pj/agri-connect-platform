@@ -10,7 +10,8 @@ use application::{
         partner_usecase::PartnerUseCase, permission_usecase::PermissionUseCase,
         price_usecase::PriceUseCase, product_usecase::ProductUseCase,
         provider_dashboard_usecase::ProviderDashboardUseCase, review_usecase::ReviewUseCase,
-        setup_usecase::SetupUseCase, stats_usecase::StatsUseCase, zalo_usecase::ZaloUseCase,
+        settings_usecase::SettingsUseCase, setup_usecase::SetupUseCase,
+        stats_usecase::StatsUseCase, zalo_usecase::ZaloUseCase,
     },
 };
 
@@ -40,6 +41,8 @@ pub struct UseCases {
     pub provider_dashboard: ProviderDashboardUseCase,
     pub review: ReviewUseCase,
     pub setup: SetupUseCase,
+    /// The settings an admin changes without a deploy.
+    pub settings: SettingsUseCase,
     pub stats: StatsUseCase,
     pub zalo: ZaloUseCase,
 }

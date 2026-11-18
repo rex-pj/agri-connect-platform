@@ -343,7 +343,7 @@ async fn the_json_api_lists_and_keeps_the_commodities() {
 #[tokio::test]
 #[ignore = "needs TEST_DATABASE_URL"]
 async fn a_business_lists_a_capped_number_of_supplies() {
-    use application::constants::PRODUCTS_PER_BUSINESS_MAX;
+    use application::constants::PRODUCTS_PER_BUSINESS_DEFAULT;
     use axum::{body::Body, http::Request};
     use integration_tests::{create_product, json_body, register_provider, with_product_category};
 
@@ -357,7 +357,7 @@ async fn a_business_lists_a_capped_number_of_supplies() {
             "INSERT INTO products (business_id, supply_type_id, name, is_active)
              SELECT p.business_id, p.supply_type_id, 'NPK ' || n, n > 1
              FROM products p, generate_series(1, {}) AS n WHERE p.id = {first}",
-            PRODUCTS_PER_BUSINESS_MAX - 2
+            PRODUCTS_PER_BUSINESS_DEFAULT - 2
         ))
         .await
         .unwrap();
@@ -375,7 +375,7 @@ async fn a_business_lists_a_capped_number_of_supplies() {
     assert_eq!(json_body(res).await["code"], "product_limit_reached");
     assert_eq!(
         scalar(&e, "SELECT count(*)::text AS v FROM products").await,
-        PRODUCTS_PER_BUSINESS_MAX.to_string()
+        PRODUCTS_PER_BUSINESS_DEFAULT.to_string()
     );
 
     // A deleted one frees its place.

@@ -21,6 +21,7 @@ pub mod reviews;
 pub mod roles;
 pub mod sectors;
 pub mod services;
+pub mod settings;
 pub mod users;
 
 use application::{
@@ -29,7 +30,8 @@ use application::{
         PERM_ADMIN_DASHBOARD_VIEW, PERM_ALERT_MANAGE, PERM_CATEGORY_MANAGE, PERM_INQUIRY_READ,
         PERM_JOB_MODERATE, PERM_LISTING_MODERATE, PERM_LOCATION_MANAGE, PERM_PARTNER_MANAGE,
         PERM_PRICE_MANAGE, PERM_PROVIDER_READ, PERM_REPORT_DEMAND_READ, PERM_REVIEW_MODERATE,
-        PERM_ROLE_READ, PERM_SERVICE_MANAGE, PERM_SYSTEM_DEMO_MANAGE, PERM_USER_READ,
+        PERM_ROLE_READ, PERM_SERVICE_MANAGE, PERM_SETTING_MANAGE, PERM_SYSTEM_DEMO_MANAGE,
+        PERM_USER_READ,
     },
 };
 use axum::{http::StatusCode, response::Response};
@@ -226,9 +228,25 @@ const MENU: &[(Option<&str>, &[Entry])] = &[
                 "admin_menu.demo_data",
                 PERM_SYSTEM_DEMO_MANAGE,
             ),
+            (
+                "admin_settings",
+                "fa-sliders",
+                "admin_menu.settings",
+                PERM_SETTING_MANAGE,
+            ),
         ],
     ),
 ];
+
+/// The address of the menu entry `route`, when `actor` may open it: the
+/// menu's own permission, so a link elsewhere (a dashboard card) never
+/// leads where the menu would not.
+pub fn menu_href(actor: &Actor, route: &str) -> Option<String> {
+    MENU.iter()
+        .flat_map(|(_, entries)| entries.iter())
+        .find(|(r, _, _, perm)| *r == route && actor.can(perm))
+        .and_then(|(r, _, _, _)| routes::url(r, &[]).ok())
+}
 
 /// Pages with no menu entry of their own, and the entry that lights for them:
 /// a crop is kept on the price board's second tab, and the classification's
@@ -258,6 +276,16 @@ const MENU_KEYWORDS: &[(&str, &[&str])] = &[
         ],
     ),
     ("admin_roles", &["admin_menu.permissions"]),
+    (
+        "admin_settings",
+        &[
+            "settings.group.support",
+            "settings.group.access",
+            "settings.group.jobs",
+            "settings.group.listings",
+            "settings.group.market",
+        ],
+    ),
 ];
 
 /// The search words of the menu entry leading to `route`.
@@ -554,6 +582,9 @@ pub struct ListPosition {
     pub tab: String,
     /// The name search box (`q`), kept like the page and the provider.
     pub q: String,
+    /// A list narrowed to one status (`?state=`: contact requests, job
+    /// posts); not `status`, the field a row's form sets.
+    pub state: String,
 }
 
 impl ListPosition {
@@ -578,6 +609,9 @@ impl ListPosition {
         }
         if let Some(s) = self.search() {
             q.push(("q", s.to_owned()));
+        }
+        if let Some(s) = self.state() {
+            q.push(("state", s.to_owned()));
         }
         if let Some(n) = parse_opt::<i64>(&self.page).filter(|n| *n > 1) {
             q.push(("page", n.to_string()));
@@ -659,6 +693,52 @@ impl ListPosition {
 
     pub fn page(&self) -> i64 {
         parse_opt(&self.page).unwrap_or(1)
+    }
+
+    /// The status filter as typed, when it is a code (lower-case letters
+    /// and `_`); the page checks it against its list (`state_in`).
+    fn state(&self) -> Option<&str> {
+        Some(self.state.trim())
+            .filter(|s| !s.is_empty() && s.bytes().all(|b| b.is_ascii_lowercase() || b == b'_'))
+    }
+
+    /// The status filter when it is one of `statuses`, else none (the
+    /// whole list).
+    pub fn state_in(&self, statuses: &[&'static str]) -> Option<&'static str> {
+        self.state()
+            .and_then(|s| statuses.iter().copied().find(|code| *code == s))
+    }
+
+    /// The chips above a list filtered by status (`molecules/status_chips`):
+    /// the whole list (`all`), then each status worded by `word`; each
+    /// keeps the provider filter and goes back to the first page. `waiting`:
+    /// the status still waiting for someone and how many are in it, counted
+    /// on its chip.
+    pub fn state_chips(
+        &self,
+        route: &str,
+        statuses: &[&'static str],
+        all: String,
+        word: impl Fn(&str) -> String,
+        waiting: (&str, i64),
+    ) -> Result<Vec<AdminTab>, Error> {
+        let current = self.state_in(statuses);
+        let chip = |state: Option<&str>, label: String| {
+            let at = ListPosition {
+                page: String::new(),
+                state: state.unwrap_or_default().to_owned(),
+                ..self.clone()
+            };
+            Ok(AdminTab {
+                label,
+                href: at.href(route, &[])?,
+                count: (state == Some(waiting.0)).then(|| usize::try_from(waiting.1).unwrap_or(0)),
+                current: current == state,
+            })
+        };
+        std::iter::once(chip(None, all))
+            .chain(statuses.iter().map(|s| chip(Some(s), word(s))))
+            .collect()
     }
 }
 

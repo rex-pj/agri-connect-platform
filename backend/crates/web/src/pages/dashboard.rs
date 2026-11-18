@@ -15,7 +15,7 @@ use application::{
         PERM_OWN_LISTING_DELETE, PERM_OWN_PROFILE_UPDATE, PERM_OWN_SERVICE_CREATE,
         PERM_OWN_SERVICE_DELETE, PERM_OWN_SERVICE_UPDATE,
     },
-    constants::{CALL_STATS_DAYS, PRODUCTS_PER_BUSINESS_MAX, SERVICES_PER_BUSINESS_MAX},
+    constants::CALL_STATS_DAYS,
     outputs::{
         CategoryDto, CommodityDto, ProviderProductDto, ProviderProfileDto, ProviderServiceDto,
     },
@@ -186,13 +186,17 @@ async fn dashboard_page(
             });
         }
     }
-    let full = service_rows.len() as u64 >= SERVICES_PER_BUSINESS_MAX;
-    let products_full = rows.len() as u64 >= PRODUCTS_PER_BUSINESS_MAX;
+    // The caps are settings (`listings.*_per_business`).
+    let settings = state.usecases.settings.current().await?;
+    let services_max = settings.services_per_business();
+    let products_max = settings.products_per_business();
+    let full = service_rows.len() as u64 >= services_max;
+    let products_full = rows.len() as u64 >= products_max;
     let services_first = !service_rows.is_empty() || rows.is_empty();
     let services = ServicesSection {
         can_create: actor.can(PERM_OWN_SERVICE_CREATE) && !full,
         full,
-        max: SERVICES_PER_BUSINESS_MAX,
+        max: services_max,
         new_href: url("provider_service_new", &[])?,
         rows: service_rows,
     };
@@ -251,7 +255,7 @@ async fn dashboard_page(
         can_edit_profile: actor.can(PERM_OWN_PROFILE_UPDATE),
         can_create: actor.can(PERM_OWN_LISTING_CREATE) && !products_full,
         products_full,
-        products_max: PRODUCTS_PER_BUSINESS_MAX,
+        products_max,
         inbox,
         reviews,
         jobs,

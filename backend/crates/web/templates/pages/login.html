@@ -29,7 +29,9 @@
 
 <p class="auth-footer">
   <a class="text-muted small" href="{{ url_for(name="home") }}">{{ atoms::icon(name="fa-arrow-left", class="me-1") }}{{ t(key="common.back_home") }}</a>
+  {% if page.registration_open %}
   <span class="text-muted small mx-2" aria-hidden="true">·</span>
   <a class="text-muted small" href="{{ url_for(name="register") }}">{{ t(key="account_menu.register_provider") }}</a>
+  {% endif %}
 </p>
 {% endblock card %}

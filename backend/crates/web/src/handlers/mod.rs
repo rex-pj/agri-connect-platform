@@ -12,6 +12,7 @@ pub mod price_handler;
 pub mod products_handler;
 pub mod provider_dashboard_handler;
 pub mod role_handler;
+pub mod settings_handler;
 
 pub mod setup_handler;
 pub mod stats_handler;

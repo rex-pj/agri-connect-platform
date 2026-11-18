@@ -32,6 +32,7 @@ pub mod service;
 pub mod service_form;
 pub mod services;
 pub mod setup;
+pub mod status_steps;
 
 use axum::{
     http::{header, HeaderValue, StatusCode},

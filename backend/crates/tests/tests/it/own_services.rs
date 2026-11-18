@@ -510,7 +510,7 @@ async fn the_rules_hold_through_the_api_and_a_business_lists_at_most_the_cap() {
         "Vui lòng chọn loại dịch vụ."
     );
 
-    let max = application::constants::SERVICES_PER_BUSINESS_MAX;
+    let max = application::constants::SERVICES_PER_BUSINESS_DEFAULT;
     for n in 0..max {
         let res = send(
             &e.router,

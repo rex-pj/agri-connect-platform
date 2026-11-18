@@ -48,4 +48,6 @@ pub const CALL_CHANNELS: &[&str] = &[CALL_CHANNEL_PHONE, CALL_CHANNEL_ZALO];
 /// needed), spam (junk; never shown). Keep in sync with the `job_posts`
 /// CHECK.
 pub const JOB_STATUS_OPEN: &str = "open";
-pub const JOB_STATUSES: &[&str] = &[JOB_STATUS_OPEN, "closed", "spam"];
+pub const JOB_STATUS_CLOSED: &str = "closed";
+pub const JOB_STATUS_SPAM: &str = "spam";
+pub const JOB_STATUSES: &[&str] = &[JOB_STATUS_OPEN, JOB_STATUS_CLOSED, JOB_STATUS_SPAM];

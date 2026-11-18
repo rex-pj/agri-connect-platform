@@ -167,11 +167,24 @@ pub enum Commodities {
     Sector,
     Icon,
     DisplayOrder,
+    /// Days a price of its crops stays on the board (`m20261123_000004`).
+    PriceFreshDays,
     IsActive,
     IsDemo,
     CreatedOn,
     UpdatedOn,
     CreatedBy,
+    UpdatedBy,
+}
+
+/// The platform settings an admin moved off their defaults (the registry in
+/// `application::settings`); a key with no row is at its default.
+#[derive(DeriveIden, Clone, Copy)]
+pub enum PlatformSettings {
+    Table,
+    Key,
+    Value,
+    UpdatedOn,
     UpdatedBy,
 }
 

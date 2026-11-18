@@ -22,7 +22,7 @@ use crate::{
     },
     routes,
     session::CookiePolicy,
-    shell::{home_area_href, Shell},
+    shell::{home_area_href, Shell, SupportLines},
     views::{render_page, render_page_status},
 };
 
@@ -96,6 +96,8 @@ pub struct LoginPage {
     pub locked: bool,
     /// Just reset the password (flash from /reset-password).
     pub reset: bool,
+    /// Sign-ups are open (`access.registration_open`): the page links there.
+    pub registration_open: bool,
 }
 
 pub async fn login_page(
@@ -109,11 +111,13 @@ pub async fn login_page(
     if state.usecases.auth.needs_first_admin().await? {
         return see_other(&url("setup")?);
     }
+    let registration_open = state.usecases.settings.current().await?.registration_open();
     let page = LoginPage {
         username: String::new(),
         errors: FormErrors::default(),
         locked: false,
         reset: flash.0 == Some(Flash::PasswordReset),
+        registration_open,
     };
     let mut response = render_page(
         &state,
@@ -141,12 +145,14 @@ pub async fn login(
         Ok(login) => signed_in(&state, policy, login.user_id, None).await,
         Err(err) => {
             let locked = err.code() == ErrorCode::AccountLocked;
+            let registration_open = state.usecases.settings.current().await?.registration_open();
             reshow(&state, &url("login")?, err, "pages/login.html", |errors| {
                 LoginPage {
                     username: form.username,
                     errors,
                     locked,
                     reset: false,
+                    registration_open,
                 }
             })
         }
@@ -173,6 +179,10 @@ pub struct RegisterForm {
 pub struct RegisterPage {
     pub values: RegisterForm,
     pub errors: FormErrors,
+    /// Sign-ups are open; closed, the form is replaced by a notice.
+    pub open: bool,
+    /// Where a would-be provider can ask instead.
+    pub support: SupportLines,
 }
 
 pub async fn register_page(
@@ -182,9 +192,12 @@ pub async fn register_page(
     if viewer.is_some() {
         return see_other(&landing(viewer.as_ref()));
     }
+    let settings = state.usecases.settings.current().await?;
     let page = RegisterPage {
         values: RegisterForm::default(),
         errors: FormErrors::default(),
+        open: settings.registration_open(),
+        support: SupportLines::of(&settings),
     };
     render_page(
         &state,
@@ -219,16 +232,21 @@ pub async fn register(
     };
     match result {
         Ok(login) => signed_in(&state, policy, login.user_id, None).await,
-        Err(err) => reshow(
-            &state,
-            &url("register")?,
-            err,
-            "pages/register.html",
-            |errors| RegisterPage {
-                values: form,
-                errors,
-            },
-        ),
+        Err(err) => {
+            let settings = state.usecases.settings.current().await?;
+            reshow(
+                &state,
+                &url("register")?,
+                err,
+                "pages/register.html",
+                |errors| RegisterPage {
+                    values: form,
+                    errors,
+                    open: settings.registration_open(),
+                    support: SupportLines::of(&settings),
+                },
+            )
+        }
     }
 }
 

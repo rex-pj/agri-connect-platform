@@ -2,12 +2,15 @@
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/alert.html" as alerts %}
 {% import "molecules/form_field.html" as field %}
-{#- `page` is web::pages::auth::RegisterPage. -#}
+{#- `page` is web::pages::auth::RegisterPage. While sign-ups are closed
+    (`page.open` false) a notice and the platform's help lines replace the
+    form. -#}
 {% block title %}{{ t(key="account_menu.register_provider") }} — {{ site.name }}{% endblock title %}
 {% block card %}
 {% set v = page.values %}
 {% set e = page.errors.fields %}
 <h1 class="auth-title">{{ t(key="account_menu.register_provider") }}</h1>
+{% if page.open %}
 <p class="auth-sub">{{ t(key="auth.register_sub") }}</p>
 <form class="auth-form" method="post" action="{{ url_for(name="register") }}">
   {% if page.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=page.errors.message) }}{% endif %}
@@ -26,6 +29,18 @@
   </fieldset>
   <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-user-plus") }} {{ t(key="auth.create_account") }}</button>
 </form>
+{% else %}
+{{ alerts::alert(kind="warning", icon="fa-door-closed", text=t(key="auth.registration_closed")) }}
+{% set s = page.support %}
+{% if s.phone or s.zalo_url or s.email %}
+<div class="d-grid gap-2">
+  <p class="auth-sub mb-2">{{ t(key="auth.registration_closed_help") }}</p>
+  {% if s.phone %}<a class="btn btn-success btn-lg w-100" href="tel:{{ s.phone }}">{{ atoms::icon(name="fa-phone") }} {{ s.phone | phone }}</a>{% endif %}
+  {% if s.zalo_url %}<a class="btn btn-outline-primary btn-lg w-100" href="{{ s.zalo_url }}" rel="noopener" target="_blank">{{ atoms::icon(name="fa-comment-dots") }} {{ t(key="footer.zalo") }}</a>{% endif %}
+  {% if s.email %}<a class="btn btn-link w-100" href="mailto:{{ s.email }}">{{ atoms::icon(name="fa-envelope") }} {{ s.email }}</a>{% endif %}
+</div>
+{% endif %}
+{% endif %}
 <p class="auth-footer">
   <span class="text-muted small">{{ t(key="auth.have_account") }}</span>
   <a class="small" href="{{ url_for(name="login") }}">{{ t(key="account_menu.login") }}</a>

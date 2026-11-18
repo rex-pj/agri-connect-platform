@@ -134,6 +134,16 @@ pub struct UpdateCategoryRequest {
 #[derive(Deserialize)]
 pub struct UpdateInquiryStatusRequest {
     pub status: String,
+    pub reason: Option<String>,
+}
+
+/// GET /api/admin/inquiries and /api/admin/jobs: a page, narrowed to one
+/// provider (inquiries) and to one status.
+#[derive(Deserialize)]
+pub struct StatusListQuery {
+    pub page: Option<i64>,
+    pub provider_id: Option<i32>,
+    pub status: Option<String>,
 }
 
 /// POST /api/admin/locations and PUT /api/admin/locations/{id}.
@@ -500,6 +510,9 @@ pub struct CommodityRequest {
     pub icon: Option<String>,
     #[serde(default)]
     pub display_order: i16,
+    /// Days a price of its crops stays on the board (default 14).
+    #[serde(default = "default_price_fresh_days")]
+    pub price_fresh_days: i16,
 }
 
 impl From<CommodityRequest> for application::inputs::CommodityInput {
@@ -509,6 +522,7 @@ impl From<CommodityRequest> for application::inputs::CommodityInput {
             sector: r.sector,
             icon: r.icon,
             display_order: r.display_order,
+            price_fresh_days: r.price_fresh_days,
         }
     }
 }
@@ -609,4 +623,8 @@ pub struct ZaloTokenRequest {
     pub access_token: String,
     #[serde(default)]
     pub token: String,
+}
+
+fn default_price_fresh_days() -> i16 {
+    application::constants::PRICE_FRESH_DAYS_DEFAULT
 }

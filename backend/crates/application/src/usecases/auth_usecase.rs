@@ -31,6 +31,7 @@ use crate::{
     outputs::{LoginResponse, MeResponse},
     ports::{EmailService, EventBus, PasswordHasher, SessionClaims, TokenService},
     repeats::WindowCounter,
+    settings::SettingsReader,
     validation::{
         max_chars, max_chars_opt, non_blank, validate_email, validate_password, validate_phone,
         validate_username,
@@ -50,6 +51,8 @@ pub struct AuthUseCase {
     events: Arc<dyn EventBus>,
     refresh_days: i64,
     setup_token: Option<String>,
+    /// Whether providers may sign themselves up (`access.registration_open`).
+    settings: SettingsReader,
     /// A hash no password matches, made once with the real hasher: a login
     /// for an unknown username verifies against it, so it takes as long as
     /// one for a known username.
@@ -72,6 +75,7 @@ pub struct AuthDeps {
     pub refresh_days: i64,
     /// SETUP_TOKEN: when set, creating the first admin needs it.
     pub setup_token: Option<String>,
+    pub settings: SettingsReader,
 }
 
 /// A browser session: a short access token and the refresh token that
@@ -107,6 +111,7 @@ impl AuthUseCase {
             events: d.events,
             refresh_days: d.refresh_days,
             setup_token: d.setup_token,
+            settings: d.settings,
             decoy_hash: Arc::default(),
             failed_logins: WindowCounter::default(),
         }
@@ -438,6 +443,9 @@ impl AuthUseCase {
         business_name: String,
         business_phone: String,
     ) -> Result<LoginResponse> {
+        if !self.settings.load().await?.registration_open() {
+            return Err(Error::new(ErrorCode::RegistrationClosed));
+        }
         let username = username.trim().to_lowercase();
         let email = email.trim().to_lowercase();
         let business_name = business_name.trim().to_owned();

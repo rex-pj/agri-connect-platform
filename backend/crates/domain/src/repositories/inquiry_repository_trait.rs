@@ -12,8 +12,12 @@ pub trait InquiryRepositoryTrait {
     /// The inquiry `id` with the email address of the provider it went to.
     async fn find_for_notice(&self, id: i32) -> Result<Option<InquiryForNotice>, Error>;
 
-    /// `provider_id`: only that business's.
-    async fn count_admin(&self, provider_id: Option<i32>) -> Result<i64, Error>;
+    /// `provider_id`: only that business's; `status`: only those in it.
+    async fn count_admin(
+        &self,
+        provider_id: Option<i32>,
+        status: Option<&str>,
+    ) -> Result<i64, Error>;
 
     /// The newest inquiry from `phone` to the business that its provider
     /// answered (`INQUIRY_STATUSES_REVIEWABLE`): what lets that farmer review
@@ -23,6 +27,7 @@ pub trait InquiryRepositoryTrait {
     async fn list_admin(
         &self,
         provider_id: Option<i32>,
+        status: Option<&str>,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<InquiryAdmin>, Error>;

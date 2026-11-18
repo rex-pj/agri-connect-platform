@@ -5,11 +5,15 @@
 {% import "molecules/empty_state.html" as empty %}
 {% import "molecules/pagination_nav.html" as paging %}
 {% import "molecules/share_button.html" as share %}
+{% import "molecules/row_action.html" as row %}
+{% import "organisms/confirm_sheet.html" as confirm %}
 {#- The provider's inbox: farmers who asked to be called back. `page` is
-    web::pages::inbox::InboxPage. Each card's status is a small form; with JS
-    a change saves it (`autoSubmit`, which hides the button), without JS the
-    button does. Once a farmer was called back, the card offers the review
-    link to send them (the share sheet: Zalo). -#}
+    web::pages::inbox::InboxPage. Each card ends with the next steps of its
+    status (`r.steps`, the admin list's buttons, worded here at every
+    width): one click each, but spam, whose link reloads the inbox with that
+    card's confirmation open (`page.confirm`). Once a farmer was called
+    back, the card offers the review link to send them (the share sheet:
+    Zalo). -#}
 {% block title %}{{ t(key="contact.title") }} — {{ site.name }}{% endblock title %}
 {% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
 {% block main %}
@@ -21,7 +25,7 @@
   </div>
 </header>
 
-<div class="detail-body">
+<div class="detail-body" x-data="dialog" data-open="{% if page.confirm %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
   {% if page.flash == "inquiry_status_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="inbox.status_saved")) }}{% endif %}
 
   {% for r in page.rows %}
@@ -36,14 +40,12 @@
     <p class="small text-muted mb-2"><time datetime="{{ q.created_on | utc_iso }}">{{ q.created_on | vn_datetime }}</time></p>
     <a class="btn btn-success btn-lg w-100 mb-2" href="tel:{{ q.requester_phone }}">{{ atoms::icon(name="fa-phone") }} {{ t(key="inbox.call", phone=q.requester_phone | phone) }}</a>
     {% if r.review_href %}<div class="mb-2">{{ share::share_button(title=page.business_name, text=t(key="review.ask_text", name=page.business_name), url=r.review_href, label=t(key="review.ask")) }}</div>{% endif %}
-    <form class="d-flex gap-2" method="post" action="{{ r.action }}" x-data="autoSubmit" x-on:change="submit">
-      <input type="hidden" name="page" value="{{ page.page }}">
-      <label class="visually-hidden" for="status-{{ q.id }}">{{ t(key="inbox.status_of", name=q.requester_name) }}</label>
-      <select class="form-select" id="status-{{ q.id }}" name="status">
-        {% for s in page.statuses %}<option value="{{ s }}"{% if s == q.status %} selected{% endif %}>{{ inquiry::label(status=s) }}</option>{% endfor %}
-      </select>
-      <button type="submit" class="btn btn-outline-success" aria-label="{{ t(key="inbox.save_status") }}" x-show="withoutScript">{{ atoms::icon(name="fa-check") }}</button>
-    </form>
+    {% set what = t(key="inbox.request_of", name=q.requester_name) %}
+    <div class="row-actions row-actions--labelled">
+      {% for s in r.steps %}
+      {% if s.look == "spam" %}{{ row::spam(href=r.spam_href ~ "#xac-nhan", name=what) }}{% else %}{{ row::step(action=r.action, to=s.to, look=s.look, name=what, primary=s.primary, keep=page.keep) }}{% endif %}
+      {% endfor %}
+    </div>
   </section>
   {% else %}
   <section class="detail-card">
@@ -51,5 +53,9 @@
   </section>
   {% endfor %}
   {% if page.pagination %}{{ paging::pagination_nav(p=page.pagination) }}{% endif %}
+
+  {% if page.confirm %}
+  {{ confirm::confirm_sheet(id="xac-nhan", title=t(key="inbox.spam_title", name=page.confirm.requester), icon="fa-ban", action=page.confirm.action, button=t(key="inbox.spam_confirm"), reason_max=limits.audit_reason_max, note=t(key="inbox.spam_note"), hidden_name="status", hidden_value="spam", keep=page.keep, with_reason=false) }}
+  {% endif %}
 </div>
 {% endblock main %}

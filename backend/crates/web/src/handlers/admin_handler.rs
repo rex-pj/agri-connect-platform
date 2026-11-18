@@ -11,9 +11,9 @@ use crate::{
     requests::{
         AdminCreateServiceRequest, AdminListQuery, AdminPageQuery, AdminUpdateProductRequest,
         AdminUpdateServiceRequest, AssignUserRequest, CreateCategoryRequest, DeleteWithReasonBody,
-        LocationRequest, SetVerificationRequest, SlugSuggestionQuery, ToggleActiveRequest,
-        ToggleVisibleRequest, UpdateCategoryRequest, UpdateInquiryStatusRequest,
-        UpdateProfileRequest, UpdateUserRoleRequest,
+        LocationRequest, SetVerificationRequest, SlugSuggestionQuery, StatusListQuery,
+        ToggleActiveRequest, ToggleVisibleRequest, UpdateCategoryRequest,
+        UpdateInquiryStatusRequest, UpdateProfileRequest, UpdateUserRoleRequest,
     },
 };
 
@@ -291,13 +291,18 @@ impl AdminHandler {
     pub async fn list_inquiries(
         MaybeActor(actor): MaybeActor,
         State(state): State<AppState>,
-        ApiQuery(q): ApiQuery<AdminListQuery>,
+        ApiQuery(q): ApiQuery<StatusListQuery>,
     ) -> Result<impl IntoResponse, Error> {
         let actor = require_actor(actor)?;
         let result = state
             .usecases
             .admin
-            .list_inquiries(&actor, q.page.unwrap_or(1), q.provider_id)
+            .list_inquiries(
+                &actor,
+                q.page.unwrap_or(1),
+                q.provider_id,
+                q.status.as_deref(),
+            )
             .await?;
         Ok(Json(result))
     }
@@ -313,7 +318,7 @@ impl AdminHandler {
         let result = state
             .usecases
             .admin
-            .update_inquiry_status(&actor, id, req.status)
+            .update_inquiry_status(&actor, id, req.status, req.reason)
             .await?;
         Ok(Json(result))
     }

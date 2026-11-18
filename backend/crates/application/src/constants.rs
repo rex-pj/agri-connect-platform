@@ -41,8 +41,9 @@ pub const LOGIN_FAIL_MAX_ATTEMPTS: u32 = 5;
 pub const LOGIN_FAIL_ACCOUNT_MAX_ATTEMPTS: i32 = 50;
 pub const LOGIN_LOCK_MINUTES: i64 = 15;
 /// Job posts from one client (address) within a day; the cap per phone does
-/// not hold alone, since the phone is whatever the poster types.
-pub const JOB_POSTS_PER_CLIENT_PER_DAY: u32 = 5;
+/// not hold alone, since the phone is whatever the poster types. The
+/// default of `settings::JOB_POSTS_PER_CLIENT_PER_DAY`.
+pub const JOB_POSTS_PER_CLIENT_PER_DAY_DEFAULT: i64 = 5;
 /// The day the cap above counts over.
 pub const JOB_POST_CLIENT_WINDOW_SECS: u64 = 24 * 3600;
 
@@ -73,6 +74,8 @@ pub const LNG_MIN: f64 = -180.0;
 pub const LNG_MAX: f64 = 180.0;
 pub const RADIUS_MIN_M: f64 = 100.0;
 pub const RADIUS_MAX_M: f64 = 50_000.0;
+/// Metres in a kilometre (radii are stored in metres, shown and set in km).
+pub const METRES_PER_KM: i64 = 1_000;
 /// A farm visit by motorbike; the near-me page and the JSON API share it.
 pub const RADIUS_DEFAULT_M: f64 = 10_000.0;
 /// Most results one near-me search returns (providers or services), nearest
@@ -83,10 +86,13 @@ pub const GEO_RESULTS_MAX: i64 = 50;
 /// the figures partners pay for.
 pub const CALL_REPEAT_SECS: u64 = 3_600;
 /// A review written this soon after the contact request it rests on is
-/// flagged for the moderator: no job is done and judged that fast.
-pub const REVIEW_SUSPECT_MINUTES: i64 = 60;
+/// flagged for the moderator: no job is done and judged that fast (the
+/// default of `settings::REVIEW_SUSPECT_MINUTES`).
+pub const REVIEW_SUSPECT_MINUTES_DEFAULT: i64 = 60;
 /// The window the call counts cover (admin dashboard, provider dashboard).
 pub const CALL_STATS_DAYS: i64 = 30;
+/// The window of the admin dashboard's "new providers" figure.
+pub const NEW_BUSINESS_DAYS: i64 = 7;
 
 // ── Demand report ─────────────────────────────────────────────────────────────
 /// Vietnam is UTC+7 all year (no daylight saving since 1975), so a fixed
@@ -108,8 +114,9 @@ pub const DEMAND_REPORT_MIN_COUNT: i64 = 5;
 /// of the official ones, so this only catches what falls between them.
 pub const ADMIN_UNIT_SNAP_M: f64 = 500.0;
 /// An area is steady when every one of the report's weeks has at least this
-/// many leads: ready to show partners.
-pub const STEADY_WEEKLY_LEADS: i64 = 20;
+/// many leads: ready to show partners (the default of
+/// `settings::STEADY_WEEKLY_LEADS`).
+pub const STEADY_WEEKLY_LEADS_DEFAULT: i64 = 20;
 /// A stored search keeps at most this many characters of its words.
 pub const SEARCH_QUERY_MAX: usize = 100;
 /// The fewest characters a public search takes (`validation::search_text`).
@@ -123,8 +130,10 @@ pub const SEARCH_REPEAT_SECS: u64 = 600;
 // ── Partners ──────────────────────────────────────────────────────────────────
 pub const PARTNER_NAME_MAX: usize = 200;
 pub const CONTRACT_NOTE_MAX: usize = 500;
-/// How many sponsored services a near-me page shows above its results.
-pub const SPONSORED_SHOWN: usize = 2;
+/// How many sponsored services a near-me page shows above its results: the
+/// default of `settings::SPONSORED_SHOWN`, and the most it may be set to.
+pub const SPONSORED_SHOWN_DEFAULT: usize = 2;
+pub const SPONSORED_SHOWN_MAX: usize = 5;
 
 // ── Coded lists (sectors, alert kinds) ───────────────────────────────────────
 pub const CODED_NAME_MAX: usize = 100;
@@ -149,11 +158,15 @@ pub const ALERTS_SHOWN: u64 = 3;
 /// The highest price per unit an admin can enter, in đồng: a typo with an
 /// extra zero or two is refused rather than published.
 pub const PRICE_PER_UNIT_MAX: i64 = 10_000_000;
-/// A price older than this many days is not shown: a stale price misleads
-/// more than none.
-pub const PRICE_FRESH_DAYS: i64 = 14;
+/// A price older than its commodity's `price_fresh_days` is not shown: a
+/// stale price misleads more than none. This is a new commodity's
+/// (`chk_commodities_price_fresh_days` holds the bounds too).
+pub const PRICE_FRESH_DAYS_DEFAULT: i16 = 14;
+/// The most a commodity's freshness may be: the board reads no further back.
+pub const PRICE_FRESH_DAYS_MAX: i16 = 60;
 /// How far back the price before the latest is looked for, to show the move.
 pub const PRICE_HISTORY_DAYS: i64 = 60;
+const _: () = assert!(PRICE_FRESH_DAYS_MAX as i64 <= PRICE_HISTORY_DAYS);
 
 // ── Reviews ───────────────────────────────────────────────────────────────────
 pub const RATING_MIN: i16 = 1;
@@ -198,11 +211,16 @@ pub const SERVICE_PRICE_NOTE_MAX: usize = 300;
 /// `services.description` is TEXT; this keeps a listing readable on a phone.
 pub const SERVICE_DESCRIPTION_MAX: usize = 2000;
 /// How many services one business may list (hidden ones count), so deleting
-/// and re-adding cannot flood the directory.
-pub const SERVICES_PER_BUSINESS_MAX: u64 = 20;
+/// and re-adding cannot flood the directory: the default of
+/// `settings::SERVICES_PER_BUSINESS`, and the most it may be set to (the
+/// featured picks read that many per provider).
+pub const SERVICES_PER_BUSINESS_DEFAULT: u64 = 20;
+pub const SERVICES_PER_BUSINESS_MAX: u64 = 50;
 /// How many supplies one business may list (hidden ones count): a dealer's
-/// whole shelf, and still a list its owner's page shows at once.
-pub const PRODUCTS_PER_BUSINESS_MAX: u64 = 200;
+/// whole shelf, and still a list its owner's page shows at once: the default
+/// of `settings::PRODUCTS_PER_BUSINESS`, and the most it may be set to.
+pub const PRODUCTS_PER_BUSINESS_DEFAULT: u64 = 200;
+pub const PRODUCTS_PER_BUSINESS_MAX: u64 = 500;
 pub const PRODUCT_NAME_MAX: usize = 300;
 pub const PRODUCT_UNIT_MAX: usize = 50;
 pub const PRODUCT_DESCRIPTION_MAX: usize = 2000;
@@ -217,17 +235,19 @@ const _: () = assert!(TOPIC_MAX_LEN >= SERVICE_NAME_MAX);
 
 // ── Job posts ─────────────────────────────────────────────────────────────────
 pub const JOB_DESCRIPTION_MAX: usize = 500;
+// The defaults of the job settings (`settings::JOB_*`).
 /// How long a job post stays open to providers, in days.
-pub const JOB_POST_DAYS: i64 = 7;
-/// How long a job post is kept at all, in days. Providers see one for
-/// `JOB_POST_DAYS`; after this it is deleted, whatever its status, so the
-/// table and the phone numbers in it do not pile up for ever.
+pub const JOB_POST_DAYS_DEFAULT: i64 = 7;
+/// How long a job post is kept at all, in days. Providers see one while it
+/// is open; after this it is deleted, whatever its status, so the table and
+/// the phone numbers in it do not pile up for ever.
 pub const JOB_POST_KEEP_DAYS: i64 = 365;
-/// Open posts one phone may have within `JOB_POST_DAYS`.
-pub const JOB_POSTS_OPEN_PER_PHONE: u64 = 3;
-/// How far from a job a provider is told about it, in metres.
-pub const JOB_NOTIFY_RADIUS_M: f64 = RADIUS_DEFAULT_M;
+/// Open posts one phone may have while they are open.
+pub const JOB_POSTS_OPEN_PER_PHONE_DEFAULT: i64 = 3;
+/// How far from a job a provider is told about it, in km (the near-me
+/// radius before the visitor picks one).
+pub const JOB_NOTIFY_RADIUS_KM_DEFAULT: i64 = RADIUS_DEFAULT_M as i64 / METRES_PER_KM;
 /// At most this many providers (the nearest) are emailed about one job.
-pub const JOB_NOTIFY_MAX: i64 = 20;
+pub const JOB_NOTIFY_MAX_DEFAULT: i64 = 20;
 /// At most this many posts on a provider's jobs page.
 pub const JOBS_SHOWN: i64 = 50;

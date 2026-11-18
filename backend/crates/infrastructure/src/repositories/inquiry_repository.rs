@@ -76,11 +76,16 @@ impl InquiryRepositoryTrait for InquiryRepository {
             })
     }
 
-    async fn count_admin(&self, provider_id: Option<i32>) -> Result<i64, Error> {
+    async fn count_admin(
+        &self,
+        provider_id: Option<i32>,
+        status: Option<&str>,
+    ) -> Result<i64, Error> {
         Inquiry::find()
             .apply_if(provider_id, |q, id| {
                 q.filter(inquiry::Column::BusinessId.eq(id))
             })
+            .apply_if(status, |q, s| q.filter(inquiry::Column::Status.eq(s)))
             .count(self.db.as_ref())
             .await
             .map(|c| c as i64)
@@ -109,6 +114,7 @@ impl InquiryRepositoryTrait for InquiryRepository {
     async fn list_admin(
         &self,
         provider_id: Option<i32>,
+        status: Option<&str>,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<InquiryAdmin>, Error> {
@@ -116,6 +122,7 @@ impl InquiryRepositoryTrait for InquiryRepository {
             .apply_if(provider_id, |q, id| {
                 q.filter(inquiry::Column::BusinessId.eq(id))
             })
+            .apply_if(status, |q, s| q.filter(inquiry::Column::Status.eq(s)))
             .select_only()
             .column(inquiry::Column::Id)
             .column(inquiry::Column::BusinessId)

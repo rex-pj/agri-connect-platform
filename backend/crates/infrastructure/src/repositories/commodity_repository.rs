@@ -44,6 +44,7 @@ fn to_commodity(c: commodity::Model) -> Commodity {
         sector: c.sector,
         icon: c.icon,
         display_order: c.display_order,
+        price_fresh_days: c.price_fresh_days,
         is_active: c.is_active,
         is_demo: c.is_demo,
     }
@@ -92,6 +93,7 @@ impl CommodityRepositoryTrait for CommodityRepository {
             sector: Set(f.sector.clone()),
             icon: Set(f.icon.clone()),
             display_order: Set(f.display_order),
+            price_fresh_days: Set(f.price_fresh_days),
             created_by: Set(Some(actor_id)),
             ..Default::default()
         })
@@ -111,6 +113,10 @@ impl CommodityRepositoryTrait for CommodityRepository {
             .col_expr(
                 commodity::Column::DisplayOrder,
                 Expr::value(f.display_order),
+            )
+            .col_expr(
+                commodity::Column::PriceFreshDays,
+                Expr::value(f.price_fresh_days),
             )
             .col_expr(commodity::Column::UpdatedBy, Expr::value(Some(actor_id)))
             .filter(commodity::Column::Id.eq(id))

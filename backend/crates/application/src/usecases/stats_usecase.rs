@@ -13,7 +13,9 @@ use domain::{
 use chrono::{Duration, Utc};
 
 use crate::{
-    authz::Actor, catalogue::PERM_ADMIN_DASHBOARD_VIEW, constants::CALL_STATS_DAYS,
+    authz::Actor,
+    catalogue::PERM_ADMIN_DASHBOARD_VIEW,
+    constants::{CALL_STATS_DAYS, NEW_BUSINESS_DAYS},
     outputs::AdminStatsDto,
 };
 
@@ -48,13 +50,26 @@ impl StatsUseCase {
 
     pub async fn get_stats(&self, actor: &Actor) -> Result<AdminStatsDto> {
         actor.require(PERM_ADMIN_DASHBOARD_VIEW)?;
-        let since = Utc::now() - Duration::days(CALL_STATS_DAYS);
-        let (total_businesses, verified_businesses, active_products, total_users, recent_calls) = tokio::try_join!(
+        let now = Utc::now();
+        let since = now - Duration::days(CALL_STATS_DAYS);
+        let (
+            total_businesses,
+            verified_businesses,
+            active_products,
+            total_users,
+            recent_calls,
+            calls_two_windows,
+            new_businesses,
+        ) = tokio::try_join!(
             self.business_repo.count_all(),
             self.business_repo.count_verified(),
             self.product_repo.count_active(),
             self.user_repo.count_all(),
             self.call_repo.count_since(None, since),
+            self.call_repo
+                .count_since(None, now - Duration::days(2 * CALL_STATS_DAYS)),
+            self.business_repo
+                .count_created_since(now - Duration::days(NEW_BUSINESS_DAYS)),
         )?;
 
         Ok(AdminStatsDto {
@@ -63,6 +78,9 @@ impl StatsUseCase {
             active_products,
             total_users,
             recent_calls,
+            // Taps are kept far longer than two windows (`EVENT_KEEP_WEEKS`).
+            previous_calls: (calls_two_windows - recent_calls).max(0),
+            new_businesses,
         })
     }
 }

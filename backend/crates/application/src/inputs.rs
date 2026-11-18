@@ -112,6 +112,9 @@ pub struct CommodityInput {
     pub sector: String,
     pub icon: Option<String>,
     pub display_order: i16,
+    /// Days a price of its crops stays on the board (1 to
+    /// `PRICE_FRESH_DAYS_MAX`).
+    pub price_fresh_days: i16,
 }
 
 /// Who made a tap or a search, as far as counting it goes. Every account is

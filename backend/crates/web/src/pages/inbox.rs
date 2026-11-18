@@ -2,15 +2,15 @@
 //! business, newest first, each with a call button and its handling status —
 //! and POST /provider/inquiries/{id}/status.
 //!
-//! Each row's status is a small form: with JS the select saves itself
-//! (Alpine `autoSubmit`), without JS its button does.
+//! Each card ends with the next steps of its status (`status_steps`, the
+//! same buttons as the admin's list): one click each, but spam, whose link
+//! reloads the inbox with `?spam={id}` and that card's confirmation open.
+
+use std::collections::BTreeMap;
 
 use application::outputs::OwnInquiryDto;
 use axum::{extract::State, response::Response};
-use domain::{
-    constants::{INQUIRY_STATUSES, INQUIRY_STATUSES_REVIEWABLE},
-    Error, ErrorCode,
-};
+use domain::{constants::INQUIRY_STATUSES_REVIEWABLE, Error, ErrorCode};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -24,6 +24,7 @@ use crate::{
         parse_id,
         provider::REVIEWS_ANCHOR,
         see_other,
+        status_steps::{inquiry_steps, offers_spam, Step},
     },
     routes,
     shell::Shell,
@@ -38,15 +39,27 @@ fn url(name: &str, params: &[(&str, &str)]) -> Result<String, Error> {
 #[serde(default)]
 pub struct ListQuery {
     pub page: String,
+    /// The inquiry whose spam confirmation is open.
+    pub spam: String,
 }
 
 #[derive(Serialize)]
 pub struct InquiryRow {
     pub inquiry: OwnInquiryDto,
     pub action: String,
+    /// The buttons this card offers, from its status.
+    pub steps: &'static [Step],
+    pub spam_href: String,
     /// The link to review this business, offered once the farmer was
     /// called back (`contacted`, `closed`): the provider sends it on Zalo.
     pub review_href: Option<String>,
+}
+
+/// The spam confirmation: the farmer's name and where the form posts.
+#[derive(Serialize)]
+pub struct Confirm {
+    pub requester: String,
+    pub action: String,
 }
 
 #[derive(Serialize)]
@@ -55,10 +68,11 @@ pub struct InboxPage {
     pub total: i64,
     pub new_count: i64,
     pub pagination: Option<Pagination>,
-    /// The codes the select offers; the template names them.
-    pub statuses: &'static [&'static str],
-    /// Sent back with a row's form, so saving returns to the same page.
-    pub page: i64,
+    /// Sent back with a card's form (`page`), so saving returns to the
+    /// same page.
+    pub keep: BTreeMap<&'static str, String>,
+    /// The spam confirmation open on this render.
+    pub confirm: Option<Confirm>,
     pub dashboard_href: String,
     /// For the review link's message.
     pub business_name: String,
@@ -96,13 +110,27 @@ pub async fn list(
         canonical_url("provider", profile.id, &profile.name)?
     );
     let business_name = profile.name;
+    let page_param = Some(inbox.page)
+        .filter(|p| *p > 1)
+        .map(|p| p.to_string())
+        .unwrap_or_default();
+    let spam = parse_opt::<i32>(&q.spam);
+    let mut confirm = None;
     let mut rows = Vec::with_capacity(inbox.items.len());
     for inquiry in inbox.items {
+        let id = inquiry.id.to_string();
+        let action = url("provider_inquiry_status", &[("id", &id)])?;
+        let steps = inquiry_steps(&inquiry.status);
+        if spam == Some(inquiry.id) && offers_spam(steps) {
+            confirm = Some(Confirm {
+                requester: inquiry.requester_name.clone(),
+                action: action.clone(),
+            });
+        }
         rows.push(InquiryRow {
-            action: url(
-                "provider_inquiry_status",
-                &[("id", &inquiry.id.to_string())],
-            )?,
+            spam_href: with_query(&path, &[("page", &page_param), ("spam", &id)]),
+            action,
+            steps,
             review_href: INQUIRY_STATUSES_REVIEWABLE
                 .contains(&inquiry.status.as_str())
                 .then(|| review_href.clone()),
@@ -114,8 +142,8 @@ pub async fn list(
         total: inbox.total,
         new_count: inbox.new_count,
         pagination: Pagination::new(&path, &[], inbox.page, inbox.total_pages),
-        statuses: INQUIRY_STATUSES,
-        page: inbox.page,
+        keep: BTreeMap::from([("page", inbox.page.to_string())]),
+        confirm,
         dashboard_href: url("provider_dashboard", &[])?,
         business_name,
         flash: flash.0,

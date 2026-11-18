@@ -36,7 +36,7 @@ const FIELD_PREFIX: &str = "perm.";
 /// key.
 fn group_key(key: &str) -> &'static str {
     match key.split('.').next().unwrap_or_default() {
-        "admin" | "system" => "permission_group.system",
+        "admin" | "system" | "setting" => "permission_group.system",
         "user" | "role" => "permission_group.users",
         "provider" => "permission_group.providers",
         "listing" | "service" => "permission_group.listings",

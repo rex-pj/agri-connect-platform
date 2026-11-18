@@ -39,8 +39,9 @@ pub struct HomePage {
     pub rows: Vec<TileRow>,
     pub services: Vec<ServiceCard>,
     pub products: Vec<ProductDto>,
-    /// "Found no one? Post the job": the way to the job form.
-    pub job_cta: ProviderCta,
+    /// "Found no one? Post the job": the way to the job form; none while job
+    /// posts are paused.
+    pub job_cta: Option<ProviderCta>,
     /// Today's few prices (each crop's newest), under the near-me banner.
     pub prices: Vec<PriceLine>,
 }
@@ -165,7 +166,8 @@ pub async fn show(shell: Shell, State(state): State<AppState>) -> Result<Respons
             })
             .collect(),
         rows,
-        job_cta: ProviderCta {
+        // Not offered while job posts are paused (`access.job_posts_open`).
+        job_cta: shell.job_posts_open.then_some(ProviderCta {
             link: Link {
                 href: url("job_new", &[])?,
                 icon: "fa-bullhorn",
@@ -173,7 +175,7 @@ pub async fn show(shell: Shell, State(state): State<AppState>) -> Result<Respons
             },
             title: state.locale().text("job.cta_title"),
             sub: state.locale().text("job.cta_sub"),
-        },
+        }),
         prices: {
             let today = vn_today(Utc::now())?;
             prices

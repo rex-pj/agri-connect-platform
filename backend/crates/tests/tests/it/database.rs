@@ -522,6 +522,17 @@ async fn the_schema_refuses_rows_that_contradict_each_other() {
                VALUES ('p82', 'X', 'Tỉnh X', 'province', 'SRID=4326;POINT(106 10)')",
             "chk_provinces_code",
         ),
+        // A setting's key is dotted lower-case words, like the registry's.
+        (
+            "INSERT INTO platform_settings (key, value) VALUES ('Support Phone', '0912345678')",
+            "chk_platform_settings_key",
+        ),
+        // A commodity's prices stay on the board 1 to 60 days.
+        (
+            "INSERT INTO sectors (code, name) VALUES ('crop', 'Trồng trọt');
+             INSERT INTO commodities (name, sector, price_fresh_days) VALUES ('Lúa', 'crop', 0)",
+            "chk_commodities_price_fresh_days",
+        ),
     ] {
         refused(db, sql, constraint).await;
     }

@@ -159,6 +159,7 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("admin_service", "/admin/services/{id}"),
     ("admin_service_status", "/admin/services/{id}/status"),
     ("admin_service_delete", "/admin/services/{id}/delete"),
+    ("admin_settings", "/admin/settings"),
     ("admin_logout", "/admin/logout"),
     ("file", FILE_PATH),
     ("file_thumb", FILE_THUMB_PATH),

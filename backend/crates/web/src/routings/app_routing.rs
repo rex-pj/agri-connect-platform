@@ -36,6 +36,7 @@ use crate::{
         products_handler::ProductsHandler,
         provider_dashboard_handler::ProviderDashboardHandler,
         role_handler::RoleHandler,
+        settings_handler::SettingsHandler,
         setup_handler::SetupHandler,
         stats_handler::StatsHandler,
         zalo_handler::ZaloHandler,
@@ -506,6 +507,10 @@ impl AppRouting {
                 "/admin/jobs/{id}/status",
                 post(pages::admin::jobs::change_status),
             )
+            .route(
+                "/admin/settings",
+                get(pages::admin::settings::show).post(pages::admin::settings::update),
+            )
             .route("/admin/demand", get(pages::admin::demand::show))
             .route("/admin/demand.csv", get(pages::admin::demand::csv))
             .route(
@@ -718,6 +723,10 @@ impl AppRouting {
             )
             // Permissions (read-only; grants belong to roles)
             .route("/api/admin/permissions", get(PermissionHandler::list_all))
+            .route(
+                "/api/admin/settings",
+                get(SettingsHandler::list).patch(SettingsHandler::update),
+            )
             .route(
                 "/api/admin/users/{id}/permissions",
                 get(PermissionHandler::list_by_user),

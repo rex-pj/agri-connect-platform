@@ -2,14 +2,16 @@
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/figure.html" as fig %}
 {% import "atoms/alert.html" as alerts %}
+{% import "organisms/area_progress.html" as progress %}
 {% import "molecules/admin_header.html" as header %}
 {% import "organisms/demand_table.html" as demand %}
 {% import "organisms/unmet_searches.html" as unmet %}
 {#- The demand report. `page.body` is web::pages::admin::demand::DemandPage.
     The area filter is a GET form that sends itself on change (`autoSubmit`;
     its button shows without JS); the header's action
-    downloads the same table as CSV. The area list says which areas are
-    steady: every week at `steady_weekly_leads` or more. -#}
+    downloads the same table as CSV. The area list (organisms/area_progress)
+    shows how near each area is to `steady_weekly_leads` a week; steady:
+    every week did. -#}
 {% block title %}{{ t(key="admin_menu.demand") }} — {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
@@ -38,14 +40,7 @@
   <section class="admin-section" aria-labelledby="areas-title">
     <h2 class="admin-section__title" id="areas-title">{{ t(key="demand.areas") }}</h2>
     <p class="small text-muted">{{ t(key="demand.steady_hint", count=r.steady_weekly_leads, weeks=r.weeks | length) }}</p>
-    <ul class="list-unstyled mb-0">
-      {% for a in r.areas %}
-      <li class="py-2 border-bottom d-flex justify-content-between gap-2{% if a.nested %} ps-3 small{% endif %}">
-        <span>{% if a.nested %}{{ a.name }}{% elif a.label %}<span class="fw-semibold">{{ a.label }}</span>{% else %}<span class="text-muted">{{ t(key="demand.unplaced") }}</span>{% endif %}{% if a.steady %} <span class="badge text-bg-success">{{ t(key="demand.steady") }}</span>{% endif %}</span>
-        <span class="fw-semibold">{{ fig::figure(f=a.total, min=r.min_count) }}</span>
-      </li>
-      {% endfor %}
-    </ul>
+    {{ progress::area_progress(areas=r.areas, weeks=r.weeks, bar=r.steady_weekly_leads, min=r.min_count, hrefs=b.area_hrefs) }}
   </section>
 </div>
 {% endblock content %}

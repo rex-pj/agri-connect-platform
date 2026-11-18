@@ -3,9 +3,9 @@
     "my area"). The account column is the profile menu's links: sign in and
     sign up for visitors, the provider dashboard or the admin panel (which is
     not a tab) and the profile for signed-in users; error pages, which do not
-    know the session, leave it out. Help lines come from `site.support_*` and
-    each one left unset is not shown. The language switch is the top
-    bar's, not repeated here.
+    know the session, leave it out. Help lines come from `shell.support` (the
+    `support.*` settings), each one left empty not shown. The language
+    switch is the top bar's, not repeated here.
 
     Phone: one column, links two per row, help buttons full width. Tablet:
     brand beside help, links below. Wide: four columns. -#}
@@ -47,13 +47,13 @@
     </nav>
     {% endif %}
 
-    {% if site.support_phone or site.support_zalo_url or site.support_email %}
+    {% if shell.support.phone or shell.support.zalo_url or shell.support.email %}
     <section class="app-footer__col app-footer__col--help" aria-labelledby="footer-help">
       <h2 class="app-footer__title" id="footer-help">{{ t(key="footer.help_title") }}</h2>
       <div class="app-footer__help">
-        {% if site.support_phone %}<a class="btn btn-warning app-footer__call" href="tel:{{ site.support_phone }}">{{ atoms::icon(name="fa-phone") }} {{ site.support_phone | phone }}</a>{% endif %}
-        {% if site.support_zalo_url %}<a class="btn btn-outline-light" href="{{ site.support_zalo_url }}" rel="noopener" target="_blank">{{ atoms::icon(name="fa-comment-dots") }} {{ t(key="footer.zalo") }}</a>{% endif %}
-        {% if site.support_email %}<a class="app-footer__email" href="mailto:{{ site.support_email }}">{{ atoms::icon(name="fa-envelope") }} {{ site.support_email }}</a>{% endif %}
+        {% if shell.support.phone %}<a class="btn btn-warning app-footer__call" href="tel:{{ shell.support.phone }}">{{ atoms::icon(name="fa-phone") }} {{ shell.support.phone | phone }}</a>{% endif %}
+        {% if shell.support.zalo_url %}<a class="btn btn-outline-light" href="{{ shell.support.zalo_url }}" rel="noopener" target="_blank">{{ atoms::icon(name="fa-comment-dots") }} {{ t(key="footer.zalo") }}</a>{% endif %}
+        {% if shell.support.email %}<a class="app-footer__email" href="mailto:{{ shell.support.email }}">{{ atoms::icon(name="fa-envelope") }} {{ shell.support.email }}</a>{% endif %}
       </div>
     </section>
     {% endif %}

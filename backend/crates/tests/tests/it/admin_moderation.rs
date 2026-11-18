@@ -253,9 +253,31 @@ async fn inquiry_status_and_review_visibility_are_set_from_their_lists() {
     )
     .await;
 
+    // The status is a badge; the row offers the next steps only, spam
+    // through its confirmation.
     let html = page(&e, "/admin/inquiries", &admin).await;
-    assert!(html.contains(r#"x-data="autoSubmit""#));
-    assert!(html.contains(r#"<option value="new" selected>Mới</option>"#));
+    assert!(!html.contains("<select"));
+    assert!(html.contains(r#"<span class="badge text-bg-info">Mới</span>"#));
+    assert!(html.contains(r#"name="status" value="contacted""#));
+    assert!(html.contains(r#"name="status" value="closed""#));
+    assert!(!html.contains(r#"name="status" value="new""#));
+    assert!(html.contains(&format!("/admin/inquiries?spam={inquiry}#xac-nhan")));
+    assert!(!html.contains("Đánh dấu rác yêu cầu của Chú Tư?"));
+
+    // The chips narrow the list to one status; an unknown one is the whole list.
+    let html = page(&e, "/admin/inquiries?state=closed", &admin).await;
+    assert!(!html.contains("Chú Tư"));
+    assert!(html.contains("Không có yêu cầu nào ở trạng thái này."));
+    assert!(html.contains(r#"href="/admin/inquiries?state=closed" aria-current="true""#));
+    let html = page(&e, "/admin/inquiries?state=new", &admin).await;
+    assert!(html.contains("Chú Tư"));
+    assert!(
+        html.contains(r#"name="state" value="new""#),
+        "the forms keep it"
+    );
+    assert!(page(&e, "/admin/inquiries?state=xoa", &admin)
+        .await
+        .contains("Chú Tư"));
 
     // Narrowed to one provider: its rows only, and the forms keep the filter.
     let own = format!("/admin/inquiries?provider_id={business}");
@@ -309,6 +331,44 @@ async fn inquiry_status_and_review_visibility_are_set_from_their_lists() {
     )
     .await;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    // Spam asks first, with a reason for the audit log; the list's status
+    // filter is kept on the way back.
+    let html = page(&e, &format!("/admin/inquiries?spam={inquiry}"), &admin).await;
+    assert!(html.contains("Đánh dấu rác yêu cầu của Chú Tư?"));
+    assert!(html.contains(r#"name="reason""#));
+    let res = send(
+        &e.router,
+        post_form(
+            &format!("/admin/inquiries/{inquiry}/status"),
+            &[
+                ("status", "spam"),
+                ("reason", "số lạ"),
+                ("state", "contacted"),
+            ],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        res.headers()[header::LOCATION],
+        "/admin/inquiries?state=contacted"
+    );
+    assert_eq!(
+        one_text(
+            &e,
+            &format!(
+                "SELECT reason FROM audit_logs WHERE entity_type = 'inquiry'                  AND entity_id = {inquiry} ORDER BY id DESC LIMIT 1"
+            )
+        )
+        .await,
+        "spam: số lạ"
+    );
+    // A spam one only reopens.
+    let html = page(&e, "/admin/inquiries", &admin).await;
+    assert!(html.contains(r#"name="status" value="new""#));
+    assert!(!html.contains(&format!("?spam={inquiry}")));
 
     let html = page(&e, &format!("/admin/reviews?hide={review}"), &admin).await;
     assert!(html.contains("Ẩn đánh giá của Chú Tư?"));

@@ -6,8 +6,9 @@
 //! rice, durian, pigs), and enter the prices (`price.manage`);
 //! entering the same crop, area and day again replaces that day's price. The
 //! public board shows, commodity by commodity, each crop's latest price per area,
-//! only when it is at most `PRICE_FRESH_DAYS` old (a stale price misleads
-//! more than none), with how its middle moved since the price before.
+//! only while it is fresh: at most its commodity's `price_fresh_days` old
+//! (durian moves daily, rice weekly; a stale price misleads more than none),
+//! with how its middle moved since the price before.
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -28,8 +29,8 @@ use crate::{
     authz::Actor,
     catalogue::PERM_PRICE_MANAGE,
     constants::{
-        ADMIN_PAGE_SIZE, CROP_NAME_MAX, CROP_UNIT_MAX, PRICE_FRESH_DAYS, PRICE_HISTORY_DAYS,
-        PRICE_NOTE_MAX, PRICE_PER_UNIT_MAX,
+        ADMIN_PAGE_SIZE, CROP_NAME_MAX, CROP_UNIT_MAX, PRICE_FRESH_DAYS_DEFAULT,
+        PRICE_HISTORY_DAYS, PRICE_NOTE_MAX, PRICE_PER_UNIT_MAX,
     },
     inputs::{CropInput, PriceInput},
     outputs::{
@@ -345,7 +346,6 @@ impl PriceUseCase {
             crops,
             areas,
             today,
-            fresh_days: PRICE_FRESH_DAYS,
         })
     }
 
@@ -370,9 +370,10 @@ fn middle(p: &CropPrice) -> i64 {
 }
 
 /// The board from prices newest first: per crop (by commodity in the order
-/// of `commodities`, then in the crops' order; shown crops of those only) the latest price of each area if it is fresh, compared with
-/// the one before; `area` keeps one area. Also the areas with a fresh price,
-/// by label.
+/// of `commodities`, then in the crops' order; shown crops of those only) the
+/// latest price of each area if it is fresh (within its commodity's
+/// `price_fresh_days`), compared with the one before; `area` keeps one area.
+/// Also the areas with a fresh price, by label.
 fn build_board(
     prices: &[CropPrice],
     crops: &[Crop],
@@ -380,7 +381,23 @@ fn build_board(
     today: NaiveDate,
     area: Option<i32>,
 ) -> (Vec<CropBoardDto>, Vec<NamedDto>) {
-    let fresh_from = today - Duration::days(PRICE_FRESH_DAYS);
+    // The first day a price of each crop is still fresh on: its commodity's
+    // window, a crop of a commodity not on this board the default one.
+    let fresh_from: HashMap<i32, NaiveDate> = crops
+        .iter()
+        .map(|c| {
+            let days = commodities
+                .iter()
+                .find(|g| g.id == c.commodity_id)
+                .map_or(PRICE_FRESH_DAYS_DEFAULT, |g| g.price_fresh_days);
+            (c.id, today - Duration::days(i64::from(days)))
+        })
+        .collect();
+    let is_fresh = |p: &CropPrice| {
+        fresh_from
+            .get(&p.crop_id)
+            .is_some_and(|from| p.observed_on >= *from)
+    };
     // (crop, area) → [latest, previous], in the newest-first order given:
     // the move is the latest against the one before.
     let mut pairs: HashMap<(i32, i32), Vec<&CropPrice>> = HashMap::new();
@@ -393,7 +410,7 @@ fn build_board(
     let mut quotes: HashMap<i32, Vec<PriceQuoteDto>> = HashMap::new();
     let mut areas: HashMap<i32, String> = HashMap::new();
     for seen in pairs.values() {
-        let Some(latest) = seen.first().filter(|p| p.observed_on >= fresh_from) else {
+        let Some(latest) = seen.first().filter(|p| is_fresh(p)) else {
             continue;
         };
         areas.insert(latest.location_id, latest.location_label.clone());
@@ -553,6 +570,7 @@ mod tests {
             sector: "crop".into(),
             icon: None,
             display_order: 1,
+            price_fresh_days: PRICE_FRESH_DAYS_DEFAULT,
             is_active: true,
             is_demo: false,
         }]
@@ -574,6 +592,39 @@ mod tests {
     }
 
     #[test]
+    fn each_commodity_keeps_its_prices_for_its_own_days() {
+        let today = day(20);
+        // Crop 1 is rice (14 days); crop 2 is durian, fresh for 2 days.
+        let durian = Commodity {
+            id: 2,
+            name: "durian".into(),
+            price_fresh_days: 2,
+            ..rice().remove(0)
+        };
+        let commodities = vec![rice().remove(0), durian];
+        let crops = vec![
+            crop(1, true),
+            Crop {
+                commodity_id: 2,
+                ..crop(2, true)
+            },
+        ];
+        let prices = vec![
+            price(2, 2, 10, 17, 90_000, 95_000),
+            price(1, 1, 10, 10, 6_000, 6_200),
+        ];
+        let (board, _) = build_board(&prices, &crops, &commodities, today, None);
+        let shown: Vec<i32> = board.iter().map(|c| c.crop_id).collect();
+        assert_eq!(
+            shown,
+            vec![1],
+            "a 10-day-old rice price shows, a 3-day-old durian one does not"
+        );
+        let (board, _) = build_board(&prices, &crops, &commodities, day(18), None);
+        assert_eq!(board.len(), 2, "on the 18th the durian price is a day old");
+    }
+
+    #[test]
     fn the_board_shows_the_latest_fresh_price_and_its_move() {
         let today = day(20);
         // Newest first, as the repository gives them.
@@ -582,7 +633,7 @@ mod tests {
             price(4, 1, 11, 19, 6_000, 6_000),
             price(3, 1, 10, 18, 6_000, 6_200),
             price(2, 1, 10, 15, 5_000, 5_000),
-            // Crop 2's only price is older than PRICE_FRESH_DAYS.
+            // Crop 2's only price is older than its commodity's 14 days.
             price(1, 2, 10, 1, 90_000, 95_000),
         ];
         let (board, areas) = build_board(

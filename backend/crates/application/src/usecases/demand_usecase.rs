@@ -40,8 +40,7 @@ use crate::{
     catalogue::PERM_REPORT_DEMAND_READ,
     constants::{
         ADMIN_UNIT_SNAP_M, DEMAND_REPORT_MIN_COUNT, DEMAND_WEEKS, EVENT_KEEP_WEEKS,
-        SEARCH_QUERY_MAX, SEARCH_REPEAT_SECS, STEADY_WEEKLY_LEADS, UNMET_SEARCHES_SHOWN,
-        VN_UTC_OFFSET_SECS,
+        SEARCH_QUERY_MAX, SEARCH_REPEAT_SECS, UNMET_SEARCHES_SHOWN, VN_UTC_OFFSET_SECS,
     },
     hashing::sha256_hex,
     inputs::{SearchInput, SearchPlace, Visitor},
@@ -49,6 +48,7 @@ use crate::{
         DemandAreaDto, DemandReportDto, DemandRowDto, DemandWeekDto, Figure, UnmetSearchDto,
     },
     repeats::RepeatFilter,
+    settings::SettingsReader,
 };
 
 /// What a report may show: every area and category (`None`), or only these
@@ -69,6 +69,7 @@ pub struct DemandReportUseCase {
     category_repo: Arc<dyn CategoryRepositoryTrait + Send + Sync>,
     location_repo: Arc<dyn LocationRepositoryTrait + Send + Sync>,
     admin_unit_repo: Arc<dyn AdminUnitRepositoryTrait + Send + Sync>,
+    settings: SettingsReader,
     /// Fingerprints of recent searches (hashed, in memory only) and when
     /// they were made: a repeat within `SEARCH_REPEAT_SECS` counts once.
     recent_searches: RepeatFilter,
@@ -81,6 +82,7 @@ pub struct DemandDeps {
     pub category_repo: Arc<dyn CategoryRepositoryTrait + Send + Sync>,
     pub location_repo: Arc<dyn LocationRepositoryTrait + Send + Sync>,
     pub admin_unit_repo: Arc<dyn AdminUnitRepositoryTrait + Send + Sync>,
+    pub settings: SettingsReader,
 }
 
 impl DemandReportUseCase {
@@ -90,6 +92,7 @@ impl DemandReportUseCase {
             category_repo: d.category_repo,
             location_repo: d.location_repo,
             admin_unit_repo: d.admin_unit_repo,
+            settings: d.settings,
             recent_searches: RepeatFilter::default(),
         }
     }
@@ -113,13 +116,14 @@ impl DemandReportUseCase {
     ) -> Result<DemandReportDto> {
         let weeks = report_weeks(now)?;
         let (from, to) = window(&weeks)?;
-        let (events, searches, areas, sole, categories, units) = tokio::try_join!(
+        let (events, searches, areas, sole, categories, units, settings) = tokio::try_join!(
             self.demand_repo.lead_counts(from, to, scope.demo),
             self.demand_repo.search_counts(from, to, scope.demo),
             self.demand_repo.business_areas(scope.demo),
             self.demand_repo.sole_categories(),
             self.category_repo.list_admin(),
             AdminUnits::load(self.admin_unit_repo.as_ref()),
+            self.settings.load(),
         )?;
         Ok(aggregate(Input {
             weeks,
@@ -131,6 +135,7 @@ impl DemandReportUseCase {
             categories,
             units: &units,
             scope,
+            steady_weekly_leads: settings.steady_weekly_leads(),
         }))
     }
 
@@ -342,6 +347,8 @@ struct Input<'a> {
     categories: Vec<CategoryAdmin>,
     units: &'a AdminUnits,
     scope: &'a ReportScope,
+    /// Leads a week an area needs (`market.steady_weekly_leads`).
+    steady_weekly_leads: i64,
 }
 
 /// Which wards (by their keys) a report counts: those in its areas, and of
@@ -386,6 +393,7 @@ fn aggregate(input: Input<'_>) -> DemandReportDto {
         categories,
         units,
         scope,
+        steady_weekly_leads,
     } = input;
     let filter = AreaFilter { units, scope };
     let sole_of: HashMap<i32, i32> = sole
@@ -423,30 +431,68 @@ fn aggregate(input: Input<'_>) -> DemandReportDto {
         (Some(_), None) => false,
     };
 
-    let area_rows = area_rows(&cells, &filter, &in_categories);
+    let mut ordered: Vec<&CategoryAdmin> = categories.iter().collect();
+    ordered.sort_by_key(|c| (c.category_type.clone(), c.display_order, c.id));
+    let wanted = scope.categories.as_deref().unwrap_or_default();
+
+    let area_rows = area_rows(
+        &cells,
+        &filter,
+        &in_categories,
+        &ordered,
+        wanted,
+        steady_weekly_leads,
+    );
     let steady_areas = area_rows
         .iter()
         .filter(|a| a.steady && !a.nested && a.level != LEVEL_NONE)
         .count();
 
     // Rows: the categories of the areas in scope, or of the one in focus.
-    let mut by_category: HashMap<Option<i32>, Cell> = HashMap::new();
+    let mut by_category = ByCategory::new();
     for ((ward, category), cell) in &cells {
         if filter.in_rows(ward.as_deref()) && in_categories(category) {
             by_category.entry(*category).or_default().add(cell);
         }
     }
-    if let Some(wanted) = &scope.categories {
-        for c in wanted {
-            by_category.entry(Some(*c)).or_default();
-        }
+    let (rows, all_row, _) = category_rows(&by_category, &ordered, wanted);
+
+    let (searches, unmet) = search_figures(searches, &filter, &in_categories);
+
+    DemandReportDto {
+        weeks,
+        areas: area_rows,
+        rows,
+        all: all_row,
+        searches,
+        unmet,
+        steady_areas,
+        min_count: DEMAND_REPORT_MIN_COUNT,
+        steady_weekly_leads,
+        with_demo,
     }
-    let mut ordered: Vec<&CategoryAdmin> = categories.iter().collect();
-    ordered.sort_by_key(|c| (c.category_type.clone(), c.display_order, c.id));
+}
+
+/// Leads by category (`None`: about no category).
+type ByCategory = HashMap<Option<i32>, Cell>;
+
+/// The report's rows for these leads: the catalogue's categories in order
+/// (each of `wanted` even at zero), then the leads with no category; their
+/// sum row, hidden so that no row or column sum gives a hidden figure away;
+/// and the sum's raw counts.
+fn category_rows(
+    by_category: &ByCategory,
+    ordered: &[&CategoryAdmin],
+    wanted: &[i32],
+) -> (Vec<DemandRowDto>, DemandRowDto, Cell) {
+    let empty = Cell::default();
     let mut rows = Vec::new();
     let mut all = Cell::default();
     for c in ordered {
-        if let Some(cell) = by_category.get(&Some(c.id)) {
+        let cell = by_category
+            .get(&Some(c.id))
+            .or_else(|| wanted.contains(&c.id).then_some(&empty));
+        if let Some(cell) = cell {
             all.add(cell);
             let mut r = row(Some(c.id), Some(c.name.clone()), cell);
             r.sector = c.sector.clone();
@@ -464,29 +510,11 @@ fn aggregate(input: Input<'_>) -> DemandReportDto {
             .iter()
             .filter_map(|r| r.weeks.get(i).copied())
             .collect();
-        if shown_total(*raw, &column).value.is_none() {
-            figure.value = None;
-        }
+        hide_where(figure, shown_total(*raw, &column));
     }
     let totals: Vec<Figure> = rows.iter().map(|r| r.total).collect();
-    if shown_total(all.total(), &totals).value.is_none() {
-        all_row.total.value = None;
-    }
-
-    let (searches, unmet) = search_figures(searches, &filter, &in_categories);
-
-    DemandReportDto {
-        weeks,
-        areas: area_rows,
-        rows,
-        all: all_row,
-        searches,
-        unmet,
-        steady_areas,
-        min_count: DEMAND_REPORT_MIN_COUNT,
-        steady_weekly_leads: STEADY_WEEKLY_LEADS,
-        with_demo,
-    }
+    hide_where(&mut all_row.total, shown_total(all.total(), &totals));
+    (rows, all_row, all)
 }
 
 const LEVEL_PROVINCE: &str = "province";
@@ -502,32 +530,38 @@ fn area_rows(
     cells: &HashMap<(Option<String>, Option<i32>), Cell>,
     filter: &AreaFilter<'_>,
     in_categories: &dyn Fn(&Option<i32>) -> bool,
+    ordered: &[&CategoryAdmin],
+    wanted: &[i32],
+    bar: i64,
 ) -> Vec<DemandAreaDto> {
     let units = filter.units;
-    let mut by_ward: HashMap<&str, Cell> = HashMap::new();
-    let mut by_province: HashMap<&str, Cell> = HashMap::new();
-    let mut unplaced: Option<Cell> = None;
+    let mut by_ward: HashMap<&str, ByCategory> = HashMap::new();
+    let mut by_province: HashMap<&str, ByCategory> = HashMap::new();
+    let mut unplaced: Option<ByCategory> = None;
     for ((ward, category), cell) in cells {
         if !in_categories(category) {
             continue;
         }
+        let add = |leads: &mut ByCategory| leads.entry(*category).or_default().add(cell);
         match ward.as_deref() {
             Some(w) => {
-                by_ward.entry(w).or_default().add(cell);
+                add(by_ward.entry(w).or_default());
                 if let Some(p) = units.province_of(w) {
-                    by_province.entry(p).or_default().add(cell);
+                    add(by_province.entry(p).or_default());
                 }
             }
-            None => unplaced.get_or_insert_with(Cell::default).add(cell),
+            None => add(unplaced.get_or_insert_with(ByCategory::new)),
         }
     }
+    let figures = |leads: Option<&ByCategory>| {
+        category_rows(leads.unwrap_or(&ByCategory::new()), ordered, wanted)
+    };
     let every_area = filter.scope.areas.is_none();
-    let empty = Cell::default();
     let mut rows = Vec::new();
     for p in units.provinces() {
         let key = AreaKey::Province(p.code.clone());
-        let cell = by_province.get(p.code.as_str());
-        let province_shown = filter.listed(&key) || (every_area && cell.is_some());
+        let leads = by_province.get(p.code.as_str());
+        let province_shown = filter.listed(&key) || (every_area && leads.is_some());
         if province_shown {
             rows.push(area_dto(
                 &key,
@@ -535,33 +569,36 @@ fn area_rows(
                 Some(p.name.clone()),
                 None,
                 false,
-                cell.unwrap_or(&empty),
+                figures(leads),
+                bar,
             ));
         }
         for w in units.wards_of(&p.code) {
             let key = AreaKey::Ward(w.code.clone());
-            let cell = by_ward.get(w.code.as_str());
-            if filter.listed(&key) || (province_shown && cell.is_some()) {
+            let leads = by_ward.get(w.code.as_str());
+            if filter.listed(&key) || (province_shown && leads.is_some()) {
                 rows.push(area_dto(
                     &key,
                     LEVEL_WARD,
                     units.label(&key),
                     Some(w.full_name.clone()),
                     province_shown,
-                    cell.unwrap_or(&empty),
+                    figures(leads),
+                    bar,
                 ));
             }
         }
     }
     if every_area || filter.listed(&AreaKey::Unplaced) {
-        if let Some(cell) = &unplaced {
+        if let Some(leads) = &unplaced {
             rows.push(area_dto(
                 &AreaKey::Unplaced,
                 LEVEL_NONE,
                 None,
                 None,
                 false,
-                cell,
+                figures(Some(leads)),
+                bar,
             ));
         }
     }
@@ -572,18 +609,32 @@ fn area_rows(
 fn shown(value: i64) -> Figure {
     Figure {
         value: (value == 0 || value >= DEMAND_REPORT_MIN_COUNT).then_some(value),
+        at_least: None,
     }
 }
 
 /// A total of `parts` as shown: hidden like any figure, and also when
 /// exactly one part is hidden, since the total minus the shown parts would
-/// give that one away.
+/// give that one away; then it is at least the shown parts and one.
 fn shown_total(total: i64, parts: &[Figure]) -> Figure {
     let hidden = parts.iter().filter(|f| f.value.is_none()).count();
     if hidden == 1 {
-        Figure { value: None }
+        let shown_sum: i64 = parts.iter().filter_map(|f| f.value).sum();
+        Figure {
+            value: None,
+            at_least: Some(shown_sum + 1),
+        }
     } else {
         shown(total)
+    }
+}
+
+/// Hides `figure` where `check` (the same sum seen through other parts)
+/// is hidden, keeping the larger "at least" of the two.
+fn hide_where(figure: &mut Figure, check: Figure) {
+    if check.value.is_none() {
+        figure.value = None;
+        figure.at_least = figure.at_least.max(check.at_least);
     }
 }
 
@@ -592,17 +643,16 @@ fn row(category_id: Option<i32>, category: Option<String>, cell: &Cell) -> Deman
     let calls = shown(cell.calls);
     let zalo = shown(cell.zalo);
     let inquiries = shown(cell.inquiries);
-    let by_week = shown_total(cell.total(), &weeks);
-    let by_channel = shown_total(cell.total(), &[calls, zalo, inquiries]);
+    let mut total = shown_total(cell.total(), &weeks);
+    hide_where(
+        &mut total,
+        shown_total(cell.total(), &[calls, zalo, inquiries]),
+    );
     DemandRowDto {
         category_id,
         category,
         sector: None,
-        total: if by_week.value.is_none() || by_channel.value.is_none() {
-            Figure { value: None }
-        } else {
-            by_week
-        },
+        total,
         weeks,
         calls,
         zalo,
@@ -645,22 +695,29 @@ fn search_figures(
     (weekly.iter().map(|v| shown(*v)).collect(), unmet)
 }
 
+/// An area's line from its `category_rows`: the sum row its own report
+/// (`?area=`, the same scope) shows, so the list gives away nothing that
+/// report hides; and how many of its weeks reached the bar.
 fn area_dto(
     key: &AreaKey,
     level: &str,
     label: Option<String>,
     name: Option<String>,
     nested: bool,
-    cell: &Cell,
+    (_, sum, raw): (Vec<DemandRowDto>, DemandRowDto, Cell),
+    bar: i64,
 ) -> DemandAreaDto {
+    let weeks_at_bar = raw.weeks.iter().filter(|w| **w >= bar).count();
     DemandAreaDto {
         value: key.value(),
         level: level.to_owned(),
         label,
         name,
         nested,
-        total: shown(cell.total()),
-        steady: cell.weeks.iter().all(|w| *w >= STEADY_WEEKLY_LEADS),
+        weeks: sum.weeks,
+        total: sum.total,
+        weeks_at_bar,
+        steady: weeks_at_bar == raw.weeks.len(),
     }
 }
 
@@ -668,6 +725,7 @@ fn area_dto(
 mod tests {
     use super::*;
     use crate::admin_units::tests::units;
+    use crate::constants::STEADY_WEEKLY_LEADS_DEFAULT;
 
     fn at(y: i32, m: u32, d: u32, h: u32) -> DateTime<Utc> {
         Utc.with_ymd_and_hms(y, m, d, h, 0, 0)
@@ -689,11 +747,13 @@ mod tests {
 
     /// One call tap, if `at` is in the report, as the database counts it:
     /// under the ward of its business (1 is in Cai Lậy, 28439, Đồng Tháp; 3
-    /// in Long Xuyên, 30001, An Giang; 2 has no ward), naming the business
+    /// in Long Xuyên, 30001, An Giang; 4 in Tân Phước, 28400, Đồng Tháp; 2
+    /// has no ward), naming the business
     /// only when it is about no category.
     fn event(at: DateTime<Utc>, business_id: i32, category_id: Option<i32>) -> Option<LeadCount> {
         let ward_code = match business_id {
             1 => Some("28439".to_owned()),
+            4 => Some("28400".to_owned()),
             3 => Some("30001".to_owned()),
             _ => None,
         };
@@ -757,6 +817,7 @@ mod tests {
             categories: vec![category(7, "spray"), category(8, "dredge")],
             units: &units,
             scope,
+            steady_weekly_leads: STEADY_WEEKLY_LEADS_DEFAULT,
         })
     }
 
@@ -811,6 +872,20 @@ mod tests {
         assert_eq!(week(DEMAND_WEEKS - 2), Some(6));
         assert_eq!(week(0), Some(0), "zero is shown");
         assert_eq!(report.rows.first().map(|r| r.total.value), Some(None));
+        assert_eq!(
+            report.rows.first().and_then(|r| r.total.at_least),
+            Some(7),
+            "never \"fewer than 5\" for a total of 9: at least the 6 shown and one"
+        );
+        assert_eq!(
+            report
+                .rows
+                .first()
+                .and_then(|r| r.weeks.get(DEMAND_WEEKS - 1))
+                .map(|f| f.at_least),
+            Some(None),
+            "a small figure is just small"
+        );
     }
 
     #[test]
@@ -907,30 +982,77 @@ mod tests {
                 .with_ymd_and_hms(day.year(), day.month(), day.day(), 3, 0, 0)
                 .single()
                 .unwrap_or_default();
-            for _ in 0..STEADY_WEEKLY_LEADS {
+            for _ in 0..STEADY_WEEKLY_LEADS_DEFAULT {
                 events.push(event(instant, 1, Some(7)));
             }
         }
         events.push(event(at(2026, 11, 3, 2), 3, Some(7)));
         let report = run(events, &ReportScope::default());
-        let steady: Vec<(&str, bool)> = report
+        let steady: Vec<(&str, bool, usize)> = report
             .areas
             .iter()
-            .map(|a| (a.value.as_str(), a.steady))
+            .map(|a| (a.value.as_str(), a.steady, a.weeks_at_bar))
             .collect();
         assert_eq!(
             steady,
             vec![
-                ("p82", true),
-                ("w28439", true),
-                ("p91", false),
-                ("w30001", false)
+                ("p82", true, DEMAND_WEEKS),
+                ("w28439", true, DEMAND_WEEKS),
+                ("p91", false, 0),
+                ("w30001", false, 0)
             ]
         );
         assert_eq!(
             report.steady_areas, 1,
             "a steady ward under its province counts once"
         );
+    }
+
+    #[test]
+    fn an_area_shows_by_week_what_its_own_report_sums() {
+        // The last week: Cai Lậy 3 sprays (hidden) and 6 dredges, Tân Phước
+        // 6 sprays; the week before, Cai Lậy 7 sprays.
+        let mut events = Vec::new();
+        let last = at(2026, 11, 3, 2);
+        for (n, business, category) in [(3, 1, 7), (6, 1, 8), (6, 4, 7)] {
+            for _ in 0..n {
+                events.push(event(last, business, Some(category)));
+            }
+        }
+        for _ in 0..7 {
+            events.push(event(at(2026, 10, 27, 2), 1, Some(7)));
+        }
+        let whole = run(events.clone(), &ReportScope::default());
+        let line = |value: &str| whole.areas.iter().find(|a| a.value == value).cloned();
+        let cai_lay = line("w28439");
+        assert_eq!(
+            cai_lay
+                .as_ref()
+                .and_then(|a| a.weeks.get(DEMAND_WEEKS - 1))
+                .map(|f| f.value),
+            Some(None),
+            "9 in all, but 9 − 6 dredges would give the 3 sprays away"
+        );
+        assert_eq!(
+            cai_lay
+                .as_ref()
+                .and_then(|a| a.weeks.get(DEMAND_WEEKS - 2))
+                .map(|f| f.value),
+            Some(Some(7))
+        );
+
+        // Every line is its area's own report's sum row, figure for figure.
+        for area in &whole.areas {
+            let own = run(
+                events.clone(),
+                &ReportScope {
+                    focus: AreaKey::parse(&area.value),
+                    ..ReportScope::default()
+                },
+            );
+            assert_eq!(area.weeks, own.all.weeks, "{}", area.value);
+            assert_eq!(area.total, own.all.total, "{}", area.value);
+        }
     }
 
     #[test]

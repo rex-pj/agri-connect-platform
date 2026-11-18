@@ -12,6 +12,7 @@ pub use sea_orm_migration::prelude::*;
 mod m20261120_000001_baseline;
 mod m20261121_000002_email_verification;
 mod m20261122_000003_scale;
+mod m20261123_000004_settings;
 pub mod schema;
 pub mod search;
 
@@ -24,6 +25,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20261120_000001_baseline::Migration),
             Box::new(m20261121_000002_email_verification::Migration),
             Box::new(m20261122_000003_scale::Migration),
+            Box::new(m20261123_000004_settings::Migration),
         ]
     }
 }

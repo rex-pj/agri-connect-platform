@@ -14,6 +14,7 @@ use application::{
         InquiryNotificationSubscriber, JobNotificationSubscriber,
     },
     ports::{EmailService, EventBus, FileStorage, PasswordHasher, TokenService, ZaloGateway},
+    settings::SettingsReader,
     usecases::{
         admin_usecase::{AdminDeps, AdminUseCase},
         alert_usecase::AlertUseCase,
@@ -31,6 +32,7 @@ use application::{
         product_usecase::ProductUseCase,
         provider_dashboard_usecase::{ProviderDashboardDeps, ProviderDashboardUseCase},
         review_usecase::{ReviewDeps, ReviewUseCase},
+        settings_usecase::SettingsUseCase,
         setup_usecase::SetupUseCase,
         stats_usecase::{StatsDeps, StatsUseCase},
         zalo_usecase::ZaloUseCase,
@@ -67,6 +69,7 @@ use infrastructure::{
         review_repository::ReviewRepository,
         role_repository::RoleRepository,
         service_repository::ServiceRepository,
+        setting_repository::SettingRepository,
         user_repository::UserRepository,
     },
     zalo_gateway::ZaloGraphGateway,
@@ -308,16 +311,12 @@ fn router_config(app_url: &str, limiters: Limiters) -> Result<RouterConfig, Star
 }
 
 /// `SITE_NAME` / `SITE_DESCRIPTION`, shown in every page's title and meta
-/// tags, and the help lines the footer offers (`SITE_SUPPORT_PHONE`,
-/// `SITE_SUPPORT_ZALO_URL`, `SITE_SUPPORT_EMAIL`).
+/// tags. The footer's help lines are settings (`application::settings`).
 fn site_config() -> SiteConfig {
     let defaults = SiteConfig::default();
     SiteConfig {
         name: optional_env("SITE_NAME").unwrap_or(defaults.name),
         description: optional_env("SITE_DESCRIPTION"),
-        support_phone: optional_env("SITE_SUPPORT_PHONE"),
-        support_zalo_url: optional_env("SITE_SUPPORT_ZALO_URL"),
-        support_email: optional_env("SITE_SUPPORT_EMAIL"),
     }
 }
 
@@ -524,6 +523,9 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
     let jobs_path = routes::url("provider_jobs", &[])
         .map_err(|e| domain::Error::internal(format!("route provider_jobs: {e}")))?;
     let job_repo = Arc::new(JobRepository::new(Arc::clone(&db)));
+    let setting_repo = Arc::new(SettingRepository::new(Arc::clone(&db)));
+    // Every use case that follows a setting reads it through this, on each use.
+    let settings = SettingsReader::new(setting_repo.clone());
     // Subscribers run in this order for every event. Webhooks would be added
     // here.
     let events: Arc<dyn EventBus> = Arc::new(InProcessEventBus::new(vec![
@@ -542,6 +544,7 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
         Arc::new(JobNotificationSubscriber::new(
             job_repo.clone(),
             email.clone(),
+            settings.clone(),
             jobs_path,
         )),
     ]));
@@ -568,6 +571,7 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
         category_repo: category_repo.clone(),
         location_repo: location_repo.clone(),
         admin_unit_repo: admin_unit_repo.clone(),
+        settings: settings.clone(),
     });
 
     let usecases = UseCases {
@@ -599,6 +603,7 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
             events: events.clone(),
             password_hasher: password_hasher.clone(),
             refresh_repo: refresh_repo.clone(),
+            settings: settings.clone(),
         }),
         auth: AuthUseCase::new(AuthDeps {
             user_repo: user_repo.clone(),
@@ -610,6 +615,7 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
             events: events.clone(),
             refresh_days,
             setup_token,
+            settings: settings.clone(),
         }),
         permission: PermissionUseCase::new(PermissionDeps {
             permission_repo,
@@ -626,6 +632,7 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
             demand_repo,
             demand: demand.clone(),
             password_hasher,
+            settings: settings.clone(),
             events: events.clone(),
         }),
         job: JobUseCase::new(
@@ -633,6 +640,7 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
             category_repo.clone(),
             location_repo.clone(),
             events.clone(),
+            settings.clone(),
         ),
         commodity: CommodityUseCase::new(
             commodity_repo.clone(),
@@ -669,7 +677,8 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
             call_repo: call_repo.clone(),
             inquiry_repo: inquiry_repo.clone(),
             media: media.clone(),
-            events,
+            settings,
+            events: events.clone(),
         }),
         setup: SetupUseCase::new(
             catalogue_repo,
@@ -679,6 +688,7 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
             user_repo.clone(),
             media,
         ),
+        settings: SettingsUseCase::new(setting_repo, events),
         stats: StatsUseCase::new(StatsDeps {
             business_repo,
             product_repo,

@@ -13,6 +13,7 @@
 use application::catalogue::PERM_LISTING_MODERATE;
 use application::{
     authz::Actor,
+    constants::PRICE_FRESH_DAYS_DEFAULT,
     inputs::CommodityInput,
     outputs::{CommodityDto, CropDto},
 };
@@ -46,6 +47,8 @@ pub struct CommodityForm {
     pub sector: String,
     pub icon: String,
     pub display_order: String,
+    /// Days a price stays on the board; blank is the default.
+    pub price_fresh_days: String,
 }
 
 impl CommodityForm {
@@ -55,6 +58,10 @@ impl CommodityForm {
             sector: self.sector.clone(),
             icon: Some(self.icon.clone()),
             display_order: whole_number(&self.display_order, "display_order")?,
+            price_fresh_days: match self.price_fresh_days.trim() {
+                "" => PRICE_FRESH_DAYS_DEFAULT,
+                raw => whole_number(raw, "price_fresh_days")?,
+            },
         })
     }
 
@@ -64,6 +71,7 @@ impl CommodityForm {
             sector: c.sector.clone(),
             icon: c.icon.clone().unwrap_or_default(),
             display_order: c.display_order.to_string(),
+            price_fresh_days: c.price_fresh_days.to_string(),
         }
     }
 }
@@ -165,7 +173,10 @@ pub async fn list(
         return see_other(&url("login", &[])?);
     };
     let view = ListView {
-        form: CommodityForm::default(),
+        form: CommodityForm {
+            price_fresh_days: PRICE_FRESH_DAYS_DEFAULT.to_string(),
+            ..CommodityForm::default()
+        },
         errors: FormErrors::default(),
         asked: Asked::new(&q.hide, ""),
         flash: flash.0,

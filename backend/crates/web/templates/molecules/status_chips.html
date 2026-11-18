@@ -1,0 +1,13 @@
+{#- The chips above a list that can be narrowed to one status (contact
+    requests, job posts): plain links, the whole list first, the current
+    one marked. They narrow the list, so they are pills, never tabs. The
+    status still waiting for someone (new requests, open posts) carries its
+    count, so the queue shows before anything is clicked.
+    `chips` are web::pages::admin::AdminTab (`ListPosition::state_chips`). -#}
+{% macro status_chips(chips, label) -%}
+<nav class="admin-chips" aria-label="{{ label }}">
+  {% for c in chips %}
+  <a class="chip" href="{{ c.href }}"{% if c.current %} aria-current="true"{% endif %}>{{ c.label }}{% if c.count is number %} <span class="chip__count">{{ c.count }}</span>{% endif %}</a>
+  {% endfor %}
+</nav>
+{%- endmacro status_chips %}

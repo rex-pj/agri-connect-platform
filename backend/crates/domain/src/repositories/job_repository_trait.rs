@@ -36,11 +36,16 @@ pub trait JobRepositoryTrait {
         limit: i64,
     ) -> Result<Vec<JobPost>, Error>;
 
-    /// A page of every post, newest first.
-    async fn list_admin(&self, limit: i64, offset: i64) -> Result<Vec<JobPost>, Error>;
+    /// A page of every post (`status`: only those in it), newest first.
+    async fn list_admin(
+        &self,
+        status: Option<&str>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<JobPost>, Error>;
 
     /// How many posts `list_admin` pages through.
-    async fn count_admin(&self) -> Result<i64, Error>;
+    async fn count_admin(&self, status: Option<&str>) -> Result<i64, Error>;
 
     /// False when there is no such post.
     async fn set_status(&self, id: i32, status: &str) -> Result<bool, Error>;

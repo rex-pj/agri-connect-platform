@@ -18,7 +18,7 @@ use domain::{
 use crate::{
     authz::Actor,
     catalogue::PERM_CATEGORY_MANAGE,
-    constants::{COMMODITY_ICON_MAX, COMMODITY_NAME_MAX},
+    constants::{COMMODITY_ICON_MAX, COMMODITY_NAME_MAX, PRICE_FRESH_DAYS_MAX},
     inputs::CommodityInput,
     outputs::CommodityDto,
     ports::EventBus,
@@ -146,6 +146,12 @@ fn validate(input: CommodityInput, known: &[CodedEntry]) -> Result<CommodityFiel
         .rule("name", max_chars(&name, COMMODITY_NAME_MAX))
         .check(chosen.is_none(), "sector", ErrorCode::InvalidSector)
         .rule("icon", max_chars_opt(&icon, COMMODITY_ICON_MAX))
+        .check_with(
+            !(1..=PRICE_FRESH_DAYS_MAX).contains(&input.price_fresh_days),
+            "price_fresh_days",
+            ErrorCode::InvalidFreshDays,
+            ("max", PRICE_FRESH_DAYS_MAX as usize),
+        )
         .finish()?;
     let Some(chosen) = chosen else {
         return Err(Error::field("sector", ErrorCode::InvalidSector));
@@ -155,6 +161,7 @@ fn validate(input: CommodityInput, known: &[CodedEntry]) -> Result<CommodityFiel
         sector: chosen,
         icon,
         display_order: input.display_order,
+        price_fresh_days: input.price_fresh_days,
     })
 }
 
@@ -175,13 +182,14 @@ mod tests {
     }
 
     #[test]
-    fn a_commodity_needs_a_name_and_a_sector() {
+    fn a_commodity_needs_a_name_a_sector_and_a_freshness() {
         let err = validate(
             CommodityInput {
                 name: " ".into(),
                 sector: "".into(),
                 icon: None,
                 display_order: 0,
+                price_fresh_days: 0,
             },
             &crops_sector(),
         )
@@ -190,7 +198,7 @@ mod tests {
             .as_ref()
             .map(|e| e.fields().iter().map(|f| f.field).collect())
             .unwrap_or_default();
-        assert_eq!(fields, vec!["name", "sector"]);
+        assert_eq!(fields, vec!["name", "sector", "price_fresh_days"]);
     }
 
     #[test]
@@ -201,12 +209,13 @@ mod tests {
                 sector: "crop".into(),
                 icon: Some(" ".into()),
                 display_order: 2,
+                price_fresh_days: 7,
             },
             &crops_sector(),
         );
         let fields = fields.ok();
         assert_eq!(fields.as_ref().map(|f| f.name.as_str()), Some("Durian"));
         assert_eq!(fields.as_ref().map(|f| f.sector.as_str()), Some("crop"));
-        assert!(fields.is_some_and(|f| f.icon.is_none()));
+        assert!(fields.is_some_and(|f| f.icon.is_none() && f.price_fresh_days == 7));
     }
 }

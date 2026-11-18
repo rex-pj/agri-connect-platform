@@ -82,7 +82,6 @@ pub struct PricesPage {
     pub area_name: Option<String>,
     pub action: String,
     pub back_href: String,
-    pub fresh_days: i64,
 }
 
 fn url(name: &str) -> Result<String, Error> {
@@ -152,7 +151,6 @@ pub async fn show(
         areas: board.areas,
         action: url("prices")?,
         back_href: url("home")?,
-        fresh_days: board.fresh_days,
     };
     render_page(&state, &shell, "pages/prices.html", &page)
 }

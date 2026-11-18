@@ -19,8 +19,8 @@ use domain::{
 use tracing::{info, warn};
 
 use crate::{
-    constants::{JOB_NOTIFY_MAX, JOB_NOTIFY_RADIUS_M},
     ports::{EmailService, EventBus, FileStorage, InquiryNotice, JobNotice},
+    settings::SettingsReader,
     usecases::media_usecase::release_file,
 };
 
@@ -86,6 +86,7 @@ pub fn audit_action(event: &DomainEvent) -> String {
         (Change::StatusChanged { .. }, _) => format!("set_{entity}_status"),
         (Change::Created, _) => format!("create_{entity}"),
         (Change::Auth(what), _) => what.as_str().into(),
+        (Change::SettingsChanged { .. }, _) => "change_settings".into(),
     }
 }
 
@@ -107,6 +108,14 @@ impl EventSubscriber for AuditLogSubscriber {
             (Change::AccountAssigned { username }, _) => Some(username.clone()),
             (Change::StatusChanged { status }, Some(r)) => Some(format!("{status}: {r}")),
             (Change::StatusChanged { status }, None) => Some(status.clone()),
+            // "key: before → after; …: reason".
+            (Change::SettingsChanged { changes }, r) => {
+                let diff = changes.join("; ");
+                Some(match r {
+                    Some(r) => format!("{diff}: {r}"),
+                    None => diff,
+                })
+            }
             // The audit row says what changed: "+key, -key: reason".
             (Change::PermissionsChanged { added, removed }, r) => {
                 let diff = added
@@ -247,6 +256,8 @@ impl EventSubscriber for InquiryNotificationSubscriber {
 pub struct JobNotificationSubscriber {
     jobs: Arc<dyn JobRepositoryTrait + Send + Sync>,
     email: Arc<dyn EmailService>,
+    /// How far and how many (`jobs.notify_radius_km`, `jobs.notify_max`).
+    settings: SettingsReader,
     /// The provider's jobs page, from the web layer's route table.
     jobs_path: String,
 }
@@ -255,11 +266,13 @@ impl JobNotificationSubscriber {
     pub fn new(
         jobs: Arc<dyn JobRepositoryTrait + Send + Sync>,
         email: Arc<dyn EmailService>,
+        settings: SettingsReader,
         jobs_path: String,
     ) -> Self {
         Self {
             jobs,
             email,
+            settings,
             jobs_path,
         }
     }
@@ -275,9 +288,14 @@ impl EventSubscriber for JobNotificationSubscriber {
         if !(event.entity == Entity::JobPost && event.change == Change::Created) {
             return Ok(());
         }
+        let settings = self.settings.load().await?;
         let Some(job) = self
             .jobs
-            .find_for_notice(event.entity_id, JOB_NOTIFY_RADIUS_M, JOB_NOTIFY_MAX)
+            .find_for_notice(
+                event.entity_id,
+                settings.job_notify_radius_m(),
+                settings.job_notify_max(),
+            )
             .await?
         else {
             return Ok(());

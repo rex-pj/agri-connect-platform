@@ -2210,7 +2210,8 @@ a.chip {
   flex: none;
   white-space: nowrap;
 }
-.search-tab__badge {
+.search-tab__badge,
+.chip__count {
   min-width: 22px;
   padding: 0 6px;
   border-radius: 11px;
@@ -2933,6 +2934,18 @@ ac-geolocate {
   justify-content: center;
   gap: 8px;
 }
+/* A setting that is on or off (pages/admin/settings): a box big enough to
+   tap, its label beside it and its hint under the label. */
+.settings-switch {
+  min-height: 44px;
+  padding-left: 2.25rem;
+}
+.settings-switch .form-check-input {
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-top: 0;
+  margin-left: -2.25rem;
+}
 /* The one provider a list is narrowed to (molecules/admin_filter). */
 .admin-filter {
   display: flex;
@@ -3010,9 +3023,64 @@ ac-geolocate {
     display: inline;
   }
 }
-.row-select,
+/* The same buttons on a card (the provider's inbox): worded at every width,
+   sharing the card's width, wrapping on a narrow phone. */
+.row-actions--labelled {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+.row-actions--labelled > form,
+.row-actions--labelled > .row-btn {
+  flex: 1 1 0;
+}
+.row-actions--labelled .row-btn {
+  width: 100%;
+  padding: 0 12px;
+}
+.row-actions--labelled .row-btn__label {
+  display: inline;
+}
+/* A rare move (spam) keeps its own width on a card, so the main step gets
+   the room. */
+.row-actions--labelled > .row-btn--aside {
+  flex: none;
+  width: auto;
+}
+/* Bootstrap's amber outline puts #ffc107 text on white (1.6:1): unreadable
+   in the sun. The word and icon take the dark amber; the border and the
+   hover fill stay amber. */
+.row-btn.btn-outline-warning {
+  --bs-btn-color: var(--a800);
+  --bs-btn-border-color: var(--a500);
+  --bs-btn-hover-color: var(--text);
+  --bs-btn-hover-bg: var(--a200);
+  --bs-btn-hover-border-color: var(--a500);
+  --bs-btn-active-color: var(--text);
+  --bs-btn-active-bg: var(--a200);
+  --bs-btn-active-border-color: var(--a600);
+}
 .admin-actions .form-select {
   min-height: 44px;
+}
+/* The status chips above a list (molecules/status_chips.html): one row that
+   scrolls sideways on a narrow phone rather than wrapping. */
+.admin-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+}
+.admin-chips > .chip {
+  flex: none;
+  white-space: nowrap;
+}
+/* Above a list the chosen chip is tinted, not filled: a filled pill would be
+   the heaviest thing on the page and outweigh the rows' main step. */
+.admin-chips > .chip[aria-current="true"] {
+  border-color: var(--p600);
+  background: var(--p50);
+  color: var(--p800);
+  box-shadow: inset 0 0 0 1px var(--p600);
 }
 /* The body's gap already spaces the page links, and its padding the tabs
    (molecules/admin_tabs): they start at the cards' edge. */
@@ -3031,25 +3099,48 @@ ac-geolocate {
   text-transform: uppercase;
   white-space: nowrap;
 }
+/* A dashboard figure: its label and icon on one line, the figure, what it
+   counts, how it moved pinned to the foot, so a row of cards lines up
+   whatever each one says. A card with a page behind it lifts on hover. */
 .stat-card {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
   height: 100%;
   padding: 16px;
   border: 1px solid var(--hairline);
   border-radius: 14px;
   background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+}
+.stat-card--link {
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.stat-card--link:hover {
+  border-color: var(--border);
+  box-shadow: var(--shadow-card);
+  color: var(--text);
+}
+.stat-card--link:focus-visible {
+  outline: 2px solid var(--p600);
+  outline-offset: 2px;
+}
+.stat-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
 }
 .stat-card__icon {
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
-  font-size: 1.25rem;
+  border-radius: 10px;
+  font-size: 1rem;
 }
 .stat-card__icon--green {
   background: var(--p100);
@@ -3069,14 +3160,55 @@ ac-geolocate {
 }
 .stat-card__label {
   margin: 0;
+  padding-top: 2px;
   color: var(--muted);
   font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.3;
 }
 .stat-card__value {
   margin: 0;
   color: var(--text);
   font-size: 1.5rem;
   font-weight: 800;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+@media (min-width: 768px) {
+  .stat-card__value {
+    font-size: 1.75rem;
+  }
+}
+.stat-card__note {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+/* The share a figure is of its total (verified of all providers). */
+.stat-card__share {
+  display: block;
+  width: 100%;
+  height: 6px;
+  margin-top: 8px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--bg);
+  overflow: hidden;
+  appearance: none;
+}
+.stat-card__share::-webkit-progress-bar {
+  border-radius: 999px;
+  background: var(--bg);
+}
+.stat-card__share::-webkit-progress-value {
+  border-radius: 999px;
+  background: #1d4ed8;
+}
+.stat-card__share::-moz-progress-bar {
+  border-radius: 999px;
+  background: #1d4ed8;
 }
 .grant-group {
   padding: 16px 16px 8px;
@@ -3389,4 +3521,234 @@ ac-geolocate {
  * and never more than half the screen (a sheet on a phone). */
 .form-field .ts-dropdown .ts-dropdown-content {
   max-height: min(22rem, 50vh);
+}
+
+/* ── Dashboard: a weekly figure as columns (atoms/week_columns.html) ────── */
+.week-columns {
+  display: block;
+  width: 100%;
+  max-width: 480px;
+  height: auto;
+  overflow: visible;
+}
+.week-columns__title {
+  margin-bottom: 4px;
+  color: var(--text2);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.week-columns__base {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.week-columns__bar--leads {
+  fill: #3b82f6;
+}
+.week-columns__bar--searches {
+  fill: #64748b;
+}
+.week-columns__bar--hidden {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 3 2;
+}
+.week-columns__value {
+  fill: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+}
+.week-columns__week {
+  fill: var(--muted);
+  font-size: 10px;
+}
+
+/* ── Demand table: week cells shaded by their leads (demand_table `heat`) ──
+ * One hue, four steps, light enough that the figure stays readable; set
+ * through Bootstrap's own cell variable so the table's rules still apply. */
+.demand-heat--1 {
+  --bs-table-bg: #dbeafe;
+  background-color: #dbeafe;
+}
+.demand-heat--2 {
+  --bs-table-bg: #bfdbfe;
+  background-color: #bfdbfe;
+}
+.demand-heat--3 {
+  --bs-table-bg: #93c5fd;
+  background-color: #93c5fd;
+}
+.demand-heat--4 {
+  --bs-table-bg: #60a5fa;
+  background-color: #60a5fa;
+}
+
+/* ── Areas: how near each is to steady (organisms/area_progress.html) ───── */
+.area-progress__name {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.area-progress__link {
+  color: inherit;
+}
+/* A ward under its province: lighter, indented, joined by a tree line; no
+   rule between a province and its wards, so each province reads as a block. */
+.area-progress tbody tr:has(+ .area-progress__ward) > * {
+  border-bottom-color: transparent;
+}
+.area-progress .area-progress__ward .area-progress__name {
+  position: relative;
+  padding-left: 46px;
+  color: var(--text2);
+  font-weight: 500;
+}
+.area-progress .area-progress__ward .area-progress__name::before,
+.area-progress .area-progress__ward .area-progress__name::after {
+  content: "";
+  position: absolute;
+  left: 24px;
+  border-color: var(--border);
+  border-style: solid;
+  border-width: 0;
+}
+.area-progress .area-progress__ward .area-progress__name::before {
+  top: 0;
+  bottom: 0;
+  border-left-width: 2px;
+}
+.area-progress .area-progress__ward .area-progress__name::after {
+  top: 50%;
+  width: 12px;
+  border-top-width: 2px;
+}
+.area-progress .area-progress__ward--last .area-progress__name::before {
+  bottom: 50%;
+  width: 12px;
+  border-bottom-width: 2px;
+  border-bottom-left-radius: 8px;
+}
+.area-progress .area-progress__ward--last .area-progress__name::after {
+  display: none;
+}
+.area-progress__average {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 170px;
+}
+.area-progress__bar {
+  display: block;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 80px;
+  height: 10px;
+  overflow: visible;
+}
+.area-progress__track {
+  fill: var(--hairline);
+}
+.area-progress__fill {
+  fill: #3b82f6;
+}
+.area-progress__fill--met {
+  fill: var(--p600);
+}
+.area-progress__said {
+  flex-shrink: 0;
+  min-width: 4.5em;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+.area-progress__weeks {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.area-progress__squares {
+  display: inline-flex;
+  gap: 3px;
+}
+.area-progress__week {
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+}
+.area-progress__week--met {
+  border-color: var(--p600);
+  background: var(--p600);
+}
+.area-progress__count {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.demand-heat-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 16px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.demand-heat-legend__swatches {
+  display: inline-flex;
+}
+.demand-heat-legend__swatches > .demand-heat {
+  display: inline-block;
+  width: 16px;
+  height: 12px;
+  border: 1px solid var(--hairline);
+}
+
+/* A stat card's movement, at its foot: the amount in a neutral pill (its
+   arrow says the way, never a status colour), then a few words. */
+.stat-card__change {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin: auto 0 0;
+  padding-top: 10px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+.stat-card__delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text2);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.stat-card__delta .fa-solid {
+  font-size: 0.65rem;
+}
+
+/* Searches that found nothing: the words, the count, a bar under them. */
+.unmet-line {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.unmet-line__count {
+  font-weight: 600;
+  text-align: right;
+}
+.unmet-line__bar {
+  grid-column: 1 / -1;
+  display: block;
+  width: 100%;
+  height: 6px;
+  fill: var(--a500);
 }

@@ -37,13 +37,14 @@ use crate::{
     admin_units::{AdminUnits, AreaKey},
     authz::Actor,
     catalogue::{PERM_PARTNER_MANAGE, PERM_PARTNER_REPORT_READ},
-    constants::{ADMIN_UNIT_SNAP_M, CONTRACT_NOTE_MAX, PARTNER_NAME_MAX, SPONSORED_SHOWN},
+    constants::{ADMIN_UNIT_SNAP_M, CONTRACT_NOTE_MAX, PARTNER_NAME_MAX},
     inputs::{ContractInput, PartnerInput},
     outputs::{
         AreaGroupDto, AreaRevenueDto, ContractDto, NamedDto, PartnerAccountDto, PartnerDetailDto,
         PartnerDto, PartnerKpiDto, PartnerReportDto, PublicServiceDto, SponsorCandidateDto,
     },
     ports::{EventBus, PasswordHasher},
+    settings::SettingsReader,
     usecases::{
         account_rules::account_for_role,
         demand_usecase::{vn_today, DemandReportUseCase, ReportScope},
@@ -62,6 +63,7 @@ pub struct PartnerUseCase {
     demand_repo: Arc<dyn DemandRepositoryTrait + Send + Sync>,
     demand: DemandReportUseCase,
     password_hasher: Arc<dyn PasswordHasher>,
+    settings: SettingsReader,
     events: Arc<dyn EventBus>,
 }
 
@@ -75,6 +77,7 @@ pub struct PartnerDeps {
     pub demand_repo: Arc<dyn DemandRepositoryTrait + Send + Sync>,
     pub demand: DemandReportUseCase,
     pub password_hasher: Arc<dyn PasswordHasher>,
+    pub settings: SettingsReader,
     pub events: Arc<dyn EventBus>,
 }
 
@@ -88,6 +91,7 @@ impl PartnerUseCase {
             demand_repo: d.demand_repo,
             demand: d.demand,
             password_hasher: d.password_hasher,
+            settings: d.settings,
             events: d.events,
         }
     }
@@ -592,7 +596,7 @@ impl PartnerUseCase {
     }
 
     /// Near-me services split into the sponsored ones to show first, labelled
-    /// (one per sponsored provider of the area, at most `SPONSORED_SHOWN`,
+    /// (one per sponsored provider of the area, at most `market.sponsored_shown`,
     /// in the order found) and the others, in their order. A sponsored card
     /// moves up; nothing is hidden and nothing is shown twice.
     pub async fn feature_sponsored(
@@ -605,7 +609,8 @@ impl PartnerUseCase {
             Some((lat, lng)) => self.sponsored_at(lat, lng, category_id).await?,
             None => Vec::new(),
         };
-        Ok(split_sponsored(services, &sponsored))
+        let shown = self.settings.load().await?.sponsored_shown();
+        Ok(split_sponsored(services, &sponsored, shown))
     }
 }
 
@@ -719,15 +724,13 @@ fn contract_dto(
 fn split_sponsored(
     services: Vec<PublicServiceDto>,
     sponsored: &[i32],
+    shown: usize,
 ) -> (Vec<PublicServiceDto>, Vec<PublicServiceDto>) {
     let mut first = Vec::new();
     let mut rest = Vec::with_capacity(services.len());
     let mut seen: HashSet<i32> = HashSet::new();
     for s in services {
-        if first.len() < SPONSORED_SHOWN
-            && sponsored.contains(&s.business_id)
-            && seen.insert(s.business_id)
-        {
+        if first.len() < shown && sponsored.contains(&s.business_id) && seen.insert(s.business_id) {
             first.push(s);
         } else {
             rest.push(s);

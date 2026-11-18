@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 
 // external
 use async_trait::async_trait;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use sea_orm::{
     sea_query::{Expr, Func, Order, SimpleExpr},
     ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, DatabaseConnection, DbErr,
@@ -899,6 +899,17 @@ impl BusinessRepositoryTrait for BusinessRepository {
                 error!("business count_verified error: {e}");
                 Error::internal("Failed to load statistics.")
             })
+    }
+
+    async fn count_created_since(&self, since: DateTime<Utc>) -> Result<i64, Error> {
+        Business::find()
+            .filter(business::Column::DeletedAt.is_null())
+            .filter(business::Column::IsDemo.eq(false))
+            .filter(business::Column::CreatedOn.gte(since))
+            .count(self.db.as_ref())
+            .await
+            .map(|c| c as i64)
+            .map_err(|e| Error::internal(format!("business count_created_since: {e}")))
     }
 }
 

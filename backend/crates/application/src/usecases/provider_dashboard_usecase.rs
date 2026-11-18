@@ -26,7 +26,7 @@ use crate::{
         PERM_OWN_LISTING_UPDATE, PERM_OWN_PROFILE_UPDATE, PERM_OWN_SERVICE_CREATE,
         PERM_OWN_SERVICE_DELETE, PERM_OWN_SERVICE_UPDATE,
     },
-    constants::{CALL_STATS_DAYS, PAGE_SIZE, PRODUCTS_PER_BUSINESS_MAX, SERVICES_PER_BUSINESS_MAX},
+    constants::{CALL_STATS_DAYS, PAGE_SIZE},
     inputs::{CreateProductInput, ServiceInput, UpdateProductInput, UpdateProfileInput},
     outputs::{
         OwnInquiriesResponse, OwnInquiryDto, ProviderProductDto, ProviderProfileDto,
@@ -34,6 +34,7 @@ use crate::{
     },
     pagination::{paginate, total_pages},
     ports::{EventBus, ProcessedImage},
+    settings::SettingsReader,
     usecases::{
         business_rules::validate_profile, media_usecase::MediaUseCase,
         product_rules::validate_product, service_rules::validate_service,
@@ -51,6 +52,8 @@ pub struct ProviderDashboardUseCase {
     inquiry_repo: Arc<dyn InquiryRepositoryTrait + Send + Sync>,
     /// Stores a new product's photo together with the product.
     media: MediaUseCase,
+    /// The listing caps (`listings.*_per_business`).
+    settings: SettingsReader,
     events: Arc<dyn EventBus>,
 }
 
@@ -62,6 +65,7 @@ pub struct ProviderDashboardDeps {
     pub call_repo: Arc<dyn CallRepositoryTrait + Send + Sync>,
     pub inquiry_repo: Arc<dyn InquiryRepositoryTrait + Send + Sync>,
     pub media: MediaUseCase,
+    pub settings: SettingsReader,
     pub events: Arc<dyn EventBus>,
 }
 
@@ -74,6 +78,7 @@ impl ProviderDashboardUseCase {
             call_repo: d.call_repo,
             inquiry_repo: d.inquiry_repo,
             media: d.media,
+            settings: d.settings,
             events: d.events,
         }
     }
@@ -262,6 +267,7 @@ impl ProviderDashboardUseCase {
             Some(image) => Some(self.media.store(actor, image).await?),
             None => None,
         };
+        let cap = self.settings.load().await?.products_per_business();
         let created = self
             .product_repo
             .create_capped(
@@ -276,7 +282,7 @@ impl ProviderDashboardUseCase {
                     image_file_id,
                     created_by: actor.user_id,
                 },
-                PRODUCTS_PER_BUSINESS_MAX,
+                cap,
             )
             .await;
         let new_id = match created {
@@ -287,8 +293,7 @@ impl ProviderDashboardUseCase {
                 }
                 return Err(match refused {
                     Err(e) => e,
-                    Ok(_) => Error::new(ErrorCode::ProductLimitReached)
-                        .with_param("max", PRODUCTS_PER_BUSINESS_MAX),
+                    Ok(_) => Error::new(ErrorCode::ProductLimitReached).with_param("max", cap),
                 });
             }
         };
@@ -419,6 +424,7 @@ impl ProviderDashboardUseCase {
             Some(image) => Some(self.media.store(actor, image).await?),
             None => None,
         };
+        let cap = self.settings.load().await?.services_per_business();
         let created = self
             .service_repo
             .create_capped(
@@ -431,7 +437,7 @@ impl ProviderDashboardUseCase {
                     image_file_id,
                     created_by: actor.user_id,
                 },
-                SERVICES_PER_BUSINESS_MAX,
+                cap,
             )
             .await;
         let id = match created {
@@ -442,8 +448,7 @@ impl ProviderDashboardUseCase {
                 }
                 return Err(match refused {
                     Err(e) => e,
-                    Ok(_) => Error::new(ErrorCode::ServiceLimitReached)
-                        .with_param("max", SERVICES_PER_BUSINESS_MAX),
+                    Ok(_) => Error::new(ErrorCode::ServiceLimitReached).with_param("max", cap),
                 });
             }
         };

@@ -5,6 +5,7 @@
 //! The pages are the shared
 //! coded-list pages (`coded`); this module says where and in which words.
 
+use application::usecases::admin_usecase::HistoryOf;
 use axum::{extract::State, response::Response};
 use domain::{Error, ErrorCode};
 use serde::Deserialize;
@@ -57,6 +58,8 @@ pub const PAGES: CodedPages = CodedPages {
     saved: Flash::SectorSaved,
     hidden: Flash::SectorHidden,
     shown: Flash::SectorShown,
+    history: HistoryOf::Sector,
+    hide_action: "hide_sector",
 };
 
 #[derive(Debug, Default, Deserialize)]

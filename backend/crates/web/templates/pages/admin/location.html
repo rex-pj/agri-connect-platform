@@ -1,21 +1,23 @@
 {% extends "layouts/admin.html" %}
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/alert.html" as alerts %}
-{% import "atoms/status_badge.html" as status %}
-{% import "molecules/admin_header.html" as header %}
 {% import "molecules/form_field.html" as field %}
+{% import "molecules/history_list.html" as history %}
+{% import "organisms/record_header.html" as record %}
 {% import "organisms/location_fields.html" as fields %}
 {% import "organisms/confirm_sheet.html" as confirm %}
-{#- One location preset: its edit form, visibility and deletion.
-    `page.body` is web::pages::admin::locations::LocationPage. Hiding and
-    deleting each go through a confirmation with a reason (each in its own
-    `dialog` scope: its section); showing again is one button. -#}
+{#- One location preset, as a record page: the header (hide / show; the map
+    and the deletion in its menu: `b.header`), one status strip (offered or
+    not, who hid it and why), then its edit form, and beside it on a wide
+    screen its history. The deletion's confirmation comes back open after a
+    refusal (an area still in use). `page.body` is
+    web::pages::admin::locations::LocationPage. -#}
 {% block title %}{{ page.body.location.label }} — {{ site.name }} Admin{% endblock title %}
 {% block vendor %}{{ field::searchable_select_assets() }}{% endblock vendor %}
 {% block content %}
 {% set b = page.body %}
 {% set l = b.location %}
-{{ header::admin_header(title=l.label, icon="fa-map-location-dot", sub=l.lat ~ ", " ~ l.lng, back_href=url_for(name="admin_locations"), back_label=t(key="admin_menu.locations")) }}
+{{ record::record_header(h=b.header) }}
 <div class="admin-body">
   {% if b.flash == "location_created" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.location_created")) }}{% endif %}
   {% if b.flash == "location_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.saved")) }}{% endif %}
@@ -23,37 +25,31 @@
   {% if b.flash == "location_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.location_shown")) }}{% endif %}
   {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
 
-  <section class="admin-section" aria-labelledby="edit-title">
-    <h2 class="admin-section__title" id="edit-title">{{ t(key="admin.info") }}</h2>
-    <form class="form-stack" method="post" action="{{ b.update_action }}" novalidate>
-      {{ fields::location_fields(form=b.form, errors=b.errors, label_max=b.label_max, prefix="edit", wards=b.wards) }}
-      <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button></div>
-    </form>
+  <section class="admin-section record-strip" aria-labelledby="status-title">
+    <h2 class="visually-hidden" id="status-title">{{ t(key="admin.status_now") }}</h2>
+    <p class="small mb-0">{% if l.is_active %}{{ t(key="admin.location_on") }}{% else %}{{ t(key="admin.location_off") }}{% endif %}</p>
+    {% if not l.is_active %}{% set off = b.history | filter(attribute="action", value="hide_location") | first %}{% if off %}{{ history::last_change(row=off) }}{% endif %}{% endif %}
   </section>
 
-  <section class="admin-section" aria-labelledby="status-title" x-data="dialog" x-on:keydown.escape.window="hide">
-    <h2 class="admin-section__title" id="status-title">{{ t(key="admin.visibility") }}</h2>
-    <p class="admin-status">{{ status::visibility(on=l.is_active) }}{% if l.is_demo %}{{ status::demo() }}{% endif %}<span>{% if l.is_active %}{{ t(key="admin.location_on") }}{% else %}{{ t(key="admin.location_off") }}{% endif %}</span></p>
-    <div class="admin-actions">
-      {% if l.is_active %}
-      <a class="btn btn-outline-warning" href="#an-khu-vuc" x-on:click.prevent="show">{{ atoms::icon(name="fa-eye-slash") }} {{ t(key="admin.hide_location") }}</a>
-      {% else %}
-      <form method="post" action="{{ b.status_action }}">
-        <input type="hidden" name="is_active" value="true">
-        <button type="submit" class="btn btn-outline-success">{{ atoms::icon(name="fa-eye") }} {{ t(key="admin.show_again") }}</button>
-      </form>
-      {% endif %}
+  <div class="row g-3 g-lg-4">
+    <div class="col-lg-8">
+      <section class="admin-section" aria-labelledby="edit-title">
+        <h2 class="admin-section__title" id="edit-title">{{ t(key="admin.edit_title") }}</h2>
+        <form class="form-stack" method="post" action="{{ b.update_action }}" novalidate>
+          {{ fields::location_fields(form=b.form, errors=b.errors, label_max=b.label_max, prefix="edit", wards=b.wards) }}
+          <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button></div>
+        </form>
+      </section>
     </div>
-    {% if l.is_active %}
-    {{ confirm::confirm_sheet(id="an-khu-vuc", title=t(key="admin.hide_location_title", name=l.label), icon="fa-eye-slash", action=b.status_action, button=t(key="admin.confirm_hide"), reason_max=limits.audit_reason_max, note=t(key="admin.hide_location_note"), hidden_name="is_active", hidden_value="false") }}
-    {% endif %}
-  </section>
+    <div class="col-lg-4 d-flex flex-column gap-3">
+      {{ history::history_list(rows=b.history) }}
+    </div>
+  </div>
 
-  <section class="admin-section" aria-labelledby="delete-title" x-data="dialog" data-open="{% if b.confirm_open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
-    <h2 class="admin-section__title" id="delete-title">{{ t(key="admin.delete") }}</h2>
-    <p class="small text-muted">{{ t(key="admin.delete_location_note") }}</p>
-    <div class="admin-actions"><a class="btn btn-outline-danger" href="#xoa-khu-vuc" x-on:click.prevent="show">{{ atoms::icon(name="fa-trash") }} {{ t(key="admin.delete_location") }}</a></div>
-    {{ confirm::confirm_sheet(id="xoa-khu-vuc", title=t(key="admin.delete_location_title", name=l.label), icon="fa-trash", action=b.delete_action, button=t(key="common.confirm_delete"), reason_max=limits.audit_reason_max, effect="delete", what=t(key="admin.location_what"), button_class="btn-danger") }}
-  </section>
+  {% for x in b.confirms %}
+  <div x-data="dialog" data-open="{% if x.open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+    {{ confirm::confirm_sheet(id=x.id, title=x.title, icon=x.icon, action=x.action, button=x.button, reason_max=limits.audit_reason_max, effect=x.effect, what=x.what, note=x.note, hidden_name=x.hidden_name, hidden_value=x.hidden_value, button_class=x.button_class) }}
+  </div>
+  {% endfor %}
 </div>
 {% endblock content %}

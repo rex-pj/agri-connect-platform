@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::{
     app_state::AppState,
-    pages::admin::{url, Badge, Confirm, RecordAction, RecordHeader},
+    pages::admin::{url, Badge, Confirm, RecordAction, RecordHeader, Says, Toggle},
 };
 
 /// What a kind of listing is called on its page: locale keys and the ids of
@@ -81,33 +81,18 @@ pub fn listing_controls(
 
     let mut actions = Vec::new();
     let mut confirms = Vec::new();
-    if l.is_active {
-        actions.push(RecordAction::sheet(
-            text(words.hide),
-            "fa-eye-slash",
-            words.hide_sheet,
-            "warning",
-        ));
-        confirms.push(
-            Confirm::off(
-                words.hide_sheet,
-                named(words.hide_title),
-                "fa-eye-slash",
-                l.status_action.clone(),
-                text("admin.confirm_hide"),
-                "is_active",
-            )
-            .saying("hide", text(words.what)),
-        );
-    } else {
-        actions.push(RecordAction::post(
-            text("admin.show_again"),
-            "fa-eye",
-            l.status_action.clone(),
-            "is_active",
-            "true",
-        ));
-    }
+    let (toggle, hide) = Toggle::visibility(
+        state,
+        l.is_active,
+        l.status_action,
+        words.hide_sheet,
+        text(words.hide),
+        named(words.hide_title),
+        Says::Hide(text(words.what)),
+    )
+    .split();
+    actions.push(toggle);
+    confirms.extend(hide);
     if let Some(href) = l.public_href {
         actions.push(RecordAction::link(
             text("admin.public_page"),
@@ -159,7 +144,7 @@ pub fn listing_controls(
 
     let header = RecordHeader {
         title: l.name.to_owned(),
-        icon: words.icon,
+        icon: words.icon.to_owned(),
         sub: None,
         back_href: l.back_href,
         back_label: l.back_label,

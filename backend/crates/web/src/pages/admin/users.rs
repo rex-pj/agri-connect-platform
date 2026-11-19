@@ -12,6 +12,7 @@ use application::{
         PERM_USER_STATUS_UPDATE,
     },
     outputs::{AdminPagedResponse, AdminUserDetailDto, AdminUserDto, PermissionDto, RoleDto},
+    usecases::admin_usecase::HistoryOf,
 };
 use axum::{extract::State, http::StatusCode, response::Response};
 use domain::{Error, ErrorCode};
@@ -24,7 +25,10 @@ use crate::{
     labels::Worded,
     middleware::auth::Viewer,
     pages::{
-        admin::{is_refusal, render_admin, url, ListPosition, SearchBox},
+        admin::{
+            history_rows, is_refusal, render_admin, url, Badge, Confirm, HistoryRow, ListPosition,
+            RecordAction, RecordHeader, Says, SearchBox, Toggle,
+        },
         forms::{reason, FormErrors},
         listing::Pagination,
         parse_id, see_other,
@@ -91,22 +95,86 @@ pub async fn list(
 #[derive(Serialize)]
 pub struct UserPage {
     pub user: AdminUserDetailDto,
+    /// Its name, state and actions (turn on; what it manages; turning it
+    /// off in the menu), and the confirmation.
+    pub header: RecordHeader,
+    pub confirms: Vec<Confirm>,
+    /// Its latest changes and sign-ins: who changed its role or switched it
+    /// off, and why.
+    pub history: Vec<HistoryRow>,
     pub permissions: Vec<PermissionDto>,
     /// Set when the visitor may change roles: the choices for the select.
     pub roles: Option<Vec<RoleDto>>,
-    pub can_change_status: bool,
     /// The user's role grid, when the visitor may read roles.
     pub role_href: Option<String>,
-    /// The business this account manages, when the visitor may open it.
-    pub business_href: Option<String>,
-    /// The partner whose report account this is, likewise.
-    pub partner_href: Option<String>,
     pub role_action: String,
-    pub status_action: String,
     pub errors: FormErrors,
-    /// The dialog re-opens after a refused deactivation.
-    pub confirm_open: bool,
     pub flash: Option<Flash>,
+}
+
+/// The account's header: turning it back on is a button, switching it off
+/// (it signs out at once) waits in the menu; the business or partner it
+/// manages is a link beside them.
+fn user_controls(
+    state: &AppState,
+    actor: &application::authz::Actor,
+    user: &AdminUserDetailDto,
+    business_href: Option<String>,
+    partner_href: Option<String>,
+    confirm_open: bool,
+) -> Result<(RecordHeader, Vec<Confirm>), Error> {
+    let locale = state.locale();
+    let mut actions = Vec::new();
+    let mut menu = Vec::new();
+    let mut confirms = Vec::new();
+    if actor.can(PERM_USER_STATUS_UPDATE) {
+        let (toggle, off) = Toggle {
+            is_on: user.is_active,
+            action: url("admin_user_status", &[("id", &user.id.to_string())])?,
+            field: "is_active",
+            sheet: "tat-tai-khoan",
+            off_label: locale.text("admin.turn_off_account"),
+            off_icon: "fa-user-slash",
+            on_label: locale.text("admin.turn_on_account"),
+            on_icon: "fa-user-check",
+            title: locale.text_with("admin.turn_off_account_title", &[("name", &user.username)]),
+            button: locale.text("admin.confirm_off"),
+            says: Says::Note(locale.text("admin.turn_off_account_note")),
+        }
+        .split();
+        match off {
+            Some(confirm) => {
+                menu.push(toggle);
+                confirms.push(confirm.opened(confirm_open));
+            }
+            None => actions.push(toggle),
+        }
+    }
+    if let Some(href) = business_href {
+        actions.push(RecordAction::link(
+            locale.text("admin.open_business"),
+            "fa-store",
+            href,
+        ));
+    }
+    if let Some(href) = partner_href {
+        actions.push(RecordAction::link(
+            locale.text("admin.open_partner"),
+            "fa-handshake",
+            href,
+        ));
+    }
+    let header = RecordHeader {
+        title: user.username.clone(),
+        icon: "fa-user".to_owned(),
+        sub: Some(user.email.clone()),
+        back_href: url("admin_users", &[])?,
+        back_label: locale.text("admin_menu.users"),
+        badges: vec![Badge::new("account", user.is_active)],
+        actions,
+        menu,
+    };
+    Ok((header, confirms))
 }
 
 async fn user_page(
@@ -165,18 +233,24 @@ async fn user_page(
         None
     };
     let id_text = id.to_string();
-    let body = UserPage {
-        permissions,
-        roles,
-        can_change_status: actor.can(PERM_USER_STATUS_UPDATE),
-        role_href,
+    let (header, confirms) = user_controls(
+        state,
+        actor,
+        &user,
         business_href,
         partner_href,
+        confirm_open,
+    )?;
+    let body = UserPage {
+        header,
+        confirms,
+        history: history_rows(state, actor, HistoryOf::User(id)).await?,
+        permissions,
+        roles,
+        role_href,
         role_action: url("admin_user_role", &[("id", &id_text)])?,
-        status_action: url("admin_user_status", &[("id", &id_text)])?,
         user,
         errors,
-        confirm_open,
         flash,
     };
     render_admin(

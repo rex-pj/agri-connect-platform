@@ -39,10 +39,10 @@ use crate::{
     authz::Actor,
     catalogue::{
         PERM_ALERT_MANAGE, PERM_CATEGORY_MANAGE, PERM_INQUIRY_MANAGE, PERM_INQUIRY_READ,
-        PERM_LISTING_MODERATE, PERM_LOCATION_MANAGE, PERM_PROVIDER_ACCOUNT_ASSIGN,
-        PERM_PROVIDER_MANAGE, PERM_PROVIDER_READ, PERM_PROVIDER_STATUS_UPDATE,
-        PERM_PROVIDER_VERIFY, PERM_REVIEW_MODERATE, PERM_ROLE_READ, PERM_SERVICE_MANAGE,
-        PERM_USER_READ, PERM_USER_ROLE_UPDATE, PERM_USER_STATUS_UPDATE,
+        PERM_LISTING_MODERATE, PERM_LOCATION_MANAGE, PERM_PARTNER_MANAGE, PERM_PRICE_MANAGE,
+        PERM_PROVIDER_ACCOUNT_ASSIGN, PERM_PROVIDER_MANAGE, PERM_PROVIDER_READ,
+        PERM_PROVIDER_STATUS_UPDATE, PERM_PROVIDER_VERIFY, PERM_REVIEW_MODERATE, PERM_ROLE_READ,
+        PERM_SERVICE_MANAGE, PERM_USER_READ, PERM_USER_ROLE_UPDATE, PERM_USER_STATUS_UPDATE,
     },
     constants::{
         ADMIN_PAGE_SIZE, CALL_STATS_DAYS, CATEGORY_COLOR_MAX, CATEGORY_DESCRIPTION_MAX,
@@ -86,6 +86,14 @@ pub enum HistoryOf {
     Provider(i32),
     Service(i32),
     Product(i32),
+    Crop(i32),
+    Alert(i32),
+    Sector(i32),
+    AlertKind(i32),
+    Location(i32),
+    Partner(i32),
+    User(i32),
+    Role(i32),
 }
 
 impl HistoryOf {
@@ -95,6 +103,13 @@ impl HistoryOf {
             Self::Provider(_) => PERM_PROVIDER_READ,
             Self::Service(_) => PERM_SERVICE_MANAGE,
             Self::Product(_) => PERM_LISTING_MODERATE,
+            Self::Crop(_) => PERM_PRICE_MANAGE,
+            Self::Alert(_) | Self::AlertKind(_) => PERM_ALERT_MANAGE,
+            Self::Sector(_) => PERM_CATEGORY_MANAGE,
+            Self::Location(_) => PERM_LOCATION_MANAGE,
+            Self::Partner(_) => PERM_PARTNER_MANAGE,
+            Self::User(_) => PERM_USER_READ,
+            Self::Role(_) => PERM_ROLE_READ,
         }
     }
 
@@ -104,6 +119,14 @@ impl HistoryOf {
             Self::Provider(id) => (Entity::Provider, id),
             Self::Service(id) => (Entity::Service, id),
             Self::Product(id) => (Entity::Product, id),
+            Self::Crop(id) => (Entity::Crop, id),
+            Self::Alert(id) => (Entity::Alert, id),
+            Self::Sector(id) => (Entity::Sector, id),
+            Self::AlertKind(id) => (Entity::AlertKind, id),
+            Self::Location(id) => (Entity::Location, id),
+            Self::Partner(id) => (Entity::Partner, id),
+            Self::User(id) => (Entity::User, id),
+            Self::Role(id) => (Entity::Role, id),
         }
     }
 }

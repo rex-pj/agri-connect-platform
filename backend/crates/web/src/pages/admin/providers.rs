@@ -40,13 +40,15 @@ use crate::{
     },
     pages::{
         admin::{
+            chosen_tab,
             dashboard::{card, StatCard},
-            history_rows, is_refusal, render_admin, url, user_href, AdminTab, Badge, Confirm,
-            HistoryRow, ListPosition, Outcome, ReasonForm, RecordAction, RecordHeader, SearchBox,
+            history_rows, is_refusal, record_tabs, render_admin, tab_href, to_tab, url, user_href,
+            AdminTab, Badge, Confirm, HistoryRow, ListPosition, Outcome, ReasonForm, RecordAction,
+            RecordHeader, SearchBox, TabQuery, TabSpec,
         },
         canonical_url,
         forms::{reason, FormErrors},
-        listing::{with_query, Pagination},
+        listing::Pagination,
         parse_id,
         profile_form::ProfileForm,
         see_other,
@@ -249,7 +251,7 @@ pub struct ProviderPage {
     pub confirms: Vec<Confirm>,
     /// The parts of the page (`?tab=`), and the one shown.
     pub tabs: Vec<AdminTab>,
-    pub tab: ProviderTab,
+    pub tab: &'static str,
     /// Its latest changes: who turned it off, verified or edited it, and why.
     pub history: Vec<HistoryRow>,
     /// Its recent activity, as the dashboard's cards.
@@ -286,67 +288,37 @@ pub struct ProviderPage {
 
 /// The parts of a provider's page, each a URL (`?tab=`): what decides about
 /// it first, then what it offers, its profile form, its history.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ProviderTab {
-    #[default]
-    Overview,
-    Offers,
-    Profile,
-    History,
+const PROVIDER_TABS: [TabSpec; 4] = [
+    TabSpec {
+        code: TAB_OVERVIEW,
+        label: "admin.tab_overview",
+    },
+    TabSpec {
+        code: TAB_OFFERS,
+        label: "admin.tab_offers",
+    },
+    TabSpec {
+        code: TAB_PROFILE,
+        label: "admin.tab_profile",
+    },
+    TabSpec {
+        code: TAB_HISTORY,
+        label: "admin.tab_history",
+    },
+];
+const TAB_OVERVIEW: &str = "overview";
+const TAB_OFFERS: &str = "offers";
+const TAB_PROFILE: &str = "profile";
+const TAB_HISTORY: &str = "history";
+
+/// A provider's page, or one of its parts.
+fn provider_href(id: i32, tab: &str) -> Result<String, Error> {
+    Ok(tab_href(
+        &url("admin_provider", &[("id", &id.to_string())])?,
+        &PROVIDER_TABS,
+        tab,
+    ))
 }
-
-impl ProviderTab {
-    const ALL: [ProviderTab; 4] = [
-        ProviderTab::Overview,
-        ProviderTab::Offers,
-        ProviderTab::Profile,
-        ProviderTab::History,
-    ];
-
-    fn code(self) -> &'static str {
-        match self {
-            ProviderTab::Overview => "overview",
-            ProviderTab::Offers => "offers",
-            ProviderTab::Profile => "profile",
-            ProviderTab::History => "history",
-        }
-    }
-
-    fn label(self) -> &'static str {
-        match self {
-            ProviderTab::Overview => "admin.tab_overview",
-            ProviderTab::Offers => "admin.tab_offers",
-            ProviderTab::Profile => "admin.tab_profile",
-            ProviderTab::History => "admin.tab_history",
-        }
-    }
-
-    /// The tab asked for; an unknown one is the overview.
-    fn parse(text: &str) -> Self {
-        Self::ALL
-            .into_iter()
-            .find(|t| t.code() == text.trim())
-            .unwrap_or_default()
-    }
-
-    /// Its address: the overview is the page itself.
-    fn href(self, id: i32) -> Result<String, Error> {
-        let page = url("admin_provider", &[("id", &id.to_string())])?;
-        Ok(match self {
-            ProviderTab::Overview => page,
-            tab => with_query(&page, &[("tab", tab.code())]),
-        })
-    }
-}
-
-/// `?tab=` of a provider's page.
-#[derive(Debug, Default, Deserialize)]
-#[serde(default)]
-pub struct TabQuery {
-    pub tab: String,
-}
-
 const ACCOUNT_SHEET: &str = "gan-tai-khoan";
 const UNLINK_SHEET: &str = "go-tai-khoan";
 const UNVERIFY_SHEET: &str = "bo-xac-minh";
@@ -480,7 +452,7 @@ fn provider_controls(
     }
     let header = RecordHeader {
         title: p.name.clone(),
-        icon: "fa-store",
+        icon: "fa-store".to_owned(),
         sub: None,
         back_href: url("admin_providers", &[])?,
         back_label: text("admin_menu.providers"),
@@ -495,7 +467,7 @@ async fn provider_page(
     state: &AppState,
     actor: &Actor,
     id: i32,
-    tab: ProviderTab,
+    tab: &'static str,
     outcome: Outcome<Typed>,
 ) -> Result<Response, Error> {
     let provider = state.usecases.admin.get_provider_detail(actor, id).await?;
@@ -510,8 +482,8 @@ async fn provider_page(
     // permission to edit.
     let can_edit = actor.can(PERM_PROVIDER_MANAGE);
     let tab = match (failed, tab) {
-        ("profile", _) => ProviderTab::Profile,
-        (_, ProviderTab::Profile) if !can_edit => ProviderTab::Overview,
+        ("profile", _) => TAB_PROFILE,
+        (_, TAB_PROFILE) if !can_edit => TAB_OVERVIEW,
         (_, tab) => tab,
     };
     // A business without an account is usually set up with its phone number
@@ -541,18 +513,13 @@ async fn provider_page(
     let inquiries_href = list_of(PERM_INQUIRY_READ, "admin_inquiries")?;
     let reviews_href = list_of(PERM_REVIEW_MODERATE, "admin_reviews")?;
     let offers = provider.services.len() + provider.products.len();
-    let tabs = ProviderTab::ALL
+    let shown: Vec<TabSpec> = PROVIDER_TABS
         .into_iter()
-        .filter(|t| *t != ProviderTab::Profile || can_edit)
-        .map(|t| {
-            Ok(AdminTab {
-                label: state.locale().text(t.label()),
-                href: t.href(id)?,
-                count: (t == ProviderTab::Offers).then_some(offers),
-                current: t == tab,
-            })
-        })
-        .collect::<Result<Vec<_>, Error>>()?;
+        .filter(|t| t.code != TAB_PROFILE || can_edit)
+        .collect();
+    let tabs = record_tabs(state, &path, &shown, tab, |code| {
+        (code == TAB_OFFERS).then_some(offers)
+    });
     let (header, confirms) = provider_controls(state, actor, &provider)?;
     let account_label = state.locale().text(if provider.linked_username.is_some() {
         "admin.change_account"
@@ -588,7 +555,7 @@ async fn provider_page(
         can_assign: actor.can(PERM_PROVIDER_ACCOUNT_ASSIGN),
         can_edit,
         account_action: url("admin_provider_account", &[("id", &id_text)])?,
-        profile_action: ProviderTab::Profile.href(id)?,
+        profile_action: provider_href(id, TAB_PROFILE)?,
         form,
         profile,
         profile_errors,
@@ -615,17 +582,20 @@ async fn refused(
     typed: Typed,
 ) -> Result<Response, Error> {
     let outcome = Outcome::refused(state, err, Some(typed), false);
-    provider_page(state, actor, id, ProviderTab::Overview, outcome).await
+    provider_page(state, actor, id, TAB_OVERVIEW, outcome).await
 }
 
 fn redirect_to(id: i32, flash: Flash) -> Result<Response, Error> {
-    redirect_to_tab(id, ProviderTab::Overview, flash)
+    redirect_to_tab(id, TAB_OVERVIEW, flash)
 }
 
-fn redirect_to_tab(id: i32, tab: ProviderTab, flash: Flash) -> Result<Response, Error> {
-    let mut response = see_other(&tab.href(id)?)?;
-    flash.set_on(&mut response);
-    Ok(response)
+fn redirect_to_tab(id: i32, tab: &str, flash: Flash) -> Result<Response, Error> {
+    to_tab(
+        &url("admin_provider", &[("id", &id.to_string())])?,
+        &PROVIDER_TABS,
+        tab,
+        flash,
+    )
 }
 
 /// GET /admin/providers/{id} (`?tab=` one of its parts)
@@ -644,7 +614,7 @@ pub async fn show(
         flash: flash.0,
         ..Outcome::default()
     };
-    let tab = ProviderTab::parse(&q.tab);
+    let tab = chosen_tab(&PROVIDER_TABS, &q.tab);
     let mut response = provider_page(&state, &actor, id, tab, outcome).await?;
     flash.clear_on(&mut response);
     Ok(response)
@@ -667,7 +637,7 @@ pub async fn update(
         .update_provider(&actor, id, form.input())
         .await
     {
-        Ok(()) => redirect_to_tab(id, ProviderTab::Profile, Flash::ProviderSaved),
+        Ok(()) => redirect_to_tab(id, TAB_PROFILE, Flash::ProviderSaved),
         Err(err) if is_refusal(&err) => {
             refused(&state, &actor, id, &err, Typed::Profile(form)).await
         }

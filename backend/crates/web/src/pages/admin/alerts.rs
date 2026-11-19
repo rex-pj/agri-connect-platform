@@ -6,7 +6,9 @@
 //! one off asks for confirmation and a reason; turning it on is one button.
 //! An alert is never deleted: it ends, or is turned off.
 
-use application::{authz::Actor, inputs::AlertInput, outputs::AlertDto};
+use application::{
+    authz::Actor, inputs::AlertInput, outputs::AlertDto, usecases::admin_usecase::HistoryOf,
+};
 use axum::{extract::State, http::StatusCode, response::Response};
 use chrono::NaiveDate;
 use domain::{Error, ErrorCode};
@@ -21,8 +23,9 @@ use crate::{
     pages::{
         admin::{
             alert_kinds::{self, TAB_KINDS},
-            coded, is_refusal, render_admin, url, AdminTab, Asked, ListPosition, ListReturn,
-            Outcome, RowConfirm, BACK_TO_LIST,
+            coded, history_rows, is_refusal, render_admin, url, AdminTab, Asked, Badge, Confirm,
+            HistoryRow, ListPosition, ListReturn, Outcome, RecordHeader, RowConfirm, Says, Toggle,
+            BACK_TO_LIST,
         },
         forms::{reason, FormErrors},
         parse_id, see_other,
@@ -282,14 +285,16 @@ pub async fn create(
 #[derive(Serialize)]
 pub struct AlertPage {
     pub alert: AlertDto,
+    /// Its name, state and the turn-off / on action, and the confirmation.
+    pub header: RecordHeader,
+    pub confirms: Vec<Confirm>,
+    /// Its latest changes: who turned it off or edited it, and why.
+    pub history: Vec<HistoryRow>,
     pub reach: String,
     pub choices: AlertChoices,
     pub form: AlertForm,
     pub errors: FormErrors,
     pub update_action: String,
-    pub status_action: String,
-    pub list_href: String,
-    pub confirm_open: bool,
     pub flash: Option<Flash>,
 }
 
@@ -303,18 +308,45 @@ async fn alert_page(
         state.usecases.alert.get(actor, id),
         state.usecases.sector.named(),
     )?;
+    let locale = state.locale();
     let id_text = id.to_string();
     let path = url("admin_alert", &[("id", &id_text)])?;
+    let reach = reach(locale, &sectors, &alert);
+    // An alert is turned off, never deleted: its one action.
+    let (toggle, hide) = Toggle::visibility(
+        state,
+        alert.is_active,
+        url("admin_alert_status", &[("id", &id_text)])?,
+        "tat-canh-bao",
+        locale.text("alert.hide"),
+        locale.text_with("alert.hide_title", &[("name", &alert.title)]),
+        Says::Hide(locale.text("alert.what")),
+    )
+    .split();
+    let mut badges = vec![Badge::new("visibility", alert.live)];
+    if alert.is_demo {
+        badges.push(Badge::new("demo", true));
+    }
+    let header = RecordHeader {
+        title: alert.title.clone(),
+        icon: "fa-triangle-exclamation".to_owned(),
+        sub: Some(reach.clone()),
+        back_href: url("admin_alerts", &[])?,
+        back_label: locale.text("admin_menu.alerts"),
+        badges,
+        actions: vec![toggle],
+        menu: Vec::new(),
+    };
     let body = AlertPage {
+        header,
+        confirms: hide.into_iter().collect(),
+        history: history_rows(state, actor, HistoryOf::Alert(id)).await?,
         form: outcome.form.unwrap_or_else(|| AlertForm::from_dto(&alert)),
-        reach: reach(state.locale(), &sectors, &alert),
+        reach,
         alert,
         choices: choices(state, actor).await?,
         errors: outcome.errors,
         update_action: path.clone(),
-        status_action: url("admin_alert_status", &[("id", &id_text)])?,
-        list_href: url("admin_alerts", &[])?,
-        confirm_open: outcome.confirm_open,
         flash: outcome.flash,
     };
     render_admin(

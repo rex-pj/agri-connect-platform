@@ -12,6 +12,7 @@ use application::{
     constants::LOCATION_LABEL_MAX,
     inputs::LocationInput,
     outputs::{AdminLocationDto, AreaGroupDto},
+    usecases::admin_usecase::HistoryOf,
 };
 use axum::{extract::State, http::StatusCode, response::Response};
 use domain::{Error, ErrorCode};
@@ -19,13 +20,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     app_state::AppState,
+    constants::MAP_POINT_URL,
     cookies::{Flash, TakeFlash},
     extract::{ApiForm, ApiPath, ApiQuery},
     middleware::auth::Viewer,
     pages::{
         admin::{
-            is_refusal, render_admin, url, Asked, ListPosition, ListReturn, Outcome, RowConfirm,
-            BACK_TO_LIST,
+            history_rows, is_refusal, render_admin, url, Asked, Badge, Confirm, HistoryRow,
+            ListPosition, ListReturn, Outcome, RecordAction, RecordHeader, RowConfirm, Says,
+            Toggle, BACK_TO_LIST,
         },
         forms::{coordinate, reason, whole_number, FormErrors},
         parse_id, see_other,
@@ -229,17 +232,21 @@ pub async fn create(
 pub struct LocationPage {
     pub label_max: usize,
     pub location: AdminLocationDto,
+    /// Its name, state and actions (hide / show; the map and deletion in
+    /// the menu), and the confirmations.
+    pub header: RecordHeader,
+    pub confirms: Vec<Confirm>,
+    /// Its latest changes: who hid or edited it, and why.
+    pub history: Vec<HistoryRow>,
     pub form: LocationForm,
     pub errors: FormErrors,
     pub update_action: String,
-    pub status_action: String,
-    pub delete_action: String,
-    /// The delete dialog re-opens after a refusal.
-    pub confirm_open: bool,
     pub flash: Option<Flash>,
     /// The wards the form fills itself from, by province.
     pub wards: Vec<AreaGroupDto>,
 }
+
+const DELETE_SHEET: &str = "xoa-khu-vuc";
 
 async fn location_page(
     state: &AppState,
@@ -251,9 +258,59 @@ async fn location_page(
         state.usecases.admin.get_location_admin(actor, id),
         state.usecases.admin.location_choices(actor),
     )?;
+    let locale = state.locale();
     let id_text = id.to_string();
     let path = url("admin_location", &[("id", &id_text)])?;
+    let named = |key: &str| locale.text_with(key, &[("name", &location.label)]);
+    let (toggle, hide) = Toggle::visibility(
+        state,
+        location.is_active,
+        url("admin_location_status", &[("id", &id_text)])?,
+        "an-khu-vuc",
+        locale.text("admin.hide_location"),
+        named("admin.hide_location_title"),
+        Says::Note(locale.text("admin.hide_location_note")),
+    )
+    .split();
+    let delete = Confirm::delete(
+        DELETE_SHEET,
+        named("admin.delete_location_title"),
+        "fa-trash",
+        url("admin_location_delete", &[("id", &id_text)])?,
+        locale.text("common.confirm_delete"),
+    )
+    .saying("delete", locale.text("admin.location_what"))
+    .opened(outcome.confirm_open);
+    let mut badges = vec![Badge::new("visibility", location.is_active)];
+    if location.is_demo {
+        badges.push(Badge::new("demo", true));
+    }
+    let header = RecordHeader {
+        title: location.label.clone(),
+        icon: "fa-map-location-dot".to_owned(),
+        sub: Some(format!("{}, {}", location.lat, location.lng)),
+        back_href: url("admin_locations", &[])?,
+        back_label: locale.text("admin_menu.locations"),
+        badges,
+        actions: vec![toggle],
+        menu: vec![
+            RecordAction::link(
+                locale.text("admin.open_map"),
+                "fa-map",
+                format!("{MAP_POINT_URL}{},{}", location.lat, location.lng),
+            ),
+            RecordAction::sheet(
+                locale.text("admin.delete_location"),
+                "fa-trash",
+                DELETE_SHEET,
+                "danger",
+            ),
+        ],
+    };
     let body = LocationPage {
+        header,
+        confirms: hide.into_iter().chain([delete]).collect(),
+        history: history_rows(state, actor, HistoryOf::Location(id)).await?,
         label_max: LOCATION_LABEL_MAX,
         form: outcome
             .form
@@ -261,9 +318,6 @@ async fn location_page(
         location,
         errors: outcome.errors,
         update_action: path.clone(),
-        status_action: url("admin_location_status", &[("id", &id_text)])?,
-        delete_action: url("admin_location_delete", &[("id", &id_text)])?,
-        confirm_open: outcome.confirm_open,
         flash: outcome.flash,
         wards,
     };

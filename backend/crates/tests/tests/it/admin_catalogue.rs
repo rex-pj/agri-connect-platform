@@ -572,3 +572,44 @@ async fn a_location_is_filled_from_the_ward_chosen() {
     assert!(html.contains(r#"value="Thử""#));
     e.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_location_page_acts_from_its_header_and_says_who_hid_it() {
+    let e = env_with_origin().await;
+    let admin = install_admin(&e).await;
+    let fields = [("label", "Tân Phú"), ("lat", "10.40"), ("lng", "106.10")];
+    let res = send(
+        &e.router,
+        post_form("/admin/locations", &fields, Some(&admin)),
+    )
+    .await;
+    let detail = location_of(&res);
+
+    // One header: hide as its button, the map and the deletion in its menu,
+    // each confirmation opened by a link to its sheet.
+    let html = page(&e, &detail, &admin).await;
+    assert!(html.contains(r##"href="#an-khu-vuc""##));
+    assert!(html.contains(r##"href="#xoa-khu-vuc""##));
+    assert!(html.contains("https://www.google.com/maps?q=10.4,106.1"));
+    assert!(html.contains("Chưa có thay đổi nào được ghi lại."), "its history");
+
+    let res = send(
+        &e.router,
+        post_form(
+            &format!("{detail}/status"),
+            &[("is_active", "false"), ("reason", "Trùng với Tân Phú Đông")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let html = page(&e, &detail, &admin).await;
+    assert!(html.contains("Ẩn khu vực"), "the strip says who hid it");
+    assert!(html.contains("Trùng với Tân Phú Đông"));
+    assert!(
+        !html.contains(r##"href="#an-khu-vuc""##),
+        "shown again with one button"
+    );
+    e.cleanup().await;
+}

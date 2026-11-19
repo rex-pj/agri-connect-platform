@@ -13,7 +13,10 @@
 //! `back=list`, they land back on the list.
 
 use application::{
-    authz::Actor, inputs::CodedInput, outputs::CodedDto, usecases::coded_usecase::CodedUseCase,
+    authz::Actor,
+    inputs::CodedInput,
+    outputs::CodedDto,
+    usecases::{admin_usecase::HistoryOf, coded_usecase::CodedUseCase},
 };
 use axum::{http::StatusCode, response::Response};
 use domain::{Error, ErrorCode};
@@ -25,8 +28,9 @@ use crate::{
     labels::SECTOR_ICON_DEFAULT,
     pages::{
         admin::{
-            render_admin, url, AdminTab, Asked, ListPosition, ListReturn, Outcome, RowConfirm,
-            BACK_TO_LIST,
+            history_rows, render_admin, url, AdminTab, Asked, Badge, Confirm, HistoryRow,
+            ListPosition, ListReturn, Outcome, RecordAction, RecordHeader, RowConfirm, Says,
+            Toggle, BACK_TO_LIST,
         },
         forms::{reason, whole_number, FormErrors},
         parse_id, see_other,
@@ -79,6 +83,10 @@ pub struct CodedPages {
     pub saved: Flash,
     pub hidden: Flash,
     pub shown: Flash,
+    /// An entry's history, and the audit code of hiding one (the line under
+    /// a hidden one: who hid it and why).
+    pub history: fn(i32) -> HistoryOf,
+    pub hide_action: &'static str,
 }
 
 /// The words of a list, in the visitor's language.
@@ -328,16 +336,16 @@ pub async fn create(
 pub struct CodedEntryPage {
     pub words: CodedWords,
     pub entry: CodedDto,
-    pub icon: String,
-    pub hide_title: String,
+    /// Its name, state and actions (hide / show, what is filed under the
+    /// list), and the confirmation.
+    pub header: RecordHeader,
+    pub confirms: Vec<Confirm>,
+    /// Its latest changes, and the audit code of hiding it.
+    pub history: Vec<HistoryRow>,
+    pub hide_action: &'static str,
     pub form: CodedForm,
     pub errors: FormErrors,
     pub update_action: String,
-    pub status_action: String,
-    pub list_href: String,
-    pub related_href: String,
-    pub related_icon: &'static str,
-    pub confirm_open: bool,
     pub flash_text: Option<String>,
 }
 
@@ -351,19 +359,49 @@ async fn entry_page(
     let entry = pages.uc(state).get(actor, id).await?;
     let id_text = id.to_string();
     let path = url(pages.entry_route, &[("id", &id_text)])?;
-    let body = CodedEntryPage {
-        words: pages.words(state, 0),
+    let words = pages.words(state, 0);
+    // Never deleted (other rows name it): hiding is its one action.
+    let (toggle, hide) = Toggle::visibility(
+        state,
+        entry.is_active,
+        url(pages.status_route, &[("id", &id_text)])?,
+        "an-muc",
+        words.hide.clone(),
+        pages.hide_title(state, &entry.name),
+        Says::Hide(words.what.clone()),
+    )
+    .split();
+    let mut badges = vec![Badge::new("visibility", entry.is_active)];
+    if entry.is_demo {
+        badges.push(Badge::new("demo", true));
+    }
+    let header = RecordHeader {
+        title: entry.name.clone(),
         icon: icon_of(&entry),
-        hide_title: pages.hide_title(state, &entry.name),
+        sub: None,
+        back_href: pages.list_href()?,
+        back_label: words.title.clone(),
+        badges,
+        actions: vec![
+            toggle,
+            RecordAction::link(
+                words.related.clone(),
+                pages.related_icon,
+                url(pages.related_route, &[])?,
+            ),
+        ],
+        menu: Vec::new(),
+    };
+    let body = CodedEntryPage {
+        header,
+        confirms: hide.into_iter().collect(),
+        history: history_rows(state, actor, (pages.history)(id)).await?,
+        hide_action: pages.hide_action,
+        words,
         form: outcome.form.unwrap_or_else(|| CodedForm::from_dto(&entry)),
         entry,
         errors: outcome.errors,
         update_action: path.clone(),
-        status_action: url(pages.status_route, &[("id", &id_text)])?,
-        list_href: pages.list_href()?,
-        related_href: url(pages.related_route, &[])?,
-        related_icon: pages.related_icon,
-        confirm_open: outcome.confirm_open,
         flash_text: pages.flash_text(state, outcome.flash),
     };
     render_admin(

@@ -15,6 +15,7 @@ use application::{
     authz::Actor,
     inputs::CropInput,
     outputs::{CommodityDto, CropDto, CropPriceDto},
+    usecases::admin_usecase::HistoryOf,
 };
 use axum::{extract::State, http::StatusCode, response::Response};
 use domain::{Error, ErrorCode};
@@ -27,8 +28,9 @@ use crate::{
     middleware::auth::Viewer,
     pages::{
         admin::{
-            is_refusal, prices, render_admin, url, AdminTab, Asked, ListPosition, ListReturn,
-            Outcome, RowConfirm, BACK_TO_LIST,
+            history_rows, is_refusal, prices, render_admin, url, AdminTab, Asked, Badge, Confirm,
+            HistoryRow, ListPosition, ListReturn, Outcome, RecordAction, RecordHeader, RowConfirm,
+            Says, Toggle, BACK_TO_LIST,
         },
         forms::{reason, whole_number, FormErrors},
         listing::parse_opt,
@@ -233,23 +235,74 @@ pub async fn create(
 #[derive(Serialize)]
 pub struct CropPage {
     pub crop: CropDto,
+    /// Its name, state and actions (enter a price, hide / show; its
+    /// commodity and every price in the menu), and the confirmation.
+    pub header: RecordHeader,
+    pub confirms: Vec<Confirm>,
+    /// Its latest changes: who hid or edited it, and why.
+    pub history: Vec<HistoryRow>,
     /// Its commodity's admin page.
     pub commodity_href: String,
-    /// Its latest prices (one list page), every one of them, and the price
-    /// sheet with it chosen.
+    /// Its latest prices (one list page) and every one of them.
     pub prices: Vec<CropPriceDto>,
     pub prices_total: i64,
     pub prices_href: String,
-    pub enter_price_href: String,
     pub commodities: Vec<CommodityDto>,
     pub commodities_href: String,
     pub form: CropForm,
     pub errors: FormErrors,
     pub update_action: String,
-    pub status_action: String,
-    pub list_href: String,
-    pub confirm_open: bool,
     pub flash: Option<Flash>,
+}
+
+/// The crop's header: entering today's price is what its page is opened
+/// for, so it leads; hiding it (its prices leave the board) beside it.
+fn crop_controls(
+    state: &AppState,
+    crop: &CropDto,
+    enter_price_href: String,
+    prices_href: String,
+    prices_total: i64,
+    commodity_href: String,
+) -> Result<(RecordHeader, Vec<Confirm>), Error> {
+    let locale = state.locale();
+    let commodity = crop.commodity.clone().unwrap_or_default();
+    let (toggle, hide) = Toggle::visibility(
+        state,
+        crop.is_active,
+        url("admin_crop_status", &[("id", &crop.id.to_string())])?,
+        "an-cay",
+        locale.text("admin_crops.hide"),
+        locale.text_with("admin_crops.hide_title", &[("name", &crop.name)]),
+        Says::Hide(locale.text("admin_crops.what")),
+    )
+    .split();
+    let mut badges = vec![Badge::new("visibility", crop.is_active)];
+    if crop.is_demo {
+        badges.push(Badge::new("demo", true));
+    }
+    let header = RecordHeader {
+        title: crop.name.clone(),
+        icon: "fa-seedling".to_owned(),
+        sub: Some(locale.text_with("admin_crops.of_commodity", &[("name", &commodity)])),
+        back_href: list_position().href("admin_prices", &[])?,
+        back_label: locale.text("admin_prices.tab_crops"),
+        badges,
+        actions: vec![
+            RecordAction::link(locale.text("admin_prices.add"), "fa-plus", enter_price_href)
+                .tinted("success"),
+            toggle,
+        ],
+        menu: vec![
+            RecordAction::link(commodity, "fa-leaf", commodity_href),
+            RecordAction::link(
+                locale.text_with("admin_crops.all_prices", &[("count", &prices_total)]),
+                "fa-list",
+                prices_href,
+            ),
+        ],
+    };
+    Ok((header, hide.into_iter().collect()))
 }
 
 async fn crop_page(
@@ -270,21 +323,30 @@ async fn crop_page(
         ..ListPosition::default()
     };
     let path = url("admin_crop", &[("id", &id_text)])?;
+    let prices_href = of_crop.href("admin_prices", &[])?;
+    let commodity_href = url("admin_commodity", &[("id", &crop.commodity_id.to_string())])?;
+    let (header, confirms) = crop_controls(
+        state,
+        &crop,
+        format!("{prices_href}#nhap-gia"),
+        prices_href.clone(),
+        recent.total,
+        commodity_href.clone(),
+    )?;
     let body = CropPage {
+        header,
+        confirms,
+        history: history_rows(state, actor, HistoryOf::Crop(id)).await?,
         form: outcome.form.unwrap_or_else(|| CropForm::from_dto(&crop)),
-        commodity_href: url("admin_commodity", &[("id", &crop.commodity_id.to_string())])?,
+        commodity_href,
         prices: recent.items,
         prices_total: recent.total,
-        prices_href: of_crop.href("admin_prices", &[])?,
-        enter_price_href: format!("{}#nhap-gia", of_crop.href("admin_prices", &[])?),
+        prices_href,
         crop,
         commodities,
         commodities_href: url("admin_commodities", &[])?,
         errors: outcome.errors,
         update_action: path.clone(),
-        status_action: url("admin_crop_status", &[("id", &id_text)])?,
-        list_href: list_position().href("admin_prices", &[])?,
-        confirm_open: outcome.confirm_open,
         flash: outcome.flash,
     };
     render_admin(

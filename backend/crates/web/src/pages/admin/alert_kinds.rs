@@ -5,6 +5,7 @@
 //! `/admin/alert-kinds` 301s to the tab. The pages are the shared
 //! coded-list pages (`coded`); this module says where and in which words.
 
+use application::usecases::admin_usecase::HistoryOf;
 use axum::{extract::State, response::Response};
 use domain::{Error, ErrorCode};
 
@@ -59,6 +60,8 @@ pub const PAGES: CodedPages = CodedPages {
     saved: Flash::AlertKindSaved,
     hidden: Flash::AlertKindHidden,
     shown: Flash::AlertKindShown,
+    history: HistoryOf::AlertKind,
+    hide_action: "hide_alert_kind",
 };
 
 /// GET /admin/alert-kinds: the list is a tab of the alerts page.

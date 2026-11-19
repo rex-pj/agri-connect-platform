@@ -561,7 +561,7 @@ pub async fn history_rows(
 #[derive(Serialize)]
 pub struct RecordHeader {
     pub title: String,
-    pub icon: &'static str,
+    pub icon: String,
     pub sub: Option<String>,
     pub back_href: String,
     pub back_label: String,
@@ -633,6 +633,11 @@ impl RecordAction {
         }
     }
 
+    /// The same action in another colour (a link that adds something: green).
+    pub fn tinted(self, tone: &'static str) -> Self {
+        Self { tone, ..self }
+    }
+
     pub fn sheet(label: String, icon: &'static str, sheet: &str, tone: &'static str) -> Self {
         Self {
             kind: "sheet",
@@ -662,6 +667,8 @@ pub struct Confirm {
     pub note: String,
     pub hidden_name: &'static str,
     pub hidden_value: &'static str,
+    /// Open when the page comes back after this confirmation was refused.
+    pub open: bool,
 }
 
 impl Confirm {
@@ -686,6 +693,7 @@ impl Confirm {
             note: String::new(),
             hidden_name: field,
             hidden_value: "false",
+            open: false,
         }
     }
 
@@ -716,6 +724,148 @@ impl Confirm {
     pub fn noting(self, note: String) -> Self {
         Self { note, ..self }
     }
+
+    pub fn opened(self, open: bool) -> Self {
+        Self { open, ..self }
+    }
+}
+
+/// What a switch-off confirmation says: the generic "hidden from farmers,
+/// can be shown again" about `what` (`confirm.hide_effect`), or its own
+/// words.
+pub enum Says {
+    Hide(String),
+    Note(String),
+}
+
+/// The on / off pair of a record (shown / hidden, active / off): while on,
+/// a button opening the confirmation to turn it off; while off, a one-button
+/// form turning it back on (no second look needed). The page puts the
+/// button among its header's actions or in its menu.
+pub struct Toggle {
+    pub is_on: bool,
+    /// The form both send, setting `field`.
+    pub action: String,
+    pub field: &'static str,
+    pub sheet: &'static str,
+    pub off_label: String,
+    pub off_icon: &'static str,
+    pub on_label: String,
+    pub on_icon: &'static str,
+    /// The confirmation's title and button.
+    pub title: String,
+    pub button: String,
+    pub says: Says,
+}
+
+impl Toggle {
+    /// Shown / hidden (`is_active`): "hide …" behind its confirmation, "show
+    /// again" one button.
+    pub fn visibility(
+        state: &AppState,
+        is_on: bool,
+        action: String,
+        sheet: &'static str,
+        hide_label: String,
+        title: String,
+        says: Says,
+    ) -> Self {
+        let locale = state.locale();
+        Self {
+            is_on,
+            action,
+            field: "is_active",
+            sheet,
+            off_label: hide_label,
+            off_icon: "fa-eye-slash",
+            on_label: locale.text("admin.show_again"),
+            on_icon: "fa-eye",
+            title,
+            button: locale.text("admin.confirm_hide"),
+            says,
+        }
+    }
+
+    /// The header's action, and the confirmation it opens while on.
+    pub fn split(self) -> (RecordAction, Option<Confirm>) {
+        if !self.is_on {
+            let on =
+                RecordAction::post(self.on_label, self.on_icon, self.action, self.field, "true");
+            return (on, None);
+        }
+        let off = RecordAction::sheet(self.off_label, self.off_icon, self.sheet, "warning");
+        let confirm = Confirm::off(
+            self.sheet,
+            self.title,
+            self.off_icon,
+            self.action,
+            self.button,
+            self.field,
+        );
+        let confirm = match self.says {
+            Says::Hide(what) => confirm.saying("hide", what),
+            Says::Note(note) => confirm.noting(note),
+        };
+        (off, Some(confirm))
+    }
+}
+
+/// One part of a record page shown alone (`?tab=`): its code and its label's
+/// locale key. The first of a page's parts is its overview, the page itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TabSpec {
+    pub code: &'static str,
+    pub label: &'static str,
+}
+
+/// `?tab=` of a record page.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct TabQuery {
+    pub tab: String,
+}
+
+/// The part asked for among `tabs`; an unknown one is the overview.
+pub fn chosen_tab(tabs: &[TabSpec], asked: &str) -> &'static str {
+    tabs.iter()
+        .find(|t| t.code == asked.trim())
+        .or(tabs.first())
+        .map_or("", |t| t.code)
+}
+
+/// A part's address: the overview is the page itself.
+pub fn tab_href(page: &str, tabs: &[TabSpec], code: &str) -> String {
+    if tabs.first().is_some_and(|t| t.code == code) {
+        page.to_owned()
+    } else {
+        with_query(page, &[("tab", code)])
+    }
+}
+
+/// The tab links of a record page (`molecules/admin_tabs.html`), the
+/// current one marked, each with the count `count` gives it.
+pub fn record_tabs(
+    state: &AppState,
+    page: &str,
+    tabs: &[TabSpec],
+    current: &str,
+    count: impl Fn(&str) -> Option<usize>,
+) -> Vec<AdminTab> {
+    tabs.iter()
+        .map(|t| AdminTab {
+            label: state.locale().text(t.label),
+            href: tab_href(page, tabs, t.code),
+            count: count(t.code),
+            current: t.code == current,
+        })
+        .collect()
+}
+
+/// 303 to one part of a record page, with `flash`.
+pub fn to_tab(page: &str, tabs: &[TabSpec], code: &str, flash: Flash) -> Result<Response, Error> {
+    let mut response = see_other(&tab_href(page, tabs, code))?;
+    flash.set_on(&mut response);
+    Ok(response)
 }
 
 /// A form that only carries the optional reason of an audited change (a

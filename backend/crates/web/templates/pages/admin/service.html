@@ -60,7 +60,7 @@
   </div>
 
   {% for c in b.confirms %}
-  <div x-data="dialog" x-on:keydown.escape.window="hide">
+  <div x-data="dialog" data-open="{% if c.open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
     {{ confirm::confirm_sheet(id=c.id, title=c.title, icon=c.icon, action=c.action, button=c.button, reason_max=limits.audit_reason_max, effect=c.effect, what=c.what, note=c.note, hidden_name=c.hidden_name, hidden_value=c.hidden_value, button_class=c.button_class) }}
   </div>
   {% endfor %}

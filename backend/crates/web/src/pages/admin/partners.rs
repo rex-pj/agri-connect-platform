@@ -17,6 +17,7 @@ use application::{
         AreaGroupDto, CategoryDto, CodedDto, NamedDto, PartnerDetailDto, PartnerDto, PartnerKpiDto,
         SponsorCandidateDto,
     },
+    usecases::admin_usecase::HistoryOf,
 };
 use axum::{extract::State, http::StatusCode, response::Response};
 use chrono::NaiveDate;
@@ -29,12 +30,16 @@ use serde::{Deserialize, Serialize};
 use crate::{
     app_state::AppState,
     cookies::{Flash, TakeFlash},
-    extract::{ApiForm, ApiPath},
+    extract::{ApiForm, ApiPath, ApiQuery},
     labels::sector_name,
     locale::Locale,
     middleware::auth::Viewer,
     pages::{
-        admin::{is_refusal, render_admin, url, user_href, Outcome, ReasonForm},
+        admin::{
+            chosen_tab, history_rows, is_refusal, record_tabs, render_admin, tab_href, to_tab, url,
+            user_href, AdminTab, Badge, Confirm, HistoryRow, Outcome, ReasonForm, RecordAction,
+            RecordHeader, Says, TabQuery, TabSpec, Toggle,
+        },
         forms::{reason, FormErrors},
         parse_id, see_other,
     },
@@ -336,9 +341,131 @@ pub struct CategoryOption {
     pub group: Option<String>,
 }
 
+/// The parts of a partner's page (`?tab=`): what decides about it first, then
+/// its contracts (with the add form), its profile form, its history.
+const PARTNER_TABS: [TabSpec; 4] = [
+    TabSpec {
+        code: TAB_OVERVIEW,
+        label: "admin.tab_overview",
+    },
+    TabSpec {
+        code: TAB_CONTRACTS,
+        label: "partner.contracts",
+    },
+    TabSpec {
+        code: TAB_PROFILE,
+        label: "admin.tab_profile",
+    },
+    TabSpec {
+        code: TAB_HISTORY,
+        label: "admin.tab_history",
+    },
+];
+const TAB_OVERVIEW: &str = "overview";
+const TAB_CONTRACTS: &str = "contracts";
+const TAB_PROFILE: &str = "profile";
+const TAB_HISTORY: &str = "history";
+
+const ACCOUNT_SHEET: &str = "gan-tai-khoan";
+const TURN_OFF_SHEET: &str = "tat-doi-tac";
+
+/// The part a change lands on: a contract's on the contracts (a new
+/// partner's too: its first contract is next), the profile's on the profile.
+fn tab_after(flash: Flash) -> &'static str {
+    match flash {
+        Flash::PartnerCreated
+        | Flash::ContractCreated
+        | Flash::ContractSaved
+        | Flash::ContractDeleted
+        | Flash::SponsoredAdded
+        | Flash::SponsoredRemoved => TAB_CONTRACTS,
+        Flash::PartnerSaved => TAB_PROFILE,
+        _ => TAB_OVERVIEW,
+    }
+}
+
+/// The partner's header: turning it back on and adding a contract are
+/// buttons; the report account and switching it off (its contracts stop)
+/// wait in the menu.
+fn partner_controls(
+    state: &AppState,
+    p: &PartnerDto,
+    contracts_href: &str,
+) -> Result<(RecordHeader, Vec<Confirm>), Error> {
+    let locale = state.locale();
+    let id = p.id.to_string();
+    let (toggle, off) = Toggle {
+        is_on: p.is_active,
+        action: url("admin_partner_status", &[("id", &id)])?,
+        field: "is_active",
+        sheet: TURN_OFF_SHEET,
+        off_label: locale.text("partner.turn_off"),
+        off_icon: "fa-ban",
+        on_label: locale.text("partner.turn_on"),
+        on_icon: "fa-handshake",
+        title: locale.text_with("partner.turn_off_title", &[("name", &p.name)]),
+        button: locale.text("admin.confirm_off"),
+        says: Says::Note(locale.text("partner.turn_off_note")),
+    }
+    .split();
+    let mut actions = Vec::new();
+    let account_label = if p.account_username.is_some() {
+        "admin.change_account"
+    } else {
+        "admin.assign"
+    };
+    let mut menu = vec![RecordAction::sheet(
+        locale.text(account_label),
+        "fa-user-plus",
+        ACCOUNT_SHEET,
+        "success",
+    )];
+    if off.is_some() {
+        menu.push(toggle);
+    } else {
+        actions.push(toggle);
+    }
+    actions.push(
+        RecordAction::link(
+            locale.text("partner.add_contract"),
+            "fa-file-signature",
+            format!("{contracts_href}#them-hop-dong"),
+        )
+        .tinted("success"),
+    );
+    let mut badges = vec![
+        Badge::new("account", p.is_active),
+        Badge::new("managed", p.account_username.is_some()),
+    ];
+    if p.is_demo {
+        badges.push(Badge::new("demo", true));
+    }
+    let header = RecordHeader {
+        title: p.name.clone(),
+        icon: "fa-handshake".to_owned(),
+        sub: Some(kind_label(locale, &p.kind)),
+        back_href: url("admin_partners", &[])?,
+        back_label: locale.text("admin_menu.partners"),
+        badges,
+        actions,
+        menu,
+    };
+    Ok((header, off.into_iter().collect()))
+}
+
 #[derive(Serialize)]
 pub struct PartnerPage {
     pub partner: PartnerDto,
+    /// Its name, states and actions, and the confirmation.
+    pub header: RecordHeader,
+    pub confirms: Vec<Confirm>,
+    /// The parts of the page, and the one shown.
+    pub tabs: Vec<AdminTab>,
+    pub tab: &'static str,
+    /// Its latest changes: who switched it off or edited it, and why.
+    pub history: Vec<HistoryRow>,
+    /// The account form's title: "assign", or "change" once one is linked.
+    pub account_label: String,
     /// The report account's admin page, when the visitor may read accounts.
     pub account_href: Option<String>,
     pub kind_label: String,
@@ -358,7 +485,6 @@ pub struct PartnerPage {
     /// A refused confirmation, shown above everything.
     pub errors: FormErrors,
     pub profile_action: String,
-    pub status_action: String,
     pub account_action: String,
     pub contract_action: String,
 }
@@ -367,6 +493,7 @@ async fn partner_page(
     state: &AppState,
     actor: &Actor,
     id: i32,
+    tab: &'static str,
     outcome: Outcome<Typed>,
 ) -> Result<Response, Error> {
     let partners = &state.usecases.partner;
@@ -440,7 +567,32 @@ async fn partner_page(
     let any_edit = rows.iter().any(|r| r.edit_open);
     let refused_form = profile.is_some() || account.is_some() || contract.is_some() || any_edit;
     let path = url("admin_partner", &[("id", &id_text)])?;
+    // A refused form is shown on its part of the page.
+    let tab = if profile.is_some() {
+        TAB_PROFILE
+    } else if contract.is_some() || any_edit {
+        TAB_CONTRACTS
+    } else {
+        tab
+    };
+    let contracts_href = tab_href(&path, &PARTNER_TABS, TAB_CONTRACTS);
+    let (header, confirms) = partner_controls(state, &partner, &contracts_href)?;
+    let count = rows.len();
+    let tabs = record_tabs(state, &path, &PARTNER_TABS, tab, |code| {
+        (code == TAB_CONTRACTS).then_some(count)
+    });
+    let account_label = state.locale().text(if partner.account_username.is_some() {
+        "admin.change_account"
+    } else {
+        "admin.assign"
+    });
     let body = PartnerPage {
+        header,
+        confirms,
+        tabs,
+        tab,
+        history: history_rows(state, actor, HistoryOf::Partner(id)).await?,
+        account_label,
         account_href: user_href(actor, partner.account_id)?,
         profile_errors: refused(profile.is_some()),
         account_errors: refused(account.is_some()),
@@ -463,8 +615,7 @@ async fn partner_page(
         kinds: kinds(state.locale()),
         areas,
         categories: category_options(state.locale(), &sectors, categories),
-        profile_action: path.clone(),
-        status_action: url("admin_partner_status", &[("id", &id_text)])?,
+        profile_action: tab_href(&path, &PARTNER_TABS, TAB_PROFILE),
         account_action: url("admin_partner_account", &[("id", &id_text)])?,
         contract_action: url("admin_partner_contracts", &[("id", &id_text)])?,
     };
@@ -478,10 +629,10 @@ async fn partner_page(
     )
 }
 
+/// 303 to the partner's page, on the part the change belongs to.
 fn redirect_to(id: i32, flash: Flash) -> Result<Response, Error> {
-    let mut response = see_other(&url("admin_partner", &[("id", &id.to_string())])?)?;
-    flash.set_on(&mut response);
-    Ok(response)
+    let page = url("admin_partner", &[("id", &id.to_string())])?;
+    to_tab(&page, &PARTNER_TABS, tab_after(flash), flash)
 }
 
 /// The page again with the refused form's values and messages, or the
@@ -498,7 +649,7 @@ async fn after(
         Ok(()) => redirect_to(id, flash),
         Err(err) if is_refusal(&err) => {
             let outcome = Outcome::refused(state, &err, typed, false);
-            partner_page(state, actor, id, outcome).await
+            partner_page(state, actor, id, TAB_OVERVIEW, outcome).await
         }
         Err(err) => Err(err),
     }
@@ -510,6 +661,7 @@ pub async fn show(
     flash: TakeFlash,
     State(state): State<AppState>,
     ApiPath(raw_id): ApiPath<String>,
+    ApiQuery(q): ApiQuery<TabQuery>,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
@@ -519,7 +671,8 @@ pub async fn show(
         flash: flash.0,
         ..Outcome::default()
     };
-    let mut response = partner_page(&state, &actor, id, outcome).await?;
+    let tab = chosen_tab(&PARTNER_TABS, &q.tab);
+    let mut response = partner_page(&state, &actor, id, tab, outcome).await?;
     flash.clear_on(&mut response);
     Ok(response)
 }

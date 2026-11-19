@@ -1,40 +1,51 @@
 {% extends "layouts/admin.html" %}
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/alert.html" as alerts %}
-{% import "molecules/admin_header.html" as header %}
-{#- One role and its permission grid. `page.body` is
-    web::pages::admin::roles::RolePage. Each box is named `perm.<key>`; the
-    form works without JS. Read-only for visitors who may not manage grants. -#}
+{% import "molecules/history_list.html" as history %}
+{% import "organisms/record_header.html" as record %}
+{#- One role, as a record page: the header (its name and description, the
+    way back: `b.header`), then its permission grid, and beside it on a wide
+    screen who changed its grants, when and why. Each box is named
+    `perm.<key>`; the form works without JS. Read-only for visitors who may
+    not manage grants. `page.body` is web::pages::admin::roles::RolePage. -#}
 {% block title %}{{ page.body.role.name }} — {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
-{{ header::admin_header(title=b.role.name, icon="fa-shield-halved", sub=b.role.description | default(value=""), back_href=url_for(name="admin_roles"), back_label=t(key="admin_menu.roles")) }}
+{{ record::record_header(h=b.header) }}
 <div class="admin-body">
   {% if b.saved %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.permissions_saved")) }}{% endif %}
   {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
-  <form class="d-flex flex-column gap-3" method="post" action="{{ b.action }}">
-    {% for g in b.groups %}
-    <fieldset class="admin-card grant-group"{% if not b.editable %} disabled{% endif %}>
-      <legend class="grant-group__label">{{ g.label }}</legend>
-      {% for p in g.permissions %}
-      <div class="form-check grant-row">
-        <input class="form-check-input" type="checkbox" id="perm-{{ p.code }}" name="{{ b.field_prefix }}{{ p.code }}"{% if p.granted and p.grantable %} checked{% endif %}{% if not p.grantable %} disabled{% endif %}>
-        <label class="form-check-label" for="perm-{{ p.code }}">{{ p.name }} <code class="grant-row__code">{{ p.code }}</code></label>
-      </div>
-      {% endfor %}
-    </fieldset>
-    {% endfor %}
-    {% if b.editable %}
-    <div class="admin-section">
-      <div class="form-field">
-        <label class="form-label fw-semibold" for="grant-reason">{{ t(key="confirm.reason_label") }}</label>
-        <input class="form-control" id="grant-reason" name="reason" maxlength="{{ limits.audit_reason_max }}" placeholder="{{ t(key="admin.reason_placeholder") }}">
-      </div>
-      <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_permissions") }}</button></div>
+
+  <div class="row g-3 g-lg-4">
+    <div class="col-lg-8">
+      <form class="d-flex flex-column gap-3" method="post" action="{{ b.action }}">
+        {% for g in b.groups %}
+        <fieldset class="admin-card grant-group"{% if not b.editable %} disabled{% endif %}>
+          <legend class="grant-group__label">{{ g.label }}</legend>
+          {% for p in g.permissions %}
+          <div class="form-check grant-row">
+            <input class="form-check-input" type="checkbox" id="perm-{{ p.code }}" name="{{ b.field_prefix }}{{ p.code }}"{% if p.granted and p.grantable %} checked{% endif %}{% if not p.grantable %} disabled{% endif %}>
+            <label class="form-check-label" for="perm-{{ p.code }}">{{ p.name }} <code class="grant-row__code">{{ p.code }}</code></label>
+          </div>
+          {% endfor %}
+        </fieldset>
+        {% endfor %}
+        {% if b.editable %}
+        <div class="admin-section">
+          <div class="form-field">
+            <label class="form-label fw-semibold" for="grant-reason">{{ t(key="confirm.reason_label") }}</label>
+            <input class="form-control" id="grant-reason" name="reason" maxlength="{{ limits.audit_reason_max }}" placeholder="{{ t(key="admin.reason_placeholder") }}">
+          </div>
+          <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_permissions") }}</button></div>
+        </div>
+        {% else %}
+        <p class="small text-muted mb-0">{{ atoms::icon(name="fa-lock", class="me-1") }}{{ t(key="admin.read_only") }}</p>
+        {% endif %}
+      </form>
     </div>
-    {% else %}
-    <p class="small text-muted mb-0">{{ atoms::icon(name="fa-lock", class="me-1") }}{{ t(key="admin.read_only") }}</p>
-    {% endif %}
-  </form>
+    <div class="col-lg-4 d-flex flex-column gap-3">
+      {{ history::history_list(rows=b.history) }}
+    </div>
+  </div>
 </div>
 {% endblock content %}

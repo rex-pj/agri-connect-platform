@@ -1,79 +1,72 @@
 {% extends "layouts/admin.html" %}
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/alert.html" as alerts %}
-{% import "atoms/status_badge.html" as status %}
-{% import "molecules/admin_header.html" as header %}
+{% import "molecules/history_list.html" as history %}
+{% import "organisms/record_header.html" as record %}
 {% import "organisms/confirm_sheet.html" as confirm %}
-{#- One account: details, role, status and effective permissions.
-    `page.body` is web::pages::admin::users::UserPage. Deactivating is a
-    confirmation section that Alpine `dialog` turns into a sheet; without JS
-    it is reached by the anchor and submitted in place. -#}
+{#- One account, as a record page: the header (turning it back on and what
+    it manages as buttons; switching it off in its menu: `b.header`,
+    `users::user_controls`), one status strip (on or off, who switched it
+    off and why), then its role and effective permissions, and beside them
+    on a wide screen its details and history (its sign-ins among them).
+    `page.body` is web::pages::admin::users::UserPage. -#}
 {% block title %}{{ page.body.user.username }} — {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
 {% set u = b.user %}
-{{ header::admin_header(title=u.username, icon="fa-user", sub=u.email, back_href=url_for(name="admin_users"), back_label=t(key="admin_menu.users")) }}
-<div class="admin-body" x-data="dialog" data-open="{% if b.confirm_open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+{{ record::record_header(h=b.header) }}
+<div class="admin-body">
   {% if b.flash == "user_role_changed" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.role_changed")) }}{% endif %}
   {% if b.flash == "user_activated" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.user_activated")) }}{% endif %}
   {% if b.flash == "user_deactivated" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.user_deactivated")) }}{% endif %}
   {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
 
-  <section class="admin-section" aria-labelledby="info-title">
-    <h2 class="admin-section__title" id="info-title">{{ t(key="admin.info") }}</h2>
-    <dl class="acct-rows">
-      {% if u.full_name %}<div class="acct-row"><dt>{{ t(key="form.full_name") }}</dt><dd>{{ u.full_name }}</dd></div>{% endif %}
-      <div class="acct-row"><dt>{{ t(key="account.role") }}</dt><dd>{% if b.role_href %}<a href="{{ b.role_href }}">{{ u.role_name }}</a>{% else %}{{ u.role_name }}{% endif %}</dd></div>
-      <div class="acct-row"><dt>{{ t(key="admin.created") }}</dt><dd><time datetime="{{ u.created_on | utc_iso }}">{{ u.created_on | vn_datetime }}</time></dd></div>
-    </dl>
-    {% if b.business_href or b.partner_href %}
-    <div class="admin-actions">
-      {% if b.business_href %}<a class="btn btn-outline-secondary" href="{{ b.business_href }}">{{ atoms::icon(name="fa-store") }} {{ t(key="admin.open_business") }}</a>{% endif %}
-      {% if b.partner_href %}<a class="btn btn-outline-secondary" href="{{ b.partner_href }}">{{ atoms::icon(name="fa-handshake") }} {{ t(key="admin.open_partner") }}</a>{% endif %}
-    </div>
-    {% endif %}
+  <section class="admin-section record-strip" aria-labelledby="status-title">
+    <h2 class="visually-hidden" id="status-title">{{ t(key="admin.status_now") }}</h2>
+    <p class="small mb-0">{% if u.is_active %}{{ t(key="admin.user_on") }}{% else %}{{ t(key="admin.user_off") }}{% endif %}</p>
+    {% if not u.is_active %}{% set off = b.history | filter(attribute="action", value="deactivate_user") | first %}{% if off %}{{ history::last_change(row=off) }}{% endif %}{% endif %}
   </section>
 
-  {% if b.roles %}
-  <section class="admin-section" aria-labelledby="role-title">
-    <h2 class="admin-section__title" id="role-title">{{ t(key="admin.change_role") }}</h2>
-    <form class="admin-actions" method="post" action="{{ b.role_action }}">
-      <label class="visually-hidden" for="user-role">{{ t(key="account.role") }}</label>
-      <select class="form-select flex-grow-1 w-auto" id="user-role" name="role_code">
-        {% for r in b.roles %}<option value="{{ r.code }}"{% if r.code == u.role_code %} selected{% endif %}>{{ r.name }}</option>{% endfor %}
-      </select>
-      <button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_role") }}</button>
-    </form>
-  </section>
-  {% endif %}
-
-  <section class="admin-section" aria-labelledby="status-title">
-    <h2 class="admin-section__title" id="status-title">{{ t(key="admin.account_status") }}</h2>
-    <p class="admin-status">{{ status::account(on=u.is_active) }}<span>{% if u.is_active %}{{ t(key="admin.user_on") }}{% else %}{{ t(key="admin.user_off") }}{% endif %}</span></p>
-    {% if b.can_change_status %}
-    <div class="admin-actions">
-      {% if u.is_active %}
-      <a class="btn btn-outline-warning" href="#tat-tai-khoan" x-on:click.prevent="show">{{ atoms::icon(name="fa-user-slash") }} {{ t(key="admin.turn_off_account") }}</a>
-      {% else %}
-      <form method="post" action="{{ b.status_action }}">
-        <input type="hidden" name="is_active" value="true">
-        <button type="submit" class="btn btn-outline-success">{{ atoms::icon(name="fa-user-check") }} {{ t(key="admin.turn_on_account") }}</button>
-      </form>
+  <div class="row g-3 g-lg-4">
+    <div class="col-lg-8 d-flex flex-column gap-3">
+      {% if b.roles %}
+      <section class="admin-section" aria-labelledby="role-title">
+        <h2 class="admin-section__title" id="role-title">{{ t(key="admin.change_role") }}</h2>
+        <form class="admin-actions" method="post" action="{{ b.role_action }}">
+          <label class="visually-hidden" for="user-role">{{ t(key="account.role") }}</label>
+          <select class="form-select flex-grow-1 w-auto" id="user-role" name="role_code">
+            {% for r in b.roles %}<option value="{{ r.code }}"{% if r.code == u.role_code %} selected{% endif %}>{{ r.name }}</option>{% endfor %}
+          </select>
+          <button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_role") }}</button>
+        </form>
+      </section>
       {% endif %}
+
+      <section class="admin-section" aria-labelledby="perm-title">
+        <h2 class="admin-section__title" id="perm-title">{{ t(key="admin.user_permissions", count=b.permissions | length) }}</h2>
+        <p class="small text-muted">{{ t(key="admin.user_permissions_note") }}</p>
+        <ul class="perm-chips">
+          {% for p in b.permissions %}<li><span class="ac-tag" title="{{ p.code }}">{{ p.name }}</span></li>{% endfor %}
+        </ul>
+      </section>
     </div>
-    {% endif %}
-  </section>
+    <div class="col-lg-4 d-flex flex-column gap-3">
+      <section class="admin-section" aria-labelledby="details-title">
+        <h2 class="admin-section__title" id="details-title">{{ t(key="admin.details") }}</h2>
+        <dl class="acct-rows mb-0">
+          {% if u.full_name %}<div class="acct-row"><dt>{{ t(key="form.full_name") }}</dt><dd>{{ u.full_name }}</dd></div>{% endif %}
+          <div class="acct-row"><dt>{{ t(key="account.role") }}</dt><dd>{% if b.role_href %}<a href="{{ b.role_href }}">{{ u.role_name }}</a>{% else %}{{ u.role_name }}{% endif %}</dd></div>
+          <div class="acct-row"><dt>{{ t(key="admin.created") }}</dt><dd><time datetime="{{ u.created_on | utc_iso }}">{{ u.created_on | vn_datetime }}</time></dd></div>
+        </dl>
+      </section>
+      {{ history::history_list(rows=b.history) }}
+    </div>
+  </div>
 
-  <section class="admin-section" aria-labelledby="perm-title">
-    <h2 class="admin-section__title" id="perm-title">{{ t(key="admin.user_permissions", count=b.permissions | length) }}</h2>
-    <p class="small text-muted">{{ t(key="admin.user_permissions_note") }}</p>
-    <ul class="perm-chips">
-      {% for p in b.permissions %}<li><span class="ac-tag" title="{{ p.code }}">{{ p.name }}</span></li>{% endfor %}
-    </ul>
-  </section>
-
-  {% if b.can_change_status and u.is_active %}
-  {{ confirm::confirm_sheet(id="tat-tai-khoan", title=t(key="admin.turn_off_account_title", name=u.username), icon="fa-user-slash", action=b.status_action, button=t(key="admin.confirm_off"), reason_max=limits.audit_reason_max, note=t(key="admin.turn_off_account_note"), hidden_name="is_active", hidden_value="false") }}
-  {% endif %}
+  {% for x in b.confirms %}
+  <div x-data="dialog" data-open="{% if x.open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+    {{ confirm::confirm_sheet(id=x.id, title=x.title, icon=x.icon, action=x.action, button=x.button, reason_max=limits.audit_reason_max, effect=x.effect, what=x.what, note=x.note, hidden_name=x.hidden_name, hidden_value=x.hidden_value, button_class=x.button_class) }}
+  </div>
+  {% endfor %}
 </div>
 {% endblock content %}

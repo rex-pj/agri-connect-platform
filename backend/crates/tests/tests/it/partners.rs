@@ -100,7 +100,11 @@ async fn a_partner_pays_for_an_area_reads_its_report_and_sponsors_a_shop() {
     )
     .await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
-    let page = res.headers()[header::LOCATION].to_str().unwrap().to_owned();
+    // A new partner lands on its contracts: the first one is next.
+    let location = res.headers()[header::LOCATION].to_str().unwrap().to_owned();
+    let (page, tab) = location.split_once('?').unwrap();
+    assert_eq!(tab, "tab=contracts");
+    let page = page.to_owned();
     let id = scalar(&e, "SELECT id::text AS v FROM partners").await;
 
     // A contract: an end before the start and no category are refused at once.
@@ -205,7 +209,8 @@ async fn a_partner_pays_for_an_area_reads_its_report_and_sponsors_a_shop() {
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
     let list = body_text(send(&e.router, get_page("/admin/partners", Some(&admin))).await).await;
     assert!(list.contains("3.000.000"), "the new price counts");
-    let detail = body_text(send(&e.router, get_page(&page, Some(&admin))).await).await;
+    let tab = format!("{page}?tab=contracts");
+    let detail = body_text(send(&e.router, get_page(&tab, Some(&admin))).await).await;
     assert!(
         detail.contains(&format!(r##"href="#bo-tai-tro-{contract}-{sponsored}""##)),
         "stopping a sponsorship asks first"

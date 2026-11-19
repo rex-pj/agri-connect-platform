@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use application::{
     catalogue::PERM_ROLE_PERMISSION_MANAGE,
     outputs::{GrantDto, PermissionMatrixDto, RoleDto, RoleGrantsDto},
+    usecases::admin_usecase::HistoryOf,
 };
 use axum::{extract::State, http::StatusCode, response::Response};
 use domain::{Error, ErrorCode};
@@ -23,7 +24,9 @@ use crate::{
     locale::Locale,
     middleware::auth::Viewer,
     pages::{
-        admin::{render_admin, url, AdminTab, ListPosition},
+        admin::{
+            history_rows, render_admin, url, AdminTab, HistoryRow, ListPosition, RecordHeader,
+        },
         forms::{is_form_error, FormErrors},
         moved_permanently, parse_id, see_other,
     },
@@ -174,6 +177,11 @@ pub async fn list(
 #[derive(Serialize)]
 pub struct RolePage {
     pub role: RoleDto,
+    /// Its name and description, the way back; no action: its grid is the
+    /// page's one form.
+    pub header: RecordHeader,
+    /// Its latest grant changes: who added or took which keys, and why.
+    pub history: Vec<HistoryRow>,
     pub groups: Vec<GrantGroup>,
     pub field_prefix: &'static str,
     /// The visitor may change the grid; otherwise it is shown read-only.
@@ -198,7 +206,19 @@ async fn role_page(
         .await?
         .worded(state.locale());
     let id = role_id.to_string();
+    let header = RecordHeader {
+        title: role.name.clone(),
+        icon: "fa-shield-halved".to_owned(),
+        sub: role.description.clone(),
+        back_href: url("admin_roles", &[])?,
+        back_label: state.locale().text("admin_menu.roles"),
+        badges: Vec::new(),
+        actions: Vec::new(),
+        menu: Vec::new(),
+    };
     let page = RolePage {
+        header,
+        history: history_rows(state, actor, HistoryOf::Role(role_id)).await?,
         groups: grouped(state.locale(), permissions),
         field_prefix: FIELD_PREFIX,
         editable: actor.can(PERM_ROLE_PERMISSION_MANAGE),

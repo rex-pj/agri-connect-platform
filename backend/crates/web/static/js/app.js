@@ -338,80 +338,90 @@ document.addEventListener("alpine:init", () => {
   const fold = (text) =>
     text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\u0111/gi, "d").toLowerCase();
 
-  // What a Tom Select over `select` shares: Tom Select over the select itself,
-  // which stays what the form sends; every option listed, as a plain select
-  // scrolls through them all; typing scores each option over the text
-  // `wordsOf(item, groupLabel)` gives: every word typed must appear, accents
-  // ignored, the words typed together rank first (before them, the text they
-  // start), and the group of the best match leads; equal matches keep the
-  // select's order. data-no-results: the words when nothing matches. `extra`
-  // adds to the settings.
-  const tomSelect = (select, wordsOf, extra = {}) =>
-    new TomSelect(select, {
-      maxOptions: null,
-      lockOptgroupOrder: false,
-      sortField: [{ field: "$score", direction: "desc" }, { field: "$order" }],
-      // Called on the Tom Select instance: an option's group is an id into
-      // its optgroups.
-      score(query) {
-        const words = fold(query).split(/\s+/).filter(Boolean);
-        const phrase = words.join(" ");
-        const groups = this.optgroups;
-        return (item) => {
-          const text = fold(wordsOf(item, groups[item.optgroup]?.label || ""));
-          if (!words.every((w) => text.includes(w))) return 0;
-          if (text.startsWith(phrase)) return 3;
-          return text.includes(phrase) ? 2 : 1;
-        };
-      },
-      ...extra,
-      render: {
-        no_results() {
-          const note = document.createElement("div");
-          note.className = "no-results";
-          note.textContent = select.dataset.noResults;
-          return note;
-        },
-        ...extra.render,
-      },
-    });
+  // Tom Select's line when nothing matches: the element's data-no-results.
+  const noResults = (el) => () => {
+    const note = document.createElement("div");
+    note.className = "no-results";
+    note.textContent = el.dataset.noResults;
+    return note;
+  };
 
-  // A long select (provinces and their wards) that takes typing, over the
-  // option and its group (the province: "ca mau" finds its wards). A page
-  // without the library keeps the plain select.
+  // A long select (provinces and their wards) that takes typing: Tom Select
+  // over the select itself, which stays what the form sends. Every word typed
+  // must appear in the option or its group (the province), accents ignored.
+  // The words typed together ("ca mau") rank first, and the province of the
+  // best match leads; equal matches keep the official order. A page without
+  // the library keeps the plain select. data-no-results: the words when
+  // nothing matches.
   Alpine.data("searchableSelect", () => ({
     init() {
       if (typeof TomSelect === "undefined") return;
-      tomSelect(this.$el, (item, province) => `${province} ${item.text}`);
+      const select = this.$el;
+      new TomSelect(select, {
+        // Every option, as a plain select scrolls through them all (the
+        // provinces alphabetical, each ward by name: application::admin_units).
+        maxOptions: null,
+        lockOptgroupOrder: false,
+        sortField: [{ field: "$score", direction: "desc" }, { field: "$order" }],
+        // Called on the Tom Select instance: an option's group is an id into
+        // its optgroups, whose label is the province.
+        score(query) {
+          const words = fold(query).split(/\s+/).filter(Boolean);
+          const phrase = words.join(" ");
+          const groups = this.optgroups;
+          return (item) => {
+            const province = groups[item.optgroup]?.label || "";
+            const text = fold(`${province} ${item.text}`);
+            if (!words.every((w) => text.includes(w))) return 0;
+            return text.includes(phrase) ? 2 : 1;
+          };
+        },
+        render: { no_results: noResults(select) },
+      });
     },
   }));
 
-  // The icon picker (molecules/form_field.html icon_select): each option
-  // drawn with its glyph (`fa-solid` + its value) beside its Font Awesome
-  // name, found by that name ("cloud rain" or "cloud-rain"), the names it
-  // starts first. Every Font Awesome name is an option, so the open list
-  // shows the first ICON_OPTIONS_SHOWN matches: typing finds the rest. The
-  // blank option (no icon) stays choosable. A page without the library keeps
-  // the plain select.
-  const ICON_OPTIONS_SHOWN = 120;
+  // The icon picker (molecules/form_field.html icon_select): the text box
+  // that holds the icon's name becomes a one-item Tom Select whose options
+  // come from the server as the name is typed (data-url: GET
+  // /api/admin/icons?q=, `{icons: [...]}` best first, Tom Select waits for a
+  // pause in the typing). Each is drawn with its glyph beside its Font
+  // Awesome name; the server's order is kept. The clear button (data-clear:
+  // its title) leaves no icon. Without the library the box takes the name
+  // typed, and the server checks it.
   Alpine.data("iconSelect", () => ({
     init() {
       if (typeof TomSelect === "undefined") return;
-      const drawn = (data, escape) => {
-        const glyph = data.value
-          ? `<i class="fa-solid ${escape(data.value)} icon-choice__glyph" aria-hidden="true"></i>`
-          : "";
-        return `<div class="icon-choice">${glyph}<span>${escape(data.text)}</span></div>`;
-      };
-      tomSelect(
-        this.$el,
-        (item) => `${item.text} ${item.text.replace(/-/g, " ")}`,
-        {
-          allowEmptyOption: true,
-          maxOptions: ICON_OPTIONS_SHOWN,
-          render: { option: drawn, item: drawn },
+      const input = this.$el;
+      const drawn = (data, escape) =>
+        `<div class="icon-choice"><i class="fa-solid ${escape(data.value)} icon-choice__glyph" aria-hidden="true"></i>` +
+        `<span>${escape(data.value.replace(/^fa-/, ""))}</span></div>`;
+      new TomSelect(input, {
+        maxItems: 1,
+        create: false,
+        persist: false,
+        valueField: "value",
+        labelField: "value",
+        searchField: [],
+        // The server has picked and ordered the matches: show them all, as sent.
+        score: () => () => 1,
+        sortField: [{ field: "$order" }],
+        preload: "focus",
+        shouldLoad: () => true,
+        load(query, callback) {
+          const url = new URL(input.dataset.url, window.location.origin);
+          url.searchParams.set("q", query);
+          fetch(url, { credentials: "same-origin", headers: { Accept: "application/json" } })
+            .then((response) => (response.ok ? response.json() : { icons: [] }))
+            .then((body) => {
+              this.clearOptions();
+              callback(body.icons.map((value) => ({ value })));
+            })
+            .catch(() => callback());
         },
-      );
+        plugins: { clear_button: { title: input.dataset.clear } },
+        render: { option: drawn, item: drawn, no_results: noResults(input) },
+      });
     },
   }));
 

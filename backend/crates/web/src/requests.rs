@@ -118,6 +118,13 @@ pub struct SlugSuggestionQuery {
     pub id: Option<i32>,
 }
 
+/// `q`: what an icon box holds as typed.
+#[derive(Deserialize)]
+pub struct IconSearchQuery {
+    #[serde(default)]
+    pub q: String,
+}
+
 #[derive(Deserialize)]
 pub struct UpdateCategoryRequest {
     pub name: String,

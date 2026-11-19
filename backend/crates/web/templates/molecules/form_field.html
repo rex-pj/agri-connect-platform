@@ -64,26 +64,20 @@
 </div>
 {%- endmacro area_select %}
 
-{#- An icon from the picker's list (application::icons, `icon_choices`),
-    each under its Font Awesome name (`fa-tractor` is "tractor"), blank for
-    none. With JS (Alpine `iconSelect` over Tom Select) each option draws its
-    glyph and the select takes typing; the page loads the library with
-    `searchable_select_assets()` in its `vendor` block. Without JS it is a
-    plain select. A stored icon the list no longer has stays chosen, marked,
-    so the form never drops it unseen; saving asks for a listed one
-    (`invalid_icon`). -#}
+{#- An icon by its Font Awesome name (application::icons): a text box
+    holding the stored name (`fa-tractor`; `tractor` typed is taken too),
+    blank for none, checked on save (`invalid_icon`). With JS (Alpine
+    `iconSelect` over Tom Select) it is a picker whose matches come from
+    `GET /api/admin/icons` as the name is typed, each drawn with its glyph;
+    the page loads the library with `searchable_select_assets()` in its
+    `vendor` block. A stored icon the list no longer has is said under the
+    box, so the form never drops it unseen. -#}
 {% macro icon_select(id, name, label, value="", error="") -%}
-{% set c = icon_choices(current=value) -%}
+{% set c = icon_choice(current=value) -%}
 <div class="form-field">
   <label class="form-label fw-semibold" for="{{ id }}">{{ label }}</label>
-  <select class="form-select{% if error %} is-invalid{% endif %}" id="{{ id }}" name="{{ name }}" x-data="iconSelect" data-no-results="{{ t(key="form.no_results") }}" aria-describedby="{{ id }}-hint{% if error %} {{ id }}-error{% endif %}"{% if error %} aria-invalid="true"{% endif %}>
-    <option value="">{{ t(key="form.icon_none") }}</option>
-    {% if not c.listed %}<option value="{{ c.current }}" selected>{{ t(key="form.icon_unlisted", name=c.current) }}</option>{% endif %}
-    {%- for icon in c.icons %}
-    <option value="{{ icon }}"{% if icon == c.current %} selected{% endif %}>{{ icon | trim_start_matches(pat="fa-") }}</option>
-    {%- endfor %}
-  </select>
-  <div class="form-text" id="{{ id }}-hint">{{ t(key="form.icon_hint") }}</div>
+  <input class="form-control{% if error %} is-invalid{% endif %}" id="{{ id }}" name="{{ name }}" type="text" value="{{ c.current }}" autocomplete="off" spellcheck="false" placeholder="{{ t(key="form.icon_placeholder") }}" x-data="iconSelect" data-url="{{ url_for(name="admin_icons") }}" data-clear="{{ t(key="form.icon_clear") }}" data-no-results="{{ t(key="form.no_results") }}" aria-describedby="{{ id }}-hint{% if error %} {{ id }}-error{% endif %}"{% if error %} aria-invalid="true"{% endif %}>
+  <div class="form-text" id="{{ id }}-hint">{% if c.listed %}{{ t(key="form.icon_hint") }}{% else %}{{ t(key="form.icon_unlisted", name=c.current) }}{% endif %}</div>
   {% if error %}<div class="invalid-feedback" id="{{ id }}-error">{{ error }}</div>{% endif %}
 </div>
 {%- endmacro icon_select %}

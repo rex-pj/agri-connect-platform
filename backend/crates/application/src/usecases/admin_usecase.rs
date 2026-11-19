@@ -38,17 +38,18 @@ use crate::{
     admin_units::{preset_label, AdminUnits, AreaKey},
     authz::Actor,
     catalogue::{
-        PERM_CATEGORY_MANAGE, PERM_INQUIRY_MANAGE, PERM_INQUIRY_READ, PERM_LISTING_MODERATE,
-        PERM_LOCATION_MANAGE, PERM_PROVIDER_ACCOUNT_ASSIGN, PERM_PROVIDER_MANAGE,
-        PERM_PROVIDER_READ, PERM_PROVIDER_STATUS_UPDATE, PERM_PROVIDER_VERIFY,
-        PERM_REVIEW_MODERATE, PERM_ROLE_READ, PERM_SERVICE_MANAGE, PERM_USER_READ,
-        PERM_USER_ROLE_UPDATE, PERM_USER_STATUS_UPDATE,
+        PERM_ALERT_MANAGE, PERM_CATEGORY_MANAGE, PERM_INQUIRY_MANAGE, PERM_INQUIRY_READ,
+        PERM_LISTING_MODERATE, PERM_LOCATION_MANAGE, PERM_PROVIDER_ACCOUNT_ASSIGN,
+        PERM_PROVIDER_MANAGE, PERM_PROVIDER_READ, PERM_PROVIDER_STATUS_UPDATE,
+        PERM_PROVIDER_VERIFY, PERM_REVIEW_MODERATE, PERM_ROLE_READ, PERM_SERVICE_MANAGE,
+        PERM_USER_READ, PERM_USER_ROLE_UPDATE, PERM_USER_STATUS_UPDATE,
     },
     constants::{
         ADMIN_PAGE_SIZE, CALL_STATS_DAYS, CATEGORY_COLOR_MAX, CATEGORY_DESCRIPTION_MAX,
-        CATEGORY_NAME_MAX, CATEGORY_SLUG_MAX, HISTORY_SHOWN, LOCATION_LABEL_MAX,
-        SLUG_CANDIDATES_PER_QUERY,
+        CATEGORY_NAME_MAX, CATEGORY_SLUG_MAX, HISTORY_SHOWN, ICON_SEARCH_RESULTS,
+        LOCATION_LABEL_MAX, SLUG_CANDIDATES_PER_QUERY,
     },
+    icons,
     inputs::{
         CategoryInput, CreateProductInput, LocationInput, UpdateProductInput, UpdateProfileInput,
     },
@@ -56,8 +57,9 @@ use crate::{
         AdminCategoryDto, AdminInquiryDto, AdminLocationDto, AdminPagedResponse, AdminProductDto,
         AdminProductItemDto, AdminProviderDetailDto, AdminProviderDto, AdminReviewDto,
         AdminServiceDto, AdminServiceItemDto, AdminUserDetailDto, AdminUserDto, AreaGroupDto,
-        AssignUserDto, AuditEntryDto, InquiryCountsDto, ListingActivityDto, ProviderActivityDto,
-        ProviderStatusDto, ReviewCountsDto, RoleDto, SlugSuggestionDto, VerificationDto,
+        AssignUserDto, AuditEntryDto, IconMatchesDto, InquiryCountsDto, ListingActivityDto,
+        ProviderActivityDto, ProviderStatusDto, ReviewCountsDto, RoleDto, SlugSuggestionDto,
+        VerificationDto,
     },
     pagination::{admin_total_pages, paginate_admin, total_or_count},
     ports::{EventBus, PasswordHasher},
@@ -794,6 +796,21 @@ impl AdminUseCase {
         Ok(SlugSuggestionDto {
             taken: slug != base,
             slug,
+        })
+    }
+
+    /// The icon names matching `query`, best first (`icons::search`), for the
+    /// icon box of the forms that take one: the catalogue's
+    /// (`category.manage`) and the alert kinds' (`alert.manage`).
+    pub fn search_icons(&self, actor: &Actor, query: &str) -> Result<IconMatchesDto> {
+        if !actor.can(PERM_ALERT_MANAGE) {
+            actor.require(PERM_CATEGORY_MANAGE)?;
+        }
+        Ok(IconMatchesDto {
+            icons: icons::search(query, ICON_SEARCH_RESULTS)
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
         })
     }
 

@@ -156,11 +156,10 @@ const FIELD_LIMITS: FieldLimits = FieldLimits {
     near_me_km: km(EXPLORE_DEFAULT_RADIUS_M),
 };
 
-/// What `icon_choices()` gives a template: the picker's icons, the icon
-/// chosen as the picker names it, and whether the list has it.
+/// What `icon_choice()` gives a template: the icon box's value as the
+/// picker names it, and whether the list has it.
 #[derive(Serialize)]
-struct IconChoices<'a> {
-    icons: &'static [&'static str],
+struct IconChoice<'a> {
     current: &'a str,
     listed: bool,
 }
@@ -322,20 +321,20 @@ impl Views {
                 .map_err(|e| tera::Error::msg(format!("file_url: {e}")))
         });
 
-        // icon_choices(current=form.icon): the icon picker's icons
-        // (application::icons), `current` as the picker names it (an older
-        // row's `fa-solid fa-cow` is `fa-cow`), and whether it is `listed`.
-        tera.register_function("icon_choices", |args: &HashMap<String, Value>| {
+        // icon_choice(current=form.icon): the icon box's value as the picker
+        // names it (an older row's `fa-solid fa-cow` is `fa-cow`), and
+        // whether the list has it (application::icons). The list itself is
+        // searched through GET /api/admin/icons.
+        tera.register_function("icon_choice", |args: &HashMap<String, Value>| {
             let current = args
                 .get("current")
                 .and_then(Value::as_str)
                 .and_then(icons::normalize);
-            tera::to_value(IconChoices {
-                icons: icons::ICONS,
+            tera::to_value(IconChoice {
                 current: current.unwrap_or(""),
-                listed: current.is_none_or(icons::is_known),
+                listed: current.is_none_or(|name| icons::known(name).is_some()),
             })
-            .map_err(|e| tera::Error::msg(format!("icon_choices: {e}")))
+            .map_err(|e| tera::Error::msg(format!("icon_choice: {e}")))
         });
 
         tera.register_filter("slugify", |value: &Value, _: &HashMap<String, Value>| {
@@ -802,7 +801,8 @@ mod tests {
     }
 
     #[test]
-    fn the_icon_picker_lists_every_icon_and_keeps_an_unlisted_one() -> Result<(), Error> {
+    fn the_icon_box_holds_the_stored_name_and_says_an_unlisted_one() -> Result<(), Error> {
+        let vi = vi()?;
         let mut tera = views(SiteConfig::default())?.vi;
         let mut picker = |value: &str| {
             let mut ctx = tera::Context::new();
@@ -814,13 +814,13 @@ mod tests {
             .map_err(|e| Error::internal(chain(&e)))
         };
         let html = picker("fa-solid fa-cow")?;
-        assert_eq!(html.matches("<option").count(), icons::ICONS.len() + 1);
-        assert!(html.contains(r#"<option value="fa-cow" selected>"#));
-        assert!(html.contains(r#"<option value="fa-tractor">tractor</option>"#));
+        assert!(html.contains(r#"value="fa-cow""#));
+        assert!(html.contains(r#"data-url="/api/admin/icons""#));
+        assert!(html.contains(&vi.text("form.icon_hint")));
 
         let html = picker("fa-sedling")?;
-        assert!(html.contains(r#"<option value="fa-sedling" selected>"#));
-        assert_eq!(html.matches(" selected").count(), 1);
+        assert!(html.contains(r#"value="fa-sedling""#));
+        assert!(html.contains(&vi.text_with("form.icon_unlisted", &[("name", &"fa-sedling")])));
         Ok(())
     }
 

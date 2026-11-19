@@ -147,6 +147,66 @@ async fn slug_of(e: &Env, detail: &str) -> String {
 
 #[tokio::test]
 #[ignore = "needs TEST_DATABASE_URL"]
+async fn an_icon_box_finds_font_awesome_names_for_the_catalogue_keepers_only() {
+    let e = env_with_origin().await;
+    let admin = install_admin(&e).await;
+    let search = |query: &str, who: Option<String>| {
+        send(
+            &e.router,
+            get_page(&format!("/api/admin/icons?q={query}"), who.as_deref()),
+        )
+    };
+
+    let res = search("sun", Some(admin.clone())).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = json_body(res).await;
+    let icons = body["icons"].as_array().unwrap();
+    assert_eq!(icons.first().unwrap(), "fa-sun");
+    assert!(icons.iter().all(|i| i.as_str().unwrap().contains("sun")));
+    let body = json_body(search("cloud%20rain", Some(admin.clone())).await).await;
+    assert_eq!(body["icons"][0], "fa-cloud-rain");
+
+    // Saved typed without its fa-, an icon is stored as Font Awesome names it.
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/categories",
+            &[
+                ("category_type", "service"),
+                ("name", "Bơm nước"),
+                ("icon", "faucet"),
+            ],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let id = location_of(&res).rsplit('/').next().unwrap().to_owned();
+    let icon: Option<String> =
+        e.t.db
+            .query_one(Statement::from_string(
+                e.t.db.get_database_backend(),
+                format!("SELECT icon FROM service_types WHERE id = {id}"),
+            ))
+            .await
+            .unwrap()
+            .unwrap()
+            .try_get("", "icon")
+            .unwrap();
+    assert_eq!(icon.as_deref(), Some("fa-faucet"));
+
+    // A provider keeps no list with icons; nobody signed in, nobody at all.
+    register_provider(&e.state, "nongdan", "0901234567").await;
+    let provider = sign_in(&e, "nongdan", "matkhau123").await;
+    assert_eq!(
+        search("sun", Some(provider)).await.status(),
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(search("sun", None).await.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
 async fn a_blank_slug_is_made_from_the_name_and_never_repeats_one() {
     let e = env_with_origin().await;
     let admin = install_admin(&e).await;

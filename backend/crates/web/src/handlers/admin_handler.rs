@@ -11,10 +11,10 @@ use crate::{
     requests::{
         AdminCreateProductRequest, AdminCreateServiceRequest, AdminListQuery, AdminPageQuery,
         AdminUpdateProductRequest, AdminUpdateServiceRequest, AssignUserRequest,
-        CreateCategoryRequest, DeleteWithReasonBody, LocationRequest, SetVerificationRequest,
-        SlugSuggestionQuery, StatusListQuery, ToggleActiveRequest, ToggleVisibleRequest,
-        UpdateCategoryRequest, UpdateInquiryStatusRequest, UpdateProfileRequest,
-        UpdateUserRoleRequest,
+        CreateCategoryRequest, DeleteWithReasonBody, IconSearchQuery, LocationRequest,
+        SetVerificationRequest, SlugSuggestionQuery, StatusListQuery, ToggleActiveRequest,
+        ToggleVisibleRequest, UpdateCategoryRequest, UpdateInquiryStatusRequest,
+        UpdateProfileRequest, UpdateUserRoleRequest,
     },
 };
 
@@ -269,6 +269,17 @@ impl AdminHandler {
             .admin
             .suggest_category_slug(&actor, &q.text, q.id)
             .await?;
+        Ok(Json(result))
+    }
+
+    /// GET /api/admin/icons: the icon names matching what an icon box holds.
+    pub async fn search_icons(
+        MaybeActor(actor): MaybeActor,
+        State(state): State<AppState>,
+        ApiQuery(q): ApiQuery<IconSearchQuery>,
+    ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
+        let result = state.usecases.admin.search_icons(&actor, &q.q)?;
         Ok(Json(result))
     }
 

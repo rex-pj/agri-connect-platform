@@ -1439,3 +1439,9 @@ pub struct ListingActivityDto {
     /// `inquiry.read`.
     pub inquiries: Option<i64>,
 }
+
+/// The icon names matching what an icon box holds, best first.
+#[derive(Debug, Serialize)]
+pub struct IconMatchesDto {
+    pub icons: Vec<String>,
+}

@@ -200,6 +200,8 @@ pub const REFRESH_REUSE_GRACE_SECS: i64 = 30;
 // ── Catalogue fields (the VARCHAR sizes in the baseline schema) ────────────────
 pub const CATEGORY_NAME_MAX: usize = 100;
 pub const CATEGORY_SLUG_MAX: usize = 100;
+/// Icon names an icon box's search gives back at once (`GET /api/admin/icons`).
+pub const ICON_SEARCH_RESULTS: usize = 60;
 pub const CATEGORY_COLOR_MAX: usize = 20;
 pub const CATEGORY_DESCRIPTION_MAX: usize = 300;
 /// Numbered slug candidates (`base`, `base-2`, …) checked per query while

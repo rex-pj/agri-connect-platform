@@ -671,6 +671,7 @@ impl AppRouting {
                 "/api/admin/categories/slug",
                 get(AdminHandler::suggest_category_slug),
             )
+            .route("/api/admin/icons", get(AdminHandler::search_icons))
             .route(
                 "/api/admin/categories/{id}",
                 get(AdminHandler::get_category_detail),

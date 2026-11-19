@@ -4,7 +4,7 @@
 //! from that file; the convention test `the_icon_list_is_the_vendored_fonts`
 //! fails when they differ.
 
-/// The names, sorted (`icons::is_known` searches them).
+/// The names, sorted (`icons::known` and `icons::search` read them).
 pub const ICONS: &[&str] = &[
     "fa-0",
     "fa-1",

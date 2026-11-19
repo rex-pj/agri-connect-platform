@@ -34,13 +34,15 @@ pub fn coded(text: &str, known: &[CodedEntry], invalid: ErrorCode) -> Result<Opt
         .ok_or_else(|| Error::new(invalid))
 }
 
-/// An icon as sent, one of the picker's (`icons`): `None` for blank,
-/// `invalid_icon` for a name the list lacks (a typo would draw nothing).
+/// An icon as sent, one of the picker's (`icons`) as stored (`fa-cow`, also
+/// when typed `cow`): `None` for blank, `invalid_icon` for a name the list
+/// lacks (a typo would draw nothing).
 pub fn icon(text: Option<&str>) -> Result<Option<String>> {
     match text.and_then(icons::normalize) {
         None => Ok(None),
-        Some(name) if icons::is_known(name) => Ok(Some(name.to_owned())),
-        Some(_) => Err(Error::new(ErrorCode::InvalidIcon)),
+        Some(name) => icons::known(name)
+            .map(|icon| Some(icon.to_owned()))
+            .ok_or_else(|| Error::new(ErrorCode::InvalidIcon)),
     }
 }
 

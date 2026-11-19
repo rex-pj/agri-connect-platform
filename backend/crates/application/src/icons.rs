@@ -8,6 +8,9 @@
 /// accepted and dropped, so such a row saves unchanged.
 const STYLE_CLASS: &str = "fa-solid";
 
+/// What every Font Awesome icon name starts with.
+const PREFIX: &str = "fa-";
+
 /// Every icon name of the vendored font (`icons/names.rs`, generated), sorted.
 mod names;
 
@@ -24,9 +27,58 @@ pub fn normalize(raw: &str) -> Option<&str> {
     (!name.is_empty()).then_some(name)
 }
 
-/// Whether `name` (normalized) is one of the picker's.
-pub fn is_known(name: &str) -> bool {
-    ICONS.binary_search(&name).is_ok()
+/// The listed name `name` (normalized) stands for: itself, or with its
+/// `fa-` added (`cow` is `fa-cow`, as the box takes it typed without JS).
+pub fn known(name: &str) -> Option<&'static str> {
+    let name = name.to_lowercase();
+    let full = if name.starts_with(PREFIX) {
+        name
+    } else {
+        format!("{PREFIX}{name}")
+    };
+    ICONS
+        .binary_search(&full.as_str())
+        .ok()
+        .and_then(|i| ICONS.get(i).copied())
+}
+
+/// The names matching `query`, best first, at most `limit`: every word of it
+/// (split at spaces and dashes, `fa-` ignored) is in the name; the name
+/// itself, then the names it starts, then those holding its words together,
+/// then the rest, each alphabetical. A blank query gives the first names.
+pub fn search(query: &str, limit: usize) -> Vec<&'static str> {
+    let query = query.trim().to_lowercase();
+    let query = query.strip_prefix(PREFIX).unwrap_or(&query);
+    let words: Vec<&str> = query
+        .split(|c: char| c.is_whitespace() || c == '-')
+        .filter(|w| !w.is_empty())
+        .collect();
+    let phrase = words.join("-");
+    let mut found: Vec<(u8, &'static str)> = ICONS
+        .iter()
+        .filter_map(|icon| {
+            let bare = icon.strip_prefix(PREFIX).unwrap_or(icon);
+            if !words.iter().all(|w| bare.contains(w)) {
+                return None;
+            }
+            let rank = if bare == phrase {
+                0
+            } else if bare.starts_with(&phrase) {
+                1
+            } else if bare.contains(&phrase) {
+                2
+            } else {
+                3
+            };
+            Some((rank, *icon))
+        })
+        .collect();
+    found.sort_unstable();
+    found
+        .into_iter()
+        .take(limit)
+        .map(|(_, icon)| icon)
+        .collect()
 }
 
 #[cfg(test)]
@@ -51,7 +103,20 @@ mod tests {
         assert_eq!(normalize("fa-cow"), Some("fa-cow"));
         assert_eq!(normalize("  "), None);
         assert_eq!(normalize("fa-solid "), None);
-        assert!(is_known("fa-cow"));
-        assert!(!is_known("fa-sedling"));
+        assert_eq!(known("fa-cow"), Some("fa-cow"));
+        assert_eq!(known("Cow"), Some("fa-cow"));
+        assert_eq!(known("fa-sedling"), None);
+    }
+
+    #[test]
+    fn a_search_puts_the_name_and_its_starts_first() {
+        let found = search("sun", 5);
+        assert_eq!(found.first(), Some(&"fa-sun"));
+        assert!(found.iter().all(|i| i.contains("sun")));
+        assert_eq!(search("cloud rain", 3), search("fa-cloud-rain", 3));
+        assert_eq!(search("cloud rain", 1), vec!["fa-cloud-rain"]);
+        assert!(search("rain cloud", 50).contains(&"fa-cloud-rain"));
+        assert_eq!(search("", 2), ICONS.get(..2).unwrap_or_default());
+        assert!(search("zzzz", 5).is_empty());
     }
 }

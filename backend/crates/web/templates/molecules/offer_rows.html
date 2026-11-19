@@ -1,0 +1,11 @@
+{#- A provider's other services as rows, each one link (icon, name, price,
+    chevron): the service and supply pages' "also offers". `items` carry
+    `href`, `name`, `category_icon`, `price_note`. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro offer_rows(items) -%}
+<ul class="offer-rows">
+  {% for o in items %}
+  <li><a class="offer-rows__link" href="{{ o.href }}"><span class="offer-rows__icon">{{ atoms::icon(name=o.category_icon | default(value="fa-tag")) }}</span><span class="offer-rows__name">{{ o.name }}</span>{% if o.price_note %}<span class="offer-rows__price">{{ o.price_note | price_note }}</span>{% endif %}{{ atoms::icon(name="fa-chevron-right", class="offer-rows__chevron") }}</a></li>
+  {% endfor %}
+</ul>
+{%- endmacro offer_rows %}

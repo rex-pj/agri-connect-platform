@@ -1,0 +1,8 @@
+{#- A one-line notice. kind: success (announced politely) or danger (announced
+    at once). -#}
+{% macro alert(kind, icon, text) -%}
+<div class="alert alert-{{ kind }} d-flex align-items-center gap-2 mb-0" role="{% if kind == "danger" %}alert{% else %}status{% endif %}">
+  <i class="fa-solid {{ icon }}" aria-hidden="true"></i>
+  <span>{{ text }}</span>
+</div>
+{%- endmacro alert %}

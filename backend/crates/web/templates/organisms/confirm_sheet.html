@@ -1,0 +1,37 @@
+{#- A confirmation for an action that needs a second look (deactivate,
+    hide, delete), with an optional reason for the audit log. Place it inside
+    an element with `x-data="dialog"`: with JS it is a sheet opened by a
+    trigger with `x-on:click.prevent="show"`, or by any link to `#{{ id }}`
+    on the page (a record header's button or menu: the URL hash); without
+    JS that anchor leads to the form, submitted in place.
+    Under the title it says what will happen: `effect="hide"` (`what` is no
+    longer shown, can be shown again) or `effect="delete"` (`what` is gone for
+    good), else `note` in its own words. `hidden_name` / `hidden_value`: one
+    extra field the action needs (e.g. is_active=false). `keep`: a map of
+    further hidden fields, e.g. the list page to return to. `reason_max`:
+    `limits.audit_reason_max` (macros do not see the page's globals);
+    `with_reason=false` leaves out the reason box (nothing is audited). -#}
+{% import "atoms/icon.html" as atoms %}
+{% import "molecules/sheet_header.html" as sheet_head %}
+{% macro confirm_sheet(id, title, icon, action, button, reason_max, effect="", what="", note="", hidden_name="", hidden_value="", button_class="btn-warning", keep="", with_reason=true) -%}
+<div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
+<section class="contact-sheet" id="{{ id }}" aria-labelledby="{{ id }}-title" aria-describedby="{{ id }}-note" :class="sheetClass">
+  {{ sheet_head::sheet_header(id=id, title=title, icon=icon) }}
+  <p class="confirm-note{% if effect == "delete" %} confirm-note--danger{% endif %}" id="{{ id }}-note">
+    {%- if effect == "hide" %}{{ t(key="confirm.hide_effect", what=what) }}
+    {%- elif effect == "delete" %}{{ atoms::icon(name="fa-triangle-exclamation") }} {{ t(key="confirm.delete_effect", what=what) }}
+    {%- else %}{{ note }}{% endif -%}
+  </p>
+  <form class="contact-sheet__form" method="post" action="{{ action }}">
+    {% if hidden_name %}<input type="hidden" name="{{ hidden_name }}" value="{{ hidden_value }}">{% endif %}
+    {% if keep %}{% for k, v in keep %}{% if v %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}{% endif %}
+    {% if with_reason %}
+    <div class="form-field">
+      <label class="form-label fw-semibold" for="{{ id }}-reason">{{ t(key="confirm.reason_label") }}</label>
+      <textarea class="form-control" id="{{ id }}-reason" name="reason" rows="2" maxlength="{{ reason_max }}" x-ref="first"></textarea>
+    </div>
+    {% endif %}
+    <button type="submit" class="btn {{ button_class }} btn-lg w-100">{{ atoms::icon(name=icon) }} {{ button }}</button>
+  </form>
+</section>
+{%- endmacro confirm_sheet %}

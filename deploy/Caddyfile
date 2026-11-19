@@ -1,0 +1,7 @@
+# TLS via Let's Encrypt for $DOMAIN; everything goes to the Rust server, which
+# serves every page and the API. Caddy sets
+# X-Forwarded-For to the client address (TRUSTED_PROXY_HOPS=1 relies on it).
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy web:8080
+}

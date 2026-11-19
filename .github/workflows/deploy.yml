@@ -1,0 +1,59 @@
+name: Deploy
+
+# Runs after CI passes on master, or by hand. Configuration lives in the
+# repository's "production" environment (deploy/README.md lists every value).
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    environment: production
+    permissions:
+      contents: read
+      id-token: write # Workload Identity Federation: no service-account key exists anywhere
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      REGISTRY_HOST: ${{ vars.GCP_REGION }}-docker.pkg.dev
+      REGISTRY: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REPO }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ env.SHA }}
+
+      - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
+
+      - name: Build and push images
+        run: |
+          gcloud auth configure-docker "$REGISTRY_HOST" --quiet
+          docker build -t "$REGISTRY/web:$SHA" backend
+          docker push "$REGISTRY/web:$SHA"
+
+      - name: Roll out on the VM
+        env:
+          VM: ${{ vars.GCE_VM }}
+          ZONE: ${{ vars.GCE_ZONE }}
+          PROJECT: ${{ vars.GCP_PROJECT_ID }}
+          DOMAIN: ${{ vars.DOMAIN }}
+          UPLOAD_BUCKET: ${{ vars.UPLOAD_BUCKET }}
+        run: |
+          gcloud compute scp --recurse --tunnel-through-iap --zone "$ZONE" --project "$PROJECT" \
+            deploy "$VM:/tmp/agri-deploy-$SHA"
+          gcloud compute ssh "$VM" --tunnel-through-iap --zone "$ZONE" --project "$PROJECT" --command \
+            "DOMAIN='$DOMAIN' GCP_PROJECT_ID='$PROJECT' REGISTRY_HOST='$REGISTRY_HOST' UPLOAD_BUCKET='$UPLOAD_BUCKET' \
+             bash /tmp/agri-deploy-$SHA/remote-deploy.sh '$REGISTRY/web:$SHA' \
+             && rm -rf /tmp/agri-deploy-$SHA"

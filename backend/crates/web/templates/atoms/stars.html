@@ -1,0 +1,5 @@
+{#- A rating as five stars, the first `rating` lit; read aloud as its
+    words ("4 of 5 stars"), the icons themselves are decorative. -#}
+{% macro stars(rating) -%}
+<span class="stars" role="img" aria-label="{{ t(key="review.stars", count=rating) }}">{% for i in range(start=1, end=6) %}<i class="fa-solid fa-star{% if i > rating %} stars__off{% endif %}" aria-hidden="true"></i>{% endfor %}</span>
+{%- endmacro stars %}

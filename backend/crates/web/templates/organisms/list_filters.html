@@ -1,0 +1,58 @@
+{#- Search and filters of a list page: one GET form, so the result is a URL.
+    Chips are radio buttons. Without JS the panel is simply open; Alpine
+    `collapse` folds it behind the sliders button. `f` is
+    web::pages::listing::FilterForm. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro list_filters(f) -%}
+<form class="list-search" method="get" action="{{ f.action }}" role="search" x-data="collapse">
+  {% for h in f.hidden %}<input type="hidden" name="{{ h.0 }}" value="{{ h.1 }}">{% endfor %}
+  <div class="list-search__row">
+    <label class="list-search__input">
+      {{ atoms::icon(name="fa-magnifying-glass", class="list-search__icon") }}
+      <span class="visually-hidden">{{ f.placeholder }}</span>
+      <input type="search" name="q" value="{{ f.q }}" placeholder="{{ f.placeholder }}" enterkeyhint="search" minlength="{{ limits.search_min }}">
+    </label>
+    <button type="button" class="list-search__toggle" aria-label="{{ t(key="filters.label") }}" aria-controls="list-filters" x-cloak x-on:click="toggle" :class="buttonClass" :aria-expanded="expanded">
+      {{ atoms::icon(name="fa-sliders") }}
+      {% if f.active %}<span class="list-search__badge">{{ f.active }}</span>{% endif %}
+    </button>
+    <button type="submit" class="list-search__submit" aria-label="{{ t(key="common.search") }}">{{ atoms::icon(name="fa-arrow-right") }}</button>
+  </div>
+
+  <div class="filter-panel" id="list-filters" :class="panelClass">
+    <div class="filter-panel__inner">
+      <fieldset class="filter-section">
+        <legend class="filter-label">{{ f.category_label }}</legend>
+        <div class="chip-row">
+          <label class="chip"><input class="visually-hidden" type="radio" name="{{ f.category_param }}" value=""{% if not f.category_id %} checked{% endif %}> {{ t(key="filters.all") }}</label>
+          {% for c in f.categories %}
+          <label class="chip"><input class="visually-hidden" type="radio" name="{{ f.category_param }}" value="{{ c.id }}"{% if f.category_id == c.id %} checked{% endif %}> {{ atoms::icon(name=c.icon) }} {{ c.name }}</label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      {% if f.price %}
+      <fieldset class="filter-section">
+        <legend class="filter-label">{{ t(key="filters.price") }}</legend>
+        <div class="price-row">
+          <input class="form-control" type="number" name="min_price" min="0" inputmode="numeric" placeholder="{{ t(key="filters.price_from") }}" aria-label="{{ t(key="filters.price_min") }}" value="{{ f.price.min }}">
+          <span class="price-row__sep" aria-hidden="true">—</span>
+          <input class="form-control" type="number" name="max_price" min="0" inputmode="numeric" placeholder="{{ t(key="filters.price_to") }}" aria-label="{{ t(key="filters.price_max") }}" value="{{ f.price.max }}">
+        </div>
+      </fieldset>
+      {% endif %}
+      <fieldset class="filter-section">
+        <legend class="filter-label">{{ t(key="filters.sort") }}</legend>
+        <div class="chip-row">
+          {% for s in f.sorts %}
+          <label class="chip"><input class="visually-hidden" type="radio" name="sort" value="{{ s.value }}"{% if f.sort == s.value %} checked{% endif %}> {{ s.label }}</label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      <div class="filter-actions">
+        <a class="btn btn-outline-secondary" href="{{ f.reset_href }}">{{ t(key="filters.reset") }}</a>
+        <button type="submit" class="btn btn-success">{{ t(key="filters.apply") }}</button>
+      </div>
+    </div>
+  </div>
+</form>
+{%- endmacro list_filters %}

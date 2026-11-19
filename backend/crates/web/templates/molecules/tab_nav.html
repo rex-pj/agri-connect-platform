@@ -1,0 +1,12 @@
+{#- Result tabs as links (each works without JS, `tab=` in its URL); inside an
+    Alpine `tabs` scope a tap switches the panels in place. `tabs` are
+    web::pages::search::TabLink. -#}
+{% macro tab_nav(tabs, label) -%}
+<nav class="search-tabs" aria-label="{{ label }}">
+  {% for tab in tabs %}
+  <a class="search-tab" href="{{ tab.href }}" data-tab="{{ tab.tab }}"{% if tab.active %} aria-current="page"{% endif %} x-on:click.prevent="select" :aria-current="current">
+    {{ tab.label }}{% if tab.count %} <span class="search-tab__badge">{{ tab.count }}</span>{% endif %}
+  </a>
+  {% endfor %}
+</nav>
+{%- endmacro tab_nav %}

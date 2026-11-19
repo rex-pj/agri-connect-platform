@@ -1,0 +1,14 @@
+{
+  "name": "agri-connect-islands",
+  "private": true,
+  "type": "module",
+  "description": "Svelte custom elements for the few behaviours Alpine cannot do. Built into ../crates/web/static/js/islands.js, which is committed; CI rebuilds and fails on a diff.",
+  "scripts": {
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "4.0.4",
+    "svelte": "5.55.5",
+    "vite": "5.4.21"
+  }
+}

@@ -1,0 +1,6 @@
+# One toolchain for laptops, CI and the Docker build: a clippy lint that
+# exists in one version and not another must not make CI disagree with you.
+[toolchain]
+channel = "1.97.1"
+components = ["clippy", "rustfmt"]
+profile = "minimal"

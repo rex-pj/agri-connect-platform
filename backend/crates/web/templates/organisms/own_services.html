@@ -1,0 +1,37 @@
+{#- The services section of the provider's dashboard. `s` is
+    web::pages::dashboard::ServicesSection: each row with its photo (or the
+    category icon), price note, category, a "hidden" badge when an admin hid
+    it, and an edit button when the account may edit or delete. Empty: one
+    large button, since without a service the provider is missed by every
+    service filter. -#}
+{% import "atoms/icon.html" as atoms %}
+{% import "molecules/empty_state.html" as empty %}
+{% macro own_services(s) -%}
+<section class="detail-card" aria-labelledby="services-title">
+  <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+    <h2 class="detail-card__title mb-0" id="services-title">{{ atoms::icon(name="fa-screwdriver-wrench", class="me-1") }} {{ t(key="dashboard.services_count", count=s.rows | length) }}</h2>
+    {% if s.can_create and s.rows %}<a class="btn btn-success" href="{{ s.new_href }}">{{ atoms::icon(name="fa-plus") }} {{ t(key="common.add") }}</a>{% endif %}
+  </div>
+  {% if s.rows %}
+  <ul class="list-unstyled mb-0">
+    {% for r in s.rows %}
+    {% set x = r.service %}
+    <li class="d-flex align-items-center gap-3 py-2 border-bottom">
+      {% if x.image_file_id %}<img class="rounded object-fit-cover flex-shrink-0" width="56" height="56" src="{{ file_url(id=x.image_file_id, variant="thumb") }}" alt="" loading="lazy" decoding="async">{% else %}<span class="dash-thumb flex-shrink-0">{{ atoms::icon(name=x.category_icon | default(value="fa-tag")) }}</span>{% endif %}
+      <div class="flex-grow-1 min-w-0">
+        {% if r.public_href %}<a class="fw-bold text-decoration-none d-block text-truncate" href="{{ r.public_href }}">{{ x.name }}</a>{% else %}<strong class="d-block text-truncate">{{ x.name }}</strong>{% endif %}
+        <span class="small text-muted">{% if x.price_note %}{{ x.price_note | price_note }}{% else %}{{ t(key="price.ask") }}{% endif %} · {{ x.category }}</span>
+        {% if not x.is_active %}<span class="badge text-bg-secondary ms-1">{{ t(key="dashboard.hidden_by_admin") }}</span>{% endif %}
+      </div>
+      {% if r.edit_href %}<a class="btn btn-outline-success" href="{{ r.edit_href }}" aria-label="{{ t(key="common.edit_label", name=x.name) }}">{{ atoms::icon(name="fa-pen") }}</a>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% if s.full %}<p class="small text-muted mt-2 mb-0">{{ t(key="dashboard.services_full", max=s.max) }}</p>{% endif %}
+  {% elif s.can_create %}
+  {{ empty::empty_state(icon="fa-screwdriver-wrench", title=t(key="dashboard.no_services"), hint=t(key="dashboard.no_services_hint"), action_href=s.new_href, action_icon="fa-plus", action_label=t(key="dashboard.add_service")) }}
+  {% else %}
+  {{ empty::empty_state(icon="fa-screwdriver-wrench", title=t(key="dashboard.no_services"), hint=t(key="dashboard.no_services_ask_admin")) }}
+  {% endif %}
+</section>
+{%- endmacro own_services %}

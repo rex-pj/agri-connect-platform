@@ -1,0 +1,98 @@
+{#- Labelled form controls with their error message. `error` is the localised
+    text for this field, empty when it is fine; it is linked to the control so
+    screen readers read it with the field. `first`: the field a `dialog`
+    focuses when it opens. `hint`: a line under the box, read with it. `min`,
+    `max`: a number box's bounds (as text; empty: none). A
+    password field never echoes a value back and gets a show/hide button
+    (Alpine `passwordToggle`; hidden without JS). -#}
+
+{% macro input(id, name, label, value="", type="text", error="", required=false, placeholder="", pattern="", inputmode="", autocomplete="", maxlength=0, minlength=0, min="", max="", first=false, hint="") -%}
+<div class="form-field">
+  <label class="form-label fw-semibold" for="{{ id }}">{{ label }}{% if required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
+  {% if type == "password" %}<div class="input-group has-validation" x-data="passwordToggle" :class="groupClass">{% endif %}
+  <input class="form-control{% if error %} is-invalid{% endif %}" id="{{ id }}" name="{{ name }}" type="{{ type }}"{% if type != "password" %} value="{{ value }}"{% endif %}{% if required %} required{% endif %}{% if placeholder %} placeholder="{{ placeholder }}"{% endif %}{% if pattern %} pattern="{{ pattern }}"{% endif %}{% if inputmode %} inputmode="{{ inputmode }}"{% endif %}{% if autocomplete %} autocomplete="{{ autocomplete }}"{% endif %}{% if maxlength %} maxlength="{{ maxlength }}"{% endif %}{% if minlength %} minlength="{{ minlength }}"{% endif %}{% if min != "" %} min="{{ min }}"{% endif %}{% if max != "" %} max="{{ max }}"{% endif %}{% if first %} x-ref="first"{% endif %}{% if type == "password" %} :type="inputType"{% endif %}{% if error %} aria-invalid="true"{% endif %}{% if hint or error %} aria-describedby="{% if hint %}{{ id }}-hint{% endif %}{% if hint and error %} {% endif %}{% if error %}{{ id }}-error{% endif %}"{% endif %}>
+  {% if type == "password" %}<button type="button" class="btn btn-outline-secondary password-toggle" aria-label="{{ t(key="form.show_password") }}" aria-controls="{{ id }}" x-cloak x-on:click="toggle" :aria-pressed="pressed"><i class="fa-solid fa-eye" aria-hidden="true" x-show="hidden"></i><i class="fa-solid fa-eye-slash" aria-hidden="true" x-show="shown" x-cloak></i></button>{% endif %}
+  {% if hint %}<div class="form-text" id="{{ id }}-hint">{{ hint }}</div>{% endif %}
+  {% if error %}<div class="invalid-feedback" id="{{ id }}-error">{{ error }}</div>{% endif %}
+  {% if type == "password" %}</div>{% endif %}
+</div>
+{%- endmacro input %}
+
+{#- `options` are strings (each is value and label), or objects whose
+    `value_key` field is the value and `label_key` field the label. `value`
+    is the chosen value as text, as the form sent it. -#}
+{% macro select(id, name, label, options, value="", error="", required=false, placeholder="", value_key="", label_key="") -%}
+<div class="form-field">
+  <label class="form-label fw-semibold" for="{{ id }}">{{ label }}{% if required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
+  <select class="form-select{% if error %} is-invalid{% endif %}" id="{{ id }}" name="{{ name }}"{% if required %} required{% endif %}{% if error %} aria-invalid="true" aria-describedby="{{ id }}-error"{% endif %}>
+    {% if placeholder %}<option value="">{{ placeholder }}</option>{% endif %}
+    {% for option in options %}
+    {%- if value_key %}{% set v = option[value_key] ~ "" %}{% set l = option[label_key] %}{% else %}{% set v = option %}{% set l = option %}{% endif -%}
+    <option value="{{ v }}"{% if v == value %} selected{% endif %}>{{ l }}</option>
+    {%- endfor %}
+  </select>
+  {% if error %}<div class="invalid-feedback" id="{{ id }}-error">{{ error }}</div>{% endif %}
+</div>
+{%- endmacro select %}
+
+{#- An area: one group per province (application::outputs::AreaGroupDto),
+    first the whole province (`whole`), then its communes and wards by name.
+    `points`: each ward carries its preset name and point (`data-preset`,
+    `data-lat`, `data-lng`) for a form that fills itself; `hint` under it.
+    With JS the select itself takes typing (Alpine `searchableSelect` over
+    Tom Select, accents ignored); the page loads the library with
+    `searchable_select_assets()` in its `vendor` block. Without JS it is a plain
+    select. -#}
+{% macro area_select(id, name, label, groups, value="", error="", required=false, placeholder="", whole=true, points=false, hint="") -%}
+<div class="form-field">
+  <label class="form-label fw-semibold" for="{{ id }}">{{ label }}{% if required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
+  <select class="form-select{% if error %} is-invalid{% endif %}" id="{{ id }}" name="{{ name }}" x-data="searchableSelect" data-no-results="{{ t(key="form.no_results") }}"{% if required %} required{% endif %}{% if error %} aria-invalid="true" aria-describedby="{{ id }}-error"{% endif %}>
+    {% if placeholder %}<option value="">{{ placeholder }}</option>{% endif %}
+    {% for g in groups %}
+    <optgroup label="{{ g.label }}">
+      {%- if whole %}
+      <option value="{{ g.value }}"{% if g.value == value %} selected{% endif %}>{{ t(key="partner.whole_province", name=g.label) }}</option>
+      {%- endif %}
+      {%- for w in g.wards %}
+      <option value="{{ w.value }}"{% if w.value == value %} selected{% endif %}{% if points %} data-preset="{{ w.preset }}" data-lat="{{ w.lat }}" data-lng="{{ w.lng }}"{% endif %}>{{ w.label }}</option>
+      {%- endfor %}
+    </optgroup>
+    {% endfor %}
+  </select>
+  {% if hint %}<div class="form-text">{{ hint }}</div>{% endif %}
+  {% if error %}<div class="invalid-feedback" id="{{ id }}-error">{{ error }}</div>{% endif %}
+</div>
+{%- endmacro area_select %}
+
+{#- An icon by its Font Awesome name (application::icons): a text box
+    holding the stored name (`fa-tractor`; `tractor` typed is taken too),
+    blank for none, checked on save (`invalid_icon`). With JS (Alpine
+    `iconSelect` over Tom Select) it is a picker whose matches come from
+    `GET /api/admin/icons` as the name is typed, each drawn with its glyph;
+    the page loads the library with `searchable_select_assets()` in its
+    `vendor` block. A stored icon the list no longer has is said under the
+    box, so the form never drops it unseen. -#}
+{% macro icon_select(id, name, label, value="", error="") -%}
+{% set c = icon_choice(current=value) -%}
+<div class="form-field">
+  <label class="form-label fw-semibold" for="{{ id }}">{{ label }}</label>
+  <input class="form-control{% if error %} is-invalid{% endif %}" id="{{ id }}" name="{{ name }}" type="text" value="{{ c.current }}" autocomplete="off" spellcheck="false" placeholder="{{ t(key="form.icon_placeholder") }}" x-data="iconSelect" data-url="{{ url_for(name="admin_icons") }}" data-clear="{{ t(key="form.icon_clear") }}" data-no-results="{{ t(key="form.no_results") }}" aria-describedby="{{ id }}-hint{% if error %} {{ id }}-error{% endif %}"{% if error %} aria-invalid="true"{% endif %}>
+  <div class="form-text" id="{{ id }}-hint">{% if c.listed %}{{ t(key="form.icon_hint") }}{% else %}{{ t(key="form.icon_unlisted", name=c.current) }}{% endif %}</div>
+  {% if error %}<div class="invalid-feedback" id="{{ id }}-error">{{ error }}</div>{% endif %}
+</div>
+{%- endmacro icon_select %}
+
+{#- The library `area_select` and `icon_select` search with, for a page's
+    `vendor` block. -#}
+{% macro searchable_select_assets() -%}
+<link rel="stylesheet" href="{{ asset_url(path='vendor/tom-select-2.6.2/tom-select.bootstrap5.min.css') }}">
+<script defer src="{{ asset_url(path='vendor/tom-select-2.6.2/tom-select.complete.min.js') }}"></script>
+{%- endmacro searchable_select_assets %}
+
+{% macro textarea(id, name, label, value="", error="", placeholder="", maxlength=0, rows=3) -%}
+<div class="form-field">
+  <label class="form-label fw-semibold" for="{{ id }}">{{ label }}</label>
+  <textarea class="form-control{% if error %} is-invalid{% endif %}" id="{{ id }}" name="{{ name }}" rows="{{ rows }}"{% if placeholder %} placeholder="{{ placeholder }}"{% endif %}{% if maxlength %} maxlength="{{ maxlength }}"{% endif %}{% if error %} aria-invalid="true" aria-describedby="{{ id }}-error"{% endif %}>{{ value }}</textarea>
+  {% if error %}<div class="invalid-feedback" id="{{ id }}-error">{{ error }}</div>{% endif %}
+</div>
+{%- endmacro textarea %}

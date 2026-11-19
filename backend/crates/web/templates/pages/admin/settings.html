@@ -1,0 +1,74 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "molecules/admin_header.html" as header %}
+{% import "molecules/admin_tabs.html" as tabs %}
+{% import "molecules/form_field.html" as field %}
+{#- The platform settings, laid out like the other admin pages: one tab per
+    group (each counting its settings off their defaults), the group as one
+    `admin-section` card (title, status line, `form-stack`, one
+    `admin-actions` row), and, while one is off its default, "back to
+    defaults" as its own card at the end, saying what goes back to what.
+    Every box says its default and bounds; a switch is a plain checkbox
+    (unticked, the browser sends nothing: off). `page.body` is
+    web::pages::admin::settings::SettingsPage. -#}
+{% block title %}{{ t(key="admin_menu.settings") }} — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+{% set g = b.group %}
+{{ header::admin_header(title=t(key="admin_menu.settings"), icon="fa-sliders", sub=t(key="settings.sub")) }}
+<div class="admin-body">
+  {{ tabs::admin_tabs(tabs=b.tabs, label=t(key="admin_menu.settings")) }}
+  {% if b.flash_text %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=b.flash_text) }}{% endif %}
+  {% if b.error %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.error) }}{% endif %}
+
+  <section class="admin-section" aria-labelledby="settings-title">
+    <h2 class="admin-section__title" id="settings-title">{{ g.title }}</h2>
+    <p class="admin-status">
+      {% if g.changed %}<span class="badge text-bg-info">{{ t(key="settings.changed_count", count=g.changed) }}</span>{% else %}<span class="badge text-bg-secondary">{{ t(key="settings.all_default") }}</span>{% endif %}
+      <span>{{ g.sub }}</span>
+    </p>
+    <form class="form-stack" method="post" action="{{ b.action }}" novalidate>
+      <input type="hidden" name="group" value="{{ g.code }}">
+      {% for s in g.settings %}
+      {% set hint = s.hint ~ " " ~ s.default_line %}
+      {% if s.changed_on %}{% set when = s.changed_on | vn_datetime %}{% set hint = hint ~ " " ~ t(key="settings.changed_on", when=when) %}{% endif %}
+      {% if s.kind == "switch" %}
+      <div class="form-check settings-switch">
+        <input class="form-check-input{% if s.error %} is-invalid{% endif %}" type="checkbox" id="{{ s.id }}" name="{{ s.key }}" value="true"{% if s.on %} checked{% endif %} aria-describedby="{{ s.id }}-hint{% if s.error %} {{ s.id }}-error{% endif %}">
+        <label class="form-check-label fw-semibold" for="{{ s.id }}">{{ s.label }}</label>
+        <div class="form-text" id="{{ s.id }}-hint">{{ hint }}</div>
+        {% if s.error %}<div class="invalid-feedback d-block" id="{{ s.id }}-error">{{ s.error }}</div>{% endif %}
+      </div>
+      {% elif s.kind == "number" %}
+      {{ field::input(id=s.id, name=s.key, label=s.label, value=s.value, type="number", inputmode="numeric", min=s.min, max=s.max, error=s.error | default(value=""), hint=hint) }}
+      {% elif s.kind == "phone" %}
+      {{ field::input(id=s.id, name=s.key, label=s.label, value=s.value, type="tel", inputmode="tel", pattern=limits.phone_pattern, autocomplete="off", placeholder=t(key="form.phone_placeholder"), error=s.error | default(value=""), hint=hint) }}
+      {% elif s.kind == "url" %}
+      {{ field::input(id=s.id, name=s.key, label=s.label, value=s.value, type="url", inputmode="url", autocomplete="off", placeholder=t(key="settings.url_placeholder"), maxlength=limits.setting_value_max, error=s.error | default(value=""), hint=hint) }}
+      {% else %}
+      {{ field::input(id=s.id, name=s.key, label=s.label, value=s.value, type="email", autocomplete="off", placeholder=t(key="settings.email_placeholder"), maxlength=limits.setting_value_max, error=s.error | default(value=""), hint=hint) }}
+      {% endif %}
+      {% endfor %}
+      {{ field::input(id="settings-reason", name="reason", label=t(key="settings.reason"), placeholder=t(key="settings.reason_placeholder"), maxlength=limits.audit_reason_max) }}
+      <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button></div>
+    </form>
+  </section>
+
+  {% if g.resets %}
+  <section class="admin-section" aria-labelledby="reset-title">
+    <h2 class="admin-section__title" id="reset-title">{{ t(key="settings.reset_title") }}</h2>
+    <p class="admin-status">{{ t(key="settings.reset_sub") }}</p>
+    <ul class="mb-0 ps-3 d-grid gap-1">
+      {% for r in g.resets %}<li><span class="fw-semibold">{{ r.label }}</span> <span class="text-body-secondary">{{ r.current }} → {{ r.default }}</span></li>{% endfor %}
+    </ul>
+    <form class="form-stack" method="post" action="{{ b.action }}">
+      <input type="hidden" name="group" value="{{ g.code }}">
+      <input type="hidden" name="action" value="reset">
+      {{ field::input(id="reset-reason", name="reason", label=t(key="settings.reason"), placeholder=t(key="settings.reason_placeholder"), maxlength=limits.audit_reason_max) }}
+      <div class="admin-actions"><button type="submit" class="btn btn-outline-secondary">{{ atoms::icon(name="fa-rotate-left") }} {{ t(key="settings.reset") }}</button></div>
+    </form>
+  </section>
+  {% endif %}
+</div>
+{% endblock content %}

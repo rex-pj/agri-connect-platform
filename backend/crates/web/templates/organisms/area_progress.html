@@ -1,0 +1,82 @@
+{#- How near each area is to steady, as a table anyone can read: its
+    average leads a week against the goal (`bar`, STEADY_WEEKLY_LEADS) as a
+    progress bar, its weeks as squares (filled: the week reached the goal),
+    and its total. `areas` are application::outputs::DemandAreaDto, `weeks`
+    the report's (to name each square), `min` the smallest figure shown.
+
+    Each row links to its own report (`hrefs`: one per area). A province
+    (or "no area") is a top row; its wards follow it (`a.nested`), each by
+    its own name, joined to it by a tree line (`--last` ends the line). A
+    hidden week is always under the goal (it is under `min`), so it is
+    simply an empty square; the average is worked out from the total shown
+    (hidden total: "< 1" when it is small, else at least its shown parts).
+    Drawn without script or style attributes (the page CSP): the bar is SVG
+    (widths in %, corners in px, so the pill keeps round ends at any width),
+    the squares spans. -#}
+{% import "atoms/figure.html" as fig %}
+{% macro area_progress(areas, weeks, bar, min, hrefs) -%}
+{%- set n = weeks | length -%}
+<div class="table-responsive">
+  <table class="table align-middle mb-0 admin-table admin-table--matrix area-progress">
+    <thead class="admin-table-head">
+      <tr>
+        <th scope="col">{{ t(key="demand.col_area") }}</th>
+        <th scope="col">{{ t(key="demand.col_average", bar=bar) }}</th>
+        <th scope="col">{{ t(key="demand.col_weeks", bar=bar) }}</th>
+        <th scope="col" class="text-end">{{ t(key="demand.col_total", weeks=n) }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {%- for a in areas %}
+      {%- set href = hrefs[loop.index0] %}
+      {%- if a.total.value is number %}
+        {%- set average = a.total.value / n %}
+        {%- set shown_average = average | round | int %}
+        {%- set said = t(key="demand.per_week", count=shown_average) %}
+      {%- elif a.total.at_least is number %}
+        {%- set average = a.total.at_least / n %}
+        {%- set shown_average = average | round(method="floor") | int %}
+        {%- set said = t(key="demand.per_week_at_least", count=shown_average) %}
+      {%- else %}
+        {%- set average = 0 %}
+        {%- set said = t(key="demand.per_week_few") %}
+      {%- endif %}
+      {%- set share = average * 100 / bar %}
+      {%- if share > 100 %}{% set share = 100 %}{% endif %}
+      {%- set last = loop.last %}
+      {%- if not loop.last %}{% set next = areas[loop.index] %}{% set last = not next.nested %}{% endif %}
+      <tr class="{% if a.nested %}area-progress__ward{% if last %} area-progress__ward--last{% endif %}{% else %}area-progress__top{% endif %}">
+        <th scope="row" class="area-progress__name">
+          {%- if a.label or a.name %}{% set name = a.label %}{% if a.nested %}{% set name = a.name %}{% endif %}
+          {%- if href %}<a class="area-progress__link link-body-emphasis link-offset-2 link-underline-opacity-0 link-underline-opacity-75-hover" href="{{ href }}">{{ name }}</a>{% else %}{{ name }}{% endif %}
+          {%- else %}<span class="text-muted">{{ t(key="demand.unplaced") }}</span>{% endif %}
+          {%- if a.steady %} <span class="badge rounded-pill text-bg-success">{{ t(key="demand.steady") }}</span>{% endif %}
+        </th>
+        <td>
+          <div class="area-progress__average">
+            <svg class="area-progress__bar" aria-hidden="true">
+              <rect class="area-progress__track" width="100%" height="100%" rx="5"/>
+              {%- if share > 0 %}
+              <rect class="area-progress__fill{% if average >= bar %} area-progress__fill--met{% endif %}" width="{{ share | round(precision=1) }}%" height="100%" rx="5"/>
+              {%- endif %}
+            </svg>
+            <span class="area-progress__said">{{ said }}</span>
+          </div>
+        </td>
+        <td>
+          <div class="area-progress__weeks">
+            <span class="area-progress__squares" role="img" aria-label="{{ t(key="demand.weeks_label", count=a.weeks_at_bar, weeks=n, bar=bar) }}">
+              {%- for f in a.weeks %}{% set w = weeks[loop.index0] %}
+              <span class="area-progress__week{% if f.value is number and f.value >= bar %} area-progress__week--met{% endif %}" title="{{ w.starts_on | day_month }} – {{ w.ends_on | day_month }}: {% if f.value is number %}{{ f.value | number }}{% elif f.at_least is number %}{{ t(key="demand.at_least", count=f.at_least) }}{% else %}{{ t(key="demand.fewer_than", min=min) }}{% endif %}"></span>
+              {%- endfor %}
+            </span>
+            <span class="area-progress__count">{{ t(key="demand.at_bar", count=a.weeks_at_bar, weeks=n) }}</span>
+          </div>
+        </td>
+        <td class="text-end fw-semibold">{{ fig::figure(f=a.total, min=min) }}</td>
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+</div>
+{%- endmacro area_progress %}

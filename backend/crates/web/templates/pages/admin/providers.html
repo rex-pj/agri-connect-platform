@@ -1,0 +1,71 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "atoms/status_badge.html" as status %}
+{% import "molecules/admin_header.html" as header %}
+{% import "molecules/admin_search.html" as search %}
+{% import "molecules/pagination_nav.html" as paging %}
+{% import "molecules/row_action.html" as row %}
+{% import "molecules/sheet_header.html" as sheet_head %}
+{% import "organisms/business_fields.html" as business %}
+{#- `page.body` is web::pages::admin::providers::ProvidersPage. Verification
+    and accounts are changed on each provider's page. With `provider.manage`
+    (`b.create`), the header's "add" opens the create sheet (an anchored
+    section without JS), which comes back open with its messages when a rule
+    is broken: a listing set up in the field, from the owner's phone. -#}
+{% block title %}{{ t(key="admin_menu.providers") }} — {{ site.name }} Admin{% endblock title %}
+{% block scripts %}{% if page.body.create %}<script defer src="{{ asset_url(path='js/islands.js') }}"></script>{% endif %}{% endblock scripts %}
+{% block content %}
+{% set b = page.body %}
+{% set c = b.create %}
+<div x-data="dialog" data-open="{% if c and (c.errors.message or c.errors.fields) %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+{% if c %}
+{{ header::admin_header(title=t(key="admin_menu.providers"), icon="fa-store", sub=t(key="directory.count", count=b.total), action_href="#them-nha-cung-cap", action_icon="fa-plus", action_label=t(key="admin.add_provider"), action_opens=true) }}
+{% else %}
+{{ header::admin_header(title=t(key="admin_menu.providers"), icon="fa-store", sub=t(key="directory.count", count=b.total)) }}
+{% endif %}
+<div class="admin-body">
+  {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.providers")) }}
+  <div class="admin-card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 admin-table admin-table--cards">
+        <thead class="admin-table-head">
+          <tr><th>{{ t(key="common.provider") }}</th><th class="d-none d-lg-table-cell">{{ t(key="admin.col_address") }}</th><th class="text-center">{{ t(key="admin_menu.services") }}</th><th class="text-center">{{ t(key="admin_menu.products") }}</th><th>{{ t(key="nav.account") }}</th><th class="text-center">{{ t(key="status.verified") }}</th><th>{{ t(key="admin.created") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
+        </thead>
+        <tbody>
+          {% for r in b.rows %}
+          {% set p = r.provider %}
+          <tr{% if not p.is_active %} class="table-light text-body-secondary"{% endif %}>
+            <td data-label=""><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ p.name }}</a><a class="d-block small text-muted text-decoration-none" href="tel:{{ p.phone }}">{{ p.phone | phone }}</a></td>
+            <td data-label="{{ t(key="admin.col_address") }}" class="small d-none d-lg-table-cell"><div class="cell-short">{% if p.address %}{{ p.address }}{% else %}<span class="text-muted">—</span>{% endif %}</div></td>
+            <td data-label="{{ t(key="admin_menu.services") }}" class="text-center">{{ p.service_count }}</td>
+            <td data-label="{{ t(key="admin_menu.products") }}" class="text-center">{{ p.product_count }}</td>
+            <td data-label="{{ t(key="nav.account") }}">{% if p.linked_username %}<span class="badge text-bg-light border">{{ p.linked_username }}</span>{% else %}<span class="small text-muted">{{ t(key="admin.none") }}</span>{% endif %}</td>
+            <td data-label="{{ t(key="status.verified") }}" class="text-center cell-state">{{ status::verified(on=p.is_verified) }}</td>
+            <td data-label="{{ t(key="admin.created") }}" class="small text-muted"><time datetime="{{ p.created_on | utc_iso }}">{{ p.created_on | vn_datetime }}</time>{% if p.created_by_name %}<span class="d-block">{{ p.created_by_name }}</span>{% endif %}</td>
+            <td data-label="" class="text-end"><div class="row-actions">{{ row::open(href=r.href, name=p.name) }}</div></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="8" class="text-center text-muted py-4">{% if b.search.q %}{{ t(key="admin_search.none", q=b.search.q) }}{% else %}{{ t(key="admin.no_providers") }}{% endif %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% if b.pagination %}{{ paging::pagination_nav(p=b.pagination) }}{% endif %}
+
+  {% if c %}
+  <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
+  <section class="contact-sheet" id="them-nha-cung-cap" aria-labelledby="them-nha-cung-cap-title" :class="sheetClass">
+    {{ sheet_head::sheet_header(id="them-nha-cung-cap", title=t(key="admin.add_provider"), icon="fa-store") }}
+    <form class="contact-sheet__form" method="post" action="{{ c.action }}" novalidate>
+      {% if c.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=c.errors.message) }}{% endif %}
+      <p class="small text-muted mb-0">{{ t(key="admin.add_provider_hint") }}</p>
+      {{ business::business_fields(form=c.form, errors=c.errors, limits=limits, prefix="new", first=true) }}
+      <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-plus") }} {{ t(key="admin.add_provider") }}</button>
+    </form>
+  </section>
+  {% endif %}
+</div>
+</div>
+{% endblock content %}

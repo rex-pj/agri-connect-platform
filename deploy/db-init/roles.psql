@@ -1,0 +1,35 @@
+-- The database's roles, run once by 01-app-role.sh as the postgres
+-- superuser when the data directory is first created. Also run by the
+-- integration test it/database.rs (`the_app_role_cannot_change_the_schema`)
+-- with role names of its own, so what deploys is what is tested.
+--
+-- Two roles, so a flaw in the server can read and write rows but never
+-- change or drop the schema:
+--   :"owner_role"  owns the database and every table; the server connects as
+--                  it only to run migrations at startup (MIGRATION_DATABASE_URL).
+--   :"app_role"    what the server answers requests as (DATABASE_URL): rows
+--                  only, on the tables and sequences the owner creates.
+-- Variables: owner_role, owner_pw, app_role, app_pw, db_name.
+
+CREATE ROLE :"owner_role" LOGIN PASSWORD :'owner_pw';
+CREATE ROLE :"app_role" LOGIN PASSWORD :'app_pw';
+
+ALTER DATABASE :"db_name" OWNER TO :"owner_role";
+ALTER SCHEMA public OWNER TO :"owner_role";
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+REVOKE ALL ON DATABASE :"db_name" FROM PUBLIC;
+GRANT CONNECT, TEMPORARY ON DATABASE :"db_name" TO :"app_role";
+GRANT USAGE ON SCHEMA public TO :"app_role";
+
+-- Every table and sequence the owner's migrations create, now and later.
+ALTER DEFAULT PRIVILEGES FOR ROLE :"owner_role" IN SCHEMA public
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO :"app_role";
+ALTER DEFAULT PRIVILEGES FOR ROLE :"owner_role" IN SCHEMA public
+    GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO :"app_role";
+
+-- Creating an extension needs a superuser; the migrations' own
+-- CREATE EXTENSION IF NOT EXISTS are then no-ops.
+CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION IF NOT EXISTS unaccent;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;

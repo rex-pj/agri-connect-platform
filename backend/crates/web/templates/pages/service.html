@@ -1,0 +1,78 @@
+{% extends "layouts/app.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/photo_placeholder.html" as placeholder %}
+{% import "molecules/call_button.html" as call %}
+{% import "molecules/zalo_button.html" as zalo %}
+{% import "molecules/contact_sent.html" as sent %}
+{% import "organisms/detail_hero.html" as hero %}
+{% import "organisms/vendor_summary.html" as vendor %}
+{% import "organisms/provider_offers.html" as offers %}
+{% import "organisms/contact_sheet.html" as sheet %}
+{#- One service, in the detail-page frame shared with the supply and provider
+    pages (`detail-page`, app.css). `page` is web::pages::service::ServicePage.
+    Ranked by what the farmer needs to act:
+    1. what it is: the header (title, the way back to its category) and the
+       photo (or a "no photo yet" placeholder);
+    2. the decision box: the price, who does it (provider, badge, area,
+       rating: you call a person, not a service), and the call button with
+       Zalo and the contact form beside it;
+    3. the details: the description;
+    4. where to go next: the provider's other services, more of the category.
+    The owner's or admin's way to edit it is an icon in the header. The
+    contact form with this service chosen is a bottom sheet with JS, a plain
+    section without. -#}
+{% block title %}{{ page.service.name }} — {{ page.service.business_name }} — {{ site.name }}{% endblock title %}
+{% block meta %}<meta name="description" content="{% if page.meta_description %}{{ page.meta_description }}{% else %}{{ t(key="service.meta", name=page.service.name, provider=page.service.business_name, area=page.area) }}{% endif %}">{% endblock meta %}
+{% block main %}
+{% set s = page.service %}
+{% set icon = s.category_icon | default(value="fa-tag") %}
+<div class="detail-page" x-data="dialog" data-open="{% if page.contact.open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+  {{ hero::detail_hero(title=s.name, share_text=page.share_text, back_href=page.category_href, back_label=s.category, manage=page.manage) }}
+  <div class="detail-layout">
+    <div class="detail-photo">
+      {% if s.image_file_id %}
+      <img src="{{ file_url(id=s.image_file_id) }}" alt="{{ s.name }}">
+      {% else %}
+      {{ placeholder::photo_placeholder(icon=icon, category=s.category, size="lg") }}
+      {% endif %}
+    </div>
+
+    <div class="detail-layout__aside">
+      <section class="detail-card decision-box">
+        {#- A service's price is the provider's own words ("Từ 15.000 đ/con,
+            tuỳ loại"), so it is set as text, not as a figure. -#}
+        <div class="detail-price">
+          {% if s.price_note %}
+          <span class="detail-price__amount detail-price__amount--text">{{ s.price_note | price_note }}</span>
+          {% else %}
+          <span class="detail-price__amount detail-price__amount--contact">{{ t(key="price.ask") }}</span>
+          {% endif %}
+        </div>
+        <p class="detail-price__note">{{ t(key="service.price_note") }}</p>
+        {{ vendor::vendor_summary(name=s.business_name, verified=s.business_verified, area=page.area, rating=page.rating.rating, href=page.provider_href) }}
+        <div class="provider-actions">
+          {{ call::call_button(phone=s.business_phone, kind="service", id=s.id, class="btn btn-success btn-lg btn-call") }}
+          {{ zalo::zalo_button(phone=s.business_phone, kind="service", id=s.id, class="btn btn-outline-primary btn-lg") }}
+          <a class="btn btn-outline-success btn-lg" href="#lien-he" x-on:click.prevent="show">{{ atoms::icon(name="fa-comment-dots") }} {{ t(key="contact.send") }}</a>
+        </div>
+      </section>
+      {% if page.sent %}{{ sent::contact_sent(review_href=page.rating.href) }}{% endif %}
+    </div>
+
+    <div class="detail-layout__main">
+      {% if s.description %}
+      <section class="detail-card">
+        <h2 class="detail-card__title">{{ t(key="service.description") }}</h2>
+        <p class="detail-card__text">{{ s.description }}</p>
+      </section>
+      {% endif %}
+
+      {{ offers::provider_offers(title=t(key="service.others", provider=s.business_name), items=page.others, provider_href=page.provider_href) }}
+
+      <a class="detail-more" href="{{ page.category_href }}">{{ atoms::icon(name=icon) }} {{ t(key="service.more_in_category", category=s.category) }} {{ atoms::icon(name="fa-chevron-right") }}</a>
+
+      {{ sheet::contact_sheet(provider=page.provider, contact=page.contact, limits=page.limits, return_to=page.return_to) }}
+    </div>
+  </div>
+</div>
+{% endblock main %}

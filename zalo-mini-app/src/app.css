@@ -1,0 +1,198 @@
+/* The Mini App's own styles, on top of zmp-ui: large tap targets (44 px
+   and up) and little text, for farmers on low-end phones. Colours follow
+   the website's green and amber. */
+:root {
+  --ac-green: #1b6b3a;
+  --ac-green-soft: #e8f3ec;
+  --ac-amber: #b26a00;
+  --ac-red: #c62828;
+  --ac-muted: #6b7280;
+  --ac-border: #e5e7eb;
+  --ac-bg: #f5f7f5;
+}
+
+body {
+  background: var(--ac-bg);
+}
+
+.page {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--ac-bg);
+}
+
+.hero {
+  background: var(--ac-green);
+  color: #fff;
+  border-radius: 16px;
+  padding: 20px 16px;
+}
+.hero * {
+  color: #fff;
+}
+
+.errands {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.center {
+  text-align: center;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.muted {
+  color: var(--ac-muted);
+}
+.up {
+  color: var(--ac-green);
+}
+.down {
+  color: var(--ac-red);
+}
+.verified {
+  color: var(--ac-green);
+}
+
+.link {
+  background: none;
+  border: 0;
+  color: var(--ac-green);
+  font-weight: 600;
+  min-height: 44px;
+  padding: 0 4px;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.tile {
+  min-height: 56px;
+  border: 1px solid var(--ac-border);
+  border-radius: 12px;
+  background: var(--ac-green-soft);
+  color: var(--ac-green);
+  font-weight: 600;
+  font-size: 15px;
+  padding: 8px;
+}
+
+.field-label {
+  display: block;
+  font-weight: 600;
+  margin-top: 4px;
+}
+.field-error {
+  color: var(--ac-red);
+}
+.native-select {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--ac-border);
+  border-radius: 10px;
+  background: #fff;
+  padding: 0 12px;
+  font-size: 16px;
+}
+.native-select--error {
+  border-color: var(--ac-red);
+}
+
+.place-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.place-picker__done {
+  color: var(--ac-green);
+}
+
+.price-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--ac-border);
+}
+.price-line:last-child {
+  border-bottom: 0;
+}
+.price-line__where {
+  min-width: 0;
+}
+.price-line__value {
+  text-align: end;
+  flex-shrink: 0;
+}
+
+.service-card__row {
+  display: flex;
+  gap: 12px;
+}
+.service-card__photo {
+  width: 88px;
+  height: 88px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.service-card__photo--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ac-green-soft);
+  color: var(--ac-green);
+}
+.service-card__text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.form {
+  gap: 12px;
+}
+
+/* Alerts at the top of the home page: amber, as the website's. */
+.alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.alert {
+  background: #fff3cd;
+  border: 1px solid #ffda6a;
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}

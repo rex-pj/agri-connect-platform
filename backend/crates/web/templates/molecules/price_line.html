@@ -1,0 +1,22 @@
+{#- One price on the price page and the home strip: where (the area, or the
+    crop too on the home page), when (today, else the day), the range per
+    unit, and how it moved since the price before (up green, down red, the
+    same grey; nothing when there is no price before). `l` is
+    web::pages::prices::PriceLine. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro price_line(l, show_crop=false, show_area=true) -%}
+{% set q = l.quote %}
+<li class="price-line">
+  <div class="price-line__where">
+    {% if show_crop %}<strong class="d-block text-truncate">{{ q.crop_name }}</strong>{% endif %}
+    {% if show_area %}<span class="d-block text-truncate{% if show_crop %} small text-muted{% else %} fw-semibold{% endif %}">{{ q.location_label }}</span>{% endif %}
+    <span class="small text-muted">{% if l.is_today %}{{ t(key="prices.today") }}{% else %}{{ q.observed_on | day_month }}{% endif %}{% if q.note %} · {{ q.note }}{% endif %}</span>
+  </div>
+  <div class="price-line__value">
+    <strong class="text-nowrap">{% if q.price_low == q.price_high %}{{ q.price_low | vnd }}{% else %}{{ q.price_low | number }} – {{ q.price_high | vnd }}{% endif %}</strong><span class="small text-muted">/{{ q.unit }}</span>
+    {% if l.direction == "up" %}<span class="price-move text-success" aria-label="{{ t(key="prices.up", amount=l.change_abs | number) }}">{{ atoms::icon(name="fa-arrow-trend-up") }} {{ l.change_abs | number }}</span>
+    {% elif l.direction == "down" %}<span class="price-move text-danger" aria-label="{{ t(key="prices.down", amount=l.change_abs | number) }}">{{ atoms::icon(name="fa-arrow-trend-down") }} {{ l.change_abs | number }}</span>
+    {% elif l.direction == "same" %}<span class="price-move text-muted" aria-label="{{ t(key="prices.same") }}">{{ atoms::icon(name="fa-minus") }}</span>{% endif %}
+  </div>
+</li>
+{%- endmacro price_line %}

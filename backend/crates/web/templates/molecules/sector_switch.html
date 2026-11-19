@@ -1,0 +1,35 @@
+{#- "Which sector are you in?": every sector, crops, livestock, aquaculture.
+    Each is a button of one plain POST form to /sector with the page to
+    come back to (`back`, the shell's `here`), so it works without JS; the
+    chosen one is pressed. The choice is kept a year (`pages::sector`) and
+    narrows the service and product lists and the price board to that
+    sector and the categories of every sector; the home page has no switch
+    and is never narrowed. `sectors` are
+    web::shell::SectorChoice, the shown sectors (`/admin/sectors`); none
+    while there is no sector, and then no switch. Large buttons, scrolling sideways on a narrow
+    phone rather than wrapping onto two rows. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro sector_switch(sectors, back) -%}
+{% if sectors %}
+<form class="sector-switch" method="post" action="{{ url_for(name="sector") }}" aria-label="{{ t(key="sector.label") }}">
+  <input type="hidden" name="back" value="{{ back }}">
+  {% for s in sectors %}
+  <button type="submit" class="chip" name="sector" value="{{ s.value }}" aria-pressed="{% if s.current %}true{% else %}false{% endif %}">{{ atoms::icon(name=s.icon) }} {{ s.label }}</button>
+  {% endfor %}
+</form>
+{% endif %}
+{%- endmacro sector_switch %}
+
+{#- The same buttons as links, for the search results: each narrows this one
+    search to a sector (`sector=`) and nothing is remembered, so a typed
+    search is never narrowed unseen. `sectors` are
+    web::pages::search::SectorLink. -#}
+{% macro sector_links(sectors) -%}
+{% if sectors %}
+<nav class="sector-switch" aria-label="{{ t(key="sector.label") }}">
+  {% for s in sectors %}
+  <a class="chip" href="{{ s.href }}"{% if s.current %} aria-current="true"{% endif %}>{{ atoms::icon(name=s.icon) }} {{ s.label }}</a>
+  {% endfor %}
+</nav>
+{% endif %}
+{%- endmacro sector_links %}

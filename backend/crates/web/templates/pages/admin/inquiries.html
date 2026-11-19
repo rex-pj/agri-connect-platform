@@ -1,0 +1,66 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "atoms/inquiry_status.html" as inquiry %}
+{% import "molecules/admin_header.html" as header %}
+{% import "molecules/admin_filter.html" as filter %}
+{% import "molecules/pagination_nav.html" as paging %}
+{% import "molecules/row_action.html" as row %}
+{% import "molecules/status_chips.html" as chips %}
+{% import "organisms/confirm_sheet.html" as confirm %}
+{#- `page.body` is web::pages::admin::inquiries::InquiriesPage. The status
+    is a badge (who set it under it); the row ends with its next steps
+    (`r.steps`), one click each but spam, whose link reloads the list with
+    that row's confirmation open (`b.confirm`). The chips narrow the list to
+    one status. Every form sends the list position (page, `provider_id`,
+    `state`) back; `b.filter` is set when the list is one provider's. -#}
+{% block title %}{{ t(key="contact.title") }} — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+{% if b.filter and b.filter.name %}{% set sub = b.filter.name ~ " · " ~ t(key="inquiries.count", count=b.total) %}{% else %}{% set sub = t(key="inquiries.count", count=b.total) %}{% endif %}
+{{ header::admin_header(title=t(key="contact.title"), icon="fa-envelope-open-text", sub=sub) }}
+<div class="admin-body" x-data="dialog" data-open="{% if b.confirm %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+  {% if b.flash == "inquiry_status_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="inbox.status_saved")) }}{% endif %}
+  {% if b.filter %}{{ filter::admin_filter(f=b.filter) }}{% endif %}
+  {{ chips::status_chips(chips=b.states, label=t(key="admin.status_filter")) }}
+
+  <div class="admin-card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 admin-table admin-table--cards">
+        <thead class="admin-table-head">
+          <tr><th>{{ t(key="admin.col_sender") }}</th><th>{{ t(key="admin.col_sent") }}</th><th>{{ t(key="common.provider") }}</th><th>{{ t(key="admin.col_topic") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th>{% if b.can_manage %}<th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th>{% endif %}</tr>
+        </thead>
+        <tbody>
+          {% for r in b.rows %}
+          {% set q = r.inquiry %}
+          {% set what = t(key="inbox.request_of", name=q.requester_name) %}
+          <tr{% if q.status == "closed" or q.status == "spam" %} class="table-light text-body-secondary"{% endif %}>
+            <td data-label="" class="fw-semibold">{{ q.requester_name }}<a class="d-block small text-decoration-none" href="tel:{{ q.requester_phone }}">{{ atoms::icon(name="fa-phone", class="me-1") }}{{ q.requester_phone | phone }}</a></td>
+            <td data-label="{{ t(key="admin.col_sent") }}" class="small text-muted text-nowrap"><time datetime="{{ q.created_on | utc_iso }}">{{ q.created_on | vn_datetime }}</time></td>
+            <td data-label="{{ t(key="common.provider") }}"><a class="text-decoration-none" href="{{ r.provider_href }}">{{ q.business_name }}</a></td>
+            <td data-label="{{ t(key="admin.col_topic") }}"><div class="cell-prose">{{ q.topic }}</div></td>
+            <td data-label="{{ t(key="admin.col_status") }}" class="text-center cell-state">{{ inquiry::label(status=q.status, badge=true) }}{% if q.updated_by_name %}<span class="d-block small text-muted">{{ q.updated_by_name }}</span>{% endif %}</td>
+            {% if b.can_manage %}
+            <td data-label="" class="text-end">
+              <div class="row-actions">
+                {% for s in r.steps %}
+                {% if s.look == "spam" %}{{ row::spam(href=r.spam_href ~ "#xac-nhan", name=what) }}{% else %}{{ row::step(action=r.action, to=s.to, look=s.look, name=what, primary=s.primary, keep=b.position) }}{% endif %}
+                {% endfor %}
+              </div>
+            </td>
+            {% endif %}
+          </tr>
+          {% else %}
+          <tr><td colspan="{% if b.can_manage %}6{% else %}5{% endif %}" class="text-center text-muted py-4">{% if b.narrowed %}{{ t(key="admin.no_inquiries_in_state") }}{% else %}{{ t(key="admin.no_inquiries") }}{% endif %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% if b.pagination %}{{ paging::pagination_nav(p=b.pagination) }}{% endif %}
+
+  {% if b.confirm %}
+  {{ confirm::confirm_sheet(id="xac-nhan", title=t(key="inbox.spam_title", name=b.confirm.requester), icon="fa-ban", action=b.confirm.action, button=t(key="inbox.spam_confirm"), reason_max=limits.audit_reason_max, note=t(key="inbox.spam_note"), hidden_name="status", hidden_value="spam", keep=b.position) }}
+  {% endif %}
+</div>
+{% endblock content %}

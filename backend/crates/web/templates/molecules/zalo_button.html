@@ -1,0 +1,9 @@
+{#- A public "chat on Zalo" button beside the call button on a detail page:
+    a plain link to the Zalo chat with the same phone number (works without
+    JS); Alpine `callBeacon` counts the tap as a lead through the `zalo`
+    channel. `kind` and `id` as for `call_button`. Cards keep only the call
+    button: one action per card. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro zalo_button(phone, kind, id, class) -%}
+<a class="{{ class }}" href="{{ phone | zalo }}" rel="noopener" target="_blank" x-data="callBeacon" x-on:click="count" data-call-url="{{ url_for(name="call_log") }}" data-call-kind="{{ kind }}" data-call-id="{{ id }}" data-call-channel="zalo">{{ atoms::icon(name="fa-comments") }} {{ t(key="contact.zalo") }}</a>
+{%- endmacro zalo_button %}

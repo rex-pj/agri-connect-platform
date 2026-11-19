@@ -1,0 +1,110 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "atoms/admin_thumb.html" as thumb %}
+{% import "atoms/status_badge.html" as status %}
+{% import "molecules/admin_header.html" as header %}
+{% import "molecules/admin_search.html" as search %}
+{% import "molecules/admin_filter.html" as filter %}
+{% import "molecules/pagination_nav.html" as paging %}
+{% import "molecules/row_action.html" as row %}
+{% import "molecules/sheet_header.html" as sheet_head %}
+{% import "organisms/service_fields.html" as fields %}
+{% import "organisms/confirm_sheet.html" as confirm %}
+{#- `page.body` is web::pages::admin::services::ServicesPage. The create form
+    (`b.create`) appears only when the list is one provider's: a service
+    always belongs to a provider; it is a sheet opened by the header's "add"
+    (an anchored section without JS), which comes back open with its
+    messages when a rule is broken. "Ẩn" and "Xoá" reload the list with that
+    row's confirmation open (`b.confirm`, in its own `dialog` scope); row
+    actions send `back=list` and the list position (`b.keep`) so they land
+    here again. -#}
+{% block title %}{{ t(key="admin_menu.services") }} — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+{% if b.filter and b.filter.name %}{% set sub = b.filter.name ~ " · " ~ t(key="services.count", count=b.total) %}{% else %}{% set sub = t(key="services.count", count=b.total) %}{% endif %}
+<div x-data="dialog" data-open="{% if b.create and (b.create.errors.message or b.create.errors.fields) %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+{% if b.create %}
+{{ header::admin_header(title=t(key="admin_menu.services"), icon="fa-screwdriver-wrench", sub=sub, action_href="#them-dich-vu", action_icon="fa-plus", action_label=t(key="dashboard.add_service"), action_opens=true) }}
+{% else %}
+{{ header::admin_header(title=t(key="admin_menu.services"), icon="fa-screwdriver-wrench", sub=sub) }}
+{% endif %}
+<div class="admin-body">
+  {% if b.flash == "service_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.service_hidden")) }}{% endif %}
+  {% if b.flash == "service_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.service_shown")) }}{% endif %}
+  {% if b.flash == "service_deleted" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="dashboard.service_deleted")) }}{% endif %}
+  {% if b.filter %}
+  {{ filter::admin_filter(f=b.filter) }}
+  {% else %}
+  <p class="small text-muted mb-0">{{ t(key="admin.services_add_hint", action=t(key="admin.manage_services")) }}</p>
+  {% endif %}
+
+  {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.services")) }}
+  <div class="admin-card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 admin-table admin-table--cards">
+        <thead class="admin-table-head">
+          <tr><th>{{ t(key="admin_menu.services") }}</th><th>{{ t(key="common.provider") }}</th><th>{{ t(key="admin.col_classification") }}</th><th>{{ t(key="service_form.price") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
+        </thead>
+        <tbody>
+          {% for r in b.rows %}
+          {% set s = r.service %}
+          <tr{% if not s.is_active %} class="table-light text-body-secondary"{% endif %}>
+            <td data-label="">
+              <div class="d-flex align-items-center gap-2">
+                {{ thumb::admin_thumb(file_id=s.image_file_id) }}
+                <a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ s.name }}</a>
+              </div>
+            </td>
+            <td data-label="{{ t(key="common.provider") }}"><a class="text-decoration-none" href="{{ r.provider_href }}">{{ s.business_name }}</a>{% if s.added_by_owner %}<span class="d-block small text-muted">{{ t(key="admin.added_by_owner") }}</span>{% endif %}</td>
+            <td data-label="{{ t(key="admin.col_classification") }}" class="small"><span class="d-block"><span class="text-muted">{{ t(key="admin.label_type") }}:</span> <a class="fw-semibold text-decoration-none" href="{{ r.category_href }}">{{ s.category }}</a></span><span class="d-block"><span class="text-muted">{{ t(key="admin.label_sector") }}:</span> {% if r.sector_href %}<a class="text-decoration-none" href="{{ r.sector_href }}">{{ r.sector_label }}</a>{% else %}{{ r.sector_label }}{% endif %}</span></td>
+            <td data-label="{{ t(key="service_form.price") }}">{% if s.price_note %}{{ s.price_note }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+            <td data-label="{{ t(key="admin.col_status") }}" class="text-center cell-state">{{ status::visibility(on=s.is_active) }}</td>
+            <td data-label="" class="text-end">
+              <div class="row-actions">
+                {% if s.is_active %}
+                {{ row::hide(href=r.hide_href ~ "#xac-nhan", name=s.name) }}
+                {% else %}
+                {{ row::show(action=r.status_action, name=s.name, field="is_active", keep=b.keep) }}
+                {% endif %}
+                {{ row::delete(href=r.delete_href ~ "#xac-nhan", name=s.name) }}
+                {{ row::open(href=r.href, name=s.name) }}
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="text-center text-muted py-4">{% if b.search.q %}{{ t(key="admin_search.none", q=b.search.q) }}{% else %}{{ t(key="admin.no_services") }}{% endif %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% if b.pagination %}{{ paging::pagination_nav(p=b.pagination) }}{% endif %}
+
+  {% if b.confirm %}
+  {% set c = b.confirm %}
+  <div x-data="dialog" data-open="true" x-on:keydown.escape.window="hide">
+    {% if c.kind == "hide" %}
+    {{ confirm::confirm_sheet(id="xac-nhan", title=t(key="admin.hide_service_title", name=c.name), icon="fa-eye-slash", action=c.action, button=t(key="admin.confirm_hide"), reason_max=limits.audit_reason_max, effect="hide", what=t(key="admin.service_what"), hidden_name="is_active", hidden_value="false", keep=b.keep) }}
+    {% else %}
+    {{ confirm::confirm_sheet(id="xac-nhan", title=t(key="admin.delete_service_title", name=c.name), icon="fa-trash", action=c.action, button=t(key="common.confirm_delete"), reason_max=limits.audit_reason_max, effect="delete", what=t(key="dashboard.delete_service_what"), button_class="btn-danger", keep=b.keep) }}
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if b.create %}
+  {% set c = b.create %}
+  <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
+  <section class="contact-sheet" id="them-dich-vu" aria-labelledby="them-dich-vu-title" :class="sheetClass">
+    {{ sheet_head::sheet_header(id="them-dich-vu", title=t(key="dashboard.add_service"), icon="fa-screwdriver-wrench") }}
+    <form class="contact-sheet__form" method="post" action="{{ c.action }}" novalidate>
+      <input type="hidden" name="business_id" value="{{ c.business_id }}">
+      {% if c.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=c.errors.message) }}{% endif %}
+      {{ fields::service_fields(form=c.form, errors=c.errors, categories=c.categories, limits=b.limits, prefix="new", first=true) }}
+      <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-plus") }} {{ t(key="dashboard.add_service") }}</button>
+    </form>
+  </section>
+  {% endif %}
+</div>
+</div>
+{% endblock content %}

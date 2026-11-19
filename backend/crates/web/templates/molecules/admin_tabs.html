@@ -1,0 +1,10 @@
+{#- The tabs of an admin page that shows one of several lists: plain links
+    (each a URL of its own), the current one marked. `tabs` are
+    web::pages::admin::AdminTab. -#}
+{% macro admin_tabs(tabs, label) -%}
+<nav class="search-tabs" aria-label="{{ label }}">
+  {% for tab in tabs %}
+  <a class="search-tab" href="{{ tab.href }}"{% if tab.current %} aria-current="page"{% endif %}>{{ tab.label }}{% if tab.count is number %} <span class="search-tab__badge">{{ tab.count }}</span>{% endif %}</a>
+  {% endfor %}
+</nav>
+{%- endmacro admin_tabs %}

@@ -1,0 +1,130 @@
+{% extends "layouts/app.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "molecules/section_header.html" as section %}
+{% import "molecules/empty_state.html" as empty %}
+{% import "organisms/category_grid.html" as grid %}
+{% import "organisms/provider_card.html" as providers %}
+{% import "organisms/service_card.html" as services %}
+{% import "organisms/product_card.html" as products %}
+{% import "molecules/tab_nav.html" as tabs %}
+{#- Services, providers and products near the visitor, in three tabs (links without JS,
+    switched in place by Alpine `tabs`). `page` is web::pages::explore::ExplorePage.
+    The GPS button is the `ac-geolocate` island; the preset form beside it
+    works without JS. The area's sponsored services (`page.sponsored`) come
+    first under a "Tài trợ" label; they are moved up, never duplicated. -#}
+{% block title %}{{ t(key="explore.title") }} — {{ site.name }}{% endblock title %}
+{% block meta %}<meta name="description" content="{{ t(key="explore.meta") }}">{% endblock meta %}
+{% block scripts %}<script defer src="{{ asset_url(path='js/islands.js') }}"></script>{% endblock scripts %}
+{% block main %}
+{% if not page.located %}
+<section class="loc-hero">
+  <div class="loc-hero__inner">
+    <div class="loc-ripple" aria-hidden="true">
+      <span class="geo-cta__ripple geo-cta__ripple--1"></span>
+      <span class="geo-cta__ripple geo-cta__ripple--2"></span>
+      <span class="geo-cta__ripple geo-cta__ripple--3"></span>
+      <span class="loc-ripple__pin">{{ atoms::icon(name="fa-location-dot") }}</span>
+    </div>
+    <h1 class="loc-hero__title">{{ t(key="explore.locate_title") }}</h1>
+    <p class="loc-hero__sub">{{ t(key="explore.locate_sub_before") }} <strong>{{ t(key="explore.km", km=page.radius_km) }}</strong> {{ t(key="explore.locate_sub_after") }}</p>
+    <ac-geolocate href="{{ page.geolocate_href }}" label="{{ t(key="geolocate.locate_me") }}" busy-label="{{ t(key="geolocate.locating") }}" denied="{{ t(key="geolocate.denied_settings") }}" failed="{{ t(key="geolocate.failed_gps") }}" unsupported="{{ t(key="geolocate.unsupported_pick") }}" button-class="btn btn-warning btn-lg loc-hero__btn"></ac-geolocate>
+    <p class="loc-hero__privacy">{{ atoms::icon(name="fa-shield-halved") }} {{ t(key="explore.privacy") }}</p>
+    {% if page.locations %}
+    <form class="loc-manual" method="get" action="{{ url_for(name="explore") }}">
+      <label class="loc-manual__label" for="location_id">{{ t(key="explore.pick_area") }}</label>
+      <div class="loc-manual__row">
+        <select class="form-select" id="location_id" name="location_id" required>
+          <option value="">{{ t(key="explore.choose_area") }}</option>
+          {% for l in page.locations %}<option value="{{ l.id }}">{{ l.label }}</option>{% endfor %}
+        </select>
+        <button type="submit" class="btn btn-light" aria-label="{{ t(key="explore.search_area") }}">{{ atoms::icon(name="fa-arrow-right") }}</button>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+</section>
+{% else %}
+<header class="page-hero">
+  <div class="explore-hero__row">
+    <h1 class="page-hero__title">{{ atoms::icon(name="fa-location-dot", class="explore-hero__pin") }} {{ t(key="explore.near_title") }}</h1>
+    <ac-geolocate href="{{ page.geolocate_href }}" label="{{ t(key="geolocate.refresh") }}" busy-label="{{ t(key="geolocate.busy") }}" denied="{{ t(key="geolocate.denied") }}" failed="{{ t(key="geolocate.failed_short") }}" unsupported="{{ t(key="geolocate.unsupported") }}" button-class="btn btn-sm explore-hero__refresh"></ac-geolocate>
+  </div>
+  <p class="page-hero__sub">{{ atoms::icon(name="fa-circle-check", class="explore-hero__check") }} {% if page.place %}{{ page.place }}{% else %}{{ t(key="explore.located") }}{% endif %}</p>
+</header>
+<nav class="radius-links" aria-label="{{ t(key="explore.radius") }}">
+  <span class="radius-links__label">{{ atoms::icon(name="fa-circle-dot") }} {{ t(key="explore.radius_label") }}</span>
+  {% for r in page.radius_links %}
+  <a class="chip" href="{{ r.href }}"{% if r.active %} aria-current="true"{% endif %}>{{ r.label }}</a>
+  {% endfor %}
+</nav>
+{% endif %}
+
+{% if page.service_tiles %}
+<section class="home-categories">
+  <h2 class="cat-section-label">{{ t(key="explore.service_categories") }}</h2>
+  {{ grid::category_grid(items=page.service_tiles) }}
+</section>
+{% endif %}
+
+{% if page.located %}
+<div class="list-results" x-data="tabs" data-tab="{{ page.tab }}">
+  {{ tabs::tab_nav(tabs=page.tabs, label=t(key="explore.results_label")) }}
+  {% set none_title = t(key="explore.no_services", km=page.radius_km) %}
+  {% set no_shop_title = t(key="explore.no_shops", km=page.radius_km) %}
+  {% set no_product_title = t(key="explore.no_products", km=page.radius_km) %}
+
+  <section data-panel="services"{% if page.tab != "services" %} hidden{% endif %} :hidden="panelHidden">
+    {% if page.sponsored or page.services %}
+    {% if page.sponsored %}
+    <div class="mb-3" aria-label="{{ t(key="partner_area.tag") }}">
+      <p class="small mb-2"><span class="badge rounded-pill border text-body-secondary bg-body">{{ t(key="partner_area.tag") }}</span></p>
+      {{ services::service_grid(services=page.sponsored) }}
+    </div>
+    {% endif %}
+    {% if page.services %}
+    <p class="small text-muted mb-2"><strong>{{ page.services | length }}{% if page.services | length >= page.results_max %}+{% endif %}</strong> {{ t(key="explore.services_near") }}</p>
+    {{ services::service_grid(services=page.services) }}
+    {% endif %}
+    {% elif page.wider %}
+    {% set wider_label = t(key="explore.search_within", area=page.wider.label) %}
+    {{ empty::empty_state(icon="fa-magnifying-glass", title=none_title, hint=t(key="explore.hint_services_wider"), action_href=page.wider.href, action_icon="fa-expand", action_label=wider_label) }}
+    {% else %}
+    {{ empty::empty_state(icon="fa-magnifying-glass", title=none_title, hint=t(key="explore.hint_services"), action_href=url_for(name="services"), action_icon="fa-border-all", action_label=t(key="list.all_services")) }}
+    {% endif %}
+  </section>
+
+  <section data-panel="products"{% if page.tab != "products" %} hidden{% endif %} :hidden="panelHidden">
+    {% if page.products %}
+    <p class="small text-muted mb-2"><strong>{{ page.products | length }}{% if page.products | length >= page.results_max %}+{% endif %}</strong> {{ t(key="explore.products_near") }}</p>
+    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 row-cols-xl-6 g-2 g-md-3">
+      {% for p in page.products %}<div class="col">{{ products::product_card(p=p) }}</div>{% endfor %}
+    </div>
+    {% elif page.wider %}
+    {% set wider_label = t(key="explore.search_within", area=page.wider.label) %}
+    {{ empty::empty_state(icon="fa-magnifying-glass", title=no_product_title, hint=t(key="explore.hint_products_wider"), action_href=page.wider.href, action_icon="fa-expand", action_label=wider_label) }}
+    {% else %}
+    {{ empty::empty_state(icon="fa-magnifying-glass", title=no_product_title, hint=t(key="explore.hint_products"), action_href=url_for(name="products"), action_icon="fa-bag-shopping", action_label=t(key="list.all_products")) }}
+    {% endif %}
+  </section>
+
+  <section data-panel="providers"{% if page.tab != "providers" %} hidden{% endif %} :hidden="panelHidden">
+    {% if page.providers %}
+    <p class="small text-muted mb-2"><strong>{{ page.providers | length }}{% if page.providers | length >= page.results_max %}+{% endif %}</strong> {{ t(key="explore.shops_near") }}</p>
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
+      {% for p in page.providers %}<div class="col">{{ providers::provider_card(p=p) }}</div>{% endfor %}
+    </div>
+    {% elif page.wider %}
+    {% set wider_label = t(key="explore.search_within", area=page.wider.label) %}
+    {{ empty::empty_state(icon="fa-magnifying-glass", title=no_shop_title, hint=t(key="explore.hint_shops_wider"), action_href=page.wider.href, action_icon="fa-expand", action_label=wider_label) }}
+    {% else %}
+    {{ empty::empty_state(icon="fa-magnifying-glass", title=no_shop_title, hint=t(key="explore.hint_shops"), action_href=url_for(name="providers"), action_icon="fa-store", action_label=t(key="list.all_shops")) }}
+    {% endif %}
+  </section>
+</div>
+{% elif page.featured_services %}
+<section class="home-section">
+  {{ section::section_header(title=t(key="home.featured_services"), more_href=url_for(name="services")) }}
+  {{ services::service_grid(services=page.featured_services) }}
+</section>
+{% endif %}
+{% endblock main %}

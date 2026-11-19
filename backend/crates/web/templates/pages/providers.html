@@ -1,0 +1,43 @@
+{% extends "layouts/app.html" %}
+{% import "molecules/page_hero.html" as hero %}
+{% import "molecules/sector_switch.html" as sector %}
+{% import "molecules/geo_cta.html" as geo %}
+{% import "molecules/empty_state.html" as empty %}
+{% import "molecules/pagination_nav.html" as paging %}
+{% import "molecules/tab_nav.html" as tabs %}
+{% import "organisms/provider_card.html" as cards %}
+{% import "organisms/list_filters.html" as filters %}
+{#- The provider directory: every live business, new ones without a service
+    included; tabs switch the same search to the services (`/services`).
+    `page` is web::pages::directory::DirectoryPage. -#}
+{% block title %}{{ t(key="directory.title") }} — {{ site.name }}{% endblock title %}
+{% block meta %}<meta name="description" content="{{ t(key="directory.meta") }}">{% endblock meta %}
+{% block main %}
+{{ hero::page_hero(title=t(key="directory.title"), back_href=page.back_href, back_label=t(key="nav.home"), variant="", icon="fa-store", sub=t(key="directory.sub")) }}
+
+{{ tabs::tab_nav(tabs=page.tabs, label=t(key="list.view_by")) }}
+
+{% if page.sectors %}{{ sector::sector_links(sectors=page.sectors) }}{% else %}{{ sector::sector_switch(sectors=shell.sectors, back=shell.here) }}{% endif %}
+<div class="list-tools">{{ filters::list_filters(f=page.filters) }}</div>
+
+<section class="list-results">
+  {% if page.providers %}
+  <p class="small text-muted mb-2"><strong>{{ page.total }}</strong> {{ t(key="directory.unit") }}{% if page.filters.q %} {{ t(key="list.for_query", q=page.filters.q) }}{% endif %}</p>
+  {#- The near-me banner after the first three cards, as on /services. -#}
+  <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
+    {% for p in page.providers | slice(end=3) %}<div class="col">{{ cards::provider_card(p=p) }}</div>{% endfor %}
+  </div>
+  <div class="my-3">{{ geo::geo_cta(href=page.near_href, title=t(key="geo.title_shops"), sub=page.geo_sub) }}</div>
+  {% if page.providers | length > 3 %}
+  <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
+    {% for p in page.providers | slice(start=3) %}<div class="col">{{ cards::provider_card(p=p) }}</div>{% endfor %}
+  </div>
+  {% endif %}
+  {% if page.pagination %}{{ paging::pagination_nav(p=page.pagination) }}{% endif %}
+  {% elif page.filtered %}
+  {{ empty::empty_state(icon="fa-store", title=t(key="directory.none_found"), hint=t(key="directory.none_found_hint"), action_href=page.filters.reset_href, action_icon="fa-xmark", action_label=t(key="filters.reset"), second_href=page.tabs[0].href, second_icon="fa-border-all", second_label=t(key="directory.search_services")) }}
+  {% else %}
+  {{ empty::empty_state(icon="fa-inbox", title=t(key="directory.none_yet"), hint=t(key="list.come_back")) }}
+  {% endif %}
+</section>
+{% endblock main %}

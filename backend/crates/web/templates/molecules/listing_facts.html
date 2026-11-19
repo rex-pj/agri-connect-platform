@@ -1,0 +1,38 @@
+{#- What a service's or supply's admin page says about it beside its form
+    (`l` is AdminServiceDto or AdminProductDto):
+    `listing_meta`: its sector, what it is for (`for_label`, supplies only),
+    when it was added and last changed, and whether its provider listed it;
+    `owner_note`: above the save button of a listing its provider added,
+    that the change is theirs to see (it lands in the history);
+    `provider_line` (at the end): whose listing it is;
+    `listing_activity`: its taps and contact requests lately
+    (`a` is ListingActivityDto). -#}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/status_badge.html" as status %}
+{% macro listing_meta(l, sector_label, for_label="") -%}
+<dl class="acct-rows mb-0">
+  <div class="acct-row"><dt>{{ t(key="admin.label_sector") }}</dt><dd>{{ sector_label }}</dd></div>
+  {% if for_label %}<div class="acct-row"><dt>{{ t(key="admin.label_for") }}</dt><dd>{{ for_label }}</dd></div>{% endif %}
+  <div class="acct-row"><dt>{{ t(key="admin.created_label") }}</dt><dd><time datetime="{{ l.created_on | utc_iso }}">{{ l.created_on | vn_datetime }}</time></dd></div>
+  <div class="acct-row"><dt>{{ t(key="admin.updated_label") }}</dt><dd><time datetime="{{ l.updated_on | utc_iso }}">{{ l.updated_on | vn_datetime }}</time></dd></div>
+</dl>
+{% if l.added_by_owner %}<p class="mb-0"><span class="badge text-bg-light border">{{ atoms::icon(name="fa-user-pen") }} {{ t(key="admin.added_by_owner") }}</span></p>{% endif %}
+{%- endmacro listing_meta %}
+
+{% macro owner_note(l) -%}
+{% if l.added_by_owner %}<p class="small text-warning-emphasis mb-0">{{ atoms::icon(name="fa-user-pen") }} {{ t(key="admin.owner_content_note") }}</p>{% endif %}
+{%- endmacro owner_note %}
+
+{% macro listing_activity(a) -%}
+<p class="small text-muted mb-0">{{ atoms::icon(name="fa-phone") }} {{ t(key="admin.listing_taps", count=a.taps, days=a.days) }}{% if a.inquiries is number %} · {{ t(key="admin.listing_inquiries", count=a.inquiries) }}{% endif %}</p>
+{%- endmacro listing_activity %}
+
+{#- `provider_line`: whose listing it is, at the top of its page: the
+    provider (to its page), its phone, its badge, and "off" while it is. -#}
+{% macro provider_line(l, provider_href) -%}
+<p class="admin-status mb-0">
+  <span>{{ atoms::icon(name="fa-store") }} <a class="fw-semibold" href="{{ provider_href }}">{{ l.business_name }}</a> · <a href="tel:{{ l.provider_phone }}">{{ l.provider_phone | phone }}</a></span>
+  {{ status::verified(on=l.provider_verified) }}
+  {% if not l.provider_active %}{{ status::account(on=false) }}{% endif %}
+</p>
+{%- endmacro provider_line %}

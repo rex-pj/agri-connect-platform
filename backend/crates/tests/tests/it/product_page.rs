@@ -1,0 +1,285 @@
+//! Product detail: canonical URLs, the rendered page, and missing products.
+//! Database tests need TEST_DATABASE_URL and `--include-ignored`.
+
+use axum::{
+    body::Body,
+    http::{header, Request, Response, StatusCode},
+};
+use infrastructure::entities::{business, inquiry};
+use integration_tests::{
+    create_product, env_with_origin, post_form, put_photo, register_provider, send,
+    with_product_category, Env,
+};
+use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
+use web::views::PAGE_CSP;
+
+const NAME: &str = "Gạo Thơm ST25 An Giang";
+const SLUG: &str = "gao-thom-st25-an-giang";
+
+fn page(uri: &str) -> Request<Body> {
+    Request::get(uri)
+        .header(header::ACCEPT, "text/html")
+        .body(Body::empty())
+        .unwrap()
+}
+
+async fn text(res: Response<Body>) -> String {
+    let bytes = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    String::from_utf8(bytes.to_vec()).unwrap()
+}
+
+/// A provider with one product; returns (token, product id).
+async fn seeded(e: &Env, body: &str) -> (String, i32) {
+    let token = register_provider(&e.state, "nongdan", "0901234567").await;
+    let id = create_product(e, &token, &with_product_category(e, body).await).await;
+    (token, id)
+}
+
+fn rice() -> String {
+    format!(
+        r#"{{"name":"{NAME}","price":28000,"unit":"kg",
+            "description":"Gạo thơm dẻo.\nĐóng bao 5 kg."}}"#
+    )
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn every_other_spelling_of_the_url_moves_permanently_to_the_canonical_one() {
+    let e = Env::new().await;
+    let (_, id) = seeded(&e, &rice()).await;
+    let canonical = format!("/supplies/{id}/{SLUG}");
+
+    for uri in [
+        format!("/supplies/{id}"),
+        format!("/supplies/{id}/ten-cu-truoc-khi-doi"),
+        format!("/supplies/0{id}/{SLUG}"),
+    ] {
+        let res = send(&e.router, page(&uri)).await;
+        // 301, not 308: the status old crawlers and link previews understand.
+        assert_eq!(res.status(), StatusCode::MOVED_PERMANENTLY, "{uri}");
+        assert_eq!(res.headers()[header::LOCATION], canonical.as_str(), "{uri}");
+    }
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn the_detail_page_shows_price_description_and_a_call_button() {
+    let e = Env::new().await;
+    let (_, id) = seeded(&e, &rice()).await;
+
+    let res = send(&e.router, page(&format!("/supplies/{id}/{SLUG}"))).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(res.headers()[header::CONTENT_SECURITY_POLICY], PAGE_CSP);
+    let html = text(res).await;
+    assert!(html.contains(&format!("<title>{NAME} — Agri-Connect</title>")));
+    // The description on one line for search snippets...
+    assert!(html.contains(r#"<meta name="description" content="Gạo thơm dẻo. Đóng bao 5 kg.">"#));
+    // ...and with the seller's line break on the page.
+    assert!(html.contains("Gạo thơm dẻo.\nĐóng bao 5 kg."));
+    assert!(html.contains("28.000 ₫") && html.contains("/kg"));
+    assert!(html.contains(r#"href="tel:0901234567""#));
+    assert!(html.contains("Vườn nongdan"));
+    // The way to the seller's page and its contact form.
+    let link = html
+        .split(r#"href="/providers/"#)
+        .nth(1)
+        .and_then(|rest| rest.split(['"', '#']).next())
+        .unwrap_or_default();
+    assert!(link.ends_with("/vuon-nongdan"), "provider link: {link:?}");
+    assert!(html.contains("Chưa có ảnh"), "says there is no photo yet");
+    assert!(!html.contains("{{") && !html.contains("{%"));
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_product_with_a_photo_shows_the_full_size_image() {
+    let e = Env::new().await;
+    let (token, id) = seeded(&e, &rice()).await;
+    let file = put_photo(&e, id, &token).await;
+
+    let html = text(send(&e.router, page(&format!("/supplies/{id}/{SLUG}"))).await).await;
+    assert!(!html.contains("Chưa có ảnh"));
+    // The main image, not the thumbnail the cards use.
+    assert!(html.contains(&format!(r#"src="/files/{file}""#)), "{html}");
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn without_a_description_the_meta_tag_says_who_sells_it() {
+    let e = Env::new().await;
+    let (_, id) = seeded(&e, r#"{"name":"Sầu riêng"}"#).await;
+    let html = text(send(&e.router, page(&format!("/supplies/{id}/sau-rieng"))).await).await;
+    assert!(html.contains("Mua Sầu riêng từ Vườn nongdan trên Agri-Connect."));
+    assert!(html.contains("Liên hệ giá"));
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn missing_hidden_and_mistyped_products_are_a_404_page() {
+    let e = Env::new().await;
+    let (_, id) = seeded(&e, &rice()).await;
+    e.t.db
+        .execute_unprepared(&format!(
+            "UPDATE products SET is_active = FALSE WHERE id = {id}"
+        ))
+        .await
+        .unwrap();
+
+    for uri in [
+        format!("/supplies/{id}/{SLUG}"), // deactivated
+        "/supplies/999999/x".to_owned(),
+        "/supplies/khong-phai-so".to_owned(),
+        "/supplies/99999999999999/x".to_owned(), // overflows i32
+    ] {
+        let res = send(&e.router, page(&uri)).await;
+        assert_eq!(res.status(), StatusCode::NOT_FOUND, "{uri}");
+        assert!(text(res).await.contains("Không tìm thấy vật tư."), "{uri}");
+    }
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn the_page_shows_what_else_the_seller_does() {
+    let e = Env::new().await;
+    let (token, id) = seeded(&e, &rice()).await;
+    let uri = format!("/supplies/{id}/{SLUG}");
+    let before = text(send(&e.router, page(&uri)).await).await;
+    assert!(
+        !before.contains(r#"class="offer-rows""#),
+        "nothing else yet"
+    );
+
+    let category = integration_tests::categories_of(&e, "service").await[0].0;
+    let req = Request::post("/api/provider/services")
+        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(format!(
+            r#"{{"category_id":{category},"name":"Xay xát lúa"}}"#
+        )))
+        .unwrap();
+    let res = send(&e.router, req).await;
+    assert_eq!(res.status(), StatusCode::CREATED);
+    let service = integration_tests::json_body(res).await["id"]
+        .as_i64()
+        .unwrap();
+
+    let after = text(send(&e.router, page(&uri)).await).await;
+    assert!(after.contains(r#"class="offer-rows""#));
+    assert!(after.contains(&format!(r#"href="/services/{service}/xay-xat-lua""#)));
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn the_contact_form_asks_about_this_product_and_lands_back_on_it() {
+    let e = env_with_origin().await;
+    let (_, id) = seeded(&e, &rice()).await;
+    let canonical = format!("/supplies/{id}/{SLUG}");
+    let business = business::Entity::find()
+        .filter(business::Column::Name.eq("Vườn nongdan"))
+        .one(&e.t.db)
+        .await
+        .unwrap()
+        .unwrap()
+        .id
+        .to_string();
+
+    let html = text(send(&e.router, page(&canonical)).await).await;
+    assert!(html.contains(r#"name="return_to" value="product""#));
+    assert!(html.contains(&format!(r#"name="product_id" value="{id}""#)));
+    assert!(
+        html.contains(&format!(r#"name="topic" type="text" value="{NAME}""#)),
+        "the topic is this product"
+    );
+
+    // A refused form re-shows this page; a sent one lands back on it.
+    let product = id.to_string();
+    let form = |name: &'static str| {
+        post_form(
+            "/contact",
+            &[
+                ("business_id", business.as_str()),
+                ("product_id", product.as_str()),
+                ("return_to", "product"),
+                ("topic", NAME),
+                ("requester_phone", "0912345678"),
+                ("requester_name", name),
+            ],
+            None,
+        )
+    };
+    let res = send(&e.router, form("")).await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    let refused = text(res).await;
+    assert!(refused.contains(&format!("<title>{NAME} — Agri-Connect</title>")));
+    assert!(
+        refused.contains(r#"value="0912345678""#),
+        "typed phone kept"
+    );
+
+    let res = send(&e.router, form("Chú Năm")).await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res.headers()[header::LOCATION], canonical.as_str());
+    let stored = inquiry::Entity::find().one(&e.t.db).await.unwrap().unwrap();
+    assert_eq!(stored.topic, NAME);
+    assert_eq!(
+        (stored.product_id, stored.service_id),
+        (Some(id), None),
+        "the request is stored as about this supply"
+    );
+
+    // A supply of another business, or one that is gone, is left out: the
+    // farmer chose none in the form, so the request still goes through.
+    let res = send(
+        &e.router,
+        post_form(
+            "/contact",
+            &[
+                ("business_id", business.as_str()),
+                ("product_id", "999999"),
+                ("return_to", "product"),
+                ("topic", NAME),
+                ("requester_phone", "0912345679"),
+                ("requester_name", "Chú Sáu"),
+            ],
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let unlinked = inquiry::Entity::find()
+        .filter(inquiry::Column::RequesterPhone.eq("0912345679"))
+        .one(&e.t.db)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(unlinked.product_id, None);
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn the_sellers_page_lists_their_products() {
+    let e = Env::new().await;
+    let (_, id) = seeded(&e, &rice()).await;
+    let res = send(&e.router, page(&format!("/supplies/{id}/{SLUG}"))).await;
+    let html = text(res).await;
+    let provider = html
+        .split(r#"href="/providers/"#)
+        .nth(1)
+        .and_then(|rest| rest.split('"').next())
+        .unwrap_or_default()
+        .to_owned();
+
+    let shop = text(send(&e.router, page(&format!("/providers/{provider}"))).await).await;
+    assert!(shop.contains("Vật tư đang bán"));
+    assert!(shop.contains(&format!(r#"href="/supplies/{id}/{SLUG}""#)));
+    e.cleanup().await;
+}

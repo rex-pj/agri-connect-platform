@@ -1,0 +1,14 @@
+{#- Green header of a page: a way back, the title, then a label or a line of
+    context. variant: "" (list pages) or "detail" (more room below for
+    cards). The public detail pages have their own, organisms/detail_hero.
+    `icon` also shows faintly as a watermark. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro page_hero(title, back_href="", back_label="", badge_icon="", badge_text="", variant="detail", icon="", sub="") -%}
+<header class="page-hero{% if variant %} page-hero--{{ variant }}{% endif %}">
+  {% if icon %}{{ atoms::icon(name=icon, class="page-hero__watermark") }}{% endif %}
+  {% if back_href %}<a class="back-link" href="{{ back_href }}">{{ atoms::icon(name="fa-arrow-left") }} {{ back_label }}</a>{% endif %}
+  <h1 class="page-hero__title">{% if icon %}{{ atoms::icon(name=icon, class="page-hero__title-icon") }} {% endif %}{{ title }}</h1>
+  {% if badge_text %}<span class="page-hero__badge">{% if badge_icon %}{{ atoms::icon(name=badge_icon) }} {% endif %}{{ badge_text }}</span>{% endif %}
+  {% if sub %}<p class="page-hero__sub">{{ sub }}</p>{% endif %}
+</header>
+{%- endmacro page_hero %}

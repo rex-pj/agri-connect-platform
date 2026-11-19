@@ -1,0 +1,60 @@
+{% extends "layouts/admin.html" %}
+{% import "molecules/form_field.html" as field %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "molecules/history_list.html" as history %}
+{% import "organisms/record_header.html" as record %}
+{% import "organisms/coded_fields.html" as fields %}
+{% import "organisms/confirm_sheet.html" as confirm %}
+{#- One entry of a coded list (a sector, an alert kind), as a record page:
+    the header (hide / show, and what is filed under the list: `b.header`),
+    one status strip (shown or not, who hid it and why), then its edit form,
+    and beside it on a wide screen its code (shown, never edited: cookies,
+    `sector=` and the rows pointing to it keep it) and history. An entry is
+    never deleted: other rows name it. `page.body` is
+    web::pages::admin::coded::CodedEntryPage. -#}
+{% block title %}{{ page.body.entry.name }} — {{ site.name }} Admin{% endblock title %}
+{% block vendor %}{{ field::searchable_select_assets() }}{% endblock vendor %}
+{% block content %}
+{% set b = page.body %}
+{% set w = b.words %}
+{% set s = b.entry %}
+{{ record::record_header(h=b.header) }}
+<div class="admin-body">
+  {% if b.flash_text %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=b.flash_text) }}{% endif %}
+  {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
+
+  <section class="admin-section record-strip" aria-labelledby="status-title">
+    <h2 class="visually-hidden" id="status-title">{{ t(key="admin.status_now") }}</h2>
+    <p class="small mb-0">{% if s.is_active %}{{ w.on }}{% else %}{{ w.off }}{% endif %}</p>
+    {% if not s.is_active %}{% set off = b.history | filter(attribute="action", value=b.hide_action) | first %}{% if off %}{{ history::last_change(row=off) }}{% endif %}{% endif %}
+  </section>
+
+  <div class="row g-3 g-lg-4">
+    <div class="col-lg-8">
+      <section class="admin-section" aria-labelledby="edit-title">
+        <h2 class="admin-section__title" id="edit-title">{{ t(key="admin.edit_title") }}</h2>
+        <form class="form-stack" method="post" action="{{ b.update_action }}" novalidate>
+          {{ fields::coded_fields(form=b.form, errors=b.errors, words=w, name_max=limits.coded_name_max, prefix="edit") }}
+          <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button></div>
+        </form>
+      </section>
+    </div>
+    <div class="col-lg-4 d-flex flex-column gap-3">
+      <section class="admin-section" aria-labelledby="details-title">
+        <h2 class="admin-section__title" id="details-title">{{ t(key="admin.details") }}</h2>
+        <dl class="acct-rows mb-0">
+          <div class="acct-row"><dt>{{ t(key="coded_form.code") }}</dt><dd><code>{{ s.code }}</code></dd></div>
+        </dl>
+      </section>
+      {{ history::history_list(rows=b.history) }}
+    </div>
+  </div>
+
+  {% for x in b.confirms %}
+  <div x-data="dialog" data-open="{% if x.open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+    {{ confirm::confirm_sheet(id=x.id, title=x.title, icon=x.icon, action=x.action, button=x.button, reason_max=limits.audit_reason_max, effect=x.effect, what=x.what, note=x.note, hidden_name=x.hidden_name, hidden_value=x.hidden_value, button_class=x.button_class) }}
+  </div>
+  {% endfor %}
+</div>
+{% endblock content %}

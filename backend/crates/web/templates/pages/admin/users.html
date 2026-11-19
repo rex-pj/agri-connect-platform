@@ -1,0 +1,40 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/status_badge.html" as status %}
+{% import "molecules/admin_header.html" as header %}
+{% import "molecules/admin_search.html" as search %}
+{% import "molecules/pagination_nav.html" as paging %}
+{% import "molecules/row_action.html" as row %}
+{#- `page.body` is web::pages::admin::users::UsersPage. Changes happen on each
+    user's page. -#}
+{% block title %}{{ t(key="admin_menu.users") }} — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+{{ header::admin_header(title=t(key="admin_menu.users"), icon="fa-users", sub=t(key="users.count", count=b.total)) }}
+<div class="admin-body">
+  {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.users")) }}
+  <div class="admin-card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 admin-table admin-table--cards">
+        <thead class="admin-table-head">
+          <tr><th>{{ t(key="admin_menu.users") }}</th><th>{{ t(key="account.role") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th>{{ t(key="admin.created") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
+        </thead>
+        <tbody>
+          {% for r in b.rows %}
+          {% set u = r.user %}
+          <tr{% if not u.is_active %} class="table-light text-body-secondary"{% endif %}>
+            <td data-label=""><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ u.username }}</a>{% if u.full_name %}<span class="d-block small text-muted">{{ u.full_name }}</span>{% endif %}<span class="d-block small text-muted">{{ u.email }}</span></td>
+            <td data-label="{{ t(key="account.role") }}"><span class="badge text-bg-light border">{{ u.role_name }}</span></td>
+            <td data-label="{{ t(key="admin.col_status") }}" class="text-center cell-state">{{ status::account(on=u.is_active) }}</td>
+            <td data-label="{{ t(key="admin.created") }}" class="small text-muted"><time datetime="{{ u.created_on | utc_iso }}">{{ u.created_on | vn_datetime }}</time>{% if u.created_by_name %}<span class="d-block">{{ u.created_by_name }}</span>{% endif %}</td>
+            <td data-label="" class="text-end"><div class="row-actions">{{ row::open(href=r.href, name=u.username) }}</div></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-center text-muted py-4">{% if b.search.q %}{{ t(key="admin_search.none", q=b.search.q) }}{% else %}{{ t(key="admin.no_users") }}{% endif %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% if b.pagination %}{{ paging::pagination_nav(p=b.pagination) }}{% endif %}
+</div>
+{% endblock content %}

@@ -1,0 +1,18 @@
+{#- Who you are calling, in the decision box of a service's or a supply's
+    page, between the price and the call button: the provider (name, badge),
+    their area and rating, the whole row one link to their page. `rating` is
+    application::outputs::RatingDto (`None` without any reviews: nothing is
+    said, the row stays short). -#}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/badge.html" as badge %}
+{% import "molecules/rating_line.html" as rating_line %}
+{% macro vendor_summary(name, verified, area, rating, href) -%}
+<a class="vendor-row" href="{{ href }}">
+  <span class="vendor-row__icon">{{ atoms::icon(name="fa-shop") }}</span>
+  <span class="vendor-row__info">
+    <span class="vendor-row__name">{{ name }}{% if verified %} {{ badge::badge(text=t(key="status.verified"), icon="fa-circle-check") }}{% endif %}</span>
+    <span class="vendor-row__meta">{{ atoms::icon(name="fa-location-dot") }} {{ area }}{% if rating %} · {{ rating_line::rating_line(r=rating, compact=true) }}{% endif %}</span>
+  </span>
+  {{ atoms::icon(name="fa-chevron-right", class="vendor-row__chevron") }}
+</a>
+{%- endmacro vendor_summary %}

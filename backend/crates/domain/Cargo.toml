@@ -1,0 +1,24 @@
+[package]
+name = "domain"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+# No I/O and no framework here. `cargo check -p domain` must keep compiling
+# with default features, so any framework import outside `axum` (feature-gated)
+# fails the build.
+[features]
+default = []
+# IntoResponse / rejection conversions for the error type. The orphan rule
+# forces these impls into this crate; only the web crate enables the feature.
+axum = ["dep:axum"]
+
+[dependencies]
+async-trait.workspace = true
+chrono.workspace      = true
+serde.workspace       = true
+uuid.workspace        = true
+axum = { workspace = true, optional = true }
+
+[lints]
+workspace = true

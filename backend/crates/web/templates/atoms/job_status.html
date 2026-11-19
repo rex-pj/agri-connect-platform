@@ -1,0 +1,10 @@
+{#- The worded name of a job post status code (domain::constants::JOB_STATUSES).
+    `badge=true` wraps it in its badge, the same look as an inquiry's
+    (`atoms/inquiry_status.html`): an open post stands out (it still needs a
+    provider), the rest are quiet, and none uses the green that means
+    "shown" or "active" elsewhere. -#}
+{% macro label(status, badge=false) -%}
+{% if badge %}<span class="badge {% if status == "open" %}text-bg-info{% elif status == "spam" %}text-bg-secondary{% else %}bg-body-secondary text-body-secondary{% endif %}">{% endif -%}
+{% if status == "open" %}{{ t(key="job_status.open") }}{% elif status == "closed" %}{{ t(key="job_status.closed") }}{% elif status == "spam" %}{{ t(key="job_status.spam") }}{% else %}{{ status }}{% endif %}
+{%- if badge %}</span>{% endif %}
+{%- endmacro label %}

@@ -1,0 +1,8 @@
+[Unit]
+Description=Agri-Connect database backup to GCS
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/agri-connect/backup/agri-backup.sh

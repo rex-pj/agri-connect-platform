@@ -1,0 +1,28 @@
+{#- The signed-in account menu, the same in the app top bar and the admin bar:
+    a pill button (`label`: "Tài khoản" on app pages, the username in the
+    admin bar) opening the menu's links and, last and red, the logout form.
+    Without JS the button is a link to /account; Alpine `profileMenu` turns
+    it into the menu, closing on Escape, a tap outside, or another top-bar
+    menu opening. `menu` is a `shell::ProfileMenu`; `label_class` lets a
+    frame hide the label on a phone, leaving the icon. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro account_menu(menu, label, label_class="") -%}
+<div class="app-nav__profile" x-data="profileMenu" x-on:nav-search-opened.window="close" x-on:language-menu-opened.window="close" x-on:keydown.escape.window="close">
+  <a class="app-nav__login" href="{{ url_for(name='account') }}" role="button" aria-haspopup="true" aria-label="{{ label }}"x-on:click.prevent="toggle" :class="buttonClass" :aria-expanded="expanded">
+    {{ atoms::icon(name="fa-circle-user") }}
+    <span class="app-nav__login-label {{ label_class }}">{{ label }}</span>
+    <span class="app-nav__chevron" :class="chevronClass">{{ atoms::icon(name="fa-chevron-down") }}</span>
+  </a>
+  <div class="app-nav__dropdown" role="menu" x-show="open" x-cloak>
+    {% for item in menu.items %}
+    <a class="app-nav__dropdown-item" role="menuitem" href="{{ item.href }}">{{ atoms::icon(name=item.icon) }} {{ item.label }}</a>
+    {% endfor %}
+    {% if menu.logout %}
+    <form method="post" action="{{ menu.logout }}">
+      <button type="submit" class="app-nav__dropdown-item app-nav__dropdown-item--danger" role="menuitem">{{ atoms::icon(name="fa-right-from-bracket") }} {{ t(key="common.logout") }}</button>
+    </form>
+    {% endif %}
+  </div>
+  <button type="button" class="app-nav__backdrop" tabindex="-1" aria-hidden="true" x-show="open" x-cloak x-on:click="close"></button>
+</div>
+{%- endmacro account_menu %}

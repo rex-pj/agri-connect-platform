@@ -1,0 +1,13 @@
+{#- The home page's way in for providers: sign up, or back to the dashboard.
+    `cta` is web::shell::ProviderCta. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro provider_cta(cta) -%}
+<a class="provider-cta card card-body flex-row align-items-center gap-3 text-decoration-none" href="{{ cta.href }}">
+  <span class="provider-cta__icon">{{ atoms::icon(name=cta.icon) }}</span>
+  <span class="provider-cta__text">
+    <strong class="d-block text-body">{{ cta.title }}</strong>
+    <span class="small text-muted">{{ cta.sub }}</span>
+  </span>
+  <span class="btn btn-success flex-shrink-0">{{ cta.label }} {{ atoms::icon(name="fa-arrow-right") }}</span>
+</a>
+{%- endmacro provider_cta %}

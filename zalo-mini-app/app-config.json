@@ -1,0 +1,17 @@
+{
+  "app": {
+    "title": "Agri-Connect",
+    "headerColor": "#1b6b3a",
+    "textColor": "white",
+    "statusBarColor": "#1b6b3a",
+    "leftButton": "back",
+    "statusBar": "normal",
+    "actionBarHidden": false,
+    "hideAndroidBottomNavigationBar": false,
+    "hideIOSSafeAreaBottom": false
+  },
+  "debug": false,
+  "listCSS": [],
+  "listSyncJS": [],
+  "listAsyncJS": []
+}

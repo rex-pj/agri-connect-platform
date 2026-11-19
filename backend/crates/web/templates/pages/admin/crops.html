@@ -1,0 +1,79 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "atoms/status_badge.html" as status %}
+{% import "molecules/admin_header.html" as header %}
+{% import "molecules/admin_tabs.html" as tabs %}
+{% import "molecules/row_action.html" as row %}
+{% import "molecules/sheet_header.html" as sheet_head %}
+{% import "organisms/crop_fields.html" as fields %}
+{% import "organisms/confirm_sheet.html" as confirm %}
+{#- `page.body` is web::pages::admin::crops::CropsPage: every crop (hidden
+    ones too) and the create sheet opened by the header's "add" (an anchored
+    section without JS), which comes back open with its messages when a rule
+    is broken. "Ẩn" reloads the list with that row's confirmation open
+    (`b.confirm`, in its own `dialog` scope). Row actions send `back=list`
+    (`b.keep`) so they land here again. -#}
+{% block title %}{{ t(key="admin_prices.tab_crops") }} — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+<div x-data="dialog" data-open="{% if b.errors.message or b.errors.fields %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+{{ header::admin_header(title=t(key="admin_menu.price_board"), icon="fa-chart-line", sub=t(key="admin_crops.sub", count=b.rows | length), action_href="#them-cay", action_icon="fa-plus", action_label=t(key="admin_crops.add"), action_opens=true) }}
+<div class="admin-body">
+  {{ tabs::admin_tabs(tabs=b.tabs, label=t(key="admin_menu.price_board")) }}
+  {% if b.flash == "crop_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin_crops.hidden")) }}{% endif %}
+  {% if b.flash == "crop_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin_crops.shown")) }}{% endif %}
+
+  <div class="admin-card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 admin-table admin-table--cards">
+        <thead class="admin-table-head">
+          <tr><th>{{ t(key="crop_form.name") }}</th><th>{{ t(key="crop_form.commodity") }}</th><th class="text-center">{{ t(key="crop_form.unit") }}</th><th class="text-center">{{ t(key="form.display_order") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
+        </thead>
+        <tbody>
+          {% for r in b.rows %}
+          {% set c = r.crop %}
+          <tr{% if not c.is_active %} class="table-light text-body-secondary"{% endif %}>
+            <td data-label=""><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ c.name }}</a>{% if c.is_demo %} {{ status::demo() }}{% endif %}</td>
+            <td data-label="{{ t(key="crop_form.commodity") }}">{% if c.commodity %}{{ c.commodity }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+            <td data-label="{{ t(key="crop_form.unit") }}" class="text-center">{{ c.unit }}</td>
+            <td data-label="{{ t(key="form.display_order") }}" class="text-center">{{ c.display_order }}</td>
+            <td data-label="{{ t(key="admin.col_status") }}" class="text-center cell-state">{{ status::visibility(on=c.is_active) }}</td>
+            <td data-label="" class="text-end">
+              <div class="row-actions">
+                {% if c.is_active %}
+                {{ row::hide(href=r.hide_href ~ "#xac-nhan", name=c.name) }}
+                {% else %}
+                {{ row::show(action=r.status_action, name=c.name, field="is_active", keep=b.keep) }}
+                {% endif %}
+                {{ row::open(href=r.href, name=c.name) }}
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="text-center text-muted py-4">{{ t(key="admin_crops.none") }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if b.confirm %}
+  {% set c = b.confirm %}
+  <div x-data="dialog" data-open="true" x-on:keydown.escape.window="hide">
+    {{ confirm::confirm_sheet(id="xac-nhan", title=t(key="admin_crops.hide_title", name=c.name), icon="fa-eye-slash", action=c.action, button=t(key="admin.confirm_hide"), reason_max=limits.audit_reason_max, effect="hide", what=t(key="admin_crops.what"), hidden_name="is_active", hidden_value="false", keep=b.keep) }}
+  </div>
+  {% endif %}
+
+  <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
+  <section class="contact-sheet" id="them-cay" aria-labelledby="them-cay-title" :class="sheetClass">
+    {{ sheet_head::sheet_header(id="them-cay", title=t(key="admin_crops.add"), icon="fa-seedling") }}
+    <form class="contact-sheet__form" method="post" action="{{ b.create_action }}" novalidate>
+      {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
+      {{ fields::crop_fields(form=b.form, errors=b.errors, commodities=b.commodities, commodities_href=b.commodities_href, name_max=limits.crop_name_max, unit_max=limits.crop_unit_max, prefix="new", first=true) }}
+      <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-plus") }} {{ t(key="admin_crops.add") }}</button>
+    </form>
+  </section>
+</div>
+</div>
+{% endblock content %}

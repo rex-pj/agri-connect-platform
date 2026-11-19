@@ -1,0 +1,20 @@
+{#- The boxes of an alert, shared by the create sheet and the edit form.
+    `form` is web::pages::admin::alerts::AlertForm (as typed), `errors` its
+    FormErrors, `choices` the kinds, sectors and provinces. A blank sector
+    is every sector, a blank province the whole region. `first`: the kind
+    box takes the focus when its sheet opens. -#}
+{% import "molecules/form_field.html" as field %}
+{% macro alert_fields(form, errors, choices, title_max, body_max, prefix, first=false) -%}
+{% set e = errors.fields %}
+{{ field::select(id=prefix ~ "-kind", name="kind", label=t(key="alert.kind"), options=choices.kinds, value_key="value", label_key="label", value=form.kind, error=e.kind | default(value=""), required=true, placeholder=t(key="alert.choose_kind")) }}
+<div class="row g-2">
+  <div class="col-sm-6">{{ field::select(id=prefix ~ "-sector", name="sector", label=t(key="sector.label"), options=choices.sectors, value_key="value", label_key="label", value=form.sector, error=e.sector | default(value=""), placeholder=t(key="sector.all")) }}</div>
+  <div class="col-sm-6">{{ field::select(id=prefix ~ "-province", name="province_code", label=t(key="alert.province"), options=choices.provinces, value_key="value", label_key="label", value=form.province_code, error=e.province_code | default(value=""), placeholder=t(key="alert.whole_region")) }}</div>
+</div>
+{{ field::input(id=prefix ~ "-title", name="title", label=t(key="alert.title"), value=form.title, error=e.title | default(value=""), required=true, maxlength=title_max, placeholder=t(key="alert.title_placeholder")) }}
+{{ field::textarea(id=prefix ~ "-body", name="body", label=t(key="alert.body"), value=form.body, error=e.body | default(value=""), maxlength=body_max, rows=3, placeholder=t(key="alert.body_placeholder")) }}
+<div class="row g-2">
+  <div class="col-6">{{ field::input(id=prefix ~ "-start", name="starts_on", label=t(key="alert.starts_on"), type="date", value=form.starts_on, error=e.starts_on | default(value=""), required=true) }}</div>
+  <div class="col-6">{{ field::input(id=prefix ~ "-end", name="ends_on", label=t(key="alert.ends_on"), type="date", value=form.ends_on, error=e.ends_on | default(value=""), required=true) }}</div>
+</div>
+{%- endmacro alert_fields %}

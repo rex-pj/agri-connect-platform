@@ -1,0 +1,15 @@
+{#- The name search above an admin list: one GET form, so the result is a
+    URL; it keeps the provider filter. `s` is web::pages::admin::SearchBox,
+    `placeholder` says what is searched. With a search, a link clears it. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro admin_search(s, placeholder) -%}
+<form method="get" action="{{ s.action }}" role="search">
+  {% if s.provider_id %}<input type="hidden" name="provider_id" value="{{ s.provider_id }}">{% endif %}
+  <label class="visually-hidden" for="admin-q">{{ t(key="admin_search.label") }}</label>
+  <div class="input-group">
+    <input class="form-control" id="admin-q" type="search" name="q" value="{{ s.q }}" placeholder="{{ placeholder }}" enterkeyhint="search">
+    <button class="btn btn-success" type="submit" aria-label="{{ t(key="common.search") }}">{{ atoms::icon(name="fa-magnifying-glass") }}</button>
+  </div>
+  {% if s.q %}<a class="d-inline-block small mt-2" href="{{ s.clear_href }}">{{ atoms::icon(name="fa-xmark", class="me-1") }}{{ t(key="admin_search.clear") }}</a>{% endif %}
+</form>
+{%- endmacro admin_search %}

@@ -1,0 +1,74 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "molecules/admin_header.html" as header %}
+{% import "molecules/admin_tabs.html" as tabs %}
+{% import "molecules/admin_filter.html" as filter %}
+{% import "molecules/pagination_nav.html" as paging %}
+{% import "molecules/row_action.html" as row %}
+{% import "molecules/sheet_header.html" as sheet_head %}
+{% import "organisms/price_fields.html" as fields %}
+{% import "organisms/confirm_sheet.html" as confirm %}
+{#- `page.body` is web::pages::admin::prices::PricesPage: every price
+    entered, newest day first, and the "enter a price" sheet opened by the
+    header's action (an anchored section without JS), which comes back open
+    with its messages when a rule is broken. "Xoá" reloads the list with that
+    row's confirmation open (`b.confirm`, in its own `dialog` scope); its
+    form sends the page back (`b.keep`). -#}
+{% block title %}{{ t(key="admin_menu.price_board") }} — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+<div x-data="dialog" data-open="{% if b.errors.message or b.errors.fields %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+{{ header::admin_header(title=t(key="admin_menu.price_board"), icon="fa-chart-line", sub=t(key="admin_prices.sub", count=b.total), action_href="#nhap-gia", action_icon="fa-plus", action_label=t(key="admin_prices.add"), action_opens=true) }}
+<div class="admin-body">
+  {{ tabs::admin_tabs(tabs=b.tabs, label=t(key="admin_menu.price_board")) }}
+  {% if b.flash == "price_recorded" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin_prices.recorded")) }}{% endif %}
+  {% if b.flash == "price_deleted" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin_prices.deleted")) }}{% endif %}
+  {% if b.filter %}{{ filter::admin_filter(f=b.filter) }}{% endif %}
+  <p class="small text-muted mb-0">{{ t(key="admin_prices.hint", days=b.fresh_days) }}</p>
+
+  <div class="admin-card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 admin-table admin-table--cards">
+        <thead class="admin-table-head">
+          <tr><th>{{ t(key="price_form.crop") }}</th><th>{{ t(key="prices.area") }}</th><th>{{ t(key="price_form.day") }}</th><th class="text-end">{{ t(key="admin_prices.col_price") }}</th><th class="d-none d-md-table-cell">{{ t(key="price_form.note") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
+        </thead>
+        <tbody>
+          {% for r in b.rows %}
+          {% set p = r.price %}
+          <tr>
+            <td data-label=""><a class="fw-bold text-decoration-none" href="{{ r.crop_href }}">{{ p.crop_name }}</a></td>
+            <td data-label="{{ t(key="prices.area") }}"><a class="text-decoration-none" href="{{ r.area_href }}">{{ p.location_label }}</a></td>
+            <td data-label="{{ t(key="price_form.day") }}" class="text-nowrap">{{ p.observed_on | full_date }}</td>
+            <td data-label="{{ t(key="admin_prices.col_price") }}" class="text-end text-nowrap">{% if p.price_low == p.price_high %}{{ p.price_low | vnd }}{% else %}{{ p.price_low | number }} – {{ p.price_high | vnd }}{% endif %}<span class="small text-muted">/{{ p.unit }}</span></td>
+            <td data-label="{{ t(key="price_form.note") }}" class="small text-muted d-none d-md-table-cell"><div class="cell-short">{% if p.note %}{{ p.note }}{% else %}—{% endif %}</div></td>
+            <td data-label="" class="text-end"><div class="row-actions">{{ row::delete(href=r.delete_href ~ "#xac-nhan", name=p.crop_name) }}</div></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="text-center text-muted py-4">{{ t(key="admin_prices.none") }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% if b.pagination %}{{ paging::pagination_nav(p=b.pagination) }}{% endif %}
+
+  {% if b.confirm %}
+  {% set c = b.confirm %}
+  <div x-data="dialog" data-open="true" x-on:keydown.escape.window="hide">
+    {{ confirm::confirm_sheet(id="xac-nhan", title=t(key="admin_prices.delete_title", name=c.name), icon="fa-trash", action=c.action, button=t(key="common.confirm_delete"), reason_max=limits.audit_reason_max, effect="delete", what=t(key="admin_prices.what"), button_class="btn-danger", keep=b.keep) }}
+  </div>
+  {% endif %}
+
+  <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
+  <section class="contact-sheet" id="nhap-gia" aria-labelledby="nhap-gia-title" :class="sheetClass">
+    {{ sheet_head::sheet_header(id="nhap-gia", title=t(key="admin_prices.add"), icon="fa-chart-line") }}
+    <form class="contact-sheet__form" method="post" action="{{ b.create_action }}" novalidate>
+      {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
+      {{ fields::price_fields(form=b.form, errors=b.errors, crops=b.crops, areas=b.areas, note_max=limits.price_note_max, prefix="new") }}
+      <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin_prices.save") }}</button>
+    </form>
+  </section>
+</div>
+</div>
+{% endblock content %}

@@ -1,0 +1,66 @@
+{#- The page footer: who we are, where to look, the account links, and the
+    platform's own help lines. The browse links are the frame's tabs (minus
+    "my area"). The account column is the profile menu's links: sign in and
+    sign up for visitors, the provider dashboard or the admin panel (which is
+    not a tab) and the profile for signed-in users; error pages, which do not
+    know the session, leave it out. Help lines come from `shell.support` (the
+    `support.*` settings), each one left empty not shown. The language
+    switch is the top bar's, not repeated here.
+
+    Phone: one column, links two per row, help buttons full width. Tablet:
+    brand beside help, links below. Wide: four columns. -#}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/logo.html" as brand %}
+{% macro app_footer(shell, site, year) -%}
+<footer class="app-footer">
+  <div class="app-footer__inner">
+    <div class="app-footer__brand">
+      <a class="app-footer__logo" href="{{ url_for(name='home') }}">
+        {{ brand::logo(class="app-footer__mark") }}
+        {{ site.name }}
+      </a>
+      <p class="app-footer__promise">{{ t(key="footer.promise") }}</p>
+      <ul class="app-footer__values" aria-label="{{ t(key="footer.values_label") }}">
+        <li>{{ atoms::icon(name="fa-location-dot") }} {{ t(key="footer.value_local") }}</li>
+        <li>{{ atoms::icon(name="fa-eye") }} {{ t(key="footer.value_transparent") }}</li>
+        <li>{{ atoms::icon(name="fa-bolt") }} {{ t(key="footer.value_timely") }}</li>
+      </ul>
+    </div>
+
+    <nav class="app-footer__col app-footer__col--explore" aria-labelledby="footer-explore">
+      <h2 class="app-footer__title" id="footer-explore">{{ t(key="footer.explore") }}</h2>
+      <ul class="app-footer__links">
+        {% for tab in shell.tabs %}{% if not loop.last %}
+        <li><a href="{{ tab.href }}">{{ atoms::icon(name=tab.icon) }} {{ tab.label }}</a></li>
+        {% endif %}{% endfor %}
+      </ul>
+    </nav>
+
+    {% if shell.profile %}
+    <nav class="app-footer__col app-footer__col--account" aria-labelledby="footer-account">
+      <h2 class="app-footer__title" id="footer-account">{% if shell.profile.signed_in %}{{ t(key="nav.account") }}{% else %}{{ t(key="footer.providers") }}{% endif %}</h2>
+      <ul class="app-footer__links">
+        {% for item in shell.profile.items %}
+        <li><a href="{{ item.href }}">{{ atoms::icon(name=item.icon) }} {{ item.label }}</a></li>
+        {% endfor %}
+      </ul>
+    </nav>
+    {% endif %}
+
+    {% if shell.support.phone or shell.support.zalo_url or shell.support.email %}
+    <section class="app-footer__col app-footer__col--help" aria-labelledby="footer-help">
+      <h2 class="app-footer__title" id="footer-help">{{ t(key="footer.help_title") }}</h2>
+      <div class="app-footer__help">
+        {% if shell.support.phone %}<a class="btn btn-warning app-footer__call" href="tel:{{ shell.support.phone }}">{{ atoms::icon(name="fa-phone") }} {{ shell.support.phone | phone }}</a>{% endif %}
+        {% if shell.support.zalo_url %}<a class="btn btn-outline-light" href="{{ shell.support.zalo_url }}" rel="noopener" target="_blank">{{ atoms::icon(name="fa-comment-dots") }} {{ t(key="footer.zalo") }}</a>{% endif %}
+        {% if shell.support.email %}<a class="app-footer__email" href="mailto:{{ shell.support.email }}">{{ atoms::icon(name="fa-envelope") }} {{ shell.support.email }}</a>{% endif %}
+      </div>
+    </section>
+    {% endif %}
+  </div>
+  <div class="app-footer__legal">
+    <span>© {{ year }} {{ site.name }}</span>
+    <span>{{ atoms::icon(name="fa-location-dot") }} {{ t(key="site.region") }}</span>
+  </div>
+</footer>
+{%- endmacro app_footer %}

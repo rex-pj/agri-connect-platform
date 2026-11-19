@@ -61,6 +61,8 @@ struct AdminServiceRow {
     is_active: bool,
     business_active: bool,
     category_active: bool,
+    business_phone: String,
+    business_verified: bool,
     image_file_id: Option<Uuid>,
     created_by: Option<i32>,
     owner_id: Option<i32>,
@@ -97,6 +99,8 @@ fn base_admin_service_query() -> sea_orm::Select<ServiceEntity> {
         .column(service::Column::IsActive)
         .column_as(business::Column::IsActive, QueryAs::BusinessActive)
         .column_as(category::Column::IsActive, QueryAs::CategoryActive)
+        .column_as(business::Column::Phone, QueryAs::BusinessPhone)
+        .column_as(business::Column::IsVerified, QueryAs::BusinessVerified)
         .column(service::Column::ImageFileId)
         .column(service::Column::CreatedBy)
         .column(business::Column::OwnerId)
@@ -145,6 +149,8 @@ fn map_admin_row(r: AdminServiceRow) -> AdminService {
         is_active: r.is_active,
         business_active: r.business_active,
         category_active: r.category_active,
+        business_phone: r.business_phone,
+        business_verified: r.business_verified,
         image_file_id: r.image_file_id,
         created_by: r.created_by,
         owner_id: r.owner_id,

@@ -4,9 +4,11 @@
     when it was added and last changed, and whether its provider listed it;
     `owner_note`: above the save button of a listing its provider added,
     that the change is theirs to see (it lands in the history);
+    `provider_line` (at the end): whose listing it is;
     `listing_activity`: its taps and contact requests lately
     (`a` is ListingActivityDto). -#}
 {% import "atoms/icon.html" as atoms %}
+{% import "atoms/status_badge.html" as status %}
 {% macro listing_meta(l, sector_label, for_label="") -%}
 <p class="small text-muted mb-0">
   {{ t(key="admin.label_sector") }}: {{ sector_label }}
@@ -24,3 +26,13 @@
 {% macro listing_activity(a) -%}
 <p class="small text-muted mb-0">{{ atoms::icon(name="fa-phone") }} {{ t(key="admin.listing_taps", count=a.taps, days=a.days) }}{% if a.inquiries is number %} · {{ t(key="admin.listing_inquiries", count=a.inquiries) }}{% endif %}</p>
 {%- endmacro listing_activity %}
+
+{#- `provider_line`: whose listing it is, at the top of its page: the
+    provider (to its page), its phone, its badge, and "off" while it is. -#}
+{% macro provider_line(l, provider_href) -%}
+<p class="admin-status mb-0">
+  <span>{{ atoms::icon(name="fa-store") }} <a class="fw-semibold" href="{{ provider_href }}">{{ l.business_name }}</a> · <a href="tel:{{ l.provider_phone }}">{{ l.provider_phone | phone }}</a></span>
+  {{ status::verified(on=l.provider_verified) }}
+  {% if not l.provider_active %}{{ status::account(on=false) }}{% endif %}
+</p>
+{%- endmacro provider_line %}

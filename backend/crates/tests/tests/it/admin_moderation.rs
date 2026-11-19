@@ -757,6 +757,10 @@ async fn a_supply_page_keeps_its_list_and_says_who_listed_it() {
         "back to that list"
     );
     assert!(html.contains("Nhà cung cấp tự thêm"), "the owner listed it");
+    assert!(
+        html.contains(r#"href="tel:0901234567""#),
+        "its provider's phone on top"
+    );
     assert!(html.contains("Nhà cung cấp tự đăng mục này"));
     assert!(html.contains("Ngành:"));
     assert!(html.contains("0 lượt gọi, Zalo trong 30 ngày"));

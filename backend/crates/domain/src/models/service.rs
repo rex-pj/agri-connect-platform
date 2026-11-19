@@ -17,6 +17,9 @@ pub struct AdminService {
     /// puts it on the public pages (`is_public`).
     pub business_active: bool,
     pub category_active: bool,
+    /// Its provider's phone and badge, said at the top of its admin page.
+    pub business_phone: String,
+    pub business_verified: bool,
     pub image_file_id: Option<Uuid>,
     /// The account that added it and the business's managing account: equal
     /// when the provider listed it themselves rather than an admin for them.

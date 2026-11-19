@@ -92,6 +92,8 @@ struct AdminProductRow {
     is_active: bool,
     business_active: bool,
     category_active: bool,
+    business_phone: String,
+    business_verified: bool,
     created_by: Option<i32>,
     owner_id: Option<i32>,
     created_on: DateTimeWithTimeZone,
@@ -179,6 +181,8 @@ fn base_admin_product_query() -> sea_orm::Select<ProductEntity> {
         .column(product::Column::IsActive)
         .column_as(business::Column::IsActive, QueryAs::BusinessActive)
         .column_as(category::Column::IsActive, QueryAs::CategoryActive)
+        .column_as(business::Column::Phone, QueryAs::BusinessPhone)
+        .column_as(business::Column::IsVerified, QueryAs::BusinessVerified)
         .column(product::Column::CreatedBy)
         .column(business::Column::OwnerId)
         .column(product::Column::CreatedOn)
@@ -705,6 +709,8 @@ fn map_admin_row(r: AdminProductRow) -> AdminProduct {
         is_active: r.is_active,
         business_active: r.business_active,
         category_active: r.category_active,
+        business_phone: r.business_phone,
+        business_verified: r.business_verified,
         created_by: r.created_by,
         owner_id: r.owner_id,
         created_on: r.created_on.with_timezone(&Utc),

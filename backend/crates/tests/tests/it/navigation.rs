@@ -125,7 +125,7 @@ async fn a_detail_page_goes_back_to_its_category_and_lists_offer_near_me() {
     let (_, _, product, service) = seeded(&e).await;
 
     let back = |page: &str| {
-        page.split(r#"class="back-link back-link--overlay" href=""#)
+        page.split(r#"class="back-link" href=""#)
             .nth(1)
             .and_then(|rest| rest.split('"').next())
             .map(str::to_owned)

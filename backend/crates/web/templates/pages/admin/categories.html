@@ -33,7 +33,7 @@
 
   <div class="admin-card">
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0 admin-table">
+      <table class="table table-hover align-middle mb-0 admin-table admin-table--cards">
         <thead class="admin-table-head">
           <tr><th>{{ heading }}</th><th>{{ t(key="sector.label") }}</th><th class="text-center">{{ t(key="form.display_order") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th>{{ t(key="admin.col_updated") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
         </thead>
@@ -41,12 +41,12 @@
           {% for r in b.rows %}
           {% set c = r.category %}
           <tr{% if not c.is_active %} class="table-light text-body-secondary"{% endif %}>
-            <td>{% if c.icon %}{{ atoms::icon(name=c.icon, class="text-success me-2") }}{% endif %}<a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ c.name }}</a>{% if c.is_demo %} {{ status::demo() }}{% endif %}<code class="d-block small text-muted">{{ c.slug }}</code></td>
-            <td>{{ r.sector_label }}</td>
-            <td class="text-center">{{ c.display_order }}</td>
-            <td class="text-center">{{ status::visibility(on=c.is_active) }}</td>
-            <td class="small text-muted"><time datetime="{{ c.updated_on | utc_iso }}">{{ c.updated_on | vn_datetime }}</time>{% if c.updated_by_name %}<span class="d-block">{{ c.updated_by_name }}</span>{% endif %}</td>
-            <td class="text-end"><div class="row-actions">
+            <td data-label="">{% if c.icon %}{{ atoms::icon(name=c.icon, class="text-success me-2") }}{% endif %}<a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ c.name }}</a>{% if c.is_demo %} {{ status::demo() }}{% endif %}<code class="d-block small text-muted">{{ c.slug }}</code></td>
+            <td data-label="{{ t(key="sector.label") }}">{{ r.sector_label }}</td>
+            <td data-label="{{ t(key="form.display_order") }}" class="text-center">{{ c.display_order }}</td>
+            <td data-label="{{ t(key="admin.col_status") }}" class="text-center cell-state">{{ status::visibility(on=c.is_active) }}</td>
+            <td data-label="{{ t(key="admin.col_updated") }}" class="small text-muted"><time datetime="{{ c.updated_on | utc_iso }}">{{ c.updated_on | vn_datetime }}</time>{% if c.updated_by_name %}<span class="d-block">{{ c.updated_by_name }}</span>{% endif %}</td>
+            <td data-label="" class="text-end"><div class="row-actions">
                 {% if c.is_active %}
                 {{ row::hide(href=r.hide_href ~ "#xac-nhan", name=c.name) }}
                 {% else %}

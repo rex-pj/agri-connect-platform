@@ -26,7 +26,7 @@
 
   <div class="admin-card">
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0 admin-table">
+      <table class="table table-hover align-middle mb-0 admin-table admin-table--cards">
         <thead class="admin-table-head">
           <tr><th>{{ t(key="crop_form.name") }}</th><th>{{ t(key="crop_form.commodity") }}</th><th class="text-center">{{ t(key="crop_form.unit") }}</th><th class="text-center">{{ t(key="form.display_order") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
         </thead>
@@ -34,12 +34,12 @@
           {% for r in b.rows %}
           {% set c = r.crop %}
           <tr{% if not c.is_active %} class="table-light text-body-secondary"{% endif %}>
-            <td><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ c.name }}</a>{% if c.is_demo %} {{ status::demo() }}{% endif %}</td>
-            <td>{% if c.commodity %}{{ c.commodity }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
-            <td class="text-center">{{ c.unit }}</td>
-            <td class="text-center">{{ c.display_order }}</td>
-            <td class="text-center">{{ status::visibility(on=c.is_active) }}</td>
-            <td class="text-end">
+            <td data-label=""><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ c.name }}</a>{% if c.is_demo %} {{ status::demo() }}{% endif %}</td>
+            <td data-label="{{ t(key="crop_form.commodity") }}">{% if c.commodity %}{{ c.commodity }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+            <td data-label="{{ t(key="crop_form.unit") }}" class="text-center">{{ c.unit }}</td>
+            <td data-label="{{ t(key="form.display_order") }}" class="text-center">{{ c.display_order }}</td>
+            <td data-label="{{ t(key="admin.col_status") }}" class="text-center cell-state">{{ status::visibility(on=c.is_active) }}</td>
+            <td data-label="" class="text-end">
               <div class="row-actions">
                 {% if c.is_active %}
                 {{ row::hide(href=r.hide_href ~ "#xac-nhan", name=c.name) }}

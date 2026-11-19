@@ -57,5 +57,5 @@
 {%- endmacro spam %}
 
 {% macro open(href, name) -%}
-<a class="btn btn-outline-secondary row-btn" href="{{ href }}" aria-label="{{ t(key="row.open_label", name=name) }}" title="{{ t(key="row.open_label", name=name) }}">{{ atoms::icon(name="fa-chevron-right") }}<span class="row-btn__label">{{ t(key="row.open") }}</span></a>
+<a class="btn btn-outline-secondary row-btn row-btn--open" href="{{ href }}" aria-label="{{ t(key="row.open_label", name=name) }}" title="{{ t(key="row.open_label", name=name) }}">{{ atoms::icon(name="fa-chevron-right") }}<span class="row-btn__label">{{ t(key="row.open") }}</span></a>
 {%- endmacro open %}

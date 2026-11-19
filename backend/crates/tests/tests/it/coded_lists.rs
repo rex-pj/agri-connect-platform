@@ -140,6 +140,8 @@ async fn the_admin_lists_say_each_rows_type_and_sector() {
         "type and sector share a column"
     );
     assert!(!supplies.contains("<th>Ngành</th>"));
+    // What a supply is for is its own column, not part of its classification.
+    assert!(supplies.contains("<th>Dùng cho</th>"));
     assert!(supplies.contains(&format!(r#"href="/admin/supplies?category_id={feed}""#)));
     // Pig feed is for pigs, so livestock, though feed serves every sector.
     let row = supplies
@@ -149,7 +151,7 @@ async fn the_admin_lists_say_each_rows_type_and_sector() {
         .expect("the feed row");
     assert!(row.contains("Chăn nuôi"), "{row}");
     assert!(
-        row.contains("Loại:") && row.contains("Ngành:") && row.contains("Dùng cho:"),
+        row.contains("Loại:") && row.contains("Ngành:") && !row.contains("Dùng cho:"),
         "{row}"
     );
     // Each label leads somewhere: the type and the commodity narrow the

@@ -1,7 +1,7 @@
 {#- Green header of a page: a way back, the title, then a label or a line of
-    context. variant: "" (list pages), "detail" (more room below for cards),
-    "compact" (the slimmer one beside a photo). `icon` also shows faintly as a
-    watermark. -#}
+    context. variant: "" (list pages) or "detail" (more room below for
+    cards). The public detail pages have their own, organisms/detail_hero.
+    `icon` also shows faintly as a watermark. -#}
 {% import "atoms/icon.html" as atoms %}
 {% macro page_hero(title, back_href="", back_label="", badge_icon="", badge_text="", variant="detail", icon="", sub="") -%}
 <header class="page-hero{% if variant %} page-hero--{{ variant }}{% endif %}">

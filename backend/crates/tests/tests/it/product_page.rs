@@ -152,7 +152,7 @@ async fn the_page_shows_what_else_the_seller_does() {
     let uri = format!("/supplies/{id}/{SLUG}");
     let before = text(send(&e.router, page(&uri)).await).await;
     assert!(
-        !before.contains("Nhà cung cấp này còn làm"),
+        !before.contains(r#"class="offer-rows""#),
         "nothing else yet"
     );
 
@@ -171,7 +171,7 @@ async fn the_page_shows_what_else_the_seller_does() {
         .unwrap();
 
     let after = text(send(&e.router, page(&uri)).await).await;
-    assert!(after.contains("Nhà cung cấp này còn làm"));
+    assert!(after.contains(r#"class="offer-rows""#));
     assert!(after.contains(&format!(r#"href="/services/{service}/xay-xat-lua""#)));
     e.cleanup().await;
 }

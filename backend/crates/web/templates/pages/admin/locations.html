@@ -29,7 +29,7 @@
 
   <div class="admin-card">
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0 admin-table">
+      <table class="table table-hover align-middle mb-0 admin-table admin-table--cards">
         <thead class="admin-table-head">
           <tr><th>{{ t(key="admin_menu.locations") }}</th><th>{{ t(key="location_form.coordinates") }}</th><th class="text-center">{{ t(key="form.display_order") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
         </thead>
@@ -37,11 +37,11 @@
           {% for r in b.rows %}
           {% set l = r.location %}
           <tr{% if not l.is_active %} class="table-light text-body-secondary"{% endif %}>
-            <td><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ l.label }}</a>{% if l.is_demo %} {{ status::demo() }}{% endif %}</td>
-            <td class="small text-muted font-monospace">{{ l.lat }}, {{ l.lng }}</td>
-            <td class="text-center">{{ l.display_order }}</td>
-            <td class="text-center">{{ status::visibility(on=l.is_active) }}</td>
-            <td class="text-end">
+            <td data-label=""><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ l.label }}</a>{% if l.is_demo %} {{ status::demo() }}{% endif %}</td>
+            <td data-label="{{ t(key="location_form.coordinates") }}" class="small text-muted font-monospace">{{ l.lat }}, {{ l.lng }}</td>
+            <td data-label="{{ t(key="form.display_order") }}" class="text-center">{{ l.display_order }}</td>
+            <td data-label="{{ t(key="admin.col_status") }}" class="text-center cell-state">{{ status::visibility(on=l.is_active) }}</td>
+            <td data-label="" class="text-end">
               <div class="row-actions">
                 {% if l.is_active %}
                 {{ row::hide(href=r.hide_href ~ "#xac-nhan", name=l.label) }}

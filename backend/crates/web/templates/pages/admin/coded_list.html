@@ -30,7 +30,7 @@
 
   <div class="admin-card">
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0 admin-table">
+      <table class="table table-hover align-middle mb-0 admin-table admin-table--cards">
         <thead class="admin-table-head">
           <tr><th>{{ w.name }}</th><th>{{ t(key="coded_form.code") }}</th><th class="text-center">{{ t(key="form.display_order") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
         </thead>
@@ -38,11 +38,11 @@
           {% for r in b.rows %}
           {% set s = r.entry %}
           <tr{% if not s.is_active %} class="table-light text-body-secondary"{% endif %}>
-            <td>{{ atoms::icon(name=r.icon, class="text-success me-2") }}<a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ s.name }}</a>{% if s.is_demo %} {{ status::demo() }}{% endif %}</td>
-            <td><code>{{ s.code }}</code></td>
-            <td class="text-center">{{ s.display_order }}</td>
-            <td class="text-center">{{ status::visibility(on=s.is_active) }}</td>
-            <td class="text-end">
+            <td data-label="">{{ atoms::icon(name=r.icon, class="text-success me-2") }}<a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ s.name }}</a>{% if s.is_demo %} {{ status::demo() }}{% endif %}</td>
+            <td data-label="{{ t(key="coded_form.code") }}"><code>{{ s.code }}</code></td>
+            <td data-label="{{ t(key="form.display_order") }}" class="text-center">{{ s.display_order }}</td>
+            <td data-label="{{ t(key="admin.col_status") }}" class="text-center cell-state">{{ status::visibility(on=s.is_active) }}</td>
+            <td data-label="" class="text-end">
               <div class="row-actions">
                 {% if s.is_active %}
                 {{ row::hide(href=r.hide_href ~ "#xac-nhan", name=s.name) }}

@@ -22,20 +22,22 @@
 
   <div class="admin-card">
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0 admin-table">
+      <table class="table table-hover align-middle mb-0 admin-table admin-table--cards">
         <thead class="admin-table-head">
-          <tr><th>{{ t(key="admin.col_sender") }}</th><th>{{ t(key="job.category") }}</th><th>{{ t(key="job.description") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
+          <tr><th>{{ t(key="admin.col_sender") }}</th><th>{{ t(key="admin.col_sent") }}</th><th>{{ t(key="job.category") }}</th><th>{{ t(key="prices.area") }}</th><th>{{ t(key="job.description") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
         </thead>
         <tbody>
           {% for r in b.rows %}
           {% set j = r.job %}
           {% set what = t(key="admin_jobs.post_of", name=j.requester_name) %}
           <tr{% if j.status != "open" %} class="table-light text-body-secondary"{% endif %}>
-            <td class="fw-semibold">{{ j.requester_name }}<a class="d-block small text-decoration-none" href="tel:{{ j.requester_phone }}">{{ atoms::icon(name="fa-phone", class="me-1") }}{{ j.requester_phone | phone }}</a><span class="d-block small text-muted fw-normal"><time datetime="{{ j.created_on | utc_iso }}">{{ j.created_on | vn_datetime }}</time></span></td>
-            <td>{{ j.category }}{% if j.area %}<span class="d-block small text-muted">{{ j.area }}</span>{% endif %}</td>
-            <td>{{ j.description }}</td>
-            <td class="text-center">{{ job_status::label(status=j.status, badge=true) }}</td>
-            <td class="text-end">
+            <td data-label="" class="fw-semibold">{{ j.requester_name }}<a class="d-block small text-decoration-none" href="tel:{{ j.requester_phone }}">{{ atoms::icon(name="fa-phone", class="me-1") }}{{ j.requester_phone | phone }}</a></td>
+            <td data-label="{{ t(key="admin.col_sent") }}" class="small text-muted text-nowrap"><time datetime="{{ j.created_on | utc_iso }}">{{ j.created_on | vn_datetime }}</time></td>
+            <td data-label="{{ t(key="job.category") }}">{{ j.category }}</td>
+            <td data-label="{{ t(key="prices.area") }}" class="small"><div class="cell-short">{% if j.area %}{{ j.area }}{% else %}<span class="text-muted">—</span>{% endif %}</div></td>
+            <td data-label="{{ t(key="job.description") }}"><div class="cell-prose">{{ j.description }}</div></td>
+            <td data-label="{{ t(key="admin.col_status") }}" class="text-center cell-state">{{ job_status::label(status=j.status, badge=true) }}</td>
+            <td data-label="" class="text-end">
               <div class="row-actions">
                 {% for s in r.steps %}
                 {% if s.look == "spam" %}{{ row::spam(href=r.spam_href ~ "#xac-nhan", name=what) }}{% else %}{{ row::step(action=r.action, to=s.to, look=s.look, name=what, primary=s.primary, keep=b.position) }}{% endif %}
@@ -44,7 +46,7 @@
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="5" class="text-center text-muted py-4">{% if b.narrowed %}{{ t(key="admin_jobs.none_in_state") }}{% else %}{{ t(key="admin_jobs.none") }}{% endif %}</td></tr>
+          <tr><td colspan="7" class="text-center text-muted py-4">{% if b.narrowed %}{{ t(key="admin_jobs.none_in_state") }}{% else %}{{ t(key="admin_jobs.none") }}{% endif %}</td></tr>
           {% endfor %}
         </tbody>
       </table>

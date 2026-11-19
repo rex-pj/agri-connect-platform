@@ -31,6 +31,10 @@
   --text: #0c1a12;
   --text2: #2d4a38;
   --muted: #5e7a68;
+  /* A price, and "ask for the price" where there is none: one pair for the
+     cards, the detail pages and the provider's service list. */
+  --price: #ea580c;
+  --price-ask: #b45309;
 
   --shadow-card: 0 1px 3px rgba(6, 78, 59, 0.06), 0 4px 14px rgba(6, 78, 59, 0.09);
   --shadow-btn: 0 2px 8px rgba(6, 78, 59, 0.22);
@@ -41,6 +45,29 @@
 
   /* Large base size: farmers read on small, low-end phones outdoors. */
   font-size: 17px;
+
+  /* The one type scale, app and admin alike (rem of the 17 px root): small
+     uppercase labels and counters, meta lines and badges, second lines,
+     body text, card titles, section titles, page titles, big figures.
+     Icons drawn as glyphs larger than these keep their own sizes. */
+  --fs-2xs: 0.72rem;
+  --fs-xs: 0.8rem;
+  --fs-sm: 0.875rem;
+  --fs-base: 1rem;
+  --fs-md: 1.125rem;
+  --fs-lg: 1.3rem;
+  --fs-xl: 1.6rem;
+  --fs-2xl: 2rem;
+
+  /* The admin type scale, one for every admin page and report: the text
+     of a page (tables, status lines, filters, menus), its second lines, and
+     the small uppercase labels (table heads, section titles). */
+  --admin-text: var(--fs-sm);
+  --admin-text-sm: var(--fs-xs);
+  --admin-label: var(--fs-2xs);
+  --admin-badge: var(--fs-xs);
+  /* Typed text never under 16 px: a phone zooms into a smaller box. */
+  --admin-input: max(16px, var(--admin-text));
 }
 
 *,
@@ -72,7 +99,7 @@ body {
     (var(--app-btn-h) - var(--bs-btn-line-height) * 1em - 2 * var(--bs-btn-border-width)) / 2
   );
   min-height: var(--app-btn-h);
-  font-size: 1rem;
+  font-size: var(--fs-base);
   font-weight: 600;
   border-radius: 12px;
   transition: transform 0.1s ease, opacity 0.15s ease;
@@ -86,7 +113,7 @@ body {
 .form-control,
 .form-select {
   min-height: 52px;
-  font-size: 1rem;
+  font-size: var(--fs-base);
   border-radius: 12px;
   border-color: var(--border);
 }
@@ -94,6 +121,16 @@ body {
 .form-select:focus {
   border-color: var(--p600);
   box-shadow: 0 0 0 3px rgba(4, 120, 87, 0.15);
+}
+/* Bootstrap's own size utilities follow the type scale. */
+.fs-4 {
+  font-size: var(--fs-xl) !important;
+}
+.fs-5 {
+  font-size: var(--fs-lg) !important;
+}
+.fs-6 {
+  font-size: var(--fs-base) !important;
 }
 .card {
   border-radius: 16px !important;
@@ -149,13 +186,13 @@ body {
   line-height: 1;
 }
 .error-card__message {
-  font-size: 1rem;
+  font-size: var(--fs-base);
   color: #4b5563;
   margin: 0 0 24px;
   line-height: 1.5;
 }
 .error-card__ref {
-  font-size: 0.8rem;
+  font-size: var(--fs-xs);
   color: var(--muted);
   margin: 16px 0 0;
 }
@@ -182,6 +219,10 @@ html {
   scrollbar-gutter: stable;
 }
 .app-main {
+  /* Links in the app frame are the brand green, like "see more", never
+     Bootstrap's blue. */
+  --bs-link-color-rgb: 4, 120, 87;
+  --bs-link-hover-color-rgb: 6, 78, 59;
   /* One reading width for every page; phones never reach it. */
   max-width: 1320px;
   margin-inline: auto;
@@ -219,7 +260,7 @@ body:has(.app-nav__search-row.open) .app-main {
   gap: 8px;
   color: #fff;
   text-decoration: none;
-  font-size: 1.1rem;
+  font-size: var(--fs-md);
   font-weight: 700;
   letter-spacing: -0.02em;
 }
@@ -293,7 +334,7 @@ body:has(.app-nav__search-row.open) .app-main {
 }
 .lang-offer__text {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--fs-sm);
 }
 .lang-offer__actions {
   display: flex;
@@ -314,7 +355,7 @@ body:has(.app-nav__search-row.open) .app-main {
   border: 1px solid rgba(255, 255, 255, 0.3);
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
-  font-size: 0.82rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
@@ -332,7 +373,7 @@ body:has(.app-nav__search-row.open) .app-main {
   text-overflow: ellipsis;
 }
 .app-nav__chevron {
-  font-size: 0.65rem;
+  font-size: var(--fs-2xs);
   margin-left: 2px;
   transition: transform 0.18s ease;
 }
@@ -361,7 +402,7 @@ body:has(.app-nav__search-row.open) .app-main {
   border-bottom: 1px solid #e7ede9;
   background: none;
   color: #1a2e24;
-  font-size: 0.92rem;
+  font-size: var(--fs-sm);
   font-weight: 500;
   text-align: left;
   text-decoration: none;
@@ -422,7 +463,7 @@ body:has(.app-nav__search-row.open) .app-main {
 }
 .app-nav__search-icon {
   color: rgba(255, 255, 255, 0.65);
-  font-size: 0.85rem;
+  font-size: var(--fs-sm);
 }
 .app-nav__search-input {
   flex: 1;
@@ -430,7 +471,7 @@ body:has(.app-nav__search-row.open) .app-main {
   border: none;
   background: transparent;
   color: #fff;
-  font-size: 0.95rem;
+  font-size: var(--fs-base);
   outline: none;
 }
 .app-nav__search-input::placeholder {
@@ -447,7 +488,7 @@ body:has(.app-nav__search-row.open) .app-main {
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 50%;
   color: #fff;
-  font-size: 0.78rem;
+  font-size: var(--fs-xs);
 }
 
 /* ── Footer (organisms/app_footer) ───────────────────────────────────────── */
@@ -491,7 +532,7 @@ body:has(.app-nav__search-row.open) .app-main {
   align-items: center;
   gap: 8px;
   color: #fff;
-  font-size: 1.1rem;
+  font-size: var(--fs-md);
   font-weight: 700;
   text-decoration: none;
 }
@@ -516,7 +557,7 @@ body:has(.app-nav__search-row.open) .app-main {
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 100px;
   color: #fff;
-  font-size: 0.82rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
 }
 .app-footer__values .fa-solid {
@@ -525,7 +566,7 @@ body:has(.app-nav__search-row.open) .app-main {
 .app-footer__title {
   margin: 0 0 6px;
   color: #fff;
-  font-size: 0.78rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -583,7 +624,7 @@ body:has(.app-nav__search-row.open) .app-main {
   gap: 4px 16px;
   border-top: 1px solid rgba(255, 255, 255, 0.14);
   color: rgba(255, 255, 255, 0.7);
-  font-size: 0.82rem;
+  font-size: var(--fs-xs);
 }
 
 /* ── Language switch (molecules/language_switch) ─────────────────────────────
@@ -622,12 +663,12 @@ body:has(.app-nav__search-row.open) .app-main {
   outline-offset: 2px;
 }
 .lang-menu__code {
-  font-size: 0.78rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   letter-spacing: 0.03em;
 }
 .lang-menu__chevron {
-  font-size: 0.65rem;
+  font-size: var(--fs-2xs);
   opacity: 0.75;
   transition: transform 0.15s ease;
 }
@@ -668,7 +709,7 @@ body:has(.app-nav__search-row.open) .app-main {
   border-bottom: 1px solid #e7ede9;
   background: none;
   color: var(--text);
-  font-size: 0.92rem;
+  font-size: var(--fs-sm);
   font-weight: 500;
   text-align: left;
   cursor: pointer;
@@ -787,10 +828,10 @@ body:has(.app-nav__search-row.open) .app-main {
   transition: background 0.2s ease;
 }
 .bottom-nav__icon {
-  font-size: 1.2rem;
+  font-size: var(--fs-md);
 }
 .bottom-nav__label {
-  font-size: 0.8rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -851,7 +892,7 @@ body:has(.app-nav__search-row.open) .app-main {
     background: none !important;
   }
   .bottom-nav__icon {
-    font-size: 1rem;
+    font-size: var(--fs-base);
   }
   .bottom-nav__tab--active {
     color: #fff;
@@ -866,7 +907,7 @@ body:has(.app-nav__search-row.open) .app-main {
   gap: 0.375rem;
   padding: 0.3rem 0.625rem;
   border-radius: 9999px;
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
@@ -889,7 +930,7 @@ body:has(.app-nav__search-row.open) .app-main {
   border: 1px solid var(--p100);
   background: var(--p50);
   color: var(--p700);
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   line-height: 1.5;
   white-space: nowrap;
@@ -903,7 +944,7 @@ body:has(.app-nav__search-row.open) .app-main {
 }
 .section-title {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: var(--fs-md);
   font-weight: 800;
   color: var(--text);
 }
@@ -913,7 +954,7 @@ body:has(.app-nav__search-row.open) .app-main {
   gap: 4px;
   min-height: 44px;
   padding: 0 4px;
-  font-size: 0.85rem;
+  font-size: var(--fs-sm);
   font-weight: 700;
   color: var(--p600);
   text-decoration: none;
@@ -981,7 +1022,7 @@ body:has(.app-nav__search-row.open) .app-main {
   border-radius: 16px;
   background: var(--p100);
   color: var(--p700);
-  font-size: 1.5rem;
+  font-size: var(--fs-xl);
   transition: transform 0.15s ease, background 0.15s ease;
 }
 .cat-item:hover .cat-item__icon {
@@ -1039,7 +1080,7 @@ body:has(.app-nav__search-row.open) .app-main {
   min-height: 2.5em;
   width: 100%;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
   line-height: 1.25;
   text-align: center;
@@ -1122,7 +1163,7 @@ body:has(.app-nav__search-row.open) .app-main {
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.12);
   color: var(--p300);
-  font-size: 1.6rem;
+  font-size: var(--fs-xl);
 }
 .geo-cta__text {
   min-width: 0;
@@ -1132,12 +1173,12 @@ body:has(.app-nav__search-row.open) .app-main {
 }
 .geo-cta__title {
   color: #fff;
-  font-size: 1rem;
+  font-size: var(--fs-base);
   font-weight: 800;
 }
 .geo-cta__sub {
   color: rgba(255, 255, 255, 0.7);
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   line-height: 1.4;
 }
 .geo-cta__btn {
@@ -1150,7 +1191,7 @@ body:has(.app-nav__search-row.open) .app-main {
   border-radius: 100px;
   background: var(--a500);
   color: #1c1917;
-  font-size: 0.8rem;
+  font-size: var(--fs-xs);
   font-weight: 800;
   white-space: nowrap;
 }
@@ -1170,13 +1211,13 @@ body:has(.app-nav__search-row.open) .app-main {
 .empty-state__title {
   margin: 0;
   color: var(--text);
-  font-size: 1.1rem;
+  font-size: var(--fs-md);
   font-weight: 700;
 }
 .empty-state__hint {
   margin: 0;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--fs-sm);
 }
 .empty-state__action {
   margin-top: 12px;
@@ -1213,11 +1254,11 @@ body:has(.app-nav__search-row.open) .app-main {
 }
 .photo-placeholder__icon {
   color: var(--p600);
-  font-size: 2rem;
+  font-size: var(--fs-2xl);
 }
 .photo-placeholder__cat {
   color: var(--p800);
-  font-size: 0.72rem;
+  font-size: var(--fs-2xs);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1227,7 +1268,7 @@ body:has(.app-nav__search-row.open) .app-main {
   align-items: center;
   gap: 4px;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--fs-2xs);
 }
 .photo-placeholder--lg {
   gap: 10px;
@@ -1236,7 +1277,7 @@ body:has(.app-nav__search-row.open) .app-main {
   font-size: 3.5rem;
 }
 .photo-placeholder--lg .photo-placeholder__note {
-  font-size: 0.95rem;
+  font-size: var(--fs-base);
   font-weight: 600;
 }
 .product-card__name {
@@ -1247,11 +1288,11 @@ body:has(.app-nav__search-row.open) .app-main {
   line-height: 1.3;
 }
 .product-card__price {
-  color: #ea580c;
-  font-size: 1.15rem;
+  color: var(--price);
+  font-size: var(--fs-md);
 }
 .product-card__price-contact {
-  color: #b45309;
+  color: var(--price-ask);
 }
 .provider-card {
   border-top: 3px solid var(--border) !important;
@@ -1286,13 +1327,13 @@ body:has(.app-nav__search-row.open) .app-main {
   height: 30px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.18);
-  font-size: 0.85rem;
+  font-size: var(--fs-sm);
 }
 .btn-call:hover .btn-call__icon {
   background: rgba(255, 255, 255, 0.28);
 }
 .btn-call__num {
-  font-size: 1.05rem;
+  font-size: var(--fs-base);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
@@ -1301,10 +1342,10 @@ body:has(.app-nav__search-row.open) .app-main {
   .btn-call__icon {
     width: 26px;
     height: 26px;
-    font-size: 0.75rem;
+    font-size: var(--fs-xs);
   }
   .btn-call__num {
-    font-size: 0.95rem;
+    font-size: var(--fs-base);
     letter-spacing: 0;
   }
 }
@@ -1315,7 +1356,7 @@ body:has(.app-nav__search-row.open) .app-main {
     background: none;
   }
   .btn-call__num {
-    font-size: 0.88rem;
+    font-size: var(--fs-sm);
   }
 }
 
@@ -1330,7 +1371,7 @@ body:has(.app-nav__search-row.open) .app-main {
 }
 /* The name of a row of tiles: what it is for ("Thuê làm", "Mua vật tư"). */
 .home-categories__title {
-  font-size: 0.875rem;
+  font-size: var(--fs-sm);
   font-weight: 700;
   color: var(--muted);
   margin: 0 4px 4px;
@@ -1355,7 +1396,7 @@ body:has(.app-nav__search-row.open) .app-main {
   .home-categories--strip .cat-item__icon {
     width: 48px;
     height: 48px;
-    font-size: 1.3rem;
+    font-size: var(--fs-lg);
   }
 }
 .home-categories--strip + .home-section {
@@ -1379,7 +1420,7 @@ body:has(.app-nav__search-row.open) .app-main {
   border-radius: 50%;
   background: var(--p100);
   color: var(--p700);
-  font-size: 1.3rem;
+  font-size: var(--fs-lg);
 }
 .provider-cta__text {
   flex: 1;
@@ -1398,23 +1439,23 @@ body:has(.app-nav__search-row.open) .app-main {
 .page-hero--detail {
   padding-bottom: 36px;
 }
-.page-hero--compact {
-  padding-top: 8px;
-  padding-bottom: 14px;
+/* A detail page's header (organisms/detail_hero): room below for the first
+   card, lifted onto it (.detail-layout). */
+.page-hero--lift {
+  padding-bottom: 48px;
 }
 @media (min-width: 768px) {
   .page-hero {
     padding: 28px 24px 36px;
     border-radius: 0 0 24px 24px;
   }
-  .page-hero--compact {
-    padding-top: 10px;
-    padding-bottom: 16px;
+  .page-hero--lift {
+    padding-bottom: 56px;
   }
 }
 .page-hero__title {
   margin: 0 0 10px;
-  font-size: 1.4rem;
+  font-size: var(--fs-lg);
   font-weight: 800;
   line-height: 1.3;
   letter-spacing: -0.01em;
@@ -1426,7 +1467,7 @@ body:has(.app-nav__search-row.open) .app-main {
   padding: 5px 14px;
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.15);
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
 }
 .back-link {
@@ -1438,7 +1479,7 @@ body:has(.app-nav__search-row.open) .app-main {
   padding: 4px 8px;
   border-radius: 8px;
   color: rgba(255, 255, 255, 0.85);
-  font-size: 0.85rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
   text-decoration: none;
   -webkit-tap-highlight-color: transparent;
@@ -1448,56 +1489,88 @@ body:has(.app-nav__search-row.open) .app-main {
   color: #fff;
   background: rgba(255, 255, 255, 0.1);
 }
-/* Over a photo: a dark pill so it stays readable on any image. */
-.back-link--overlay {
-  position: absolute;
-  top: 16px;
-  left: 14px;
-  z-index: 2;
-  margin: 0;
-  padding: 6px 12px;
-  border-radius: 20px;
-  background: rgba(0, 0, 0, 0.55);
-  color: rgba(255, 255, 255, 0.92);
-}
-.back-link--overlay:hover,
-.back-link--overlay:focus-visible {
-  background: rgba(0, 0, 0, 0.7);
-}
-
-/* ── Product detail (pages/product) ──────────────────────────────────────── */
-.product-detail__photo {
+/* ── Detail pages (pages/service, pages/product, pages/provider) ─────────── */
+/* One frame for the three (`detail-page`): the green header across the top,
+   then the cards on the page's background, the first of them lifted onto
+   the header so the two read as one. Its parts, in the order a phone shows
+   them and a screen reader reads them: the photo (service, supply), the side
+   box (price and the call button), the content. From 992 px the side box is
+   a column of its own on the right that stays in view, and the photo and
+   the content share the left one, so neither column has to match the
+   other's height.
+   One type scale for the three: card titles 1.05 rem dark, body text 1 rem,
+   second lines (notes, areas, dates) 0.875 rem, never smaller. */
+.detail-layout {
+  /* Above the header it overlaps. */
   position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  max-height: 400px;
-  overflow: hidden;
-  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: -32px;
+  padding: 0 16px 16px;
 }
-.product-detail__photo img {
+.detail-layout__aside,
+.detail-layout__main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+/* The photo is a card like the others (or the "no photo yet" placeholder in
+   one): its own shape whatever the image's, cropped to fill it. */
+.detail-photo {
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+.detail-photo img {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 @media (min-width: 768px) {
-  /* Photo (or its placeholder) beside the details, with or without one. */
-  .product-detail {
+  .detail-photo {
+    max-height: 480px;
+  }
+}
+@media (min-width: 992px) {
+  .detail-page {
+    max-width: 1160px;
+    margin-inline: auto;
+  }
+  .detail-page .page-hero {
+    padding-inline: 32px;
+  }
+  /* The page's tools at the title's end: edit (for who may), share. */
+.detail-hero__tools {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.detail-hero__title {
+    font-size: var(--fs-xl);
+  }
+  .detail-layout {
     display: grid;
-    grid-template-columns: 55% 45%;
-    align-items: stretch;
-    max-width: 1280px;
-    min-height: 520px;
-    margin: 0 auto;
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+    align-items: start;
+    gap: 24px;
+    padding: 0 32px 24px;
   }
-  .product-detail__photo {
-    aspect-ratio: auto;
-    max-height: none;
-    height: 100%;
+  .detail-photo,
+  .detail-layout__main {
+    grid-column: 1;
   }
-  .product-detail .page-hero {
-    border-radius: 0;
-    padding-top: 28px;
+  .detail-layout__aside {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    position: sticky;
+    top: calc(var(--app-nav-h) + 16px);
   }
 }
 .detail-body {
@@ -1513,52 +1586,149 @@ body:has(.app-nav__search-row.open) .app-main {
   background: var(--surface);
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.07);
 }
-.detail-card__title,
+.detail-card__title {
+  margin-bottom: 12px;
+  color: var(--text);
+  font-size: var(--fs-base);
+  font-weight: 800;
+  line-height: 1.35;
+}
 .admin-section__title {
   margin-bottom: 10px;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+/* A title with something at its right end (the rating). */
+.detail-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-bottom: 12px;
+}
+.detail-card__head .detail-card__title {
+  margin-bottom: 0;
+}
+/* A second part inside a card ("other services" under the provider). */
+.detail-card__subtitle {
+  margin: 16px 0 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline);
+  color: var(--text2);
+  font-size: var(--fs-base);
+  font-weight: 700;
+}
 .detail-card__text {
   margin: 0;
   color: var(--text);
-  font-size: 0.95rem;
+  font-size: var(--fs-base);
   line-height: 1.6;
   /* Keep the seller's line breaks. */
   white-space: pre-line;
 }
+.detail-card__empty {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: var(--fs-base);
+}
 .detail-price {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 6px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 .detail-price__amount {
-  color: #ea580c;
-  font-size: 1.8rem;
+  color: var(--price);
+  font-size: var(--fs-xl);
   font-weight: 800;
+  line-height: 1.2;
+}
+/* A service's price is the provider's own words, not a figure: set as a
+   line of text so a long one wraps cleanly. */
+.detail-price__amount--text {
+  font-size: var(--fs-lg);
+  line-height: 1.35;
 }
 .detail-price__amount--contact {
-  color: #b45309;
-  font-size: 1.3rem;
+  color: var(--price-ask);
+  font-size: var(--fs-lg);
 }
 .detail-price__unit {
   color: var(--muted);
-  font-size: 0.95rem;
+  font-size: var(--fs-base);
 }
 .detail-price__note {
   margin: 0;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
 }
+/* What a supply is for ("Dùng cho: Lúa"), under its price. */
+.detail-for {
+  margin: 10px 0 0;
+  font-size: var(--fs-base);
+}
+.detail-for .fa-solid {
+  margin-right: 4px;
+  color: var(--p600);
+}
+.detail-for a {
+  font-weight: 700;
+}
+/* The buttons come after the price lines in the same card. */
+.detail-card .provider-actions:not(:first-child) {
+  margin-top: 16px;
+}
+/* "More in this category" at the end of a detail page: the same link as a
+   section's "see more", a full tap target. */
+.detail-more {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 8px;
+  min-height: 44px;
+  font-size: var(--fs-base);
+  font-weight: 700;
+  color: var(--p600);
+  text-decoration: none;
+}
+.detail-more:hover,
+.detail-more:focus-visible {
+  color: var(--p800);
+}
+.detail-more .fa-chevron-right {
+  font-size: 0.75em;
+}
+.contact-sent__hint {
+  margin: 8px 0 0;
+  font-size: var(--fs-base);
+}
+/* The decision box (the side box of a detail page): what it costs, who
+   does it, then the call. The provider row is set apart by hairlines, so
+   the price above and the buttons below read as its two ends. */
+.decision-box__rating {
+  margin: 0;
+  font-size: var(--fs-base);
+}
+/* Who you are calling: one link to their page. */
 .vendor-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 14px;
+  min-height: 64px;
+  margin: 16px -18px 0;
+  padding: 12px 18px;
+  border-block: 1px solid var(--hairline);
+  color: var(--text);
+  text-decoration: none;
+}
+.vendor-row:hover,
+.vendor-row:focus-visible {
+  background: var(--p50);
 }
 .vendor-row__icon {
   width: 46px;
@@ -1570,37 +1740,95 @@ body:has(.app-nav__search-row.open) .app-main {
   border-radius: 12px;
   background: var(--p50);
   color: var(--p700);
-  font-size: 1.25rem;
+  font-size: var(--fs-lg);
 }
 .vendor-row__info {
+  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 3px;
 }
-
-/* ── Provider detail (pages/provider) ────────────────────────────────────── */
-.provider-hero__row {
-  display: flex;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 8px;
+.vendor-row__name {
+  font-weight: 700;
 }
-.provider-hero__title {
-  flex: 1;
-  margin-bottom: 0;
+.vendor-row__meta {
+  color: var(--muted);
+  font-size: var(--fs-sm);
 }
-.provider-hero__actions {
-  flex-shrink: 0;
+.vendor-row__meta .rating-line strong {
+  color: var(--text);
+}
+.vendor-row__chevron {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+/* A provider's other services, each row one link. */
+.offer-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.offer-rows li + li {
+  border-top: 1px solid var(--hairline);
+}
+.offer-rows__link {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  min-height: 48px;
+  color: var(--text);
+  text-decoration: none;
 }
-.provider-hero__address {
-  margin: 0;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 0.9rem;
+.offer-rows__link:hover .offer-rows__name,
+.offer-rows__link:focus-visible .offer-rows__name {
+  color: var(--p700);
+}
+.offer-rows__icon {
+  width: 24px;
+  flex-shrink: 0;
+  text-align: center;
+  color: var(--p600);
+}
+.offer-rows__name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+}
+.offer-rows__price {
+  color: var(--price);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.offer-rows__chevron {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+/* ── Detail header (organisms/detail_hero) ─────────────────────────────── */
+/* The title and the share button on one row, on every detail page. */
+.detail-hero__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.detail-hero__title {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+}
+.detail-hero__tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.detail-hero__address {
+  margin: 8px 0 0;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: var(--fs-base);
 }
 .hero-icon-btn {
   width: 44px;
@@ -1630,7 +1858,7 @@ body:has(.app-nav__search-row.open) .app-main {
   border-radius: 8px;
   background: var(--p900);
   color: #fff;
-  font-size: 0.8rem;
+  font-size: var(--fs-xs);
   white-space: nowrap;
 }
 .provider-actions {
@@ -1668,19 +1896,40 @@ body:has(.app-nav__search-row.open) .app-main {
 }
 .review-list {
   list-style: none;
-  margin: 12px 0;
+  margin: 0 0 16px;
   padding: 0;
 }
 .review-list__item {
   padding: 12px 0;
-  border-bottom: 1px solid var(--bs-border-color);
+  border-bottom: 1px solid var(--hairline);
+}
+.review-list__item:first-child {
+  padding-top: 0;
+}
+.review-list__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.review-list__name {
+  font-weight: 700;
+}
+.review-list__comment {
+  margin: 6px 0 4px;
+  line-height: 1.55;
+}
+.review-list__date {
+  display: block;
+  color: var(--muted);
+  font-size: var(--fs-sm);
 }
 .review-list__reply {
   margin: 8px 0 0;
   padding: 8px 12px;
   border-left: 3px solid var(--bs-success);
   background: var(--bs-tertiary-bg);
-  font-size: 0.95rem;
+  font-size: var(--fs-base);
 }
 .service-list {
   display: flex;
@@ -1704,7 +1953,7 @@ body:has(.app-nav__search-row.open) .app-main {
   border-radius: 12px;
   background: var(--p50);
   color: var(--p700);
-  font-size: 1.1rem;
+  font-size: var(--fs-md);
 }
 .service-list__info {
   min-width: 0;
@@ -1718,19 +1967,23 @@ body:has(.app-nav__search-row.open) .app-main {
   align-items: baseline;
   gap: 6px;
 }
+.service-list__name {
+  font-weight: 700;
+  text-decoration: none;
+}
 .service-list__cat {
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
 }
 .service-list__desc {
   margin: 0;
   color: var(--text2);
-  font-size: 0.9rem;
+  font-size: var(--fs-base);
   line-height: 1.5;
 }
 .service-list__price {
-  color: #b45309;
-  font-size: 0.85rem;
+  color: var(--price);
+  font-size: var(--fs-sm);
   font-weight: 600;
 }
 
@@ -1833,7 +2086,7 @@ body:has(.app-nav__search-row.open) .app-main {
   gap: 8px;
   margin: 0;
   color: var(--p800);
-  font-size: 1.1rem;
+  font-size: var(--fs-md);
   font-weight: 800;
 }
 .contact-sheet__close {
@@ -1850,7 +2103,7 @@ body:has(.app-nav__search-row.open) .app-main {
 .contact-sheet__sub {
   margin: 0 0 14px;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--fs-sm);
 }
 .contact-sheet__form {
   display: flex;
@@ -1862,7 +2115,7 @@ body:has(.app-nav__search-row.open) .app-main {
 .confirm-note {
   margin: 0 0 14px;
   color: var(--muted);
-  font-size: 0.95rem;
+  font-size: var(--fs-base);
 }
 .confirm-note--danger {
   color: var(--bs-danger-text-emphasis);
@@ -1883,13 +2136,13 @@ body:has(.app-nav__search-row.open) .app-main {
   padding: 6px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.12);
-  font-size: 1.15rem;
+  font-size: var(--fs-md);
   opacity: 0.85;
 }
 .page-hero__sub {
   margin: 8px 0 0;
   color: rgba(255, 255, 255, 0.76);
-  font-size: 0.875rem;
+  font-size: var(--fs-sm);
   line-height: 1.45;
 }
 
@@ -1928,7 +2181,7 @@ body:has(.app-nav__search-row.open) .app-main {
   min-width: 0;
   border: none;
   background: transparent;
-  font-size: 1rem;
+  font-size: var(--fs-base);
   outline: none;
 }
 .list-search__icon {
@@ -1944,7 +2197,7 @@ body:has(.app-nav__search-row.open) .app-main {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  font-size: 1rem;
+  font-size: var(--fs-base);
 }
 .list-search__toggle {
   border: 1px solid var(--border);
@@ -1970,7 +2223,7 @@ body:has(.app-nav__search-row.open) .app-main {
   border-radius: 10px;
   background: var(--a500);
   color: var(--text);
-  font-size: 0.72rem;
+  font-size: var(--fs-2xs);
   font-weight: 800;
   line-height: 20px;
 }
@@ -2005,7 +2258,7 @@ body:has(.app-nav__search-row.open) .app-main {
 .filter-label {
   margin-bottom: 8px;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -2025,7 +2278,7 @@ body:has(.app-nav__search-row.open) .app-main {
   border-radius: 100px;
   background: var(--surface);
   color: var(--text2);
-  font-size: 0.88rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -2217,7 +2470,7 @@ a.chip {
   border-radius: 11px;
   background: var(--p100);
   color: var(--p800);
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   font-weight: 800;
   line-height: 22px;
   text-align: center;
@@ -2263,17 +2516,17 @@ ac-geolocate {
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.14);
   color: var(--a500);
-  font-size: 2rem;
+  font-size: var(--fs-2xl);
 }
 .loc-hero__title {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: var(--fs-xl);
   font-weight: 800;
 }
 .loc-hero__sub {
   margin: 0;
   color: rgba(255, 255, 255, 0.8);
-  font-size: 0.95rem;
+  font-size: var(--fs-base);
 }
 .loc-hero__btn {
   width: 100%;
@@ -2286,13 +2539,13 @@ ac-geolocate {
   border-radius: 10px;
   background: rgba(254, 226, 226, 0.95);
   color: #991b1b;
-  font-size: 0.85rem;
+  font-size: var(--fs-sm);
   text-align: left;
 }
 .loc-hero__privacy {
   margin: 0;
   color: rgba(255, 255, 255, 0.65);
-  font-size: 0.8rem;
+  font-size: var(--fs-xs);
 }
 .loc-manual {
   width: 100%;
@@ -2303,7 +2556,7 @@ ac-geolocate {
   display: block;
   margin-bottom: 6px;
   color: rgba(255, 255, 255, 0.85);
-  font-size: 0.85rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
 }
 .loc-manual__row {
@@ -2354,13 +2607,13 @@ ac-geolocate {
 }
 .radius-links__label {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
 }
 .cat-section-label {
   margin: 0 0 8px 4px;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -2411,21 +2664,21 @@ ac-geolocate {
 }
 .auth-brand__name {
   color: var(--p900);
-  font-size: 1.35rem;
+  font-size: var(--fs-lg);
   font-weight: 800;
   letter-spacing: -0.02em;
 }
 .auth-title {
   margin: 0 0 6px;
   color: var(--text);
-  font-size: 1.3rem;
+  font-size: var(--fs-lg);
   font-weight: 800;
   text-align: center;
 }
 .auth-sub {
   margin: 0 0 20px;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--fs-sm);
   text-align: center;
 }
 .auth-form,
@@ -2442,7 +2695,7 @@ ac-geolocate {
   align-items: center;
   gap: 6px 12px;
   margin-top: 6px;
-  font-size: 0.9rem;
+  font-size: var(--fs-sm);
 }
 .auth-fieldset {
   display: flex;
@@ -2460,14 +2713,14 @@ ac-geolocate {
 .auth-legend {
   margin-bottom: 0;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 .auth-footer {
   margin: 20px 0 0;
-  font-size: 0.875rem;
+  font-size: var(--fs-sm);
   text-align: center;
 }
 .auth-footer a {
@@ -2500,7 +2753,7 @@ ac-geolocate {
 }
 .lockout-banner__icon {
   color: #dc2626;
-  font-size: 2rem;
+  font-size: var(--fs-2xl);
 }
 .lockout-banner__title {
   margin: 0;
@@ -2510,7 +2763,7 @@ ac-geolocate {
 .lockout-banner__body {
   margin: 0;
   color: #7f1d1d;
-  font-size: 0.9rem;
+  font-size: var(--fs-sm);
 }
 /* Bootstrap squares the box's right side only when an error message follows
    (has-validation counts it), and our .form-control rounds every corner. */
@@ -2556,17 +2809,17 @@ ac-geolocate {
   justify-content: center;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.14);
-  font-size: 2rem;
+  font-size: var(--fs-2xl);
 }
 .acct-name {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: var(--fs-lg);
   font-weight: 800;
 }
 .acct-sub {
   margin: 0;
   color: rgba(255, 255, 255, 0.75);
-  font-size: 0.85rem;
+  font-size: var(--fs-sm);
 }
 .acct-role {
   display: inline-flex;
@@ -2575,7 +2828,7 @@ ac-geolocate {
   padding: 3px 10px;
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.15);
-  font-size: 0.78rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
 }
 .acct-rows {
@@ -2593,14 +2846,14 @@ ac-geolocate {
 }
 .acct-row dt {
   color: var(--muted);
-  font-size: 0.88rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
 }
 .acct-row dd {
   margin: 0;
   min-width: 0;
   color: var(--text);
-  font-size: 0.92rem;
+  font-size: var(--fs-sm);
   text-align: right;
   word-break: break-word;
 }
@@ -2736,7 +2989,7 @@ ac-geolocate {
 .ash-search .form-control {
   min-height: 40px;
   padding: 6px 12px;
-  font-size: 0.9rem;
+  font-size: var(--fs-sm);
 }
 .ash-no-match + .ash-link {
   margin-top: 6px;
@@ -2744,7 +2997,7 @@ ac-geolocate {
 .ash-no-match {
   margin: 8px 10px;
   color: #6b7280;
-  font-size: 0.85rem;
+  font-size: var(--admin-text-sm);
 }
 /* A group folds: its label is the <summary>, the chevron turns when shut. */
 .ash-group-label {
@@ -2757,7 +3010,7 @@ ac-geolocate {
   padding: 0 10px;
   border-radius: 8px;
   color: #6b7280;
-  font-size: 0.7rem;
+  font-size: var(--admin-label);
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -2778,7 +3031,7 @@ ac-geolocate {
   }
 }
 .ash-group-chevron {
-  font-size: 0.65rem;
+  font-size: var(--fs-2xs);
   transition: transform 0.15s ease;
 }
 .ash-group:not([open]) .ash-group-chevron {
@@ -2795,7 +3048,7 @@ ac-geolocate {
   padding: 8px 10px;
   border-radius: 8px;
   color: #374151;
-  font-size: 0.9rem;
+  font-size: var(--admin-text);
   font-weight: 500;
   text-decoration: none;
 }
@@ -2816,8 +3069,78 @@ ac-geolocate {
   flex-shrink: 0;
   text-align: center;
 }
+/* Admin pages read a step under the farmer-sized base (the scale on :root). */
 .ash-content {
   min-width: 0;
+  font-size: var(--admin-text);
+  line-height: 1.45;
+}
+.ash-content .small,
+.ash-content small {
+  font-size: var(--admin-text-sm);
+}
+.ash-content .admin-section__title {
+  font-size: var(--admin-label);
+}
+/* The controls follow the same scale: a button says its word at the size of
+   the text around it, 44 px tall (still a full tap target) rather than the
+   farmer pages' 48; boxes 44 px, their labels at the text size, their
+   hints and errors at the second-line size; tabs, chips, page links and
+   badges likewise, so no control shouts over the table it sits on. */
+.ash-content .btn {
+  --app-btn-h: 44px;
+  font-size: var(--admin-text);
+  border-radius: 10px;
+}
+.ash-content .btn-lg {
+  --app-btn-h: 48px;
+  font-size: var(--fs-base);
+}
+.ash-content .btn-sm {
+  --app-btn-h: 36px;
+  font-size: var(--admin-text-sm);
+  border-radius: 8px;
+}
+.ash-content .form-control,
+.ash-content .form-select {
+  min-height: 44px;
+  font-size: var(--admin-input);
+  border-radius: 10px;
+}
+.ash-content textarea.form-control {
+  min-height: 96px;
+}
+.ash-content .input-group-text {
+  font-size: var(--admin-text);
+}
+.ash-content .form-label,
+.ash-content .form-check-label {
+  font-size: var(--admin-text);
+}
+.ash-content .form-label {
+  margin-bottom: 6px;
+}
+.ash-content .form-text,
+.ash-content .invalid-feedback,
+.ash-content .slug-note {
+  font-size: var(--admin-text-sm);
+}
+.ash-content .search-tab {
+  min-height: 44px;
+  font-size: var(--admin-text);
+}
+.ash-content .chip {
+  font-size: var(--admin-text-sm);
+}
+.ash-content .page-btn {
+  font-size: var(--admin-text);
+}
+.ash-content .badge {
+  font-size: var(--admin-badge);
+  font-weight: 600;
+}
+.ash-content .contact-sheet__sub {
+  font-size: var(--admin-text);
 }
 .admin-header {
   padding: 20px 16px 4px;
@@ -2841,20 +3164,20 @@ ac-geolocate {
   align-items: center;
   min-height: 44px;
   color: var(--p600);
-  font-size: 0.88rem;
+  font-size: var(--admin-text);
   font-weight: 600;
   text-decoration: none;
 }
 .admin-header__title {
   margin: 0;
   color: var(--text);
-  font-size: 1.35rem;
+  font-size: var(--fs-lg);
   font-weight: 800;
 }
 .admin-header__sub {
   margin: 4px 0 0;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--admin-text);
 }
 .admin-body {
   display: flex;
@@ -2905,7 +3228,7 @@ ac-geolocate {
   align-items: center;
   gap: 6px;
   min-height: 44px;
-  font-size: 0.9rem;
+  font-size: var(--admin-text);
   font-weight: 600;
   text-decoration: none;
 }
@@ -2916,7 +3239,7 @@ ac-geolocate {
   align-items: center;
   gap: 8px;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--admin-text);
 }
 /* Every button row of an admin page: one height (a 44 px tap target), one
    gap, whatever mix of links and forms it holds. */
@@ -2957,7 +3280,7 @@ ac-geolocate {
   border: 1px solid var(--p200);
   border-radius: 12px;
   background: var(--p50);
-  font-size: 0.9rem;
+  font-size: var(--admin-text);
 }
 .admin-filter a {
   display: inline-flex;
@@ -2970,7 +3293,44 @@ ac-geolocate {
 .admin-filter__clear {
   margin-left: auto;
 }
-/* Tables in an admin card: room for the rounded edge, and taller rows. */
+/* Tables in an admin card: room for the rounded edge, and taller rows.
+   A step under the farmer-sized base so a row of six columns still reads on
+   one line; the second line of a cell (.small) a clear step under that, and
+   figures in even columns so they line up down the table. */
+.admin-table {
+  font-size: var(--admin-text);
+  font-variant-numeric: tabular-nums;
+}
+.admin-table .small,
+.admin-table small {
+  font-size: var(--admin-text-sm);
+  line-height: 1.4;
+}
+.admin-table .small.d-block,
+.admin-table .d-block.small {
+  margin-top: 2px;
+}
+.admin-table td .fw-bold {
+  font-weight: 600 !important;
+}
+/* Free text in a row wraps at a readable measure instead of stretching the
+   table: a farmer's description or a review at most ~45 characters a line,
+   an address, area or note ~26; never cut, the moderator reads it whole. */
+.admin-table .cell-prose,
+.admin-table .cell-short {
+  overflow-wrap: anywhere;
+}
+.admin-table .cell-prose {
+  min-width: 18ch;
+  max-width: 45ch;
+}
+.admin-table .cell-short {
+  min-width: 12ch;
+  max-width: 26ch;
+}
+.admin-table code {
+  font-size: var(--admin-text-sm);
+}
 .admin-table > :not(caption) > * > * {
   padding: 10px 8px;
 }
@@ -2979,6 +3339,272 @@ ac-geolocate {
 }
 .admin-table > :not(caption) > * > :last-child {
   padding-right: 16px;
+}
+/* Wider than its card, a table scrolls inside the card, never the page. */
+.admin-card,
+.admin-section {
+  min-width: 0;
+  max-width: 100%;
+}
+.admin-card .table-responsive,
+.admin-section .table-responsive {
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+.admin-table th,
+.admin-table td {
+  overflow-wrap: anywhere;
+}
+.admin-table-head th {
+  overflow-wrap: normal;
+}
+/* A matrix (permissions, demand weeks): its row names stay in sight while
+   the columns scroll under them. */
+.perm-matrix th[scope="row"],
+.perm-matrix thead th:first-child,
+.admin-table--matrix > :not(caption) > * > :first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+  box-shadow: inset -1px 0 0 var(--hairline);
+}
+.perm-matrix thead th:first-child,
+.admin-table--matrix > thead > tr > :first-child {
+  background: #f8faf9;
+}
+.admin-table--matrix.area-progress .area-progress__ward .area-progress__name {
+  position: sticky;
+}
+@media (max-width: 575.98px) {
+  .perm-matrix th[scope="row"] {
+    min-width: 160px;
+  }
+  .admin-table--matrix > tbody > tr > :first-child {
+    min-width: 9rem;
+    max-width: 45vw;
+    white-space: normal;
+  }
+}
+
+/* A list table in a narrow card (a phone, a tablet beside the menu): each
+   row becomes a card of its own: the first cell its title, the state cells
+   (cell-state) badges beside each other, every other cell a fact two to a
+   line under its label (data-label, the column's head), the actions a
+   worded bar at its foot, or a chevron at the title's end when opening is
+   the only one. Sized by the card, not the screen, so the menu's width counts. */
+.admin-card {
+  container-type: inline-size;
+}
+/* The page body is measured too: when its list is narrow, the list's own
+   frame gives way and each row stands as a card of its own, the page's
+   background between them, so where one record ends is never in doubt. */
+.admin-body {
+  container: admin-body / inline-size;
+}
+@container admin-body (max-width: 719.98px) {
+  .admin-card:has(> .table-responsive > .admin-table--cards) {
+    overflow: visible;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+  }
+  .admin-card > .table-responsive:has(> .admin-table--cards) {
+    overflow: visible;
+  }
+  .admin-card > .table-responsive > .admin-table--cards {
+    --bs-table-bg: transparent;
+    background: transparent;
+  }
+  .admin-card > .table-responsive > .admin-table--cards > tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .admin-card > .table-responsive > .admin-table--cards > tbody > tr {
+    border: 1px solid var(--hairline);
+    border-radius: 14px;
+    background: var(--surface);
+    box-shadow: 0 1px 2px rgba(6, 78, 59, 0.05);
+  }
+  .admin-card > .table-responsive > .admin-table--cards > tbody > tr:last-child {
+    border-bottom: 1px solid var(--hairline);
+  }
+  /* A hidden or switched-off record: the grey card, its edge a step darker. */
+  .admin-card > .table-responsive > .admin-table--cards > tbody > tr.table-light {
+    border-color: #dfe3e1;
+    background: #f3f5f4;
+  }
+}
+@container (max-width: 719.98px) {
+  .admin-table--cards > thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .admin-table--cards,
+  .admin-table--cards > tbody {
+    display: block;
+    width: 100%;
+  }
+  /* A row, top to bottom: the title, its states as one line of badges, its
+     facts on a two-column grid (label above value), the actions last. */
+  .admin-table--cards > tbody > tr {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    column-gap: 16px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .admin-table--cards > tbody > tr:last-child {
+    border-bottom: none;
+  }
+  .admin-table--cards > tbody > tr.table-light {
+    background: #f8f9fa;
+  }
+  .admin-table.admin-table--cards > tbody > tr > td {
+    order: 3;
+    flex: 0 0 calc(50% - 8px);
+    min-width: 0;
+    margin-top: 12px;
+    padding: 0;
+    border: none;
+    box-shadow: none;
+    background: transparent;
+    color: var(--text);
+    font-size: var(--admin-text);
+    line-height: 1.45;
+    text-align: start !important;
+  }
+  .admin-table--cards > tbody > tr > td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 2px;
+    color: var(--muted);
+    font-size: var(--admin-label);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+    text-transform: uppercase;
+  }
+  .admin-table--cards > tbody > tr > td[data-label=""]::before,
+  .admin-table--cards > tbody > tr > td.cell-state::before,
+  .admin-table--cards > tbody > tr > td[colspan]::before {
+    content: none;
+  }
+  /* Every value at one size: a cell's second lines are not a step smaller
+     here, the label above already says what it is. */
+  .admin-table--cards > tbody > tr > td:not(:first-child) .small,
+  .admin-table--cards > tbody > tr > td:not(:first-child).small {
+    font-size: var(--admin-text);
+  }
+  .admin-table--cards > tbody > tr > td:not(:first-child) .fw-bold,
+  .admin-table--cards > tbody > tr > td:not(:first-child) .fw-semibold {
+    font-weight: 500 !important;
+  }
+  /* The title: the record's name in the text colour, its second line (a
+     phone, a code) muted under it, whatever the page made of them. */
+  .admin-table.admin-table--cards > tbody > tr > td:first-child {
+    order: 0;
+    flex-basis: 100%;
+    margin-top: 0;
+    font-size: var(--fs-base);
+    font-weight: 700;
+  }
+  .admin-table--cards > tbody > tr > td:first-child a:not(.d-block) {
+    color: var(--text);
+    font-weight: 700 !important;
+  }
+  .admin-table--cards > tbody > tr > td:first-child .d-block,
+  .admin-table--cards > tbody > tr > td:first-child .small {
+    margin-top: 2px;
+    color: var(--muted) !important;
+    font-size: var(--admin-text);
+    font-weight: 500;
+  }
+  /* States need no label (the badge says it): one line of their own, the
+     line ended by the row's ::after so no fact climbs beside them. */
+  .admin-table.admin-table--cards > tbody > tr > td.cell-state {
+    order: 1;
+    flex: 0 0 auto;
+    margin-top: 10px;
+  }
+  .admin-table--cards > tbody > tr::after {
+    content: "";
+    order: 2;
+    flex-basis: 100%;
+    height: 0;
+  }
+  .admin-table--cards td.cell-state .d-block {
+    display: inline !important;
+    margin-left: 6px;
+    color: var(--muted) !important;
+  }
+  /* Free text and addresses take the whole width, read whole. */
+  .admin-table.admin-table--cards > tbody > tr > td:has(.cell-prose, .cell-short) {
+    flex-basis: 100%;
+  }
+  .admin-table--cards .cell-prose,
+  .admin-table--cards .cell-short {
+    min-width: 0;
+    max-width: none;
+  }
+  .admin-table--cards .text-nowrap {
+    white-space: normal !important;
+  }
+  /* The actions: a bar at the foot, each button worded. */
+  .admin-table.admin-table--cards > tbody > tr > td:last-child[data-label=""] {
+    order: 4;
+    flex-basis: 100%;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--hairline);
+  }
+  .admin-table--cards .row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .admin-table--cards .row-btn {
+    padding: 0 12px;
+  }
+  .admin-table--cards .row-btn__label {
+    display: inline;
+  }
+  /* Opening the record the only action: a quiet chevron at the title's end
+     (the whole tap target kept), no bar. */
+  .admin-table.admin-table--cards > tbody > tr > td:last-child[data-label=""]:has(> .row-actions > .row-btn--open:only-child) {
+    position: absolute;
+    top: 6px;
+    right: 4px;
+    width: auto;
+    margin: 0;
+    padding: 0;
+    border: none;
+  }
+  .admin-table--cards .row-actions > .row-btn--open:only-child {
+    padding: 0;
+    border-color: transparent;
+    color: var(--muted);
+  }
+  .admin-table--cards .row-actions > .row-btn--open:only-child .row-btn__label {
+    display: none;
+  }
+  .admin-table.admin-table--cards > tbody > tr:has(> td:last-child > .row-actions > .row-btn--open:only-child) > td:first-child {
+    padding-right: 40px;
+  }
+  /* The empty list's one cell spans the table: centred. */
+  .admin-table.admin-table--cards > tbody > tr > td[colspan] {
+    flex-basis: 100%;
+    margin-top: 0;
+    color: var(--muted);
+    text-align: center !important;
+  }
 }
 .admin-thumb {
   width: 44px;
@@ -3093,7 +3719,7 @@ ac-geolocate {
 .admin-table-head th {
   background: #f8faf9;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--admin-label);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -3140,7 +3766,7 @@ ac-geolocate {
   align-items: center;
   justify-content: center;
   border-radius: 10px;
-  font-size: 1rem;
+  font-size: var(--fs-base);
 }
 .stat-card__icon--green {
   background: var(--p100);
@@ -3162,14 +3788,14 @@ ac-geolocate {
   margin: 0;
   padding-top: 2px;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--admin-text-sm);
   font-weight: 600;
   line-height: 1.3;
 }
 .stat-card__value {
   margin: 0;
   color: var(--text);
-  font-size: 1.5rem;
+  font-size: var(--fs-lg);
   font-weight: 800;
   line-height: 1.15;
   font-variant-numeric: tabular-nums;
@@ -3177,13 +3803,13 @@ ac-geolocate {
 }
 @media (min-width: 768px) {
   .stat-card__value {
-    font-size: 1.75rem;
+    font-size: var(--fs-xl);
   }
 }
 .stat-card__note {
   margin: 4px 0 0;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--admin-label);
   line-height: 1.3;
 }
 /* The share a figure is of its total (verified of all providers). */
@@ -3218,7 +3844,7 @@ ac-geolocate {
   width: auto;
   margin-bottom: 8px;
   color: var(--p700);
-  font-size: 0.85rem;
+  font-size: var(--admin-text);
   font-weight: 800;
 }
 .grant-row {
@@ -3238,7 +3864,7 @@ ac-geolocate {
 .grant-row__code {
   margin-left: 6px;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--admin-label);
 }
 .perm-matrix th[scope="row"] {
   min-width: 220px;
@@ -3294,7 +3920,7 @@ ac-geolocate {
   -webkit-tap-highlight-color: transparent;
 }
 .choice-card__icon {
-  font-size: 1.5rem;
+  font-size: var(--fs-xl);
   color: var(--p700);
 }
 .choice-card:has(input:checked) {
@@ -3322,12 +3948,6 @@ ac-geolocate {
   border-radius: 12px;
 }
 
-/* A row that is one link (a provider's other services): a full-size tap
-   target on a phone. */
-.link-row {
-  min-height: 44px;
-}
-
 
 /* A flex child that may shrink below its content, so long names truncate
    instead of widening the card. */
@@ -3349,7 +3969,7 @@ ac-geolocate {
   border-radius: 12px;
   background: var(--p50);
   color: var(--p700);
-  font-size: 2rem;
+  font-size: var(--fs-2xl);
   text-decoration: none;
 }
 .service-card__photo img {
@@ -3408,7 +4028,7 @@ ac-geolocate {
   line-height: 1.3;
 }
 .photo-picker__icon {
-  font-size: 2rem;
+  font-size: var(--fs-2xl);
   margin-bottom: 4px;
 }
 .photo-picker__tag {
@@ -3423,7 +4043,7 @@ ac-geolocate {
   border-radius: 100px;
   background: rgba(0, 0, 0, 0.65);
   color: #fff;
-  font-size: 0.85rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
 }
 /* Without JS the native box shows below the tile. */
@@ -3454,7 +4074,7 @@ ac-geolocate {
 }
 .price-move {
   display: block;
-  font-size: 0.875rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
 }
 /* The home page's prices: one column on a phone, two from a tablet (the
@@ -3534,7 +4154,7 @@ ac-geolocate {
   flex: 0 0 1.5em;
   text-align: center;
   color: var(--p700);
-  font-size: 1.125rem;
+  font-size: var(--fs-md);
 }
 
 /* ── Dashboard: a weekly figure as columns (atoms/week_columns.html) ────── */
@@ -3548,7 +4168,7 @@ ac-geolocate {
 .week-columns__title {
   margin-bottom: 4px;
   color: var(--text2);
-  font-size: 0.875rem;
+  font-size: var(--admin-text);
   font-weight: 600;
 }
 .week-columns__base {
@@ -3670,7 +4290,7 @@ ac-geolocate {
 .area-progress__said {
   flex-shrink: 0;
   min-width: 4.5em;
-  font-size: 0.875rem;
+  font-size: var(--admin-text);
   white-space: nowrap;
 }
 .area-progress__weeks {
@@ -3696,7 +4316,7 @@ ac-geolocate {
 }
 .area-progress__count {
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--admin-text-sm);
 }
 .demand-heat-legend {
   display: flex;
@@ -3706,7 +4326,7 @@ ac-geolocate {
   margin: 0;
   padding: 10px 16px;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--admin-text-sm);
 }
 .demand-heat-legend__swatches {
   display: inline-flex;
@@ -3728,7 +4348,7 @@ ac-geolocate {
   margin: auto 0 0;
   padding-top: 10px;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--admin-label);
   line-height: 1.3;
 }
 .stat-card__delta {
@@ -3744,7 +4364,7 @@ ac-geolocate {
   white-space: nowrap;
 }
 .stat-card__delta .fa-solid {
-  font-size: 0.65rem;
+  font-size: var(--fs-2xs);
 }
 
 /* Searches that found nothing: the words, the count, a bar under them. */
@@ -3822,7 +4442,7 @@ ac-geolocate {
   border-bottom: 1px solid var(--hairline);
   background: none;
   color: var(--text);
-  font-size: 0.92rem;
+  font-size: var(--admin-text);
   font-weight: 500;
   text-align: left;
   text-decoration: none;

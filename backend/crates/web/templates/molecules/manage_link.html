@@ -1,7 +1,10 @@
 {#- On a public page, the way to where its record is edited, for the one
     who may: the admin panel's page, or the owner's form
-    (web::pages::manage). `link` is a `shell::Link`; nothing when `None`. -#}
+    (web::pages::manage). A round icon button in the detail header, beside
+    the share button: a tool on the page, never competing with the call. Its
+    words are the tooltip and what a screen reader says. `link` is a
+    `shell::Link`; nothing when `None`. -#}
 {% import "atoms/icon.html" as atoms %}
 {% macro manage_link(link) -%}
-{% if link %}<a class="btn btn-outline-secondary w-100" href="{{ link.href }}">{{ atoms::icon(name=link.icon) }} {{ link.label }}</a>{% endif %}
+{% if link %}<a class="hero-icon-btn" href="{{ link.href }}" title="{{ link.label }}" aria-label="{{ link.label }}">{{ atoms::icon(name=link.icon) }}</a>{% endif %}
 {%- endmacro manage_link %}

@@ -20,7 +20,6 @@ use crate::{
     middleware::auth::Viewer,
     pages::{
         canonical_url,
-        cards::same_label,
         manage::{manage_link, Managed},
         moved_permanently, parse_id,
         provider::{
@@ -49,8 +48,6 @@ pub struct ServicePage {
     /// The provider's rating and the way to its reviews.
     pub rating: RatingLine,
     pub service: PublicServiceDto,
-    /// The category badge is left out when the name already says it.
-    pub show_category: bool,
     /// The provider, with the services the contact form offers.
     pub provider: BusinessDetailDto,
     pub provider_href: String,
@@ -117,7 +114,6 @@ pub(super) async fn render(
     let rating = rating_line(state, &provider).await?;
     let page = ServicePage {
         rating,
-        show_category: !same_label(&service.name, &service.category),
         provider_href: canonical_url("provider", provider.id, &provider.name)?,
         category_href: routes::url(
             "service_category",

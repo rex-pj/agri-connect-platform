@@ -43,23 +43,24 @@
 
   <div class="admin-card">
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0 admin-table">
+      <table class="table table-hover align-middle mb-0 admin-table admin-table--cards">
         <thead class="admin-table-head">
-          <tr><th>{{ t(key="partner.name") }}</th><th>{{ t(key="partner.kind") }}</th><th class="text-center">{{ t(key="partner.in_force") }}</th><th class="text-end">{{ t(key="partner.monthly_revenue") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
+          <tr><th>{{ t(key="partner.name") }}</th><th>{{ t(key="partner.kind") }}</th><th>{{ t(key="nav.account") }}</th><th class="text-center">{{ t(key="partner.in_force") }}</th><th class="text-end">{{ t(key="partner.monthly_revenue") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
         </thead>
         <tbody>
           {% for r in b.rows %}
           {% set p = r.partner %}
           <tr{% if not p.is_active %} class="table-light text-body-secondary"{% endif %}>
-            <td><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ p.name }}</a>{% if p.is_demo %} {{ status::demo() }}{% endif %}{% if p.account_username %}<span class="d-block small text-muted">{{ p.account_username }}</span>{% endif %}</td>
-            <td>{{ r.kind_label }}</td>
-            <td class="text-center">{{ p.contracts_in_force }}</td>
-            <td class="text-end">{{ p.monthly_revenue | vnd }}</td>
-            <td class="text-center">{{ status::account(on=p.is_active) }}</td>
-            <td class="text-end"><div class="row-actions">{{ row::open(href=r.href, name=p.name) }}</div></td>
+            <td data-label=""><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ p.name }}</a>{% if p.is_demo %} {{ status::demo() }}{% endif %}</td>
+            <td data-label="{{ t(key="partner.kind") }}">{{ r.kind_label }}</td>
+            <td data-label="{{ t(key="nav.account") }}">{% if p.account_username %}<span class="badge text-bg-light border">{{ p.account_username }}</span>{% else %}<span class="small text-muted">{{ t(key="admin.none") }}</span>{% endif %}</td>
+            <td data-label="{{ t(key="partner.in_force") }}" class="text-center">{{ p.contracts_in_force }}</td>
+            <td data-label="{{ t(key="partner.monthly_revenue") }}" class="text-end text-nowrap">{{ p.monthly_revenue | vnd }}</td>
+            <td data-label="{{ t(key="admin.col_status") }}" class="text-center cell-state">{{ status::account(on=p.is_active) }}</td>
+            <td data-label="" class="text-end"><div class="row-actions">{{ row::open(href=r.href, name=p.name) }}</div></td>
           </tr>
           {% else %}
-          <tr><td colspan="6" class="text-center text-muted py-4">{{ t(key="partner.none") }}</td></tr>
+          <tr><td colspan="7" class="text-center text-muted py-4">{{ t(key="partner.none") }}</td></tr>
           {% endfor %}
         </tbody>
       </table>

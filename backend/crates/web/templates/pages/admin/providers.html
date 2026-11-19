@@ -28,23 +28,25 @@
   {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.providers")) }}
   <div class="admin-card">
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0 admin-table">
+      <table class="table table-hover align-middle mb-0 admin-table admin-table--cards">
         <thead class="admin-table-head">
-          <tr><th>{{ t(key="common.provider") }}</th><th class="text-center">{{ t(key="admin.col_listings") }}</th><th>{{ t(key="nav.account") }}</th><th class="text-center">{{ t(key="status.verified") }}</th><th>{{ t(key="admin.created") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
+          <tr><th>{{ t(key="common.provider") }}</th><th class="d-none d-lg-table-cell">{{ t(key="admin.col_address") }}</th><th class="text-center">{{ t(key="admin_menu.services") }}</th><th class="text-center">{{ t(key="admin_menu.products") }}</th><th>{{ t(key="nav.account") }}</th><th class="text-center">{{ t(key="status.verified") }}</th><th>{{ t(key="admin.created") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
         </thead>
         <tbody>
           {% for r in b.rows %}
           {% set p = r.provider %}
           <tr{% if not p.is_active %} class="table-light text-body-secondary"{% endif %}>
-            <td><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ p.name }}</a><a class="d-block small text-muted text-decoration-none" href="tel:{{ p.phone }}">{{ p.phone | phone }}</a>{% if p.address %}<span class="d-block small text-muted">{{ p.address }}</span>{% endif %}</td>
-            <td class="text-center">{{ p.service_count }} / {{ p.product_count }}</td>
-            <td>{% if p.linked_username %}<span class="badge text-bg-light border">{{ p.linked_username }}</span>{% else %}<span class="small text-muted">{{ t(key="admin.none") }}</span>{% endif %}</td>
-            <td class="text-center">{{ status::verified(on=p.is_verified) }}</td>
-            <td class="small text-muted"><time datetime="{{ p.created_on | utc_iso }}">{{ p.created_on | vn_datetime }}</time>{% if p.created_by_name %}<span class="d-block">{{ p.created_by_name }}</span>{% endif %}</td>
-            <td class="text-end"><div class="row-actions">{{ row::open(href=r.href, name=p.name) }}</div></td>
+            <td data-label=""><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ p.name }}</a><a class="d-block small text-muted text-decoration-none" href="tel:{{ p.phone }}">{{ p.phone | phone }}</a></td>
+            <td data-label="{{ t(key="admin.col_address") }}" class="small d-none d-lg-table-cell"><div class="cell-short">{% if p.address %}{{ p.address }}{% else %}<span class="text-muted">—</span>{% endif %}</div></td>
+            <td data-label="{{ t(key="admin_menu.services") }}" class="text-center">{{ p.service_count }}</td>
+            <td data-label="{{ t(key="admin_menu.products") }}" class="text-center">{{ p.product_count }}</td>
+            <td data-label="{{ t(key="nav.account") }}">{% if p.linked_username %}<span class="badge text-bg-light border">{{ p.linked_username }}</span>{% else %}<span class="small text-muted">{{ t(key="admin.none") }}</span>{% endif %}</td>
+            <td data-label="{{ t(key="status.verified") }}" class="text-center cell-state">{{ status::verified(on=p.is_verified) }}</td>
+            <td data-label="{{ t(key="admin.created") }}" class="small text-muted"><time datetime="{{ p.created_on | utc_iso }}">{{ p.created_on | vn_datetime }}</time>{% if p.created_by_name %}<span class="d-block">{{ p.created_by_name }}</span>{% endif %}</td>
+            <td data-label="" class="text-end"><div class="row-actions">{{ row::open(href=r.href, name=p.name) }}</div></td>
           </tr>
           {% else %}
-          <tr><td colspan="6" class="text-center text-muted py-4">{% if b.search.q %}{{ t(key="admin_search.none", q=b.search.q) }}{% else %}{{ t(key="admin.no_providers") }}{% endif %}</td></tr>
+          <tr><td colspan="8" class="text-center text-muted py-4">{% if b.search.q %}{{ t(key="admin_search.none", q=b.search.q) }}{% else %}{{ t(key="admin.no_providers") }}{% endif %}</td></tr>
           {% endfor %}
         </tbody>
       </table>

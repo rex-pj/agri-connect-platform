@@ -13,7 +13,7 @@
 {%- set_global most = 1 -%}
 {%- for row in r.rows %}{% for f in row.weeks %}{% if f.value is number and f.value > most %}{% set_global most = f.value %}{% endif %}{% endfor %}{% endfor -%}
 <div class="table-responsive">
-  <table class="table align-middle mb-0 admin-table">
+  <table class="table align-middle mb-0 admin-table admin-table--matrix">
     <thead class="admin-table-head">
       <tr>
         <th scope="col">{{ t(key="demand.category") }}</th>

@@ -29,22 +29,23 @@
 
   <div class="admin-card">
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0 admin-table">
+      <table class="table table-hover align-middle mb-0 admin-table admin-table--cards">
         <thead class="admin-table-head">
-          <tr><th>{{ t(key="price_form.crop") }}</th><th>{{ t(key="prices.area") }}</th><th>{{ t(key="price_form.day") }}</th><th class="text-end">{{ t(key="admin_prices.col_price") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
+          <tr><th>{{ t(key="price_form.crop") }}</th><th>{{ t(key="prices.area") }}</th><th>{{ t(key="price_form.day") }}</th><th class="text-end">{{ t(key="admin_prices.col_price") }}</th><th class="d-none d-md-table-cell">{{ t(key="price_form.note") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
         </thead>
         <tbody>
           {% for r in b.rows %}
           {% set p = r.price %}
           <tr>
-            <td><a class="fw-bold text-decoration-none" href="{{ r.crop_href }}">{{ p.crop_name }}</a>{% if p.note %}<span class="d-block small text-muted">{{ p.note }}</span>{% endif %}</td>
-            <td><a class="text-decoration-none" href="{{ r.area_href }}">{{ p.location_label }}</a></td>
-            <td class="text-nowrap">{{ p.observed_on | full_date }}</td>
-            <td class="text-end text-nowrap">{% if p.price_low == p.price_high %}{{ p.price_low | vnd }}{% else %}{{ p.price_low | number }} – {{ p.price_high | vnd }}{% endif %}<span class="small text-muted">/{{ p.unit }}</span></td>
-            <td class="text-end"><div class="row-actions">{{ row::delete(href=r.delete_href ~ "#xac-nhan", name=p.crop_name) }}</div></td>
+            <td data-label=""><a class="fw-bold text-decoration-none" href="{{ r.crop_href }}">{{ p.crop_name }}</a></td>
+            <td data-label="{{ t(key="prices.area") }}"><a class="text-decoration-none" href="{{ r.area_href }}">{{ p.location_label }}</a></td>
+            <td data-label="{{ t(key="price_form.day") }}" class="text-nowrap">{{ p.observed_on | full_date }}</td>
+            <td data-label="{{ t(key="admin_prices.col_price") }}" class="text-end text-nowrap">{% if p.price_low == p.price_high %}{{ p.price_low | vnd }}{% else %}{{ p.price_low | number }} – {{ p.price_high | vnd }}{% endif %}<span class="small text-muted">/{{ p.unit }}</span></td>
+            <td data-label="{{ t(key="price_form.note") }}" class="small text-muted d-none d-md-table-cell"><div class="cell-short">{% if p.note %}{{ p.note }}{% else %}—{% endif %}</div></td>
+            <td data-label="" class="text-end"><div class="row-actions">{{ row::delete(href=r.delete_href ~ "#xac-nhan", name=p.crop_name) }}</div></td>
           </tr>
           {% else %}
-          <tr><td colspan="5" class="text-center text-muted py-4">{{ t(key="admin_prices.none") }}</td></tr>
+          <tr><td colspan="6" class="text-center text-muted py-4">{{ t(key="admin_prices.none") }}</td></tr>
           {% endfor %}
         </tbody>
       </table>

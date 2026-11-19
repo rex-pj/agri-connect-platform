@@ -1,0 +1,15 @@
+{#- What else the provider offers, on a service's or a supply's page: the
+    rows of `molecules/offer_rows.html` under `title`, with the way to the
+    provider's page at the title's end. Only when there is something. -#}
+{% import "molecules/offer_rows.html" as rows %}
+{% macro provider_offers(title, items, provider_href) -%}
+{% if items %}
+<section class="detail-card">
+  <div class="detail-card__head">
+    <h2 class="detail-card__title">{{ title }}</h2>
+    <a class="section-more" href="{{ provider_href }}">{{ t(key="shop.see") }}</a>
+  </div>
+  {{ rows::offer_rows(items=items) }}
+</section>
+{% endif %}
+{%- endmacro provider_offers %}

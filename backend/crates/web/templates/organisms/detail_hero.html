@@ -1,0 +1,25 @@
+{#- The green header of a public detail page (provider, service, supply), the
+    top of the `detail-page` frame: the way back (to the category, or to the
+    providers), the title with the page's tools at its end (the way to edit
+    it, for the owner or an admin who may: `manage`, a shell::Link or none;
+    then share), always in the same place, then the provider's
+    badge and address on the provider's own page. It leaves room below for
+    the first card, which is lifted onto it. -#}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/badge.html" as badge %}
+{% import "molecules/share_button.html" as share %}
+{% import "molecules/manage_link.html" as manage_link %}
+{% macro detail_hero(title, share_text, back_href, back_label, manage, verified=false, address="") -%}
+<header class="page-hero page-hero--lift">
+  <a class="back-link" href="{{ back_href }}">{{ atoms::icon(name="fa-arrow-left") }} {{ back_label }}</a>
+  <div class="detail-hero__row">
+    <h1 class="page-hero__title detail-hero__title">{{ title }}</h1>
+    <div class="detail-hero__tools">
+      {{ manage_link::manage_link(link=manage) }}
+      {{ share::share_button(title=title, text=share_text) }}
+    </div>
+  </div>
+  {% if verified %}<div class="detail-hero__tags">{{ badge::badge(text=t(key="status.verified"), variant="hero", icon="fa-circle-check") }}</div>{% endif %}
+  {% if address %}<p class="detail-hero__address">{{ atoms::icon(name="fa-location-dot") }} {{ address }}</p>{% endif %}
+</header>
+{%- endmacro detail_hero %}

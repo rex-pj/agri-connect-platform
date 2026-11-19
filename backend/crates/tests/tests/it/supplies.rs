@@ -211,7 +211,7 @@ async fn a_supply_says_what_it_is_for_and_the_board_leads_to_it() {
 
     // The admin's list says what it is for.
     let list = body_text(send(&e.router, get_page("/admin/supplies", Some(&cookie))).await).await;
-    assert!(list.contains("Dùng cho:</span> <a") && list.contains(">Lúa</a>"));
+    assert!(list.contains("<th>Dùng cho</th>") && list.contains(">Lúa</a>"));
     e.cleanup().await;
 }
 

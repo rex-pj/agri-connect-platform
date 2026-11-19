@@ -25,19 +25,20 @@
 
   <div class="admin-card">
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0 admin-table">
+      <table class="table table-hover align-middle mb-0 admin-table admin-table--cards">
         <thead class="admin-table-head">
-          <tr><th>{{ t(key="admin.col_reviewer") }}</th><th>{{ t(key="common.provider") }}</th><th>{{ t(key="admin.col_content") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
+          <tr><th>{{ t(key="admin.col_reviewer") }}</th><th>{{ t(key="admin.col_sent") }}</th><th>{{ t(key="common.provider") }}</th><th>{{ t(key="admin.col_content") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
         </thead>
         <tbody>
           {% for r in b.rows %}
           {% set v = r.review %}
           <tr{% if not v.is_visible %} class="table-light text-body-secondary"{% endif %}>
-            <td class="fw-semibold">{{ v.reviewer_name }}<span class="d-block small text-muted fw-normal"><time datetime="{{ v.created_on | utc_iso }}">{{ v.created_on | vn_datetime }}</time></span></td>
-            <td><a class="text-decoration-none" href="{{ r.provider_href }}">{{ v.business_name }}</a></td>
-            <td>{{ stars::stars(rating=v.rating) }}{% if v.comment %}<span class="d-block small">{{ v.comment }}</span>{% endif %}{% if v.reply %}<span class="d-block small text-muted">{{ atoms::icon(name="fa-reply") }} {{ v.reply }}</span>{% endif %}{% for sign in v.suspect %}<span class="d-block small text-danger">{{ atoms::icon(name="fa-triangle-exclamation") }} {% if sign == "own_phone" %}{{ t(key="admin.review_suspect_own_phone") }}{% else %}{{ t(key="admin.review_suspect_quick") }}{% endif %}</span>{% endfor %}</td>
-            <td class="text-center">{{ status::visibility(on=v.is_visible) }}{% if not v.is_visible %}<span class="d-block small text-muted">{% if v.updated_by_name %}{{ v.updated_by_name }}{% else %}{{ t(key="review.waiting") }}{% endif %}</span>{% endif %}</td>
-            <td class="text-end">
+            <td data-label="" class="fw-semibold">{{ v.reviewer_name }}</td>
+            <td data-label="{{ t(key="admin.col_sent") }}" class="small text-muted text-nowrap"><time datetime="{{ v.created_on | utc_iso }}">{{ v.created_on | vn_datetime }}</time></td>
+            <td data-label="{{ t(key="common.provider") }}"><a class="text-decoration-none" href="{{ r.provider_href }}">{{ v.business_name }}</a></td>
+            <td data-label="{{ t(key="admin.col_content") }}"><div class="cell-prose">{{ stars::stars(rating=v.rating) }}{% if v.comment %}<span class="d-block small">{{ v.comment }}</span>{% endif %}{% if v.reply %}<span class="d-block small text-muted">{{ atoms::icon(name="fa-reply") }} {{ v.reply }}</span>{% endif %}</div></td>
+            <td data-label="{{ t(key="admin.col_status") }}" class="text-center cell-state">{{ status::visibility(on=v.is_visible) }}{% if not v.is_visible %}<span class="d-block small text-muted">{% if v.updated_by_name %}{{ v.updated_by_name }}{% else %}{{ t(key="review.waiting") }}{% endif %}</span>{% endif %}{% for sign in v.suspect %}<span class="cell-short d-block small text-danger mx-auto mt-1">{{ atoms::icon(name="fa-triangle-exclamation") }} {% if sign == "own_phone" %}{{ t(key="admin.review_suspect_own_phone") }}{% else %}{{ t(key="admin.review_suspect_quick") }}{% endif %}</span>{% endfor %}</td>
+            <td data-label="" class="text-end">
               <div class="row-actions">
                 {% if v.is_visible %}
                 {{ row::hide(href=r.hide_href ~ "#xac-nhan", name=t(key="admin.review_of", name=v.reviewer_name)) }}
@@ -48,7 +49,7 @@
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="5" class="text-center text-muted py-4">{{ t(key="admin.no_reviews") }}</td></tr>
+          <tr><td colspan="6" class="text-center text-muted py-4">{{ t(key="admin.no_reviews") }}</td></tr>
           {% endfor %}
         </tbody>
       </table>

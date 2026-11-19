@@ -14,85 +14,85 @@
     {
       "name": "Lúa",
       "sector": "crop",
-      "icon": "fa-solid fa-wheat-awn",
+      "icon": "fa-wheat-awn",
       "display_order": 1
     },
     {
       "name": "Sầu riêng",
       "sector": "crop",
-      "icon": "fa-solid fa-seedling",
+      "icon": "fa-seedling",
       "display_order": 2
     },
     {
       "name": "Xoài",
       "sector": "crop",
-      "icon": "fa-solid fa-apple-whole",
+      "icon": "fa-apple-whole",
       "display_order": 3
     },
     {
       "name": "Bưởi",
       "sector": "crop",
-      "icon": "fa-solid fa-lemon",
+      "icon": "fa-lemon",
       "display_order": 4
     },
     {
       "name": "Thanh long",
       "sector": "crop",
-      "icon": "fa-solid fa-apple-whole",
+      "icon": "fa-apple-whole",
       "display_order": 5
     },
     {
       "name": "Chanh",
       "sector": "crop",
-      "icon": "fa-solid fa-lemon",
+      "icon": "fa-lemon",
       "display_order": 6
     },
     {
       "name": "Mít",
       "sector": "crop",
-      "icon": "fa-solid fa-tree",
+      "icon": "fa-tree",
       "display_order": 7
     },
     {
       "name": "Rau màu",
       "sector": "crop",
-      "icon": "fa-solid fa-carrot",
+      "icon": "fa-carrot",
       "display_order": 8
     },
     {
       "name": "Heo",
       "sector": "livestock",
-      "icon": "fa-solid fa-piggy-bank",
+      "icon": "fa-piggy-bank",
       "display_order": 9
     },
     {
       "name": "Bò",
       "sector": "livestock",
-      "icon": "fa-solid fa-cow",
+      "icon": "fa-cow",
       "display_order": 10
     },
     {
       "name": "Gà",
       "sector": "livestock",
-      "icon": "fa-solid fa-egg",
+      "icon": "fa-egg",
       "display_order": 11
     },
     {
       "name": "Vịt",
       "sector": "livestock",
-      "icon": "fa-solid fa-feather",
+      "icon": "fa-feather",
       "display_order": 12
     },
     {
       "name": "Tôm",
       "sector": "aquatic",
-      "icon": "fa-solid fa-shrimp",
+      "icon": "fa-shrimp",
       "display_order": 13
     },
     {
       "name": "Cá tra",
       "sector": "aquatic",
-      "icon": "fa-solid fa-fish",
+      "icon": "fa-fish",
       "display_order": 14
     }
   ],
@@ -100,7 +100,7 @@
     {
       "name": "Nạo vét",
       "slug": "muc-bun",
-      "icon": "fa-solid fa-water",
+      "icon": "fa-water",
       "color": "#1E40AF",
       "description": "Múc bùn kênh mương, ruộng trũng; sên vét, cải tạo ao nuôi giữa hai vụ",
       "display_order": 1
@@ -108,7 +108,7 @@
     {
       "name": "Phun thuốc",
       "slug": "phun-thuoc",
-      "icon": "fa-solid fa-spray-can-sparkles",
+      "icon": "fa-spray-can-sparkles",
       "color": "#065F46",
       "description": "Phun thuốc bảo vệ thực vật bằng drone hoặc bình đeo vai",
       "sector": "crop",
@@ -117,7 +117,7 @@
     {
       "name": "Sửa máy",
       "slug": "sua-may-no",
-      "icon": "fa-solid fa-wrench",
+      "icon": "fa-wrench",
       "color": "#92400E",
       "description": "Sửa máy nổ, máy bơm, máy gặt, máy sục khí",
       "display_order": 3
@@ -125,7 +125,7 @@
     {
       "name": "Thú y",
       "slug": "thu-y",
-      "icon": "fa-solid fa-syringe",
+      "icon": "fa-syringe",
       "color": "#7C2D12",
       "description": "Tiêm phòng, chữa bệnh heo, bò, gà, vịt tại nhà",
       "sector": "livestock",
@@ -134,7 +134,7 @@
     {
       "name": "Giấy tờ xuất khẩu",
       "slug": "giay-to-xuat-khau",
-      "icon": "fa-solid fa-certificate",
+      "icon": "fa-certificate",
       "color": "#155E75",
       "description": "Mã số vùng trồng, mã số cơ sở nuôi, VietGAHP, tem truy xuất nguồn gốc",
       "display_order": 5
@@ -142,7 +142,7 @@
     {
       "name": "Xét nghiệm",
       "slug": "xet-nghiem",
-      "icon": "fa-solid fa-flask-vial",
+      "icon": "fa-flask-vial",
       "color": "#6D28D9",
       "description": "Kiểm nghiệm dư lượng thuốc, kim loại nặng, chất cấm trước khi bán, xuất khẩu",
       "display_order": 6
@@ -152,7 +152,7 @@
     {
       "name": "Giống",
       "slug": "giong",
-      "icon": "fa-solid fa-seedling",
+      "icon": "fa-seedling",
       "color": "#065F46",
       "description": "Lúa giống, cây giống, con giống đã kiểm dịch",
       "display_order": 1
@@ -160,7 +160,7 @@
     {
       "name": "Phân bón",
       "slug": "phan-bon",
-      "icon": "fa-solid fa-leaf",
+      "icon": "fa-leaf",
       "color": "#7F1D1D",
       "description": "Phân NPK, phân đạm, phân hữu cơ, vôi",
       "sector": "crop",
@@ -169,7 +169,7 @@
     {
       "name": "Thuốc bảo vệ thực vật",
       "slug": "thuoc-bvtv",
-      "icon": "fa-solid fa-bug-slash",
+      "icon": "fa-bug-slash",
       "color": "#14532D",
       "description": "Thuốc trừ sâu, trừ bệnh, diệt cỏ",
       "sector": "crop",
@@ -178,7 +178,7 @@
     {
       "name": "Thức ăn",
       "slug": "thuc-an",
-      "icon": "fa-solid fa-bowl-food",
+      "icon": "fa-bowl-food",
       "color": "#A16207",
       "description": "Cám heo, cám gà vịt, thức ăn cá, tôm",
       "display_order": 4
@@ -186,7 +186,7 @@
     {
       "name": "Thuốc thú y",
       "slug": "thuoc-thu-y",
-      "icon": "fa-solid fa-capsules",
+      "icon": "fa-capsules",
       "color": "#9A3412",
       "description": "Vắc-xin, thuốc trị bệnh, men tiêu hoá cho vật nuôi",
       "sector": "livestock",
@@ -195,7 +195,7 @@
     {
       "name": "Nông cụ, máy",
       "slug": "nong-cu",
-      "icon": "fa-solid fa-tractor",
+      "icon": "fa-tractor",
       "color": "#1E3A8A",
       "description": "Bình phun, liềm, cuốc, máy bơm, máy cắt",
       "display_order": 6

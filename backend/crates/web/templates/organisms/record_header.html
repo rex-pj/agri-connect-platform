@@ -1,0 +1,59 @@
+{#- The top of one record's admin page: the way back, its name, its states
+    as badges (each once), the actions done often as buttons, and the rare
+    or harmful ones in a "more" menu, the harmful last. `h` is
+    web::pages::admin::RecordHeader. An action is a link, a one-button form
+    (turning something back on), or a link to a sheet on the page (`#id`: a
+    confirmation, the account form), which the `dialog` holding that sheet
+    opens by the URL hash; without JS the link leads to the sheet's form on
+    the page. The menu is a `<details>`, so it opens without JS; Alpine
+    `recordMenu` closes it on Escape, a tap outside, or a choice. -#}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/status_badge.html" as status %}
+{% macro record_header(h) -%}
+<header class="admin-header">
+  <a class="admin-header__back" href="{{ h.back_href }}">{{ atoms::icon(name="fa-arrow-left", class="me-1") }}{{ h.back_label }}</a>
+  <div class="admin-header__row">
+    <div class="record-header__name">
+      <h1 class="admin-header__title">{{ atoms::icon(name=h.icon, class="text-success me-2") }}{{ h.title }}</h1>
+      {% if h.sub %}<p class="admin-header__sub">{{ h.sub }}</p>{% endif %}
+      {% if h.badges %}
+      <p class="record-header__badges">
+        {% for x in h.badges %}{% if x.kind == "visibility" %}{{ status::visibility(on=x.on) }}{% elif x.kind == "account" %}{{ status::account(on=x.on) }}{% elif x.kind == "verified" %}{{ status::verified(on=x.on) }}{% elif x.kind == "managed" %}{{ status::managed(on=x.on) }}{% elif x.kind == "demo" %}{{ status::demo() }}{% endif %} {% endfor %}
+      </p>
+      {% endif %}
+    </div>
+    {% if h.actions or h.menu %}
+    <div class="record-header__actions">
+      {% for a in h.actions %}
+      {% if a.kind == "post" %}
+      <form method="post" action="{{ a.href }}">
+        <input type="hidden" name="{{ a.field }}" value="{{ a.value }}">
+        <button type="submit" class="btn btn-outline-{{ a.tone }} admin-header__action">{{ atoms::icon(name=a.icon) }} {{ a.label }}</button>
+      </form>
+      {% else %}
+      <a class="btn btn-outline-{{ a.tone }} admin-header__action" href="{{ a.href }}">{{ atoms::icon(name=a.icon) }} {{ a.label }}</a>
+      {% endif %}
+      {% endfor %}
+      {% if h.menu %}
+      <details class="record-menu" x-data="recordMenu" :open="open" x-on:keydown.escape.window="close">
+        <summary class="btn btn-outline-secondary admin-header__action record-menu__btn" aria-label="{{ t(key="admin.more_actions") }}" title="{{ t(key="admin.more_actions") }}" x-on:click.prevent="toggle" :class="buttonClass">{{ atoms::icon(name="fa-ellipsis") }}</summary>
+        <div class="record-menu__list" x-on:click="close">
+          {% for a in h.menu %}
+          {% if a.kind == "post" %}
+          <form method="post" action="{{ a.href }}">
+            <input type="hidden" name="{{ a.field }}" value="{{ a.value }}">
+            <button type="submit" class="record-menu__item">{% if a.tone == "warning" %}{% set tint = "text-warning-emphasis" %}{% else %}{% set tint = "text-" ~ a.tone %}{% endif %}{{ atoms::icon(name=a.icon, class=tint) }} {{ a.label }}</button>
+          </form>
+          {% else %}
+          <a class="record-menu__item" href="{{ a.href }}">{% if a.tone == "warning" %}{% set tint = "text-warning-emphasis" %}{% else %}{% set tint = "text-" ~ a.tone %}{% endif %}{{ atoms::icon(name=a.icon, class=tint) }} {{ a.label }}</a>
+          {% endif %}
+          {% endfor %}
+        </div>
+        <button type="button" class="record-menu__backdrop" tabindex="-1" aria-hidden="true" x-show="open" x-cloak x-on:click="close"></button>
+      </details>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</header>
+{%- endmacro record_header %}

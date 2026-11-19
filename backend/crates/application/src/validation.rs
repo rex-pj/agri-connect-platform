@@ -3,6 +3,8 @@
 
 use domain::{models::coded::CodedEntry, Error, ErrorCode, Result};
 
+use crate::icons;
+
 use crate::constants::{
     AUDIT_REASON_MAX, EMAIL_MAX, LAT_MAX, LAT_MIN, LNG_MAX, LNG_MIN, PASSWORD_MAX_BYTES,
     PASSWORD_MIN_CHARS, SEARCH_QUERY_MIN, USERNAME_MAX_LEN, USERNAME_MIN_LEN,
@@ -30,6 +32,16 @@ pub fn coded(text: &str, known: &[CodedEntry], invalid: ErrorCode) -> Result<Opt
         .find(|s| s.code == text)
         .map(|s| Some(s.code.clone()))
         .ok_or_else(|| Error::new(invalid))
+}
+
+/// An icon as sent, one of the picker's (`icons`): `None` for blank,
+/// `invalid_icon` for a name the list lacks (a typo would draw nothing).
+pub fn icon(text: Option<&str>) -> Result<Option<String>> {
+    match text.and_then(icons::normalize) {
+        None => Ok(None),
+        Some(name) if icons::is_known(name) => Ok(Some(name.to_owned())),
+        Some(_) => Err(Error::new(ErrorCode::InvalidIcon)),
+    }
 }
 
 /// A sector code as sent (`coded`): `None` for blank (every sector),

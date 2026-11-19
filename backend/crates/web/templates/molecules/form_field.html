@@ -41,7 +41,7 @@
     `data-lat`, `data-lng`) for a form that fills itself; `hint` under it.
     With JS the select itself takes typing (Alpine `searchableSelect` over
     Tom Select, accents ignored); the page loads the library with
-    `area_select_assets()` in its `vendor` block. Without JS it is a plain
+    `searchable_select_assets()` in its `vendor` block. Without JS it is a plain
     select. -#}
 {% macro area_select(id, name, label, groups, value="", error="", required=false, placeholder="", whole=true, points=false, hint="") -%}
 <div class="form-field">
@@ -64,11 +64,36 @@
 </div>
 {%- endmacro area_select %}
 
-{#- The library `area_select` searches with, for a page's `vendor` block. -#}
-{% macro area_select_assets() -%}
+{#- An icon from the picker's list (application::icons, `icon_choices`),
+    each under its Font Awesome name (`fa-tractor` is "tractor"), blank for
+    none. With JS (Alpine `iconSelect` over Tom Select) each option draws its
+    glyph and the select takes typing; the page loads the library with
+    `searchable_select_assets()` in its `vendor` block. Without JS it is a
+    plain select. A stored icon the list no longer has stays chosen, marked,
+    so the form never drops it unseen; saving asks for a listed one
+    (`invalid_icon`). -#}
+{% macro icon_select(id, name, label, value="", error="") -%}
+{% set c = icon_choices(current=value) -%}
+<div class="form-field">
+  <label class="form-label fw-semibold" for="{{ id }}">{{ label }}</label>
+  <select class="form-select{% if error %} is-invalid{% endif %}" id="{{ id }}" name="{{ name }}" x-data="iconSelect" data-no-results="{{ t(key="form.no_results") }}" aria-describedby="{{ id }}-hint{% if error %} {{ id }}-error{% endif %}"{% if error %} aria-invalid="true"{% endif %}>
+    <option value="">{{ t(key="form.icon_none") }}</option>
+    {% if not c.listed %}<option value="{{ c.current }}" selected>{{ t(key="form.icon_unlisted", name=c.current) }}</option>{% endif %}
+    {%- for icon in c.icons %}
+    <option value="{{ icon }}"{% if icon == c.current %} selected{% endif %}>{{ icon | trim_start_matches(pat="fa-") }}</option>
+    {%- endfor %}
+  </select>
+  <div class="form-text" id="{{ id }}-hint">{{ t(key="form.icon_hint") }}</div>
+  {% if error %}<div class="invalid-feedback" id="{{ id }}-error">{{ error }}</div>{% endif %}
+</div>
+{%- endmacro icon_select %}
+
+{#- The library `area_select` and `icon_select` search with, for a page's
+    `vendor` block. -#}
+{% macro searchable_select_assets() -%}
 <link rel="stylesheet" href="{{ asset_url(path='vendor/tom-select-2.6.2/tom-select.bootstrap5.min.css') }}">
 <script defer src="{{ asset_url(path='vendor/tom-select-2.6.2/tom-select.complete.min.js') }}"></script>
-{%- endmacro area_select_assets %}
+{%- endmacro searchable_select_assets %}
 
 {% macro textarea(id, name, label, value="", error="", placeholder="", maxlength=0, rows=3) -%}
 <div class="form-field">

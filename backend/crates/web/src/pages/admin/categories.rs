@@ -12,8 +12,7 @@
 
 use application::{
     constants::{
-        CATEGORY_COLOR_MAX, CATEGORY_DESCRIPTION_MAX, CATEGORY_ICON_MAX, CATEGORY_NAME_MAX,
-        CATEGORY_SLUG_MAX,
+        CATEGORY_COLOR_MAX, CATEGORY_DESCRIPTION_MAX, CATEGORY_NAME_MAX, CATEGORY_SLUG_MAX,
     },
     inputs::CategoryInput,
     outputs::AdminCategoryDto,
@@ -92,7 +91,6 @@ pub struct Limits {
     pub name: usize,
     pub slug: usize,
     pub slug_pattern: &'static str,
-    pub icon: usize,
     pub color: usize,
     pub description: usize,
 }
@@ -101,7 +99,6 @@ const LIMITS: Limits = Limits {
     name: CATEGORY_NAME_MAX,
     slug: CATEGORY_SLUG_MAX,
     slug_pattern: application::validation::SLUG_PATTERN,
-    icon: CATEGORY_ICON_MAX,
     color: CATEGORY_COLOR_MAX,
     description: CATEGORY_DESCRIPTION_MAX,
 };

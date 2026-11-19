@@ -48,7 +48,6 @@ pub struct CodedWordKeys {
     pub off: &'static str,
     pub name: &'static str,
     pub name_placeholder: &'static str,
-    pub icon_placeholder: &'static str,
     /// The entry page's way to what is filed under the list.
     pub related: &'static str,
     pub created: &'static str,
@@ -95,7 +94,6 @@ pub struct CodedWords {
     pub off: String,
     pub name: String,
     pub name_placeholder: String,
-    pub icon_placeholder: String,
     pub related: String,
 }
 
@@ -118,7 +116,6 @@ impl CodedPages {
             off: l.text(w.off),
             name: l.text(w.name),
             name_placeholder: l.text(w.name_placeholder),
-            icon_placeholder: l.text(w.icon_placeholder),
             related: l.text(w.related),
         }
     }

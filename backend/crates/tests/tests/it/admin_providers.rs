@@ -429,12 +429,12 @@ async fn a_provider_page_opens_with_its_summary_area_and_activity() {
     assert!(html.contains("Gán tài khoản"));
     assert!(html.contains("Lượt gọi + Zalo (30 ngày)"));
     assert!(html.contains(r#"href="https://zalo.me/0912345678""#));
-    let summary = html.find(r#"id="summary-title""#).unwrap();
-    let profile = html.find(r#"id="ho-so-title""#).unwrap();
-    assert!(
-        summary < profile,
-        "the summary first, the profile form last"
-    );
+    // The overview first; the profile form on a tab of its own.
+    assert!(html.contains(r#"id="summary-title""#));
+    assert!(!html.contains(r#"id="ho-so-title""#));
+    let tab = format!("{detail}?tab=profile");
+    let profile = body_text(send(&e.router, get_page(&tab, Some(&admin))).await).await;
+    assert!(profile.contains(r#"id="ho-so-title""#));
 
     // Placed in a ward, tapped once: its area by name, the map, the figure.
     let ward = scalar(&e, "SELECT code FROM wards ORDER BY code LIMIT 1", "code").await;
@@ -472,8 +472,10 @@ async fn a_provider_page_says_who_changed_it_and_why() {
     let detail = format!("/admin/providers/{id}");
     let page = || async { body_text(send(&e.router, get_page(&detail, Some(&admin))).await).await };
 
-    let html = page().await;
+    let history = format!("{detail}?tab=history");
+    let html = body_text(send(&e.router, get_page(&history, Some(&admin))).await).await;
     assert!(html.contains("Chưa có thay đổi nào được ghi lại."));
+    let html = page().await;
     assert!(
         html.contains("Trước khi cấp, kiểm tra:"),
         "the checklist while unverified"
@@ -524,6 +526,14 @@ async fn a_managing_account_is_removed_behind_a_confirmation() {
     let html = page().await;
     assert!(html.contains("Đổi tài khoản"));
     assert!(html.contains("Email của tài khoản chưa xác nhận"));
+    let html = body_text(
+        send(
+            &e.router,
+            get_page(&format!("{detail}?tab=offers"), Some(&admin)),
+        )
+        .await,
+    )
+    .await;
     assert!(html.contains(&format!(
         r#"href="/admin/services?provider_id={id}#them-dich-vu""#
     )));
@@ -552,6 +562,14 @@ async fn a_managing_account_is_removed_behind_a_confirmation() {
     );
     let html = page().await;
     assert!(html.contains("Gán tài khoản"));
+    let html = body_text(
+        send(
+            &e.router,
+            get_page(&format!("{detail}?tab=history"), Some(&admin)),
+        )
+        .await,
+    )
+    .await;
     assert!(html.contains("Gỡ tài khoản"), "in its history");
     assert!(html.contains("Chủ đã bán vườn"));
     // Twice: nothing left to remove.

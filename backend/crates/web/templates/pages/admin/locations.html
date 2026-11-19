@@ -16,7 +16,7 @@
     list with that row's confirmation open (`b.confirm`, in its own `dialog`
     scope). Row actions send `back=list` (`b.keep`) so they land here again. -#}
 {% block title %}{{ t(key="admin_menu.locations") }} — {{ site.name }} Admin{% endblock title %}
-{% block vendor %}{{ field::area_select_assets() }}{% endblock vendor %}
+{% block vendor %}{{ field::searchable_select_assets() }}{% endblock vendor %}
 {% block content %}
 {% set b = page.body %}
 {% set n = b.rows | length %}

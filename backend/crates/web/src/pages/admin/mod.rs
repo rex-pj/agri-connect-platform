@@ -12,6 +12,7 @@ pub mod dashboard;
 pub mod demand;
 pub mod inquiries;
 pub mod jobs;
+pub mod listing_record;
 pub mod locations;
 pub mod partners;
 pub mod prices;
@@ -551,6 +552,170 @@ pub async fn history_rows(
             created_on: e.created_on,
         })
         .collect())
+}
+
+/// The top of one record's admin page (`organisms/record_header.html`): the
+/// one place to see what state it is in and to act on it. Its states show
+/// once, as badges; the actions done often are buttons beside the title, the
+/// rare or harmful ones wait in the "more" menu, the harmful last.
+#[derive(Serialize)]
+pub struct RecordHeader {
+    pub title: String,
+    pub icon: &'static str,
+    pub sub: Option<String>,
+    pub back_href: String,
+    pub back_label: String,
+    pub badges: Vec<Badge>,
+    pub actions: Vec<RecordAction>,
+    pub menu: Vec<RecordAction>,
+}
+
+/// One state of a record as `atoms/status_badge.html` draws it: `kind` is
+/// one of its macros (`visibility`, `account`, `verified`, `managed`,
+/// `demo`).
+#[derive(Serialize)]
+pub struct Badge {
+    pub kind: &'static str,
+    pub on: bool,
+}
+
+impl Badge {
+    pub fn new(kind: &'static str, on: bool) -> Self {
+        Self { kind, on }
+    }
+}
+
+/// One action of a record header. `kind`: `link` goes to `href`; `post` is
+/// a one-button form to `href` setting `field` to `value` (turning
+/// something back on: no second look needed); `sheet` opens the sheet whose
+/// id `href` names (`#…`), a confirmation or a form on the page. `tone` is
+/// the Bootstrap colour of a button and of a menu item's icon (`success`,
+/// `warning`, `danger`, `secondary`).
+#[derive(Serialize)]
+pub struct RecordAction {
+    pub kind: &'static str,
+    pub label: String,
+    pub icon: &'static str,
+    pub href: String,
+    pub field: &'static str,
+    pub value: &'static str,
+    pub tone: &'static str,
+}
+
+impl RecordAction {
+    pub fn link(label: String, icon: &'static str, href: String) -> Self {
+        Self {
+            kind: "link",
+            label,
+            icon,
+            href,
+            field: "",
+            value: "",
+            tone: "secondary",
+        }
+    }
+
+    pub fn post(
+        label: String,
+        icon: &'static str,
+        action: String,
+        field: &'static str,
+        value: &'static str,
+    ) -> Self {
+        Self {
+            kind: "post",
+            label,
+            icon,
+            href: action,
+            field,
+            value,
+            tone: "success",
+        }
+    }
+
+    pub fn sheet(label: String, icon: &'static str, sheet: &str, tone: &'static str) -> Self {
+        Self {
+            kind: "sheet",
+            label,
+            icon,
+            href: format!("#{sheet}"),
+            field: "",
+            value: "",
+            tone,
+        }
+    }
+}
+
+/// A confirmation of a record page (`organisms/confirm_sheet.html`), opened
+/// by its header: what it does in words (`effect` + `what`, else `note`),
+/// the form it sends, the hidden field it sets.
+#[derive(Serialize)]
+pub struct Confirm {
+    pub id: &'static str,
+    pub title: String,
+    pub icon: &'static str,
+    pub action: String,
+    pub button: String,
+    pub button_class: &'static str,
+    pub effect: &'static str,
+    pub what: String,
+    pub note: String,
+    pub hidden_name: &'static str,
+    pub hidden_value: &'static str,
+}
+
+impl Confirm {
+    /// Hiding or switching off: the amber button, `field` set to `false`.
+    pub fn off(
+        id: &'static str,
+        title: String,
+        icon: &'static str,
+        action: String,
+        button: String,
+        field: &'static str,
+    ) -> Self {
+        Self {
+            id,
+            title,
+            icon,
+            action,
+            button,
+            button_class: "btn-warning",
+            effect: "",
+            what: String::new(),
+            note: String::new(),
+            hidden_name: field,
+            hidden_value: "false",
+        }
+    }
+
+    /// Deleting or removing for good: the red button.
+    pub fn delete(
+        id: &'static str,
+        title: String,
+        icon: &'static str,
+        action: String,
+        button: String,
+    ) -> Self {
+        Self {
+            button_class: "btn-danger",
+            hidden_name: "",
+            hidden_value: "",
+            ..Self::off(id, title, icon, action, button, "")
+        }
+    }
+
+    pub fn saying(self, effect: &'static str, what: String) -> Self {
+        Self {
+            effect,
+            what,
+            ..self
+        }
+    }
+
+    pub fn noting(self, note: String) -> Self {
+        Self { note, ..self }
+    }
 }
 
 /// A form that only carries the optional reason of an audited change (a

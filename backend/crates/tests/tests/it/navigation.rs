@@ -167,6 +167,12 @@ async fn admin_pages_link_a_record_and_its_account_both_ways() {
         detail.contains(&format!(r#"href="/admin/users/{account}""#)),
         "the managing account opens"
     );
+    let detail = page(
+        &e,
+        &format!("/admin/providers/{business}?tab=offers"),
+        Some(&admin),
+    )
+    .await;
     assert!(
         detail.contains(&format!(r#"href="/admin/supplies/{product}""#)),
         "products open in the panel, like services"

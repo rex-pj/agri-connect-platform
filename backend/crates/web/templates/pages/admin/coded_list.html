@@ -1,4 +1,5 @@
 {% extends "layouts/admin.html" %}
+{% import "molecules/form_field.html" as field %}
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/alert.html" as alerts %}
 {% import "atoms/status_badge.html" as status %}
@@ -17,6 +18,7 @@
     in its own `dialog` scope). Row actions send `back=list` (`b.keep`) so
     they land here again. -#}
 {% block title %}{{ page.body.words.title }} — {{ site.name }} Admin{% endblock title %}
+{% block vendor %}{{ field::searchable_select_assets() }}{% endblock vendor %}
 {% block content %}
 {% set b = page.body %}
 {% set w = b.words %}
@@ -72,7 +74,7 @@
     <form class="contact-sheet__form" method="post" action="{{ b.create_action }}" novalidate>
       {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
       <p class="small text-muted mb-0">{{ t(key="coded_form.code_note") }}</p>
-      {{ fields::coded_fields(form=b.form, errors=b.errors, words=w, name_max=limits.coded_name_max, icon_max=limits.coded_icon_max, prefix="new", first=true) }}
+      {{ fields::coded_fields(form=b.form, errors=b.errors, words=w, name_max=limits.coded_name_max, prefix="new", first=true) }}
       <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-plus") }} {{ w.add }}</button>
     </form>
   </section>

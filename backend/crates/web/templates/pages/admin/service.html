@@ -1,80 +1,68 @@
 {% extends "layouts/admin.html" %}
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/alert.html" as alerts %}
-{% import "atoms/status_badge.html" as status %}
-{% import "molecules/admin_header.html" as header %}
 {% import "molecules/offstage_note.html" as offstage %}
 {% import "molecules/photo_picker.html" as photo %}
 {% import "molecules/history_list.html" as history %}
 {% import "molecules/listing_facts.html" as facts %}
+{% import "organisms/record_header.html" as record %}
 {% import "organisms/service_fields.html" as fields %}
 {% import "organisms/confirm_sheet.html" as confirm %}
-{#- One service: edit, hide (confirmation with a reason) / show, delete
-    (confirmation with a reason). `page.body` is
-    web::pages::admin::services::ServicePage. Each confirmation has its own
-    `dialog` scope: its section. -#}
+{#- One service, in the three layers of a record page: the header (its state
+    once, hide / show and the public page as buttons, the photo and the
+    deletion in its "more" menu: `b.header`, `listing_record`), one status
+    strip (whose it is, whether farmers see it and why not, who hid it, its
+    leads), then the content: the edit form with its photo, and beside it on
+    a wide screen its details and history. The header's confirmations
+    (`b.confirms`) close the page, each in its own `dialog` scope, opened by
+    the URL hash. `page.body` is web::pages::admin::services::ServicePage. -#}
 {% block title %}{{ page.body.service.name }} — {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
 {% set s = b.service %}
-{{ header::admin_header(title=s.name, icon="fa-screwdriver-wrench", sub=s.business_name, back_href=b.back_href, back_label=b.back_label, action_href=b.public_href, action_icon="fa-arrow-up-right-from-square", action_label=t(key="admin.public_page"), action_class="btn-outline-secondary") }}
+{{ record::record_header(h=b.header) }}
 <div class="admin-body">
   {% if b.flash == "service_created" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="dashboard.service_created")) }}{% endif %}
-  {% if b.flash == "image_removed" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.photo_removed")) }}{% endif %}
   {% if b.flash == "service_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.saved")) }}{% endif %}
   {% if b.flash == "service_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.service_hidden")) }}{% endif %}
   {% if b.flash == "service_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.service_shown")) }}{% endif %}
+  {% if b.flash == "image_removed" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.photo_removed")) }}{% endif %}
   {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
 
-  <section class="admin-section" aria-labelledby="edit-title">
-    <h2 class="admin-section__title" id="edit-title">{{ t(key="admin.info") }}</h2>
+  <section class="admin-section record-strip" aria-labelledby="status-title">
+    <h2 class="visually-hidden" id="status-title">{{ t(key="admin.status_now") }}</h2>
     {{ facts::provider_line(l=s, provider_href=b.provider_href) }}
-    {{ facts::listing_meta(l=s, sector_label=b.sector_label) }}
-    <form class="form-stack" method="post" action="{{ b.update_action }}" enctype="multipart/form-data" novalidate>
-      {{ fields::service_fields(form=b.form, errors=b.errors, categories=b.categories, limits=b.limits, prefix="edit") }}
-      {{ photo::photo_picker(id="edit-image", label=t(key="admin.photo"), max_mb=b.max_upload_mb, hint=t(key="admin.photo_hint"), current=s.image_file_id | default(value=""), error=b.errors.fields.image | default(value="")) }}
-      {{ facts::owner_note(l=s) }}
-      <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button></div>
-    </form>
-    {% if s.image_file_id %}
-    <div x-data="dialog" x-on:keydown.escape.window="hide">
-      <div class="admin-actions">
-        <a class="btn btn-outline-secondary" href="{{ file_url(id=s.image_file_id) }}">{{ atoms::icon(name="fa-image") }} {{ t(key="admin.view_photo", name=s.name) }}</a>
-        <a class="btn btn-outline-danger" href="#go-anh" x-on:click.prevent="show">{{ atoms::icon(name="fa-trash") }} {{ t(key="admin.remove_photo") }}</a>
-      </div>
-      {{ confirm::confirm_sheet(id="go-anh", title=t(key="admin.remove_photo_title", name=s.name), icon="fa-image", action=b.image_delete_action, button=t(key="admin.remove_photo"), reason_max=limits.audit_reason_max, note=t(key="admin.remove_photo_note"), button_class="btn-danger") }}
-    </div>
-    {% endif %}
-  </section>
-
-  <section class="admin-section" aria-labelledby="status-title" x-data="dialog" x-on:keydown.escape.window="hide">
-    <h2 class="admin-section__title" id="status-title">{{ t(key="admin.visibility") }}</h2>
-    <p class="admin-status">{{ status::visibility(on=s.is_active) }}<span><a href="{{ b.provider_href }}">{{ s.business_name }}</a> · {% if s.is_public %}{{ t(key="admin.public_on") }}{% elif s.is_active %}{{ t(key="admin.public_held") }}{% else %}{{ t(key="admin.public_off") }}{% endif %}</span></p>
+    <p class="small mb-0">{% if s.is_public %}{{ t(key="admin.public_on") }}{% elif s.is_active %}{{ t(key="admin.public_held") }}{% else %}{{ t(key="admin.public_off") }}{% endif %}</p>
     {{ offstage::offstage_note(l=s, provider_href=b.provider_href, category_href=b.category_href) }}
-    {{ facts::listing_activity(a=b.activity) }}
     {% if not s.is_active %}{% set off = b.history | filter(attribute="action", value="hide_service") | first %}{% if off %}{{ history::last_change(row=off) }}{% endif %}{% endif %}
-    <div class="admin-actions">
-      {% if s.is_active %}
-      <a class="btn btn-outline-warning" href="#an-dich-vu" x-on:click.prevent="show">{{ atoms::icon(name="fa-eye-slash") }} {{ t(key="admin.hide_service") }}</a>
-      {% else %}
-      <form method="post" action="{{ b.status_action }}">
-        <input type="hidden" name="is_active" value="true">
-        <button type="submit" class="btn btn-outline-success">{{ atoms::icon(name="fa-eye") }} {{ t(key="admin.show_again") }}</button>
-      </form>
-      {% endif %}
+    {{ facts::listing_activity(a=b.activity) }}
+  </section>
+
+  <div class="row g-3 g-lg-4">
+    <div class="col-lg-8">
+      <section class="admin-section" aria-labelledby="edit-title">
+        <h2 class="admin-section__title" id="edit-title">{{ t(key="admin.edit_title") }}</h2>
+        <form class="form-stack" method="post" action="{{ b.update_action }}" enctype="multipart/form-data" novalidate>
+          {{ fields::service_fields(form=b.form, errors=b.errors, categories=b.categories, limits=b.limits, prefix="edit") }}
+          {{ photo::photo_picker(id="edit-image", label=t(key="admin.photo"), max_mb=b.max_upload_mb, hint=t(key="admin.photo_hint"), current=s.image_file_id | default(value=""), error=b.errors.fields.image | default(value="")) }}
+          {{ facts::owner_note(l=s) }}
+          <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button></div>
+        </form>
+      </section>
     </div>
-    {% if s.is_active %}
-    {{ confirm::confirm_sheet(id="an-dich-vu", title=t(key="admin.hide_service_title", name=s.name), icon="fa-eye-slash", action=b.status_action, button=t(key="admin.confirm_hide"), reason_max=limits.audit_reason_max, effect="hide", what=t(key="admin.service_what"), hidden_name="is_active", hidden_value="false") }}
-    {% endif %}
-  </section>
+    <div class="col-lg-4 d-flex flex-column gap-3">
+      <section class="admin-section" aria-labelledby="details-title">
+        <h2 class="admin-section__title" id="details-title">{{ t(key="admin.details") }}</h2>
+        {{ facts::listing_meta(l=s, sector_label=b.sector_label) }}
+      </section>
+      {{ history::history_list(rows=b.history) }}
+    </div>
+  </div>
 
-  {{ history::history_list(rows=b.history) }}
-
-  <section class="admin-section" aria-labelledby="delete-title" x-data="dialog" x-on:keydown.escape.window="hide">
-    <h2 class="admin-section__title" id="delete-title">{{ t(key="admin.delete") }}</h2>
-    <p class="small text-muted">{{ t(key="admin.delete_service_note") }}</p>
-    <div class="admin-actions"><a class="btn btn-outline-danger" href="#xoa-dich-vu" x-on:click.prevent="show">{{ atoms::icon(name="fa-trash") }} {{ t(key="dashboard.delete_service") }}</a></div>
-    {{ confirm::confirm_sheet(id="xoa-dich-vu", title=t(key="admin.delete_service_title", name=s.name), icon="fa-trash", action=b.delete_action, button=t(key="common.confirm_delete"), reason_max=limits.audit_reason_max, effect="delete", what=t(key="dashboard.delete_service_what"), button_class="btn-danger") }}
-  </section>
+  {% for c in b.confirms %}
+  <div x-data="dialog" x-on:keydown.escape.window="hide">
+    {{ confirm::confirm_sheet(id=c.id, title=c.title, icon=c.icon, action=c.action, button=c.button, reason_max=limits.audit_reason_max, effect=c.effect, what=c.what, note=c.note, hidden_name=c.hidden_name, hidden_value=c.hidden_value, button_class=c.button_class) }}
+  </div>
+  {% endfor %}
 </div>
 {% endblock content %}

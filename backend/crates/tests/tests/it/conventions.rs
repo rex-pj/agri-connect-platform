@@ -484,6 +484,34 @@ fn every_text_key_used_has_text() {
 }
 
 #[test]
+fn the_icon_list_is_the_vendored_fonts() {
+    // Every name the vendored stylesheet draws (`.fa-…:before`): the picker
+    // offers each, and a name it lacks would draw nothing. After a Font
+    // Awesome update, regenerate `application/src/icons/names.rs`.
+    let css = fs::read_to_string(
+        crates_dir().join("web/static/vendor/fontawesome-6.5.1/css/fontawesome.min.css"),
+    )
+    .unwrap();
+    let drawn: std::collections::BTreeSet<&str> =
+        regex::Regex::new(r"\.(fa-[a-z0-9-]+):before[,{]")
+            .unwrap()
+            .captures_iter(&css)
+            .map(|c| c.get(1).unwrap().as_str())
+            .collect();
+    let listed: std::collections::BTreeSet<&str> =
+        application::icons::ICONS.iter().copied().collect();
+    let missing: Vec<&str> = drawn.difference(&listed).copied().collect();
+    let extra: Vec<&str> = listed.difference(&drawn).copied().collect();
+    assert!(
+        missing.is_empty() && extra.is_empty(),
+        "application/src/icons/names.rs differs from the vendored Font Awesome:\n\
+         missing: {}\nnot drawn: {}",
+        missing.join(", "),
+        extra.join(", ")
+    );
+}
+
+#[test]
 fn user_facing_text_lives_in_the_locale_files() {
     // Vietnamese letters: any of them in code or markup is text that a
     // second language could not replace.

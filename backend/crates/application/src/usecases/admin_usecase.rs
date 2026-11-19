@@ -46,7 +46,7 @@ use crate::{
     },
     constants::{
         ADMIN_PAGE_SIZE, CALL_STATS_DAYS, CATEGORY_COLOR_MAX, CATEGORY_DESCRIPTION_MAX,
-        CATEGORY_ICON_MAX, CATEGORY_NAME_MAX, CATEGORY_SLUG_MAX, HISTORY_SHOWN, LOCATION_LABEL_MAX,
+        CATEGORY_NAME_MAX, CATEGORY_SLUG_MAX, HISTORY_SHOWN, LOCATION_LABEL_MAX,
         SLUG_CANDIDATES_PER_QUERY,
     },
     inputs::{
@@ -1626,7 +1626,7 @@ fn validate_category(
 ) -> Result<CategoryInput> {
     let name = input.name.trim().to_owned();
     let slug = input.slug.trim().to_owned();
-    let icon = non_blank(input.icon);
+    let icon = validation::icon(input.icon.as_deref());
     let color = non_blank(input.color);
     let description = non_blank(input.description);
     let sector = input.sector.trim().to_owned();
@@ -1647,7 +1647,7 @@ fn validate_category(
             },
         )
         .rule("slug", max_chars(&slug, CATEGORY_SLUG_MAX))
-        .rule("icon", max_chars_opt(&icon, CATEGORY_ICON_MAX))
+        .check(icon.is_err(), "icon", ErrorCode::InvalidIcon)
         .rule("color", max_chars_opt(&color, CATEGORY_COLOR_MAX))
         .rule(
             "description",
@@ -1667,7 +1667,7 @@ fn validate_category(
     Ok(CategoryInput {
         name,
         slug,
-        icon,
+        icon: icon.ok().flatten(),
         color,
         description,
         display_order: input.display_order,

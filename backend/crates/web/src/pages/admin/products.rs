@@ -31,8 +31,10 @@ use crate::{
     pages::admin::sector_href,
     pages::{
         admin::{
-            history_rows, is_refusal, render_admin, url, HistoryRow, ListPosition, ListReturn,
-            Outcome, ProviderFilter, ReasonForm, RowConfirm, SearchBox, BACK_TO_LIST,
+            history_rows, is_refusal,
+            listing_record::{listing_controls, ListingState, PRODUCT_WORDS},
+            render_admin, url, Confirm, HistoryRow, ListPosition, ListReturn, Outcome,
+            ProviderFilter, ReasonForm, RecordHeader, RowConfirm, SearchBox, BACK_TO_LIST,
         },
         canonical_url,
         dashboard::{max_upload_mb, prepare},
@@ -367,22 +369,15 @@ pub struct ProductPage {
     pub form: ProductForm,
     pub errors: FormErrors,
     pub update_action: String,
-    pub status_action: String,
-    pub delete_action: String,
-    /// Takes its photo off (confirmation with a reason).
-    pub image_delete_action: String,
     /// The photo box's size line.
     pub max_upload_mb: usize,
     pub provider_href: String,
-    /// The page farmers see; `None` while it is off the public pages (it
-    /// would 404).
-    pub public_href: Option<String>,
     /// Its supply type's admin page, where a hidden type is shown again.
     pub category_href: String,
-    /// The way back: the list page it was opened from, else the provider's
-    /// products (where a deletion lands too).
-    pub back_href: String,
-    pub back_label: String,
+    /// Its name, state and actions (`listing_record`), and the
+    /// confirmations they open.
+    pub header: RecordHeader,
+    pub confirms: Vec<Confirm>,
     pub flash: Option<Flash>,
 }
 
@@ -415,12 +410,33 @@ async fn product_page(
         business_id: product.business_id,
         id,
     };
+    let public_href = product
+        .is_public
+        .then(|| canonical_url("product", product.id, &product.name))
+        .transpose()?;
     let back_label = if back.is_default() {
         "admin.provider_products"
     } else {
         "admin_menu.products"
     };
+    let (header, confirms) = listing_controls(
+        state,
+        &PRODUCT_WORDS,
+        ListingState {
+            name: &product.name,
+            is_active: product.is_active,
+            image_file_id: product.image_file_id,
+            public_href,
+            back_href: back_list(back, product.business_id).href("admin_products", &[])?,
+            back_label: state.locale().text(back_label),
+            status_action: back.record_href("admin_product_status", id)?,
+            delete_action: back.record_href("admin_product_delete", id)?,
+            image_delete_action: back.record_href("admin_product_image_delete", id)?,
+        },
+    )?;
     let body = ProductPage {
+        header,
+        confirms,
         history: history_rows(state, actor, HistoryOf::Product(id)).await?,
         activity: admin.listing_activity(actor, listing).await?,
         sector_label: sector_label(state, &sectors, product.sector.as_deref()),
@@ -438,9 +454,6 @@ async fn product_page(
         commodities: product_commodities(state).await?,
         errors: outcome.errors,
         update_action: back.record_href("admin_product", id)?,
-        status_action: back.record_href("admin_product_status", id)?,
-        delete_action: back.record_href("admin_product_delete", id)?,
-        image_delete_action: back.record_href("admin_product_image_delete", id)?,
         max_upload_mb: max_upload_mb(state),
         provider_href: url(
             "admin_provider",
@@ -450,12 +463,6 @@ async fn product_page(
             "admin_category",
             &[("id", &product.category_id.to_string())],
         )?,
-        public_href: product
-            .is_public
-            .then(|| canonical_url("product", product.id, &product.name))
-            .transpose()?,
-        back_href: back_list(back, product.business_id).href("admin_products", &[])?,
-        back_label: state.locale().text(back_label),
         product,
         flash: outcome.flash,
     };

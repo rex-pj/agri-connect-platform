@@ -10,13 +10,13 @@
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/status_badge.html" as status %}
 {% macro listing_meta(l, sector_label, for_label="") -%}
-<p class="small text-muted mb-0">
-  {{ t(key="admin.label_sector") }}: {{ sector_label }}
-  {% if for_label %} · {{ t(key="admin.label_for") }}: {{ for_label }}{% endif %}
-  · {{ t(key="admin.created_label") }} <time datetime="{{ l.created_on | utc_iso }}">{{ l.created_on | vn_datetime }}</time>
-  · {{ t(key="admin.updated_label") }} <time datetime="{{ l.updated_on | utc_iso }}">{{ l.updated_on | vn_datetime }}</time>
-  {% if l.added_by_owner %} <span class="badge text-bg-light border">{{ t(key="admin.added_by_owner") }}</span>{% endif %}
-</p>
+<dl class="acct-rows mb-0">
+  <div class="acct-row"><dt>{{ t(key="admin.label_sector") }}</dt><dd>{{ sector_label }}</dd></div>
+  {% if for_label %}<div class="acct-row"><dt>{{ t(key="admin.label_for") }}</dt><dd>{{ for_label }}</dd></div>{% endif %}
+  <div class="acct-row"><dt>{{ t(key="admin.created_label") }}</dt><dd><time datetime="{{ l.created_on | utc_iso }}">{{ l.created_on | vn_datetime }}</time></dd></div>
+  <div class="acct-row"><dt>{{ t(key="admin.updated_label") }}</dt><dd><time datetime="{{ l.updated_on | utc_iso }}">{{ l.updated_on | vn_datetime }}</time></dd></div>
+</dl>
+{% if l.added_by_owner %}<p class="mb-0"><span class="badge text-bg-light border">{{ atoms::icon(name="fa-user-pen") }} {{ t(key="admin.added_by_owner") }}</span></p>{% endif %}
 {%- endmacro listing_meta %}
 
 {% macro owner_note(l) -%}

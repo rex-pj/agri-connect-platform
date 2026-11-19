@@ -11,7 +11,7 @@
     deleting each go through a confirmation with a reason (each in its own
     `dialog` scope: its section); showing again is one button. -#}
 {% block title %}{{ page.body.location.label }} — {{ site.name }} Admin{% endblock title %}
-{% block vendor %}{{ field::area_select_assets() }}{% endblock vendor %}
+{% block vendor %}{{ field::searchable_select_assets() }}{% endblock vendor %}
 {% block content %}
 {% set b = page.body %}
 {% set l = b.location %}

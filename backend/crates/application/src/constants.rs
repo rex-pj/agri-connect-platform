@@ -140,14 +140,12 @@ pub const SPONSORED_SHOWN_MAX: usize = 5;
 
 // ── Coded lists (sectors, alert kinds) ───────────────────────────────────────
 pub const CODED_NAME_MAX: usize = 100;
-pub const CODED_ICON_MAX: usize = 100;
 /// A code's length (`sectors.code`, `alert_kinds.code`): the slug of its
 /// name, cut.
 pub const CODED_CODE_MAX: usize = 40;
 
 // ── Commodities (cây trồng, vật nuôi) ──────────────────────────────────────────────────
 pub const COMMODITY_NAME_MAX: usize = 100;
-pub const COMMODITY_ICON_MAX: usize = 100;
 
 // ── Crop prices ───────────────────────────────────────────────────────────────
 pub const CROP_NAME_MAX: usize = 100;
@@ -202,7 +200,6 @@ pub const REFRESH_REUSE_GRACE_SECS: i64 = 30;
 // ── Catalogue fields (the VARCHAR sizes in the baseline schema) ────────────────
 pub const CATEGORY_NAME_MAX: usize = 100;
 pub const CATEGORY_SLUG_MAX: usize = 100;
-pub const CATEGORY_ICON_MAX: usize = 100;
 pub const CATEGORY_COLOR_MAX: usize = 20;
 pub const CATEGORY_DESCRIPTION_MAX: usize = 300;
 /// Numbered slug candidates (`base`, `base-2`, …) checked per query while

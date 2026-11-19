@@ -79,20 +79,38 @@ document.addEventListener("alpine:init", () => {
   // Language dropdown. Without JS the button is a link to the picker page.
   Alpine.data("languageMenu", () => topBarMenu("language-menu-opened"));
 
+  // A record header's "more" menu (organisms/record_header): a `<details>`, so
+  // it opens without JS; this adds closing on Escape, on a tap outside and
+  // once an item is chosen.
+  Alpine.data("recordMenu", () => topBarMenu("record-menu-opened"));
+
   // Turns an in-page section into a bottom sheet (a centred dialog on a wide
   // screen, by CSS). Without JS the section is part of the page and its
   // trigger is an anchor link to it. The server sets data-open="true" when
   // it re-shows a form with errors. The sheet takes its first state still;
-  // only the visitor's show or hide animates (`animated`).
+  // only the visitor's show or hide animates (`animated`). A trigger may sit
+  // anywhere on the page (a record header's button or menu): a plain link to
+  // the sheet's id opens it, by the URL hash, and closing it clears the hash
+  // so the same link opens it again.
   Alpine.data("dialog", () => ({
     modal: false,
     isOpen: false,
     animated: false,
+    sheetId: "",
 
     init() {
       this.modal = true;
       this.isOpen = this.$el.dataset.open === "true";
+      const own = Array.from(this.$el.querySelectorAll(".contact-sheet[id]")).find(
+        (sheet) => sheet.closest("[x-data='dialog']") === this.$el,
+      );
+      this.sheetId = own ? own.id : "";
+      const fromHash = () => {
+        if (this.sheetId && window.location.hash === `#${this.sheetId}`) this.show();
+      };
+      window.addEventListener("hashchange", fromHash);
       if (this.isOpen) this.focusFirst();
+      else fromHash();
     },
     show() {
       this.animated = true;
@@ -102,6 +120,9 @@ document.addEventListener("alpine:init", () => {
     hide() {
       this.animated = true;
       this.isOpen = false;
+      if (this.sheetId && window.location.hash === `#${this.sheetId}`) {
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      }
     },
     focusFirst() {
       this.$nextTick(() => this.$refs.first?.focus());
@@ -317,45 +338,80 @@ document.addEventListener("alpine:init", () => {
   const fold = (text) =>
     text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\u0111/gi, "d").toLowerCase();
 
-  // A long select (provinces and their wards) that takes typing: Tom Select
-  // over the select itself, which stays what the form sends. Every word typed
-  // must appear in the option or its group (the province), accents ignored.
-  // The words typed together ("ca mau") rank first, and the province of the
-  // best match leads; equal matches keep the official order. A page without
-  // the library keeps the plain select. data-no-results: the words when
-  // nothing matches.
+  // What a Tom Select over `select` shares: Tom Select over the select itself,
+  // which stays what the form sends; every option listed, as a plain select
+  // scrolls through them all; typing scores each option over the text
+  // `wordsOf(item, groupLabel)` gives: every word typed must appear, accents
+  // ignored, the words typed together rank first (before them, the text they
+  // start), and the group of the best match leads; equal matches keep the
+  // select's order. data-no-results: the words when nothing matches. `extra`
+  // adds to the settings.
+  const tomSelect = (select, wordsOf, extra = {}) =>
+    new TomSelect(select, {
+      maxOptions: null,
+      lockOptgroupOrder: false,
+      sortField: [{ field: "$score", direction: "desc" }, { field: "$order" }],
+      // Called on the Tom Select instance: an option's group is an id into
+      // its optgroups.
+      score(query) {
+        const words = fold(query).split(/\s+/).filter(Boolean);
+        const phrase = words.join(" ");
+        const groups = this.optgroups;
+        return (item) => {
+          const text = fold(wordsOf(item, groups[item.optgroup]?.label || ""));
+          if (!words.every((w) => text.includes(w))) return 0;
+          if (text.startsWith(phrase)) return 3;
+          return text.includes(phrase) ? 2 : 1;
+        };
+      },
+      ...extra,
+      render: {
+        no_results() {
+          const note = document.createElement("div");
+          note.className = "no-results";
+          note.textContent = select.dataset.noResults;
+          return note;
+        },
+        ...extra.render,
+      },
+    });
+
+  // A long select (provinces and their wards) that takes typing, over the
+  // option and its group (the province: "ca mau" finds its wards). A page
+  // without the library keeps the plain select.
   Alpine.data("searchableSelect", () => ({
     init() {
       if (typeof TomSelect === "undefined") return;
-      const select = this.$el;
-      new TomSelect(select, {
-        // Every option, as a plain select scrolls through them all (the
-        // provinces alphabetical, each ward by name: application::admin_units).
-        maxOptions: null,
-        lockOptgroupOrder: false,
-        sortField: [{ field: "$score", direction: "desc" }, { field: "$order" }],
-        // Called on the Tom Select instance: an option's group is an id into
-        // its optgroups, whose label is the province.
-        score(query) {
-          const words = fold(query).split(/\s+/).filter(Boolean);
-          const phrase = words.join(" ");
-          const groups = this.optgroups;
-          return (item) => {
-            const province = groups[item.optgroup]?.label || "";
-            const text = fold(`${province} ${item.text}`);
-            if (!words.every((w) => text.includes(w))) return 0;
-            return text.includes(phrase) ? 2 : 1;
-          };
+      tomSelect(this.$el, (item, province) => `${province} ${item.text}`);
+    },
+  }));
+
+  // The icon picker (molecules/form_field.html icon_select): each option
+  // drawn with its glyph (`fa-solid` + its value) beside its Font Awesome
+  // name, found by that name ("cloud rain" or "cloud-rain"), the names it
+  // starts first. Every Font Awesome name is an option, so the open list
+  // shows the first ICON_OPTIONS_SHOWN matches: typing finds the rest. The
+  // blank option (no icon) stays choosable. A page without the library keeps
+  // the plain select.
+  const ICON_OPTIONS_SHOWN = 120;
+  Alpine.data("iconSelect", () => ({
+    init() {
+      if (typeof TomSelect === "undefined") return;
+      const drawn = (data, escape) => {
+        const glyph = data.value
+          ? `<i class="fa-solid ${escape(data.value)} icon-choice__glyph" aria-hidden="true"></i>`
+          : "";
+        return `<div class="icon-choice">${glyph}<span>${escape(data.text)}</span></div>`;
+      };
+      tomSelect(
+        this.$el,
+        (item) => `${item.text} ${item.text.replace(/-/g, " ")}`,
+        {
+          allowEmptyOption: true,
+          maxOptions: ICON_OPTIONS_SHOWN,
+          render: { option: drawn, item: drawn },
         },
-        render: {
-          no_results() {
-            const note = document.createElement("div");
-            note.className = "no-results";
-            note.textContent = select.dataset.noResults;
-            return note;
-          },
-        },
-      });
+      );
     },
   }));
 

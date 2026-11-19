@@ -28,8 +28,10 @@ use crate::{
     pages::admin::sector_href,
     pages::{
         admin::{
-            history_rows, is_refusal, render_admin, url, Asked, HistoryRow, ListPosition,
-            ListReturn, Outcome, ProviderFilter, ReasonForm, RowConfirm, SearchBox, BACK_TO_LIST,
+            history_rows, is_refusal,
+            listing_record::{listing_controls, ListingState, SERVICE_WORDS},
+            render_admin, url, Asked, Confirm, HistoryRow, ListPosition, ListReturn, Outcome,
+            ProviderFilter, ReasonForm, RecordHeader, RowConfirm, SearchBox, BACK_TO_LIST,
         },
         canonical_url,
         dashboard::{max_upload_mb, prepare},
@@ -306,21 +308,15 @@ pub struct ServicePage {
     pub errors: FormErrors,
     pub limits: &'static Limits,
     pub update_action: String,
-    pub status_action: String,
-    pub delete_action: String,
-    /// Takes its photo off (confirmation with a reason).
-    pub image_delete_action: String,
     /// The photo box's size line.
     pub max_upload_mb: usize,
     pub provider_href: String,
-    /// Its public page, while it is on the public pages (like a product's).
-    pub public_href: Option<String>,
     /// Its service type's admin page, where a hidden type is shown again.
     pub category_href: String,
-    /// The way back: the list page it was opened from, else the provider's
-    /// services (where a deletion lands too).
-    pub back_href: String,
-    pub back_label: String,
+    /// Its name, state and actions (`listing_record`), and the
+    /// confirmations they open.
+    pub header: RecordHeader,
+    pub confirms: Vec<Confirm>,
     pub flash: Option<Flash>,
 }
 
@@ -354,12 +350,33 @@ async fn service_page(
         business_id: service.business_id,
         id,
     };
+    let public_href = service
+        .is_public
+        .then(|| canonical_url("service", service.id, &service.name))
+        .transpose()?;
     let back_label = if back.is_default() {
         "admin.provider_services"
     } else {
         "admin_menu.services"
     };
+    let (header, confirms) = listing_controls(
+        state,
+        &SERVICE_WORDS,
+        ListingState {
+            name: &service.name,
+            is_active: service.is_active,
+            image_file_id: service.image_file_id,
+            public_href,
+            back_href: back_list(back, service.business_id).href("admin_services", &[])?,
+            back_label: state.locale().text(back_label),
+            status_action: back.record_href("admin_service_status", id)?,
+            delete_action: back.record_href("admin_service_delete", id)?,
+            image_delete_action: back.record_href("admin_service_image_delete", id)?,
+        },
+    )?;
     let body = ServicePage {
+        header,
+        confirms,
         history: history_rows(state, actor, HistoryOf::Service(id)).await?,
         activity: admin.listing_activity(actor, listing).await?,
         sector_label: sector_label(state, &sectors, service.sector.as_deref()),
@@ -375,21 +392,12 @@ async fn service_page(
         errors: outcome.errors,
         limits: &LIMITS,
         update_action: back.record_href("admin_service", id)?,
-        status_action: back.record_href("admin_service_status", id)?,
-        delete_action: back.record_href("admin_service_delete", id)?,
-        image_delete_action: back.record_href("admin_service_image_delete", id)?,
         max_upload_mb: max_upload_mb(state),
         category_href: url(
             "admin_category",
             &[("id", &service.category_id.to_string())],
         )?,
         provider_href: url("admin_provider", &[("id", &business)])?,
-        public_href: service
-            .is_public
-            .then(|| canonical_url("service", service.id, &service.name))
-            .transpose()?,
-        back_href: back_list(back, service.business_id).href("admin_services", &[])?,
-        back_label: state.locale().text(back_label),
         service,
         flash: outcome.flash,
     };

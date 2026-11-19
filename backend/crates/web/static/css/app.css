@@ -3523,6 +3523,20 @@ ac-geolocate {
   max-height: min(22rem, 50vh);
 }
 
+/* The icon picker's options and choice (Alpine iconSelect): the glyph in a
+ * column of its own, so the names line up. */
+.icon-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.icon-choice__glyph {
+  flex: 0 0 1.5em;
+  text-align: center;
+  color: var(--p700);
+  font-size: 1.125rem;
+}
+
 /* ── Dashboard: a weekly figure as columns (atoms/week_columns.html) ────── */
 .week-columns {
   display: block;
@@ -3751,4 +3765,89 @@ ac-geolocate {
   width: 100%;
   height: 6px;
   fill: var(--a500);
+}
+
+/* ── Record pages (organisms/record_header) ───────────────────────────────────
+   One record's admin page: its states as badges under its name, its actions
+   at the right (wrapping under the name on a phone), the rare ones in a
+   "more" menu; under the header one status strip, then the content. */
+.record-header__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 0;
+}
+.record-header__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.record-header__actions form {
+  margin: 0;
+}
+.record-menu {
+  position: relative;
+}
+.record-menu__btn {
+  min-width: 44px;
+  list-style: none;
+}
+.record-menu__btn::-webkit-details-marker {
+  display: none;
+}
+.record-menu__list {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 1040;
+  min-width: 220px;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+}
+.record-menu__list form {
+  margin: 0;
+}
+.record-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 16px;
+  border: none;
+  border-bottom: 1px solid var(--hairline);
+  background: none;
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 500;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.record-menu__list > :last-child .record-menu__item,
+.record-menu__list > .record-menu__item:last-child {
+  border-bottom: none;
+}
+.record-menu__item:hover,
+.record-menu__item:focus-visible {
+  background: var(--p50);
+  color: var(--text);
+}
+.record-menu__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1039;
+  border: none;
+  background: transparent;
+  cursor: default;
+}
+/* The status strip: what the badges mean, read-only, one line each. */
+.record-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }

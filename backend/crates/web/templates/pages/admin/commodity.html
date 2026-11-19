@@ -1,4 +1,5 @@
 {% extends "layouts/admin.html" %}
+{% import "molecules/form_field.html" as field %}
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/alert.html" as alerts %}
 {% import "atoms/status_badge.html" as status %}
@@ -12,6 +13,7 @@
     with a reason (in its section's `dialog` scope); showing again is one
     button. A commodity is never deleted: crops and supplies point to it. -#}
 {% block title %}{{ page.body.commodity.name }} — {{ site.name }} Admin{% endblock title %}
+{% block vendor %}{{ field::searchable_select_assets() }}{% endblock vendor %}
 {% block content %}
 {% set b = page.body %}
 {% set c = b.commodity %}
@@ -50,7 +52,7 @@
   <section class="admin-section" aria-labelledby="edit-title">
     <h2 class="admin-section__title" id="edit-title">{{ t(key="admin.info") }}</h2>
     <form class="form-stack" method="post" action="{{ b.update_action }}" novalidate>
-      {{ fields::commodity_fields(form=b.form, errors=b.errors, sectors=b.sectors, name_max=limits.commodity_name_max, icon_max=limits.commodity_icon_max, prefix="edit") }}
+      {{ fields::commodity_fields(form=b.form, errors=b.errors, sectors=b.sectors, name_max=limits.commodity_name_max, prefix="edit") }}
       <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button></div>
     </form>
   </section>

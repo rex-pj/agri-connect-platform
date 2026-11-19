@@ -50,7 +50,6 @@ pub const PAGES: CodedPages = CodedPages {
         off: "admin_alert_kinds.off",
         name: "admin_alert_kinds.name",
         name_placeholder: "admin_alert_kinds.name_placeholder",
-        icon_placeholder: "admin_alert_kinds.icon_placeholder",
         related: "admin_menu.alerts",
         created: "admin_alert_kinds.created",
         hidden: "admin_alert_kinds.hidden",

@@ -41,12 +41,12 @@ use crate::{
     pages::{
         admin::{
             dashboard::{card, StatCard},
-            history_rows, is_refusal, render_admin, url, user_href, HistoryRow, ListPosition,
-            Outcome, ReasonForm, SearchBox,
+            history_rows, is_refusal, render_admin, url, user_href, AdminTab, Badge, Confirm,
+            HistoryRow, ListPosition, Outcome, ReasonForm, RecordAction, RecordHeader, SearchBox,
         },
         canonical_url,
         forms::{reason, FormErrors},
-        listing::Pagination,
+        listing::{with_query, Pagination},
         parse_id,
         profile_form::ProfileForm,
         see_other,
@@ -244,25 +244,26 @@ fn activity_cards(
 #[derive(Serialize)]
 pub struct ProviderPage {
     pub provider: AdminProviderDetailDto,
+    /// Its name, states and actions, and the confirmations they open.
+    pub header: RecordHeader,
+    pub confirms: Vec<Confirm>,
+    /// The parts of the page (`?tab=`), and the one shown.
+    pub tabs: Vec<AdminTab>,
+    pub tab: ProviderTab,
     /// Its latest changes: who turned it off, verified or edited it, and why.
     pub history: Vec<HistoryRow>,
     /// Its recent activity, as the dashboard's cards.
     pub cards: Vec<StatCard>,
     /// Its position on a map, to check where it was placed.
     pub map_href: Option<String>,
-    /// The public page, to see what farmers see.
-    pub public_href: String,
     /// The managing account's admin page, when the visitor may read accounts.
     pub linked_user_href: Option<String>,
     pub can_verify: bool,
     pub can_assign: bool,
-    pub can_change_status: bool,
     pub can_edit: bool,
-    pub verification_action: String,
-    pub status_action: String,
     pub account_action: String,
-    /// Takes the managing account off (confirmation with a reason).
-    pub account_delete_action: String,
+    /// The account sheet's title: "assign", or "change" once one is linked.
+    pub account_label: String,
     /// The create sheets of its services and supplies (their lists narrowed
     /// to it), while the visitor may add them.
     pub services_add_href: Option<String>,
@@ -272,9 +273,6 @@ pub struct ProviderPage {
     /// visitor may manage them.
     pub services_href: Option<String>,
     pub products_href: Option<String>,
-    /// The farmers' inquiries and reviews about it, likewise.
-    pub inquiries_href: Option<String>,
-    pub reviews_href: Option<String>,
     pub form: AccountForm,
     pub profile: ProfileForm,
     /// The profile form's messages, apart so they never show in the others.
@@ -283,15 +281,221 @@ pub struct ProviderPage {
     /// The form `errors` belong to: "account", or "" (a refused confirmation,
     /// shown above everything); "profile" when they are in `profile_errors`.
     pub failed: &'static str,
-    /// The unverify dialog re-opens after a refusal.
-    pub confirm_open: bool,
     pub flash: Option<Flash>,
+}
+
+/// The parts of a provider's page, each a URL (`?tab=`): what decides about
+/// it first, then what it offers, its profile form, its history.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderTab {
+    #[default]
+    Overview,
+    Offers,
+    Profile,
+    History,
+}
+
+impl ProviderTab {
+    const ALL: [ProviderTab; 4] = [
+        ProviderTab::Overview,
+        ProviderTab::Offers,
+        ProviderTab::Profile,
+        ProviderTab::History,
+    ];
+
+    fn code(self) -> &'static str {
+        match self {
+            ProviderTab::Overview => "overview",
+            ProviderTab::Offers => "offers",
+            ProviderTab::Profile => "profile",
+            ProviderTab::History => "history",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            ProviderTab::Overview => "admin.tab_overview",
+            ProviderTab::Offers => "admin.tab_offers",
+            ProviderTab::Profile => "admin.tab_profile",
+            ProviderTab::History => "admin.tab_history",
+        }
+    }
+
+    /// The tab asked for; an unknown one is the overview.
+    fn parse(text: &str) -> Self {
+        Self::ALL
+            .into_iter()
+            .find(|t| t.code() == text.trim())
+            .unwrap_or_default()
+    }
+
+    /// Its address: the overview is the page itself.
+    fn href(self, id: i32) -> Result<String, Error> {
+        let page = url("admin_provider", &[("id", &id.to_string())])?;
+        Ok(match self {
+            ProviderTab::Overview => page,
+            tab => with_query(&page, &[("tab", tab.code())]),
+        })
+    }
+}
+
+/// `?tab=` of a provider's page.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct TabQuery {
+    pub tab: String,
+}
+
+const ACCOUNT_SHEET: &str = "gan-tai-khoan";
+const UNLINK_SHEET: &str = "go-tai-khoan";
+const UNVERIFY_SHEET: &str = "bo-xac-minh";
+const TURN_OFF_SHEET: &str = "tat-nha-cung-cap";
+
+/// The provider's header and the confirmations it opens. Buttons: granting
+/// the badge and turning it back on (what an admin does to a new listing),
+/// the public page. The menu: the managing account (assign or change, then
+/// remove), withdrawing the badge, turning it off, each only for a visitor
+/// allowed to.
+fn provider_controls(
+    state: &AppState,
+    actor: &Actor,
+    p: &AdminProviderDetailDto,
+) -> Result<(RecordHeader, Vec<Confirm>), Error> {
+    let locale = state.locale();
+    let text = |key: &str| locale.text(key);
+    let named = |key: &str, name: &str| locale.text_with(key, &[("name", &name)]);
+    let id = p.id.to_string();
+    let verification = url("admin_provider_verification", &[("id", &id)])?;
+    let status = url("admin_provider_status", &[("id", &id)])?;
+    let can_verify = actor.can(PERM_PROVIDER_VERIFY);
+    let can_status = actor.can(PERM_PROVIDER_STATUS_UPDATE);
+    let can_assign = actor.can(PERM_PROVIDER_ACCOUNT_ASSIGN);
+
+    let mut actions = Vec::new();
+    if can_verify && !p.is_verified {
+        actions.push(RecordAction::post(
+            text("provider.verify"),
+            "fa-circle-check",
+            verification.clone(),
+            "is_verified",
+            "true",
+        ));
+    }
+    if can_status && !p.is_active {
+        actions.push(RecordAction::post(
+            text("admin.turn_on_provider"),
+            "fa-store",
+            status.clone(),
+            "is_active",
+            "true",
+        ));
+    }
+    actions.push(RecordAction::link(
+        text("admin.public_page"),
+        "fa-arrow-up-right-from-square",
+        canonical_url("provider", p.id, &p.name)?,
+    ));
+
+    let mut menu = Vec::new();
+    let mut confirms = Vec::new();
+    if can_assign {
+        let label = if p.linked_username.is_some() {
+            "admin.change_account"
+        } else {
+            "admin.assign"
+        };
+        menu.push(RecordAction::sheet(
+            text(label),
+            "fa-user-plus",
+            ACCOUNT_SHEET,
+            "success",
+        ));
+        if let Some(username) = &p.linked_username {
+            menu.push(RecordAction::sheet(
+                text("admin.unlink_account"),
+                "fa-user-minus",
+                UNLINK_SHEET,
+                "warning",
+            ));
+            confirms.push(Confirm {
+                button_class: "btn-warning",
+                ..Confirm::delete(
+                    UNLINK_SHEET,
+                    named("admin.unlink_account_title", username),
+                    "fa-user-minus",
+                    url("admin_provider_account_delete", &[("id", &id)])?,
+                    text("admin.unlink_account"),
+                )
+                .noting(text("admin.unlink_account_note"))
+            });
+        }
+    }
+    if can_verify && p.is_verified {
+        menu.push(RecordAction::sheet(
+            text("admin.unverify"),
+            "fa-circle-xmark",
+            UNVERIFY_SHEET,
+            "warning",
+        ));
+        confirms.push(
+            Confirm::off(
+                UNVERIFY_SHEET,
+                named("admin.unverify_title", &p.name),
+                "fa-circle-xmark",
+                verification,
+                text("admin.confirm_unverify"),
+                "is_verified",
+            )
+            .noting(text("admin.unverify_note")),
+        );
+    }
+    if can_status && p.is_active {
+        menu.push(RecordAction::sheet(
+            text("admin.turn_off_provider"),
+            "fa-store-slash",
+            TURN_OFF_SHEET,
+            "warning",
+        ));
+        confirms.push(
+            Confirm::off(
+                TURN_OFF_SHEET,
+                named("admin.turn_off_provider_title", &p.name),
+                "fa-store-slash",
+                status,
+                text("admin.confirm_off"),
+                "is_active",
+            )
+            .noting(text("admin.turn_off_provider_note")),
+        );
+    }
+
+    let mut badges = vec![
+        Badge::new("account", p.is_active),
+        Badge::new("verified", p.is_verified),
+        Badge::new("managed", p.linked_username.is_some()),
+    ];
+    if p.is_demo {
+        badges.push(Badge::new("demo", true));
+    }
+    let header = RecordHeader {
+        title: p.name.clone(),
+        icon: "fa-store",
+        sub: None,
+        back_href: url("admin_providers", &[])?,
+        back_label: text("admin_menu.providers"),
+        badges,
+        actions,
+        menu,
+    };
+    Ok((header, confirms))
 }
 
 async fn provider_page(
     state: &AppState,
     actor: &Actor,
     id: i32,
+    tab: ProviderTab,
     outcome: Outcome<Typed>,
 ) -> Result<Response, Error> {
     let provider = state.usecases.admin.get_provider_detail(actor, id).await?;
@@ -301,6 +505,14 @@ async fn provider_page(
         Some(Typed::Profile(f)) => (Some(f), None, "profile"),
         Some(Typed::Account(f)) => (None, Some(f), "account"),
         None => (None, None, ""),
+    };
+    // A refused profile is shown on its tab; the profile tab needs the
+    // permission to edit.
+    let can_edit = actor.can(PERM_PROVIDER_MANAGE);
+    let tab = match (failed, tab) {
+        ("profile", _) => ProviderTab::Profile,
+        (_, ProviderTab::Profile) if !can_edit => ProviderTab::Overview,
+        (_, tab) => tab,
     };
     // A business without an account is usually set up with its phone number
     // as the username, which is what the owner remembers.
@@ -328,7 +540,30 @@ async fn provider_page(
     };
     let inquiries_href = list_of(PERM_INQUIRY_READ, "admin_inquiries")?;
     let reviews_href = list_of(PERM_REVIEW_MODERATE, "admin_reviews")?;
+    let offers = provider.services.len() + provider.products.len();
+    let tabs = ProviderTab::ALL
+        .into_iter()
+        .filter(|t| *t != ProviderTab::Profile || can_edit)
+        .map(|t| {
+            Ok(AdminTab {
+                label: state.locale().text(t.label()),
+                href: t.href(id)?,
+                count: (t == ProviderTab::Offers).then_some(offers),
+                current: t == tab,
+            })
+        })
+        .collect::<Result<Vec<_>, Error>>()?;
+    let (header, confirms) = provider_controls(state, actor, &provider)?;
+    let account_label = state.locale().text(if provider.linked_username.is_some() {
+        "admin.change_account"
+    } else {
+        "admin.assign"
+    });
     let body = ProviderPage {
+        header,
+        confirms,
+        tabs,
+        tab,
         history: history_rows(state, actor, HistoryOf::Provider(id)).await?,
         cards: activity_cards(
             state,
@@ -346,26 +581,19 @@ async fn provider_page(
             .map(|href| format!("{href}#{PRODUCT_CREATE_SHEET}")),
         services_href: list_of(PERM_SERVICE_MANAGE, "admin_services")?,
         products_href: list_of(PERM_LISTING_MODERATE, "admin_products")?,
-        inquiries_href,
-        reviews_href,
-        public_href: canonical_url("provider", id, &provider.name)?,
         linked_user_href: user_href(actor, provider.linked_user_id)?,
+        account_label,
         provider,
         can_verify: actor.can(PERM_PROVIDER_VERIFY),
         can_assign: actor.can(PERM_PROVIDER_ACCOUNT_ASSIGN),
-        can_change_status: actor.can(PERM_PROVIDER_STATUS_UPDATE),
-        can_edit: actor.can(PERM_PROVIDER_MANAGE),
-        verification_action: url("admin_provider_verification", &[("id", &id_text)])?,
-        status_action: url("admin_provider_status", &[("id", &id_text)])?,
+        can_edit,
         account_action: url("admin_provider_account", &[("id", &id_text)])?,
-        account_delete_action: url("admin_provider_account_delete", &[("id", &id_text)])?,
-        profile_action: path.clone(),
+        profile_action: ProviderTab::Profile.href(id)?,
         form,
         profile,
         profile_errors,
         errors,
         failed,
-        confirm_open: outcome.confirm_open,
         flash: outcome.flash,
     };
     render_admin(
@@ -387,21 +615,26 @@ async fn refused(
     typed: Typed,
 ) -> Result<Response, Error> {
     let outcome = Outcome::refused(state, err, Some(typed), false);
-    provider_page(state, actor, id, outcome).await
+    provider_page(state, actor, id, ProviderTab::Overview, outcome).await
 }
 
 fn redirect_to(id: i32, flash: Flash) -> Result<Response, Error> {
-    let mut response = see_other(&url("admin_provider", &[("id", &id.to_string())])?)?;
+    redirect_to_tab(id, ProviderTab::Overview, flash)
+}
+
+fn redirect_to_tab(id: i32, tab: ProviderTab, flash: Flash) -> Result<Response, Error> {
+    let mut response = see_other(&tab.href(id)?)?;
     flash.set_on(&mut response);
     Ok(response)
 }
 
-/// GET /admin/providers/{id}
+/// GET /admin/providers/{id} (`?tab=` one of its parts)
 pub async fn show(
     Viewer(viewer): Viewer,
     flash: TakeFlash,
     State(state): State<AppState>,
     ApiPath(raw_id): ApiPath<String>,
+    ApiQuery(q): ApiQuery<TabQuery>,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
@@ -411,7 +644,8 @@ pub async fn show(
         flash: flash.0,
         ..Outcome::default()
     };
-    let mut response = provider_page(&state, &actor, id, outcome).await?;
+    let tab = ProviderTab::parse(&q.tab);
+    let mut response = provider_page(&state, &actor, id, tab, outcome).await?;
     flash.clear_on(&mut response);
     Ok(response)
 }
@@ -433,7 +667,7 @@ pub async fn update(
         .update_provider(&actor, id, form.input())
         .await
     {
-        Ok(()) => redirect_to(id, Flash::ProviderSaved),
+        Ok(()) => redirect_to_tab(id, ProviderTab::Profile, Flash::ProviderSaved),
         Err(err) if is_refusal(&err) => {
             refused(&state, &actor, id, &err, Typed::Profile(form)).await
         }

@@ -17,7 +17,7 @@
     each removed after a confirmation with a reason) and a delete
     confirmation. Each form comes back with its own messages. -#}
 {% block title %}{{ page.body.partner.name }} — {{ site.name }} Admin{% endblock title %}
-{% block vendor %}{{ field::area_select_assets() }}{% endblock vendor %}
+{% block vendor %}{{ field::searchable_select_assets() }}{% endblock vendor %}
 {% block content %}
 {% set b = page.body %}
 {% set p = b.partner %}

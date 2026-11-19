@@ -912,6 +912,31 @@ mod tests {
     use crate::demo_activity::DemoArea;
 
     #[test]
+    fn every_icon_is_one_the_forms_offer() -> Result<()> {
+        let data = demo_data()?;
+        let icons = data
+            .sectors
+            .iter()
+            .chain(&data.alert_kinds)
+            .map(|c| &c.icon)
+            .chain(data.commodities.iter().map(|c| &c.icon))
+            .chain(
+                data.service_types
+                    .iter()
+                    .chain(&data.supply_types)
+                    .map(|t| &t.icon),
+            );
+        for icon in icons {
+            assert_eq!(
+                application::validation::icon(Some(icon))?.as_deref(),
+                Some(icon.as_str()),
+                "{icon} is not stored as the icon picker names it"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
     fn listings_refer_to_demo_businesses_types_and_commodities() -> Result<()> {
         let data = demo_data()?;
         let names: HashSet<&str> = data.businesses.iter().map(|b| b.name.as_str()).collect();

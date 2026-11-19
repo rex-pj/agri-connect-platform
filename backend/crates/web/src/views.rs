@@ -7,12 +7,13 @@ use std::{collections::HashMap, sync::Arc};
 
 use application::constants::{
     ALERT_BODY_MAX, ALERT_TITLE_MAX, AUDIT_REASON_MAX, BUSINESS_ADDRESS_MAX,
-    BUSINESS_DESCRIPTION_MAX, BUSINESS_NAME_MAX, CODED_ICON_MAX, CODED_NAME_MAX,
-    COMMODITY_ICON_MAX, COMMODITY_NAME_MAX, CROP_NAME_MAX, CROP_UNIT_MAX, FULL_NAME_MAX,
-    JOB_DESCRIPTION_MAX, PASSWORD_MIN_CHARS, PASSWORD_RESET_EXPIRY_HOURS, PRICE_FRESH_DAYS_MAX,
-    PRICE_NOTE_MAX, PRODUCT_DESCRIPTION_MAX, PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX, SEARCH_QUERY_MIN,
-    USERNAME_MAX_LEN, USERNAME_MIN_LEN, VN_UTC_OFFSET_SECS,
+    BUSINESS_DESCRIPTION_MAX, BUSINESS_NAME_MAX, CODED_NAME_MAX, COMMODITY_NAME_MAX, CROP_NAME_MAX,
+    CROP_UNIT_MAX, FULL_NAME_MAX, JOB_DESCRIPTION_MAX, PASSWORD_MIN_CHARS,
+    PASSWORD_RESET_EXPIRY_HOURS, PRICE_FRESH_DAYS_MAX, PRICE_NOTE_MAX, PRODUCT_DESCRIPTION_MAX,
+    PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX, SEARCH_QUERY_MIN, USERNAME_MAX_LEN, USERNAME_MIN_LEN,
+    VN_UTC_OFFSET_SECS,
 };
+use application::icons;
 use application::settings::SETTING_VALUE_MAX;
 use application::validation::{is_valid_vn_phone, SLUG_PATTERN, VN_PHONE_PATTERN};
 use axum::{
@@ -107,9 +108,7 @@ struct FieldLimits {
     /// `SEARCH_QUERY_MIN`, for a public search box's `minlength`.
     search_min: usize,
     coded_name_max: usize,
-    coded_icon_max: usize,
     commodity_name_max: usize,
-    commodity_icon_max: usize,
     crop_name_max: usize,
     crop_unit_max: usize,
     alert_title_max: usize,
@@ -145,9 +144,7 @@ const FIELD_LIMITS: FieldLimits = FieldLimits {
     audit_reason_max: AUDIT_REASON_MAX,
     search_min: SEARCH_QUERY_MIN,
     coded_name_max: CODED_NAME_MAX,
-    coded_icon_max: CODED_ICON_MAX,
     commodity_name_max: COMMODITY_NAME_MAX,
-    commodity_icon_max: COMMODITY_ICON_MAX,
     crop_name_max: CROP_NAME_MAX,
     crop_unit_max: CROP_UNIT_MAX,
     alert_title_max: ALERT_TITLE_MAX,
@@ -158,6 +155,15 @@ const FIELD_LIMITS: FieldLimits = FieldLimits {
     setting_value_max: SETTING_VALUE_MAX,
     near_me_km: km(EXPLORE_DEFAULT_RADIUS_M),
 };
+
+/// What `icon_choices()` gives a template: the picker's icons, the icon
+/// chosen as the picker names it, and whether the list has it.
+#[derive(Serialize)]
+struct IconChoices<'a> {
+    icons: &'static [&'static str],
+    current: &'a str,
+    listed: bool,
+}
 
 /// What every template sees: `site`, `lang` (and `languages` for the
 /// switch), this `year` in Vietnam (the
@@ -314,6 +320,22 @@ impl Views {
             routes::url(route, &[("id", id)])
                 .map(Value::String)
                 .map_err(|e| tera::Error::msg(format!("file_url: {e}")))
+        });
+
+        // icon_choices(current=form.icon): the icon picker's icons
+        // (application::icons), `current` as the picker names it (an older
+        // row's `fa-solid fa-cow` is `fa-cow`), and whether it is `listed`.
+        tera.register_function("icon_choices", |args: &HashMap<String, Value>| {
+            let current = args
+                .get("current")
+                .and_then(Value::as_str)
+                .and_then(icons::normalize);
+            tera::to_value(IconChoices {
+                icons: icons::ICONS,
+                current: current.unwrap_or(""),
+                listed: current.is_none_or(icons::is_known),
+            })
+            .map_err(|e| tera::Error::msg(format!("icon_choices: {e}")))
         });
 
         tera.register_filter("slugify", |value: &Value, _: &HashMap<String, Value>| {
@@ -776,6 +798,29 @@ mod tests {
             Ok(vi.text_with("pagination.page", &[("number", &4)]))
         );
         assert!(render(r#"{{ t(key="no.such.key") }}"#).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn the_icon_picker_lists_every_icon_and_keeps_an_unlisted_one() -> Result<(), Error> {
+        let mut tera = views(SiteConfig::default())?.vi;
+        let mut picker = |value: &str| {
+            let mut ctx = tera::Context::new();
+            ctx.insert("value", value);
+            tera.render_str(
+                r#"{% import "molecules/form_field.html" as field %}{{ field::icon_select(id="i", name="icon", label="L", value=value) }}"#,
+                &ctx,
+            )
+            .map_err(|e| Error::internal(chain(&e)))
+        };
+        let html = picker("fa-solid fa-cow")?;
+        assert_eq!(html.matches("<option").count(), icons::ICONS.len() + 1);
+        assert!(html.contains(r#"<option value="fa-cow" selected>"#));
+        assert!(html.contains(r#"<option value="fa-tractor">tractor</option>"#));
+
+        let html = picker("fa-sedling")?;
+        assert!(html.contains(r#"<option value="fa-sedling" selected>"#));
+        assert_eq!(html.matches(" selected").count(), 1);
         Ok(())
     }
 

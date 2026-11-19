@@ -22,12 +22,12 @@ use domain::{
 use crate::{
     authz::Actor,
     catalogue::{PERM_ALERT_MANAGE, PERM_CATEGORY_MANAGE},
-    constants::{CODED_CODE_MAX, CODED_ICON_MAX, CODED_NAME_MAX},
+    constants::{CODED_CODE_MAX, CODED_NAME_MAX},
     inputs::CodedInput,
     outputs::CodedDto,
     ports::EventBus,
     slug::slugify,
-    validation::{self, audit_reason, max_chars, max_chars_opt, non_blank},
+    validation::{self, audit_reason, max_chars},
 };
 
 /// What tells one list from the other: who keeps it, how its changes are
@@ -201,15 +201,15 @@ fn code_of(name: &str) -> String {
 /// optional icon.
 fn validate(input: CodedInput) -> Result<CodedFields> {
     let name = input.name.trim().to_owned();
-    let icon = non_blank(input.icon);
+    let icon = validation::icon(input.icon.as_deref());
     Validation::new()
         .check(code_of(&name).is_empty(), "name", ErrorCode::NameRequired)
         .rule("name", max_chars(&name, CODED_NAME_MAX))
-        .rule("icon", max_chars_opt(&icon, CODED_ICON_MAX))
+        .check(icon.is_err(), "icon", ErrorCode::InvalidIcon)
         .finish()?;
     Ok(CodedFields {
         name,
-        icon,
+        icon: icon.ok().flatten(),
         display_order: input.display_order,
     })
 }

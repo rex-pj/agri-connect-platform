@@ -48,7 +48,6 @@ pub const PAGES: CodedPages = CodedPages {
         off: "admin_sectors.off",
         name: "admin_sectors.name",
         name_placeholder: "admin_sectors.name_placeholder",
-        icon_placeholder: "admin_sectors.icon_placeholder",
         related: "admin_sectors.commodities",
         created: "admin_sectors.created",
         hidden: "admin_sectors.hidden",

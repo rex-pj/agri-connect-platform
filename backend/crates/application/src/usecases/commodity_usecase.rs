@@ -18,11 +18,11 @@ use domain::{
 use crate::{
     authz::Actor,
     catalogue::PERM_CATEGORY_MANAGE,
-    constants::{COMMODITY_ICON_MAX, COMMODITY_NAME_MAX, PRICE_FRESH_DAYS_MAX},
+    constants::{COMMODITY_NAME_MAX, PRICE_FRESH_DAYS_MAX},
     inputs::CommodityInput,
     outputs::CommodityDto,
     ports::EventBus,
-    validation::{audit_reason, max_chars, max_chars_opt, non_blank, sector},
+    validation::{self, audit_reason, max_chars, sector},
 };
 
 #[derive(Clone)]
@@ -139,13 +139,13 @@ impl CommodityUseCase {
 /// A commodity's boxes: a name, one of the `known` sectors, an optional icon.
 fn validate(input: CommodityInput, known: &[CodedEntry]) -> Result<CommodityFields> {
     let name = input.name.trim().to_owned();
-    let icon = non_blank(input.icon);
+    let icon = validation::icon(input.icon.as_deref());
     let chosen = sector(&input.sector, known).ok().flatten();
     Validation::new()
         .check(name.is_empty(), "name", ErrorCode::NameRequired)
         .rule("name", max_chars(&name, COMMODITY_NAME_MAX))
         .check(chosen.is_none(), "sector", ErrorCode::InvalidSector)
-        .rule("icon", max_chars_opt(&icon, COMMODITY_ICON_MAX))
+        .check(icon.is_err(), "icon", ErrorCode::InvalidIcon)
         .check_with(
             !(1..=PRICE_FRESH_DAYS_MAX).contains(&input.price_fresh_days),
             "price_fresh_days",
@@ -159,7 +159,7 @@ fn validate(input: CommodityInput, known: &[CodedEntry]) -> Result<CommodityFiel
     Ok(CommodityFields {
         name,
         sector: chosen,
-        icon,
+        icon: icon.ok().flatten(),
         display_order: input.display_order,
         price_fresh_days: input.price_fresh_days,
     })

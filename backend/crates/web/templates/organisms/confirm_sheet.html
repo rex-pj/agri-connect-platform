@@ -1,8 +1,9 @@
 {#- A confirmation for an action that needs a second look (deactivate,
     hide, delete), with an optional reason for the audit log. Place it inside
     an element with `x-data="dialog"`: with JS it is a sheet opened by a
-    trigger with `x-on:click.prevent="show"`; without JS the trigger is an
-    anchor to `#{{ id }}` and the form is submitted in place.
+    trigger with `x-on:click.prevent="show"`, or by any link to `#{{ id }}`
+    on the page (a record header's button or menu: the URL hash); without
+    JS that anchor leads to the form, submitted in place.
     Under the title it says what will happen: `effect="hide"` (`what` is no
     longer shown, can be shown again) or `effect="delete"` (`what` is gone for
     good), else `note` in its own words. `hidden_name` / `hidden_value`: one

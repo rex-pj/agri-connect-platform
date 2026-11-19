@@ -762,7 +762,7 @@ async fn a_supply_page_keeps_its_list_and_says_who_listed_it() {
         "its provider's phone on top"
     );
     assert!(html.contains("Nhà cung cấp tự đăng mục này"));
-    assert!(html.contains("Ngành:"));
+    assert!(html.contains("<dt>Ngành</dt>"));
     assert!(html.contains("0 lượt gọi, Zalo trong 30 ngày"));
     assert!(html.contains("0 yêu cầu liên hệ"));
 

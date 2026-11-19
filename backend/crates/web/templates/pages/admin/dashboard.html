@@ -4,6 +4,7 @@
 {% import "organisms/area_progress.html" as progress %}
 {% import "atoms/week_columns.html" as columns %}
 {% import "molecules/admin_header.html" as header %}
+{% import "molecules/stat_card.html" as stat %}
 {#- `page.body` is web::pages::admin::dashboard::DashboardPage: the cards in
     the admin menu's groups (platform, then business), the areas nearest to
     steady (each to its own report), then the report weeks' leads and
@@ -28,21 +29,7 @@
     <div class="row g-3 g-md-4">
       {% for s in g.cards %}
       <div class="col-6 col-lg-3">
-        {% if s.href %}<a class="stat-card stat-card--link" href="{{ s.href }}">{% else %}<div class="stat-card">{% endif %}
-          <div class="stat-card__head">
-            <p class="stat-card__label">{{ s.label }}</p>
-            <span class="stat-card__icon stat-card__icon--{{ s.tone }}">{{ atoms::icon(name=s.icon) }}</span>
-          </div>
-          <p class="stat-card__value">{% if s.money %}{{ s.value | vnd }}{% else %}{{ s.value | number }}{% endif %}</p>
-          {% if s.share is number %}<progress class="stat-card__share" value="{{ s.share }}" max="100" aria-hidden="true"></progress>{% endif %}
-          {% if s.note %}<p class="stat-card__note">{{ s.note }}</p>{% endif %}
-          {% if s.change %}
-          <p class="stat-card__change">
-            {% if s.change.delta %}<span class="stat-card__delta stat-card__delta--{{ s.change.way }}">{% if s.change.way == "up" %}{{ atoms::icon(name="fa-arrow-up") }} +{% else %}{{ atoms::icon(name="fa-arrow-down") }} −{% endif %}{{ s.change.delta | number }}</span>{% endif %}
-            <span>{{ s.change.text }}</span>
-          </p>
-          {% endif %}
-        {% if s.href %}</a>{% else %}</div>{% endif %}
+        {{ stat::stat_card(s=s) }}
       </div>
       {% endfor %}
     </div>

@@ -97,7 +97,7 @@ pub struct StatGroup {
     pub cards: Vec<StatCard>,
 }
 
-fn card(label: String, value: i64, icon: &'static str, tone: &'static str) -> StatCard {
+pub(crate) fn card(label: String, value: i64, icon: &'static str, tone: &'static str) -> StatCard {
     StatCard {
         label,
         value,

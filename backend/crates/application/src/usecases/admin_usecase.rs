@@ -1,7 +1,11 @@
 use std::sync::Arc;
 
+use chrono::{Duration, Utc};
+
 use domain::{
-    constants::{CATEGORY_TYPES, INQUIRY_STATUSES, ROLE_PROVIDER},
+    constants::{
+        CATEGORY_TYPES, INQUIRY_STATUSES, INQUIRY_STATUS_NEW, INQUIRY_STATUS_SPAM, ROLE_PROVIDER,
+    },
     events::{Change, DomainEvent, Entity},
     models::{
         category::{CategoryAdmin, NewCategory, UpdateCategory},
@@ -14,6 +18,7 @@ use domain::{
     repositories::{
         admin_unit_repository_trait::AdminUnitRepositoryTrait,
         business_repository_trait::BusinessRepositoryTrait,
+        call_repository_trait::CallRepositoryTrait,
         category_repository_trait::CategoryRepositoryTrait,
         coded_repository_trait::CodedRepositoryTrait,
         inquiry_repository_trait::InquiryRepositoryTrait,
@@ -38,8 +43,9 @@ use crate::{
         PERM_USER_ROLE_UPDATE, PERM_USER_STATUS_UPDATE,
     },
     constants::{
-        ADMIN_PAGE_SIZE, CATEGORY_COLOR_MAX, CATEGORY_DESCRIPTION_MAX, CATEGORY_ICON_MAX,
-        CATEGORY_NAME_MAX, CATEGORY_SLUG_MAX, LOCATION_LABEL_MAX, SLUG_CANDIDATES_PER_QUERY,
+        ADMIN_PAGE_SIZE, CALL_STATS_DAYS, CATEGORY_COLOR_MAX, CATEGORY_DESCRIPTION_MAX,
+        CATEGORY_ICON_MAX, CATEGORY_NAME_MAX, CATEGORY_SLUG_MAX, LOCATION_LABEL_MAX,
+        SLUG_CANDIDATES_PER_QUERY,
     },
     inputs::{
         CategoryInput, CreateProductInput, LocationInput, UpdateProductInput, UpdateProfileInput,
@@ -48,7 +54,8 @@ use crate::{
         AdminCategoryDto, AdminInquiryDto, AdminLocationDto, AdminPagedResponse, AdminProductDto,
         AdminProductItemDto, AdminProviderDetailDto, AdminProviderDto, AdminReviewDto,
         AdminServiceDto, AdminServiceItemDto, AdminUserDetailDto, AdminUserDto, AreaGroupDto,
-        AssignUserDto, ProviderStatusDto, RoleDto, SlugSuggestionDto, VerificationDto,
+        AssignUserDto, InquiryCountsDto, ProviderActivityDto, ProviderStatusDto, ReviewCountsDto,
+        RoleDto, SlugSuggestionDto, VerificationDto,
     },
     pagination::{admin_total_pages, paginate_admin, total_or_count},
     ports::{EventBus, PasswordHasher},
@@ -58,6 +65,7 @@ use crate::{
         account_rules::account_for_role,
         business_rules::validate_profile,
         product_rules::{validate_product, ProductFields},
+        review_usecase::one_decimal,
         service_rules::{validate_service, ServiceFields},
     },
     validation::{
@@ -88,6 +96,8 @@ pub struct AdminUseCase {
     password_hasher: Arc<dyn PasswordHasher>,
     /// A deactivated account's sessions end with it.
     refresh_repo: Arc<dyn RefreshTokenRepositoryTrait + Send + Sync>,
+    /// A provider's call and Zalo taps, for its page.
+    call_repo: Arc<dyn CallRepositoryTrait + Send + Sync>,
     /// How soon after its request a review is flagged.
     settings: SettingsReader,
 }
@@ -109,6 +119,7 @@ pub struct AdminDeps {
     pub events: Arc<dyn EventBus>,
     pub password_hasher: Arc<dyn PasswordHasher>,
     pub refresh_repo: Arc<dyn RefreshTokenRepositoryTrait + Send + Sync>,
+    pub call_repo: Arc<dyn CallRepositoryTrait + Send + Sync>,
     pub settings: SettingsReader,
 }
 
@@ -129,6 +140,7 @@ impl AdminUseCase {
             events: d.events,
             password_hasher: d.password_hasher,
             refresh_repo: d.refresh_repo,
+            call_repo: d.call_repo,
             settings: d.settings,
         }
     }
@@ -167,6 +179,11 @@ impl AdminUseCase {
             .find_admin_detail(id)
             .await?
             .ok_or_else(|| Error::new(ErrorCode::ProviderNotFound))?;
+        let activity = self.provider_activity(actor, id).await?;
+        let area = match (&b.province_name, &b.ward_name) {
+            (Some(province), Some(ward)) => Some(preset_label(province, ward)),
+            _ => None,
+        };
 
         Ok(AdminProviderDetailDto {
             id: b.id,
@@ -177,6 +194,9 @@ impl AdminUseCase {
             address: b.address,
             is_verified: b.is_verified,
             is_active: b.is_active,
+            is_demo: b.is_demo,
+            area,
+            activity,
             created_on: b.created_on,
             linked_user_id: b.linked_user_id,
             linked_username: b.linked_username,
@@ -205,6 +225,42 @@ impl AdminUseCase {
                     is_active: p.is_active,
                 })
                 .collect(),
+        })
+    }
+
+    /// One provider's recent leads and reviews: taps over `CALL_STATS_DAYS`
+    /// (as its owner's dashboard counts them), contact requests and reviews
+    /// only for a visitor who may read those lists.
+    async fn provider_activity(&self, actor: &Actor, id: i32) -> Result<ProviderActivityDto> {
+        let since = Utc::now() - Duration::days(CALL_STATS_DAYS);
+        let taps = self.call_repo.count_since(Some(id), since).await?;
+        let inquiries = if actor.can(PERM_INQUIRY_READ) {
+            let count = |status| self.inquiry_repo.count_admin(Some(id), status);
+            let all = count(None).await?;
+            let spam = count(Some(INQUIRY_STATUS_SPAM)).await?;
+            Some(InquiryCountsDto {
+                waiting: count(Some(INQUIRY_STATUS_NEW)).await?,
+                total: all - spam,
+            })
+        } else {
+            None
+        };
+        let reviews = if actor.can(PERM_REVIEW_MODERATE) {
+            let all = self.review_repo.count_admin(Some(id)).await?;
+            let shown = self.review_repo.summary_public(id).await?;
+            Some(ReviewCountsDto {
+                shown: shown.count,
+                average: shown.average.map(one_decimal),
+                waiting: all - shown.count,
+            })
+        } else {
+            None
+        };
+        Ok(ProviderActivityDto {
+            taps,
+            days: CALL_STATS_DAYS,
+            inquiries,
+            reviews,
         })
     }
 

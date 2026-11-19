@@ -34,8 +34,9 @@ use crate::{
     entities::{
         business::{self, Entity as Business},
         product::{self, Entity as ProductEntity},
+        province,
         service::{self, Entity as ServiceEntity},
-        service_type as category, supply_type, user,
+        service_type as category, supply_type, user, ward,
     },
     sql::{
         business_lat, business_lng, business_location, category_in_sector, distance,
@@ -188,6 +189,8 @@ struct BusinessAdminDetailRow {
     address: Option<String>,
     is_verified: bool,
     is_active: bool,
+    is_demo: bool,
+    ward_code: Option<String>,
     created_on: DateTimeWithTimeZone,
     linked_user_id: Option<i32>,
     linked_username: Option<String>,
@@ -620,6 +623,8 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .column(business::Column::Address)
             .column(business::Column::IsVerified)
             .column(business::Column::IsActive)
+            .column(business::Column::IsDemo)
+            .column(business::Column::WardCode)
             .column(business::Column::CreatedOn)
             .column_as(user::Column::Id, QueryAs::LinkedUserId)
             .column_as(user::Column::Username, QueryAs::LinkedUsername)
@@ -637,6 +642,24 @@ impl BusinessRepositoryTrait for BusinessRepository {
             })? {
             None => return Ok(None),
             Some(r) => r,
+        };
+
+        // Its ward and province by their keys, for the line naming its area.
+        let ward_row = match core.ward_code.as_deref() {
+            Some(code) => ward::Entity::find_by_id(code.to_owned())
+                .one(db)
+                .await
+                .map_err(|e| Error::internal(format!("business find_admin_detail ward: {e}")))?,
+            None => None,
+        };
+        let province_row = match &ward_row {
+            Some(w) => province::Entity::find_by_id(w.province_code.clone())
+                .one(db)
+                .await
+                .map_err(|e| {
+                    Error::internal(format!("business find_admin_detail province: {e}"))
+                })?,
+            None => None,
         };
 
         let svc_rows = ServiceEntity::find()
@@ -686,6 +709,10 @@ impl BusinessRepositoryTrait for BusinessRepository {
             address: core.address,
             is_verified: core.is_verified,
             is_active: core.is_active,
+            is_demo: core.is_demo,
+            ward_code: core.ward_code,
+            ward_name: ward_row.map(|w| w.full_name),
+            province_name: province_row.map(|p| p.name),
             created_on: core.created_on.with_timezone(&Utc),
             linked_user_id: core.linked_user_id,
             linked_username: core.linked_username,

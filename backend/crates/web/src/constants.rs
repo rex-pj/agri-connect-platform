@@ -33,6 +33,9 @@ pub const MEMBER_WRITE_RATE_LIMIT_PER_MIN: NonZeroU32 = per_minute(120);
 /// A Zalo chat with a Vietnamese phone number is this followed by the number
 /// (the `zalo` template filter): every provider is reachable there by phone.
 pub const ZALO_CHAT_URL: &str = "https://zalo.me/";
+/// A map at one point is this followed by `lat,lng`: the admin checks where
+/// a provider was placed (its ward, the near-me page) against the map.
+pub const MAP_POINT_URL: &str = "https://www.google.com/maps?q=";
 
 // ── Database ──────────────────────────────────────────────────────────────────
 /// Connections in the pool when `DB_MAX_CONNECTIONS` is unset. A page takes a

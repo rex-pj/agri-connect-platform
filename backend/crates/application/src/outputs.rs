@@ -435,6 +435,13 @@ pub struct AdminProviderDetailDto {
     pub address: Option<String>,
     pub is_verified: bool,
     pub is_active: bool,
+    pub is_demo: bool,
+    /// Its area, "Đồng Tháp — Xã Bình Phú": the ward its position lies in;
+    /// `None` without a position.
+    pub area: Option<String>,
+    /// What farmers did about it lately, each figure only for a visitor who
+    /// may open its list.
+    pub activity: ProviderActivityDto,
     pub created_on: DateTime<Utc>,
     pub linked_user_id: Option<i32>,
     pub linked_username: Option<String>,
@@ -1342,4 +1349,34 @@ pub struct SettingGroupDto {
     pub code: &'static str,
     pub changed: usize,
     pub settings: Vec<SettingDto>,
+}
+
+/// A provider's recent activity on its admin page: what the go / no-go
+/// figures are made of, one business at a time.
+#[derive(Serialize)]
+pub struct ProviderActivityDto {
+    /// Call and Zalo taps in the last `days` days.
+    pub taps: i64,
+    pub days: i64,
+    /// `None` without `inquiry.read`.
+    pub inquiries: Option<InquiryCountsDto>,
+    /// `None` without `review.moderate`.
+    pub reviews: Option<ReviewCountsDto>,
+}
+
+#[derive(Serialize)]
+pub struct InquiryCountsDto {
+    /// Still `new`: the provider has not called back.
+    pub waiting: i64,
+    /// Every one but spam.
+    pub total: i64,
+}
+
+#[derive(Serialize)]
+pub struct ReviewCountsDto {
+    /// Shown ones and their average (`None` without any).
+    pub shown: i64,
+    pub average: Option<f64>,
+    /// Hidden until an admin shows them.
+    pub waiting: i64,
 }

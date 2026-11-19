@@ -21,7 +21,7 @@ use application::{
         PERM_PROVIDER_MANAGE, PERM_PROVIDER_STATUS_UPDATE, PERM_PROVIDER_VERIFY,
         PERM_REVIEW_MODERATE, PERM_SERVICE_MANAGE,
     },
-    outputs::{AdminPagedResponse, AdminProviderDetailDto, AdminProviderDto},
+    outputs::{AdminPagedResponse, AdminProviderDetailDto, AdminProviderDto, ProviderActivityDto},
 };
 use axum::{extract::State, http::StatusCode, response::Response};
 use domain::{Error, ErrorCode};
@@ -29,11 +29,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     app_state::AppState,
+    constants::MAP_POINT_URL,
     cookies::{Flash, TakeFlash},
     extract::{ApiForm, ApiPath, ApiQuery},
     middleware::auth::Viewer,
     pages::{
-        admin::{is_refusal, render_admin, url, user_href, ListPosition, Outcome, SearchBox},
+        admin::{
+            dashboard::{card, StatCard},
+            is_refusal, render_admin, url, user_href, ListPosition, Outcome, SearchBox,
+        },
         canonical_url,
         forms::{reason, FormErrors},
         listing::Pagination,
@@ -176,9 +180,68 @@ pub enum Typed {
     Account(AccountForm),
 }
 
+/// What farmers did about the provider lately, as the dashboard's cards:
+/// taps, contact requests (to their list), reviews (to theirs); a figure
+/// the visitor may not read is left out.
+fn activity_cards(
+    state: &AppState,
+    activity: &ProviderActivityDto,
+    inquiries_href: Option<&String>,
+    reviews_href: Option<&String>,
+) -> Vec<StatCard> {
+    let locale = state.locale();
+    let mut cards = vec![card(
+        locale.text_with("admin_stats.calls", &[("days", &activity.days)]),
+        activity.taps,
+        "fa-phone",
+        "green",
+    )];
+    if let Some(i) = &activity.inquiries {
+        let note = if i.waiting > 0 {
+            Some(locale.text_with("admin.inquiries_waiting", &[("count", &i.waiting)]))
+        } else {
+            (i.total > 0).then(|| locale.text("admin.inquiries_none_waiting"))
+        };
+        cards.push(StatCard {
+            href: inquiries_href.cloned(),
+            note,
+            ..card(
+                locale.text("contact.title"),
+                i.total,
+                "fa-envelope-open-text",
+                "blue",
+            )
+        });
+    }
+    if let Some(r) = &activity.reviews {
+        let mut parts = Vec::new();
+        if let Some(average) = r.average {
+            parts.push(locale.text_with("admin.reviews_average", &[("average", &average)]));
+        }
+        if r.waiting > 0 {
+            parts.push(locale.text_with("admin.reviews_waiting", &[("count", &r.waiting)]));
+        }
+        cards.push(StatCard {
+            href: reviews_href.cloned(),
+            note: (!parts.is_empty()).then(|| parts.join(" · ")),
+            ..card(
+                locale.text("admin_menu.reviews"),
+                r.shown,
+                "fa-star",
+                "amber",
+            )
+        });
+    }
+    cards
+}
+
 #[derive(Serialize)]
 pub struct ProviderPage {
     pub provider: AdminProviderDetailDto,
+    /// Its recent activity, as the dashboard's cards.
+    pub cards: Vec<StatCard>,
+    /// Its position on a map, to check where it was placed.
+    pub map_href: Option<String>,
     /// The public page, to see what farmers see.
     pub public_href: String,
     /// The managing account's admin page, when the visitor may read accounts.
@@ -249,11 +312,23 @@ async fn provider_page(
     let list_of = |perm: &str, route: &str| -> Result<Option<String>, Error> {
         actor.can(perm).then(|| own.href(route, &[])).transpose()
     };
+    let inquiries_href = list_of(PERM_INQUIRY_READ, "admin_inquiries")?;
+    let reviews_href = list_of(PERM_REVIEW_MODERATE, "admin_reviews")?;
     let body = ProviderPage {
+        cards: activity_cards(
+            state,
+            &provider.activity,
+            inquiries_href.as_ref(),
+            reviews_href.as_ref(),
+        ),
+        map_href: provider
+            .lat
+            .zip(provider.lng)
+            .map(|(lat, lng)| format!("{MAP_POINT_URL}{lat},{lng}")),
         services_href: list_of(PERM_SERVICE_MANAGE, "admin_services")?,
         products_href: list_of(PERM_LISTING_MODERATE, "admin_products")?,
-        inquiries_href: list_of(PERM_INQUIRY_READ, "admin_inquiries")?,
-        reviews_href: list_of(PERM_REVIEW_MODERATE, "admin_reviews")?,
+        inquiries_href,
+        reviews_href,
         public_href: canonical_url("provider", id, &provider.name)?,
         linked_user_href: user_href(actor, provider.linked_user_id)?,
         provider,

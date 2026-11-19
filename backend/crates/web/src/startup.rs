@@ -603,6 +603,7 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
             events: events.clone(),
             password_hasher: password_hasher.clone(),
             refresh_repo: refresh_repo.clone(),
+            call_repo: call_repo.clone(),
             settings: settings.clone(),
         }),
         auth: AuthUseCase::new(AuthDeps {

@@ -4,8 +4,8 @@
 
 use axum::http::{header, StatusCode};
 use integration_tests::{
-    body_text, env_with_origin, get_page, install_admin, post_form, register_provider, send,
-    sign_in, Env,
+    body_text, env_with_origin, get_page, install_admin, load_admin_units, post_form,
+    register_provider, send, sign_in, Env,
 };
 use sea_orm::{ConnectionTrait, Statement};
 
@@ -409,5 +409,56 @@ async fn an_admin_lists_a_provider_in_the_field_and_edits_its_profile() {
     )
     .await;
     assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_provider_page_opens_with_its_summary_area_and_activity() {
+    let e = env_with_origin().await;
+    load_admin_units(&e).await;
+    let admin = install_admin(&e).await;
+    let id = unclaimed_business(&e).await;
+    let detail = format!("/admin/providers/{id}");
+    let page = || async { body_text(send(&e.router, get_page(&detail, Some(&admin))).await).await };
+
+    // No position, no account, no taps yet: each said in the summary.
+    let html = page().await;
+    assert!(html.contains("Chưa có vị trí: bà con không thấy ở trang Gần tôi."));
+    assert!(html.contains("Chưa có tài khoản"));
+    assert!(html.contains("Gán tài khoản"));
+    assert!(html.contains("Lượt gọi + Zalo (30 ngày)"));
+    assert!(html.contains(r#"href="https://zalo.me/0912345678""#));
+    let summary = html.find(r#"id="summary-title""#).unwrap();
+    let profile = html.find(r#"id="ho-so-title""#).unwrap();
+    assert!(
+        summary < profile,
+        "the summary first, the profile form last"
+    );
+
+    // Placed in a ward, tapped once: its area by name, the map, the figure.
+    let ward = scalar(&e, "SELECT code FROM wards ORDER BY code LIMIT 1", "code").await;
+    let area = scalar(
+        &e,
+        &format!(
+            "SELECT p.name || ' — ' || w.full_name AS area FROM wards w \
+             JOIN provinces p ON p.code = w.province_code WHERE w.code = '{ward}'"
+        ),
+        "area",
+    )
+    .await;
+    e.t.db
+        .execute_unprepared(&format!(
+            "UPDATE businesses SET ward_code = '{ward}', \
+             location = ST_SetSRID(ST_MakePoint(105.9, 10.3), 4326)::geography WHERE id = {id}; \
+             INSERT INTO call_clicks (business_id, channel) VALUES ({id}, 'call');"
+        ))
+        .await
+        .unwrap();
+    let html = page().await;
+    assert!(html.contains(&area), "area {area}");
+    assert!(html.contains(r#"href="https://www.google.com/maps?q=10.3,105.9""#));
+    assert!(html.contains(r#"<p class="stat-card__value">1</p>"#));
+    assert!(!html.contains("Chưa có vị trí"));
     e.cleanup().await;
 }

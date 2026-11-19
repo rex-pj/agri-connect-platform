@@ -219,6 +219,6 @@ impl ReviewUseCase {
 }
 
 /// An average as shown: one decimal.
-fn one_decimal(average: f64) -> f64 {
+pub(crate) fn one_decimal(average: f64) -> f64 {
     (average * 10.0).round() / 10.0
 }

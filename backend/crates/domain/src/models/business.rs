@@ -106,6 +106,12 @@ pub struct BusinessAdminDetail {
     pub address: Option<String>,
     pub is_verified: bool,
     pub is_active: bool,
+    pub is_demo: bool,
+    /// The ward its position lies in, with the names of that ward
+    /// ("Xã Bình Phú") and its province; `None` without a position.
+    pub ward_code: Option<String>,
+    pub ward_name: Option<String>,
+    pub province_name: Option<String>,
     pub created_on: DateTime<Utc>,
     /// The managing account, for the link to it.
     pub linked_user_id: Option<i32>,

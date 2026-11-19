@@ -765,6 +765,8 @@ impl AdminUseCase {
                 created_by: actor.user_id,
             })
             .await?;
+        self.publish(actor, Entity::Category, id, Change::Created, None)
+            .await;
         self.load_category_detail(id).await
     }
 
@@ -1149,6 +1151,8 @@ impl AdminUseCase {
             .location_repo
             .create(label, lat, lng, display_order)
             .await?;
+        self.publish(actor, Entity::Location, id, Change::Created, None)
+            .await;
         self.load_location_admin(id).await
     }
 

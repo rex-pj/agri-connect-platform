@@ -592,7 +592,7 @@ async fn a_location_page_acts_from_its_header_and_says_who_hid_it() {
     assert!(html.contains(r##"href="#an-khu-vuc""##));
     assert!(html.contains(r##"href="#xoa-khu-vuc""##));
     assert!(html.contains("https://www.google.com/maps?q=10.4,106.1"));
-    assert!(html.contains("Chưa có thay đổi nào được ghi lại."), "its history");
+    assert!(html.contains("Thêm khu vực"), "its creation in its history");
 
     let res = send(
         &e.router,

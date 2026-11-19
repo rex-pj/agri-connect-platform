@@ -19,7 +19,6 @@ pub enum Entity {
     Role,
     Inquiry,
     Partner,
-    Contract,
     Commodity,
     Sector,
     AlertKind,
@@ -44,7 +43,6 @@ impl Entity {
             Entity::Role => "role",
             Entity::Inquiry => "inquiry",
             Entity::Partner => "partner",
-            Entity::Contract => "contract",
             Entity::Commodity => "commodity",
             Entity::Sector => "sector",
             Entity::AlertKind => "alert_kind",
@@ -92,6 +90,13 @@ pub enum Change {
     },
     /// A business no longer has a managing account (the account stays).
     AccountUnlinked,
+    /// One of a partner's contracts changed: audited on the partner, the
+    /// record whose page shows it (a contract has no page, and a deleted one
+    /// is gone). `about` names it: its area, and the shop for a sponsorship.
+    Contract {
+        change: ContractChange,
+        about: String,
+    },
     /// Its fields were edited (a category, a location preset).
     Updated,
     /// An inquiry moved to `status` (contacted, closed, spam…).
@@ -148,4 +153,27 @@ pub struct DomainEvent {
     pub change: Change,
     /// Free text the admin gave, if any.
     pub reason: Option<String>,
+}
+
+/// What happened to one of a partner's contracts (`Change::Contract`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContractChange {
+    Added,
+    Edited,
+    Deleted,
+    Sponsored,
+    Unsponsored,
+}
+
+impl ContractChange {
+    /// Its audit code, worded by `[text.audit]`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            ContractChange::Added => "add_partner_contract",
+            ContractChange::Edited => "update_partner_contract",
+            ContractChange::Deleted => "delete_partner_contract",
+            ContractChange::Sponsored => "sponsor_partner_shop",
+            ContractChange::Unsponsored => "unsponsor_partner_shop",
+        }
+    }
 }

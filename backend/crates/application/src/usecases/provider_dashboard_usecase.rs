@@ -231,7 +231,10 @@ impl ProviderDashboardUseCase {
             return Err(Error::new(ErrorCode::ProviderNotFound));
         }
 
-        self.get_profile(actor).await
+        let profile = self.get_profile(actor).await?;
+        self.announce(actor, Entity::Provider, profile.id, Change::Updated)
+            .await;
+        Ok(profile)
     }
 
     /// Creates one of the actor's products, with its photo when given (checked
@@ -298,6 +301,8 @@ impl ProviderDashboardUseCase {
             }
         };
 
+        self.announce(actor, Entity::Product, new_id, Change::Created)
+            .await;
         self.product_repo
             .find_provider_product_by_id(new_id)
             .await?
@@ -342,6 +347,8 @@ impl ProviderDashboardUseCase {
             return Err(Error::new(ErrorCode::ProductNotFound));
         }
 
+        self.announce(actor, Entity::Product, input.product_id, Change::Updated)
+            .await;
         self.product_repo
             .find_provider_product_by_id(input.product_id)
             .await?

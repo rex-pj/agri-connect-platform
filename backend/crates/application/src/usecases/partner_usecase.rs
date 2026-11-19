@@ -17,7 +17,7 @@ use std::{
 use chrono::Utc;
 use domain::{
     constants::{PARTNER_KINDS, ROLE_PARTNER},
-    events::{Change, DomainEvent, Entity},
+    events::{Change, ContractChange, DomainEvent, Entity},
     models::{
         admin_unit::Ward,
         demand::DemoScope,
@@ -123,6 +123,31 @@ impl PartnerUseCase {
 
     async fn units(&self) -> Result<AdminUnits> {
         AdminUnits::load(self.admin_unit_repo.as_ref()).await
+    }
+
+    /// How a contract is named in its partner's history: its area, and the
+    /// shop a sponsorship is about.
+    async fn contract_about(&self, area: &ContractArea, shop: Option<&str>) -> Result<String> {
+        Ok(area_about(&self.units().await?, area, shop))
+    }
+
+    /// A change to one of the partner's contracts, audited on the partner.
+    async fn contract_event(
+        &self,
+        actor: &Actor,
+        partner_id: i32,
+        change: ContractChange,
+        about: String,
+        reason: Option<String>,
+    ) {
+        self.publish(
+            actor,
+            Entity::Partner,
+            partner_id,
+            Change::Contract { change, about },
+            reason,
+        )
+        .await;
     }
 
     async fn category_names(&self) -> Result<HashMap<i32, String>> {
@@ -290,11 +315,12 @@ impl PartnerUseCase {
             return Err(Error::new(ErrorCode::PartnerNotFound));
         }
         let contract = self.checked_contract(partner_id, input, None).await?;
+        let about = self.contract_about(&contract.area, None).await?;
         let id = self
             .partner_repo
             .create_contract(&contract, actor.user_id)
             .await?;
-        self.publish(actor, Entity::Contract, id, Change::Created, None)
+        self.contract_event(actor, partner_id, ContractChange::Added, about, None)
             .await;
         Ok(id)
     }
@@ -310,6 +336,7 @@ impl PartnerUseCase {
     ) -> Result<()> {
         actor.require(PERM_PARTNER_MANAGE)?;
         let current = self.contract_of(partner_id, contract_id).await?;
+        let about = self.contract_about(&current.area, None).await?;
         let contract = self
             .checked_contract(partner_id, input, Some(current.area))
             .await?;
@@ -320,7 +347,7 @@ impl PartnerUseCase {
         {
             return Err(Error::new(ErrorCode::ContractNotFound));
         }
-        self.publish(actor, Entity::Contract, contract_id, Change::Updated, None)
+        self.contract_event(actor, partner_id, ContractChange::Edited, about, None)
             .await;
         Ok(())
     }
@@ -389,6 +416,9 @@ impl PartnerUseCase {
         reason: Option<String>,
     ) -> Result<()> {
         actor.require(PERM_PARTNER_MANAGE)?;
+        // Named before it is gone: its line in the partner's history.
+        let current = self.contract_of(partner_id, contract_id).await?;
+        let about = self.contract_about(&current.area, None).await?;
         if !self
             .partner_repo
             .delete_contract(partner_id, contract_id)
@@ -396,14 +426,8 @@ impl PartnerUseCase {
         {
             return Err(Error::new(ErrorCode::ContractNotFound));
         }
-        self.publish(
-            actor,
-            Entity::Contract,
-            contract_id,
-            Change::Deleted,
-            reason,
-        )
-        .await;
+        self.contract_event(actor, partner_id, ContractChange::Deleted, about, reason)
+            .await;
         Ok(())
     }
 
@@ -468,16 +492,16 @@ impl PartnerUseCase {
         let scope = self.sponsor_scope(partner_id).await?;
         let (areas, units) =
             tokio::try_join!(self.demand_repo.business_areas(scope), self.units())?;
-        let inside = areas
-            .iter()
-            .any(|a| a.business_id == business_id && in_area(&contract.area, &a.ward_code, &units));
-        if !inside {
+        let Some(shop) = areas.iter().find(|a| {
+            a.business_id == business_id && in_area(&contract.area, &a.ward_code, &units)
+        }) else {
             return Err(Error::field("business_id", ErrorCode::SponsoredOutsideArea));
-        }
+        };
+        let about = area_about(&units, &contract.area, Some(&shop.name));
         self.partner_repo
             .add_sponsored(contract_id, business_id)
             .await?;
-        self.publish(actor, Entity::Contract, contract_id, Change::Updated, None)
+        self.contract_event(actor, partner_id, ContractChange::Sponsored, about, None)
             .await;
         Ok(())
     }
@@ -493,17 +517,23 @@ impl PartnerUseCase {
         reason: Option<String>,
     ) -> Result<()> {
         actor.require(PERM_PARTNER_MANAGE)?;
-        self.contract_of(partner_id, contract_id).await?;
+        let contract = self.contract_of(partner_id, contract_id).await?;
+        let shop = contract
+            .sponsored
+            .iter()
+            .find(|s| s.business_id == business_id)
+            .map(|s| s.name.clone());
+        let about = self.contract_about(&contract.area, shop.as_deref()).await?;
         if self
             .partner_repo
             .remove_sponsored(contract_id, business_id)
             .await?
         {
-            self.publish(
+            self.contract_event(
                 actor,
-                Entity::Contract,
-                contract_id,
-                Change::Updated,
+                partner_id,
+                ContractChange::Unsponsored,
+                about,
                 reason,
             )
             .await;
@@ -775,6 +805,15 @@ fn scope_of(partner: &Partner) -> DemoScope {
         DemoScope::Demo
     } else {
         DemoScope::Real
+    }
+}
+
+/// A contract's area by name, with the shop of a sponsorship after it.
+fn area_about(units: &AdminUnits, area: &ContractArea, shop: Option<&str>) -> String {
+    let label = units.label(&AreaKey::of_contract(area)).unwrap_or_default();
+    match shop {
+        Some(shop) => format!("{label} — {shop}"),
+        None => label,
     }
 }
 

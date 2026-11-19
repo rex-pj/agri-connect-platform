@@ -84,6 +84,7 @@ pub fn audit_action(event: &DomainEvent) -> String {
         (Change::PermissionsChanged { .. }, _) => format!("change_{entity}_permissions"),
         (Change::AccountAssigned { .. }, _) => format!("assign_{entity}_account"),
         (Change::AccountUnlinked, _) => format!("unlink_{entity}_account"),
+        (Change::Contract { change, .. }, _) => change.as_str().into(),
         (Change::Updated, _) => format!("update_{entity}"),
         (Change::StatusChanged { .. }, _) => format!("set_{entity}_status"),
         (Change::Created, _) => format!("create_{entity}"),
@@ -110,6 +111,8 @@ impl EventSubscriber for AuditLogSubscriber {
             (Change::AccountAssigned { username }, _) => Some(username.clone()),
             (Change::StatusChanged { status }, Some(r)) => Some(format!("{status}: {r}")),
             (Change::StatusChanged { status }, None) => Some(status.clone()),
+            (Change::Contract { about, .. }, Some(r)) => Some(format!("{about}: {r}")),
+            (Change::Contract { about, .. }, None) => Some(about.clone()),
             // "key: before → after; …: reason".
             (Change::SettingsChanged { changes }, r) => {
                 let diff = changes.join("; ");

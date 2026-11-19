@@ -215,6 +215,12 @@ async fn a_partner_pays_for_an_area_reads_its_report_and_sponsors_a_shop() {
         detail.contains(&format!(r##"href="#bo-tai-tro-{contract}-{sponsored}""##)),
         "stopping a sponsorship asks first"
     );
+    // Its contracts' changes are its own history, each named by its area.
+    let history = format!("{page}?tab=history");
+    let html = body_text(send(&e.router, get_page(&history, Some(&admin))).await).await;
+    assert!(html.contains("Thêm hợp đồng"));
+    assert!(html.contains("Sửa hợp đồng"));
+    assert!(html.contains("Tài trợ nhà cung cấp"));
 
     // The partner account reads its own report, nothing else.
     let res = send(
@@ -300,11 +306,12 @@ async fn a_partner_pays_for_an_area_reads_its_report_and_sponsors_a_shop() {
             &e,
             &format!(
                 "SELECT string_agg(action, ',' ORDER BY id) AS v FROM audit_logs \
-                 WHERE entity_type IN ('partner', 'contract') AND entity_id IN ({id}, {contract})"
+                 WHERE entity_type = 'partner' AND entity_id = {id}"
             ),
         )
         .await,
-        "create_partner,create_contract,update_contract,update_contract,assign_partner_account,update_contract,hide_partner"
+        // A contract's changes are audited on its partner, each by what it was.
+        "create_partner,add_partner_contract,sponsor_partner_shop,update_partner_contract,assign_partner_account,unsponsor_partner_shop,hide_partner"
     );
     e.cleanup().await;
 }

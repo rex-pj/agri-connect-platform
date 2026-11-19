@@ -22,6 +22,7 @@ use application::{
         PERM_REVIEW_MODERATE, PERM_SERVICE_MANAGE,
     },
     outputs::{AdminPagedResponse, AdminProviderDetailDto, AdminProviderDto, ProviderActivityDto},
+    usecases::admin_usecase::HistoryOf,
 };
 use axum::{extract::State, http::StatusCode, response::Response};
 use domain::{Error, ErrorCode};
@@ -36,7 +37,8 @@ use crate::{
     pages::{
         admin::{
             dashboard::{card, StatCard},
-            is_refusal, render_admin, url, user_href, ListPosition, Outcome, SearchBox,
+            history_rows, is_refusal, render_admin, url, user_href, HistoryRow, ListPosition,
+            Outcome, SearchBox,
         },
         canonical_url,
         forms::{reason, FormErrors},
@@ -238,6 +240,8 @@ fn activity_cards(
 #[derive(Serialize)]
 pub struct ProviderPage {
     pub provider: AdminProviderDetailDto,
+    /// Its latest changes: who turned it off, verified or edited it, and why.
+    pub history: Vec<HistoryRow>,
     /// Its recent activity, as the dashboard's cards.
     pub cards: Vec<StatCard>,
     /// Its position on a map, to check where it was placed.
@@ -315,6 +319,7 @@ async fn provider_page(
     let inquiries_href = list_of(PERM_INQUIRY_READ, "admin_inquiries")?;
     let reviews_href = list_of(PERM_REVIEW_MODERATE, "admin_reviews")?;
     let body = ProviderPage {
+        history: history_rows(state, actor, HistoryOf::Provider(id)).await?,
         cards: activity_cards(
             state,
             &provider.activity,

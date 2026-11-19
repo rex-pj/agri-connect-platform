@@ -1380,3 +1380,25 @@ pub struct ReviewCountsDto {
     /// Hidden until an admin shows them.
     pub waiting: i64,
 }
+
+/// One change to a record on its admin page: what (`audit_action`'s code,
+/// worded by the page), why, by whom (`None` once that account is gone),
+/// when.
+#[derive(Serialize)]
+pub struct AuditEntryDto {
+    pub action: String,
+    pub reason: Option<String>,
+    pub actor: Option<String>,
+    pub created_on: DateTime<Utc>,
+}
+
+impl From<domain::models::audit::AuditEntry> for AuditEntryDto {
+    fn from(e: domain::models::audit::AuditEntry) -> Self {
+        Self {
+            action: e.action,
+            reason: e.reason,
+            actor: e.actor,
+            created_on: e.created_on,
+        }
+    }
+}

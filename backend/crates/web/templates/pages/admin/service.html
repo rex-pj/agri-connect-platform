@@ -5,6 +5,7 @@
 {% import "molecules/admin_header.html" as header %}
 {% import "molecules/offstage_note.html" as offstage %}
 {% import "molecules/photo_picker.html" as photo %}
+{% import "molecules/history_list.html" as history %}
 {% import "organisms/service_fields.html" as fields %}
 {% import "organisms/confirm_sheet.html" as confirm %}
 {#- One service: edit, hide (confirmation with a reason) / show, delete
@@ -47,6 +48,7 @@
     <h2 class="admin-section__title" id="status-title">{{ t(key="admin.visibility") }}</h2>
     <p class="admin-status">{{ status::visibility(on=s.is_active) }}<span><a href="{{ b.provider_href }}">{{ s.business_name }}</a> · {% if s.is_public %}{{ t(key="admin.public_on") }}{% elif s.is_active %}{{ t(key="admin.public_held") }}{% else %}{{ t(key="admin.public_off") }}{% endif %}</span></p>
     {{ offstage::offstage_note(l=s, provider_href=b.provider_href, category_href=b.category_href) }}
+    {% if not s.is_active %}{% set off = b.history | filter(attribute="action", value="hide_service") | first %}{% if off %}{{ history::last_change(row=off) }}{% endif %}{% endif %}
     <div class="admin-actions">
       {% if s.is_active %}
       <a class="btn btn-outline-warning" href="#an-dich-vu" x-on:click.prevent="show">{{ atoms::icon(name="fa-eye-slash") }} {{ t(key="admin.hide_service") }}</a>
@@ -61,6 +63,8 @@
     {{ confirm::confirm_sheet(id="an-dich-vu", title=t(key="admin.hide_service_title", name=s.name), icon="fa-eye-slash", action=b.status_action, button=t(key="admin.confirm_hide"), reason_max=limits.audit_reason_max, effect="hide", what=t(key="admin.service_what"), hidden_name="is_active", hidden_value="false") }}
     {% endif %}
   </section>
+
+  {{ history::history_list(rows=b.history) }}
 
   <section class="admin-section" aria-labelledby="delete-title" x-data="dialog" x-on:keydown.escape.window="hide">
     <h2 class="admin-section__title" id="delete-title">{{ t(key="admin.delete") }}</h2>

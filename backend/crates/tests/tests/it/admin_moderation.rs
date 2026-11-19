@@ -679,7 +679,12 @@ async fn a_supply_is_listed_for_a_provider_and_its_photo_set_and_removed() {
         .await,
         "remove_product_image: Ảnh không phải vật tư"
     );
-    assert!(!page(&e, &own, &admin).await.contains(r#"id="go-anh""#));
+    let html = page(&e, &own, &admin).await;
+    assert!(!html.contains(r#"id="go-anh""#));
+    assert!(
+        html.contains("Ảnh không phải vật tư"),
+        "the reason in its history"
+    );
     e.cleanup().await;
 }
 

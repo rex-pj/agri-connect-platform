@@ -462,3 +462,44 @@ async fn a_provider_page_opens_with_its_summary_area_and_activity() {
     assert!(!html.contains("Chưa có vị trí"));
     e.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_provider_page_says_who_changed_it_and_why() {
+    let e = env_with_origin().await;
+    let admin = install_admin(&e).await;
+    let id = unclaimed_business(&e).await;
+    let detail = format!("/admin/providers/{id}");
+    let page = || async { body_text(send(&e.router, get_page(&detail, Some(&admin))).await).await };
+
+    let html = page().await;
+    assert!(html.contains("Chưa có thay đổi nào được ghi lại."));
+    assert!(
+        html.contains("Trước khi cấp, kiểm tra:"),
+        "the checklist while unverified"
+    );
+
+    let post = |path: String, pairs: &'static [(&'static str, &'static str)]| {
+        send(&e.router, post_form(&path, pairs, Some(&admin)))
+    };
+    post(
+        format!("{detail}/status"),
+        &[
+            ("is_active", "false"),
+            ("reason", "Số điện thoại không liên lạc được"),
+        ],
+    )
+    .await;
+    let html = page().await;
+    assert!(html.contains("Tắt nhà cung cấp"));
+    assert!(html.contains("Số điện thoại không liên lạc được"));
+
+    post(format!("{detail}/verification"), &[("is_verified", "true")]).await;
+    let html = page().await;
+    assert!(html.contains("Cấp huy hiệu xác minh"));
+    assert!(
+        !html.contains("Trước khi cấp, kiểm tra:"),
+        "no checklist once verified"
+    );
+    e.cleanup().await;
+}

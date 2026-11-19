@@ -1,0 +1,27 @@
+{#- A record's latest changes on its admin page (`rows`:
+    web::pages::admin::HistoryRow, newest first): what was done, by whom,
+    when, and the reason given. `last_change` is one of them in a line,
+    under the state it explains ("hidden by … on …: reason"). -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro last_change(row) -%}
+<p class="small text-muted mb-0">{{ atoms::icon(name="fa-clock-rotate-left") }} {{ row.label }}{% if row.actor %} · {{ row.actor }}{% endif %} · <time datetime="{{ row.created_on | utc_iso }}">{{ row.created_on | vn_datetime }}</time>{% if row.reason %}: <span class="text-body">{{ row.reason }}</span>{% endif %}</p>
+{%- endmacro last_change %}
+
+{% macro history_list(rows) -%}
+<section class="admin-section" aria-labelledby="history-title">
+  <h2 class="admin-section__title" id="history-title">{{ t(key="admin.history") }}</h2>
+  {% if rows %}
+  <ol class="list-unstyled mb-0">
+    {% for r in rows %}
+    <li class="py-2{% if not loop.last %} border-bottom{% endif %}">
+      <span class="fw-semibold">{{ r.label }}</span>
+      <span class="small text-muted">{% if r.actor %}· {{ r.actor }} {% endif %}· <time datetime="{{ r.created_on | utc_iso }}">{{ r.created_on | vn_datetime }}</time></span>
+      {% if r.reason %}<span class="d-block small">{{ r.reason }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="small text-muted mb-0">{{ t(key="admin.history_empty") }}</p>
+  {% endif %}
+</section>
+{%- endmacro history_list %}

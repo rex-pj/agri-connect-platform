@@ -529,7 +529,7 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
     // Subscribers run in this order for every event. Webhooks would be added
     // here.
     let events: Arc<dyn EventBus> = Arc::new(InProcessEventBus::new(vec![
-        Arc::new(AuditLogSubscriber::new(audit_log_repo)),
+        Arc::new(AuditLogSubscriber::new(audit_log_repo.clone())),
         Arc::new(FileCleanupSubscriber::new(
             product_repo.clone(),
             service_repo.clone(),
@@ -604,6 +604,7 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
             password_hasher: password_hasher.clone(),
             refresh_repo: refresh_repo.clone(),
             call_repo: call_repo.clone(),
+            audit_repo: audit_log_repo.clone(),
             settings: settings.clone(),
         }),
         auth: AuthUseCase::new(AuthDeps {

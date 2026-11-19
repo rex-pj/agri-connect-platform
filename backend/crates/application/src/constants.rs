@@ -91,6 +91,9 @@ pub const CALL_REPEAT_SECS: u64 = 3_600;
 pub const REVIEW_SUSPECT_MINUTES_DEFAULT: i64 = 60;
 /// The window the call counts cover (admin dashboard, provider dashboard).
 pub const CALL_STATS_DAYS: i64 = 30;
+/// How many of a record's latest changes its admin page lists (who, what,
+/// why).
+pub const HISTORY_SHOWN: u64 = 10;
 /// The window of the admin dashboard's "new providers" figure.
 pub const NEW_BUSINESS_DAYS: i64 = 7;
 

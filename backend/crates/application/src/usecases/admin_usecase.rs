@@ -17,6 +17,7 @@ use domain::{
     },
     repositories::{
         admin_unit_repository_trait::AdminUnitRepositoryTrait,
+        audit_log_repository_trait::AuditLogRepositoryTrait,
         business_repository_trait::BusinessRepositoryTrait,
         call_repository_trait::CallRepositoryTrait,
         category_repository_trait::CategoryRepositoryTrait,
@@ -44,7 +45,7 @@ use crate::{
     },
     constants::{
         ADMIN_PAGE_SIZE, CALL_STATS_DAYS, CATEGORY_COLOR_MAX, CATEGORY_DESCRIPTION_MAX,
-        CATEGORY_ICON_MAX, CATEGORY_NAME_MAX, CATEGORY_SLUG_MAX, LOCATION_LABEL_MAX,
+        CATEGORY_ICON_MAX, CATEGORY_NAME_MAX, CATEGORY_SLUG_MAX, HISTORY_SHOWN, LOCATION_LABEL_MAX,
         SLUG_CANDIDATES_PER_QUERY,
     },
     inputs::{
@@ -54,8 +55,8 @@ use crate::{
         AdminCategoryDto, AdminInquiryDto, AdminLocationDto, AdminPagedResponse, AdminProductDto,
         AdminProductItemDto, AdminProviderDetailDto, AdminProviderDto, AdminReviewDto,
         AdminServiceDto, AdminServiceItemDto, AdminUserDetailDto, AdminUserDto, AreaGroupDto,
-        AssignUserDto, InquiryCountsDto, ProviderActivityDto, ProviderStatusDto, ReviewCountsDto,
-        RoleDto, SlugSuggestionDto, VerificationDto,
+        AssignUserDto, AuditEntryDto, InquiryCountsDto, ProviderActivityDto, ProviderStatusDto,
+        ReviewCountsDto, RoleDto, SlugSuggestionDto, VerificationDto,
     },
     pagination::{admin_total_pages, paginate_admin, total_or_count},
     ports::{EventBus, PasswordHasher},
@@ -75,6 +76,34 @@ use crate::{
 };
 
 // ── Use case ──────────────────────────────────────────────────────────────────
+
+/// A record whose changes an admin page lists (`AdminUseCase::history`).
+#[derive(Debug, Clone, Copy)]
+pub enum HistoryOf {
+    Provider(i32),
+    Service(i32),
+    Product(i32),
+}
+
+impl HistoryOf {
+    /// What its own admin page needs: the same to read its history.
+    fn permission(self) -> &'static str {
+        match self {
+            Self::Provider(_) => PERM_PROVIDER_READ,
+            Self::Service(_) => PERM_SERVICE_MANAGE,
+            Self::Product(_) => PERM_LISTING_MODERATE,
+        }
+    }
+
+    /// The record as the audit log names it.
+    fn record(self) -> (Entity, i32) {
+        match self {
+            Self::Provider(id) => (Entity::Provider, id),
+            Self::Service(id) => (Entity::Service, id),
+            Self::Product(id) => (Entity::Product, id),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct AdminUseCase {
@@ -98,6 +127,8 @@ pub struct AdminUseCase {
     refresh_repo: Arc<dyn RefreshTokenRepositoryTrait + Send + Sync>,
     /// A provider's call and Zalo taps, for its page.
     call_repo: Arc<dyn CallRepositoryTrait + Send + Sync>,
+    /// A record's latest changes, for its page.
+    audit_repo: Arc<dyn AuditLogRepositoryTrait + Send + Sync>,
     /// How soon after its request a review is flagged.
     settings: SettingsReader,
 }
@@ -120,6 +151,7 @@ pub struct AdminDeps {
     pub password_hasher: Arc<dyn PasswordHasher>,
     pub refresh_repo: Arc<dyn RefreshTokenRepositoryTrait + Send + Sync>,
     pub call_repo: Arc<dyn CallRepositoryTrait + Send + Sync>,
+    pub audit_repo: Arc<dyn AuditLogRepositoryTrait + Send + Sync>,
     pub settings: SettingsReader,
 }
 
@@ -141,6 +173,7 @@ impl AdminUseCase {
             password_hasher: d.password_hasher,
             refresh_repo: d.refresh_repo,
             call_repo: d.call_repo,
+            audit_repo: d.audit_repo,
             settings: d.settings,
         }
     }
@@ -164,6 +197,21 @@ impl AdminUseCase {
                 reason: audit_reason(reason),
             })
             .await;
+    }
+
+    /// The latest `HISTORY_SHOWN` changes to one record, newest first: who
+    /// hid it, verified it, edited it, and why. Read with the permission its
+    /// own admin page needs.
+    pub async fn history(&self, actor: &Actor, of: HistoryOf) -> Result<Vec<AuditEntryDto>> {
+        actor.require(of.permission())?;
+        let (entity, id) = of.record();
+        Ok(self
+            .audit_repo
+            .recent(entity.as_str(), id, HISTORY_SHOWN)
+            .await?
+            .into_iter()
+            .map(AuditEntryDto::from)
+            .collect())
     }
 
     // ── Providers ─────────────────────────────────────────────────────────────

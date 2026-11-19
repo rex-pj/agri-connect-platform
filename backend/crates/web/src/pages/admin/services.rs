@@ -11,6 +11,7 @@
 use application::{
     authz::Actor,
     outputs::{AdminPagedResponse, AdminServiceDto, CategoryDto},
+    usecases::admin_usecase::HistoryOf,
 };
 use axum::{extract::State, http::StatusCode, response::Response};
 use domain::{Error, ErrorCode};
@@ -26,8 +27,8 @@ use crate::{
     pages::admin::sector_href,
     pages::{
         admin::{
-            is_refusal, render_admin, url, Asked, ListPosition, ListReturn, Outcome,
-            ProviderFilter, ReasonForm, RowConfirm, SearchBox, BACK_TO_LIST,
+            history_rows, is_refusal, render_admin, url, Asked, HistoryRow, ListPosition,
+            ListReturn, Outcome, ProviderFilter, ReasonForm, RowConfirm, SearchBox, BACK_TO_LIST,
         },
         canonical_url,
         dashboard::{max_upload_mb, prepare},
@@ -287,6 +288,8 @@ pub async fn create(
 #[derive(Serialize)]
 pub struct ServicePage {
     pub service: AdminServiceDto,
+    /// Its latest changes: who hid, edited or re-photographed it, and why.
+    pub history: Vec<HistoryRow>,
     pub categories: Vec<CategoryDto>,
     pub form: ServiceForm,
     pub errors: FormErrors,
@@ -319,6 +322,7 @@ async fn service_page(
     let business = service.business_id.to_string();
     let path = url("admin_service", &[("id", &id_text)])?;
     let body = ServicePage {
+        history: history_rows(state, actor, HistoryOf::Service(id)).await?,
         form: outcome.form.unwrap_or_else(|| {
             ServiceForm::stored(
                 service.category_id,

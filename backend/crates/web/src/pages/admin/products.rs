@@ -12,6 +12,7 @@
 use application::{
     authz::Actor,
     outputs::{AdminPagedResponse, AdminProductDto, CategoryDto, CommodityDto},
+    usecases::admin_usecase::HistoryOf,
 };
 use axum::{extract::State, http::StatusCode, response::Response};
 use domain::{models::product::AdminProductFilter, Error, ErrorCode};
@@ -27,8 +28,8 @@ use crate::{
     pages::admin::sector_href,
     pages::{
         admin::{
-            is_refusal, render_admin, url, ListPosition, ListReturn, Outcome, ProviderFilter,
-            ReasonForm, RowConfirm, SearchBox, BACK_TO_LIST,
+            history_rows, is_refusal, render_admin, url, HistoryRow, ListPosition, ListReturn,
+            Outcome, ProviderFilter, ReasonForm, RowConfirm, SearchBox, BACK_TO_LIST,
         },
         canonical_url,
         dashboard::{max_upload_mb, prepare},
@@ -345,6 +346,8 @@ pub async fn create(
 #[derive(Serialize)]
 pub struct ProductPage {
     pub product: AdminProductDto,
+    /// Its latest changes: who hid, edited or re-photographed it, and why.
+    pub history: Vec<HistoryRow>,
     pub categories: Vec<CategoryDto>,
     pub commodities: Vec<CommodityDto>,
     pub form: ProductForm,
@@ -385,6 +388,7 @@ async fn product_page(
     let id_text = id.to_string();
     let path = url("admin_product", &[("id", &id_text)])?;
     let body = ProductPage {
+        history: history_rows(state, actor, HistoryOf::Product(id)).await?,
         form: outcome.form.unwrap_or_else(|| {
             ProductForm::stored(
                 product.category_id,

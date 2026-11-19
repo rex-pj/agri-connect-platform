@@ -33,6 +33,7 @@ use application::{
         PERM_ROLE_READ, PERM_SERVICE_MANAGE, PERM_SETTING_MANAGE, PERM_SYSTEM_DEMO_MANAGE,
         PERM_USER_READ,
     },
+    usecases::admin_usecase::HistoryOf,
 };
 use axum::{http::StatusCode, response::Response};
 use domain::{
@@ -515,6 +516,41 @@ impl<F> Outcome<F> {
             status: err.kind().status(),
         }
     }
+}
+
+/// One change in a record's history on its admin page: `action` is the
+/// audit code (templates pick the latest of a kind by it), `label` its words
+/// (`audit.<action>`, the code itself for one with no words yet).
+#[derive(Serialize)]
+pub struct HistoryRow {
+    pub action: String,
+    pub label: String,
+    pub reason: Option<String>,
+    pub actor: Option<String>,
+    pub created_on: chrono::DateTime<chrono::Utc>,
+}
+
+/// The latest changes to `of`, worded in the request's language.
+pub async fn history_rows(
+    state: &AppState,
+    actor: &Actor,
+    of: HistoryOf,
+) -> Result<Vec<HistoryRow>, Error> {
+    let locale = state.locale();
+    Ok(state
+        .usecases
+        .admin
+        .history(actor, of)
+        .await?
+        .into_iter()
+        .map(|e| HistoryRow {
+            label: locale.label(&format!("audit.{}", e.action), &e.action),
+            action: e.action,
+            reason: e.reason,
+            actor: e.actor,
+            created_on: e.created_on,
+        })
+        .collect())
 }
 
 /// A form that only carries the optional reason of an audited change (a

@@ -1,5 +1,6 @@
 pub mod admin_unit;
 pub mod alert;
+pub mod audit;
 pub mod business;
 pub mod call;
 pub mod catalogue;

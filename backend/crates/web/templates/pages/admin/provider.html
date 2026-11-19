@@ -6,6 +6,7 @@
 {% import "molecules/form_field.html" as field %}
 {% import "molecules/sheet_header.html" as sheet_head %}
 {% import "molecules/stat_card.html" as stat %}
+{% import "molecules/history_list.html" as history %}
 {% import "organisms/confirm_sheet.html" as confirm %}
 {% import "organisms/business_fields.html" as business %}
 {#- One provider, what decides about it first: a summary (its states as
@@ -73,6 +74,7 @@
       <div x-data="dialog" x-on:keydown.escape.window="hide">
         <h3 class="h6 fw-bold mb-2">{{ t(key="admin.activity") }}</h3>
         <p class="admin-status">{{ status::account(on=p.is_active) }}<span>{% if p.is_active %}{{ t(key="admin.provider_on") }}{% else %}{{ t(key="admin.provider_off") }}{% endif %}</span></p>
+        {% if not p.is_active %}{% set off = b.history | filter(attribute="action", value="deactivate_provider") | first %}{% if off %}{{ history::last_change(row=off) }}{% endif %}{% endif %}
         {% if b.can_change_status %}
         <div class="admin-actions">
           {% if p.is_active %}
@@ -93,6 +95,20 @@
       <div class="pt-3 border-top" x-data="dialog" data-open="{% if b.confirm_open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
         <h3 class="h6 fw-bold mb-2">{{ t(key="admin.verify_badge") }}</h3>
         <p class="admin-status">{{ status::verified(on=p.is_verified) }}<span>{% if p.is_verified %}{{ t(key="admin.verified_on") }}{% else %}{{ t(key="admin.verified_off") }}{% endif %}</span></p>
+        {% if p.is_verified %}
+        {% set granted = b.history | filter(attribute="action", value="verify_provider") | first %}{% if granted %}{{ history::last_change(row=granted) }}{% endif %}
+        {% elif b.can_verify %}
+        {#- What to check before granting the badge: the first two read from
+            the record, the others only the admin can tell. -#}
+        {% set shown_services = p.services | filter(attribute="is_active", value=true) | length %}
+        <p class="small fw-semibold mb-1">{{ t(key="admin.verify_checks") }}</p>
+        <ul class="list-unstyled small mb-2 d-grid gap-1">
+          <li>{% if b.map_href %}{{ atoms::icon(name="fa-circle-check", class="text-success") }}{% else %}{{ atoms::icon(name="fa-circle", class="text-body-tertiary") }}{% endif %} {{ t(key="admin.verify_check_position") }}</li>
+          <li>{% if shown_services > 0 %}{{ atoms::icon(name="fa-circle-check", class="text-success") }}{% else %}{{ atoms::icon(name="fa-circle", class="text-body-tertiary") }}{% endif %} {{ t(key="admin.verify_check_service") }}</li>
+          <li>{{ atoms::icon(name="fa-phone", class="text-body-tertiary") }} {{ t(key="admin.verify_check_phone") }}</li>
+          <li>{{ atoms::icon(name="fa-camera", class="text-body-tertiary") }} {{ t(key="admin.verify_check_photo") }}</li>
+        </ul>
+        {% endif %}
         {% if b.can_verify %}
         <div class="admin-actions">
           {% if p.is_verified %}
@@ -157,6 +173,8 @@
     </ul>
     {% else %}<p class="small text-muted">{{ t(key="admin.provider_no_products") }}</p>{% endif %}
   </section>
+
+  {{ history::history_list(rows=b.history) }}
 
   {% if b.can_edit %}
   <section class="admin-section" id="ho-so" aria-labelledby="ho-so-title">

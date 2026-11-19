@@ -126,6 +126,7 @@ pub enum QueryAs {
     Turn,
     Unmet,
     UpdatedByName,
+    Username,
     VendorName,
     VendorPhone,
     VendorVerified,

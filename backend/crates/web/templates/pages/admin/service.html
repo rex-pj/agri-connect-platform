@@ -6,6 +6,7 @@
 {% import "molecules/offstage_note.html" as offstage %}
 {% import "molecules/photo_picker.html" as photo %}
 {% import "molecules/history_list.html" as history %}
+{% import "molecules/listing_facts.html" as facts %}
 {% import "organisms/service_fields.html" as fields %}
 {% import "organisms/confirm_sheet.html" as confirm %}
 {#- One service: edit, hide (confirmation with a reason) / show, delete
@@ -16,7 +17,7 @@
 {% block content %}
 {% set b = page.body %}
 {% set s = b.service %}
-{{ header::admin_header(title=s.name, icon="fa-screwdriver-wrench", sub=s.business_name, back_href=b.provider_services_href, back_label=t(key="admin.provider_services"), action_href=b.public_href, action_icon="fa-arrow-up-right-from-square", action_label=t(key="admin.public_page"), action_class="btn-outline-secondary") }}
+{{ header::admin_header(title=s.name, icon="fa-screwdriver-wrench", sub=s.business_name, back_href=b.back_href, back_label=b.back_label, action_href=b.public_href, action_icon="fa-arrow-up-right-from-square", action_label=t(key="admin.public_page"), action_class="btn-outline-secondary") }}
 <div class="admin-body">
   {% if b.flash == "service_created" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="dashboard.service_created")) }}{% endif %}
   {% if b.flash == "image_removed" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.photo_removed")) }}{% endif %}
@@ -27,10 +28,11 @@
 
   <section class="admin-section" aria-labelledby="edit-title">
     <h2 class="admin-section__title" id="edit-title">{{ t(key="admin.info") }}</h2>
-    {% if s.added_by_owner %}<p class="mb-0"><span class="badge text-bg-light border">{{ t(key="admin.added_by_owner") }}</span></p>{% endif %}
+    {{ facts::listing_meta(l=s, sector_label=b.sector_label) }}
     <form class="form-stack" method="post" action="{{ b.update_action }}" enctype="multipart/form-data" novalidate>
       {{ fields::service_fields(form=b.form, errors=b.errors, categories=b.categories, limits=b.limits, prefix="edit") }}
       {{ photo::photo_picker(id="edit-image", label=t(key="admin.photo"), max_mb=b.max_upload_mb, hint=t(key="admin.photo_hint"), current=s.image_file_id | default(value=""), error=b.errors.fields.image | default(value="")) }}
+      {{ facts::owner_note(l=s) }}
       <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button></div>
     </form>
     {% if s.image_file_id %}
@@ -48,6 +50,7 @@
     <h2 class="admin-section__title" id="status-title">{{ t(key="admin.visibility") }}</h2>
     <p class="admin-status">{{ status::visibility(on=s.is_active) }}<span><a href="{{ b.provider_href }}">{{ s.business_name }}</a> · {% if s.is_public %}{{ t(key="admin.public_on") }}{% elif s.is_active %}{{ t(key="admin.public_held") }}{% else %}{{ t(key="admin.public_off") }}{% endif %}</span></p>
     {{ offstage::offstage_note(l=s, provider_href=b.provider_href, category_href=b.category_href) }}
+    {{ facts::listing_activity(a=b.activity) }}
     {% if not s.is_active %}{% set off = b.history | filter(attribute="action", value="hide_service") | first %}{% if off %}{{ history::last_change(row=off) }}{% endif %}{% endif %}
     <div class="admin-actions">
       {% if s.is_active %}

@@ -2,7 +2,10 @@ use async_trait::async_trait;
 
 use crate::{
     error::Error,
-    models::inquiry::{InquiryAdmin, InquiryForNotice, InquiryForOwner, NewInquiry},
+    models::{
+        business::ListingRef,
+        inquiry::{InquiryAdmin, InquiryForNotice, InquiryForOwner, NewInquiry},
+    },
 };
 
 #[async_trait]
@@ -18,6 +21,9 @@ pub trait InquiryRepositoryTrait {
         provider_id: Option<i32>,
         status: Option<&str>,
     ) -> Result<i64, Error>;
+
+    /// Contact requests about one listing, spam left out.
+    async fn count_for_listing(&self, listing: ListingRef) -> Result<i64, Error>;
 
     /// The newest inquiry from `phone` to the business that its provider
     /// answered (`INQUIRY_STATUSES_REVIEWABLE`): what lets that farmer review

@@ -10,11 +10,12 @@
 
 use application::{
     authz::Actor,
+    outputs::ListingActivityDto,
     outputs::{AdminPagedResponse, AdminServiceDto, CategoryDto},
     usecases::admin_usecase::HistoryOf,
 };
 use axum::{extract::State, http::StatusCode, response::Response};
-use domain::{Error, ErrorCode};
+use domain::{models::business::ListingRef, Error, ErrorCode};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -38,6 +39,10 @@ use crate::{
         service_form::{service_categories, Limits, ServiceForm, LIMITS},
     },
 };
+
+/// The id of the create sheet on a provider's services list (`services.html`):
+/// the provider's page links straight to it.
+pub const CREATE_SHEET: &str = "them-dich-vu";
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
@@ -138,7 +143,7 @@ async fn list_page(
             });
         }
         rows.push(ServiceRow {
-            href: url("admin_service", &[("id", &id)])?,
+            href: position.record_href("admin_service", service.id)?,
             sector_label: sector_label(state, &sectors, service.sector.as_deref()),
             sector_href: sector_href(&sectors, service.sector.as_deref())?,
             category_href: url(
@@ -262,7 +267,9 @@ pub async fn create(
         )
         .await;
     match result {
-        Ok(created) => redirect_to(created.id, Flash::ServiceCreated),
+        Ok(created) => {
+            ListPosition::default().to_record("admin_service", created.id, Flash::ServiceCreated)
+        }
         Err(err) if is_refusal(&err) => {
             let errors = FormErrors::from_error(&state, &err);
             let position = ListPosition {
@@ -290,6 +297,10 @@ pub struct ServicePage {
     pub service: AdminServiceDto,
     /// Its latest changes: who hid, edited or re-photographed it, and why.
     pub history: Vec<HistoryRow>,
+    /// Its taps and contact requests lately.
+    pub activity: ListingActivityDto,
+    /// Its type's sector's name, "every sector" for none.
+    pub sector_label: String,
     pub categories: Vec<CategoryDto>,
     pub form: ServiceForm,
     pub errors: FormErrors,
@@ -306,23 +317,52 @@ pub struct ServicePage {
     pub public_href: Option<String>,
     /// Its service type's admin page, where a hidden type is shown again.
     pub category_href: String,
-    /// The provider's services, where a deletion lands.
-    pub provider_services_href: String,
+    /// The way back: the list page it was opened from, else the provider's
+    /// services (where a deletion lands too).
+    pub back_href: String,
+    pub back_label: String,
     pub flash: Option<Flash>,
+}
+
+/// The list a service's page leads back to: the one it was opened from, else
+/// its provider's services.
+fn back_list(back: &ListPosition, business_id: i32) -> ListPosition {
+    if back.is_default() {
+        ListPosition {
+            provider_id: business_id.to_string(),
+            ..ListPosition::default()
+        }
+    } else {
+        back.clone()
+    }
 }
 
 async fn service_page(
     state: &AppState,
     actor: &Actor,
     id: i32,
+    back: &ListPosition,
     outcome: Outcome<ServiceForm>,
 ) -> Result<Response, Error> {
-    let service = state.usecases.admin.get_service_admin(actor, id).await?;
+    let admin = &state.usecases.admin;
+    let service = admin.get_service_admin(actor, id).await?;
     let id_text = id.to_string();
     let business = service.business_id.to_string();
     let path = url("admin_service", &[("id", &id_text)])?;
+    let sectors = state.usecases.sector.named().await?;
+    let listing = ListingRef::Service {
+        business_id: service.business_id,
+        id,
+    };
+    let back_label = if back.is_default() {
+        "admin.provider_services"
+    } else {
+        "admin_menu.services"
+    };
     let body = ServicePage {
         history: history_rows(state, actor, HistoryOf::Service(id)).await?,
+        activity: admin.listing_activity(actor, listing).await?,
+        sector_label: sector_label(state, &sectors, service.sector.as_deref()),
         form: outcome.form.unwrap_or_else(|| {
             ServiceForm::stored(
                 service.category_id,
@@ -334,10 +374,10 @@ async fn service_page(
         categories: service_categories(state).await?,
         errors: outcome.errors,
         limits: &LIMITS,
-        update_action: path.clone(),
-        status_action: url("admin_service_status", &[("id", &id_text)])?,
-        delete_action: url("admin_service_delete", &[("id", &id_text)])?,
-        image_delete_action: url("admin_service_image_delete", &[("id", &id_text)])?,
+        update_action: back.record_href("admin_service", id)?,
+        status_action: back.record_href("admin_service_status", id)?,
+        delete_action: back.record_href("admin_service_delete", id)?,
+        image_delete_action: back.record_href("admin_service_image_delete", id)?,
         max_upload_mb: max_upload_mb(state),
         category_href: url(
             "admin_category",
@@ -348,11 +388,8 @@ async fn service_page(
             .is_public
             .then(|| canonical_url("service", service.id, &service.name))
             .transpose()?,
-        provider_services_href: ListPosition {
-            provider_id: business,
-            ..ListPosition::default()
-        }
-        .href("admin_services", &[])?,
+        back_href: back_list(back, service.business_id).href("admin_services", &[])?,
+        back_label: state.locale().text(back_label),
         service,
         flash: outcome.flash,
     };
@@ -366,18 +403,14 @@ async fn service_page(
     )
 }
 
-fn redirect_to(id: i32, flash: Flash) -> Result<Response, Error> {
-    let mut response = see_other(&url("admin_service", &[("id", &id.to_string())])?)?;
-    flash.set_on(&mut response);
-    Ok(response)
-}
-
-/// GET /admin/services/{id}
+/// GET /admin/services/{id}; opened from a list, its position rides along
+/// (`ListPosition::record_href`).
 pub async fn show(
     Viewer(viewer): Viewer,
     flash: TakeFlash,
     State(state): State<AppState>,
     ApiPath(raw_id): ApiPath<String>,
+    ApiQuery(back): ApiQuery<ListPosition>,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
@@ -387,7 +420,7 @@ pub async fn show(
         flash: flash.0,
         ..Outcome::default()
     };
-    let mut response = service_page(&state, &actor, id, outcome).await?;
+    let mut response = service_page(&state, &actor, id, &back, outcome).await?;
     flash.clear_on(&mut response);
     Ok(response)
 }
@@ -398,6 +431,7 @@ pub async fn update(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
     ApiPath(raw_id): ApiPath<String>,
+    ApiQuery(back): ApiQuery<ListPosition>,
     upload: ApiMultipart,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
@@ -412,7 +446,7 @@ pub async fn update(
         Ok(image) => image,
         Err(err) if is_refusal(&err) => {
             let outcome = Outcome::photo_refused(&state, &err, form);
-            return service_page(&state, &actor, id, outcome).await;
+            return service_page(&state, &actor, id, &back, outcome).await;
         }
         Err(err) => return Err(err),
     };
@@ -437,11 +471,11 @@ pub async fn update(
                     .attach_service_image_admin(&actor, id, image)
                     .await?;
             }
-            redirect_to(id, Flash::ServiceSaved)
+            back.to_record("admin_service", id, Flash::ServiceSaved)
         }
         Err(err) if is_refusal(&err) => {
             let outcome = Outcome::refused(&state, &err, Some(form), false);
-            service_page(&state, &actor, id, outcome).await
+            service_page(&state, &actor, id, &back, outcome).await
         }
         Err(err) => Err(err),
     }
@@ -452,6 +486,7 @@ pub async fn remove_image(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
     ApiPath(raw_id): ApiPath<String>,
+    ApiQuery(back): ApiQuery<ListPosition>,
     ApiForm(form): ApiForm<ReasonForm>,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
@@ -463,7 +498,7 @@ pub async fn remove_image(
         .media
         .remove_service_image(&actor, id, reason(&form.reason))
         .await?;
-    redirect_to(id, Flash::ImageRemoved)
+    back.to_record("admin_service", id, Flash::ImageRemoved)
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -480,11 +515,13 @@ pub struct StatusForm {
     pub q: String,
 }
 
-/// POST /admin/services/{id}/status
+/// POST /admin/services/{id}/status: from a list's row back to that list,
+/// from its page back to it (with the list it was opened from).
 pub async fn change_status(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
     ApiPath(raw_id): ApiPath<String>,
+    ApiQuery(back): ApiQuery<ListPosition>,
     ApiForm(form): ApiForm<StatusForm>,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
@@ -511,7 +548,7 @@ pub async fn change_status(
         }
         .back_to("admin_services", flash);
     }
-    redirect_to(id, flash)
+    back.to_record("admin_service", id, flash)
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -526,12 +563,14 @@ pub struct DeleteForm {
     pub q: String,
 }
 
-/// POST /admin/services/{id}/delete: back to the list it was sent from, else
-/// to the provider's services.
+/// POST /admin/services/{id}/delete: back to the list it was sent from (a
+/// row's, or the one its page was opened from), else to the provider's
+/// services.
 pub async fn delete(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
     ApiPath(raw_id): ApiPath<String>,
+    ApiQuery(back): ApiQuery<ListPosition>,
     ApiForm(form): ApiForm<DeleteForm>,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
@@ -551,10 +590,7 @@ pub async fn delete(
             ..ListPosition::default()
         }
     } else {
-        ListPosition {
-            provider_id: business_id.to_string(),
-            ..ListPosition::default()
-        }
+        back_list(&back, business_id)
     };
     position.back_to("admin_services", Flash::ServiceDeleted)
 }

@@ -68,6 +68,10 @@ pub trait BusinessRepositoryTrait {
 
     async fn assign_user(&self, business_id: i32, user_id: i32) -> Result<(), Error>;
 
+    /// The business no longer has a managing account; false when it had
+    /// none (or there is no such live business).
+    async fn unlink_user(&self, business_id: i32) -> Result<bool, Error>;
+
     async fn get_profile_by_user(&self, user_id: i32) -> Result<Option<BusinessProfile>, Error>;
 
     /// Replaces the profile of the business `user_id` owns, location included

@@ -9,12 +9,15 @@ use std::sync::Arc;
 use tracing::error;
 
 use domain::{
-    models::inquiry::{InquiryAdmin, InquiryForNotice, InquiryForOwner, NewInquiry},
+    models::{
+        business::ListingRef,
+        inquiry::{InquiryAdmin, InquiryForNotice, InquiryForOwner, NewInquiry},
+    },
     repositories::inquiry_repository_trait::InquiryRepositoryTrait,
 };
 
 use domain::{
-    constants::{INQUIRY_STATUSES_REVIEWABLE, INQUIRY_STATUS_NEW},
+    constants::{INQUIRY_STATUSES_REVIEWABLE, INQUIRY_STATUS_NEW, INQUIRY_STATUS_SPAM},
     Error, ErrorCode,
 };
 
@@ -93,6 +96,25 @@ impl InquiryRepositoryTrait for InquiryRepository {
                 error!("inquiry count_admin error: {e}");
                 Error::internal("Failed to count inquiries.")
             })
+    }
+
+    async fn count_for_listing(&self, listing: ListingRef) -> Result<i64, Error> {
+        let (business_id, item) = match listing {
+            ListingRef::Service { business_id, id } => {
+                (business_id, inquiry::Column::ServiceId.eq(id))
+            }
+            ListingRef::Product { business_id, id } => {
+                (business_id, inquiry::Column::ProductId.eq(id))
+            }
+        };
+        Inquiry::find()
+            .filter(inquiry::Column::BusinessId.eq(business_id))
+            .filter(item)
+            .filter(inquiry::Column::Status.ne(INQUIRY_STATUS_SPAM))
+            .count(self.db.as_ref())
+            .await
+            .map(|c| c as i64)
+            .map_err(|e| Error::internal(format!("inquiry count_for_listing: {e}")))
     }
 
     async fn find_reviewable(&self, business_id: i32, phone: &str) -> Result<Option<i32>, Error> {

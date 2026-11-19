@@ -83,6 +83,7 @@ pub fn audit_action(event: &DomainEvent) -> String {
         (Change::ImageRemoved { .. }, _) => format!("remove_{entity}_image"),
         (Change::PermissionsChanged { .. }, _) => format!("change_{entity}_permissions"),
         (Change::AccountAssigned { .. }, _) => format!("assign_{entity}_account"),
+        (Change::AccountUnlinked, _) => format!("unlink_{entity}_account"),
         (Change::Updated, _) => format!("update_{entity}"),
         (Change::StatusChanged { .. }, _) => format!("set_{entity}_status"),
         (Change::Created, _) => format!("create_{entity}"),

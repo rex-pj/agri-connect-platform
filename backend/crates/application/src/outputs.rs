@@ -413,6 +413,7 @@ pub struct AdminServiceItemDto {
     pub category: String,
     pub price_note: Option<String>,
     pub is_active: bool,
+    pub image_file_id: Option<Uuid>,
 }
 
 #[derive(Serialize)]
@@ -423,6 +424,7 @@ pub struct AdminProductItemDto {
     pub unit: Option<String>,
     pub category: String,
     pub is_active: bool,
+    pub image_file_id: Option<Uuid>,
 }
 
 #[derive(Serialize)]
@@ -445,10 +447,17 @@ pub struct AdminProviderDetailDto {
     pub created_on: DateTime<Utc>,
     pub linked_user_id: Option<i32>,
     pub linked_username: Option<String>,
+    /// Whether that account confirmed its email address: notices reach it
+    /// only then.
+    pub email_verified: bool,
     pub lat: Option<f64>,
     pub lng: Option<f64>,
     pub services: Vec<AdminServiceItemDto>,
     pub products: Vec<AdminProductItemDto>,
+    /// How many services and supplies it may list (the `listings.*`
+    /// settings): the owner's cap, the admin's too.
+    pub services_max: u64,
+    pub products_max: u64,
 }
 
 #[derive(Serialize)]
@@ -702,6 +711,8 @@ pub struct AdminProductDto {
     pub is_public: bool,
     pub provider_active: bool,
     pub category_active: bool,
+    /// Listed by the provider themselves, not by an admin for them.
+    pub added_by_owner: bool,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
     pub image_file_id: Option<Uuid>,
@@ -710,6 +721,7 @@ pub struct AdminProductDto {
 impl From<AdminProduct> for AdminProductDto {
     fn from(p: AdminProduct) -> Self {
         Self {
+            added_by_owner: listed_by_owner(p.created_by, p.owner_id),
             is_public: p.is_public(),
             provider_active: p.business_active,
             category_active: p.category_active,
@@ -762,7 +774,7 @@ pub struct AdminServiceDto {
 impl From<AdminService> for AdminServiceDto {
     fn from(s: AdminService) -> Self {
         Self {
-            added_by_owner: s.created_by.is_some() && s.created_by == s.owner_id,
+            added_by_owner: listed_by_owner(s.created_by, s.owner_id),
             is_public: s.is_public(),
             provider_active: s.business_active,
             category_active: s.category_active,
@@ -1401,4 +1413,21 @@ impl From<domain::models::audit::AuditEntry> for AuditEntryDto {
             created_on: e.created_on,
         }
     }
+}
+
+/// A listing the provider added themselves (its creator is the business's
+/// managing account), not one an admin listed for them.
+fn listed_by_owner(created_by: Option<i32>, owner_id: Option<i32>) -> bool {
+    created_by.is_some() && created_by == owner_id
+}
+
+/// What farmers did about one service or supply lately, on its admin page.
+#[derive(Serialize)]
+pub struct ListingActivityDto {
+    /// Call and Zalo taps on its buttons in the last `days` days.
+    pub taps: i64,
+    pub days: i64,
+    /// Contact requests about it, spam left out; `None` without
+    /// `inquiry.read`.
+    pub inquiries: Option<i64>,
 }

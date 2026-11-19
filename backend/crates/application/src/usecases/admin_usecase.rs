@@ -8,6 +8,7 @@ use domain::{
     },
     events::{Change, DomainEvent, Entity},
     models::{
+        business::ListingRef,
         category::{CategoryAdmin, NewCategory, UpdateCategory},
         coded::CodedEntry,
         location::Location,
@@ -55,8 +56,8 @@ use crate::{
         AdminCategoryDto, AdminInquiryDto, AdminLocationDto, AdminPagedResponse, AdminProductDto,
         AdminProductItemDto, AdminProviderDetailDto, AdminProviderDto, AdminReviewDto,
         AdminServiceDto, AdminServiceItemDto, AdminUserDetailDto, AdminUserDto, AreaGroupDto,
-        AssignUserDto, AuditEntryDto, InquiryCountsDto, ProviderActivityDto, ProviderStatusDto,
-        ReviewCountsDto, RoleDto, SlugSuggestionDto, VerificationDto,
+        AssignUserDto, AuditEntryDto, InquiryCountsDto, ListingActivityDto, ProviderActivityDto,
+        ProviderStatusDto, ReviewCountsDto, RoleDto, SlugSuggestionDto, VerificationDto,
     },
     pagination::{admin_total_pages, paginate_admin, total_or_count},
     ports::{EventBus, PasswordHasher},
@@ -214,6 +215,29 @@ impl AdminUseCase {
             .collect())
     }
 
+    /// One service's or supply's recent leads: taps on its buttons over
+    /// `CALL_STATS_DAYS`, and contact requests about it for a visitor who
+    /// may read them. Read with the permission of its own admin page.
+    pub async fn listing_activity(
+        &self,
+        actor: &Actor,
+        listing: ListingRef,
+    ) -> Result<ListingActivityDto> {
+        actor.require(listing_permission(listing))?;
+        let since = Utc::now() - Duration::days(CALL_STATS_DAYS);
+        let taps = self.call_repo.count_listing_since(listing, since).await?;
+        let inquiries = if actor.can(PERM_INQUIRY_READ) {
+            Some(self.inquiry_repo.count_for_listing(listing).await?)
+        } else {
+            None
+        };
+        Ok(ListingActivityDto {
+            taps,
+            days: CALL_STATS_DAYS,
+            inquiries,
+        })
+    }
+
     // ── Providers ─────────────────────────────────────────────────────────────
 
     pub async fn get_provider_detail(
@@ -228,6 +252,7 @@ impl AdminUseCase {
             .await?
             .ok_or_else(|| Error::new(ErrorCode::ProviderNotFound))?;
         let activity = self.provider_activity(actor, id).await?;
+        let settings = self.settings.load().await?;
         let area = match (&b.province_name, &b.ward_name) {
             (Some(province), Some(ward)) => Some(preset_label(province, ward)),
             _ => None,
@@ -245,9 +270,12 @@ impl AdminUseCase {
             is_demo: b.is_demo,
             area,
             activity,
+            services_max: settings.services_per_business(),
+            products_max: settings.products_per_business(),
             created_on: b.created_on,
             linked_user_id: b.linked_user_id,
             linked_username: b.linked_username,
+            email_verified: b.email_verified,
             lat: b.lat,
             lng: b.lng,
             services: b
@@ -259,6 +287,7 @@ impl AdminUseCase {
                     category: s.category,
                     price_note: s.price_note,
                     is_active: s.is_active,
+                    image_file_id: s.image_file_id,
                 })
                 .collect(),
             products: b
@@ -271,6 +300,7 @@ impl AdminUseCase {
                     unit: p.unit,
                     category: p.category,
                     is_active: p.is_active,
+                    image_file_id: p.image_file_id,
                 })
                 .collect(),
         })
@@ -514,6 +544,29 @@ impl AdminUseCase {
             business_id,
             username,
         })
+    }
+
+    /// The business no longer has a managing account (one that left, or was
+    /// linked by mistake); the account itself stays. Audited with `reason`.
+    pub async fn unlink_provider_user(
+        &self,
+        actor: &Actor,
+        business_id: i32,
+        reason: Option<String>,
+    ) -> Result<()> {
+        actor.require(PERM_PROVIDER_ACCOUNT_ASSIGN)?;
+        if !self.business_repo.unlink_user(business_id).await? {
+            return Err(Error::new(ErrorCode::ProviderNotFound));
+        }
+        self.publish(
+            actor,
+            Entity::Provider,
+            business_id,
+            Change::AccountUnlinked,
+            reason,
+        )
+        .await;
+        Ok(())
     }
 
     // ── Users ─────────────────────────────────────────────────────────────────
@@ -1629,4 +1682,13 @@ fn refuse_self(actor: &Actor, target_user_id: i32) -> Result<()> {
         return Err(Error::new(ErrorCode::CannotChangeOwnAccount));
     }
     Ok(())
+}
+
+/// The permission a service's or supply's admin page needs: the same reads
+/// its figures.
+fn listing_permission(listing: ListingRef) -> &'static str {
+    match listing {
+        ListingRef::Service { .. } => PERM_SERVICE_MANAGE,
+        ListingRef::Product { .. } => PERM_LISTING_MODERATE,
+    }
 }

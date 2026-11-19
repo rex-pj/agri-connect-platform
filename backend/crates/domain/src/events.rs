@@ -90,6 +90,8 @@ pub enum Change {
     AccountAssigned {
         username: String,
     },
+    /// A business no longer has a managing account (the account stays).
+    AccountUnlinked,
     /// Its fields were edited (a category, a location preset).
     Updated,
     /// An inquiry moved to `status` (contacted, closed, spam…).

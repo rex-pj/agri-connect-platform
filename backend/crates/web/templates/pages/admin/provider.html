@@ -7,6 +7,7 @@
 {% import "molecules/sheet_header.html" as sheet_head %}
 {% import "molecules/stat_card.html" as stat %}
 {% import "molecules/history_list.html" as history %}
+{% import "atoms/admin_thumb.html" as thumb %}
 {% import "organisms/confirm_sheet.html" as confirm %}
 {% import "organisms/business_fields.html" as business %}
 {#- One provider, what decides about it first: a summary (its states as
@@ -36,6 +37,7 @@
   {% if b.flash == "provider_activated" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.provider_activated")) }}{% endif %}
   {% if b.flash == "provider_deactivated" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.provider_deactivated")) }}{% endif %}
   {% if b.flash == "provider_account_assigned" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.provider_account_assigned")) }}{% endif %}
+  {% if b.flash == "provider_account_unlinked" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.provider_account_unlinked")) }}{% endif %}
   {% if b.flash == "provider_created" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.provider_created")) }}{% endif %}
   {% if b.flash == "provider_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.provider_saved")) }}{% endif %}
   {% if b.errors.message and not b.failed %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
@@ -129,10 +131,17 @@
       <div class="pt-3 border-top" x-data="dialog" data-open="{% if account_failed %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
         <h3 class="h6 fw-bold mb-2" id="tai-khoan-title">{{ t(key="admin.managing_account") }}</h3>
         <p class="small text-muted">{% if p.linked_username %}{{ t(key="admin.linked_before") }} {% if b.linked_user_href %}<a class="fw-bold" href="{{ b.linked_user_href }}">{{ p.linked_username }}</a>{% else %}<strong>{{ p.linked_username }}</strong>{% endif %}{{ t(key="admin.linked_after") }}{% else %}{{ t(key="admin.no_account") }}{% endif %}</p>
+        {% if p.linked_username and not p.email_verified %}<p class="small text-warning-emphasis">{{ atoms::icon(name="fa-envelope-circle-check") }} {{ t(key="admin.email_unconfirmed") }}</p>{% endif %}
         {% if b.can_assign %}
         {% set e = b.errors.fields %}
         {% if p.linked_username %}{% set assign_label = t(key="admin.change_account") %}{% else %}{% set assign_label = t(key="admin.assign") %}{% endif %}
         <div class="admin-actions"><a class="btn btn-outline-success" href="#gan-tai-khoan" x-on:click.prevent="show">{{ atoms::icon(name="fa-user-plus") }} {{ assign_label }}</a></div>
+        {% if p.linked_username %}
+        <div class="mt-2" x-data="dialog" x-on:keydown.escape.window="hide">
+          <div class="admin-actions"><a class="btn btn-outline-warning" href="#go-tai-khoan" x-on:click.prevent="show">{{ atoms::icon(name="fa-user-minus") }} {{ t(key="admin.unlink_account") }}</a></div>
+          {{ confirm::confirm_sheet(id="go-tai-khoan", title=t(key="admin.unlink_account_title", name=p.linked_username), icon="fa-user-minus", action=b.account_delete_action, button=t(key="admin.unlink_account"), reason_max=limits.audit_reason_max, note=t(key="admin.unlink_account_note")) }}
+        </div>
+        {% endif %}
         <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
         <section class="contact-sheet" id="gan-tai-khoan" aria-labelledby="gan-tai-khoan-title" :class="sheetClass">
           {{ sheet_head::sheet_header(id="gan-tai-khoan", title=assign_label, icon="fa-user-plus") }}
@@ -151,25 +160,43 @@
   </section>
 
   <section class="admin-section" aria-labelledby="services-title">
+    {% set count = p.services | length %}
     <div class="admin-section__head">
-      <h2 class="admin-section__title mb-0" id="services-title">{{ t(key="dashboard.services_count", count=p.services | length) }}</h2>
-      {% if b.services_href %}<a class="admin-section__link" href="{{ b.services_href }}">{{ atoms::icon(name="fa-screwdriver-wrench") }} {{ t(key="admin.manage_services") }}</a>{% endif %}
+      <h2 class="admin-section__title mb-0" id="services-title">{{ t(key="dashboard.services_count", count=count) }} <span class="small fw-normal text-muted">({{ t(key="admin.listing_cap", count=count, max=p.services_max) }})</span></h2>
+      <div class="d-flex flex-wrap gap-3">
+        {% if b.services_add_href and count < p.services_max %}<a class="admin-section__link" href="{{ b.services_add_href }}">{{ atoms::icon(name="fa-plus") }} {{ t(key="dashboard.add_service") }}</a>{% endif %}
+        {% if b.services_href %}<a class="admin-section__link" href="{{ b.services_href }}">{{ atoms::icon(name="fa-screwdriver-wrench") }} {{ t(key="admin.manage_services") }}</a>{% endif %}
+      </div>
     </div>
     {% if p.services %}
     <ul class="list-unstyled mb-0">
-      {% for s in p.services %}<li class="py-2 border-bottom">{% if b.services_href %}<a class="fw-semibold text-decoration-none" href="{{ url_for(name="admin_service", id=s.id) }}">{{ s.name }}</a>{% else %}<span class="fw-semibold">{{ s.name }}</span>{% endif %} <span class="ac-tag">{{ s.category }}</span>{% if s.price_note %} <span class="small text-muted">· {{ s.price_note }}</span>{% endif %}{% if not s.is_active %} {{ status::visibility(on=false) }}{% endif %}</li>{% endfor %}
+      {% for s in p.services %}
+      <li class="py-2 border-bottom d-flex align-items-center gap-2">
+        {{ thumb::admin_thumb(file_id=s.image_file_id) }}
+        <span>{% if b.services_href %}<a class="fw-semibold text-decoration-none" href="{{ url_for(name="admin_service", id=s.id) }}">{{ s.name }}</a>{% else %}<span class="fw-semibold">{{ s.name }}</span>{% endif %} <span class="ac-tag">{{ s.category }}</span>{% if s.price_note %} <span class="small text-muted">· {{ s.price_note }}</span>{% endif %}{% if not s.is_active %} {{ status::visibility(on=false) }}{% endif %}</span>
+      </li>
+      {% endfor %}
     </ul>
     {% else %}<p class="small text-muted">{{ t(key="admin.provider_no_services") }}</p>{% endif %}
   </section>
 
   <section class="admin-section" aria-labelledby="products-title">
+    {% set count = p.products | length %}
     <div class="admin-section__head">
-      <h2 class="admin-section__title mb-0" id="products-title">{{ t(key="dashboard.products_count", count=p.products | length) }}</h2>
-      {% if b.products_href %}<a class="admin-section__link" href="{{ b.products_href }}">{{ atoms::icon(name="fa-box-open") }} {{ t(key="admin.manage_products") }}</a>{% endif %}
+      <h2 class="admin-section__title mb-0" id="products-title">{{ t(key="dashboard.products_count", count=count) }} <span class="small fw-normal text-muted">({{ t(key="admin.listing_cap", count=count, max=p.products_max) }})</span></h2>
+      <div class="d-flex flex-wrap gap-3">
+        {% if b.products_add_href and count < p.products_max %}<a class="admin-section__link" href="{{ b.products_add_href }}">{{ atoms::icon(name="fa-plus") }} {{ t(key="dashboard.add_product") }}</a>{% endif %}
+        {% if b.products_href %}<a class="admin-section__link" href="{{ b.products_href }}">{{ atoms::icon(name="fa-box-open") }} {{ t(key="admin.manage_products") }}</a>{% endif %}
+      </div>
     </div>
     {% if p.products %}
     <ul class="list-unstyled mb-0">
-      {% for x in p.products %}<li class="py-2 border-bottom">{% if b.products_href %}<a class="fw-semibold text-decoration-none" href="{{ url_for(name="admin_product", id=x.id) }}">{{ x.name }}</a>{% else %}<span class="fw-semibold">{{ x.name }}</span>{% endif %} <span class="ac-tag">{{ x.category }}</span>{% if x.price %} <span class="small text-muted">· {{ x.price | vnd }}{% if x.unit %}/{{ x.unit }}{% endif %}</span>{% endif %}{% if not x.is_active %} {{ status::visibility(on=false) }}{% endif %}</li>{% endfor %}
+      {% for x in p.products %}
+      <li class="py-2 border-bottom d-flex align-items-center gap-2">
+        {{ thumb::admin_thumb(file_id=x.image_file_id) }}
+        <span>{% if b.products_href %}<a class="fw-semibold text-decoration-none" href="{{ url_for(name="admin_product", id=x.id) }}">{{ x.name }}</a>{% else %}<span class="fw-semibold">{{ x.name }}</span>{% endif %} <span class="ac-tag">{{ x.category }}</span>{% if x.price %} <span class="small text-muted">· {{ x.price | vnd }}{% if x.unit %}/{{ x.unit }}{% endif %}</span>{% endif %}{% if not x.is_active %} {{ status::visibility(on=false) }}{% endif %}</span>
+      </li>
+      {% endfor %}
     </ul>
     {% else %}<p class="small text-muted">{{ t(key="admin.provider_no_products") }}</p>{% endif %}
   </section>

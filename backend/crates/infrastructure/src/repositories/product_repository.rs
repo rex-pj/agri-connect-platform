@@ -92,6 +92,8 @@ struct AdminProductRow {
     is_active: bool,
     business_active: bool,
     category_active: bool,
+    created_by: Option<i32>,
+    owner_id: Option<i32>,
     created_on: DateTimeWithTimeZone,
     updated_on: DateTimeWithTimeZone,
     image_file_id: Option<Uuid>,
@@ -177,6 +179,8 @@ fn base_admin_product_query() -> sea_orm::Select<ProductEntity> {
         .column(product::Column::IsActive)
         .column_as(business::Column::IsActive, QueryAs::BusinessActive)
         .column_as(category::Column::IsActive, QueryAs::CategoryActive)
+        .column(product::Column::CreatedBy)
+        .column(business::Column::OwnerId)
         .column(product::Column::CreatedOn)
         .column(product::Column::UpdatedOn)
         .column(product::Column::ImageFileId)
@@ -701,6 +705,8 @@ fn map_admin_row(r: AdminProductRow) -> AdminProduct {
         is_active: r.is_active,
         business_active: r.business_active,
         category_active: r.category_active,
+        created_by: r.created_by,
+        owner_id: r.owner_id,
         created_on: r.created_on.with_timezone(&Utc),
         updated_on: r.updated_on.with_timezone(&Utc),
         image_file_id: r.image_file_id,

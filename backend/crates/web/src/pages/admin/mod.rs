@@ -684,6 +684,30 @@ impl ListPosition {
         Ok(with_query(&url(route, &[])?, &params))
     }
 
+    /// One record's page (`route` with its `id`), or one of its actions,
+    /// carrying this position: a record opened from a list keeps the way
+    /// back to that page of it through its own forms and redirects.
+    pub fn record_href(&self, route: &str, id: i32) -> Result<String, Error> {
+        let query = self.query();
+        let params: Vec<(&str, &str)> = query.iter().map(|(k, v)| (*k, v.as_str())).collect();
+        Ok(with_query(
+            &url(route, &[("id", &id.to_string())])?,
+            &params,
+        ))
+    }
+
+    /// Page 1 of the whole list: no position worth keeping.
+    pub fn is_default(&self) -> bool {
+        self.query().is_empty()
+    }
+
+    /// 303 to one record's page, keeping this position, with `flash`.
+    pub fn to_record(&self, route: &str, id: i32, flash: Flash) -> Result<Response, Error> {
+        let mut response = see_other(&self.record_href(route, id)?)?;
+        flash.set_on(&mut response);
+        Ok(response)
+    }
+
     /// 303 back to the list at `route`, with `flash`.
     pub fn back_to(&self, route: &str, flash: Flash) -> Result<Response, Error> {
         let mut response = see_other(&self.href(route, &[])?)?;

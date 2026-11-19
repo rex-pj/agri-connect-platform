@@ -4,7 +4,9 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, Quer
 use std::sync::Arc;
 
 use domain::{
-    models::call::NewCallClick, repositories::call_repository_trait::CallRepositoryTrait, Error,
+    models::{business::ListingRef, call::NewCallClick},
+    repositories::call_repository_trait::CallRepositoryTrait,
+    Error,
 };
 
 use crate::entities::call_click::{self, Entity as CallClick};
@@ -49,5 +51,28 @@ impl CallRepositoryTrait for CallRepository {
             .await
             .map(|c| c as i64)
             .map_err(|e| Error::internal(format!("call count_since: {e}")))
+    }
+
+    async fn count_listing_since(
+        &self,
+        listing: ListingRef,
+        since: DateTime<Utc>,
+    ) -> Result<i64, Error> {
+        let (business_id, item) = match listing {
+            ListingRef::Service { business_id, id } => {
+                (business_id, call_click::Column::ServiceId.eq(id))
+            }
+            ListingRef::Product { business_id, id } => {
+                (business_id, call_click::Column::ProductId.eq(id))
+            }
+        };
+        CallClick::find()
+            .filter(call_click::Column::BusinessId.eq(business_id))
+            .filter(call_click::Column::CreatedOn.gte(since))
+            .filter(item)
+            .count(self.db.as_ref())
+            .await
+            .map(|c| c as i64)
+            .map_err(|e| Error::internal(format!("call count_listing_since: {e}")))
     }
 }

@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use uuid::Uuid;
 
 pub struct BusinessGeoResult {
     pub id: i32,
@@ -86,6 +87,7 @@ pub struct ServiceAdminItem {
     pub category: String,
     pub price_note: Option<String>,
     pub is_active: bool,
+    pub image_file_id: Option<Uuid>,
 }
 
 pub struct ProductAdminItem {
@@ -95,6 +97,7 @@ pub struct ProductAdminItem {
     pub unit: Option<String>,
     pub category: String,
     pub is_active: bool,
+    pub image_file_id: Option<Uuid>,
 }
 
 pub struct BusinessAdminDetail {
@@ -116,6 +119,9 @@ pub struct BusinessAdminDetail {
     /// The managing account, for the link to it.
     pub linked_user_id: Option<i32>,
     pub linked_username: Option<String>,
+    /// Whether that account confirmed its email address: notices (contact
+    /// requests, job posts) reach it only then.
+    pub email_verified: bool,
     pub lat: Option<f64>,
     pub lng: Option<f64>,
     pub services: Vec<ServiceAdminItem>,
@@ -184,4 +190,13 @@ impl ListingEditor {
             Self::Owner(id) | Self::Moderator(id) => id,
         }
     }
+}
+
+/// One listing of a business, for the figures about it alone (taps on its
+/// call button, contact requests about it). Its business goes with it, so a
+/// count reads that business's rows by their index first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ListingRef {
+    Service { business_id: i32, id: i32 },
+    Product { business_id: i32, id: i32 },
 }

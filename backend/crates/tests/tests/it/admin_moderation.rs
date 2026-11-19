@@ -730,3 +730,58 @@ async fn a_shown_service_says_why_farmers_cannot_see_it() {
     assert!(!html.contains(&public), "no link to a page that would 404");
     e.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_supply_page_keeps_its_list_and_says_who_listed_it() {
+    let e = env_with_origin().await;
+    let (admin, token, business) = setup(&e).await;
+    let (category, _) = categories_of(&e, "product").await[0].clone();
+    let id = create_product(
+        &e,
+        &token,
+        &format!(r#"{{"category_id":{category},"name":"Phân bón lá"}}"#),
+    )
+    .await;
+
+    // Opened from a page of a searched list, the page leads back to it.
+    let list = page(&e, "/admin/supplies?q=bon", &admin).await;
+    let own = format!("/admin/supplies/{id}?q=bon");
+    assert!(
+        list.contains(&format!(r#"href="{own}""#)),
+        "the row keeps the list"
+    );
+    let html = page(&e, &own, &admin).await;
+    assert!(
+        html.contains(r#"href="/admin/supplies?q=bon""#),
+        "back to that list"
+    );
+    assert!(html.contains("Nhà cung cấp tự thêm"), "the owner listed it");
+    assert!(html.contains("Nhà cung cấp tự đăng mục này"));
+    assert!(html.contains("Ngành:"));
+    assert!(html.contains("0 lượt gọi, Zalo trong 30 ngày"));
+    assert!(html.contains("0 yêu cầu liên hệ"));
+
+    // Saving lands on the page again, the list still behind it.
+    let category = category.to_string();
+    let res = send(
+        &e.router,
+        post_multipart_form(
+            &own,
+            &[
+                ("category_id", category.as_str()),
+                ("name", "Phân bón lá NPK"),
+            ],
+            None,
+            &admin,
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res.headers()[header::LOCATION], own.as_str());
+
+    // Opened with no list, it leads to the provider's supplies.
+    let html = page(&e, &format!("/admin/supplies/{id}"), &admin).await;
+    assert!(html.contains(&format!(r#"href="/admin/supplies?provider_id={business}""#)));
+    e.cleanup().await;
+}

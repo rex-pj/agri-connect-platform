@@ -503,3 +503,63 @@ async fn a_provider_page_says_who_changed_it_and_why() {
     );
     e.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_managing_account_is_removed_behind_a_confirmation() {
+    let e = env_with_origin().await;
+    let admin = install_admin(&e).await;
+    register_provider(&e.state, "chuvuon", "0901234567").await;
+    let id: i32 = scalar(
+        &e,
+        "SELECT id::text AS id FROM businesses WHERE name = 'Vườn chuvuon'",
+        "id",
+    )
+    .await
+    .parse()
+    .unwrap();
+    let detail = format!("/admin/providers/{id}");
+    let page = || async { body_text(send(&e.router, get_page(&detail, Some(&admin))).await).await };
+
+    let html = page().await;
+    assert!(html.contains("Đổi tài khoản"));
+    assert!(html.contains("Email của tài khoản chưa xác nhận"));
+    assert!(html.contains(&format!(
+        r#"href="/admin/services?provider_id={id}#them-dich-vu""#
+    )));
+    assert!(html.contains(&format!(
+        r#"href="/admin/supplies?provider_id={id}#them-vat-tu""#
+    )));
+
+    let res = send(
+        &e.router,
+        post_form(
+            &format!("{detail}/account/delete"),
+            &[("reason", "Chủ đã bán vườn")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        scalar(
+            &e,
+            &format!("SELECT (owner_id IS NULL)::text AS gone FROM businesses WHERE id = {id}"),
+            "gone"
+        )
+        .await,
+        "true"
+    );
+    let html = page().await;
+    assert!(html.contains("Gán tài khoản"));
+    assert!(html.contains("Gỡ tài khoản"), "in its history");
+    assert!(html.contains("Chủ đã bán vườn"));
+    // Twice: nothing left to remove.
+    let res = send(
+        &e.router,
+        post_form(&format!("{detail}/account/delete"), &[], Some(&admin)),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+    e.cleanup().await;
+}

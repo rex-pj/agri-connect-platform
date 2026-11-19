@@ -11,11 +11,14 @@
 
 use application::{
     authz::Actor,
-    outputs::{AdminPagedResponse, AdminProductDto, CategoryDto, CommodityDto},
+    outputs::{AdminPagedResponse, AdminProductDto, CategoryDto, CommodityDto, ListingActivityDto},
     usecases::admin_usecase::HistoryOf,
 };
 use axum::{extract::State, http::StatusCode, response::Response};
-use domain::{models::product::AdminProductFilter, Error, ErrorCode};
+use domain::{
+    models::{business::ListingRef, product::AdminProductFilter},
+    Error, ErrorCode,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -40,6 +43,10 @@ use crate::{
         see_other,
     },
 };
+
+/// The id of the create sheet on a provider's supplies list (`products.html`):
+/// the provider's page links straight to it.
+pub const CREATE_SHEET: &str = "them-vat-tu";
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
@@ -206,7 +213,7 @@ async fn list_page(state: &AppState, actor: &Actor, asked: Listing) -> Result<Re
             });
         }
         rows.push(ProductRow {
-            href: url("admin_product", &[("id", &id)])?,
+            href: position.record_href("admin_product", product.id)?,
             category_href: ListPosition {
                 category_id: product.category_id.to_string(),
                 ..ListPosition::default()
@@ -325,7 +332,9 @@ pub async fn create(
         Err(err) => Err(err),
     };
     match result {
-        Ok(created) => redirect_to(created.id, Flash::ProductCreated),
+        Ok(created) => {
+            ListPosition::default().to_record("admin_product", created.id, Flash::ProductCreated)
+        }
         Err(err) if is_refusal(&err) => {
             let errors = FormErrors::from_error(&state, &err);
             let asked = Listing {
@@ -348,6 +357,11 @@ pub struct ProductPage {
     pub product: AdminProductDto,
     /// Its latest changes: who hid, edited or re-photographed it, and why.
     pub history: Vec<HistoryRow>,
+    /// Its taps and contact requests lately.
+    pub activity: ListingActivityDto,
+    /// Its sector's name (its commodity's, else its type's), "every sector"
+    /// for none.
+    pub sector_label: String,
     pub categories: Vec<CategoryDto>,
     pub commodities: Vec<CommodityDto>,
     pub form: ProductForm,
@@ -365,16 +379,23 @@ pub struct ProductPage {
     pub public_href: Option<String>,
     /// Its supply type's admin page, where a hidden type is shown again.
     pub category_href: String,
-    /// The provider's products, where a deletion lands.
-    pub provider_products_href: String,
+    /// The way back: the list page it was opened from, else the provider's
+    /// products (where a deletion lands too).
+    pub back_href: String,
+    pub back_label: String,
     pub flash: Option<Flash>,
 }
 
-/// The provider's products in the admin list.
-fn provider_products(business_id: i32) -> ListPosition {
-    ListPosition {
-        provider_id: business_id.to_string(),
-        ..ListPosition::default()
+/// The list a supply's page leads back to: the one it was opened from, else
+/// its provider's supplies.
+fn back_list(back: &ListPosition, business_id: i32) -> ListPosition {
+    if back.is_default() {
+        ListPosition {
+            provider_id: business_id.to_string(),
+            ..ListPosition::default()
+        }
+    } else {
+        back.clone()
     }
 }
 
@@ -382,13 +403,27 @@ async fn product_page(
     state: &AppState,
     actor: &Actor,
     id: i32,
+    back: &ListPosition,
     outcome: Outcome<ProductForm>,
 ) -> Result<Response, Error> {
-    let product = state.usecases.admin.get_product_admin(actor, id).await?;
+    let admin = &state.usecases.admin;
+    let product = admin.get_product_admin(actor, id).await?;
     let id_text = id.to_string();
     let path = url("admin_product", &[("id", &id_text)])?;
+    let sectors = state.usecases.sector.named().await?;
+    let listing = ListingRef::Product {
+        business_id: product.business_id,
+        id,
+    };
+    let back_label = if back.is_default() {
+        "admin.provider_products"
+    } else {
+        "admin_menu.products"
+    };
     let body = ProductPage {
         history: history_rows(state, actor, HistoryOf::Product(id)).await?,
+        activity: admin.listing_activity(actor, listing).await?,
+        sector_label: sector_label(state, &sectors, product.sector.as_deref()),
         form: outcome.form.unwrap_or_else(|| {
             ProductForm::stored(
                 product.category_id,
@@ -402,10 +437,10 @@ async fn product_page(
         categories: product_categories(state).await?,
         commodities: product_commodities(state).await?,
         errors: outcome.errors,
-        update_action: path.clone(),
-        status_action: url("admin_product_status", &[("id", &id_text)])?,
-        delete_action: url("admin_product_delete", &[("id", &id_text)])?,
-        image_delete_action: url("admin_product_image_delete", &[("id", &id_text)])?,
+        update_action: back.record_href("admin_product", id)?,
+        status_action: back.record_href("admin_product_status", id)?,
+        delete_action: back.record_href("admin_product_delete", id)?,
+        image_delete_action: back.record_href("admin_product_image_delete", id)?,
         max_upload_mb: max_upload_mb(state),
         provider_href: url(
             "admin_provider",
@@ -419,8 +454,8 @@ async fn product_page(
             .is_public
             .then(|| canonical_url("product", product.id, &product.name))
             .transpose()?,
-        provider_products_href: provider_products(product.business_id)
-            .href("admin_products", &[])?,
+        back_href: back_list(back, product.business_id).href("admin_products", &[])?,
+        back_label: state.locale().text(back_label),
         product,
         flash: outcome.flash,
     };
@@ -434,18 +469,14 @@ async fn product_page(
     )
 }
 
-fn redirect_to(id: i32, flash: Flash) -> Result<Response, Error> {
-    let mut response = see_other(&url("admin_product", &[("id", &id.to_string())])?)?;
-    flash.set_on(&mut response);
-    Ok(response)
-}
-
-/// GET /admin/supplies/{id}
+/// GET /admin/supplies/{id}; opened from a list, its position rides along
+/// (`ListPosition::record_href`).
 pub async fn show(
     Viewer(viewer): Viewer,
     flash: TakeFlash,
     State(state): State<AppState>,
     ApiPath(raw_id): ApiPath<String>,
+    ApiQuery(back): ApiQuery<ListPosition>,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
@@ -455,7 +486,7 @@ pub async fn show(
         flash: flash.0,
         ..Outcome::default()
     };
-    let mut response = product_page(&state, &actor, id, outcome).await?;
+    let mut response = product_page(&state, &actor, id, &back, outcome).await?;
     flash.clear_on(&mut response);
     Ok(response)
 }
@@ -466,6 +497,7 @@ pub async fn update(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
     ApiPath(raw_id): ApiPath<String>,
+    ApiQuery(back): ApiQuery<ListPosition>,
     upload: ApiMultipart,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
@@ -480,7 +512,7 @@ pub async fn update(
         Ok(image) => image,
         Err(err) if is_refusal(&err) => {
             let outcome = Outcome::photo_refused(&state, &err, form);
-            return product_page(&state, &actor, id, outcome).await;
+            return product_page(&state, &actor, id, &back, outcome).await;
         }
         Err(err) => return Err(err),
     };
@@ -503,11 +535,11 @@ pub async fn update(
                     .attach_product_image_admin(&actor, id, image)
                     .await?;
             }
-            redirect_to(id, Flash::ProductSaved)
+            back.to_record("admin_product", id, Flash::ProductSaved)
         }
         Err(err) if is_refusal(&err) => {
             let outcome = Outcome::refused(&state, &err, Some(form), false);
-            product_page(&state, &actor, id, outcome).await
+            product_page(&state, &actor, id, &back, outcome).await
         }
         Err(err) => Err(err),
     }
@@ -518,6 +550,7 @@ pub async fn remove_image(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
     ApiPath(raw_id): ApiPath<String>,
+    ApiQuery(back): ApiQuery<ListPosition>,
     ApiForm(form): ApiForm<ReasonForm>,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
@@ -529,8 +562,9 @@ pub async fn remove_image(
         .media
         .remove_product_image(&actor, id, reason(&form.reason))
         .await?;
-    redirect_to(id, Flash::ImageRemoved)
+    back.to_record("admin_product", id, Flash::ImageRemoved)
 }
+
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct StatusForm {
@@ -545,11 +579,13 @@ pub struct StatusForm {
     pub q: String,
 }
 
-/// POST /admin/supplies/{id}/status
+/// POST /admin/supplies/{id}/status: from a list's row back to that list,
+/// from its page back to it (with the list it was opened from).
 pub async fn change_status(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
     ApiPath(raw_id): ApiPath<String>,
+    ApiQuery(back): ApiQuery<ListPosition>,
     ApiForm(form): ApiForm<StatusForm>,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
@@ -576,7 +612,7 @@ pub async fn change_status(
         }
         .back_to("admin_products", flash);
     }
-    redirect_to(id, flash)
+    back.to_record("admin_product", id, flash)
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -591,12 +627,14 @@ pub struct DeleteForm {
     pub q: String,
 }
 
-/// POST /admin/supplies/{id}/delete: back to the list it was sent from, else
-/// to the provider's products.
+/// POST /admin/supplies/{id}/delete: back to the list it was sent from (a
+/// row's, or the one its page was opened from), else to the provider's
+/// products.
 pub async fn delete(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
     ApiPath(raw_id): ApiPath<String>,
+    ApiQuery(back): ApiQuery<ListPosition>,
     ApiForm(form): ApiForm<DeleteForm>,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
@@ -616,7 +654,7 @@ pub async fn delete(
             ..ListPosition::default()
         }
     } else {
-        provider_products(business_id)
+        back_list(&back, business_id)
     };
     position.back_to("admin_products", Flash::ProductDeleted)
 }

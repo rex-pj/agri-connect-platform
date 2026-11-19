@@ -194,6 +194,7 @@ struct BusinessAdminDetailRow {
     created_on: DateTimeWithTimeZone,
     linked_user_id: Option<i32>,
     linked_username: Option<String>,
+    email_verified: bool,
     lat: Option<f64>,
     lng: Option<f64>,
 }
@@ -205,6 +206,7 @@ struct ServiceAdminRow {
     category: String,
     price_note: Option<String>,
     is_active: bool,
+    image_file_id: Option<uuid::Uuid>,
 }
 
 #[derive(FromQueryResult)]
@@ -215,6 +217,7 @@ struct ProductAdminRow {
     unit: Option<String>,
     category: String,
     is_active: bool,
+    image_file_id: Option<uuid::Uuid>,
 }
 
 #[async_trait]
@@ -628,6 +631,10 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .column(business::Column::CreatedOn)
             .column_as(user::Column::Id, QueryAs::LinkedUserId)
             .column_as(user::Column::Username, QueryAs::LinkedUsername)
+            .expr_as(
+                Expr::col((user::Entity, user::Column::EmailVerifiedAt)).is_not_null(),
+                QueryAs::EmailVerified,
+            )
             .expr_as(business_lat(), QueryAs::Lat)
             .expr_as(business_lng(), QueryAs::Lng)
             .join(JoinType::LeftJoin, business::Relation::Owner.def())
@@ -669,6 +676,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .column_as(category::Column::Name, QueryAs::Category)
             .column(service::Column::PriceNote)
             .column(service::Column::IsActive)
+            .column(service::Column::ImageFileId)
             .join(JoinType::InnerJoin, service::Relation::ServiceType.def())
             .filter(service::Column::BusinessId.eq(id))
             .filter(service::Column::DeletedAt.is_null())
@@ -687,6 +695,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .column(product::Column::Unit)
             .column_as(supply_type::Column::Name, QueryAs::Category)
             .column(product::Column::IsActive)
+            .column(product::Column::ImageFileId)
             .join(JoinType::InnerJoin, product::Relation::SupplyType.def())
             .filter(product::Column::BusinessId.eq(id))
             .filter(product::Column::DeletedAt.is_null())
@@ -716,6 +725,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             created_on: core.created_on.with_timezone(&Utc),
             linked_user_id: core.linked_user_id,
             linked_username: core.linked_username,
+            email_verified: core.email_verified,
             lat: core.lat,
             lng: core.lng,
             services: svc_rows
@@ -726,6 +736,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
                     category: r.category,
                     price_note: r.price_note,
                     is_active: r.is_active,
+                    image_file_id: r.image_file_id,
                 })
                 .collect(),
             products: prod_rows
@@ -737,6 +748,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
                     unit: r.unit,
                     category: r.category,
                     is_active: r.is_active,
+                    image_file_id: r.image_file_id,
                 })
                 .collect(),
         }))
@@ -776,6 +788,18 @@ impl BusinessRepositoryTrait for BusinessRepository {
                     "business assign_user",
                 )
             })
+    }
+
+    async fn unlink_user(&self, business_id: i32) -> Result<bool, Error> {
+        Business::update_many()
+            .col_expr(business::Column::OwnerId, Expr::value(Option::<i32>::None))
+            .filter(business::Column::Id.eq(business_id))
+            .filter(business::Column::OwnerId.is_not_null())
+            .filter(business::Column::DeletedAt.is_null())
+            .exec(self.db.as_ref())
+            .await
+            .map(|r| r.rows_affected > 0)
+            .map_err(|e| Error::internal(format!("business unlink_user: {e}")))
     }
 
     // ── Profile (the position from `sql::business_lat` / `business_lng`) ──────────────────

@@ -1,0 +1,26 @@
+{#- What a service's or supply's admin page says about it beside its form
+    (`l` is AdminServiceDto or AdminProductDto):
+    `listing_meta`: its sector, what it is for (`for_label`, supplies only),
+    when it was added and last changed, and whether its provider listed it;
+    `owner_note`: above the save button of a listing its provider added,
+    that the change is theirs to see (it lands in the history);
+    `listing_activity`: its taps and contact requests lately
+    (`a` is ListingActivityDto). -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro listing_meta(l, sector_label, for_label="") -%}
+<p class="small text-muted mb-0">
+  {{ t(key="admin.label_sector") }}: {{ sector_label }}
+  {% if for_label %} · {{ t(key="admin.label_for") }}: {{ for_label }}{% endif %}
+  · {{ t(key="admin.created_label") }} <time datetime="{{ l.created_on | utc_iso }}">{{ l.created_on | vn_datetime }}</time>
+  · {{ t(key="admin.updated_label") }} <time datetime="{{ l.updated_on | utc_iso }}">{{ l.updated_on | vn_datetime }}</time>
+  {% if l.added_by_owner %} <span class="badge text-bg-light border">{{ t(key="admin.added_by_owner") }}</span>{% endif %}
+</p>
+{%- endmacro listing_meta %}
+
+{% macro owner_note(l) -%}
+{% if l.added_by_owner %}<p class="small text-warning-emphasis mb-0">{{ atoms::icon(name="fa-user-pen") }} {{ t(key="admin.owner_content_note") }}</p>{% endif %}
+{%- endmacro owner_note %}
+
+{% macro listing_activity(a) -%}
+<p class="small text-muted mb-0">{{ atoms::icon(name="fa-phone") }} {{ t(key="admin.listing_taps", count=a.taps, days=a.days) }}{% if a.inquiries is number %} · {{ t(key="admin.listing_inquiries", count=a.inquiries) }}{% endif %}</p>
+{%- endmacro listing_activity %}

@@ -472,6 +472,10 @@ impl AppRouting {
                 post(pages::admin::providers::change_status),
             )
             .route(
+                "/admin/providers/{id}/account/delete",
+                post(pages::admin::providers::unlink_account),
+            )
+            .route(
                 "/admin/supplies",
                 get(pages::admin::products::list).post(pages::admin::products::create),
             )

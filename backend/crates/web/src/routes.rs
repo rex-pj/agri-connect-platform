@@ -98,6 +98,10 @@ pub const ROUTES: &[(&str, &str)] = &[
         "/admin/providers/{id}/verification",
     ),
     ("admin_provider_account", "/admin/providers/{id}/account"),
+    (
+        "admin_provider_account_delete",
+        "/admin/providers/{id}/account/delete",
+    ),
     ("admin_provider_status", "/admin/providers/{id}/status"),
     ("admin_inquiries", "/admin/inquiries"),
     ("admin_inquiry_status", "/admin/inquiries/{id}/status"),

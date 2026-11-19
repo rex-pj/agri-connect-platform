@@ -34,11 +34,15 @@ use crate::{
     cookies::{Flash, TakeFlash},
     extract::{ApiForm, ApiPath, ApiQuery},
     middleware::auth::Viewer,
+    pages::admin::{
+        products::CREATE_SHEET as PRODUCT_CREATE_SHEET,
+        services::CREATE_SHEET as SERVICE_CREATE_SHEET,
+    },
     pages::{
         admin::{
             dashboard::{card, StatCard},
             history_rows, is_refusal, render_admin, url, user_href, HistoryRow, ListPosition,
-            Outcome, SearchBox,
+            Outcome, ReasonForm, SearchBox,
         },
         canonical_url,
         forms::{reason, FormErrors},
@@ -257,6 +261,12 @@ pub struct ProviderPage {
     pub verification_action: String,
     pub status_action: String,
     pub account_action: String,
+    /// Takes the managing account off (confirmation with a reason).
+    pub account_delete_action: String,
+    /// The create sheets of its services and supplies (their lists narrowed
+    /// to it), while the visitor may add them.
+    pub services_add_href: Option<String>,
+    pub products_add_href: Option<String>,
     pub profile_action: String,
     /// This provider's services and products in their admin lists, when the
     /// visitor may manage them.
@@ -330,6 +340,10 @@ async fn provider_page(
             .lat
             .zip(provider.lng)
             .map(|(lat, lng)| format!("{MAP_POINT_URL}{lat},{lng}")),
+        services_add_href: list_of(PERM_SERVICE_MANAGE, "admin_services")?
+            .map(|href| format!("{href}#{SERVICE_CREATE_SHEET}")),
+        products_add_href: list_of(PERM_LISTING_MODERATE, "admin_products")?
+            .map(|href| format!("{href}#{PRODUCT_CREATE_SHEET}")),
         services_href: list_of(PERM_SERVICE_MANAGE, "admin_services")?,
         products_href: list_of(PERM_LISTING_MODERATE, "admin_products")?,
         inquiries_href,
@@ -344,6 +358,7 @@ async fn provider_page(
         verification_action: url("admin_provider_verification", &[("id", &id_text)])?,
         status_action: url("admin_provider_status", &[("id", &id_text)])?,
         account_action: url("admin_provider_account", &[("id", &id_text)])?,
+        account_delete_action: url("admin_provider_account_delete", &[("id", &id_text)])?,
         profile_action: path.clone(),
         form,
         profile,
@@ -521,4 +536,24 @@ pub async fn assign_account(
         }
         Err(err) => Err(err),
     }
+}
+
+/// POST /admin/providers/{id}/account/delete: the business no longer has a
+/// managing account (confirmation with a reason); the account stays.
+pub async fn unlink_account(
+    Viewer(viewer): Viewer,
+    State(state): State<AppState>,
+    ApiPath(raw_id): ApiPath<String>,
+    ApiForm(form): ApiForm<ReasonForm>,
+) -> Result<Response, Error> {
+    let Some(actor) = viewer else {
+        return see_other(&url("login", &[])?);
+    };
+    let id = parse_id(&raw_id, ErrorCode::ProviderNotFound)?;
+    state
+        .usecases
+        .admin
+        .unlink_provider_user(&actor, id, reason(&form.reason))
+        .await?;
+    redirect_to(id, Flash::ProviderAccountUnlinked)
 }

@@ -1,7 +1,10 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
-use crate::{error::Error, models::call::NewCallClick};
+use crate::{
+    error::Error,
+    models::{business::ListingRef, call::NewCallClick},
+};
 
 #[async_trait]
 pub trait CallRepositoryTrait {
@@ -13,6 +16,13 @@ pub trait CallRepositoryTrait {
     async fn count_since(
         &self,
         business_id: Option<i32>,
+        since: DateTime<Utc>,
+    ) -> Result<i64, Error>;
+
+    /// Taps since `since` on one listing's buttons (a service's, a supply's).
+    async fn count_listing_since(
+        &self,
+        listing: ListingRef,
         since: DateTime<Utc>,
     ) -> Result<i64, Error>;
 }

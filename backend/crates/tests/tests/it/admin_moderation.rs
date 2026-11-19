@@ -4,8 +4,8 @@
 
 use axum::http::{header, StatusCode};
 use integration_tests::{
-    body_text, categories_of, create_product, env_with_origin, get_page, install_admin, post_form,
-    register_provider, send, sign_in, Env,
+    body_text, categories_of, create_product, env_with_origin, get_page, install_admin, photo,
+    post_form, post_multipart_form, register_provider, send, sign_in, Env,
 };
 use sea_orm::{ConnectionTrait, Statement};
 
@@ -181,10 +181,11 @@ async fn services_are_created_for_a_provider_edited_and_deleted() {
 
     let res = send(
         &e.router,
-        post_form(
+        post_multipart_form(
             &detail,
             &[("category_id", &category), ("name", "Múc bùn vườn")],
-            Some(&admin),
+            None,
+            &admin,
         ),
     )
     .await;
@@ -435,9 +436,11 @@ async fn a_product_is_edited_hidden_and_deleted_on_its_own_admin_page() {
     assert!(html.contains(r#"value="85000""#));
 
     // The owner's rules: a blank name is refused in place, typed values kept.
+    // The form carries a photo box, so it is multipart like the owner's.
+    assert!(html.contains(r#"enctype="multipart/form-data""#));
     let category = category.to_string();
     let form = |name: &'static str, price: &'static str| {
-        post_form(
+        post_multipart_form(
             &own,
             &[
                 ("category_id", category.as_str()),
@@ -445,7 +448,8 @@ async fn a_product_is_edited_hidden_and_deleted_on_its_own_admin_page() {
                 ("price", price),
                 ("unit", "kg"),
             ],
-            Some(&admin),
+            None,
+            &admin,
         )
     };
     let res = send(&e.router, form("", "90.000")).await;
@@ -560,5 +564,164 @@ async fn admin_lists_find_records_by_name_without_diacritics() {
     assert!(!page(&e, "/admin/providers?q=khong-co", &admin)
         .await
         .contains("Vườn nongdan"));
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_supply_is_listed_for_a_provider_and_its_photo_set_and_removed() {
+    let e = env_with_origin().await;
+    let (admin, _, business) = setup(&e).await;
+    let (category, _) = categories_of(&e, "product").await[0].clone();
+    let list = format!("/admin/supplies?provider_id={business}");
+
+    let all = page(&e, "/admin/supplies", &admin).await;
+    assert!(
+        !all.contains(r#"id="them-vat-tu""#),
+        "create needs a provider"
+    );
+    assert!(page(&e, &list, &admin)
+        .await
+        .contains(r#"id="them-vat-tu""#));
+
+    // The owner's rules: refused in the sheet, open again, typed values kept.
+    let business_id = business.to_string();
+    let category = category.to_string();
+    let create = |name: &'static str| {
+        post_form(
+            "/admin/supplies",
+            &[
+                ("business_id", business_id.as_str()),
+                ("category_id", category.as_str()),
+                ("name", name),
+                ("price", "350.000"),
+                ("unit", "bao"),
+            ],
+            Some(&admin),
+        )
+    };
+    let res = send(&e.router, create(" ")).await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    let html = body_text(res).await;
+    assert!(html.contains(r#"id="them-vat-tu""#));
+    assert!(html.contains(r#"value="350.000""#), "typed price kept");
+
+    let res = send(&e.router, create("Phân NPK 20-20-15")).await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let own = res.headers()[header::LOCATION].to_str().unwrap().to_owned();
+    let id = own.rsplit('/').next().unwrap().to_owned();
+    assert_eq!(
+        one_i32(
+            &e,
+            &format!("SELECT business_id FROM products WHERE id = {id}")
+        )
+        .await,
+        business
+    );
+
+    // A photo with the boxes, as on the owner's form.
+    let res = send(
+        &e.router,
+        post_multipart_form(
+            &own,
+            &[
+                ("category_id", category.as_str()),
+                ("name", "Phân NPK 20-20-15"),
+            ],
+            Some(&photo(64, 48)),
+            &admin,
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let has_photo =
+        format!("SELECT count(*)::int FROM products WHERE id = {id} AND image_file_id IS NOT NULL");
+    assert_eq!(one_i32(&e, &has_photo).await, 1);
+    assert!(page(&e, &own, &admin).await.contains(r#"id="go-anh""#));
+
+    // A file that is not an image is refused on the photo box.
+    let res = send(
+        &e.router,
+        post_multipart_form(
+            &own,
+            &[("category_id", category.as_str()), ("name", "Phân NPK")],
+            Some(b"not an image"),
+            &admin,
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert!(body_text(res).await.contains(r#"id="edit-image-error""#));
+    assert_eq!(
+        one_text(&e, &format!("SELECT name FROM products WHERE id = {id}")).await,
+        "Phân NPK 20-20-15",
+        "nothing saved with a refused photo"
+    );
+
+    // Taken off behind a confirmation with a reason: the supply stays.
+    let res = send(
+        &e.router,
+        post_form(
+            &format!("{own}/image/delete"),
+            &[("reason", "Ảnh không phải vật tư")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res.headers()[header::LOCATION], own.as_str());
+    assert_eq!(one_i32(&e, &has_photo).await, 0);
+    assert_eq!(
+        one_text(
+            &e,
+            "SELECT action || ': ' || reason FROM audit_logs WHERE entity_type = 'product' ORDER BY id DESC LIMIT 1"
+        )
+        .await,
+        "remove_product_image: Ảnh không phải vật tư"
+    );
+    assert!(!page(&e, &own, &admin).await.contains(r#"id="go-anh""#));
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_shown_service_says_why_farmers_cannot_see_it() {
+    let e = env_with_origin().await;
+    let (admin, _, business) = setup(&e).await;
+    let (category, _) = categories_of(&e, "service").await[0].clone();
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/services",
+            &[
+                ("business_id", &business.to_string()),
+                ("category_id", &category.to_string()),
+                ("name", "Phun thuốc"),
+            ],
+            Some(&admin),
+        ),
+    )
+    .await;
+    let own = res.headers()[header::LOCATION].to_str().unwrap().to_owned();
+    let id = own.rsplit('/').next().unwrap().to_owned();
+    let public = format!(r#"href="/services/{id}/"#);
+
+    let html = page(&e, &own, &admin).await;
+    assert!(html.contains("Đang hiện ở trang công khai."));
+    assert!(html.contains(&public), "its public page while public");
+
+    // Its provider switched off: the service's own switch is still on, but
+    // the page says it is not public, why, and where to fix it.
+    e.t.db
+        .execute_unprepared(&format!(
+            "UPDATE businesses SET is_active = false WHERE id = {business}"
+        ))
+        .await
+        .unwrap();
+    let html = page(&e, &own, &admin).await;
+    assert!(html.contains("Đang bật hiện, nhưng bà con chưa thấy."));
+    assert!(html.contains("Nhà cung cấp đang tắt."));
+    assert!(html.contains(&format!(r#"href="/admin/providers/{business}""#)));
+    assert!(!html.contains(&public), "no link to a page that would 404");
     e.cleanup().await;
 }

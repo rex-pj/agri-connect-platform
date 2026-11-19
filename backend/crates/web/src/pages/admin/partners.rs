@@ -34,7 +34,7 @@ use crate::{
     locale::Locale,
     middleware::auth::Viewer,
     pages::{
-        admin::{is_refusal, render_admin, url, user_href, Outcome},
+        admin::{is_refusal, render_admin, url, user_href, Outcome, ReasonForm},
         forms::{reason, FormErrors},
         parse_id, see_other,
     },
@@ -645,12 +645,6 @@ pub async fn create_contract(
         Some(Typed::Contract(form)),
     )
     .await
-}
-
-#[derive(Debug, Default, Deserialize)]
-#[serde(default)]
-pub struct ReasonForm {
-    pub reason: String,
 }
 
 /// POST /admin/partners/{id}/contracts/{cid}: the contract's edit form.

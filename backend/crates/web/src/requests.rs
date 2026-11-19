@@ -283,6 +283,14 @@ pub struct AdminUpdateServiceRequest {
     pub price_note: Option<String>,
 }
 
+/// A supply an admin lists for a provider (`business_id`).
+#[derive(Deserialize)]
+pub struct AdminCreateProductRequest {
+    pub business_id: i32,
+    #[serde(flatten)]
+    pub product: AdminUpdateProductRequest,
+}
+
 #[derive(Deserialize)]
 pub struct AdminUpdateProductRequest {
     pub category_id: i32,

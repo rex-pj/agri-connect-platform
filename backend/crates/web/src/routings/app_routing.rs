@@ -269,6 +269,9 @@ impl AppRouting {
                 "/provider/services/{id}/edit",
                 post(pages::own_services::update_service),
             )
+            // The admin's edit forms of a service and a supply carry a photo too.
+            .route("/admin/services/{id}", post(pages::admin::services::update))
+            .route("/admin/supplies/{id}", post(pages::admin::products::update))
             .layer(DefaultBodyLimit::max(
                 state.usecases.media.max_upload_bytes() + MULTIPART_OVERHEAD_BYTES,
             ))
@@ -468,10 +471,14 @@ impl AppRouting {
                 "/admin/providers/{id}/status",
                 post(pages::admin::providers::change_status),
             )
-            .route("/admin/supplies", get(pages::admin::products::list))
             .route(
-                "/admin/supplies/{id}",
-                get(pages::admin::products::show).post(pages::admin::products::update),
+                "/admin/supplies",
+                get(pages::admin::products::list).post(pages::admin::products::create),
+            )
+            .route("/admin/supplies/{id}", get(pages::admin::products::show))
+            .route(
+                "/admin/supplies/{id}/image/delete",
+                post(pages::admin::products::remove_image),
             )
             .route(
                 "/admin/supplies/{id}/status",
@@ -485,9 +492,10 @@ impl AppRouting {
                 "/admin/services",
                 get(pages::admin::services::list).post(pages::admin::services::create),
             )
+            .route("/admin/services/{id}", get(pages::admin::services::show))
             .route(
-                "/admin/services/{id}",
-                get(pages::admin::services::show).post(pages::admin::services::update),
+                "/admin/services/{id}/image/delete",
+                post(pages::admin::services::remove_image),
             )
             .route(
                 "/admin/services/{id}/status",
@@ -808,7 +816,10 @@ impl AppRouting {
                 delete(AdminHandler::delete_location),
             )
             // Products
-            .route("/api/admin/products", get(AdminHandler::list_products))
+            .route(
+                "/api/admin/products",
+                get(AdminHandler::list_products).post(AdminHandler::create_product),
+            )
             .route(
                 "/api/admin/products/{id}",
                 get(AdminHandler::get_product).put(AdminHandler::update_product),

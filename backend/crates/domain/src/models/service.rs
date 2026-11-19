@@ -13,6 +13,10 @@ pub struct AdminService {
     pub business_id: i32,
     pub business_name: String,
     pub is_active: bool,
+    /// Its business is on, its service type shown: with `is_active`, what
+    /// puts it on the public pages (`is_public`).
+    pub business_active: bool,
+    pub category_active: bool,
     pub image_file_id: Option<Uuid>,
     /// The account that added it and the business's managing account: equal
     /// when the provider listed it themselves rather than an admin for them.
@@ -20,6 +24,14 @@ pub struct AdminService {
     pub owner_id: Option<i32>,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
+}
+
+impl AdminService {
+    /// On the public pages: shown, its business on, its type shown (the
+    /// service repository's `live_public`, read back for one row).
+    pub fn is_public(&self) -> bool {
+        self.is_active && self.business_active && self.category_active
+    }
 }
 
 /// One of a provider's own services, as their dashboard shows it: hidden ones

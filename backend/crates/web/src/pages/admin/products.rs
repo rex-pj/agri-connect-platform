@@ -19,17 +19,19 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     app_state::AppState,
+    constants::IMAGE_FIELD,
     cookies::{Flash, TakeFlash},
-    extract::{ApiForm, ApiPath, ApiQuery},
+    extract::{ApiForm, ApiMultipart, ApiPath, ApiQuery},
     labels::sector_label,
     middleware::auth::Viewer,
     pages::admin::sector_href,
     pages::{
         admin::{
             is_refusal, render_admin, url, ListPosition, ListReturn, Outcome, ProviderFilter,
-            RowConfirm, SearchBox, BACK_TO_LIST,
+            ReasonForm, RowConfirm, SearchBox, BACK_TO_LIST,
         },
         canonical_url,
+        dashboard::{max_upload_mb, prepare},
         forms::{reason, FormErrors},
         listing::{parse_opt, Pagination},
         parse_id,
@@ -81,6 +83,8 @@ pub struct ProductsPage {
     /// Set when the list is one commodity's or one supply type's.
     pub narrowed: Option<ProviderFilter>,
     pub search: SearchBox,
+    /// Set when the list is one provider's.
+    pub create: Option<CreateForm>,
     /// The hidden fields of every row action: land back here.
     pub keep: ListReturn,
     pub confirm: Option<RowConfirm>,
@@ -116,16 +120,34 @@ fn narrowed(
         .transpose()
 }
 
-/// GET /admin/supplies
-pub async fn list(
-    Viewer(viewer): Viewer,
-    flash: TakeFlash,
-    State(state): State<AppState>,
-    ApiQuery(q): ApiQuery<ListQuery>,
-) -> Result<Response, Error> {
-    let Some(actor) = viewer else {
-        return see_other(&url("login", &[])?);
-    };
+/// The create form, shown when the list is one provider's: a supply always
+/// belongs to a provider (e.g. one with no account met on a field visit).
+#[derive(Serialize)]
+pub struct CreateForm {
+    pub business_id: i32,
+    pub action: String,
+    pub categories: Vec<CategoryDto>,
+    pub commodities: Vec<CommodityDto>,
+    pub form: ProductForm,
+    pub errors: FormErrors,
+}
+
+/// The list as asked: its position, the confirmation to open, and the
+/// create form as typed after a refusal.
+struct Listing {
+    query: ListQuery,
+    create_form: Option<(ProductForm, FormErrors)>,
+    flash: Option<Flash>,
+    status: StatusCode,
+}
+
+async fn list_page(state: &AppState, actor: &Actor, asked: Listing) -> Result<Response, Error> {
+    let Listing {
+        query: q,
+        create_form,
+        flash,
+        status,
+    } = asked;
     let position = ListPosition {
         page: q.page.clone(),
         provider_id: q.provider_id.clone(),
@@ -136,6 +158,7 @@ pub async fn list(
     };
     let commodity_id = parse_opt::<i32>(&q.commodity_id).filter(|c| *c > 0);
     let category_id = parse_opt::<i32>(&q.category_id).filter(|c| *c > 0);
+    let provider_id = position.provider_id();
     let AdminPagedResponse {
         items,
         total,
@@ -146,10 +169,10 @@ pub async fn list(
         .usecases
         .admin
         .list_products_admin(
-            &actor,
+            actor,
             position.page(),
             &AdminProductFilter {
-                provider_id: position.provider_id(),
+                provider_id,
                 category_id,
                 commodity_id,
                 search: position.search().map(str::to_owned),
@@ -188,7 +211,7 @@ pub async fn list(
                 ..ListPosition::default()
             }
             .href("admin_products", &[])?,
-            sector_label: sector_label(&state, &sectors, product.sector.as_deref()),
+            sector_label: sector_label(state, &sectors, product.sector.as_deref()),
             sector_href: sector_href(&sectors, product.sector.as_deref())?,
             commodity_href: product
                 .commodity_id
@@ -211,6 +234,20 @@ pub async fn list(
         });
     }
     let path = url("admin_products", &[])?;
+    let create = match provider_id {
+        Some(business_id) => {
+            let (form, errors) = create_form.unwrap_or_default();
+            Some(CreateForm {
+                business_id,
+                action: path.clone(),
+                categories: product_categories(state).await?,
+                commodities: product_commodities(state).await?,
+                form,
+                errors,
+            })
+        }
+        None => None,
+    };
     let name = rows.first().map(|r| r.product.business_name.clone());
     let narrowed = narrowed(&rows, commodity_id, category_id, &path)?;
     let body = ProductsPage {
@@ -220,20 +257,89 @@ pub async fn list(
         search: position.search_box("admin_products")?,
         pagination: position.pagination(&path, page, total_pages),
         rows,
+        create,
         keep: ListReturn::new(position),
         confirm,
-        flash: flash.0,
+        flash,
     };
-    let mut response = render_admin(
-        &state,
-        &actor,
+    render_admin(
+        state,
+        actor,
         &path,
-        StatusCode::OK,
+        status,
         "pages/admin/products.html",
         &body,
-    )?;
+    )
+}
+
+/// GET /admin/supplies
+pub async fn list(
+    Viewer(viewer): Viewer,
+    flash: TakeFlash,
+    State(state): State<AppState>,
+    ApiQuery(q): ApiQuery<ListQuery>,
+) -> Result<Response, Error> {
+    let Some(actor) = viewer else {
+        return see_other(&url("login", &[])?);
+    };
+    let asked = Listing {
+        query: q,
+        create_form: None,
+        flash: flash.0,
+        status: StatusCode::OK,
+    };
+    let mut response = list_page(&state, &actor, asked).await?;
     flash.clear_on(&mut response);
     Ok(response)
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct CreateRequest {
+    pub business_id: String,
+    #[serde(flatten)]
+    pub product: ProductForm,
+}
+
+/// POST /admin/supplies: a supply for the provider the list is narrowed
+/// to; its page next, where a photo can be added.
+pub async fn create(
+    Viewer(viewer): Viewer,
+    State(state): State<AppState>,
+    ApiForm(req): ApiForm<CreateRequest>,
+) -> Result<Response, Error> {
+    let Some(actor) = viewer else {
+        return see_other(&url("login", &[])?);
+    };
+    let business_id = parse_id(&req.business_id, ErrorCode::ProviderNotFound)?;
+    let form = req.product;
+    let result = match form.create_input() {
+        Ok(input) => {
+            state
+                .usecases
+                .admin
+                .create_product_admin(&actor, business_id, input)
+                .await
+        }
+        Err(err) => Err(err),
+    };
+    match result {
+        Ok(created) => redirect_to(created.id, Flash::ProductCreated),
+        Err(err) if is_refusal(&err) => {
+            let errors = FormErrors::from_error(&state, &err);
+            let asked = Listing {
+                query: ListQuery {
+                    provider_id: business_id.to_string(),
+                    ..ListQuery::default()
+                },
+                create_form: Some((form, errors)),
+                flash: None,
+                status: err.kind().status(),
+            };
+            list_page(&state, &actor, asked).await
+        }
+        Err(err) => Err(err),
+    }
 }
 
 #[derive(Serialize)]
@@ -246,9 +352,16 @@ pub struct ProductPage {
     pub update_action: String,
     pub status_action: String,
     pub delete_action: String,
+    /// Takes its photo off (confirmation with a reason).
+    pub image_delete_action: String,
+    /// The photo box's size line.
+    pub max_upload_mb: usize,
     pub provider_href: String,
-    /// The page farmers see; `None` while it is hidden (it would 404).
+    /// The page farmers see; `None` while it is off the public pages (it
+    /// would 404).
     pub public_href: Option<String>,
+    /// Its supply type's admin page, where a hidden type is shown again.
+    pub category_href: String,
     /// The provider's products, where a deletion lands.
     pub provider_products_href: String,
     pub flash: Option<Flash>,
@@ -288,12 +401,18 @@ async fn product_page(
         update_action: path.clone(),
         status_action: url("admin_product_status", &[("id", &id_text)])?,
         delete_action: url("admin_product_delete", &[("id", &id_text)])?,
+        image_delete_action: url("admin_product_image_delete", &[("id", &id_text)])?,
+        max_upload_mb: max_upload_mb(state),
         provider_href: url(
             "admin_provider",
             &[("id", &product.business_id.to_string())],
         )?,
+        category_href: url(
+            "admin_category",
+            &[("id", &product.category_id.to_string())],
+        )?,
         public_href: product
-            .is_active
+            .is_public
             .then(|| canonical_url("product", product.id, &product.name))
             .transpose()?,
         provider_products_href: provider_products(product.business_id)
@@ -337,17 +456,30 @@ pub async fn show(
     Ok(response)
 }
 
-/// POST /admin/supplies/{id}
+/// POST /admin/supplies/{id} (multipart: the boxes and an optional photo,
+/// checked before anything is saved, as on the owner's form)
 pub async fn update(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
     ApiPath(raw_id): ApiPath<String>,
-    ApiForm(form): ApiForm<ProductForm>,
+    upload: ApiMultipart,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
     let id = parse_id(&raw_id, ErrorCode::ProductNotFound)?;
+    // Who is asking, and that the supply exists, before reading the photo.
+    state.usecases.admin.get_product_admin(&actor, id).await?;
+    let max = state.usecases.media.max_upload_bytes();
+    let (form, file): (ProductForm, _) = upload.into_form(IMAGE_FIELD, max).await?;
+    let image = match prepare(&state, file).await {
+        Ok(image) => image,
+        Err(err) if is_refusal(&err) => {
+            let outcome = Outcome::photo_refused(&state, &err, form);
+            return product_page(&state, &actor, id, outcome).await;
+        }
+        Err(err) => return Err(err),
+    };
     let result = match form.update_input(id) {
         Ok(input) => {
             state
@@ -359,7 +491,16 @@ pub async fn update(
         Err(err) => Err(err),
     };
     match result {
-        Ok(_) => redirect_to(id, Flash::ProductSaved),
+        Ok(_) => {
+            if let Some(image) = image {
+                state
+                    .usecases
+                    .media
+                    .attach_product_image_admin(&actor, id, image)
+                    .await?;
+            }
+            redirect_to(id, Flash::ProductSaved)
+        }
         Err(err) if is_refusal(&err) => {
             let outcome = Outcome::refused(&state, &err, Some(form), false);
             product_page(&state, &actor, id, outcome).await
@@ -368,6 +509,24 @@ pub async fn update(
     }
 }
 
+/// POST /admin/supplies/{id}/image/delete: the photo off, the supply kept.
+pub async fn remove_image(
+    Viewer(viewer): Viewer,
+    State(state): State<AppState>,
+    ApiPath(raw_id): ApiPath<String>,
+    ApiForm(form): ApiForm<ReasonForm>,
+) -> Result<Response, Error> {
+    let Some(actor) = viewer else {
+        return see_other(&url("login", &[])?);
+    };
+    let id = parse_id(&raw_id, ErrorCode::ProductNotFound)?;
+    state
+        .usecases
+        .media
+        .remove_product_image(&actor, id, reason(&form.reason))
+        .await?;
+    redirect_to(id, Flash::ImageRemoved)
+}
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct StatusForm {

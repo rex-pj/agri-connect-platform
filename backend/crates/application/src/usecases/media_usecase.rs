@@ -1,11 +1,14 @@
 //! Uploaded images: the pipeline from untrusted bytes to stored objects, and
 //! reading them back for `/files/{id}`.
 
-use std::{future::Future, sync::Arc};
+use std::sync::Arc;
 
 use domain::{
     events::{Change, DomainEvent, Entity},
-    models::file::{FileVariant, NewFile},
+    models::{
+        business::ListingEditor,
+        file::{FileVariant, NewFile},
+    },
     repositories::{
         file_repository_trait::FileRepositoryTrait,
         product_repository_trait::ProductRepositoryTrait,
@@ -18,10 +21,14 @@ use uuid::Uuid;
 
 use crate::{
     authz::Actor,
-    catalogue::{PERM_OWN_LISTING_UPDATE, PERM_OWN_SERVICE_UPDATE},
+    catalogue::{
+        PERM_LISTING_MODERATE, PERM_OWN_LISTING_UPDATE, PERM_OWN_SERVICE_UPDATE,
+        PERM_SERVICE_MANAGE,
+    },
     hashing::sha256_hex,
     outputs::{ProviderProductDto, ProviderServiceDto},
     ports::{EventBus, FileStorage, ImageProcessor, ProcessedImage},
+    validation::audit_reason,
 };
 
 /// A stored object and the type to serve it with.
@@ -66,6 +73,35 @@ pub fn file_too_large(max_upload_bytes: usize) -> Error {
 /// user input reaches a storage path.
 fn object_keys(id: Uuid) -> (String, String) {
     (format!("images/{id}.jpg"), format!("images/{id}-thumb.jpg"))
+}
+
+/// The two kinds of listing that carry one image.
+#[derive(Debug, Clone, Copy)]
+enum Listing {
+    Product(i32),
+    Service(i32),
+}
+
+impl Listing {
+    fn id(self) -> i32 {
+        match self {
+            Self::Product(id) | Self::Service(id) => id,
+        }
+    }
+
+    fn entity(self) -> Entity {
+        match self {
+            Self::Product(_) => Entity::Product,
+            Self::Service(_) => Entity::Service,
+        }
+    }
+
+    fn missing(self) -> ErrorCode {
+        match self {
+            Self::Product(_) => ErrorCode::ProductNotFound,
+            Self::Service(_) => ErrorCode::ServiceNotFound,
+        }
+    }
 }
 
 impl MediaUseCase {
@@ -134,15 +170,9 @@ impl MediaUseCase {
         image: ProcessedImage,
     ) -> Result<ProviderProductDto> {
         actor.require(PERM_OWN_LISTING_UPDATE)?;
-        self.swap_image(
-            actor,
-            Entity::Product,
-            product_id,
-            image,
-            ErrorCode::ProductNotFound,
-            |file| self.products.set_image(product_id, actor.user_id, file),
-        )
-        .await?;
+        let editor = ListingEditor::Owner(actor.user_id);
+        self.swap_image(actor, Listing::Product(product_id), editor, image)
+            .await?;
 
         self.products
             .find_provider_product_by_id(product_id)
@@ -183,18 +213,9 @@ impl MediaUseCase {
         image: ProcessedImage,
     ) -> Result<ProviderServiceDto> {
         actor.require(PERM_OWN_SERVICE_UPDATE)?;
-        self.swap_image(
-            actor,
-            Entity::Service,
-            service_id,
-            image,
-            ErrorCode::ServiceNotFound,
-            |file| {
-                self.services
-                    .set_image_owned(service_id, actor.user_id, file)
-            },
-        )
-        .await?;
+        let editor = ListingEditor::Owner(actor.user_id);
+        self.swap_image(actor, Listing::Service(service_id), editor, image)
+            .await?;
 
         self.services
             .find_owned(service_id, actor.user_id)
@@ -203,45 +224,139 @@ impl MediaUseCase {
             .ok_or_else(|| Error::internal("service image set but service could not be reloaded"))
     }
 
-    /// Stores the image, points the record at it with `set` (which answers
-    /// `None` when the record is not the actor's, e.g. deleted since the
-    /// ownership check), and announces the replaced one for cleanup. A
-    /// refused or failed `set` discards what was stored.
-    async fn swap_image<F, Fut>(
+    /// A moderator's photo for any live product (prepared already by
+    /// `prepare_image`): one taken on a field visit, or one in place of an
+    /// unsuitable one. The old image goes to the cleanup subscriber.
+    pub async fn attach_product_image_admin(
         &self,
         actor: &Actor,
-        entity: Entity,
-        entity_id: i32,
+        product_id: i32,
         image: ProcessedImage,
-        missing: ErrorCode,
-        set: F,
-    ) -> Result<()>
-    where
-        F: FnOnce(Uuid) -> Fut,
-        Fut: Future<Output = Result<Option<Option<Uuid>>>>,
-    {
+    ) -> Result<()> {
+        actor.require(PERM_LISTING_MODERATE)?;
+        let editor = ListingEditor::Moderator(actor.user_id);
+        self.swap_image(actor, Listing::Product(product_id), editor, image)
+            .await
+    }
+
+    /// A moderator's photo for any live service, as for a product.
+    pub async fn attach_service_image_admin(
+        &self,
+        actor: &Actor,
+        service_id: i32,
+        image: ProcessedImage,
+    ) -> Result<()> {
+        actor.require(PERM_SERVICE_MANAGE)?;
+        let editor = ListingEditor::Moderator(actor.user_id);
+        self.swap_image(actor, Listing::Service(service_id), editor, image)
+            .await
+    }
+
+    /// A moderator takes a product's photo off, the product staying listed
+    /// (audited with `reason`; the stored image goes to the cleanup
+    /// subscriber).
+    pub async fn remove_product_image(
+        &self,
+        actor: &Actor,
+        product_id: i32,
+        reason: Option<String>,
+    ) -> Result<()> {
+        actor.require(PERM_LISTING_MODERATE)?;
+        self.remove_image(actor, Listing::Product(product_id), reason)
+            .await
+    }
+
+    /// A moderator takes a service's photo off, as for a product.
+    pub async fn remove_service_image(
+        &self,
+        actor: &Actor,
+        service_id: i32,
+        reason: Option<String>,
+    ) -> Result<()> {
+        actor.require(PERM_SERVICE_MANAGE)?;
+        self.remove_image(actor, Listing::Service(service_id), reason)
+            .await
+    }
+
+    /// Points `listing` at `file` (`None`: no image) if `editor` may change
+    /// it: the image it had before, or `None` when it may not (missing,
+    /// deleted, someone else's).
+    async fn set_image(
+        &self,
+        listing: Listing,
+        editor: ListingEditor,
+        file: Option<Uuid>,
+    ) -> Result<Option<Option<Uuid>>> {
+        match listing {
+            Listing::Product(id) => self.products.set_image(id, editor, file).await,
+            Listing::Service(id) => self.services.set_image(id, editor, file).await,
+        }
+    }
+
+    /// Stores the image, points the listing at it (refused when `editor` may
+    /// not change it, e.g. deleted since the ownership check), and announces
+    /// the replaced one for cleanup. A refused or failed write discards what
+    /// was stored.
+    async fn swap_image(
+        &self,
+        actor: &Actor,
+        listing: Listing,
+        editor: ListingEditor,
+        image: ProcessedImage,
+    ) -> Result<()> {
         let file = self.store(actor, image).await?;
-        let previous = match set(file).await {
+        let previous = match self.set_image(listing, editor, Some(file)).await {
             Ok(Some(previous)) => previous,
             Ok(None) => {
                 self.discard(file).await;
-                return Err(Error::new(missing));
+                return Err(Error::new(listing.missing()));
             }
             Err(e) => {
                 self.discard(file).await;
                 return Err(e);
             }
         };
+        self.announce(actor, listing, Change::ImageReplaced { previous }, None)
+            .await;
+        Ok(())
+    }
+
+    /// Takes the image off a listing as a moderator; nothing to announce when
+    /// it had none.
+    async fn remove_image(
+        &self,
+        actor: &Actor,
+        listing: Listing,
+        reason: Option<String>,
+    ) -> Result<()> {
+        let editor = ListingEditor::Moderator(actor.user_id);
+        let previous = self
+            .set_image(listing, editor, None)
+            .await?
+            .ok_or_else(|| Error::new(listing.missing()))?;
+        if let Some(previous) = previous {
+            self.announce(actor, listing, Change::ImageRemoved { previous }, reason)
+                .await;
+        }
+        Ok(())
+    }
+
+    async fn announce(
+        &self,
+        actor: &Actor,
+        listing: Listing,
+        change: Change,
+        reason: Option<String>,
+    ) {
         self.events
             .publish(DomainEvent {
                 actor_id: Some(actor.user_id),
-                entity,
-                entity_id,
-                change: Change::ImageReplaced { previous },
-                reason: None,
+                entity: listing.entity(),
+                entity_id: listing.id(),
+                change,
+                reason: audit_reason(reason),
             })
             .await;
-        Ok(())
     }
 
     /// Stores both objects, then the row. A failure after an object was

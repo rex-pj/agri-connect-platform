@@ -7,7 +7,7 @@ use domain::{
         category::{CategoryAdmin, NewCategory, UpdateCategory},
         coded::CodedEntry,
         location::Location,
-        product::{AdminProductFilter, UpdateProductAdmin},
+        product::{AdminProductFilter, NewProduct, UpdateProductAdmin},
         role::UserRole,
         service::{NewService, UpdateService},
     },
@@ -41,7 +41,9 @@ use crate::{
         ADMIN_PAGE_SIZE, CATEGORY_COLOR_MAX, CATEGORY_DESCRIPTION_MAX, CATEGORY_ICON_MAX,
         CATEGORY_NAME_MAX, CATEGORY_SLUG_MAX, LOCATION_LABEL_MAX, SLUG_CANDIDATES_PER_QUERY,
     },
-    inputs::{CategoryInput, LocationInput, UpdateProductInput, UpdateProfileInput},
+    inputs::{
+        CategoryInput, CreateProductInput, LocationInput, UpdateProductInput, UpdateProfileInput,
+    },
     outputs::{
         AdminCategoryDto, AdminInquiryDto, AdminLocationDto, AdminPagedResponse, AdminProductDto,
         AdminProductItemDto, AdminProviderDetailDto, AdminProviderDto, AdminReviewDto,
@@ -1034,6 +1036,70 @@ impl AdminUseCase {
         self.load_product_admin(id).await
     }
 
+    /// Lists a supply for a provider, e.g. one with no account met on a
+    /// field visit: the owner's rules (`product_rules`) and cap; its photo is
+    /// added on its page (`MediaUseCase::attach_product_image_admin`).
+    pub async fn create_product_admin(
+        &self,
+        actor: &Actor,
+        business_id: i32,
+        input: CreateProductInput,
+    ) -> Result<AdminProductDto> {
+        actor.require(PERM_LISTING_MODERATE)?;
+        if !self
+            .business_repo
+            .check_exists_for_admin(business_id)
+            .await?
+        {
+            return Err(Error::new(ErrorCode::ProviderNotFound));
+        }
+        let CreateProductInput {
+            category_id,
+            commodity_id,
+            name,
+            description,
+            price,
+            unit,
+        } = input;
+        let ProductFields {
+            name,
+            description,
+            unit,
+            commodity_id,
+        } = validate_product(
+            self.product_repo.as_ref(),
+            category_id,
+            commodity_id,
+            name,
+            description,
+            price,
+            unit,
+        )
+        .await?;
+        let cap = self.settings.load().await?.products_per_business();
+        let id = self
+            .product_repo
+            .create_capped(
+                NewProduct {
+                    business_id,
+                    category_id,
+                    commodity_id,
+                    name,
+                    description,
+                    price,
+                    unit,
+                    image_file_id: None,
+                    created_by: actor.user_id,
+                },
+                cap,
+            )
+            .await?
+            .ok_or_else(|| Error::new(ErrorCode::ProductLimitReached).with_param("max", cap))?;
+        self.publish(actor, Entity::Product, id, Change::Created, None)
+            .await;
+        self.load_product_admin(id).await
+    }
+
     async fn load_product_admin(&self, id: i32) -> Result<AdminProductDto> {
         let p = self
             .product_repo
@@ -1205,18 +1271,25 @@ impl AdminUseCase {
             price_note,
         )
         .await?;
+        // The owner's cap holds for an admin too: an owner's page shows
+        // their whole list at once.
+        let cap = self.settings.load().await?.services_per_business();
         let id = self
             .service_repo
-            .create(NewService {
-                business_id,
-                category_id,
-                name,
-                description,
-                price_note,
-                image_file_id: None,
-                created_by: actor.user_id,
-            })
-            .await?;
+            .create_capped(
+                NewService {
+                    business_id,
+                    category_id,
+                    name,
+                    description,
+                    price_note,
+                    image_file_id: None,
+                    created_by: actor.user_id,
+                },
+                cap,
+            )
+            .await?
+            .ok_or_else(|| Error::new(ErrorCode::ServiceLimitReached).with_param("max", cap))?;
         self.publish(actor, Entity::Service, id, Change::Created, None)
             .await;
         self.load_service_admin(id).await

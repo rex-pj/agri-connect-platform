@@ -18,8 +18,20 @@ pub struct AdminProduct {
     pub business_name: String,
     pub image_file_id: Option<Uuid>,
     pub is_active: bool,
+    /// Its business is on, its supply type shown: with `is_active`, what
+    /// puts it on the public pages (`is_public`).
+    pub business_active: bool,
+    pub category_active: bool,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
+}
+
+impl AdminProduct {
+    /// On the public pages: shown, its business on, its type shown (the
+    /// product repository's public query, read back for one row).
+    pub fn is_public(&self) -> bool {
+        self.is_active && self.business_active && self.category_active
+    }
 }
 
 pub struct ProductView {

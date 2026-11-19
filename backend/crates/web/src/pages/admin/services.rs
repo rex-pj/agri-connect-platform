@@ -18,17 +18,19 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     app_state::AppState,
+    constants::IMAGE_FIELD,
     cookies::{Flash, TakeFlash},
-    extract::{ApiForm, ApiPath, ApiQuery},
+    extract::{ApiForm, ApiMultipart, ApiPath, ApiQuery},
     labels::sector_label,
     middleware::auth::Viewer,
     pages::admin::sector_href,
     pages::{
         admin::{
             is_refusal, render_admin, url, Asked, ListPosition, ListReturn, Outcome,
-            ProviderFilter, RowConfirm, SearchBox, BACK_TO_LIST,
+            ProviderFilter, ReasonForm, RowConfirm, SearchBox, BACK_TO_LIST,
         },
         canonical_url,
+        dashboard::{max_upload_mb, prepare},
         forms::{reason, FormErrors},
         listing::Pagination,
         parse_id, see_other,
@@ -292,9 +294,15 @@ pub struct ServicePage {
     pub update_action: String,
     pub status_action: String,
     pub delete_action: String,
+    /// Takes its photo off (confirmation with a reason).
+    pub image_delete_action: String,
+    /// The photo box's size line.
+    pub max_upload_mb: usize,
     pub provider_href: String,
-    /// Its public page, while it is shown (like a product's).
+    /// Its public page, while it is on the public pages (like a product's).
     pub public_href: Option<String>,
+    /// Its service type's admin page, where a hidden type is shown again.
+    pub category_href: String,
     /// The provider's services, where a deletion lands.
     pub provider_services_href: String,
     pub flash: Option<Flash>,
@@ -325,9 +333,15 @@ async fn service_page(
         update_action: path.clone(),
         status_action: url("admin_service_status", &[("id", &id_text)])?,
         delete_action: url("admin_service_delete", &[("id", &id_text)])?,
+        image_delete_action: url("admin_service_image_delete", &[("id", &id_text)])?,
+        max_upload_mb: max_upload_mb(state),
+        category_href: url(
+            "admin_category",
+            &[("id", &service.category_id.to_string())],
+        )?,
         provider_href: url("admin_provider", &[("id", &business)])?,
         public_href: service
-            .is_active
+            .is_public
             .then(|| canonical_url("service", service.id, &service.name))
             .transpose()?,
         provider_services_href: ListPosition {
@@ -374,17 +388,30 @@ pub async fn show(
     Ok(response)
 }
 
-/// POST /admin/services/{id}
+/// POST /admin/services/{id} (multipart: the boxes and an optional photo,
+/// checked before anything is saved, as on the owner's form)
 pub async fn update(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
     ApiPath(raw_id): ApiPath<String>,
-    ApiForm(form): ApiForm<ServiceForm>,
+    upload: ApiMultipart,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
     let id = parse_id(&raw_id, ErrorCode::ServiceNotFound)?;
+    // Who is asking, and that the service exists, before reading the photo.
+    state.usecases.admin.get_service_admin(&actor, id).await?;
+    let max = state.usecases.media.max_upload_bytes();
+    let (form, file): (ServiceForm, _) = upload.into_form(IMAGE_FIELD, max).await?;
+    let image = match prepare(&state, file).await {
+        Ok(image) => image,
+        Err(err) if is_refusal(&err) => {
+            let outcome = Outcome::photo_refused(&state, &err, form);
+            return service_page(&state, &actor, id, outcome).await;
+        }
+        Err(err) => return Err(err),
+    };
     let result = state
         .usecases
         .admin
@@ -398,13 +425,41 @@ pub async fn update(
         )
         .await;
     match result {
-        Ok(_) => redirect_to(id, Flash::ServiceSaved),
+        Ok(_) => {
+            if let Some(image) = image {
+                state
+                    .usecases
+                    .media
+                    .attach_service_image_admin(&actor, id, image)
+                    .await?;
+            }
+            redirect_to(id, Flash::ServiceSaved)
+        }
         Err(err) if is_refusal(&err) => {
             let outcome = Outcome::refused(&state, &err, Some(form), false);
             service_page(&state, &actor, id, outcome).await
         }
         Err(err) => Err(err),
     }
+}
+
+/// POST /admin/services/{id}/image/delete: the photo off, the service kept.
+pub async fn remove_image(
+    Viewer(viewer): Viewer,
+    State(state): State<AppState>,
+    ApiPath(raw_id): ApiPath<String>,
+    ApiForm(form): ApiForm<ReasonForm>,
+) -> Result<Response, Error> {
+    let Some(actor) = viewer else {
+        return see_other(&url("login", &[])?);
+    };
+    let id = parse_id(&raw_id, ErrorCode::ServiceNotFound)?;
+    state
+        .usecases
+        .media
+        .remove_service_image(&actor, id, reason(&form.reason))
+        .await?;
+    redirect_to(id, Flash::ImageRemoved)
 }
 
 #[derive(Debug, Default, Deserialize)]

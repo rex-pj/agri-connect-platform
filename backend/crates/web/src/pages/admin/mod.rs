@@ -43,6 +43,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     app_state::AppState,
+    constants::IMAGE_FIELD,
     cookies::Flash,
     locale::Locale,
     pages::{
@@ -502,6 +503,26 @@ impl<F> Outcome<F> {
             status: err.kind().status(),
         }
     }
+
+    /// A refused photo (wrong type, too large): the boxes as typed, the
+    /// message on the photo box (a file box never keeps its file).
+    pub fn photo_refused(state: &AppState, err: &Error, form: F) -> Self {
+        Self {
+            form: Some(form),
+            errors: FormErrors::on_field(state, err, IMAGE_FIELD),
+            confirm_open: false,
+            flash: None,
+            status: err.kind().status(),
+        }
+    }
+}
+
+/// A form that only carries the optional reason of an audited change (a
+/// confirmation with nothing else to send).
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct ReasonForm {
+    pub reason: String,
 }
 
 /// The value of the `back` field a row action on a list sends, for a record

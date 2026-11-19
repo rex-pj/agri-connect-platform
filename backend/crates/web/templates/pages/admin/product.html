@@ -3,6 +3,8 @@
 {% import "atoms/alert.html" as alerts %}
 {% import "atoms/status_badge.html" as status %}
 {% import "molecules/admin_header.html" as header %}
+{% import "molecules/offstage_note.html" as offstage %}
+{% import "molecules/photo_picker.html" as photo %}
 {% import "organisms/product_fields.html" as fields %}
 {% import "organisms/confirm_sheet.html" as confirm %}
 {#- One product: edit, hide (confirmation with a reason) / show, delete
@@ -19,6 +21,8 @@
 {{ header::admin_header(title=p.name, icon="fa-box-open", sub=p.business_name, back_href=b.provider_products_href, back_label=t(key="admin.provider_products")) }}
 {% endif %}
 <div class="admin-body">
+  {% if b.flash == "image_removed" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.photo_removed")) }}{% endif %}
+  {% if b.flash == "product_created" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="dashboard.product_created")) }}{% endif %}
   {% if b.flash == "product_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.saved")) }}{% endif %}
   {% if b.flash == "product_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.product_hidden")) }}{% endif %}
   {% if b.flash == "product_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.product_shown")) }}{% endif %}
@@ -26,18 +30,26 @@
 
   <section class="admin-section" aria-labelledby="edit-title">
     <h2 class="admin-section__title" id="edit-title">{{ t(key="admin.info") }}</h2>
-    {% if p.image_file_id %}
-    <a href="{{ file_url(id=p.image_file_id) }}" aria-label="{{ t(key="admin.view_photo", name=p.name) }}"><img class="rounded object-fit-cover" width="96" height="96" src="{{ file_url(id=p.image_file_id, variant="thumb") }}" alt=""></a>
-    {% endif %}
-    <form class="form-stack" method="post" action="{{ b.update_action }}" novalidate>
+    <form class="form-stack" method="post" action="{{ b.update_action }}" enctype="multipart/form-data" novalidate>
       {{ fields::product_fields(form=b.form, errors=b.errors.fields, categories=b.categories, commodities=b.commodities, limits=limits, prefix="edit") }}
+      {{ photo::photo_picker(id="edit-image", label=t(key="admin.photo"), max_mb=b.max_upload_mb, hint=t(key="admin.photo_hint"), current=p.image_file_id | default(value=""), error=b.errors.fields.image | default(value="")) }}
       <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button></div>
     </form>
+    {% if p.image_file_id %}
+    <div x-data="dialog" x-on:keydown.escape.window="hide">
+      <div class="admin-actions">
+        <a class="btn btn-outline-secondary" href="{{ file_url(id=p.image_file_id) }}">{{ atoms::icon(name="fa-image") }} {{ t(key="admin.view_photo", name=p.name) }}</a>
+        <a class="btn btn-outline-danger" href="#go-anh" x-on:click.prevent="show">{{ atoms::icon(name="fa-trash") }} {{ t(key="admin.remove_photo") }}</a>
+      </div>
+      {{ confirm::confirm_sheet(id="go-anh", title=t(key="admin.remove_photo_title", name=p.name), icon="fa-image", action=b.image_delete_action, button=t(key="admin.remove_photo"), reason_max=limits.audit_reason_max, note=t(key="admin.remove_photo_note"), button_class="btn-danger") }}
+    </div>
+    {% endif %}
   </section>
 
   <section class="admin-section" aria-labelledby="status-title" x-data="dialog" x-on:keydown.escape.window="hide">
     <h2 class="admin-section__title" id="status-title">{{ t(key="admin.visibility") }}</h2>
-    <p class="admin-status">{{ status::visibility(on=p.is_active) }}<span><a href="{{ b.provider_href }}">{{ p.business_name }}</a> · {% if p.is_active %}{{ t(key="admin.public_on") }}{% else %}{{ t(key="admin.public_off") }}{% endif %}</span></p>
+    <p class="admin-status">{{ status::visibility(on=p.is_active) }}<span><a href="{{ b.provider_href }}">{{ p.business_name }}</a> · {% if p.is_public %}{{ t(key="admin.public_on") }}{% elif p.is_active %}{{ t(key="admin.public_held") }}{% else %}{{ t(key="admin.public_off") }}{% endif %}</span></p>
+    {{ offstage::offstage_note(l=p, provider_href=b.provider_href, category_href=b.category_href) }}
     <div class="admin-actions">
       {% if p.is_active %}
       <a class="btn btn-outline-warning" href="#an-san-pham" x-on:click.prevent="show">{{ atoms::icon(name="fa-eye-slash") }} {{ t(key="admin.hide_product") }}</a>

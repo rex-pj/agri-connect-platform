@@ -1,5 +1,5 @@
 use application::authz::require_actor;
-use application::inputs::{CategoryInput, UpdateProductInput};
+use application::inputs::{CategoryInput, CreateProductInput, UpdateProductInput};
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use domain::Error;
 
@@ -9,11 +9,12 @@ use crate::{
     labels::Worded,
     middleware::auth::MaybeActor,
     requests::{
-        AdminCreateServiceRequest, AdminListQuery, AdminPageQuery, AdminUpdateProductRequest,
-        AdminUpdateServiceRequest, AssignUserRequest, CreateCategoryRequest, DeleteWithReasonBody,
-        LocationRequest, SetVerificationRequest, SlugSuggestionQuery, StatusListQuery,
-        ToggleActiveRequest, ToggleVisibleRequest, UpdateCategoryRequest,
-        UpdateInquiryStatusRequest, UpdateProfileRequest, UpdateUserRoleRequest,
+        AdminCreateProductRequest, AdminCreateServiceRequest, AdminListQuery, AdminPageQuery,
+        AdminUpdateProductRequest, AdminUpdateServiceRequest, AssignUserRequest,
+        CreateCategoryRequest, DeleteWithReasonBody, LocationRequest, SetVerificationRequest,
+        SlugSuggestionQuery, StatusListQuery, ToggleActiveRequest, ToggleVisibleRequest,
+        UpdateCategoryRequest, UpdateInquiryStatusRequest, UpdateProfileRequest,
+        UpdateUserRoleRequest,
     },
 };
 
@@ -475,6 +476,33 @@ impl AdminHandler {
         let actor = require_actor(actor)?;
         let result = state.usecases.admin.get_product_admin(&actor, id).await?;
         Ok(Json(result))
+    }
+
+    /// POST /api/admin/products
+    pub async fn create_product(
+        MaybeActor(actor): MaybeActor,
+        State(state): State<AppState>,
+        ApiJson(req): ApiJson<AdminCreateProductRequest>,
+    ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
+        let p = req.product;
+        let result = state
+            .usecases
+            .admin
+            .create_product_admin(
+                &actor,
+                req.business_id,
+                CreateProductInput {
+                    category_id: p.category_id,
+                    commodity_id: p.commodity_id,
+                    name: p.name,
+                    description: p.description,
+                    price: p.price,
+                    unit: p.unit,
+                },
+            )
+            .await?;
+        Ok((StatusCode::CREATED, Json(result)))
     }
 
     /// PUT /api/admin/products/{id}

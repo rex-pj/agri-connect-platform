@@ -4,7 +4,7 @@ use uuid::Uuid;
 use crate::{
     error::Error,
     models::{
-        business::ProviderSort,
+        business::{ListingEditor, ProviderSort},
         service::{
             AdminService, NewService, ProviderService, PublicService, PublicServiceFilter,
             UpdateOwnService, UpdateService,
@@ -63,14 +63,15 @@ pub trait ServiceRepositoryTrait {
 
     async fn soft_delete_owned(&self, id: i32, owner_user: i32) -> Result<bool, Error>;
 
-    /// Sets the image of one of the user's services; `Some(previous)` when it
-    /// was theirs, `None` when not. The old value is read under a row lock, so
-    /// a concurrent upload cannot orphan the image it replaced.
-    async fn set_image_owned(
+    /// Sets the image of a live service (`None`: no image); `Some(previous)`
+    /// when `editor` may change it, `None` when not. The old value is read
+    /// under a row lock, so a concurrent upload cannot orphan the image it
+    /// replaced.
+    async fn set_image(
         &self,
         id: i32,
-        owner_user: i32,
-        file_id: Uuid,
+        editor: ListingEditor,
+        file_id: Option<Uuid>,
     ) -> Result<Option<Option<Uuid>>, Error>;
 
     /// The image a (possibly soft-deleted) service names.

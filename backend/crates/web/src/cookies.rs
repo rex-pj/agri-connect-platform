@@ -78,6 +78,7 @@ pub enum Flash {
     ServiceHidden,
     ServiceShown,
     ServiceDeleted,
+    ImageRemoved,
     InquiryStatusSaved,
     ReviewHidden,
     ReviewShown,
@@ -113,7 +114,7 @@ pub enum Flash {
 }
 
 impl Flash {
-    const ALL: [Flash; 78] = [
+    const ALL: [Flash; 79] = [
         Flash::ContactSent,
         Flash::PasswordReset,
         Flash::DemoLoaded,
@@ -160,6 +161,7 @@ impl Flash {
         Flash::ServiceHidden,
         Flash::ServiceShown,
         Flash::ServiceDeleted,
+        Flash::ImageRemoved,
         Flash::InquiryStatusSaved,
         Flash::ReviewHidden,
         Flash::ReviewShown,
@@ -242,6 +244,7 @@ impl Flash {
             Flash::ServiceHidden => "service_hidden",
             Flash::ServiceShown => "service_shown",
             Flash::ServiceDeleted => "service_deleted",
+            Flash::ImageRemoved => "image_removed",
             Flash::InquiryStatusSaved => "inquiry_status_saved",
             Flash::ReviewHidden => "review_hidden",
             Flash::ReviewShown => "review_shown",

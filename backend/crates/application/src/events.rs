@@ -80,6 +80,7 @@ pub fn audit_action(event: &DomainEvent) -> String {
         (Change::Deleted, _) => format!("delete_{entity}"),
         (Change::RoleChanged { .. }, _) => format!("change_{entity}_role"),
         (Change::ImageReplaced { .. }, _) => format!("replace_{entity}_image"),
+        (Change::ImageRemoved { .. }, _) => format!("remove_{entity}_image"),
         (Change::PermissionsChanged { .. }, _) => format!("change_{entity}_permissions"),
         (Change::AccountAssigned { .. }, _) => format!("assign_{entity}_account"),
         (Change::Updated, _) => format!("update_{entity}"),
@@ -179,6 +180,7 @@ impl EventSubscriber for FileCleanupSubscriber {
     async fn handle(&self, event: &DomainEvent) -> Result<()> {
         let unreferenced = match (&event.change, event.entity) {
             (Change::ImageReplaced { previous }, _) => *previous,
+            (Change::ImageRemoved { previous }, _) => Some(*previous),
             // Both are soft-deleted, so the row still names its image.
             (Change::Deleted, Entity::Product) => self.products.image_of(event.entity_id).await?,
             (Change::Deleted, Entity::Service) => self.services.image_of(event.entity_id).await?,

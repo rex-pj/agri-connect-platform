@@ -10,9 +10,12 @@ use tracing::error;
 use uuid::Uuid;
 
 use domain::{
-    models::product::{
-        AdminProduct, AdminProductFilter, NewProduct, ProductFilter, ProductSort, ProductView,
-        ProviderProduct, UpdateProduct, UpdateProductAdmin,
+    models::{
+        business::ListingEditor,
+        product::{
+            AdminProduct, AdminProductFilter, NewProduct, ProductFilter, ProductSort, ProductView,
+            ProviderProduct, UpdateProduct, UpdateProductAdmin,
+        },
     },
     repositories::product_repository_trait::ProductRepositoryTrait,
 };
@@ -87,6 +90,8 @@ struct AdminProductRow {
     business_id: i32,
     business_name: String,
     is_active: bool,
+    business_active: bool,
+    category_active: bool,
     created_on: DateTimeWithTimeZone,
     updated_on: DateTimeWithTimeZone,
     image_file_id: Option<Uuid>,
@@ -170,6 +175,8 @@ fn base_admin_product_query() -> sea_orm::Select<ProductEntity> {
         .column(product::Column::BusinessId)
         .column_as(business::Column::Name, QueryAs::BusinessName)
         .column(product::Column::IsActive)
+        .column_as(business::Column::IsActive, QueryAs::BusinessActive)
+        .column_as(category::Column::IsActive, QueryAs::CategoryActive)
         .column(product::Column::CreatedOn)
         .column(product::Column::UpdatedOn)
         .column(product::Column::ImageFileId)
@@ -624,19 +631,23 @@ impl ProductRepositoryTrait for ProductRepository {
     async fn set_image(
         &self,
         id: i32,
-        owner_user: i32,
-        file_id: Uuid,
+        editor: ListingEditor,
+        file_id: Option<Uuid>,
     ) -> Result<Option<Option<Uuid>>, Error> {
         let fail = |e: sea_orm::DbErr| Error::internal(format!("product set_image (id={id}): {e}"));
         let txn = self.db.begin().await.map_err(fail)?;
         // FOR UPDATE, with the ownership check: a concurrent upload waits
         // here, then reads this upload's image as its previous one, so the
         // image it replaces is never orphaned.
-        let previous = ProductEntity::find_by_id(id)
+        let mut query = ProductEntity::find_by_id(id)
             .select_only()
             .column(product::Column::ImageFileId)
-            .filter(product::Column::DeletedAt.is_null())
-            .filter(product::Column::BusinessId.in_subquery(businesses_of(owner_user)))
+            .filter(product::Column::DeletedAt.is_null());
+        if let ListingEditor::Owner(owner_user) = editor {
+            query =
+                query.filter(product::Column::BusinessId.in_subquery(businesses_of(owner_user)));
+        }
+        let previous = query
             .lock_exclusive()
             .into_tuple::<Option<Uuid>>()
             .one(&txn)
@@ -647,7 +658,11 @@ impl ProductRepositoryTrait for ProductRepository {
             return Ok(None);
         };
         ProductEntity::update_many()
-            .col_expr(product::Column::ImageFileId, Expr::value(Some(file_id)))
+            .col_expr(product::Column::ImageFileId, Expr::value(file_id))
+            .col_expr(
+                product::Column::UpdatedBy,
+                Expr::value(Some(editor.user_id())),
+            )
             .col_expr(product::Column::UpdatedOn, Expr::current_timestamp().into())
             .filter(product::Column::Id.eq(id))
             .exec(&txn)
@@ -684,6 +699,8 @@ fn map_admin_row(r: AdminProductRow) -> AdminProduct {
         business_id: r.business_id,
         business_name: r.business_name,
         is_active: r.is_active,
+        business_active: r.business_active,
+        category_active: r.category_active,
         created_on: r.created_on.with_timezone(&Utc),
         updated_on: r.updated_on.with_timezone(&Utc),
         image_file_id: r.image_file_id,

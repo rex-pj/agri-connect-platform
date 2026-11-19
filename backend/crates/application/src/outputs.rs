@@ -691,6 +691,10 @@ pub struct AdminProductDto {
     pub business_id: i32,
     pub business_name: String,
     pub is_active: bool,
+    /// On the public pages: shown, its business on, its type shown.
+    pub is_public: bool,
+    pub provider_active: bool,
+    pub category_active: bool,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
     pub image_file_id: Option<Uuid>,
@@ -699,6 +703,9 @@ pub struct AdminProductDto {
 impl From<AdminProduct> for AdminProductDto {
     fn from(p: AdminProduct) -> Self {
         Self {
+            is_public: p.is_public(),
+            provider_active: p.business_active,
+            category_active: p.category_active,
             id: p.id,
             name: p.name,
             description: p.description,
@@ -734,6 +741,10 @@ pub struct AdminServiceDto {
     pub business_id: i32,
     pub business_name: String,
     pub is_active: bool,
+    /// On the public pages: shown, its business on, its type shown.
+    pub is_public: bool,
+    pub provider_active: bool,
+    pub category_active: bool,
     pub image_file_id: Option<Uuid>,
     /// Listed by the provider themselves, not by an admin for them.
     pub added_by_owner: bool,
@@ -745,6 +756,9 @@ impl From<AdminService> for AdminServiceDto {
     fn from(s: AdminService) -> Self {
         Self {
             added_by_owner: s.created_by.is_some() && s.created_by == s.owner_id,
+            is_public: s.is_public(),
+            provider_active: s.business_active,
+            category_active: s.category_active,
             id: s.id,
             name: s.name,
             description: s.description,

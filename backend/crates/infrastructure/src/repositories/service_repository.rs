@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use domain::{
     models::{
-        business::ProviderSort,
+        business::{ListingEditor, ProviderSort},
         service::{
             AdminService, NewService, ProviderService, PublicService, PublicServiceFilter,
             UpdateOwnService, UpdateService,
@@ -59,6 +59,8 @@ struct AdminServiceRow {
     business_id: i32,
     business_name: String,
     is_active: bool,
+    business_active: bool,
+    category_active: bool,
     image_file_id: Option<Uuid>,
     created_by: Option<i32>,
     owner_id: Option<i32>,
@@ -93,6 +95,8 @@ fn base_admin_service_query() -> sea_orm::Select<ServiceEntity> {
         .column_as(category::Column::Sector, QueryAs::Sector)
         .column_as(business::Column::Name, QueryAs::BusinessName)
         .column(service::Column::IsActive)
+        .column_as(business::Column::IsActive, QueryAs::BusinessActive)
+        .column_as(category::Column::IsActive, QueryAs::CategoryActive)
         .column(service::Column::ImageFileId)
         .column(service::Column::CreatedBy)
         .column(business::Column::OwnerId)
@@ -139,6 +143,8 @@ fn map_admin_row(r: AdminServiceRow) -> AdminService {
         business_id: r.business_id,
         business_name: r.business_name,
         is_active: r.is_active,
+        business_active: r.business_active,
+        category_active: r.category_active,
         image_file_id: r.image_file_id,
         created_by: r.created_by,
         owner_id: r.owner_id,
@@ -519,21 +525,24 @@ impl ServiceRepositoryTrait for ServiceRepository {
             .map_err(|e| Error::internal(format!("service soft_delete_owned (id={id}): {e}")))
     }
 
-    async fn set_image_owned(
+    async fn set_image(
         &self,
         id: i32,
-        owner_user: i32,
-        file_id: Uuid,
+        editor: ListingEditor,
+        file_id: Option<Uuid>,
     ) -> Result<Option<Option<Uuid>>, Error> {
         let fail = |e: sea_orm::DbErr| Error::internal(format!("service set_image (id={id}): {e}"));
         let txn = self.db.begin().await.map_err(fail)?;
         // FOR UPDATE: a concurrent upload waits here, then reads this
         // upload's image as its previous one, so neither is orphaned.
-        let previous = ServiceEntity::find_by_id(id)
+        let mut query = ServiceEntity::find_by_id(id)
             .select_only()
             .column(service::Column::ImageFileId)
-            .filter(service::Column::DeletedAt.is_null())
-            .filter(owned_by(owner_user))
+            .filter(service::Column::DeletedAt.is_null());
+        if let ListingEditor::Owner(owner_user) = editor {
+            query = query.filter(owned_by(owner_user));
+        }
+        let previous = query
             .lock_exclusive()
             .into_tuple::<Option<Uuid>>()
             .one(&txn)
@@ -544,8 +553,11 @@ impl ServiceRepositoryTrait for ServiceRepository {
             return Ok(None);
         };
         ServiceEntity::update_many()
-            .col_expr(service::Column::ImageFileId, Expr::value(Some(file_id)))
-            .col_expr(service::Column::UpdatedBy, Expr::value(Some(owner_user)))
+            .col_expr(service::Column::ImageFileId, Expr::value(file_id))
+            .col_expr(
+                service::Column::UpdatedBy,
+                Expr::value(Some(editor.user_id())),
+            )
             .col_expr(service::Column::UpdatedOn, Expr::current_timestamp().into())
             .filter(service::Column::Id.eq(id))
             .exec(&txn)

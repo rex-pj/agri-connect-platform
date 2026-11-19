@@ -76,6 +76,11 @@ pub enum Change {
     ImageReplaced {
         previous: Option<Uuid>,
     },
+    /// A moderator took the image off a product or service; `previous` is
+    /// no longer referenced and can be removed from storage.
+    ImageRemoved {
+        previous: Uuid,
+    },
     /// A role now grants `added` and no longer grants `removed` (permission keys).
     PermissionsChanged {
         added: Vec<String>,

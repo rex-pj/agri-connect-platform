@@ -162,3 +162,20 @@ mod tests {
         );
     }
 }
+
+/// Who changes a listing (a service, a supply) of a business: its owner,
+/// matched in the same statement against the businesses they manage, or a
+/// moderator, any live listing. Either is stamped as its last editor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ListingEditor {
+    Owner(i32),
+    Moderator(i32),
+}
+
+impl ListingEditor {
+    pub fn user_id(self) -> i32 {
+        match self {
+            Self::Owner(id) | Self::Moderator(id) => id,
+        }
+    }
+}

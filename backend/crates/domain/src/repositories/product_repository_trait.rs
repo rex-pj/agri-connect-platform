@@ -3,9 +3,12 @@ use uuid::Uuid;
 
 use crate::{
     error::Error,
-    models::product::{
-        AdminProduct, AdminProductFilter, NewProduct, ProductFilter, ProductSort, ProductView,
-        ProviderProduct, UpdateProduct, UpdateProductAdmin,
+    models::{
+        business::ListingEditor,
+        product::{
+            AdminProduct, AdminProductFilter, NewProduct, ProductFilter, ProductSort, ProductView,
+            ProviderProduct, UpdateProduct, UpdateProductAdmin,
+        },
     },
 };
 
@@ -76,13 +79,15 @@ pub trait ProductRepositoryTrait {
 
     async fn count_active(&self) -> Result<i64, Error>;
 
-    /// Points the owner's product at `file_id`. `None` when `owner_user` does
-    /// not own a live product with that id; otherwise the image it had before.
+    /// Points a live product at `file_id` (`None`: no image). `None` when
+    /// there is no such product `editor` may change; otherwise the image it
+    /// had before. The old value is read under a row lock, so a concurrent
+    /// upload cannot orphan the image it replaced.
     async fn set_image(
         &self,
         id: i32,
-        owner_user: i32,
-        file_id: Uuid,
+        editor: ListingEditor,
+        file_id: Option<Uuid>,
     ) -> Result<Option<Option<Uuid>>, Error>;
 
     /// The image of a product, deleted or not: cleanup runs after a delete.

@@ -558,20 +558,39 @@ impl Env {
     }
 }
 
+/// A sign-up with no client known, so the per-client cap does not apply
+/// (a test that checks the cap sets `client`).
+pub fn signup(
+    username: &str,
+    email: &str,
+    password: &str,
+    business_name: &str,
+    phone: &str,
+) -> application::inputs::RegisterInput {
+    application::inputs::RegisterInput {
+        username: username.into(),
+        email: email.into(),
+        password: password.into(),
+        full_name: None,
+        business_name: business_name.into(),
+        business_phone: phone.into(),
+        client: String::new(),
+    }
+}
+
 /// Registers a provider through the real flow (business "Vườn {username}")
 /// and returns their session token.
 pub async fn register_provider(state: &AppState, username: &str, phone: &str) -> String {
     state
         .usecases
         .auth
-        .register(
-            username.into(),
-            format!("{username}@example.vn"),
-            "matkhau123".into(),
-            None,
-            format!("Vườn {username}"),
-            phone.into(),
-        )
+        .register(signup(
+            username,
+            &format!("{username}@example.vn"),
+            "matkhau123",
+            &format!("Vườn {username}"),
+            phone,
+        ))
         .await
         .unwrap_or_else(|e| panic!("register: {e}"))
         .token

@@ -33,6 +33,8 @@ npm run deploy     # zmp deploy: uploads a version for testing / review
 
 Outside Zalo (a desktop browser) the screens render, but the position, phone and call buttons need the Zalo app.
 
+`package.json` `overrides` lift two of zmp-ui's and zmp-vite-plugin's pins to releases with the security fixes (`npm audit` is clean with them): `react-router` / `react-router-dom` 7.18 (zmp-ui asks for 6; it uses only `BrowserRouter`, `MemoryRouter`, `Routes`, `Route`, `useNavigate`, `useLocation`, `useNavigationType`, `NavigationType`, all unchanged in 7) and vite 6.4 (zmp-vite-plugin asks for 4 or 5). When zmp-ui or zmp-vite-plugin allow these versions themselves, drop the override. Check a new Mini App version in Zalo's test view before submitting it.
+
 ## Conventions
 
 - Every word the app shows is in `src/texts.js`; error messages come from the backend, already in Vietnamese.

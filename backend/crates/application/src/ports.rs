@@ -62,16 +62,16 @@ pub struct SessionClaims {
     /// When it was minted, Unix seconds; 0 for tokens minted before the
     /// claim existed (they are older than any cut-off).
     pub issued_at: i64,
-    /// The browser session (refresh-token family) the token belongs to, so
-    /// logging out ends it at once; none for a token from the JSON login,
-    /// which has no session to end and lives its hour.
-    pub session: Option<uuid::Uuid>,
+    /// The session (refresh-token family) the token belongs to, so logging
+    /// out, a password change or a deactivated account ends it at once. Every
+    /// token has one, the JSON login's too: a token without is refused.
+    pub session: uuid::Uuid,
 }
 
 /// Mint and verify signed session tokens.
 pub trait TokenService: Send + Sync {
-    /// `session`: the browser session the token is part of, if any.
-    fn mint(&self, user_id: i32, username: &str, session: Option<uuid::Uuid>) -> Result<String>;
+    /// `session`: the session (refresh-token family) the token is part of.
+    fn mint(&self, user_id: i32, username: &str, session: uuid::Uuid) -> Result<String>;
 
     /// Fails with `invalid_token` for a bad signature, a malformed token or an
     /// expired one; callers cannot tell those apart, by design.

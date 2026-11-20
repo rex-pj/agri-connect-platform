@@ -22,8 +22,13 @@ impl ZaloGraphGateway {
     /// `graph_url`: the `me/info` endpoint; `timeout`: how long a call may
     /// take before the farmer is told to try again.
     pub fn new(graph_url: String, secret_key: String, timeout: Duration) -> Result<Self> {
+        // The app's secret travels as a custom header, which reqwest keeps on
+        // a redirect to another host (it strips only the standard credential
+        // headers): never follow one, and never speak plain HTTP.
         let client = reqwest::Client::builder()
             .timeout(timeout)
+            .redirect(reqwest::redirect::Policy::none())
+            .https_only(true)
             .build()
             .map_err(|e| Error::internal(format!("zalo http client: {e}")))?;
         Ok(Self {

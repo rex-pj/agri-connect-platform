@@ -40,17 +40,17 @@ pub fn landing(actor: Option<&Actor>) -> String {
     home_area_href(actor)
 }
 
-/// 303 to the visitor's area with a fresh session in the cookies.
+/// 303 to the visitor's area with the session the sign-in started in the
+/// cookies.
 pub async fn signed_in(
     state: &AppState,
     policy: CookiePolicy,
-    user_id: i32,
+    login: application::outputs::LoginResponse,
     flash: Option<Flash>,
 ) -> Result<Response, Error> {
-    let tokens = state.usecases.auth.start_session(user_id).await?;
-    let actor = state.usecases.auth.actor(user_id).await?;
+    let actor = state.usecases.auth.actor(login.user_id).await?;
     let mut response = see_other(&landing(actor.as_ref()))?;
-    policy.set(&mut response, &tokens);
+    policy.set(&mut response, &login.session);
     if let Some(flash) = flash {
         flash.set_on(&mut response);
     }
@@ -143,7 +143,7 @@ pub async fn login(
         .login(form.username.clone(), form.password, &client)
         .await
     {
-        Ok(login) => signed_in(&state, policy, login.user_id, None).await,
+        Ok(login) => signed_in(&state, policy, login, None).await,
         Err(err) => {
             let locked = err.code() == ErrorCode::AccountLocked;
             let registration_open = state.usecases.settings.current().await?.registration_open();
@@ -209,6 +209,7 @@ pub async fn register_page(
 }
 
 pub async fn register(
+    ip: Option<Extension<crate::middleware::client_ip::ClientIp>>,
     State(state): State<AppState>,
     Extension(policy): Extension<CookiePolicy>,
     ApiForm(form): ApiForm<RegisterForm>,
@@ -220,19 +221,20 @@ pub async fn register(
             state
                 .usecases
                 .auth
-                .register(
-                    form.username.clone(),
-                    form.email.clone(),
-                    form.password.clone(),
+                .register(application::inputs::RegisterInput {
+                    username: form.username.clone(),
+                    email: form.email.clone(),
+                    password: form.password.clone(),
                     full_name,
-                    form.business_name.clone(),
-                    form.business_phone.clone(),
-                )
+                    business_name: form.business_name.clone(),
+                    business_phone: form.business_phone.clone(),
+                    client: crate::middleware::client_ip::client_key(ip.as_deref()),
+                })
                 .await
         }
     };
     match result {
-        Ok(login) => signed_in(&state, policy, login.user_id, None).await,
+        Ok(login) => signed_in(&state, policy, login, None).await,
         Err(err) => {
             let settings = state.usecases.settings.current().await?;
             reshow(

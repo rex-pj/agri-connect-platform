@@ -46,6 +46,13 @@ pub const LOGIN_LOCK_MINUTES: i64 = 15;
 pub const JOB_POSTS_PER_CLIENT_PER_DAY_DEFAULT: i64 = 5;
 /// The day the cap above counts over.
 pub const JOB_POST_CLIENT_WINDOW_SECS: u64 = 24 * 3600;
+/// Sign-ups one client (address) may try within `SIGNUP_CLIENT_WINDOW_SECS`,
+/// counted once the form is valid: each such try tells whether the username
+/// or email has an account, so the cap bounds how fast anyone can probe
+/// addresses. A security limit, never a setting. Mobile carriers share one
+/// address among many phones (CGNAT); sign-ups are rare enough for this.
+pub const SIGNUP_ATTEMPTS_PER_CLIENT: u32 = 10;
+pub const SIGNUP_CLIENT_WINDOW_SECS: u64 = 24 * 3600;
 
 // ── Validation ─────────────────────────────────────────────────────────────────
 pub const USERNAME_MIN_LEN: usize = 3;

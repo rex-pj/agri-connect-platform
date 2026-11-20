@@ -1,5 +1,5 @@
 //! Account lockout after repeated wrong passwords, what a wrong password is
-//! told, and the cap on reset links. Database tests need
+//! told, the cap on reset links and on sign-up tries. Database tests need
 //! TEST_DATABASE_URL and `--include-ignored`.
 
 use application::constants::{
@@ -241,6 +241,59 @@ async fn sign_ins_and_password_changes_are_audited() {
     e.cleanup().await;
 }
 
+/// One client tries at most `SIGNUP_ATTEMPTS_PER_CLIENT` valid sign-ups a
+/// day: each tells whether a username or email is taken, so nobody can
+/// sweep a list of addresses through the form. A form refused for its own
+/// mistakes tells nothing and is not counted; another client is not held.
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn one_client_cannot_probe_emails_through_sign_up() {
+    use application::constants::SIGNUP_ATTEMPTS_PER_CLIENT;
+    let e = Env::new().await;
+    register_provider(&e.state, "nongdan", "0901234567").await;
+    let auth = &e.state.usecases.auth;
+    let try_from = |client: &str, username: &str, email: &str, password: &str| {
+        let mut input = integration_tests::signup(username, email, password, "Vườn", "0907654321");
+        input.client = client.to_owned();
+        async move { auth.register(input).await.map(|_| ()).map_err(|e| e.code()) }
+    };
+
+    let probe = "203.0.113.7";
+    assert_eq!(
+        try_from(probe, "ab", "a@example.vn", "short").await,
+        Err(ErrorCode::ValidationFailed),
+        "a broken form is not a probe"
+    );
+    for i in 0..SIGNUP_ATTEMPTS_PER_CLIENT {
+        assert_eq!(
+            try_from(
+                probe,
+                &format!("khach{i}"),
+                "nongdan@example.vn",
+                "matkhau123"
+            )
+            .await,
+            Err(ErrorCode::EmailTaken)
+        );
+    }
+    assert_eq!(
+        try_from(probe, "khachmoi", "khachmoi@example.vn", "matkhau123").await,
+        Err(ErrorCode::SignupDailyLimit),
+        "even a sign-up that would succeed waits for tomorrow"
+    );
+    assert_eq!(
+        try_from(
+            "198.51.100.9",
+            "khachmoi",
+            "khachmoi@example.vn",
+            "matkhau123"
+        )
+        .await,
+        Ok(())
+    );
+    e.cleanup().await;
+}
+
 #[tokio::test]
 #[ignore = "needs TEST_DATABASE_URL"]
 async fn the_email_signs_in_as_the_username_does() {
@@ -301,14 +354,13 @@ async fn a_username_with_an_at_is_refused() {
         .state
         .usecases
         .auth
-        .register(
-            "ba@gmail.com".into(),
-            "ba@gmail.com".into(),
-            "matkhau123".into(),
-            None,
-            "Vườn Ba".into(),
-            "0901234567".into(),
-        )
+        .register(integration_tests::signup(
+            "ba@gmail.com",
+            "ba@gmail.com",
+            "matkhau123",
+            "Vườn Ba",
+            "0901234567",
+        ))
         .await
         .err()
         .expect("refused");

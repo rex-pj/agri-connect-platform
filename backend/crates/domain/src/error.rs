@@ -140,6 +140,7 @@ error_codes! {
     JobPostDailyLimit         => (TooManyRequests, "job_post_daily_limit"),
     JobPostsPaused            => (Forbidden,       "job_posts_paused"),
     RegistrationClosed        => (Forbidden,       "registration_closed"),
+    SignupDailyLimit          => (TooManyRequests, "signup_daily_limit"),
     UnknownSetting            => (BadRequest,      "unknown_setting"),
     SettingOutOfRange         => (BadRequest,      "setting_out_of_range"),
     InvalidUrl                => (BadRequest,      "invalid_url"),

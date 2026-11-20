@@ -25,9 +25,10 @@ use crate::{
         BUSINESS_NAME_MAX, EMAIL_VERIFICATION_EXPIRY_HOURS, EMAIL_VERIFICATION_LINKS_MAX,
         FULL_NAME_MAX, LOGIN_FAIL_ACCOUNT_MAX_ATTEMPTS, LOGIN_FAIL_MAX_ATTEMPTS,
         LOGIN_LOCK_MINUTES, PASSWORD_RESET_EXPIRY_HOURS, PASSWORD_RESET_LINKS_MAX,
-        REFRESH_REUSE_GRACE_SECS,
+        REFRESH_REUSE_GRACE_SECS, SIGNUP_ATTEMPTS_PER_CLIENT, SIGNUP_CLIENT_WINDOW_SECS,
     },
     hashing::sha256_hex,
+    inputs::RegisterInput,
     outputs::{LoginResponse, MeResponse},
     ports::{EmailService, EventBus, PasswordHasher, SessionClaims, TokenService},
     repeats::WindowCounter,
@@ -59,6 +60,8 @@ pub struct AuthUseCase {
     decoy_hash: Arc<tokio::sync::OnceCell<String>>,
     /// Wrong passwords per account and client, in memory only.
     failed_logins: WindowCounter,
+    /// Sign-up tries per client (hashed address), in memory only.
+    signups_by_client: WindowCounter,
 }
 
 /// Everything `AuthUseCase` depends on, named so wiring cannot swap two of
@@ -114,6 +117,7 @@ impl AuthUseCase {
             settings: d.settings,
             decoy_hash: Arc::default(),
             failed_logins: WindowCounter::default(),
+            signups_by_client: WindowCounter::default(),
         }
     }
 
@@ -162,10 +166,8 @@ impl AuthUseCase {
         // Logged out (or the account was deactivated, or its refresh token
         // was reused): the access token goes with its session, not an hour
         // later.
-        if let Some(session) = claims.session {
-            if !self.refresh_repo.family_live(session).await? {
-                return Err(Error::new(ErrorCode::InvalidToken).with_detail("session ended"));
-            }
+        if !self.refresh_repo.family_live(claims.session).await? {
+            return Err(Error::new(ErrorCode::InvalidToken).with_detail("session ended"));
         }
         Ok(Actor::from_record(record))
     }
@@ -253,16 +255,37 @@ impl AuthUseCase {
             return Err(Error::new(ErrorCode::AccountHasNoRole));
         }
 
-        let token = self
-            .token_svc
-            .mint(credentials.id, &credentials.username, None)?;
+        let response = self
+            .signed_in(credentials.id, credentials.username, credentials.role)
+            .await?;
         self.audit(credentials.id, AuthEvent::LoggedIn).await;
+        Ok(response)
+    }
+
+    /// The answer to a login, sign-up or first-admin setup: a new session,
+    /// whose access token is the API's `token`. No token is ever minted
+    /// outside a session, so every one can be ended before it expires.
+    async fn signed_in(
+        &self,
+        user_id: i32,
+        username: String,
+        role: String,
+    ) -> Result<LoginResponse> {
+        let session = self.start_session(user_id).await?;
         Ok(LoginResponse {
-            user_id: credentials.id,
-            token,
-            username: credentials.username,
-            role: credentials.role,
+            user_id,
+            token: session.access.clone(),
+            session,
+            username,
+            role,
         })
+    }
+
+    /// Ends the session a token belongs to (`DELETE /api/auth/tokens`, a
+    /// script logging out): the token and every one renewed from it stop
+    /// working on the next request. A session already ended is no error.
+    pub async fn end_token_session(&self, claims: &SessionClaims) -> Result<()> {
+        self.refresh_repo.revoke_family(claims.session).await
     }
 
     // ── Browser sessions (refresh tokens) ─────────────────────────────────────
@@ -326,13 +349,15 @@ impl AuthUseCase {
             + self.user_repo.delete_expired_links(now).await?)
     }
 
-    /// Forgets the wrong passwords whose lock window has passed (bounded
-    /// memory); called with the other in-memory filters.
-    pub fn forget_old_failed_logins(&self) {
+    /// Forgets the wrong passwords and sign-up tries whose window has passed
+    /// (bounded memory); called with the other in-memory filters.
+    pub fn forget_old_attempts(&self) {
         self.failed_logins
             .forget_older_than(std::time::Duration::from_secs(
                 LOGIN_LOCK_MINUTES as u64 * 60,
             ));
+        self.signups_by_client
+            .forget_older_than(std::time::Duration::from_secs(SIGNUP_CLIENT_WINDOW_SECS));
     }
 
     /// Both tokens for `user_id` in `family_id`. `None` when the account is
@@ -344,9 +369,7 @@ impl AuthUseCase {
         if UserRole::from_code(&actor.role_code).is_none() {
             return Ok(None);
         }
-        let access = self
-            .token_svc
-            .mint(user_id, &actor.username, Some(family_id))?;
+        let access = self.token_svc.mint(user_id, &actor.username, family_id)?;
         let refresh = generate_token();
         let refresh_expires_at = Utc::now() + Duration::days(self.refresh_days);
         self.refresh_repo
@@ -427,34 +450,35 @@ impl AuthUseCase {
             .await?
             .ok_or_else(|| Error::new(ErrorCode::AdminAlreadyExists))?;
 
-        let token = self.token_svc.mint(user_id, &username, None)?;
-        Ok(LoginResponse {
-            user_id,
-            token,
-            username,
-            role: ROLE_ADMIN.into(),
-        })
+        self.signed_in(user_id, username, ROLE_ADMIN.into()).await
     }
 
     // ── Provider self-registration ────────────────────────────────────────────
 
-    pub async fn register(
-        &self,
-        username: String,
-        email: String,
-        password: String,
-        full_name: Option<String>,
-        business_name: String,
-        business_phone: String,
-    ) -> Result<LoginResponse> {
+    /// A provider's own account and business. Whether the username or the
+    /// email is taken is told (the form must say which box to change), so
+    /// one client may try at most `SIGNUP_ATTEMPTS_PER_CLIENT` valid
+    /// sign-ups a day (`signup_daily_limit`): nobody can sweep a list of
+    /// addresses through it.
+    pub async fn register(&self, input: RegisterInput) -> Result<LoginResponse> {
         if !self.settings.load().await?.registration_open() {
             return Err(Error::new(ErrorCode::RegistrationClosed));
         }
-        let username = username.trim().to_lowercase();
-        let email = email.trim().to_lowercase();
-        let business_name = business_name.trim().to_owned();
-        let business_phone = business_phone.trim().to_owned();
-        let full_name = non_blank(full_name);
+        let window = std::time::Duration::from_secs(SIGNUP_CLIENT_WINDOW_SECS);
+        // Hashed: the counter never holds an address.
+        let client_key = (!input.client.is_empty()).then(|| sha256_hex(&input.client));
+        if client_key
+            .as_deref()
+            .is_some_and(|k| self.signups_by_client.count(k, window) >= SIGNUP_ATTEMPTS_PER_CLIENT)
+        {
+            return Err(Error::new(ErrorCode::SignupDailyLimit));
+        }
+        let username = input.username.trim().to_lowercase();
+        let email = input.email.trim().to_lowercase();
+        let business_name = input.business_name.trim().to_owned();
+        let business_phone = input.business_phone.trim().to_owned();
+        let full_name = non_blank(input.full_name);
+        let password = input.password;
 
         Validation::new()
             .rule("username", validate_username(&username))
@@ -473,6 +497,10 @@ impl AuthUseCase {
             .rule("business_phone", validate_phone(&business_phone))
             .finish()?;
 
+        // From here on a try learns whether the username or email is taken.
+        if let Some(key) = client_key {
+            self.signups_by_client.hit(key, window);
+        }
         if self.user_repo.find_by_username(&username).await?.is_some() {
             return Err(Error::new(ErrorCode::UsernameTaken));
         }
@@ -504,13 +532,8 @@ impl AuthUseCase {
             tracing::warn!(user_id, error = %e, "could not send the email confirmation link");
         }
 
-        let token = self.token_svc.mint(user_id, &username, None)?;
-        Ok(LoginResponse {
-            user_id,
-            token,
-            username,
-            role: ROLE_PROVIDER.into(),
-        })
+        self.signed_in(user_id, username, ROLE_PROVIDER.into())
+            .await
     }
 
     // ── Me ────────────────────────────────────────────────────────────────────

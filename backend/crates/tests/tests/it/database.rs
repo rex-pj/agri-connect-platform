@@ -262,14 +262,13 @@ async fn a_registered_provider_holds_exactly_the_provider_permissions() {
     let login = state
         .usecases
         .auth
-        .register(
-            "nongdan01".into(),
-            "nongdan01@example.vn".into(),
-            "mậtkhẩuư".into(),
-            None,
-            "Vườn Thử".into(),
-            "0901234567".into(),
-        )
+        .register(integration_tests::signup(
+            "nongdan01",
+            "nongdan01@example.vn",
+            "mậtkhẩuư",
+            "Vườn Thử",
+            "0901234567",
+        ))
         .await
         .unwrap();
     let claims = integration_tests::token_service()
@@ -310,14 +309,13 @@ async fn registration_reports_every_bad_field_at_once() {
     let result = integration_tests::state(t.db.clone())
         .usecases
         .auth
-        .register(
-            "ab".into(),
-            "x@example.vn".into(),
-            "short".into(),
-            None,
-            " ".into(),
-            "123".into(),
-        )
+        .register(integration_tests::signup(
+            "ab",
+            "x@example.vn",
+            "short",
+            " ",
+            "123",
+        ))
         .await;
     // LoginResponse carries a session token, so it deliberately has no Debug.
     let Err(err) = result else {
@@ -546,6 +544,14 @@ async fn the_schema_refuses_rows_that_contradict_each_other() {
         "INSERT INTO users (username, email, password_hash, role_id)
            SELECT 'NongDan', 'nongdan@example.vn', 'x', id FROM roles WHERE code = 'provider'",
         "chk_users_username_lower",
+    )
+    .await;
+    // The sign-in box reads a name with `@` as an email.
+    refused(
+        db,
+        "INSERT INTO users (username, email, password_hash, role_id)
+           SELECT 'ba@gmail.com', 'nongdan@example.vn', 'x', id FROM roles WHERE code = 'provider'",
+        "chk_users_username_no_at",
     )
     .await;
 

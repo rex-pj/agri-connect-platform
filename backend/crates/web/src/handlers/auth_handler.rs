@@ -1,11 +1,11 @@
-use application::authz::require_actor;
+use application::{authz::require_actor, inputs::RegisterInput};
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use domain::Error;
 
 use crate::{
     app_state::AppState,
     extract::{ApiJson, ApiPath},
-    middleware::auth::MaybeActor,
+    middleware::auth::{CallerSession, MaybeActor},
     requests::{
         ChangePasswordRequest, CreateAdminRequest, ForgotPasswordRequest, LoginRequest,
         RegisterRequest, ResetPasswordRequest,
@@ -31,6 +31,16 @@ impl AuthHandler {
         Ok(Json(result))
     }
 
+    /// DELETE /api/auth/tokens — log out: the caller's token (and its
+    /// session) stops working at once. 204, also for a session already ended.
+    pub async fn logout(
+        CallerSession(claims): CallerSession,
+        State(state): State<AppState>,
+    ) -> Result<impl IntoResponse, Error> {
+        state.usecases.auth.end_token_session(&claims).await?;
+        Ok(StatusCode::NO_CONTENT)
+    }
+
     /// POST /api/admin/setup  — create the very first admin account
     pub async fn create_first_admin(
         State(state): State<AppState>,
@@ -53,20 +63,22 @@ impl AuthHandler {
 
     /// POST /api/users  — provider self-registration
     pub async fn register(
+        ip: Option<axum::Extension<crate::middleware::client_ip::ClientIp>>,
         State(state): State<AppState>,
         ApiJson(req): ApiJson<RegisterRequest>,
     ) -> Result<impl IntoResponse, Error> {
         let result = state
             .usecases
             .auth
-            .register(
-                req.username,
-                req.email,
-                req.password,
-                req.full_name,
-                req.business_name,
-                req.business_phone,
-            )
+            .register(RegisterInput {
+                username: req.username,
+                email: req.email,
+                password: req.password,
+                full_name: req.full_name,
+                business_name: req.business_name,
+                business_phone: req.business_phone,
+                client: crate::middleware::client_ip::client_key(ip.as_deref()),
+            })
             .await?;
 
         Ok((StatusCode::CREATED, Json(result)))

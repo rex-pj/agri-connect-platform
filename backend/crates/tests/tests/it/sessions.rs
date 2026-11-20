@@ -39,14 +39,7 @@ async fn login(e: &Env) -> (i32, SessionTokens) {
         )
         .await
         .unwrap();
-    let tokens = e
-        .state
-        .usecases
-        .auth
-        .start_session(login.user_id)
-        .await
-        .unwrap();
-    (login.user_id, tokens)
+    (login.user_id, login.session)
 }
 
 fn set_cookies(res: &Response<Body>) -> Vec<String> {
@@ -471,6 +464,65 @@ async fn expired_tokens_are_refused_and_purged() {
         .unwrap();
     let auth = &e.state.usecases.auth;
     assert_eq!(auth.refresh_session(&tokens.refresh).await.unwrap(), None);
-    assert_eq!(auth.purge_expired_sessions().await.unwrap(), 1);
+    // The sign-up's session and the login's.
+    assert_eq!(auth.purge_expired_sessions().await.unwrap(), 2);
+    e.cleanup().await;
+}
+
+/// The JSON login's token is in a session too: `DELETE /api/auth/tokens`
+/// ends it on the next request, not when its hour runs out.
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn the_json_api_logs_out_at_once() {
+    let e = Env::new().await;
+    register_provider(&e.state, "nongdan", "0901234567").await;
+    let req = Request::post("/api/auth/tokens")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(
+            r#"{"username":"nongdan","password":"matkhau123"}"#,
+        ))
+        .unwrap();
+    let res = send(&e.router, req).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = integration_tests::json_body(res).await;
+    let token = body["token"].as_str().unwrap().to_owned();
+    assert!(
+        body.get("session").is_none(),
+        "the refresh token stays inside"
+    );
+
+    let bearer = |method: &str, path: &str| {
+        Request::builder()
+            .method(method)
+            .uri(path)
+            .header(header::AUTHORIZATION, format!("Bearer {token}"))
+            .body(Body::empty())
+            .unwrap()
+    };
+    assert_eq!(
+        send(&e.router, bearer("GET", "/api/users/me"))
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        send(&e.router, bearer("DELETE", "/api/auth/tokens"))
+            .await
+            .status(),
+        StatusCode::NO_CONTENT
+    );
+    let res = send(&e.router, bearer("GET", "/api/users/me")).await;
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        integration_tests::json_body(res).await["code"],
+        "invalid_token"
+    );
+    // Ending it again changes nothing, and says so the same way.
+    assert_eq!(
+        send(&e.router, bearer("DELETE", "/api/auth/tokens"))
+            .await
+            .status(),
+        StatusCode::NO_CONTENT
+    );
     e.cleanup().await;
 }

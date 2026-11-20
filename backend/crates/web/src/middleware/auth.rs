@@ -57,6 +57,24 @@ impl FromRequestParts<AppState> for MaybeActor {
     }
 }
 
+/// The caller's session (the claims of its token), for ending it. Like
+/// `MaybeActor` a forged or expired token is `invalid_token`; no token at
+/// all is `authentication_required`.
+pub struct CallerSession(pub application::ports::SessionClaims);
+
+impl FromRequestParts<AppState> for CallerSession {
+    type Rejection = Error;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let token = session_token(parts, state.cookies.session_name())
+            .ok_or_else(|| Error::new(ErrorCode::AuthenticationRequired))?;
+        Ok(Self(state.token_service.verify(token)?))
+    }
+}
+
 /// Who is looking at a page. Unlike `MaybeActor`, an expired or forged session
 /// cookie is simply "nobody": a stale cookie must never make a page fail.
 pub struct Viewer(pub Option<Actor>);

@@ -280,7 +280,10 @@ impl AppRouting {
         // ── AUTH routes (no token required, rate-limited) ────────────────────
         let auth_routes = Router::new()
             // /tokens replaces the old /login verb
-            .route("/api/auth/tokens", post(AuthHandler::login))
+            .route(
+                "/api/auth/tokens",
+                post(AuthHandler::login).delete(AuthHandler::logout),
+            )
             // POST /api/users replaces the old /auth/register verb
             .route("/api/users", post(AuthHandler::register))
             .route(

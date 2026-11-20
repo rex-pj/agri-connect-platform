@@ -34,9 +34,14 @@ pub struct AdminLocationDto {
 
 #[derive(Serialize)]
 pub struct LoginResponse {
-    /// For starting a browser session; not part of the JSON API.
+    /// For the page that signs the browser in; not part of the JSON API.
     #[serde(skip_serializing)]
     pub user_id: i32,
+    /// The session just started: the browser keeps both tokens in cookies.
+    /// The JSON API answers `token` only (its access token), so a script
+    /// logs in again after the hour; `DELETE /api/auth/tokens` ends it.
+    #[serde(skip_serializing)]
+    pub session: crate::usecases::auth_usecase::SessionTokens,
     pub token: String,
     pub username: String,
     pub role: String,

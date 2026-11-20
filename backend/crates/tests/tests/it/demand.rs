@@ -168,7 +168,7 @@ async fn the_report_counts_real_leads_by_area_and_hides_small_figures() {
     // The page shows how near it is to steady: its average a week against
     // the goal (10 leads over 8 weeks: 1), its weeks as squares, each named
     // by its week and figure, none reached; each area leads to its report.
-    assert!(page.contains("admin-table area-progress"));
+    assert!(page.contains("admin-table admin-table--matrix area-progress"));
     assert!(page.contains("1/tuần"));
     assert!(page.contains(r#": 10"></span>"#));
     assert!(!page.contains("area-progress__week--met"));
@@ -214,7 +214,7 @@ async fn the_report_counts_real_leads_by_area_and_hides_small_figures() {
         dashboard.contains(&format!(r#"href="/admin/demand?area=w{BINH_PHU}""#)),
         "each area leads to its own report"
     );
-    assert!(dashboard.contains("admin-table area-progress"));
+    assert!(dashboard.contains("admin-table admin-table--matrix area-progress"));
     // As on the report: the province a top row, its commune under it by its
     // own name, the last of its group, never the full "province — ward".
     let top = dashboard

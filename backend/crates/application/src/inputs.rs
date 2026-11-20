@@ -204,6 +204,19 @@ pub struct PriceInput {
     pub note: Option<String>,
 }
 
+/// A provider's sign-up (`AuthUseCase::register`).
+pub struct RegisterInput {
+    pub username: String,
+    pub email: String,
+    pub password: String,
+    pub full_name: Option<String>,
+    pub business_name: String,
+    pub business_phone: String,
+    /// Who signs up, to cap tries per client (`SIGNUP_ATTEMPTS_PER_CLIENT`):
+    /// the address, kept in memory as a hash only; empty for none known.
+    pub client: String,
+}
+
 /// A farmer's job post: where is a position (`lat`/`lng`, from the phone)
 /// or else a location preset.
 pub struct JobInput {

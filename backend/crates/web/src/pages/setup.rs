@@ -129,7 +129,7 @@ pub async fn setup(
             Err(e) => tracing::warn!(error = %e, "demo data not loaded during setup"),
         }
     }
-    signed_in(&state, policy, login.user_id, flash).await
+    signed_in(&state, policy, login, flash).await
 }
 
 // ── Demo data page ────────────────────────────────────────────────────────────

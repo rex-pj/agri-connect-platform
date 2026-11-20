@@ -857,7 +857,7 @@ pub async fn start() -> Result<(), StartupError> {
             pruned.forget_idle();
             repeats.explore.forget_old_taps();
             repeats.demand.forget_old_searches();
-            repeats.auth.forget_old_failed_logins();
+            repeats.auth.forget_old_attempts();
             repeats.job.forget_old_posters();
         }
     });

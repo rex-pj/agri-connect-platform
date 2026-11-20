@@ -7,7 +7,7 @@ use domain::{
     models::{
         role::UserRole,
         session::NewRefreshToken,
-        user::{NewResetToken, NewUser},
+        user::{LoginName, NewResetToken, NewUser},
     },
     repositories::{
         permission_repository_trait::PermissionRepositoryTrait,
@@ -170,8 +170,12 @@ impl AuthUseCase {
         Ok(Actor::from_record(record))
     }
 
+    /// `login` is the account's username or its email (`LoginName`: with an
+    /// `@` an email); either names the same account, so the failure counts
+    /// and locks below are shared.
+    ///
     /// Whoever does not know the password learns nothing about the account:
-    /// an unknown username, a deactivated account and a locked one all answer
+    /// an unknown name, a deactivated account and a locked one all answer
     /// `invalid_credentials`, after the same password check. Only the right
     /// password is told that the account is deactivated or locked.
     ///
@@ -182,15 +186,13 @@ impl AuthUseCase {
     /// after `LOGIN_FAIL_ACCOUNT_MAX_ATTEMPTS` from every client together.
     pub async fn login(
         &self,
-        username: String,
+        login: String,
         password: String,
         client: &str,
     ) -> Result<LoginResponse> {
-        let username = username.trim().to_lowercase();
-
         let Some(credentials) = self
             .user_repo
-            .find_credentials_by_username(&username)
+            .find_credentials(&LoginName::parse(&login))
             .await?
         else {
             let decoy = self
@@ -251,12 +253,14 @@ impl AuthUseCase {
             return Err(Error::new(ErrorCode::AccountHasNoRole));
         }
 
-        let token = self.token_svc.mint(credentials.id, &username, None)?;
+        let token = self
+            .token_svc
+            .mint(credentials.id, &credentials.username, None)?;
         self.audit(credentials.id, AuthEvent::LoggedIn).await;
         Ok(LoginResponse {
             user_id: credentials.id,
             token,
-            username,
+            username: credentials.username,
             role: credentials.role,
         })
     }

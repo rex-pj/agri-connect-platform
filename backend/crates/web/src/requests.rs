@@ -8,6 +8,8 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct LoginRequest {
+    /// The username or the email (with an `@`); the field keeps its name so
+    /// existing clients go on working.
     pub username: String,
     pub password: String,
 }

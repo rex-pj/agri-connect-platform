@@ -1,7 +1,10 @@
 //! Field rules shared by use cases. Each returns a coded `Error`; callers that
 //! validate a whole form feed them into `domain::Validation`.
 
-use domain::{models::coded::CodedEntry, Error, ErrorCode, Result};
+use domain::{
+    models::{coded::CodedEntry, user::EMAIL_MARK},
+    Error, ErrorCode, Result,
+};
 
 use crate::icons;
 
@@ -81,8 +84,9 @@ pub fn validate_phone(phone: &str) -> Result<()> {
 }
 
 /// A login name: at least `USERNAME_MIN_LEN` and at most `USERNAME_MAX_LEN`
-/// characters, no spaces (callers pass it trimmed and lowercased). Letters
-/// with Vietnamese marks are fine.
+/// characters, no spaces and no `@` (the sign-in box reads a name with one
+/// as an email: `LoginName`); callers pass it trimmed and lowercased.
+/// Letters with Vietnamese marks are fine.
 pub fn validate_username(username: &str) -> Result<()> {
     let length = username.chars().count();
     if length < USERNAME_MIN_LEN {
@@ -93,6 +97,9 @@ pub fn validate_username(username: &str) -> Result<()> {
         .any(|c| c.is_whitespace() || c.is_control())
     {
         return Err(Error::new(ErrorCode::UsernameHasSpaces));
+    }
+    if username.contains(EMAIL_MARK) {
+        return Err(Error::new(ErrorCode::UsernameHasAt));
     }
     max_chars(username, USERNAME_MAX_LEN)
 }
@@ -268,11 +275,12 @@ mod tests {
     }
 
     #[test]
-    fn usernames_are_bounded_and_have_no_spaces() {
+    fn usernames_are_bounded_and_have_no_spaces_nor_at() {
         assert!(validate_username("nông_dân.7").is_ok());
         let code = |u: &str| validate_username(u).err().map(|e| e.code());
         assert_eq!(code("ab"), Some(ErrorCode::UsernameTooShort));
         assert_eq!(code("nong dan"), Some(ErrorCode::UsernameHasSpaces));
+        assert_eq!(code("ba@gmail.com"), Some(ErrorCode::UsernameHasAt));
         assert_eq!(
             code(&"a".repeat(USERNAME_MAX_LEN + 1)),
             Some(ErrorCode::FieldTooLong)

@@ -200,7 +200,7 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 
 | Method | Path                                | Description                                         |
 | ------ | ----------------------------------- | --------------------------------------------------- |
-| POST   | `/api/auth/tokens`                  | Login → JWT                                         |
+| POST   | `/api/auth/tokens`                  | Login → JWT; `username` takes the email too         |
 | POST   | `/api/users`                        | Provider self-registration                          |
 | POST   | `/api/auth/password-resets`         | Send password reset email                           |
 | PATCH  | `/api/auth/password-resets/{token}` | Consume reset token, set new password               |

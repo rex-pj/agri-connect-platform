@@ -240,3 +240,83 @@ async fn sign_ins_and_password_changes_are_audited() {
     assert_eq!(line, "login_failed,login,change_password,reset_password");
     e.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn the_email_signs_in_as_the_username_does() {
+    let e = Env::new().await;
+    register_provider(&e.state, "nongdan", "0901234567").await;
+    let auth = &e.state.usecases.auth;
+
+    // Folded like the username; the session answers with the stored username.
+    let session = auth
+        .login(
+            "  NongDan@Example.VN ".into(),
+            "matkhau123".into(),
+            integration_tests::CLIENT,
+        )
+        .await
+        .unwrap();
+    assert_eq!(session.username, "nongdan");
+    assert_eq!(
+        try_login_as(&e, "khongco@example.vn", "matkhau123").await,
+        Err(ErrorCode::InvalidCredentials),
+        "an unknown email answers as an unknown username"
+    );
+
+    // One account, one count: wrong passwords by either name add up.
+    for i in 0..LOGIN_FAIL_MAX_ATTEMPTS {
+        let name = if i % 2 == 0 {
+            "nongdan"
+        } else {
+            "nongdan@example.vn"
+        };
+        assert_eq!(
+            try_login_as(&e, name, "sai").await,
+            Err(ErrorCode::InvalidCredentials)
+        );
+    }
+    assert_eq!(
+        try_login_as(&e, "nongdan@example.vn", "matkhau123").await,
+        Err(ErrorCode::AccountLocked)
+    );
+
+    // A deactivated account is told so by the email too.
+    e.t.db
+        .execute_unprepared("UPDATE users SET is_active = false")
+        .await
+        .unwrap();
+    assert_eq!(
+        try_login_as(&e, "nongdan@example.vn", "sai").await,
+        Err(ErrorCode::InvalidCredentials)
+    );
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_username_with_an_at_is_refused() {
+    let e = Env::new().await;
+    let err = e
+        .state
+        .usecases
+        .auth
+        .register(
+            "ba@gmail.com".into(),
+            "ba@gmail.com".into(),
+            "matkhau123".into(),
+            None,
+            "Vườn Ba".into(),
+            "0901234567".into(),
+        )
+        .await
+        .err()
+        .expect("refused");
+    assert!(
+        err.fields()
+            .iter()
+            .any(|f| f.field == "username" && f.code == ErrorCode::UsernameHasAt),
+        "{err:?}"
+    );
+    e.cleanup().await;
+}

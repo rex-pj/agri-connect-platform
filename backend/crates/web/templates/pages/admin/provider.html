@@ -155,7 +155,7 @@
       {{ sheet_head::sheet_header(id="gan-tai-khoan", title=b.account_label, icon="fa-user-plus") }}
       <form class="contact-sheet__form" method="post" action="{{ b.account_action }}" novalidate>
         {% if account_failed and b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
-        {{ field::input(id="acc-username", name="username", label=t(key="form.username"), value=b.form.username, error=e.username | default(value=""), required=true, autocomplete="off", minlength=limits.username_min_len, first=true) }}
+        {{ field::input(id="acc-username", name="username", label=t(key="form.username"), value=b.form.username, error=e.username | default(value=""), required=true, autocomplete="off", minlength=limits.username_min_len, hint=t(key="form.username_hint"), first=true) }}
         <p class="small text-muted mb-0">{{ t(key="admin.assign_hint") }}</p>
         {{ field::input(id="acc-email", name="email", label=t(key="form.email"), type="email", value=b.form.email, error=e.email | default(value=""), autocomplete="off", inputmode="email") }}
         {{ field::input(id="acc-password", name="password", label=t(key="form.password"), type="password", error=e.password | default(value=""), autocomplete="new-password", minlength=limits.password_min_chars) }}

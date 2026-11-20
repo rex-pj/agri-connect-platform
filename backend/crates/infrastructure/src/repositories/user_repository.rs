@@ -16,8 +16,8 @@ use domain::{
     models::{
         role::UserRole,
         user::{
-            ExistingUser, NewResetToken, NewUser, UserAdmin, UserAdminDetail, UserByEmail,
-            UserCredentials, UserMe,
+            ExistingUser, LoginName, NewResetToken, NewUser, UserAdmin, UserAdminDetail,
+            UserByEmail, UserCredentials, UserMe,
         },
     },
     repositories::user_repository_trait::UserRepositoryTrait,
@@ -51,6 +51,7 @@ impl UserRepository {
 #[derive(FromQueryResult)]
 struct CredentialsRow {
     id: i32,
+    username: String,
     password_hash: String,
     role: String,
     /// Fetched explicitly so the application layer can enforce the
@@ -162,24 +163,25 @@ pub(crate) async fn insert_user<C: ConnectionTrait>(db: &C, user: NewUser) -> Re
         })
 }
 
-#[async_trait]
-impl UserRepositoryTrait for UserRepository {
-    async fn find_credentials_by_username(
+impl UserRepository {
+    /// The sign-in record of the one live (not deleted) account `condition`
+    /// picks. `is_active` is NOT filtered: the use case enforces "inactive
+    /// accounts may not log in" so the rule is visible at that layer.
+    async fn credentials_where(
         &self,
-        username: &str,
+        condition: SimpleExpr,
+        what: &str,
     ) -> Result<Option<UserCredentials>, Error> {
-        // Note: `is_active` is NOT filtered here; the use case enforces the
-        // "inactive accounts may not log in" invariant explicitly so the
-        // business rule is visible at the application layer.
         UserEntity::find()
             .select_only()
             .column(user::Column::Id)
+            .column(user::Column::Username)
             .column(user::Column::PasswordHash)
             .column(user::Column::IsActive)
             .column(user::Column::LockedUntil)
             .column_as(role::Column::Code, QueryAs::Role)
             .join(JoinType::InnerJoin, user::Relation::Role.def())
-            .filter(user::Column::Username.eq(username))
+            .filter(condition)
             .filter(user::Column::DeletedAt.is_null())
             .into_model::<CredentialsRow>()
             .one(self.db.as_ref())
@@ -187,6 +189,7 @@ impl UserRepositoryTrait for UserRepository {
             .map(|opt| {
                 opt.map(|r| UserCredentials {
                     id: r.id,
+                    username: r.username,
                     password_hash: r.password_hash,
                     role: r.role,
                     is_active: r.is_active,
@@ -194,9 +197,20 @@ impl UserRepositoryTrait for UserRepository {
                 })
             })
             .map_err(|e| {
-                error!("user find_credentials_by_username error: {e}");
+                error!("user {what} error: {e}");
                 Error::internal("System error.")
             })
+    }
+}
+
+#[async_trait]
+impl UserRepositoryTrait for UserRepository {
+    async fn find_credentials(&self, login: &LoginName) -> Result<Option<UserCredentials>, Error> {
+        let condition = match login {
+            LoginName::Username(username) => user::Column::Username.eq(username.as_str()),
+            LoginName::Email(email) => user::Column::Email.eq(email.as_str()),
+        };
+        self.credentials_where(condition, "find_credentials").await
     }
 
     async fn count_by_role(&self, role: &str) -> Result<i64, Error> {
@@ -471,32 +485,8 @@ impl UserRepositoryTrait for UserRepository {
     }
 
     async fn find_credentials_by_id(&self, id: i32) -> Result<Option<UserCredentials>, Error> {
-        UserEntity::find()
-            .select_only()
-            .column(user::Column::Id)
-            .column(user::Column::PasswordHash)
-            .column(user::Column::IsActive)
-            .column(user::Column::LockedUntil)
-            .column_as(role::Column::Code, QueryAs::Role)
-            .join(JoinType::InnerJoin, user::Relation::Role.def())
-            .filter(user::Column::Id.eq(id))
-            .filter(user::Column::DeletedAt.is_null())
-            .into_model::<CredentialsRow>()
-            .one(self.db.as_ref())
+        self.credentials_where(user::Column::Id.eq(id), "find_credentials_by_id")
             .await
-            .map(|opt| {
-                opt.map(|r| UserCredentials {
-                    id: r.id,
-                    password_hash: r.password_hash,
-                    role: r.role,
-                    is_active: r.is_active,
-                    locked_until: r.locked_until.map(|t| t.with_timezone(&Utc)),
-                })
-            })
-            .map_err(|e| {
-                error!("user find_credentials_by_id error: {e}");
-                Error::internal("System error.")
-            })
     }
 
     async fn find_by_email(&self, email: &str) -> Result<Option<UserByEmail>, Error> {

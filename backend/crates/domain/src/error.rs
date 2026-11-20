@@ -82,6 +82,7 @@ error_codes! {
     // ── Field rules ──────────────────────────────────────────────────────────
     UsernameTooShort          => (BadRequest,      "username_too_short"),
     UsernameHasSpaces         => (BadRequest,      "username_has_spaces"),
+    UsernameHasAt             => (BadRequest,      "username_has_at"),
     InvalidEmail              => (BadRequest,      "invalid_email"),
     PasswordTooShort          => (BadRequest,      "password_too_short"),
     PasswordTooLong           => (BadRequest,      "password_too_long"),

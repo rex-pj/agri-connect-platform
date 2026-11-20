@@ -166,8 +166,24 @@ async fn login_lands_by_permission_and_locks_after_repeated_failures() {
     .await;
     assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
     let page = body_text(res).await;
-    assert!(page.contains("Sai tên đăng nhập hoặc mật khẩu."));
+    assert!(page.contains("tên đăng nhập hoặc mật khẩu."));
     assert!(page.contains(r#"value="nongdan""#));
+
+    // The box takes the email too.
+    let res = send(
+        &e.router,
+        post_form(
+            "/login",
+            &[
+                ("username", "NongDan@example.vn"),
+                ("password", "matkhau123"),
+            ],
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(location(&res), "/provider/dashboard");
 
     let res = send(
         &e.router,

@@ -2723,6 +2723,9 @@ ac-geolocate {
   font-size: var(--fs-sm);
   text-align: center;
 }
+.auth-footer + .auth-footer {
+  margin-top: 8px;
+}
 .auth-footer a {
   color: var(--p600);
   font-weight: 600;

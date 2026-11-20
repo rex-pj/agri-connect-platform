@@ -804,6 +804,15 @@ pub fn add_check(table: &dyn Iden, name: &str, check: SimpleExpr) -> String {
     )
 }
 
+/// `ALTER TABLE table DROP CONSTRAINT IF EXISTS name`: undoes `add_check`.
+pub fn drop_constraint(table: &dyn Iden, name: &str) -> String {
+    format!(
+        "ALTER TABLE {} DROP CONSTRAINT IF EXISTS {}",
+        quoted(table),
+        quoted(&Alias::new(name))
+    )
+}
+
 /// `ALTER TABLE table ADD CONSTRAINT name UNIQUE (columns)`: a named unique
 /// constraint (ON CONFLICT and error mapping rely on a constraint, not a bare
 /// unique index).

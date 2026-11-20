@@ -14,7 +14,7 @@ database_unavailable           = "The service is temporarily unavailable. Please
 
 authentication_required        = "Please log in."
 invalid_token                  = "Your session has expired. Please log in again."
-invalid_credentials            = "Wrong username or password."
+invalid_credentials            = "Wrong email/username or password."
 current_password_incorrect     = "The current password is not correct."
 account_locked                 = "Account locked after too many failed log-ins. Please try again later."
 account_deactivated            = "This account has been deactivated. Please contact support."
@@ -30,6 +30,7 @@ email_verification_invalid     = "This email confirmation link is not valid or h
 
 username_too_short             = "The username needs at least {min} characters."
 username_has_spaces            = "The username cannot contain spaces."
+username_has_at                = "The username cannot contain @ (that is for emails)."
 invalid_email                  = "Email is not valid (for example: name@gmail.com)."
 password_too_short             = "The password needs at least {min} characters."
 password_too_long              = "The password is too long (at most {max} bytes)."
@@ -294,6 +295,8 @@ description        = "Description"
 display_order      = "Order"
 full_name          = "Full name"
 username           = "Username"
+username_hint      = "No spaces, no @."
+login_name         = "Email or username"
 password           = "Password"
 password_again     = "Repeat password"
 current_password   = "Current password"
@@ -761,7 +764,7 @@ invalid_sub = "This link is wrong, was already used or has expired. Log in and s
 to_account  = "Go to the account page"
 
 [text.auth]
-login_sub        = "For providers and administrators."
+login_sub        = "For providers, partners and administrators."
 locked_title     = "Account temporarily locked"
 locked_reset     = "Or reset your password to unlock it now:"
 reset_password   = "Reset password"
@@ -782,6 +785,7 @@ your_business    = "Provider details"
 business_name    = "Provider name"
 create_account   = "Create account"
 have_account     = "Already have an account?"
+no_account       = "Don't have an account?"
 registration_closed      = "New provider sign-ups are paused for now. Please come back later."
 registration_closed_help = "Want to be listed sooner? Contact us:"
 

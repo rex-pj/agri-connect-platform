@@ -5,18 +5,17 @@ use crate::{
     models::{
         role::UserRole,
         user::{
-            ExistingUser, NewResetToken, NewUser, UserAdmin, UserAdminDetail, UserByEmail,
-            UserCredentials, UserMe,
+            ExistingUser, LoginName, NewResetToken, NewUser, UserAdmin, UserAdminDetail,
+            UserByEmail, UserCredentials, UserMe,
         },
     },
 };
 
 #[async_trait]
 pub trait UserRepositoryTrait {
-    async fn find_credentials_by_username(
-        &self,
-        username: &str,
-    ) -> Result<Option<UserCredentials>, Error>;
+    /// The account a sign-in name names (its username or its email), active
+    /// or not: the use case says why a deactivated one is refused.
+    async fn find_credentials(&self, login: &LoginName) -> Result<Option<UserCredentials>, Error>;
 
     async fn find_credentials_by_id(&self, id: i32) -> Result<Option<UserCredentials>, Error>;
 

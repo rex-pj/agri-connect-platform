@@ -84,6 +84,7 @@ fn reshow<T: Serialize>(
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct LoginForm {
+    /// The username or the email (`LoginName`).
     pub username: String,
     pub password: String,
 }

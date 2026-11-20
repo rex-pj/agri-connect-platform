@@ -20,18 +20,20 @@
 {% else %}
 <form class="auth-form" method="post" action="{{ url_for(name="login") }}">
   {% if page.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=page.errors.message) }}{% endif %}
-  {{ field::input(id="lg_user", name="username", label=t(key="form.username"), value=page.username, required=true, autocomplete="username") }}
+  {{ field::input(id="lg_user", name="username", label=t(key="form.login_name"), value=page.username, required=true, autocomplete="username") }}
   {{ field::input(id="lg_pw", name="password", label=t(key="form.password"), type="password", required=true, autocomplete="current-password") }}
   <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-right-to-bracket") }} {{ t(key="account_menu.login") }}</button>
   <p class="text-center mb-0"><a class="text-muted small" href="{{ url_for(name="forgot_password") }}">{{ t(key="auth.forgot_link") }}</a></p>
 </form>
 {% endif %}
 
+{% if page.registration_open %}
+<p class="auth-footer">
+  <span class="text-muted small">{{ t(key="auth.no_account") }}</span>
+  <a class="small" href="{{ url_for(name="register") }}">{{ t(key="account_menu.register_provider") }}</a>
+</p>
+{% endif %}
 <p class="auth-footer">
   <a class="text-muted small" href="{{ url_for(name="home") }}">{{ atoms::icon(name="fa-arrow-left", class="me-1") }}{{ t(key="common.back_home") }}</a>
-  {% if page.registration_open %}
-  <span class="text-muted small mx-2" aria-hidden="true">·</span>
-  <a class="text-muted small" href="{{ url_for(name="register") }}">{{ t(key="account_menu.register_provider") }}</a>
-  {% endif %}
 </p>
 {% endblock card %}

@@ -376,3 +376,76 @@ async fn an_account_that_may_not_list_is_refused_before_its_photo_is_read() {
     assert_eq!(count(&e, "SELECT count(*) FROM files").await, 0);
     e.cleanup().await;
 }
+
+/// Storage that refuses every upload: a storage outage, or a weak link.
+struct DownStorage;
+
+#[async_trait::async_trait]
+impl application::ports::FileStorage for DownStorage {
+    async fn put(&self, _key: &str, _bytes: Vec<u8>) -> domain::Result<()> {
+        Err(domain::Error::internal("storage is down"))
+    }
+    async fn get(&self, _key: &str) -> domain::Result<Vec<u8>> {
+        Err(domain::Error::internal("storage is down"))
+    }
+    async fn delete(&self, _key: &str) -> domain::Result<()> {
+        Ok(())
+    }
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn an_edit_whose_photo_cannot_be_stored_saves_nothing() {
+    let e = env_with_origin().await;
+    let (cookie, category) = provider(&e).await;
+    let res = send(
+        &e.router,
+        post_multipart_form(
+            "/provider/supplies/new",
+            &[("category_id", &category), ("name", "Bưởi")],
+            None,
+            &cookie,
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let id = count(&e, "SELECT max(id)::bigint FROM products").await;
+
+    // The same database and session, behind storage that is down.
+    let down = integration_tests::router_with(
+        integration_tests::state_with_uploads(
+            e.t.db.clone(),
+            web::startup::Uploads {
+                storage: std::sync::Arc::new(DownStorage),
+                max_bytes: e.state.usecases.media.max_upload_bytes(),
+            },
+        ),
+        web::routings::app_routing::RouterConfig {
+            allowed_origins: vec![integration_tests::TEST_ORIGIN.to_owned()],
+            ..Default::default()
+        },
+    );
+    let res = send(
+        &down,
+        post_multipart_form(
+            &format!("/provider/supplies/{id}/edit"),
+            &[("category_id", &category), ("name", "Bưởi da xanh")],
+            Some(&photo(32, 32)),
+            &cookie,
+        ),
+    )
+    .await;
+    assert!(res.status().is_server_error(), "{}", res.status());
+    // A server error: the error page, as for any form (`refused`).
+    assert_eq!(
+        count(
+            &e,
+            &format!("SELECT count(*) FROM products WHERE id = {id} AND name = 'Bưởi'")
+        )
+        .await,
+        1,
+        "the new name is not saved without its photo"
+    );
+    assert_eq!(count(&e, "SELECT count(*) FROM files").await, 0);
+    e.cleanup().await;
+}

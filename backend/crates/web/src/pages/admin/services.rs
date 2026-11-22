@@ -521,8 +521,21 @@ pub async fn update(
     state.usecases.admin.get_service_admin(&actor, id).await?;
     let max = state.usecases.media.max_upload_bytes();
     let (form, file): (ServiceForm, _) = upload.into_form(IMAGE_FIELD, max).await?;
-    let image = match prepare(&state, file).await {
-        Ok(image) => image,
+    let media = &state.usecases.media;
+    // Uploaded before anything is saved, shown once the boxes are (see the
+    // supply page).
+    let staged = async {
+        match prepare(&state, file).await? {
+            Some(image) => media
+                .stage_service_image_admin(&actor, id, image)
+                .await
+                .map(Some),
+            None => Ok(None),
+        }
+    }
+    .await;
+    let staged = match staged {
+        Ok(staged) => staged,
         Err(err) if is_refusal(&err) => {
             let outcome = Outcome::photo_refused(&state, &err, form);
             return service_page(&state, &actor, id, &back, outcome).await;
@@ -541,17 +554,15 @@ pub async fn update(
             Some(form.price_note.clone()),
         )
         .await;
-    match result {
-        Ok(_) => {
-            if let Some(image) = image {
-                state
-                    .usecases
-                    .media
-                    .attach_service_image_admin(&actor, id, image)
-                    .await?;
-            }
-            back.to_record("admin_service", id, Flash::ServiceSaved)
+    if result.is_err() {
+        if let Some(staged) = staged {
+            media.abandon_staged(staged).await;
         }
+    } else if let Some(staged) = staged {
+        media.commit_staged(&actor, staged).await?;
+    }
+    match result {
+        Ok(_) => back.to_record("admin_service", id, Flash::ServiceSaved),
         Err(err) if is_refusal(&err) => {
             let outcome = Outcome::refused(&state, &err, Some(form), false);
             service_page(&state, &actor, id, &back, outcome).await

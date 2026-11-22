@@ -490,7 +490,7 @@ impl ProviderDashboardUseCase {
     }
 
     /// Edits one of the actor's services; its photo is replaced separately
-    /// (`MediaUseCase::attach_service_image`).
+    /// (`MediaUseCase::stage_service_image`, committed once this is saved).
     pub async fn update_service(
         &self,
         actor: &Actor,

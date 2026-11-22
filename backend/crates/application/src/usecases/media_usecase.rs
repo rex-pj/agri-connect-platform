@@ -75,6 +75,21 @@ fn object_keys(id: Uuid) -> (String, String) {
     (format!("images/{id}.jpg"), format!("images/{id}-thumb.jpg"))
 }
 
+/// A photo uploaded for one listing but not yet shown on it: an edit form
+/// stages its photo before saving anything (the upload is what fails on a
+/// weak link or a storage outage), saves its boxes, then commits the photo
+/// (`MediaUseCase::commit_staged`), or abandons it when the boxes were
+/// refused (`abandon_staged`). A storage failure so leaves the listing as
+/// it was, never with its new words and its old photo.
+#[must_use = "commit or abandon a staged photo, or its file is left behind"]
+pub struct StagedImage {
+    file: Uuid,
+    listing: Listing,
+    editor: ListingEditor,
+    /// The permission it was staged under, asked again on commit.
+    permission: &'static str,
+}
+
 /// The two kinds of listing that carry one image.
 #[derive(Debug, Clone, Copy)]
 enum Listing {
@@ -224,32 +239,111 @@ impl MediaUseCase {
             .ok_or_else(|| Error::internal("service image set but service could not be reloaded"))
     }
 
-    /// A moderator's photo for any live product (prepared already by
-    /// `prepare_image`): one taken on a field visit, or one in place of an
-    /// unsuitable one. The old image goes to the cleanup subscriber.
-    pub async fn attach_product_image_admin(
+    /// Uploads the photo of one of the actor's own products, to show once
+    /// its edit is saved (`StagedImage`).
+    pub async fn stage_product_image(
         &self,
         actor: &Actor,
         product_id: i32,
         image: ProcessedImage,
-    ) -> Result<()> {
-        actor.require(PERM_LISTING_MODERATE)?;
-        let editor = ListingEditor::Moderator(actor.user_id);
-        self.swap_image(actor, Listing::Product(product_id), editor, image)
-            .await
+    ) -> Result<StagedImage> {
+        actor.require(PERM_OWN_LISTING_UPDATE)?;
+        let editor = ListingEditor::Owner(actor.user_id);
+        self.stage(
+            actor,
+            Listing::Product(product_id),
+            editor,
+            PERM_OWN_LISTING_UPDATE,
+            image,
+        )
+        .await
     }
 
-    /// A moderator's photo for any live service, as for a product.
-    pub async fn attach_service_image_admin(
+    /// The same for one of the actor's own services.
+    pub async fn stage_service_image(
         &self,
         actor: &Actor,
         service_id: i32,
         image: ProcessedImage,
-    ) -> Result<()> {
+    ) -> Result<StagedImage> {
+        actor.require(PERM_OWN_SERVICE_UPDATE)?;
+        let editor = ListingEditor::Owner(actor.user_id);
+        self.stage(
+            actor,
+            Listing::Service(service_id),
+            editor,
+            PERM_OWN_SERVICE_UPDATE,
+            image,
+        )
+        .await
+    }
+
+    /// The same for a moderator's photo of any product.
+    pub async fn stage_product_image_admin(
+        &self,
+        actor: &Actor,
+        product_id: i32,
+        image: ProcessedImage,
+    ) -> Result<StagedImage> {
+        actor.require(PERM_LISTING_MODERATE)?;
+        let editor = ListingEditor::Moderator(actor.user_id);
+        self.stage(
+            actor,
+            Listing::Product(product_id),
+            editor,
+            PERM_LISTING_MODERATE,
+            image,
+        )
+        .await
+    }
+
+    /// The same for a moderator's photo of any service.
+    pub async fn stage_service_image_admin(
+        &self,
+        actor: &Actor,
+        service_id: i32,
+        image: ProcessedImage,
+    ) -> Result<StagedImage> {
         actor.require(PERM_SERVICE_MANAGE)?;
         let editor = ListingEditor::Moderator(actor.user_id);
-        self.swap_image(actor, Listing::Service(service_id), editor, image)
+        self.stage(
+            actor,
+            Listing::Service(service_id),
+            editor,
+            PERM_SERVICE_MANAGE,
+            image,
+        )
+        .await
+    }
+
+    async fn stage(
+        &self,
+        actor: &Actor,
+        listing: Listing,
+        editor: ListingEditor,
+        permission: &'static str,
+        image: ProcessedImage,
+    ) -> Result<StagedImage> {
+        Ok(StagedImage {
+            file: self.store(actor, image).await?,
+            listing,
+            editor,
+            permission,
+        })
+    }
+
+    /// Shows a staged photo on its listing, once the edit it came with is
+    /// saved. Refused (the listing gone, or no longer the editor's), the
+    /// file is discarded.
+    pub async fn commit_staged(&self, actor: &Actor, staged: StagedImage) -> Result<()> {
+        actor.require(staged.permission)?;
+        self.point_at(actor, staged.listing, staged.editor, staged.file)
             .await
+    }
+
+    /// Deletes a staged photo whose edit was refused.
+    pub async fn abandon_staged(&self, staged: StagedImage) {
+        self.discard(staged.file).await;
     }
 
     /// A moderator takes a product's photo off, the product staying listed
@@ -305,6 +399,18 @@ impl MediaUseCase {
         image: ProcessedImage,
     ) -> Result<()> {
         let file = self.store(actor, image).await?;
+        self.point_at(actor, listing, editor, file).await
+    }
+
+    /// Points the listing at a stored file and announces the replaced one
+    /// for cleanup; a refused or failed write discards the file.
+    async fn point_at(
+        &self,
+        actor: &Actor,
+        listing: Listing,
+        editor: ListingEditor,
+        file: Uuid,
+    ) -> Result<()> {
         let previous = match self.set_image(listing, editor, Some(file)).await {
             Ok(Some(previous)) => previous,
             Ok(None) => {

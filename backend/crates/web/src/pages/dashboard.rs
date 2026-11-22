@@ -496,8 +496,18 @@ pub async fn update_product(
     let current = dashboard.get_product(&actor, id).await?;
     let max = state.usecases.media.max_upload_bytes();
     let (form, file): (ProductForm, _) = upload.into_form(IMAGE_FIELD, max).await?;
-    let image = match prepare(&state, file).await {
-        Ok(image) => image,
+    let media = &state.usecases.media;
+    // The photo is checked and uploaded before anything is saved, and shown
+    // only once the boxes are: never the new words with the old photo.
+    let staged = async {
+        match prepare(&state, file).await? {
+            Some(image) => media.stage_product_image(&actor, id, image).await.map(Some),
+            None => Ok(None),
+        }
+    }
+    .await;
+    let staged = match staged {
+        Ok(staged) => staged,
         Err(err) => {
             let errors = FormErrors::on_field(&state, &err, IMAGE_FIELD);
             return refused(&state, &shell, &actor, Some(current), form, err, errors).await;
@@ -510,15 +520,14 @@ pub async fn update_product(
     }
     .await;
     if let Err(err) = updated {
+        if let Some(staged) = staged {
+            media.abandon_staged(staged).await;
+        }
         let errors = FormErrors::from_error(&state, &err);
         return refused(&state, &shell, &actor, Some(current), form, err, errors).await;
     }
-    if let Some(image) = image {
-        state
-            .usecases
-            .media
-            .attach_product_image(&actor, id, image)
-            .await?;
+    if let Some(staged) = staged {
+        media.commit_staged(&actor, staged).await?;
     }
     to_dashboard(Flash::ProductSaved)
 }

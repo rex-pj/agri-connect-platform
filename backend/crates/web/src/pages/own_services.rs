@@ -206,23 +206,32 @@ pub async fn update_service(
     let current = dashboard.get_service(&actor, id).await?;
     let max = state.usecases.media.max_upload_bytes();
     let (form, file): (ServiceForm, _) = upload.into_form(IMAGE_FIELD, max).await?;
-    let image = match prepare(&state, file).await {
-        Ok(image) => image,
+    let media = &state.usecases.media;
+    // Uploaded before anything is saved, shown once the boxes are (see the
+    // supply form).
+    let staged = async {
+        match prepare(&state, file).await? {
+            Some(image) => media.stage_service_image(&actor, id, image).await.map(Some),
+            None => Ok(None),
+        }
+    }
+    .await;
+    let staged = match staged {
+        Ok(staged) => staged,
         Err(err) => {
             let errors = FormErrors::on_field(&state, &err, IMAGE_FIELD);
             return refused(&state, &shell, &actor, Some(current), form, err, errors).await;
         }
     };
     if let Err(err) = dashboard.update_service(&actor, id, form.input()).await {
+        if let Some(staged) = staged {
+            media.abandon_staged(staged).await;
+        }
         let errors = FormErrors::from_error(&state, &err);
         return refused(&state, &shell, &actor, Some(current), form, err, errors).await;
     }
-    if let Some(image) = image {
-        state
-            .usecases
-            .media
-            .attach_service_image(&actor, id, image)
-            .await?;
+    if let Some(staged) = staged {
+        media.commit_staged(&actor, staged).await?;
     }
     to_dashboard(Flash::ServiceSaved)
 }

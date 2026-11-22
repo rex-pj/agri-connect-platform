@@ -1388,7 +1388,7 @@ impl AdminUseCase {
 
     /// Lists a supply for a provider, e.g. one with no account met on a
     /// field visit: the owner's rules (`product_rules`) and cap; its photo is
-    /// added on its page (`MediaUseCase::attach_product_image_admin`).
+    /// added on its page (`MediaUseCase::stage_product_image_admin`).
     pub async fn create_product_admin(
         &self,
         actor: &Actor,

@@ -579,7 +579,9 @@ pub struct AdminReviewDto {
     /// Signs the review may be the provider's own, for the moderator to weigh
     /// before showing it: `own_phone` (the contact request came from the
     /// business's phone), `quick` (written within `listings.review_suspect_minutes` of
-    /// the request: no job is done that fast). Empty for none.
+    /// the request: no job is done that fast), `quick_answer` (the provider
+    /// marked the request answered within that window: it decides which
+    /// requests open the way to a review). Empty for none.
     pub suspect: Vec<&'static str>,
 }
 
@@ -606,12 +608,20 @@ impl AdminReviewDto {
 
 /// `AdminReviewDto::suspect` of a review.
 fn review_suspicions(r: &ReviewAdmin, suspect_minutes: i64) -> Vec<&'static str> {
+    let window = chrono::Duration::minutes(suspect_minutes);
     let quick = r
         .request_sent_on
-        .is_some_and(|sent| r.created_on - sent < chrono::Duration::minutes(suspect_minutes));
+        .is_some_and(|sent| r.created_on - sent < window);
+    // The provider decides which requests count as answered: one marked so
+    // minutes after it came in may be a request it sent itself.
+    let quick_answer = r
+        .request_sent_on
+        .zip(r.request_answered_on)
+        .is_some_and(|(sent, answered)| answered - sent < window);
     [
         (r.from_business_phone, REVIEW_SUSPECT_OWN_PHONE),
         (quick, REVIEW_SUSPECT_QUICK),
+        (quick_answer, REVIEW_SUSPECT_QUICK_ANSWER),
     ]
     .into_iter()
     .filter_map(|(on, sign)| on.then_some(sign))
@@ -621,6 +631,7 @@ fn review_suspicions(r: &ReviewAdmin, suspect_minutes: i64) -> Vec<&'static str>
 /// The signs in `AdminReviewDto::suspect`; the admin page words each one.
 pub const REVIEW_SUSPECT_OWN_PHONE: &str = "own_phone";
 pub const REVIEW_SUSPECT_QUICK: &str = "quick";
+pub const REVIEW_SUSPECT_QUICK_ANSWER: &str = "quick_answer";
 
 /// A shown review on a provider's public page.
 #[derive(Serialize)]
@@ -656,10 +667,11 @@ pub struct ProviderReviewsDto {
     pub items: Vec<PublicReviewDto>,
 }
 
-/// The answer to a farmer who sent a review: it waits for an admin.
+/// The answer to a farmer who sent a review: it waits for an admin. The
+/// same whether it was stored or not (`ReviewUseCase::submit`), so it
+/// carries no id: an id would tell the two apart.
 #[derive(Serialize)]
 pub struct ReviewSentDto {
-    pub id: i32,
     pub is_visible: bool,
 }
 

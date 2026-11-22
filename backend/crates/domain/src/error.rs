@@ -121,7 +121,6 @@ error_codes! {
     InvalidMonthlyFee         => (BadRequest,      "invalid_monthly_fee"),
     ContractCategoriesRequired=> (BadRequest,      "contract_categories_required"),
     SponsoredOutsideArea      => (BadRequest,      "sponsored_outside_area"),
-    ReviewNeedsContact        => (BadRequest,      "review_needs_contact"),
     InvalidCommodity          => (BadRequest,      "invalid_commodity"),
     InvalidSector             => (BadRequest,      "invalid_sector"),
     InvalidIcon               => (BadRequest,      "invalid_icon"),

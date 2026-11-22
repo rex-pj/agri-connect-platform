@@ -15,6 +15,8 @@ pub struct ReviewAdmin {
     pub updated_by_name: Option<String>,
     /// When the contact request the review rests on was sent.
     pub request_sent_on: Option<DateTime<Utc>>,
+    /// When the provider (or an admin) first marked that request answered.
+    pub request_answered_on: Option<DateTime<Utc>>,
     /// That request came from the business's own phone number.
     pub from_business_phone: bool,
 }

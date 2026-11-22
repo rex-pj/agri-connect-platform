@@ -97,16 +97,18 @@ async fn only_an_answered_farmer_reviews_and_an_admin_approves_it() {
         "the sheet is offered"
     );
 
-    // No contact request yet: refused, the sheet comes back open as typed.
+    // No contact request yet: thanked like any farmer, nothing stored, so
+    // nobody typing a number learns whom it contacted.
     let res = send(
         &e.router,
         post("/reviews", &review_form(business, "5"), None),
     )
     .await;
-    assert!(res.status().is_client_error());
-    let html = body_text(res).await;
-    assert!(html.contains("Số này chưa gửi yêu cầu liên hệ nào"));
-    assert!(html.contains(r#"value="5" checked"#));
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        scalar(&e, "SELECT count(*)::text AS v FROM reviews").await,
+        "0"
+    );
 
     // A request the provider has not answered yet does not count either.
     let inquiry = inquiry_to(&e, business).await;
@@ -115,7 +117,11 @@ async fn only_an_answered_farmer_reviews_and_an_admin_approves_it() {
         post("/reviews", &review_form(business, "5"), None),
     )
     .await;
-    assert!(res.status().is_client_error());
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        scalar(&e, "SELECT count(*)::text AS v FROM reviews").await,
+        "0"
+    );
 
     let provider = sign_in(&e, "nongdan", "matkhau123").await;
     let res = send(
@@ -166,15 +172,17 @@ async fn only_an_answered_farmer_reviews_and_an_admin_approves_it() {
             .contains("Phun kỹ, đúng hẹn"),
         "not shown before approval"
     );
+    // A second review from the same phone: answered alike, not stored.
     let res = send(
         &e.router,
         post("/reviews", &review_form(business, "5"), None),
     )
     .await;
-    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
-    assert!(body_text(res)
-        .await
-        .contains("Số này đã đánh giá nhà cung cấp này rồi."));
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        scalar(&e, "SELECT count(*)::text AS v FROM reviews").await,
+        "1"
+    );
 
     // The admin's "show" is the approval.
     let admin = install_admin(&e).await;
@@ -390,11 +398,17 @@ async fn the_json_api_creates_providers_and_carries_reviews() {
     let body = format!(
         r#"{{"business_id":{business},"reviewer_name":"Chú Tư","reviewer_phone":"{FARMER}","rating":5}}"#
     );
+    // No answered request: the same answer as a stored review, nothing stored.
     let res = send(&e.router, json("POST", "/api/explore/reviews", None, &body)).await;
-    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(res.status(), StatusCode::CREATED);
     assert_eq!(
-        json_body(res).await["field_errors"]["reviewer_phone"][0],
-        "Số này chưa gửi yêu cầu liên hệ nào được nhà cung cấp liên hệ lại. Hãy gửi yêu cầu và chờ họ gọi trước."
+        json_body(res).await,
+        serde_json::json!({"is_visible": false}),
+        "no id: it would tell a stored review from a dropped one"
+    );
+    assert_eq!(
+        scalar(&e, "SELECT count(*)::text AS v FROM reviews").await,
+        "0"
     );
     let inquiry = inquiry_to(&e, business).await;
     e.t.db
@@ -406,8 +420,11 @@ async fn the_json_api_creates_providers_and_carries_reviews() {
     let res = send(&e.router, json("POST", "/api/explore/reviews", None, &body)).await;
     assert_eq!(res.status(), StatusCode::CREATED);
     let sent = json_body(res).await;
-    assert_eq!(sent["is_visible"], false);
-    let review = sent["id"].as_i64().unwrap();
+    assert_eq!(sent, serde_json::json!({"is_visible": false}));
+    let review: i64 = scalar(&e, "SELECT id::text AS v FROM reviews")
+        .await
+        .parse()
+        .unwrap();
 
     let res = send(
         &e.router,
@@ -502,6 +519,10 @@ async fn a_review_that_looks_like_the_providers_own_is_flagged() {
     let list = body_text(send(&e.router, get_page("/admin/reviews", Some(&admin))).await).await;
     assert!(list.contains("gửi từ chính số điện thoại của nhà cung cấp"));
     assert!(list.contains("Viết chưa tới một giờ sau yêu cầu liên hệ"));
+    assert!(
+        list.contains("chỉ vài phút sau khi nhận yêu cầu"),
+        "marked answered at once"
+    );
 
     // A farmer's review a day after the request carries no sign.
     let farmer = inquiry_to(&e, business).await;
@@ -533,5 +554,10 @@ async fn a_review_that_looks_like_the_providers_own_is_flagged() {
         1
     );
     assert_eq!(list.matches("gửi từ chính số điện thoại").count(), 1);
+    assert_eq!(
+        list.matches("chỉ vài phút sau khi nhận yêu cầu").count(),
+        1,
+        "answered a day after it came in: no sign"
+    );
     e.cleanup().await;
 }

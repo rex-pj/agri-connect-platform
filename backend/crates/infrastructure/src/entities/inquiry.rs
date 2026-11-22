@@ -16,6 +16,8 @@ pub struct Model {
     pub created_on: DateTimeWithTimeZone,
     pub updated_on: DateTimeWithTimeZone,
     pub updated_by: Option<i32>,
+    /// When it was first marked answered (`contacted` or `closed`).
+    pub answered_on: Option<DateTimeWithTimeZone>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

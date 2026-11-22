@@ -115,6 +115,7 @@ pub enum QueryAs {
     ProviderTurn,
     RecipientEmail,
     RequestSentOn,
+    RequestAnsweredOn,
     Role,
     RoleCode,
     RoleName,

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    sea_query::{Asterisk, Expr, Func},
+    sea_query::{Asterisk, Expr, Func, SimpleExpr},
     ColumnTrait, DatabaseConnection, DbErr, EntityTrait, FromQueryResult, JoinType, PaginatorTrait,
     QueryFilter, QueryOrder, QuerySelect, QueryTrait, RelationTrait, Select, Set,
 };
@@ -229,6 +229,7 @@ impl InquiryRepositoryTrait for InquiryRepository {
             .col_expr(inquiry::Column::Status, Expr::value(status.to_string()))
             .col_expr(inquiry::Column::UpdatedOn, Expr::current_timestamp().into())
             .col_expr(inquiry::Column::UpdatedBy, Expr::value(Some(admin_id)))
+            .col_expr(inquiry::Column::AnsweredOn, answered_on(status))
             .filter(inquiry::Column::Id.eq(id))
             .exec(self.db.as_ref())
             .await
@@ -342,6 +343,7 @@ impl InquiryRepositoryTrait for InquiryRepository {
             .col_expr(inquiry::Column::Status, Expr::value(status.to_owned()))
             .col_expr(inquiry::Column::UpdatedOn, Expr::current_timestamp().into())
             .col_expr(inquiry::Column::UpdatedBy, Expr::value(Some(owner_user)))
+            .col_expr(inquiry::Column::AnsweredOn, answered_on(status))
             .filter(inquiry::Column::Id.eq(id))
             .filter(inquiry::Column::BusinessId.in_subquery(businesses_of(owner_user)))
             .exec(self.db.as_ref())
@@ -443,5 +445,17 @@ fn inquiry_order() -> OrderColumns<inquiry::Column, inquiry::Column, inquiry::Co
         created: inquiry::Column::CreatedOn,
         name: inquiry::Column::RequesterName,
         id: inquiry::Column::Id,
+    }
+}
+
+/// `inquiries.answered_on` after a status change: the first time a request
+/// is marked answered (`INQUIRY_STATUSES_REVIEWABLE`) is kept for good,
+/// through a reopening and a later close; any other status leaves it.
+fn answered_on(status: &str) -> SimpleExpr {
+    let current = Expr::col(inquiry::Column::AnsweredOn);
+    if INQUIRY_STATUSES_REVIEWABLE.contains(&status) {
+        Func::coalesce([current.into(), Expr::current_timestamp().into()]).into()
+    } else {
+        current.into()
     }
 }

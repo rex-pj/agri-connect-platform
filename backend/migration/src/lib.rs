@@ -15,6 +15,7 @@ mod m20261122_000003_scale;
 mod m20261123_000004_settings;
 mod m20261124_000005_username_no_at;
 mod m20261125_000006_user_demo;
+mod m20261126_000007_inquiry_answered_on;
 pub mod schema;
 pub mod search;
 
@@ -30,6 +31,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20261123_000004_settings::Migration),
             Box::new(m20261124_000005_username_no_at::Migration),
             Box::new(m20261125_000006_user_demo::Migration),
+            Box::new(m20261126_000007_inquiry_answered_on::Migration),
         ]
     }
 }

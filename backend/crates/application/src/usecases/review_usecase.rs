@@ -76,10 +76,13 @@ impl ReviewUseCase {
     }
 
     /// Stores a farmer's review, hidden until an admin shows it. The boxes'
-    /// rules are reported together; then the phone must have a contact
-    /// request this provider answered (`review_needs_contact`), and must not
-    /// have reviewed it already (`review_already_sent`).
+    /// rules are reported together. Then it is stored only from a phone
+    /// with a contact request this provider answered, once per phone; but
+    /// the answer is the same either way ("sent, waiting for approval"), so
+    /// nobody typing a number learns whether it contacted this provider or
+    /// reviewed it already. The page tells farmers the rule beforehand.
     pub async fn submit(&self, input: ReviewInput) -> Result<ReviewSentDto> {
+        let sent = ReviewSentDto { is_visible: false };
         let business_id = self.live_provider(input.business_id).await?;
         let reviewer_name = input.reviewer_name.trim().to_owned();
         let phone = input.reviewer_phone.trim().to_owned();
@@ -105,12 +108,14 @@ impl ReviewUseCase {
             return Err(Error::field("rating", ErrorCode::InvalidRating));
         };
 
-        let inquiry_id = self
+        let Some(inquiry_id) = self
             .inquiry_repo
             .find_reviewable(business_id, &phone)
             .await?
-            .ok_or_else(|| Error::field("reviewer_phone", ErrorCode::ReviewNeedsContact))?;
-        let id = self
+        else {
+            return Ok(sent);
+        };
+        let created = self
             .review_repo
             .create(NewReview {
                 business_id,
@@ -120,7 +125,19 @@ impl ReviewUseCase {
                 reviewer_name,
                 reviewer_phone_hash: sha256_hex(&phone),
             })
-            .await?;
+            .await;
+        let id = match created {
+            Ok(id) => id,
+            // Reviewed already: answered as any other.
+            Err(e)
+                if e.fields()
+                    .iter()
+                    .any(|f| f.code == ErrorCode::ReviewAlreadySent) =>
+            {
+                return Ok(sent)
+            }
+            Err(e) => return Err(e),
+        };
         // A visitor's change: not audited, there for notifications.
         self.events
             .publish(DomainEvent {
@@ -131,10 +148,7 @@ impl ReviewUseCase {
                 reason: None,
             })
             .await;
-        Ok(ReviewSentDto {
-            id,
-            is_visible: false,
-        })
+        Ok(sent)
     }
 
     /// A live provider's shown reviews: their count, average and the newest.

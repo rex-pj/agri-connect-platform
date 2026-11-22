@@ -297,6 +297,7 @@ pub enum Inquiries {
     CreatedOn,
     UpdatedOn,
     UpdatedBy,
+    AnsweredOn,
 }
 
 #[derive(DeriveIden, Clone, Copy)]

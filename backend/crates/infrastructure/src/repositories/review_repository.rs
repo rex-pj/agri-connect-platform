@@ -54,6 +54,7 @@ struct ReviewAdminRow {
     updated_on: DateTimeWithTimeZone,
     updated_by_name: Option<String>,
     request_sent_on: Option<DateTimeWithTimeZone>,
+    request_answered_on: Option<DateTimeWithTimeZone>,
     from_business_phone: bool,
 }
 
@@ -72,6 +73,7 @@ impl From<ReviewAdminRow> for ReviewAdmin {
             updated_on: r.updated_on.with_timezone(&Utc),
             updated_by_name: r.updated_by_name,
             request_sent_on: r.request_sent_on.map(|t| t.with_timezone(&Utc)),
+            request_answered_on: r.request_answered_on.map(|t| t.with_timezone(&Utc)),
             from_business_phone: r.from_business_phone,
         }
     }
@@ -130,6 +132,7 @@ fn admin_select() -> Select<Review> {
             QueryAs::UpdatedByName,
         )
         .column_as(inquiry::Column::CreatedOn, QueryAs::RequestSentOn)
+        .column_as(inquiry::Column::AnsweredOn, QueryAs::RequestAnsweredOn)
         .expr_as(
             Func::coalesce([
                 Expr::col((inquiry::Entity, inquiry::Column::RequesterPhone))

@@ -34,6 +34,7 @@ async fn inquiry_to(e: &Env, business_id: i32) -> i32 {
             note: Some("Ao 500 m2, cần trong tuần".into()),
             service_id: None,
             product_id: None,
+            client: String::new(),
         })
         .await
         .unwrap()

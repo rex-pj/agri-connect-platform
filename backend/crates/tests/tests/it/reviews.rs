@@ -52,6 +52,7 @@ async fn inquiry_to(e: &Env, business_id: i32) -> i32 {
             note: None,
             service_id: None,
             product_id: None,
+            client: String::new(),
         })
         .await
         .unwrap()
@@ -478,6 +479,7 @@ async fn a_review_that_looks_like_the_providers_own_is_flagged() {
             note: None,
             service_id: None,
             product_id: None,
+            client: String::new(),
         })
         .await
         .unwrap()

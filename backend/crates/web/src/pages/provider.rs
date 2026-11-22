@@ -373,6 +373,7 @@ async fn origin_of(state: &AppState, form: &ContactForm) -> Result<Option<Origin
 /// POST /contact
 pub async fn submit_contact(
     shell: Shell,
+    ip: Option<axum::Extension<crate::middleware::client_ip::ClientIp>>,
     State(state): State<AppState>,
     ApiForm(form): ApiForm<ContactForm>,
 ) -> Result<Response, Error> {
@@ -395,6 +396,7 @@ pub async fn submit_contact(
             note: Some(v.note.clone()),
             service_id: parse_opt(&v.service_id),
             product_id: parse_opt(&form.product_id),
+            client: crate::middleware::client_ip::client_key(ip.as_deref()),
         })
         .await;
 
@@ -409,7 +411,13 @@ pub async fn submit_contact(
             Flash::ContactSent.set_on(&mut response);
             Ok(response)
         }
-        Err(err) if err.kind() == ErrorKind::BadRequest => {
+        // Too many sent today: said in the form, which offers the call.
+        Err(err)
+            if matches!(
+                err.kind(),
+                ErrorKind::BadRequest | ErrorKind::TooManyRequests
+            ) =>
+        {
             let form = FormErrors::from_error(&state, &err);
             let contact = ContactState {
                 values: v,

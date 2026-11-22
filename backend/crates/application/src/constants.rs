@@ -53,6 +53,15 @@ pub const JOB_POST_CLIENT_WINDOW_SECS: u64 = 24 * 3600;
 /// address among many phones (CGNAT); sign-ups are rare enough for this.
 pub const SIGNUP_ATTEMPTS_PER_CLIENT: u32 = 10;
 pub const SIGNUP_CLIENT_WINDOW_SECS: u64 = 24 * 3600;
+/// Contact requests one client (address) may send to one provider within
+/// `CONTACT_CLIENT_WINDOW_SECS`: each emails the provider and counts as a
+/// lead in the demand report partners pay for, so one address must not
+/// flood either. Per provider, not per address alone: mobile carriers share
+/// one address among many phones (CGNAT), and neighbours writing to
+/// different providers never share a count. A security limit, never a
+/// setting.
+pub const CONTACT_REQUESTS_PER_CLIENT_AND_PROVIDER: u32 = 3;
+pub const CONTACT_CLIENT_WINDOW_SECS: u64 = 24 * 3600;
 
 // ── Validation ─────────────────────────────────────────────────────────────────
 pub const USERNAME_MIN_LEN: usize = 3;

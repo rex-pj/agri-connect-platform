@@ -372,3 +372,72 @@ async fn a_username_with_an_at_is_refused() {
     );
     e.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_session_cannot_guess_its_own_current_password() {
+    let e = Env::new().await;
+    register_provider(&e.state, "nongdan", "0901234567").await;
+    let auth = &e.state.usecases.auth;
+    let user_id = auth
+        .login(
+            "nongdan".into(),
+            "matkhau123".into(),
+            integration_tests::CLIENT,
+        )
+        .await
+        .unwrap()
+        .user_id;
+    let change =
+        |current: &str| auth.change_password(user_id, current.into(), "matkhaumoi123".into());
+
+    for _ in 0..LOGIN_FAIL_MAX_ATTEMPTS {
+        assert_eq!(
+            change("sai").await.err().map(|e| e.code()),
+            Some(ErrorCode::CurrentPasswordIncorrect)
+        );
+    }
+    // Now even the right one is not checked: no more guesses.
+    assert_eq!(
+        change("matkhau123").await.err().map(|e| e.code()),
+        Some(ErrorCode::TooManyRequests)
+    );
+    // Signing in still works: only the change is held back.
+    assert_eq!(try_login(&e, "matkhau123").await, Ok(()));
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_right_current_password_forgets_the_wrong_ones() {
+    let e = Env::new().await;
+    register_provider(&e.state, "nongdan", "0901234567").await;
+    let auth = &e.state.usecases.auth;
+    let user_id = auth
+        .login(
+            "nongdan".into(),
+            "matkhau123".into(),
+            integration_tests::CLIENT,
+        )
+        .await
+        .unwrap()
+        .user_id;
+    for _ in 1..LOGIN_FAIL_MAX_ATTEMPTS {
+        assert!(auth
+            .change_password(user_id, "sai".into(), "matkhaumoi123".into())
+            .await
+            .is_err());
+    }
+    auth.change_password(user_id, "matkhau123".into(), "matkhaumoi123".into())
+        .await
+        .unwrap();
+    // Counted from zero again.
+    assert_eq!(
+        auth.change_password(user_id, "sai".into(), "matkhaukhac123".into())
+            .await
+            .err()
+            .map(|e| e.code()),
+        Some(ErrorCode::CurrentPasswordIncorrect)
+    );
+    e.cleanup().await;
+}

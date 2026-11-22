@@ -10,7 +10,7 @@
 
 use application::{authz::Actor, outputs::MeResponse};
 use axum::{extract::State, http::StatusCode, response::Response, Extension};
-use domain::Error;
+use domain::{Error, ErrorKind};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -144,7 +144,8 @@ pub async fn change_password(
             Flash::PasswordChanged.set_on(&mut response);
             Ok(response)
         }
-        Err(err) if is_form_error(&err) => {
+        // Too many wrong current passwords: said above the form.
+        Err(err) if is_form_error(&err) || err.kind() == ErrorKind::TooManyRequests => {
             let errors = FormErrors::from_error(&state, &err);
             let page = page(&state, &actor, errors, None).await?;
             render(&state, &shell, &actor, err.kind().status(), &page)

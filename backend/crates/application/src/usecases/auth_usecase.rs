@@ -636,13 +636,23 @@ impl AuthUseCase {
             return Err(Error::new(ErrorCode::AccountDeactivated));
         }
 
+        // A session in other hands must not guess the password it does not
+        // know: `LOGIN_FAIL_MAX_ATTEMPTS` wrong ones stop the checks for
+        // `LOGIN_LOCK_MINUTES` (before bcrypt, so guesses cost us nothing).
+        let attempts_key = sha256_hex(format!("{user_id}|change_password"));
+        let lock_window = std::time::Duration::from_secs(LOGIN_LOCK_MINUTES as u64 * 60);
+        if self.failed_logins.count(&attempts_key, lock_window) >= LOGIN_FAIL_MAX_ATTEMPTS {
+            return Err(Error::new(ErrorCode::TooManyRequests));
+        }
         if !self
             .password_hasher
             .verify(&current_password, &credentials.password_hash)
             .await?
         {
+            self.failed_logins.hit(attempts_key, lock_window);
             return Err(Error::new(ErrorCode::CurrentPasswordIncorrect));
         }
+        self.failed_logins.clear(&attempts_key);
 
         let new_hash = self.password_hasher.hash(&new_password).await?;
         self.user_repo.update_password(user_id, &new_hash).await?;

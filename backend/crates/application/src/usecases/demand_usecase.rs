@@ -51,16 +51,37 @@ use crate::{
     settings::SettingsReader,
 };
 
-/// What a report may show: every area and category (`None`), or only these
-/// (a partner's contracts: provinces, wards). A province covers its wards.
-/// `focus` narrows the rows to one area; the area list still shows them all.
+/// What a report may show: every area and category (`None`), or only what
+/// these grants cover (a partner's contracts). A grant is one area (a
+/// province covers its wards) and the categories paid for there, never more:
+/// two contracts (Đồng Tháp × spraying, An Giang × dredging) show neither
+/// Đồng Tháp's dredging nor An Giang's spraying. `focus` narrows the rows to
+/// one area; the area list still shows them all.
 #[derive(Debug, Clone, Default)]
 pub struct ReportScope {
-    pub areas: Option<Vec<AreaKey>>,
-    pub categories: Option<Vec<i32>>,
+    pub grants: Option<Vec<ReportGrant>>,
     pub focus: Option<AreaKey>,
     /// Real data only by default; the admin's report counts demo data too.
     pub demo: DemoScope,
+}
+
+/// One area of a report's scope and the categories it may show there.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReportGrant {
+    pub area: AreaKey,
+    pub categories: Vec<i32>,
+}
+
+impl ReportScope {
+    /// The areas the scope names (`None`: every area).
+    pub fn areas(&self) -> Option<Vec<AreaKey>> {
+        self.grants.as_ref().map(|grants| {
+            let mut areas: Vec<AreaKey> = grants.iter().map(|g| g.area.clone()).collect();
+            areas.sort();
+            areas.dedup();
+            areas
+        })
+    }
 }
 
 #[derive(Clone)]
@@ -351,25 +372,33 @@ struct Input<'a> {
     steady_weekly_leads: i64,
 }
 
-/// Which wards (by their keys) a report counts: those in its areas, and of
-/// those, the ones in its focus.
+/// Which leads a report counts: those of a ward and category one of its
+/// grants covers together, and of those, the ones in its focus.
 struct AreaFilter<'a> {
     units: &'a AdminUnits,
     scope: &'a ReportScope,
 }
 
 impl AreaFilter<'_> {
-    /// A lead in this ward (or in none) is one of the scope's areas.
-    fn in_areas(&self, ward: Option<&str>) -> bool {
-        self.scope
-            .areas
-            .as_ref()
-            .is_none_or(|areas| self.units.keys_of(ward).iter().any(|k| areas.contains(k)))
+    /// A lead in this ward (or in none) about this category is in scope:
+    /// one grant covers both the place and the category. Every lead when
+    /// the scope is everything; never one about no category otherwise.
+    fn covers(&self, ward: Option<&str>, category: &Option<i32>) -> bool {
+        let Some(grants) = &self.scope.grants else {
+            return true;
+        };
+        let Some(category) = category else {
+            return false;
+        };
+        let keys = self.units.keys_of(ward);
+        grants
+            .iter()
+            .any(|g| keys.contains(&g.area) && g.categories.contains(category))
     }
 
-    /// A lead in this ward goes into the rows: in scope, and in the focus.
-    fn in_rows(&self, ward: Option<&str>) -> bool {
-        self.in_areas(ward)
+    /// A lead goes into the rows: in scope, and in the focus.
+    fn in_rows(&self, ward: Option<&str>, category: &Option<i32>) -> bool {
+        self.covers(ward, category)
             && self
                 .scope
                 .focus
@@ -379,7 +408,38 @@ impl AreaFilter<'_> {
 
     /// The scope names this area itself.
     fn listed(&self, area: &AreaKey) -> bool {
-        self.scope.areas.as_ref().is_some_and(|a| a.contains(area))
+        self.scope
+            .grants
+            .as_ref()
+            .is_some_and(|grants| grants.iter().any(|g| &g.area == area))
+    }
+
+    /// The categories listed even at zero for `area` (`None`: the whole
+    /// scope): those of the grants over it, within it or around it. With
+    /// every category in scope, only the ones with leads are listed.
+    fn wanted(&self, area: Option<&AreaKey>) -> Vec<i32> {
+        let Some(grants) = &self.scope.grants else {
+            return Vec::new();
+        };
+        let mut wanted: Vec<i32> = grants
+            .iter()
+            .filter(|g| area.is_none_or(|a| self.overlap(&g.area, a)))
+            .flat_map(|g| g.categories.iter().copied())
+            .collect();
+        wanted.sort_unstable();
+        wanted.dedup();
+        wanted
+    }
+
+    /// Two areas share ground: the same, or a ward and its province.
+    fn overlap(&self, a: &AreaKey, b: &AreaKey) -> bool {
+        let province_of = |w: &str| self.units.province_of(w).map(str::to_owned);
+        match (a, b) {
+            (AreaKey::Ward(w), AreaKey::Province(p)) | (AreaKey::Province(p), AreaKey::Ward(w)) => {
+                province_of(w).as_deref() == Some(p.as_str())
+            }
+            _ => a == b,
+        }
     }
 }
 
@@ -425,24 +485,10 @@ fn aggregate(input: Input<'_>) -> DemandReportDto {
         }
     }
 
-    let in_categories = |c: &Option<i32>| match (&scope.categories, c) {
-        (None, _) => true,
-        (Some(s), Some(c)) => s.contains(c),
-        (Some(_), None) => false,
-    };
-
     let mut ordered: Vec<&CategoryAdmin> = categories.iter().collect();
     ordered.sort_by_key(|c| (c.category_type.clone(), c.display_order, c.id));
-    let wanted = scope.categories.as_deref().unwrap_or_default();
 
-    let area_rows = area_rows(
-        &cells,
-        &filter,
-        &in_categories,
-        &ordered,
-        wanted,
-        steady_weekly_leads,
-    );
+    let area_rows = area_rows(&cells, &filter, &ordered, steady_weekly_leads);
     let steady_areas = area_rows
         .iter()
         .filter(|a| a.steady && !a.nested && a.level != LEVEL_NONE)
@@ -451,13 +497,14 @@ fn aggregate(input: Input<'_>) -> DemandReportDto {
     // Rows: the categories of the areas in scope, or of the one in focus.
     let mut by_category = ByCategory::new();
     for ((ward, category), cell) in &cells {
-        if filter.in_rows(ward.as_deref()) && in_categories(category) {
+        if filter.in_rows(ward.as_deref(), category) {
             by_category.entry(*category).or_default().add(cell);
         }
     }
-    let (rows, all_row, _) = category_rows(&by_category, &ordered, wanted);
+    let wanted = filter.wanted(scope.focus.as_ref());
+    let (rows, all_row, _) = category_rows(&by_category, &ordered, &wanted);
 
-    let (searches, unmet) = search_figures(searches, &filter, &in_categories);
+    let (searches, unmet) = search_figures(searches, &filter);
 
     DemandReportDto {
         weeks,
@@ -530,9 +577,7 @@ const LEVEL_NONE: &str = "none";
 fn area_rows(
     cells: &HashMap<(Option<String>, Option<i32>), Cell>,
     filter: &AreaFilter<'_>,
-    in_categories: &dyn Fn(&Option<i32>) -> bool,
     ordered: &[&CategoryAdmin],
-    wanted: &[i32],
     bar: i64,
 ) -> Vec<DemandAreaDto> {
     let units = filter.units;
@@ -540,7 +585,7 @@ fn area_rows(
     let mut by_province: HashMap<&str, ByCategory> = HashMap::new();
     let mut unplaced: Option<ByCategory> = None;
     for ((ward, category), cell) in cells {
-        if !in_categories(category) {
+        if !filter.covers(ward.as_deref(), category) {
             continue;
         }
         let add = |leads: &mut ByCategory| leads.entry(*category).or_default().add(cell);
@@ -554,10 +599,12 @@ fn area_rows(
             None => add(unplaced.get_or_insert_with(ByCategory::new)),
         }
     }
-    let figures = |leads: Option<&ByCategory>| {
-        category_rows(leads.unwrap_or(&ByCategory::new()), ordered, wanted)
+    // Each area lists the categories granted over it, as its own report does.
+    let figures = |key: &AreaKey, leads: Option<&ByCategory>| {
+        let wanted = filter.wanted(Some(key));
+        category_rows(leads.unwrap_or(&ByCategory::new()), ordered, &wanted)
     };
-    let every_area = filter.scope.areas.is_none();
+    let every_area = filter.scope.grants.is_none();
     let mut rows = Vec::new();
     for p in units.provinces() {
         let key = AreaKey::Province(p.code.clone());
@@ -570,7 +617,7 @@ fn area_rows(
                 Some(p.name.clone()),
                 None,
                 false,
-                figures(leads),
+                figures(&key, leads),
                 bar,
             ));
         }
@@ -584,7 +631,7 @@ fn area_rows(
                     units.label(&key),
                     Some(w.full_name.clone()),
                     province_shown,
-                    figures(leads),
+                    figures(&key, leads),
                     bar,
                 ));
             }
@@ -598,7 +645,7 @@ fn area_rows(
                 None,
                 None,
                 false,
-                figures(Some(leads)),
+                figures(&AreaKey::Unplaced, Some(leads)),
                 bar,
             ));
         }
@@ -667,12 +714,11 @@ fn row(category_id: Option<i32>, category: Option<String>, cell: &Cell) -> Deman
 fn search_figures(
     searches: &[SearchCount],
     filter: &AreaFilter<'_>,
-    in_categories: &dyn Fn(&Option<i32>) -> bool,
 ) -> (Vec<Figure>, Vec<UnmetSearchDto>) {
     let mut weekly = [0_i64; DEMAND_WEEKS];
     let mut unmet: HashMap<&str, i64> = HashMap::new();
     for s in searches {
-        if !filter.in_rows(s.ward_code.as_deref()) || !in_categories(&s.category_id) {
+        if !filter.in_rows(s.ward_code.as_deref(), &s.category_id) {
             continue;
         }
         let Some(week) = weekly.get_mut(s.week) else {
@@ -944,8 +990,7 @@ mod tests {
         let partner = run(
             events.clone(),
             &ReportScope {
-                areas: Some(vec![ward("28400")]),
-                categories: Some(vec![8]),
+                grants: Some(vec![grant(ward("28400"), &[8])]),
                 focus: None,
                 demo: DemoScope::Real,
             },
@@ -964,13 +1009,75 @@ mod tests {
         let whole = run(
             events,
             &ReportScope {
-                areas: Some(vec![province("91")]),
-                categories: Some(vec![8]),
+                grants: Some(vec![grant(province("91"), &[8])]),
                 focus: None,
                 demo: DemoScope::Real,
             },
         );
         assert_eq!(values(&whole), vec!["p91", "w30001"]);
+    }
+
+    fn grant(area: AreaKey, categories: &[i32]) -> ReportGrant {
+        ReportGrant {
+            area,
+            categories: categories.to_vec(),
+        }
+    }
+
+    #[test]
+    fn two_contracts_never_show_each_others_categories_elsewhere() {
+        // Đồng Tháp × spraying (7) and An Giang × dredging (8) are paid for;
+        // Đồng Tháp's dredging and An Giang's spraying are not.
+        let mut events = Vec::new();
+        let last = at(2026, 11, 3, 2);
+        for (business, category) in [(1, 7), (1, 8), (3, 7), (3, 8)] {
+            for _ in 0..6 {
+                events.push(event(last, business, Some(category)));
+            }
+        }
+        let scope = |focus: Option<AreaKey>| ReportScope {
+            grants: Some(vec![
+                grant(province("82"), &[7]),
+                grant(province("91"), &[8]),
+            ]),
+            focus,
+            demo: DemoScope::Real,
+        };
+        let total = |r: &DemandReportDto| r.all.total.value;
+        let rows = |r: &DemandReportDto| {
+            r.rows
+                .iter()
+                .map(|row| (row.category_id, row.total.value))
+                .collect::<Vec<_>>()
+        };
+
+        let all = run(events.clone(), &scope(None));
+        assert_eq!(
+            total(&all),
+            Some(12),
+            "6 sprays in Đồng Tháp, 6 dredges in An Giang"
+        );
+        assert_eq!(rows(&all), vec![(Some(7), Some(6)), (Some(8), Some(6))]);
+
+        let dong_thap = run(events.clone(), &scope(Some(province("82"))));
+        assert_eq!(
+            rows(&dong_thap),
+            vec![(Some(7), Some(6))],
+            "no dredging listed there"
+        );
+        let an_giang = run(events.clone(), &scope(Some(province("91"))));
+        assert_eq!(
+            rows(&an_giang),
+            vec![(Some(8), Some(6))],
+            "no spraying listed there"
+        );
+
+        // Each area's line is its own report's sum, the other category left out.
+        for area in &all.areas {
+            let own = run(events.clone(), &scope(AreaKey::parse(&area.value)));
+            assert_eq!(area.total, own.all.total, "{}", area.value);
+            assert_eq!(area.total.value, Some(6), "{}", area.value);
+        }
     }
 
     #[test]
@@ -1073,13 +1180,12 @@ mod tests {
             search(None, 1),
         ];
         let units = units();
-        let any = |_: &Option<i32>| true;
         let everywhere = ReportScope::default();
         let filter = AreaFilter {
             units: &units,
             scope: &everywhere,
         };
-        let (weekly, unmet) = search_figures(&searches, &filter, &any);
+        let (weekly, unmet) = search_figures(&searches, &filter);
         assert_eq!(weekly.last().and_then(|f| f.value), Some(7));
         let words: Vec<_> = unmet.iter().map(|u| (u.query.as_str(), u.count)).collect();
         assert_eq!(
@@ -1097,7 +1203,7 @@ mod tests {
             units: &units,
             scope: &elsewhere,
         };
-        let (weekly, _) = search_figures(&searches, &filter, &any);
+        let (weekly, _) = search_figures(&searches, &filter);
         assert_eq!(weekly.last().and_then(|f| f.value), Some(0));
     }
 }

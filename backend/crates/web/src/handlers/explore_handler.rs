@@ -10,7 +10,10 @@ use serde::Serialize;
 use crate::{
     app_state::AppState,
     extract::{ApiJson, ApiPath, ApiQuery},
-    middleware::auth::MaybeActor,
+    middleware::{
+        auth::Viewer,
+        client_ip::{client_key, ClientIp},
+    },
     pages::listing::list_sector,
     requests::{
         CallRequest, CategoriesQuery, InquiryRequest, ProvidersQuery, ReviewRequest, SectorQuery,
@@ -170,10 +173,11 @@ impl ExploreHandler {
     }
 
     /// POST /api/explore/calls — `{ kind, id, channel? }` of the card or page whose
-    /// call button was tapped; 204. Rate-limited like the contact form.
+    /// call button was tapped; 204. Rate-limited like the contact form. A
+    /// stale session cookie is nobody (`Viewer`): the tap still counts.
     pub async fn record_call(
-        MaybeActor(actor): MaybeActor,
-        ip: Option<axum::Extension<crate::middleware::client_ip::ClientIp>>,
+        Viewer(actor): Viewer,
+        ip: Option<axum::Extension<ClientIp>>,
         State(state): State<AppState>,
         ApiJson(req): ApiJson<CallRequest>,
     ) -> Result<impl IntoResponse, Error> {
@@ -188,9 +192,10 @@ impl ExploreHandler {
                     Visitor::SignedIn
                 } else {
                     Visitor::Anonymous {
-                        // Told apart by address (in memory only), so one
+                        // Told apart by address (in memory only; an IPv6
+                        // client by its /64, as the rate limiter), so one
                         // visitor's repeated taps are one lead.
-                        key: ip.map(|i| i.0 .0.to_string()).unwrap_or_default(),
+                        key: client_key(ip.as_deref()),
                     }
                 },
             })
@@ -200,6 +205,7 @@ impl ExploreHandler {
 
     /// POST /api/explore/contact
     pub async fn contact_request(
+        ip: Option<axum::Extension<ClientIp>>,
         State(state): State<AppState>,
         ApiJson(req): ApiJson<InquiryRequest>,
     ) -> Result<impl IntoResponse, Error> {
@@ -214,6 +220,7 @@ impl ExploreHandler {
                 note: req.note,
                 service_id: req.service_id,
                 product_id: req.product_id,
+                client: client_key(ip.as_deref()),
             })
             .await?;
 

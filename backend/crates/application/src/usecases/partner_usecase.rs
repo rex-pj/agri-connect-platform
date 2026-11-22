@@ -58,7 +58,7 @@ use crate::{
     settings::SettingsReader,
     usecases::{
         account_rules::account_for_role,
-        demand_usecase::{vn_today, DemandReportUseCase, ReportScope},
+        demand_usecase::{vn_today, DemandReportUseCase, ReportGrant, ReportScope},
     },
     validation::{
         audit_reason, max_chars, max_chars_opt, non_blank, validate_email, validate_phone,
@@ -726,19 +726,23 @@ impl PartnerUseCase {
             .filter(|c| c.partner_id == partner.id)
             .collect();
         let mine_ids: HashSet<i32> = mine.iter().map(|c| c.contract_id).collect();
-        let mut areas: Vec<AreaKey> = mine.iter().map(|c| AreaKey::of_contract(&c.area)).collect();
-        areas.sort();
-        areas.dedup();
-        let mut categories: Vec<i32> = mine.iter().flat_map(|c| c.category_ids.clone()).collect();
-        categories.sort_unstable();
-        categories.dedup();
-        let scope = ReportScope {
-            focus: focus.filter(|f| units.within(f, &areas)),
-            areas: Some(areas),
-            categories: Some(categories),
+        // Each contract grants its own categories in its own area, never
+        // another contract's categories there.
+        let mut scope = ReportScope {
+            grants: Some(
+                mine.iter()
+                    .map(|c| ReportGrant {
+                        area: AreaKey::of_contract(&c.area),
+                        categories: c.category_ids.clone(),
+                    })
+                    .collect(),
+            ),
+            focus: None,
             // A real partner never sees demo figures; a demo one only those.
             demo: scope_of(&partner),
         };
+        let areas = scope.areas().unwrap_or_default();
+        scope.focus = focus.filter(|f| units.within(f, &areas));
         let report = self.demand.build(Utc::now(), &scope).await?;
         Ok(PartnerReportDto {
             partner_name: partner.name,

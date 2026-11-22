@@ -99,7 +99,7 @@ pub fn visitor(
         Visitor::SignedIn
     } else {
         Visitor::Anonymous {
-            key: ip.map(|i| i.0.to_string()).unwrap_or_default(),
+            key: crate::middleware::client_ip::client_key(ip),
         }
     }
 }

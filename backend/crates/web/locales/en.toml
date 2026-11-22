@@ -89,6 +89,7 @@ job_place_required             = "Please tap \"Use my position\" or choose an ar
 job_post_limit                 = "This number has several open hire requests already. Wait for a provider to call, or try again in a few days."
 job_post_daily_limit           = "Many hire requests were posted from this device today. Please try again tomorrow."
 signup_daily_limit             = "Many sign-ups were tried from this device today. Please try again tomorrow."
+contact_daily_limit            = "Many contact requests were sent to this provider from this device today. Please call them directly or try again tomorrow."
 job_posts_paused               = "Hire requests are paused for now. Farmers can still find and call providers near them."
 registration_closed            = "New provider sign-ups are paused for now."
 unknown_setting                = "There is no setting «{key}»."

@@ -290,3 +290,73 @@ async fn a_missing_provider_page_is_a_404() {
     }
     e.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn one_address_sends_one_provider_only_a_few_contact_requests_a_day() {
+    let e = env().await;
+    let (id, url) = provider(&e).await;
+    register_provider(&e.state, "nguoikhac", "0907654321").await;
+    let other: i32 =
+        e.t.db
+            .query_one(Statement::from_string(
+                e.t.db.get_database_backend(),
+                "SELECT id FROM businesses WHERE name = 'Vườn nguoikhac'",
+            ))
+            .await
+            .unwrap()
+            .unwrap()
+            .try_get("", "id")
+            .unwrap();
+    let contact = |business_id: i32| {
+        let body = serde_json::json!({
+            "business_id": business_id,
+            "topic": "Múc bùn",
+            "requester_name": "Nguyễn Văn A",
+            "requester_phone": "0912345678",
+        });
+        Request::post("/api/explore/contact")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap()
+    };
+    let cap = application::constants::CONTACT_REQUESTS_PER_CLIENT_AND_PROVIDER;
+    for _ in 0..cap {
+        assert_eq!(
+            send(&e.router, contact(id)).await.status(),
+            StatusCode::CREATED
+        );
+    }
+    let res = send(&e.router, contact(id)).await;
+    assert_eq!(res.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(
+        integration_tests::json_body(res).await["code"],
+        "contact_daily_limit"
+    );
+    assert_eq!(
+        inquiries(&e).await,
+        i64::from(cap),
+        "the refused one is not stored"
+    );
+
+    // The page form says so in the sheet, which stays open.
+    let form = form_body(&[
+        ("business_id", &id.to_string()),
+        ("requester_name", "Nguyễn Văn A"),
+        ("requester_phone", "0912345678"),
+        ("topic", "Múc bùn"),
+    ]);
+    let res = send(&e.router, post_contact(&form, TEST_ORIGIN)).await;
+    assert_eq!(res.status(), StatusCode::TOO_MANY_REQUESTS);
+    let html = body_text(res).await;
+    assert!(html.contains("gửi nhiều yêu cầu liên hệ"), "{url}");
+
+    // Another provider, or another address, is not held back by it.
+    assert_eq!(
+        send(&e.router, contact(other)).await.status(),
+        StatusCode::CREATED
+    );
+    let res = integration_tests::send_from(&e.router, contact(id), [203, 0, 113, 9]).await;
+    assert_eq!(res.status(), StatusCode::CREATED);
+    e.cleanup().await;
+}

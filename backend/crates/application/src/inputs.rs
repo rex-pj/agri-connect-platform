@@ -30,6 +30,9 @@ pub struct ContactInput {
     pub service_id: Option<i32>,
     /// The supply whose page the form was on.
     pub product_id: Option<i32>,
+    /// Who sent it (`client_ip::client_key`; empty: unknown), hashed before
+    /// it is kept in memory, never stored.
+    pub client: String,
 }
 
 /// A farmer's review of a provider, from the phone their contact request

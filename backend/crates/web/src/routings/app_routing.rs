@@ -296,6 +296,11 @@ impl AppRouting {
             )
             // /setup replaces the old /initialize verb
             .route("/api/admin/setup", post(AuthHandler::create_first_admin))
+            // A signed-in write, but each try checks the current password.
+            .route(
+                "/api/users/me/password",
+                patch(AuthHandler::change_password),
+            )
             .layer(limiter(&config.limiters.auth, Scope::AllRequests));
 
         // ── AUTH pages: the same budget as the auth API, on the writes only ──
@@ -325,6 +330,8 @@ impl AppRouting {
                 "/setup",
                 get(pages::setup::setup_page).post(pages::setup::setup),
             )
+            // As the API twin: each try checks the current password.
+            .route("/account/password", post(pages::account::change_password))
             .layer(limiter(&config.limiters.auth, Scope::WritesOnly));
 
         // The demo data page: an admin action, on the signed-in budget.
@@ -610,19 +617,15 @@ impl AppRouting {
                 "/provider/inquiries/{id}/status",
                 post(pages::inbox::change_status),
             )
-            .route("/account/password", post(pages::account::change_password))
             .route(
                 "/account/email-verification",
                 post(pages::account::send_email_verification),
             );
 
-        // ── USER routes (authenticated, no rate limit) ───────────────────────
-        let user_routes = Router::new()
-            .route("/api/users/me", get(AuthHandler::me))
-            .route(
-                "/api/users/me/password",
-                patch(AuthHandler::change_password),
-            );
+        // ── USER routes (authenticated, signed-in budget) ───────────────────
+        // Changing the password is under the auth budget (`auth_routes`,
+        // `auth_pages`): each try checks a password.
+        let user_routes = Router::new().route("/api/users/me", get(AuthHandler::me));
 
         // ── ADMIN routes ─────────────────────────────────────────────────────
         let admin_routes = Router::new()

@@ -27,9 +27,10 @@ use domain::{
 
 use crate::{
     constants::{
-        CALL_REPEAT_SECS, FEATURED_PRODUCTS_COUNT, FEATURED_PROVIDERS_COUNT,
-        FEATURED_SERVICES_COUNT, GEO_RESULTS_MAX, NOTE_MAX_LEN, PAGE_SIZE, RADIUS_MAX_M,
-        RADIUS_MIN_M, REQUESTER_NAME_MAX_LEN, SERVICES_PER_BUSINESS_MAX, TOPIC_MAX_LEN,
+        CALL_REPEAT_SECS, CONTACT_CLIENT_WINDOW_SECS, CONTACT_REQUESTS_PER_CLIENT_AND_PROVIDER,
+        FEATURED_PRODUCTS_COUNT, FEATURED_PROVIDERS_COUNT, FEATURED_SERVICES_COUNT,
+        GEO_RESULTS_MAX, NOTE_MAX_LEN, PAGE_SIZE, RADIUS_MAX_M, RADIUS_MIN_M,
+        REQUESTER_NAME_MAX_LEN, SERVICES_PER_BUSINESS_MAX, TOPIC_MAX_LEN,
     },
     hashing::sha256_hex,
     inputs::{BrowseParams, CallInput, ContactInput, GeoSearchParams, Visitor},
@@ -40,7 +41,7 @@ use crate::{
     },
     pagination::{paginate_public, public_total_pages, total_or_count},
     ports::EventBus,
-    repeats::RepeatFilter,
+    repeats::{RepeatFilter, WindowCounter},
     validation::{non_blank, point_wkt, search_text, validate_coordinates, validate_phone},
 };
 
@@ -60,6 +61,9 @@ pub struct ExploreUseCase {
     /// Call and Zalo taps counted lately: a repeat within `CALL_REPEAT_SECS`
     /// is not another lead.
     recent_taps: RepeatFilter,
+    /// Contact requests sent lately, by client and provider (hashed):
+    /// at most `CONTACT_REQUESTS_PER_CLIENT_AND_PROVIDER` a window.
+    contacts_by_client: WindowCounter,
 }
 
 /// Everything `ExploreUseCase` depends on, named so wiring cannot swap two
@@ -87,6 +91,7 @@ impl ExploreUseCase {
             call_repo: d.call_repo,
             events: d.events,
             recent_taps: RepeatFilter::default(),
+            contacts_by_client: WindowCounter::default(),
         }
     }
 
@@ -449,6 +454,18 @@ impl ExploreUseCase {
             return Err(Error::new(ErrorCode::ProviderNotFound));
         }
 
+        // One client writes to one provider at most so often: each request
+        // emails the provider and counts as a lead. Hashed: the counter
+        // never holds an address.
+        let window = Duration::from_secs(CONTACT_CLIENT_WINDOW_SECS);
+        let client_key = (!input.client.is_empty())
+            .then(|| sha256_hex(format!("{}|{}", input.client, input.business_id)));
+        if client_key.as_deref().is_some_and(|k| {
+            self.contacts_by_client.count(k, window) >= CONTACT_REQUESTS_PER_CLIENT_AND_PROVIDER
+        }) {
+            return Err(Error::new(ErrorCode::ContactDailyLimit));
+        }
+
         // The supply the form was on, when it is still this provider's. The
         // farmer chose no supply in the form, so one that is gone since is
         // left out, never an error; a chosen service is what the request is
@@ -475,6 +492,9 @@ impl ExploreUseCase {
                 note,
             })
             .await?;
+        if let Some(key) = client_key {
+            self.contacts_by_client.hit(key, window);
+        }
 
         // No actor: the farmer is not signed in.
         self.events
@@ -496,10 +516,13 @@ impl ExploreUseCase {
         Ok(categories.into_iter().map(CategoryDto::from).collect())
     }
 
-    /// Forgets the taps whose repeat window has passed (bounded memory).
+    /// Forgets the taps and contact requests whose window has passed
+    /// (bounded memory).
     pub fn forget_old_taps(&self) {
         self.recent_taps
             .forget_older_than(Duration::from_secs(CALL_REPEAT_SECS));
+        self.contacts_by_client
+            .forget_older_than(Duration::from_secs(CONTACT_CLIENT_WINDOW_SECS));
     }
 
     pub async fn get_locations(&self) -> Result<Vec<LocationDto>> {

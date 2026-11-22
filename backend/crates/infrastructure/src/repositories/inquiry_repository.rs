@@ -10,6 +10,7 @@ use tracing::error;
 
 use domain::{
     models::{
+        admin_list::AdminFilter,
         business::ListingRef,
         inquiry::{InquiryAdmin, InquiryForNotice, InquiryForOwner, NewInquiry},
     },
@@ -22,12 +23,14 @@ use domain::{
 };
 
 use crate::{
+    admin_list::{admin_order, OrderColumns},
     db_types::DateTimeWithTimeZone,
     entities::{
         business,
         inquiry::{self, Entity as Inquiry},
         service, user,
     },
+    search::admin_inquiry_search,
     sql::{businesses_of, live_owner_on, notice_email, username_of, QueryAs},
 };
 
@@ -79,16 +82,9 @@ impl InquiryRepositoryTrait for InquiryRepository {
             })
     }
 
-    async fn count_admin(
-        &self,
-        provider_id: Option<i32>,
-        status: Option<&str>,
-    ) -> Result<i64, Error> {
+    async fn count_admin(&self, filter: &AdminFilter) -> Result<i64, Error> {
         Inquiry::find()
-            .apply_if(provider_id, |q, id| {
-                q.filter(inquiry::Column::BusinessId.eq(id))
-            })
-            .apply_if(status, |q, s| q.filter(inquiry::Column::Status.eq(s)))
+            .filter(admin_condition(filter))
             .count(self.db.as_ref())
             .await
             .map(|c| c as i64)
@@ -135,16 +131,12 @@ impl InquiryRepositoryTrait for InquiryRepository {
 
     async fn list_admin(
         &self,
-        provider_id: Option<i32>,
-        status: Option<&str>,
+        filter: &AdminFilter,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<InquiryAdmin>, Error> {
-        Inquiry::find()
-            .apply_if(provider_id, |q, id| {
-                q.filter(inquiry::Column::BusinessId.eq(id))
-            })
-            .apply_if(status, |q, s| q.filter(inquiry::Column::Status.eq(s)))
+        let query = Inquiry::find()
+            .filter(admin_condition(filter))
             .select_only()
             .column(inquiry::Column::Id)
             .column(inquiry::Column::BusinessId)
@@ -159,34 +151,36 @@ impl InquiryRepositoryTrait for InquiryRepository {
                 username_of((inquiry::Entity, inquiry::Column::UpdatedBy)),
                 QueryAs::UpdatedByName,
             )
-            .join(JoinType::InnerJoin, inquiry::Relation::Business.def())
-            .order_by_desc(inquiry::Column::CreatedOn)
-            .order_by_desc(inquiry::Column::Id)
-            .limit(limit as u64)
-            .offset(offset as u64)
-            .into_model::<InquiryAdminRow>()
-            .all(self.db.as_ref())
-            .await
-            .map(|rows| {
-                rows.into_iter()
-                    .map(|r| InquiryAdmin {
-                        id: r.id,
-                        business_id: r.business_id,
-                        business_name: r.business_name,
-                        requester_name: r.requester_name,
-                        requester_phone: r.requester_phone,
-                        topic: r.topic,
-                        status: r.status,
-                        created_on: r.created_on.with_timezone(&Utc),
-                        updated_on: r.updated_on.with_timezone(&Utc),
-                        updated_by_name: r.updated_by_name,
-                    })
-                    .collect()
-            })
-            .map_err(|e| {
-                error!("inquiry list_admin error: {e}");
-                Error::internal("Failed to load inquiries.")
-            })
+            .join(JoinType::InnerJoin, inquiry::Relation::Business.def());
+        admin_order(query, filter.sort, inquiry_order(), |q| {
+            q.order_by_desc(inquiry::Column::CreatedOn)
+                .order_by_desc(inquiry::Column::Id)
+        })
+        .limit(limit as u64)
+        .offset(offset as u64)
+        .into_model::<InquiryAdminRow>()
+        .all(self.db.as_ref())
+        .await
+        .map(|rows| {
+            rows.into_iter()
+                .map(|r| InquiryAdmin {
+                    id: r.id,
+                    business_id: r.business_id,
+                    business_name: r.business_name,
+                    requester_name: r.requester_name,
+                    requester_phone: r.requester_phone,
+                    topic: r.topic,
+                    status: r.status,
+                    created_on: r.created_on.with_timezone(&Utc),
+                    updated_on: r.updated_on.with_timezone(&Utc),
+                    updated_by_name: r.updated_by_name,
+                })
+                .collect()
+        })
+        .map_err(|e| {
+            error!("inquiry list_admin error: {e}");
+            Error::internal("Failed to load inquiries.")
+        })
     }
 
     async fn find_by_id_admin(&self, id: i32) -> Result<Option<InquiryAdmin>, Error> {
@@ -406,5 +400,48 @@ fn owner_error(what: &'static str) -> impl Fn(DbErr) -> Error {
     move |e| {
         error!("inquiry {what} error: {e}");
         Error::internal("Failed to load inquiries.")
+    }
+}
+
+/// The admin list's criteria, shared by the list and its count.
+fn admin_condition(filter: &AdminFilter) -> sea_orm::Condition {
+    admin_condition_base(filter).add(crate::admin_list::created_between(
+        (
+            crate::entities::inquiry::Entity,
+            crate::entities::inquiry::Column::CreatedOn,
+        ),
+        filter,
+    ))
+}
+
+fn admin_condition_base(filter: &AdminFilter) -> sea_orm::Condition {
+    // The search is an OR of its columns: wrapped, so every other
+    // criterion narrows it rather than joining the OR.
+    let mut cond = sea_orm::Condition::all().add(admin_inquiry_search(filter.search()));
+    if let Some(id) = filter.provider_id {
+        cond = cond.add(inquiry::Column::BusinessId.eq(id));
+    }
+    if let Some(cutoff) = crate::admin_list::stale_cutoff(filter) {
+        cond = cond
+            .add(inquiry::Column::Status.eq(domain::constants::INQUIRY_STATUS_NEW))
+            .add(inquiry::Column::CreatedOn.lt(cutoff));
+    }
+    match filter.kind.as_deref() {
+        Some("service") => cond = cond.add(inquiry::Column::ServiceId.is_not_null()),
+        Some("product") => cond = cond.add(inquiry::Column::ProductId.is_not_null()),
+        _ => {}
+    }
+    if let Some(status) = filter.state {
+        cond = cond.add(inquiry::Column::Status.eq(status));
+    }
+    cond
+}
+
+/// What the admin list orders by when asked (a name: the sender's).
+fn inquiry_order() -> OrderColumns<inquiry::Column, inquiry::Column, inquiry::Column> {
+    OrderColumns {
+        created: inquiry::Column::CreatedOn,
+        name: inquiry::Column::RequesterName,
+        id: inquiry::Column::Id,
     }
 }

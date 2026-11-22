@@ -8,13 +8,13 @@ use async_trait::async_trait;
 use chrono::NaiveDate;
 use sea_orm::{
     sea_query::{Expr, Func, OnConflict, Order, OverStatement, Query, WindowStatement},
-    ColumnTrait, DatabaseConnection, DbErr, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
-    QuerySelect, Select, Set,
+    ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait, PaginatorTrait, QueryFilter,
+    QueryOrder, QuerySelect, Select, Set,
 };
 use tracing::error;
 
 use domain::{
-    models::price::{Crop, CropFields, CropPrice, NewCropPrice},
+    models::price::{Crop, CropFields, CropPrice, NewCropPrice, PriceFilter},
     repositories::price_repository_trait::PriceRepositoryTrait,
     Error, ErrorCode,
 };
@@ -26,6 +26,7 @@ use crate::{
         location,
     },
     repositories::unique_or_internal,
+    search::{text_contains, PRICE_NOTE_SEARCH_COLUMNS},
     sql::{output, DbFn, QueryAs, TableAlias},
 };
 
@@ -95,12 +96,44 @@ impl PriceRepository {
 }
 
 /// Every price, or one crop's: what the admin's list and its count read.
-fn prices_of(crop_id: Option<i32>) -> Select<PriceEntity> {
-    let query = PriceEntity::find();
-    match crop_id {
-        Some(id) => query.filter(crop_price::Column::CropId.eq(id)),
-        None => query,
+fn prices_of(filter: &PriceFilter) -> Select<PriceEntity> {
+    let mut query = PriceEntity::find();
+    if let Some(id) = filter.location_id {
+        query = query.filter(crop_price::Column::LocationId.eq(id));
     }
+    if let Some(id) = filter.crop_id {
+        query = query.filter(crop_price::Column::CropId.eq(id));
+    }
+    if let Some(words) = filter.words.as_ref() {
+        query = query.filter(
+            Condition::any()
+                .add(crop_price::Column::CropId.is_in(words.crop_ids.iter().copied()))
+                .add(crop_price::Column::LocationId.is_in(words.location_ids.iter().copied()))
+                .add(text_contains(PRICE_NOTE_SEARCH_COLUMNS, &words.text)),
+        );
+    }
+    if filter.stale {
+        let mut any = Condition::any();
+        for (ids, cutoff) in &filter.stale_groups {
+            any = any.add(
+                Condition::all()
+                    .add(crop_price::Column::CropId.is_in(ids.iter().copied()))
+                    .add(crop_price::Column::ObservedOn.lt(*cutoff)),
+            );
+        }
+        query = if filter.stale_groups.is_empty() {
+            query.filter(crop_price::Column::CropId.is_in(Vec::<i32>::new()))
+        } else {
+            query.filter(any)
+        };
+    }
+    if let Some(day) = filter.observed_from {
+        query = query.filter(crop_price::Column::ObservedOn.gte(day));
+    }
+    if let Some(day) = filter.observed_to {
+        query = query.filter(crop_price::Column::ObservedOn.lte(day));
+    }
+    query
 }
 
 fn to_crop(c: crop::Model) -> Crop {
@@ -232,11 +265,11 @@ impl PriceRepositoryTrait for PriceRepository {
 
     async fn list_prices(
         &self,
-        crop_id: Option<i32>,
+        filter: &PriceFilter,
         limit: u64,
         offset: u64,
     ) -> Result<Vec<CropPrice>, Error> {
-        let rows = prices_of(crop_id)
+        let rows = prices_of(filter)
             .order_by_desc(crop_price::Column::ObservedOn)
             .order_by_desc(crop_price::Column::Id)
             .limit(limit)
@@ -247,8 +280,8 @@ impl PriceRepositoryTrait for PriceRepository {
         self.assemble(rows, false).await
     }
 
-    async fn count_prices(&self, crop_id: Option<i32>) -> Result<i64, Error> {
-        prices_of(crop_id)
+    async fn count_prices(&self, filter: &PriceFilter) -> Result<i64, Error> {
+        prices_of(filter)
             .count(self.db.as_ref())
             .await
             .map(|total| i64::try_from(total).unwrap_or(i64::MAX))

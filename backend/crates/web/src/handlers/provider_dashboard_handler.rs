@@ -5,11 +5,11 @@ use domain::Error;
 
 use crate::{
     app_state::AppState,
-    extract::{ApiJson, ApiPath},
+    extract::{ApiJson, ApiPath, ApiQuery},
     middleware::auth::MaybeActor,
     requests::{
-        CreateProductRequest, OwnServiceRequest, ReviewReplyRequest, UpdateProductRequest,
-        UpdateProfileRequest,
+        CreateProductRequest, OwnServiceRequest, PageQuery, ReviewReplyRequest,
+        UpdateProductRequest, UpdateProfileRequest,
     },
 };
 
@@ -47,14 +47,19 @@ impl ProviderDashboardHandler {
         Ok(Json(result))
     }
 
-    /// GET /api/provider/reviews — every review of the own business, shown or
-    /// waiting for an admin.
+    /// GET /api/provider/reviews — a page of the reviews of the own business,
+    /// shown or waiting for an admin (`page?`).
     pub async fn list_reviews(
         MaybeActor(actor): MaybeActor,
         State(state): State<AppState>,
+        ApiQuery(q): ApiQuery<PageQuery>,
     ) -> Result<impl IntoResponse, Error> {
         let actor = require_actor(actor)?;
-        let result = state.usecases.review.list_own_reviews(&actor).await?;
+        let result = state
+            .usecases
+            .review
+            .list_own_reviews(&actor, q.page.unwrap_or(1))
+            .await?;
         Ok(Json(result))
     }
 

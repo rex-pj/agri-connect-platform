@@ -1,5 +1,7 @@
 //! GET /explore — services, products and providers near the visitor, in three
 //! tabs (`tab=providers`, `tab=products`; links, so they work without JS).
+//! Each tab's list is paged on its own: `page` belongs to the chosen tab
+//! (`listing::tab_page`), and each list's page links carry its tab.
 //! Before a position is known it features services, like the home page.
 //!
 //! The position comes from the `ac-geolocate` island (`lat`, `lng`) or, with
@@ -11,7 +13,7 @@
 use crate::{middleware::client_ip::ClientIp, pages::visitor};
 use application::outputs::{CategoryDto, LocationDto, ProductDto};
 use application::{
-    constants::{GEO_RESULTS_MAX, LAT_MAX, LAT_MIN, LNG_MAX, LNG_MIN},
+    constants::{LAT_MAX, LAT_MIN, LNG_MAX, LNG_MIN},
     inputs::{GeoSearchParams, SearchInput, SearchPlace},
 };
 use axum::{extract::State, response::Response, Extension};
@@ -24,7 +26,7 @@ use crate::{
     extract::ApiQuery,
     pages::{
         cards::{rated_providers, rated_services, tile, CategoryTile, ProviderCard, ServiceCard},
-        listing::{parse_opt, with_query},
+        listing::{parse_opt, past_the_end, tab_page, with_query, Pagination},
         search::TabLink,
     },
     routes,
@@ -42,6 +44,8 @@ pub struct ExploreQuery {
     pub service_id: String,
     /// `providers` for the shops tab; anything else shows the services.
     pub tab: String,
+    /// The page of the chosen tab's list (`listing::tab_page`).
+    pub page: String,
 }
 
 /// Where the search is centred.
@@ -96,8 +100,6 @@ pub struct ExplorePage {
     pub locations: Vec<LocationDto>,
     pub location_id: Option<i32>,
     pub radius_km: i64,
-    /// A near-me list stops at this many; a full one is counted with a "+".
-    pub results_max: i64,
     pub radius_links: Vec<RadiusLink>,
     /// The next larger radius, offered when nothing is found.
     pub wider: Option<RadiusLink>,
@@ -108,13 +110,35 @@ pub struct ExplorePage {
     pub tabs: Vec<TabLink>,
     /// Sponsored services of the area, shown first and labelled.
     pub sponsored: Vec<ServiceCard>,
-    /// Services whose provider is within the radius, nearest first.
+    /// Services whose provider is within the radius, nearest first: one
+    /// page of them. Each list is paged on its own (`listing::tab_page`).
     pub services: Vec<ServiceCard>,
+    pub service_total: i64,
+    pub service_pages: Option<Pagination>,
     pub providers: Vec<ProviderCard>,
+    pub provider_total: i64,
+    pub provider_pages: Option<Pagination>,
     /// Products whose seller is within the radius, nearest first.
     pub products: Vec<ProductDto>,
+    pub product_total: i64,
+    pub product_pages: Option<Pagination>,
     /// Before a position is known: the same featured services as the home page.
     pub featured_services: Vec<ServiceCard>,
+}
+
+/// The three lists near a position, each one page of its own.
+#[derive(Default)]
+struct Found {
+    sponsored: Vec<ServiceCard>,
+    services: Vec<ServiceCard>,
+    service_total: i64,
+    service_pages: Option<Pagination>,
+    providers: Vec<ProviderCard>,
+    provider_total: i64,
+    provider_pages: Option<Pagination>,
+    products: Vec<ProductDto>,
+    product_total: i64,
+    product_pages: Option<Pagination>,
 }
 
 const TAB_SERVICES: &str = "services";
@@ -176,8 +200,8 @@ pub async fn show(
         .unwrap_or(TAB_SERVICES);
 
     let path = url("explore", &[])?;
-    // A link to this page with the position kept and the given filters and tab.
-    let link_to = |radius: i64, service: Option<i32>, tab: &str| {
+    // The query of this page with the position kept and the given filters and tab.
+    let params_for = |radius: i64, service: Option<i32>, tab: &str| {
         let mut params: Vec<(&str, String)> =
             position.as_ref().map(Position::params).unwrap_or_default();
         if radius != EXPLORE_DEFAULT_RADIUS_M {
@@ -189,24 +213,33 @@ pub async fn show(
         if tab != TAB_SERVICES {
             params.push(("tab", tab.to_owned()));
         }
+        params
+    };
+    let link_to = |radius: i64, service: Option<i32>, tab: &str| {
+        let params = params_for(radius, service, tab);
         let borrowed: Vec<(&str, &str)> = params.iter().map(|(k, v)| (*k, v.as_str())).collect();
         with_query(&path, &borrowed)
     };
     let link = |radius: i64, service: Option<i32>| link_to(radius, service, tab);
+    // One tab's own page links: its list paged on its own, the position,
+    // filters and tab kept (`tab_page`).
+    let pages_of = |t: &str, page: i64, total_pages: i64| {
+        let params = params_for(radius, service_id, t);
+        let borrowed: Vec<(&str, &str)> = params.iter().map(|(k, v)| (*k, v.as_str())).collect();
+        Pagination::new(&path, &borrowed, page, total_pages)
+    };
+    let page_no = parse_opt::<i64>(&q.page).unwrap_or(1);
 
-    let (sponsored, services, providers, products, featured_services) = match &position {
+    let mut found = Found::default();
+    let featured_services = match &position {
         // No position yet: what the home page features, instead of results.
-        None => (
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
+        None => {
             rated_services(
                 &state,
                 explore.get_explore_data(None).await?.featured_services,
             )
-            .await?,
-        ),
+            .await?
+        }
         Some(p) => {
             let (lat, lng) = p.coordinates();
             let params = || GeoSearchParams {
@@ -216,60 +249,85 @@ pub async fn show(
                 service_id,
             };
             let (services, providers, products) = tokio::try_join!(
-                explore.search_services(params()),
-                explore.search_providers(params()),
-                explore.search_products(params()),
+                explore.search_services_page(params(), tab_page(tab, TAB_SERVICES, page_no)),
+                explore.search_providers_page(params(), tab_page(tab, TAB_PROVIDERS, page_no)),
+                explore.search_products_page(params(), tab_page(tab, TAB_PRODUCTS, page_no)),
             )?;
-            // A near-me search is demand in that area, found or not.
-            state.usecases.demand.record_search(SearchInput {
-                query: String::new(),
-                category_id: service_id,
-                place: match p {
-                    Position::Preset(l) => SearchPlace::Preset(l.id),
-                    Position::Device { lat, lng, .. } => SearchPlace::Point {
-                        lat: *lat,
-                        lng: *lng,
+            let chosen = match tab {
+                TAB_PROVIDERS => (providers.page, providers.total_pages),
+                TAB_PRODUCTS => (products.page, products.total_pages),
+                _ => (services.page, services.total_pages),
+            };
+            let params = params_for(radius, service_id, tab);
+            let borrowed: Vec<(&str, &str)> =
+                params.iter().map(|(k, v)| (*k, v.as_str())).collect();
+            if let Some(redirect) = past_the_end(&path, &borrowed, chosen.0, chosen.1) {
+                return redirect;
+            }
+            // A near-me search is demand in that area, found or not; paging
+            // through its results is not a new search.
+            if page_no <= 1 {
+                state.usecases.demand.record_search(SearchInput {
+                    query: String::new(),
+                    category_id: service_id,
+                    place: match p {
+                        Position::Preset(l) => SearchPlace::Preset(l.id),
+                        Position::Device { lat, lng, .. } => SearchPlace::Point {
+                            lat: *lat,
+                            lng: *lng,
+                        },
                     },
-                },
-                results: (services.len() + providers.len() + products.len()) as i64,
-                visitor: visitor(&shell, ip.as_ref().map(|e| &e.0)),
-            });
-            // The area's sponsored providers come first, labelled; the rest keep
-            // their order.
-            let (sponsored, services) = state
-                .usecases
-                .partner
-                .feature_sponsored(Some(p.coordinates()), service_id, services)
-                .await?;
-            (
-                rated_services(&state, sponsored).await?,
-                rated_services(&state, services).await?,
-                rated_providers(
+                    results: services.total + providers.total + products.total,
+                    visitor: visitor(&shell, ip.as_ref().map(|e| &e.0)),
+                });
+            }
+            // The area's sponsored providers come first on the first page,
+            // labelled, taken from that page's rows; the rest keep their
+            // order, so no service shows twice across the pages.
+            let (sponsored, rest) = if services.page == 1 {
+                state
+                    .usecases
+                    .partner
+                    .feature_sponsored(Some(p.coordinates()), service_id, services.items)
+                    .await?
+            } else {
+                (Vec::new(), services.items)
+            };
+            found = Found {
+                sponsored: rated_services(&state, sponsored).await?,
+                services: rated_services(&state, rest).await?,
+                service_total: services.total,
+                service_pages: pages_of(TAB_SERVICES, services.page, services.total_pages),
+                providers: rated_providers(
                     &state,
-                    providers.into_iter().map(ProviderCard::from).collect(),
+                    providers
+                        .items
+                        .into_iter()
+                        .map(ProviderCard::from)
+                        .collect(),
                 )
                 .await?,
-                products,
-                Vec::new(),
-            )
+                provider_total: providers.total,
+                provider_pages: pages_of(TAB_PROVIDERS, providers.page, providers.total_pages),
+                products: products.items,
+                product_total: products.total,
+                product_pages: pages_of(TAB_PRODUCTS, products.page, products.total_pages),
+            };
+            Vec::new()
         }
     };
     let tabs = [
         // The order of the bottom tabs and the search page's.
-        (
-            TAB_SERVICES,
-            "nav.services",
-            sponsored.len() + services.len(),
-        ),
-        (TAB_PRODUCTS, "nav.products", products.len()),
-        (TAB_PROVIDERS, "nav.shops", providers.len()),
+        (TAB_SERVICES, "nav.services", found.service_total),
+        (TAB_PRODUCTS, "nav.products", found.product_total),
+        (TAB_PROVIDERS, "nav.shops", found.provider_total),
     ]
     .into_iter()
     .map(|(t, label, count)| TabLink {
         tab: t,
         label: state.locale().text(label),
         href: link_to(radius, service_id, t),
-        count: Some(count as i64),
+        count: Some(count),
         active: t == tab,
     })
     .collect();
@@ -304,7 +362,6 @@ pub async fn show(
         },
         locations,
         radius_km: km(radius),
-        results_max: GEO_RESULTS_MAX,
         wider: EXPLORE_RADII_M
             .iter()
             .find(|&&r| r > radius)
@@ -325,10 +382,16 @@ pub async fn show(
         service_id,
         tab,
         tabs,
-        sponsored,
-        services,
-        providers,
-        products,
+        sponsored: found.sponsored,
+        services: found.services,
+        service_total: found.service_total,
+        service_pages: found.service_pages,
+        providers: found.providers,
+        provider_total: found.provider_total,
+        provider_pages: found.provider_pages,
+        products: found.products,
+        product_total: found.product_total,
+        product_pages: found.product_pages,
         featured_services,
     };
     render_page(&state, &shell, "pages/explore.html", &page)

@@ -432,8 +432,9 @@ async fn the_json_api_creates_providers_and_carries_reviews() {
         .body(Body::empty())
         .unwrap();
     let mine = json_body(send(&e.router, req).await).await;
-    assert_eq!(mine[0]["reply"], "Cảm ơn chú");
-    assert_eq!(mine[0]["is_visible"], false);
+    assert_eq!(mine["items"][0]["reply"], "Cảm ơn chú");
+    assert_eq!(mine["items"][0]["is_visible"], false);
+    assert_eq!(mine["total"], 1);
 
     e.t.db
         .execute_unprepared("UPDATE reviews SET is_visible = TRUE")

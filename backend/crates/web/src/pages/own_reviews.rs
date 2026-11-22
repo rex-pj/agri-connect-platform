@@ -17,9 +17,14 @@ use serde::{Deserialize, Serialize};
 use crate::{
     app_state::AppState,
     cookies::{Flash, TakeFlash},
-    extract::{ApiForm, ApiPath},
+    extract::{ApiForm, ApiPath, ApiQuery},
     middleware::auth::Viewer,
-    pages::{admin::is_refusal, forms::FormErrors, parse_id, see_other},
+    pages::{
+        admin::is_refusal,
+        forms::FormErrors,
+        listing::{parse_opt, past_the_end, with_query, Pagination},
+        parse_id, see_other,
+    },
     routes,
     shell::Shell,
     views::render_page_status,
@@ -41,7 +46,12 @@ pub struct ReviewRow {
 #[derive(Serialize)]
 pub struct ReviewsPage {
     pub rows: Vec<ReviewRow>,
-    pub waiting: usize,
+    /// Every review of the business, all pages.
+    pub total: i64,
+    pub waiting: i64,
+    pub pagination: Option<Pagination>,
+    /// The page a card's answer returns to (empty for the first).
+    pub page_param: String,
     pub can_reply: bool,
     pub reply_max: usize,
     pub dashboard_href: String,
@@ -56,19 +66,36 @@ struct Refused {
     errors: FormErrors,
 }
 
+/// The page number as a query value: empty for the first page.
+fn page_param(page: i64) -> String {
+    Some(page)
+        .filter(|p| *p > 1)
+        .map(|p| p.to_string())
+        .unwrap_or_default()
+}
+
+#[allow(clippy::too_many_arguments)]
 async fn reviews_page(
     state: &AppState,
     shell: &Shell,
     actor: &Actor,
+    page: i64,
     refused: Option<Refused>,
     flash: Option<Flash>,
     status: StatusCode,
 ) -> Result<Response, Error> {
-    let reviews = state.usecases.review.list_own_reviews(actor).await?;
-    let waiting = reviews.iter().filter(|r| !r.is_visible).count();
+    let review = &state.usecases.review;
+    let (reviews, (_, waiting)) = tokio::try_join!(
+        review.list_own_reviews(actor, page),
+        review.count_own_reviews(actor)
+    )?;
+    let path = url("provider_reviews", &[])?;
+    if let Some(redirect) = past_the_end(&path, &[], reviews.page, reviews.total_pages) {
+        return redirect;
+    }
     let mut refused = refused;
-    let mut rows = Vec::with_capacity(reviews.len());
-    for review in reviews {
+    let mut rows = Vec::with_capacity(reviews.items.len());
+    for review in reviews.items {
         let (reply, errors) = match refused.take_if(|r| r.id == review.id) {
             Some(r) => (r.reply, r.errors),
             None => (
@@ -85,7 +112,10 @@ async fn reviews_page(
     }
     let page = ReviewsPage {
         rows,
+        total: reviews.total,
         waiting,
+        pagination: Pagination::new(&path, &[], reviews.page, reviews.total_pages),
+        page_param: page_param(reviews.page),
         can_reply: actor.can(PERM_OWN_REVIEW_REPLY),
         reply_max: REVIEW_REPLY_MAX,
         dashboard_href: url("provider_dashboard", &[])?,
@@ -94,17 +124,26 @@ async fn reviews_page(
     render_page_status(state, shell, status, "pages/own_reviews.html", &page)
 }
 
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct ListQuery {
+    pub page: String,
+}
+
 /// GET /provider/reviews
 pub async fn list(
     shell: Shell,
     Viewer(viewer): Viewer,
     flash: TakeFlash,
     State(state): State<AppState>,
+    ApiQuery(q): ApiQuery<ListQuery>,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
-    let mut response = reviews_page(&state, &shell, &actor, None, flash.0, StatusCode::OK).await?;
+    let page = parse_opt(&q.page).unwrap_or(1);
+    let mut response =
+        reviews_page(&state, &shell, &actor, page, None, flash.0, StatusCode::OK).await?;
     flash.clear_on(&mut response);
     Ok(response)
 }
@@ -113,6 +152,8 @@ pub async fn list(
 #[serde(default)]
 pub struct ReplyForm {
     pub reply: String,
+    /// The list page the card was on, so saving returns to it.
+    pub page: String,
 }
 
 /// POST /provider/reviews/{id}/reply
@@ -127,6 +168,8 @@ pub async fn reply(
         return see_other(&url("login", &[])?);
     };
     let id = parse_id(&raw_id, ErrorCode::ReviewNotFound)?;
+    // Rebuilt from a number, never a posted URL.
+    let page = parse_opt::<i64>(&form.page).unwrap_or(1).max(1);
     match state
         .usecases
         .review
@@ -134,7 +177,10 @@ pub async fn reply(
         .await
     {
         Ok(()) => {
-            let mut response = see_other(&url("provider_reviews", &[])?)?;
+            let mut response = see_other(&with_query(
+                &url("provider_reviews", &[])?,
+                &[("page", &page_param(page))],
+            ))?;
             Flash::ReviewReplied.set_on(&mut response);
             Ok(response)
         }
@@ -145,7 +191,7 @@ pub async fn reply(
                 errors: FormErrors::from_error(&state, &err),
             };
             let status = err.kind().status();
-            reviews_page(&state, &shell, &actor, Some(refused), None, status).await
+            reviews_page(&state, &shell, &actor, page, Some(refused), None, status).await
         }
         Err(err) => Err(err),
     }

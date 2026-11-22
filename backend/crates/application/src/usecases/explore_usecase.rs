@@ -35,7 +35,7 @@ use crate::{
     inputs::{BrowseParams, CallInput, ContactInput, GeoSearchParams, Visitor},
     outputs::{
         BrowseResponse, BusinessBrowseDto, BusinessDetailDto, BusinessSearchDto, CategoryDto,
-        ExploreData, InquiryCreatedDto, LocationDto, ProductDto, PublicServiceDto,
+        ExploreData, InquiryCreatedDto, LocationDto, PagedResponse, ProductDto, PublicServiceDto,
         ServiceBrowseResponse, ServiceDto,
     },
     pagination::{paginate_public, public_total_pages, total_or_count},
@@ -90,19 +90,46 @@ impl ExploreUseCase {
         }
     }
 
+    /// The nearest providers, at most `GEO_RESULTS_MAX` (the JSON API).
     pub async fn search_providers(
         &self,
         params: GeoSearchParams,
     ) -> Result<Vec<BusinessSearchDto>> {
         let point_wkt = geo_point(&params)?;
+        self.providers_near(&point_wkt, &params, GEO_RESULTS_MAX, 0)
+            .await
+    }
+
+    /// One page of the providers near a point, nearest first (the near-me
+    /// page's shops tab).
+    pub async fn search_providers_page(
+        &self,
+        params: GeoSearchParams,
+        page: i64,
+    ) -> Result<PagedResponse<BusinessSearchDto>> {
+        let point_wkt = geo_point(&params)?;
+        let (page, offset) = paginate_public(page);
+        let items = self
+            .providers_near(&point_wkt, &params, PAGE_SIZE, offset)
+            .await?;
+        let total = total_or_count(offset, items.len(), PAGE_SIZE, || {
+            self.business_repo
+                .count_geo(&point_wkt, params.radius, params.service_id)
+        })
+        .await?;
+        Ok(PagedResponse::public(items, total, page))
+    }
+
+    async fn providers_near(
+        &self,
+        point_wkt: &str,
+        params: &GeoSearchParams,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<BusinessSearchDto>> {
         let results = self
             .business_repo
-            .search_geo(
-                &point_wkt,
-                params.radius,
-                params.service_id,
-                GEO_RESULTS_MAX,
-            )
+            .search_geo(point_wkt, params.radius, params.service_id, limit, offset)
             .await?;
 
         Ok(results
@@ -173,17 +200,44 @@ impl ExploreUseCase {
         })
     }
 
-    /// Services whose business is within the radius, nearest first.
+    /// Services whose business is within the radius, nearest first, at most
+    /// `GEO_RESULTS_MAX` (the JSON API).
     pub async fn search_services(&self, params: GeoSearchParams) -> Result<Vec<PublicServiceDto>> {
         let point_wkt = geo_point(&params)?;
+        self.services_near(&point_wkt, &params, GEO_RESULTS_MAX, 0)
+            .await
+    }
+
+    /// One page of the services near a point, nearest first (the near-me
+    /// page's services tab).
+    pub async fn search_services_page(
+        &self,
+        params: GeoSearchParams,
+        page: i64,
+    ) -> Result<PagedResponse<PublicServiceDto>> {
+        let point_wkt = geo_point(&params)?;
+        let (page, offset) = paginate_public(page);
+        let items = self
+            .services_near(&point_wkt, &params, PAGE_SIZE, offset)
+            .await?;
+        let total = total_or_count(offset, items.len(), PAGE_SIZE, || {
+            self.service_repo
+                .count_geo_public(&point_wkt, params.radius, params.service_id)
+        })
+        .await?;
+        Ok(PagedResponse::public(items, total, page))
+    }
+
+    async fn services_near(
+        &self,
+        point_wkt: &str,
+        params: &GeoSearchParams,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<PublicServiceDto>> {
         let results = self
             .service_repo
-            .search_geo_public(
-                &point_wkt,
-                params.radius,
-                params.service_id,
-                GEO_RESULTS_MAX,
-            )
+            .search_geo_public(point_wkt, params.radius, params.service_id, limit, offset)
             .await?;
         Ok(results.into_iter().map(PublicServiceDto::from).collect())
     }
@@ -315,15 +369,26 @@ impl ExploreUseCase {
         })
     }
 
-    /// Live products whose seller is within the radius, nearest first. Products
-    /// have no service category, so `service_id` in the params is not used.
-    pub async fn search_products(&self, params: GeoSearchParams) -> Result<Vec<ProductDto>> {
+    /// One page of the live products whose seller is within the radius,
+    /// nearest first (the near-me page's supplies tab). Products have no
+    /// service category, so `service_id` in the params is not used.
+    pub async fn search_products_page(
+        &self,
+        params: GeoSearchParams,
+        page: i64,
+    ) -> Result<PagedResponse<ProductDto>> {
         let point_wkt = geo_point(&params)?;
-        let results = self
+        let (page, offset) = paginate_public(page);
+        let rows = self
             .product_repo
-            .search_geo(&point_wkt, params.radius, GEO_RESULTS_MAX)
+            .search_geo(&point_wkt, params.radius, PAGE_SIZE, offset)
             .await?;
-        Ok(results.into_iter().map(ProductDto::from).collect())
+        let total = total_or_count(offset, rows.len(), PAGE_SIZE, || {
+            self.product_repo.count_geo(&point_wkt, params.radius)
+        })
+        .await?;
+        let items = rows.into_iter().map(ProductDto::from).collect();
+        Ok(PagedResponse::public(items, total, page))
     }
 
     /// The single home of the inquiry rules; every contact form posts here.

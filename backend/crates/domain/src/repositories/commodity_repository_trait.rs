@@ -11,6 +11,12 @@ pub trait CommodityRepositoryTrait {
     /// then name.
     async fn list_all(&self) -> Result<Vec<Commodity>, Error>;
 
+    /// A page of them (hidden ones too), in the same order.
+    async fn list_page(&self, limit: i64, offset: i64) -> Result<Vec<Commodity>, Error>;
+
+    /// How many there are, hidden ones too.
+    async fn count(&self) -> Result<i64, Error>;
+
     async fn find(&self, id: i32) -> Result<Option<Commodity>, Error>;
 
     /// Its id; a name another commodity has is `commodity_name_taken` on

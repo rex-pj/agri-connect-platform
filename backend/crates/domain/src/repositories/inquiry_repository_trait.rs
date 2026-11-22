@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use crate::{
     error::Error,
     models::{
+        admin_list::AdminFilter,
         business::ListingRef,
         inquiry::{InquiryAdmin, InquiryForNotice, InquiryForOwner, NewInquiry},
     },
@@ -15,12 +16,8 @@ pub trait InquiryRepositoryTrait {
     /// The inquiry `id` with the email address of the provider it went to.
     async fn find_for_notice(&self, id: i32) -> Result<Option<InquiryForNotice>, Error>;
 
-    /// `provider_id`: only that business's; `status`: only those in it.
-    async fn count_admin(
-        &self,
-        provider_id: Option<i32>,
-        status: Option<&str>,
-    ) -> Result<i64, Error>;
+    /// How many requests `list_admin` pages through.
+    async fn count_admin(&self, filter: &AdminFilter) -> Result<i64, Error>;
 
     /// Contact requests about one listing, spam left out.
     async fn count_for_listing(&self, listing: ListingRef) -> Result<i64, Error>;
@@ -30,10 +27,11 @@ pub trait InquiryRepositoryTrait {
     /// it. `None` when there is none.
     async fn find_reviewable(&self, business_id: i32, phone: &str) -> Result<Option<i32>, Error>;
 
+    /// The admin list (`state`: one status; `search`: the sender's name
+    /// or phone, or the provider's name).
     async fn list_admin(
         &self,
-        provider_id: Option<i32>,
-        status: Option<&str>,
+        filter: &AdminFilter,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<InquiryAdmin>, Error>;

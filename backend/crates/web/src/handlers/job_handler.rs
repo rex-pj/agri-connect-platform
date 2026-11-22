@@ -1,6 +1,7 @@
 //! The JSON API of job posts: a farmer's post, a provider's jobs nearby,
 //! and the admin's list and states. The same use cases as the pages.
 
+use application::usecases::job_usecase::JobUseCase;
 use application::{authz::require_actor, outputs::IdDto};
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use domain::Error;
@@ -9,7 +10,7 @@ use crate::{
     app_state::AppState,
     extract::{ApiJson, ApiPath, ApiQuery},
     middleware::auth::MaybeActor,
-    requests::{JobRequest, JobStatusRequest, StatusListQuery},
+    requests::{AdminListQuery, JobRequest, JobStatusRequest, PageQuery},
 };
 
 pub struct JobHandler;
@@ -27,20 +28,28 @@ impl JobHandler {
         Ok((StatusCode::CREATED, Json(IdDto { id })))
     }
 
-    /// GET /api/provider/jobs — open posts near the own business.
+    /// GET /api/provider/jobs — a page of the open posts near the own
+    /// business (`page?`).
     pub async fn list_own(
         MaybeActor(actor): MaybeActor,
         State(state): State<AppState>,
+        ApiQuery(q): ApiQuery<PageQuery>,
     ) -> Result<impl IntoResponse, Error> {
         let actor = require_actor(actor)?;
-        Ok(Json(state.usecases.job.list_own(&actor).await?))
+        Ok(Json(
+            state
+                .usecases
+                .job
+                .list_own(&actor, q.page.unwrap_or(1))
+                .await?,
+        ))
     }
 
     /// GET /api/admin/jobs — every post, newest first (`page?`, `status?`).
     pub async fn list_admin(
         MaybeActor(actor): MaybeActor,
         State(state): State<AppState>,
-        ApiQuery(q): ApiQuery<StatusListQuery>,
+        ApiQuery(q): ApiQuery<AdminListQuery>,
     ) -> Result<impl IntoResponse, Error> {
         let actor = require_actor(actor)?;
         let page = q.page.unwrap_or(1);
@@ -48,7 +57,11 @@ impl JobHandler {
             state
                 .usecases
                 .job
-                .list_admin(&actor, page, q.status.as_deref())
+                .list_admin(
+                    &actor,
+                    page,
+                    &q.filter(JobUseCase::job_state(q.status.as_deref())?),
+                )
                 .await?,
         ))
     }

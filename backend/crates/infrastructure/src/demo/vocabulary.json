@@ -1,0 +1,559 @@
+{
+  "_comment": "What `agri-connect demo-data` builds the demo data at volume from (demo_volume.rs): a larger catalogue on top of data.json's, and the words its generated rows are made of. Placeholders in braces are filled by the generator; everything else is data, so no Vietnamese is typed in Rust.",
+  "email_domain": "demo.example",
+  "phone_prefixes": ["090", "091", "093", "094", "096", "097", "098", "070", "076", "077", "078", "079", "081", "082", "083", "084", "085", "086", "088", "089", "032", "033", "034", "035", "036", "037", "038", "039"],
+  "provinces": [
+    { "code": "82", "weight": 30, "presets": 45 },
+    { "code": "91", "weight": 24, "presets": 40 },
+    { "code": "92", "weight": 14, "presets": 25 },
+    { "code": "86", "weight": 13, "presets": 25 },
+    { "code": "96", "weight": 11, "presets": 20 },
+    { "code": "80", "weight": 8, "presets": 15 }
+  ],
+  "people": {
+    "family": ["Nguyễn", "Trần", "Lê", "Phạm", "Huỳnh", "Hoàng", "Võ", "Phan", "Trương", "Bùi", "Đặng", "Đỗ", "Ngô", "Dương", "Lý", "Lâm", "Châu", "Thái", "Tô", "Cao", "Mai", "Đinh", "Quách", "Lưu"],
+    "middle_male": ["Văn", "Hữu", "Minh", "Thanh", "Công", "Quốc", "Đức", "Hoàng", "Tấn", "Phước"],
+    "middle_female": ["Thị", "Ngọc", "Thanh", "Kim", "Mỹ", "Bích", "Thu", "Hồng"],
+    "given_male": ["An", "Bình", "Cường", "Dũng", "Đạt", "Hải", "Hùng", "Hưng", "Khang", "Khoa", "Lộc", "Lợi", "Long", "Lực", "Minh", "Nam", "Nghĩa", "Phát", "Phúc", "Phước", "Quang", "Sang", "Sơn", "Tài", "Tâm", "Thành", "Thắng", "Thiện", "Thịnh", "Toàn", "Trí", "Trung", "Tuấn", "Vinh", "Vũ"],
+    "given_female": ["Anh", "Châu", "Diễm", "Dung", "Giang", "Hạnh", "Hiền", "Hoa", "Hương", "Lan", "Liên", "Linh", "Loan", "Mai", "My", "Nga", "Ngân", "Nhung", "Oanh", "Phượng", "Quyên", "Thảo", "Thoa", "Thủy", "Trang", "Tuyết", "Vân", "Yến"],
+    "rank": ["Hai", "Ba", "Tư", "Năm", "Sáu", "Bảy", "Tám", "Chín", "Mười", "Út"]
+  },
+  "shop_names": {
+    "service": ["Dịch vụ {person}", "Tổ dịch vụ {rank} {given}", "Cơ sở {rank} {given}", "Hộ kinh doanh {person}", "Dịch vụ nông nghiệp {given}", "Đội {service} {rank} {given}"],
+    "dealer": ["Đại lý {given}", "Cửa hàng vật tư nông nghiệp {given}", "Đại lý {supply} {rank} {given}", "Cửa hàng {person}", "Đại lý cấp 2 {rank} {given}"],
+    "both": ["Trung tâm dịch vụ nông nghiệp {ward}", "Hợp tác xã nông nghiệp {ward}", "Trạm dịch vụ {rank} {given}", "Cơ sở nông nghiệp {person}"]
+  },
+  "shop_descriptions": [
+    "Chuyên {offers} khu vực {ward}, kinh nghiệm {years} năm.",
+    "{offers}. Phục vụ bà con {ward} và các xã lân cận, gọi là có.",
+    "Hơn {years} năm làm nghề tại {ward}. Nhận {offers}, giá rõ ràng trước khi làm.",
+    "Cơ sở tại {ward}: {offers}. Làm cả ngày lễ, giao tận nơi.",
+    "Nhận {offers}. Có máy, có người, đi xa thương lượng thêm."
+  ],
+  "sectors": [
+    { "code": "lam-nghiep", "name": "Lâm nghiệp", "icon": "fa-tree", "display_order": 4 },
+    { "code": "nam-duoc-lieu", "name": "Nấm, dược liệu", "icon": "fa-spa", "display_order": 5 },
+    { "code": "diem-nghiep", "name": "Diêm nghiệp", "icon": "fa-mound", "display_order": 6 }
+  ],
+  "alert_kinds": [
+    { "code": "sau-benh", "name": "Sâu bệnh hại", "icon": "fa-bug", "display_order": 4 },
+    { "code": "nang-nong", "name": "Nắng nóng", "icon": "fa-temperature-high", "display_order": 5 },
+    { "code": "lu-ngap", "name": "Lũ, ngập", "icon": "fa-house-flood-water", "display_order": 6 },
+    { "code": "han-han", "name": "Hạn hán", "icon": "fa-sun", "display_order": 7 },
+    { "code": "dong-loc", "name": "Dông, lốc", "icon": "fa-wind", "display_order": 8 }
+  ],
+  "commodities": [
+    { "name": "Ngô", "sector": "crop", "icon": "fa-wheat-awn", "display_order": 15 },
+    { "name": "Khoai lang", "sector": "crop", "icon": "fa-carrot", "display_order": 16 },
+    { "name": "Khoai mì", "sector": "crop", "icon": "fa-carrot", "display_order": 17 },
+    { "name": "Đậu phộng", "sector": "crop", "icon": "fa-seedling", "display_order": 18 },
+    { "name": "Mía", "sector": "crop", "icon": "fa-seedling", "display_order": 19 },
+    { "name": "Dừa", "sector": "crop", "icon": "fa-tree", "display_order": 20 },
+    { "name": "Cam sành", "sector": "crop", "icon": "fa-lemon", "display_order": 21 },
+    { "name": "Quýt", "sector": "crop", "icon": "fa-lemon", "display_order": 22 },
+    { "name": "Nhãn", "sector": "crop", "icon": "fa-apple-whole", "display_order": 23 },
+    { "name": "Chôm chôm", "sector": "crop", "icon": "fa-apple-whole", "display_order": 24 },
+    { "name": "Măng cụt", "sector": "crop", "icon": "fa-apple-whole", "display_order": 25 },
+    { "name": "Vú sữa", "sector": "crop", "icon": "fa-apple-whole", "display_order": 26 },
+    { "name": "Chuối", "sector": "crop", "icon": "fa-apple-whole", "display_order": 27 },
+    { "name": "Khóm", "sector": "crop", "icon": "fa-apple-whole", "display_order": 28 },
+    { "name": "Dưa hấu", "sector": "crop", "icon": "fa-apple-whole", "display_order": 29 },
+    { "name": "Ớt", "sector": "crop", "icon": "fa-pepper-hot", "display_order": 30 },
+    { "name": "Hành lá", "sector": "crop", "icon": "fa-carrot", "display_order": 31 },
+    { "name": "Dưa leo", "sector": "crop", "icon": "fa-carrot", "display_order": 32 },
+    { "name": "Cà phê", "sector": "crop", "icon": "fa-mug-hot", "display_order": 33 },
+    { "name": "Tiêu", "sector": "crop", "icon": "fa-pepper-hot", "display_order": 34 },
+    { "name": "Điều", "sector": "crop", "icon": "fa-tree", "display_order": 35 },
+    { "name": "Ca cao", "sector": "crop", "icon": "fa-mug-hot", "display_order": 36 },
+    { "name": "Sen", "sector": "crop", "icon": "fa-spa", "display_order": 37 },
+    { "name": "Dê", "sector": "livestock", "icon": "fa-paw", "display_order": 38 },
+    { "name": "Trâu", "sector": "livestock", "icon": "fa-cow", "display_order": 39 },
+    { "name": "Bò sữa", "sector": "livestock", "icon": "fa-cow", "display_order": 40 },
+    { "name": "Chim yến", "sector": "livestock", "icon": "fa-dove", "display_order": 41 },
+    { "name": "Ngan", "sector": "livestock", "icon": "fa-feather", "display_order": 42 },
+    { "name": "Chim cút", "sector": "livestock", "icon": "fa-kiwi-bird", "display_order": 43 },
+    { "name": "Ong mật", "sector": "livestock", "icon": "fa-bug", "display_order": 44 },
+    { "name": "Tôm càng xanh", "sector": "aquatic", "icon": "fa-shrimp", "display_order": 45 },
+    { "name": "Tôm sú", "sector": "aquatic", "icon": "fa-shrimp", "display_order": 46 },
+    { "name": "Cá lóc", "sector": "aquatic", "icon": "fa-fish", "display_order": 47 },
+    { "name": "Cá rô phi", "sector": "aquatic", "icon": "fa-fish", "display_order": 48 },
+    { "name": "Cá rô đồng", "sector": "aquatic", "icon": "fa-fish", "display_order": 49 },
+    { "name": "Cua biển", "sector": "aquatic", "icon": "fa-fish-fins", "display_order": 50 },
+    { "name": "Nghêu", "sector": "aquatic", "icon": "fa-fish-fins", "display_order": 51 },
+    { "name": "Sò huyết", "sector": "aquatic", "icon": "fa-fish-fins", "display_order": 52 },
+    { "name": "Lươn", "sector": "aquatic", "icon": "fa-worm", "display_order": 53 },
+    { "name": "Ếch", "sector": "aquatic", "icon": "fa-frog", "display_order": 54 },
+    { "name": "Tràm", "sector": "lam-nghiep", "icon": "fa-tree", "display_order": 55 },
+    { "name": "Bạch đàn", "sector": "lam-nghiep", "icon": "fa-tree", "display_order": 56 },
+    { "name": "Keo lai", "sector": "lam-nghiep", "icon": "fa-tree", "display_order": 57 },
+    { "name": "Đước", "sector": "lam-nghiep", "icon": "fa-tree", "display_order": 58 },
+    { "name": "Nấm rơm", "sector": "nam-duoc-lieu", "icon": "fa-spa", "display_order": 59 },
+    { "name": "Nấm bào ngư", "sector": "nam-duoc-lieu", "icon": "fa-spa", "display_order": 60 },
+    { "name": "Đinh lăng", "sector": "nam-duoc-lieu", "icon": "fa-leaf", "display_order": 61 },
+    { "name": "Sả", "sector": "nam-duoc-lieu", "icon": "fa-leaf", "display_order": 62 },
+    { "name": "Muối", "sector": "diem-nghiep", "icon": "fa-mound", "display_order": 63 }
+  ],
+  "crops": [
+    { "commodity": "Lúa", "unit": "kg", "price": [6000, 9800], "names": ["Lúa OM 4900", "Lúa OM 380", "Lúa Jasmine 85", "Lúa Nàng Hoa 9", "Lúa ST24", "Lúa RVT", "Lúa nếp IR 4625", "Lúa Đài Thơm 8 (khô)", "Lúa OM 18 (khô)", "Lúa IR 50404 (khô)"] },
+    { "commodity": "Sầu riêng", "unit": "kg", "price": [45000, 140000], "names": ["Sầu riêng Ri6 loại 1", "Sầu riêng Ri6 loại 2", "Sầu riêng Monthong loại 1", "Sầu riêng Monthong loại 2", "Sầu riêng Musang King", "Sầu riêng Chuồng bò", "Sầu riêng Sáu Hữu", "Sầu riêng Ri6 xô"] },
+    { "commodity": "Xoài", "unit": "kg", "price": [12000, 65000], "names": ["Xoài cát chu", "Xoài Đài Loan", "Xoài keo", "Xoài tượng da xanh", "Xoài Úc", "Xoài cát Hòa Lộc loại 2"] },
+    { "commodity": "Bưởi", "unit": "kg", "price": [15000, 55000], "names": ["Bưởi Năm Roi", "Bưởi da xanh loại 1", "Bưởi da xanh loại 2", "Bưởi lông Cổ Cò"] },
+    { "commodity": "Thanh long", "unit": "kg", "price": [6000, 35000], "names": ["Thanh long ruột trắng", "Thanh long ruột đỏ loại 1", "Thanh long ruột đỏ xô", "Thanh long vàng"] },
+    { "commodity": "Chanh", "unit": "kg", "price": [4000, 30000], "names": ["Chanh ta", "Chanh dây", "Chanh không hạt loại 1", "Chanh tứ quý"] },
+    { "commodity": "Mít", "unit": "kg", "price": [8000, 35000], "names": ["Mít Thái loại 1", "Mít Thái xô", "Mít ruột đỏ", "Mít tố nữ"] },
+    { "commodity": "Rau màu", "unit": "kg", "price": [4000, 25000], "names": ["Cải xanh", "Cải ngọt", "Rau dền", "Mồng tơi", "Cà chua", "Cà tím", "Bí đỏ", "Khổ qua", "Đậu bắp", "Bầu"] },
+    { "commodity": "Heo", "unit": "kg", "price": [52000, 72000], "names": ["Heo hơi trại", "Heo hơi nông hộ", "Heo con giống", "Heo nái loại thải"] },
+    { "commodity": "Bò", "unit": "kg", "price": [70000, 98000], "names": ["Bò lai Sind", "Bò thịt BBB", "Bê giống"] },
+    { "commodity": "Gà", "unit": "kg", "price": [32000, 95000], "names": ["Gà công nghiệp", "Gà tam hoàng", "Gà nòi", "Gà đông tảo"] },
+    { "commodity": "Vịt", "unit": "kg", "price": [35000, 65000], "names": ["Vịt hơi", "Vịt xiêm", "Vịt chạy đồng"] },
+    { "commodity": "Tôm", "unit": "kg", "price": [80000, 180000], "names": ["Tôm thẻ 50 con/kg", "Tôm thẻ 70 con/kg", "Tôm thẻ 150 con/kg"] },
+    { "commodity": "Cá tra", "unit": "kg", "price": [24000, 34000], "names": ["Cá tra thịt trắng", "Cá tra thịt vàng", "Cá tra giống"] },
+    { "commodity": "Ngô", "unit": "kg", "price": [5000, 12000], "names": ["Ngô nếp", "Ngô ngọt", "Ngô lai hạt khô", "Ngô sinh khối"] },
+    { "commodity": "Khoai lang", "unit": "kg", "price": [6000, 22000], "names": ["Khoai lang tím Nhật", "Khoai lang mật", "Khoai lang ruột vàng"] },
+    { "commodity": "Khoai mì", "unit": "kg", "price": [2500, 4500], "names": ["Khoai mì tươi", "Khoai mì lát khô"] },
+    { "commodity": "Đậu phộng", "unit": "kg", "price": [18000, 40000], "names": ["Đậu phộng tươi", "Đậu phộng hạt khô"] },
+    { "commodity": "Mía", "unit": "kg", "price": [900, 1500], "names": ["Mía nguyên liệu", "Mía tím ăn tươi"] },
+    { "commodity": "Dừa", "unit": "trái", "price": [3000, 18000], "names": ["Dừa xiêm xanh", "Dừa khô", "Dừa sáp", "Dừa dứa"] },
+    { "commodity": "Cam sành", "unit": "kg", "price": [6000, 25000], "names": ["Cam sành loại 1", "Cam sành loại 2", "Cam xoàn"] },
+    { "commodity": "Quýt", "unit": "kg", "price": [15000, 45000], "names": ["Quýt đường", "Quýt hồng Lai Vung"] },
+    { "commodity": "Nhãn", "unit": "kg", "price": [12000, 45000], "names": ["Nhãn Ido", "Nhãn xuồng cơm vàng", "Nhãn tiêu da bò"] },
+    { "commodity": "Chôm chôm", "unit": "kg", "price": [8000, 45000], "names": ["Chôm chôm Thái", "Chôm chôm nhãn", "Chôm chôm Java"] },
+    { "commodity": "Măng cụt", "unit": "kg", "price": [30000, 80000], "names": ["Măng cụt loại 1", "Măng cụt xô"] },
+    { "commodity": "Vú sữa", "unit": "kg", "price": [15000, 45000], "names": ["Vú sữa Lò Rèn", "Vú sữa hoàng kim"] },
+    { "commodity": "Chuối", "unit": "kg", "price": [3000, 15000], "names": ["Chuối già Nam Mỹ", "Chuối xiêm", "Chuối cau"] },
+    { "commodity": "Khóm", "unit": "kg", "price": [4000, 15000], "names": ["Khóm Queen", "Khóm MD2"] },
+    { "commodity": "Dưa hấu", "unit": "kg", "price": [4000, 14000], "names": ["Dưa hấu Long An", "Dưa hấu không hạt"] },
+    { "commodity": "Ớt", "unit": "kg", "price": [15000, 70000], "names": ["Ớt chỉ thiên", "Ớt hiểm", "Ớt sừng"] },
+    { "commodity": "Hành lá", "unit": "kg", "price": [8000, 40000], "names": ["Hành lá", "Hành tím"] },
+    { "commodity": "Dưa leo", "unit": "kg", "price": [4000, 18000], "names": ["Dưa leo lai", "Dưa leo baby"] },
+    { "commodity": "Cà phê", "unit": "kg", "price": [90000, 130000], "names": ["Cà phê nhân Robusta", "Cà phê nhân Arabica"] },
+    { "commodity": "Tiêu", "unit": "kg", "price": [120000, 160000], "names": ["Tiêu đen", "Tiêu sọ"] },
+    { "commodity": "Điều", "unit": "kg", "price": [25000, 40000], "names": ["Điều thô", "Điều nhân"] },
+    { "commodity": "Ca cao", "unit": "kg", "price": [60000, 120000], "names": ["Ca cao hạt lên men", "Ca cao trái tươi"] },
+    { "commodity": "Sen", "unit": "kg", "price": [30000, 120000], "names": ["Hạt sen tươi", "Ngó sen", "Củ sen"] },
+    { "commodity": "Dê", "unit": "kg", "price": [120000, 170000], "names": ["Dê hơi", "Dê giống Boer"] },
+    { "commodity": "Trâu", "unit": "kg", "price": [75000, 95000], "names": ["Trâu hơi"] },
+    { "commodity": "Bò sữa", "unit": "lít", "price": [12000, 16000], "names": ["Sữa bò tươi"] },
+    { "commodity": "Chim yến", "unit": "kg", "price": [1000000, 3500000], "names": ["Tổ yến thô", "Tổ yến rút lông"] },
+    { "commodity": "Ngan", "unit": "kg", "price": [40000, 70000], "names": ["Ngan hơi", "Ngan Pháp"] },
+    { "commodity": "Chim cút", "unit": "quả", "price": [400, 900], "names": ["Trứng cút", "Trứng cút lộn"] },
+    { "commodity": "Ong mật", "unit": "lít", "price": [100000, 250000], "names": ["Mật ong hoa nhãn", "Mật ong hoa tràm", "Mật ong hoa cà phê"] },
+    { "commodity": "Tôm càng xanh", "unit": "kg", "price": [150000, 320000], "names": ["Tôm càng xanh loại 1", "Tôm càng xanh loại 2", "Tôm càng toàn đực"] },
+    { "commodity": "Tôm sú", "unit": "kg", "price": [180000, 350000], "names": ["Tôm sú 20 con/kg", "Tôm sú 30 con/kg", "Tôm sú 40 con/kg"] },
+    { "commodity": "Cá lóc", "unit": "kg", "price": [35000, 75000], "names": ["Cá lóc nuôi", "Cá lóc đồng"] },
+    { "commodity": "Cá rô phi", "unit": "kg", "price": [25000, 45000], "names": ["Cá rô phi đỏ", "Cá rô phi đơn tính"] },
+    { "commodity": "Cá rô đồng", "unit": "kg", "price": [40000, 80000], "names": ["Cá rô đầu vuông", "Cá rô đồng nuôi"] },
+    { "commodity": "Cua biển", "unit": "kg", "price": [180000, 450000], "names": ["Cua gạch", "Cua thịt", "Cua y"] },
+    { "commodity": "Nghêu", "unit": "kg", "price": [25000, 45000], "names": ["Nghêu trắng", "Nghêu Bến Tre"] },
+    { "commodity": "Sò huyết", "unit": "kg", "price": [120000, 250000], "names": ["Sò huyết loại 1", "Sò huyết loại 2"] },
+    { "commodity": "Lươn", "unit": "kg", "price": [90000, 160000], "names": ["Lươn không bùn", "Lươn đồng"] },
+    { "commodity": "Ếch", "unit": "kg", "price": [35000, 60000], "names": ["Ếch Thái", "Ếch đồng"] },
+    { "commodity": "Tràm", "unit": "cây", "price": [15000, 60000], "names": ["Cừ tràm", "Tràm bông vàng"] },
+    { "commodity": "Bạch đàn", "unit": "tấn", "price": [900000, 1400000], "names": ["Gỗ bạch đàn dăm"] },
+    { "commodity": "Keo lai", "unit": "tấn", "price": [1000000, 1500000], "names": ["Gỗ keo lai"] },
+    { "commodity": "Đước", "unit": "cây", "price": [20000, 80000], "names": ["Cừ đước"] },
+    { "commodity": "Nấm rơm", "unit": "kg", "price": [50000, 110000], "names": ["Nấm rơm búp", "Nấm rơm xô"] },
+    { "commodity": "Nấm bào ngư", "unit": "kg", "price": [35000, 70000], "names": ["Nấm bào ngư xám", "Nấm bào ngư trắng"] },
+    { "commodity": "Đinh lăng", "unit": "kg", "price": [40000, 150000], "names": ["Củ đinh lăng", "Lá đinh lăng"] },
+    { "commodity": "Sả", "unit": "kg", "price": [4000, 15000], "names": ["Sả cây", "Sả Java"] },
+    { "commodity": "Muối", "unit": "kg", "price": [800, 4000], "names": ["Muối hạt", "Muối trắng", "Muối biển sạch"] }
+  ],
+  "service_types": [
+    { "name": "Cày, xới đất", "slug": "cay-xoi", "icon": "fa-tractor", "color": "#92400E", "description": "Cày ải, xới, trục đất bằng máy cày lớn và máy xới mini", "sector": "crop", "display_order": 7 },
+    { "name": "Gặt lúa", "slug": "gat-lua", "icon": "fa-wheat-awn", "color": "#A16207", "description": "Máy gặt đập liên hợp, thu hoạch lúa tận ruộng", "sector": "crop", "display_order": 8 },
+    { "name": "Sấy lúa", "slug": "say-lua", "icon": "fa-fan", "color": "#9A3412", "description": "Sấy lúa, ngô bằng lò sấy vỉ ngang, nhận tại ruộng", "sector": "crop", "display_order": 9 },
+    { "name": "Gieo sạ", "slug": "gieo-sa", "icon": "fa-seedling", "color": "#166534", "description": "Sạ hàng, sạ cụm bằng máy hoặc drone", "sector": "crop", "display_order": 10 },
+    { "name": "Bơm tưới", "slug": "bom-tuoi", "icon": "fa-faucet-drip", "color": "#1E40AF", "description": "Bơm nước vào ruộng, rút nước, lắp tưới nhỏ giọt", "sector": "crop", "display_order": 11 },
+    { "name": "Khoan giếng", "slug": "khoan-gieng", "icon": "fa-bore-hole", "color": "#1E3A8A", "description": "Khoan giếng, lắp bồn lọc nước cho vườn và ao nuôi", "display_order": 12 },
+    { "name": "Cắt tỉa, ghép cây", "slug": "cat-tia", "icon": "fa-tree", "color": "#14532D", "description": "Tỉa cành, ghép mắt, xử lý ra hoa cây ăn trái", "sector": "crop", "display_order": 13 },
+    { "name": "Thu hoạch trái cây", "slug": "thu-hoach-trai", "icon": "fa-basket-shopping", "color": "#B45309", "description": "Nhân công cắt, hái, phân loại trái cây tại vườn", "sector": "crop", "display_order": 14 },
+    { "name": "Làm cỏ", "slug": "lam-co", "icon": "fa-plant-wilt", "color": "#3F6212", "description": "Phát cỏ, làm cỏ bờ bao, vườn cây", "sector": "crop", "display_order": 15 },
+    { "name": "Bón phân bằng drone", "slug": "bon-phan-drone", "icon": "fa-helicopter", "color": "#065F46", "description": "Rải phân hạt, phân bón lá bằng drone", "sector": "crop", "display_order": 16 },
+    { "name": "Tiêm phòng", "slug": "tiem-phong", "icon": "fa-syringe", "color": "#7C2D12", "description": "Tiêm phòng gia súc, gia cầm tại trại", "sector": "livestock", "display_order": 17 },
+    { "name": "Phối giống", "slug": "phoi-giong", "icon": "fa-cow", "color": "#78350F", "description": "Gieo tinh nhân tạo heo, bò; tư vấn chọn giống", "sector": "livestock", "display_order": 18 },
+    { "name": "Xây chuồng trại", "slug": "xay-chuong", "icon": "fa-trowel-bricks", "color": "#57534E", "description": "Xây, sửa chuồng heo, chuồng gà, nhà yến", "sector": "livestock", "display_order": 19 },
+    { "name": "Xử lý ao nuôi", "slug": "xu-ly-ao", "icon": "fa-water", "color": "#0E7490", "description": "Sên vét, phơi đáy, bón vôi, gây màu nước ao", "sector": "aquatic", "display_order": 20 },
+    { "name": "Đo nước ao", "slug": "do-nuoc-ao", "icon": "fa-flask-vial", "color": "#155E75", "description": "Đo pH, độ mặn, kiềm, khí độc ao nuôi tại chỗ", "sector": "aquatic", "display_order": 21 },
+    { "name": "Thu hoạch tôm cá", "slug": "thu-hoach-tom-ca", "icon": "fa-shrimp", "color": "#0369A1", "description": "Kéo lưới, thu tôm cá, cân và chở đến vựa", "sector": "aquatic", "display_order": 22 },
+    { "name": "Tư vấn kỹ thuật", "slug": "tu-van-ky-thuat", "icon": "fa-lightbulb", "color": "#4D7C0F", "description": "Kỹ sư đến ruộng, vườn, ao để xem bệnh và hướng dẫn", "display_order": 23 },
+    { "name": "Sửa drone", "slug": "sua-drone", "icon": "fa-screwdriver-wrench", "color": "#374151", "description": "Sửa chữa, bảo dưỡng, nâng cấp drone nông nghiệp", "display_order": 24 },
+    { "name": "Lắp điện mặt trời", "slug": "dien-mat-troi", "icon": "fa-solar-panel", "color": "#CA8A04", "description": "Lắp pin mặt trời cho trại, máy bơm, máy sục khí", "display_order": 25 },
+    { "name": "Vận chuyển nông sản", "slug": "van-chuyen", "icon": "fa-truck", "color": "#1F2937", "description": "Xe tải, ghe chở lúa, trái cây, heo, cá về vựa", "display_order": 26 },
+    { "name": "Sơ chế, đóng gói", "slug": "so-che-dong-goi", "icon": "fa-box", "color": "#6B21A8", "description": "Rửa, phân loại, đóng thùng nông sản theo đơn", "display_order": 27 },
+    { "name": "Kho lạnh", "slug": "kho-lanh", "icon": "fa-snowflake", "color": "#0C4A6E", "description": "Thuê kho lạnh, cấp đông, bảo quản trái cây và thuỷ sản", "display_order": 28 },
+    { "name": "Chứng nhận VietGAP", "slug": "chung-nhan-vietgap", "icon": "fa-clipboard-check", "color": "#115E59", "description": "Hướng dẫn, đánh giá, cấp chứng nhận VietGAP, GlobalGAP", "display_order": 29 },
+    { "name": "Trồng, khai thác rừng", "slug": "trong-rung", "icon": "fa-tree", "color": "#14532D", "description": "Trồng, tỉa thưa, khai thác tràm, keo, bạch đàn", "sector": "lam-nghiep", "display_order": 30 }
+  ],
+  "service_offers": {
+    "muc-bun": [
+      { "name": "Múc bùn mương vườn", "description": "Máy múc bánh xích vào vườn, múc bùn lên liếp, làm gọn bờ.", "price_note": "700.000–900.000 ₫/ca" },
+      { "name": "Nạo vét kênh nội đồng", "description": "Nạo vét kênh, khơi thông dòng chảy trước mùa nước.", "price_note": "Theo mét kênh, khảo sát miễn phí" },
+      { "name": "Sên vét ao nuôi", "description": "Hút bùn đáy ao bằng máy bơm bùn, dọn ao giữa hai vụ.", "price_note": "1.500.000 ₫/ao 1.000 m²" }
+    ],
+    "phun-thuoc": [
+      { "name": "Phun thuốc lúa bằng drone", "description": "Drone 30 lít, phun đều, đúng liều, có bản đồ bay.", "price_note": "30.000–40.000 ₫/công" },
+      { "name": "Phun thuốc vườn cây ăn trái", "description": "Phun bằng máy phun áp lực, ống dài vào sâu trong vườn.", "price_note": "Theo công, thương lượng" },
+      { "name": "Phun thuốc bình đeo vai", "description": "Tổ 4 người phun bình máy, nhận ruộng nhỏ, vườn rau.", "price_note": "250.000 ₫/người/ngày" }
+    ],
+    "sua-may-no": [
+      { "name": "Sửa máy bơm, máy nổ", "description": "Sửa tại chỗ máy bơm nước, máy nổ, thay bạc, xú páp.", "price_note": "100.000–400.000 ₫ tuỳ lỗi" },
+      { "name": "Bảo dưỡng máy cày", "description": "Thay nhớt, lọc, chỉnh nhông xích máy cày, máy xới.", "price_note": "Từ 300.000 ₫" },
+      { "name": "Sửa máy gặt đập liên hợp", "description": "Thợ đi ruộng sửa máy gặt mùa thu hoạch, có phụ tùng sẵn.", "price_note": "Báo giá tại chỗ" }
+    ],
+    "thu-y": [
+      { "name": "Khám bệnh heo tại trại", "description": "Bác sĩ thú y đến trại khám, kê toa, hướng dẫn cách ly.", "price_note": "150.000 ₫/lần khám" },
+      { "name": "Chữa bệnh bò, trâu", "description": "Điều trị chướng hơi, tụ huyết trùng, đỡ đẻ bò.", "price_note": "Theo ca bệnh" },
+      { "name": "Thú y gia cầm", "description": "Khám, mổ khám gà vịt, tư vấn thuốc và vắc xin.", "price_note": "Miễn phí tư vấn qua điện thoại" }
+    ],
+    "giay-to-xuat-khau": [
+      { "name": "Làm mã số vùng trồng", "description": "Hướng dẫn hồ sơ, nhật ký canh tác, đăng ký mã số vùng trồng xuất khẩu.", "price_note": "Theo diện tích vùng" },
+      { "name": "Hồ sơ kiểm dịch thực vật", "description": "Chuẩn bị hồ sơ kiểm dịch lô hàng trái cây xuất khẩu.", "price_note": "Từ 2.000.000 ₫/hồ sơ" }
+    ],
+    "xet-nghiem": [
+      { "name": "Xét nghiệm dư lượng thuốc", "description": "Lấy mẫu tại vườn, kiểm dư lượng thuốc bảo vệ thực vật.", "price_note": "Từ 1.500.000 ₫/mẫu" },
+      { "name": "Xét nghiệm đất", "description": "Phân tích đạm, lân, kali, độ chua để bón phân đúng.", "price_note": "500.000 ₫/mẫu" },
+      { "name": "Xét nghiệm bệnh tôm", "description": "PCR bệnh đốm trắng, EHP, gan tụy trên mẫu tôm.", "price_note": "300.000 ₫/chỉ tiêu" }
+    ],
+    "cay-xoi": [
+      { "name": "Cày ải ruộng lúa", "description": "Máy cày Kubota, cày sâu, phơi ải giữa vụ.", "price_note": "180.000–220.000 ₫/công" },
+      { "name": "Xới đất trồng màu", "description": "Máy xới mini lên liếp trồng rau, bắp, khoai.", "price_note": "Theo công" },
+      { "name": "Trục, san phẳng ruộng", "description": "Trục bùn, san phẳng mặt ruộng trước khi sạ.", "price_note": "150.000 ₫/công" }
+    ],
+    "gat-lua": [
+      { "name": "Gặt lúa máy gặt đập", "description": "Máy gặt đập liên hợp, đóng bao tại ruộng.", "price_note": "250.000–300.000 ₫/công" },
+      { "name": "Gặt lúa ruộng lầy", "description": "Máy gặt bánh xích rộng, chạy được ruộng ngập lầy.", "price_note": "Thương lượng theo ruộng" }
+    ],
+    "say-lua": [
+      { "name": "Sấy lúa lò vỉ ngang", "description": "Lò sấy 20 tấn, sấy đều, đạt độ ẩm bán ngay.", "price_note": "150 ₫/kg" },
+      { "name": "Sấy ngô, đậu", "description": "Sấy ngô hạt, đậu phộng, đóng bao giao vựa.", "price_note": "200 ₫/kg" }
+    ],
+    "gieo-sa": [
+      { "name": "Sạ hàng bằng máy", "description": "Máy sạ hàng kéo tay, tiết kiệm giống, lúa thẳng hàng.", "price_note": "80.000 ₫/công" },
+      { "name": "Sạ lúa bằng drone", "description": "Drone sạ đều, ruộng lớn làm xong trong ngày.", "price_note": "60.000 ₫/công" }
+    ],
+    "bom-tuoi": [
+      { "name": "Bơm nước vào ruộng", "description": "Máy bơm dầu công suất lớn, bơm theo con nước.", "price_note": "Theo giờ máy" },
+      { "name": "Lắp tưới nhỏ giọt cho vườn", "description": "Thiết kế, lắp đặt tưới nhỏ giọt, tưới phun cho sầu riêng, bưởi.", "price_note": "Khảo sát, báo giá miễn phí" }
+    ],
+    "khoan-gieng": [
+      { "name": "Khoan giếng nước ngầm", "description": "Khoan giếng 60–120 m, lắp ống, thử lưu lượng.", "price_note": "Theo mét sâu" },
+      { "name": "Lắp bồn lọc nước phèn", "description": "Lọc phèn, lọc mặn cho nước tưới và nước ao.", "price_note": "Từ 3.500.000 ₫" }
+    ],
+    "cat-tia": [
+      { "name": "Tỉa cành sầu riêng", "description": "Tỉa cành tạo tán, cắt cành sâu bệnh sau thu hoạch.", "price_note": "Theo cây" },
+      { "name": "Ghép mắt cây ăn trái", "description": "Ghép mắt, ghép cành bưởi, xoài, sầu riêng giống tốt.", "price_note": "5.000 ₫/mắt ghép" },
+      { "name": "Xử lý ra hoa xoài", "description": "Khoanh gốc, phun xử lý ra hoa nghịch vụ.", "price_note": "Thương lượng theo vườn" }
+    ],
+    "thu-hoach-trai": [
+      { "name": "Cắt sầu riêng thuê", "description": "Thợ cắt có kinh nghiệm, cắt đúng độ già, có dây tời.", "price_note": "Theo tấn" },
+      { "name": "Hái, phân loại trái cây", "description": "Tổ 6 người hái, lựa, đóng sọt theo yêu cầu vựa.", "price_note": "300.000 ₫/người/ngày" }
+    ],
+    "lam-co": [
+      { "name": "Phát cỏ vườn bằng máy", "description": "Máy cắt cỏ đeo vai, phát sạch gốc và bờ mương.", "price_note": "Theo công" },
+      { "name": "Làm cỏ bờ bao", "description": "Dọn cỏ, đắp lại bờ bao trước mùa lũ.", "price_note": "Thương lượng" }
+    ],
+    "bon-phan-drone": [
+      { "name": "Rải phân bằng drone", "description": "Drone rải phân hạt đều khắp ruộng, không dẫm lúa.", "price_note": "40.000 ₫/công" },
+      { "name": "Phun phân bón lá bằng drone", "description": "Phun dưỡng lá, dưỡng hạt cho lúa và cây ăn trái.", "price_note": "35.000 ₫/công" }
+    ],
+    "tiem-phong": [
+      { "name": "Tiêm phòng dịch tả heo", "description": "Tiêm phòng tại trại, ghi sổ theo dõi đàn.", "price_note": "Theo con" },
+      { "name": "Tiêm phòng lở mồm long móng", "description": "Tiêm cho bò, trâu, dê đúng lịch.", "price_note": "Theo con" },
+      { "name": "Chủng ngừa gà vịt", "description": "Nhỏ mắt, tiêm Newcastle, cúm gia cầm cho đàn.", "price_note": "Theo đàn" }
+    ],
+    "phoi-giong": [
+      { "name": "Gieo tinh nhân tạo heo", "description": "Tinh heo giống ngoại, phối tận trại.", "price_note": "Từ 150.000 ₫/liều" },
+      { "name": "Gieo tinh bò", "description": "Tinh bò BBB, Brahman; theo dõi động dục giúp chủ nuôi.", "price_note": "Thương lượng" }
+    ],
+    "xay-chuong": [
+      { "name": "Xây chuồng heo", "description": "Xây chuồng nền bê tông, có hầm biogas.", "price_note": "Theo m²" },
+      { "name": "Làm nhà yến", "description": "Thi công nhà yến, lắp loa dẫn dụ, tạo ẩm.", "price_note": "Khảo sát miễn phí" },
+      { "name": "Làm chuồng gà thả vườn", "description": "Chuồng khung sắt, lưới, mái tôn chống nóng.", "price_note": "Theo m²" }
+    ],
+    "xu-ly-ao": [
+      { "name": "Cải tạo ao nuôi tôm", "description": "Sên vét, phơi đáy, bón vôi, lót bạt ao tôm.", "price_note": "Theo ao" },
+      { "name": "Gây màu nước ao", "description": "Gây màu, cấy vi sinh trước khi thả giống.", "price_note": "Theo ao" }
+    ],
+    "do-nuoc-ao": [
+      { "name": "Đo môi trường nước ao", "description": "Đo pH, kiềm, độ mặn, NH3, NO2 tại ao, tư vấn xử lý.", "price_note": "100.000 ₫/ao" }
+    ],
+    "thu-hoach-tom-ca": [
+      { "name": "Thu hoạch tôm bằng lưới", "description": "Tổ kéo lưới, thu tôm sống, giao vựa trong ngày.", "price_note": "Theo tấn" },
+      { "name": "Thu hoạch cá ao", "description": "Kéo lưới, cân, chở cá về chợ đầu mối.", "price_note": "Thương lượng" }
+    ],
+    "tu-van-ky-thuat": [
+      { "name": "Kỹ sư thăm đồng", "description": "Kỹ sư đến ruộng xem sâu bệnh, lập lịch phân thuốc cả vụ.", "price_note": "Miễn phí cho xã viên" },
+      { "name": "Tư vấn nuôi tôm", "description": "Theo dõi ao, hướng dẫn cho ăn, xử lý bệnh.", "price_note": "Theo tháng" },
+      { "name": "Tư vấn chăm sóc sầu riêng", "description": "Lịch bón phân, tưới, xử lý ra hoa và nuôi trái.", "price_note": "Theo vườn" }
+    ],
+    "sua-drone": [
+      { "name": "Sửa drone phun thuốc", "description": "Thay cánh, mô tơ, bo mạch; cân chỉnh la bàn.", "price_note": "Báo giá sau khi kiểm tra" },
+      { "name": "Bảo dưỡng drone đầu vụ", "description": "Vệ sinh bơm, béc, kiểm tra pin trước mùa phun.", "price_note": "500.000 ₫/máy" }
+    ],
+    "dien-mat-troi": [
+      { "name": "Pin mặt trời cho máy bơm", "description": "Bộ pin chạy máy bơm tưới ban ngày, không tốn điện.", "price_note": "Từ 15.000.000 ₫/bộ" },
+      { "name": "Điện mặt trời trang trại", "description": "Lắp điện áp mái chuồng trại, nối lưới.", "price_note": "Khảo sát miễn phí" }
+    ],
+    "van-chuyen": [
+      { "name": "Xe tải chở nông sản", "description": "Xe 2,5–8 tấn chở lúa, trái cây đi chợ đầu mối.", "price_note": "Theo chuyến" },
+      { "name": "Ghe chở lúa", "description": "Ghe 30 tấn chở lúa từ ruộng về nhà máy.", "price_note": "Theo tấn" },
+      { "name": "Chở heo, bò", "description": "Xe chuyên chở gia súc, có lồng, đi tỉnh.", "price_note": "Theo chuyến" }
+    ],
+    "so-che-dong-goi": [
+      { "name": "Đóng thùng trái cây xuất khẩu", "description": "Rửa, lựa, dán tem, đóng thùng theo chuẩn nhà xuất khẩu.", "price_note": "Theo kg" },
+      { "name": "Sơ chế rau củ", "description": "Rửa, cắt, đóng túi rau giao siêu thị.", "price_note": "Theo đơn" }
+    ],
+    "kho-lanh": [
+      { "name": "Thuê kho lạnh trái cây", "description": "Kho 2–8 °C giữ trái cây tươi chờ giá.", "price_note": "Theo tấn/ngày" },
+      { "name": "Cấp đông thuỷ sản", "description": "Cấp đông tôm cá, bảo quản âm 18 °C.", "price_note": "Theo tấn" }
+    ],
+    "chung-nhan-vietgap": [
+      { "name": "Chứng nhận VietGAP trồng trọt", "description": "Hướng dẫn ghi chép, đánh giá, cấp giấy VietGAP.", "price_note": "Theo diện tích" },
+      { "name": "Chứng nhận GlobalGAP", "description": "Chuẩn bị vườn và hồ sơ đạt GlobalGAP cho xuất khẩu.", "price_note": "Theo dự án" }
+    ],
+    "trong-rung": [
+      { "name": "Trồng rừng tràm", "description": "Lên liếp, trồng, chăm tràm 3 năm đầu.", "price_note": "Theo ha" },
+      { "name": "Khai thác cừ tràm", "description": "Đốn, phân loại, chở cừ tràm đến bãi.", "price_note": "Theo cây" }
+    ]
+  },
+  "supply_types": [
+    { "name": "Phân hữu cơ, vi sinh", "slug": "phan-huu-co", "icon": "fa-leaf", "color": "#3F6212", "description": "Phân chuồng ủ hoai, phân trùn quế, phân vi sinh", "sector": "crop", "display_order": 7 },
+    { "name": "Vôi, cải tạo đất", "slug": "voi-cai-tao-dat", "icon": "fa-mound", "color": "#78716C", "description": "Vôi bột, dolomite, chế phẩm hạ phèn", "display_order": 8 },
+    { "name": "Túi bao trái", "slug": "tui-bao-trai", "icon": "fa-box", "color": "#B45309", "description": "Túi bao xoài, bưởi, mít chống sâu và cháy nắng", "sector": "crop", "display_order": 9 },
+    { "name": "Ống, béc tưới", "slug": "ong-tuoi", "icon": "fa-faucet", "color": "#1D4ED8", "description": "Ống PE, béc phun, van, bộ tưới nhỏ giọt", "sector": "crop", "display_order": 10 },
+    { "name": "Máy bơm", "slug": "may-bom", "icon": "fa-faucet-drip", "color": "#1E3A8A", "description": "Máy bơm nước, bơm chìm, bơm dầu", "display_order": 11 },
+    { "name": "Con giống", "slug": "con-giong", "icon": "fa-piggy-bank", "color": "#9D174D", "description": "Heo con, gà con, vịt con, bê đã tiêm phòng", "sector": "livestock", "display_order": 12 },
+    { "name": "Tôm, cá giống", "slug": "tom-ca-giong", "icon": "fa-shrimp", "color": "#0369A1", "description": "Tôm post, cá tra, cá lóc giống đã kiểm dịch", "sector": "aquatic", "display_order": 13 },
+    { "name": "Thức ăn thuỷ sản", "slug": "thuc-an-thuy-san", "icon": "fa-bowl-rice", "color": "#0F766E", "description": "Thức ăn viên cho tôm, cá theo cỡ", "sector": "aquatic", "display_order": 14 },
+    { "name": "Chế phẩm xử lý ao", "slug": "che-pham-ao", "icon": "fa-flask-vial", "color": "#155E75", "description": "Vi sinh, khoáng, yucca, chất diệt khuẩn ao nuôi", "sector": "aquatic", "display_order": 15 },
+    { "name": "Máy sục khí, quạt nước", "slug": "may-suc-khi", "icon": "fa-fan", "color": "#0C4A6E", "description": "Quạt nước, máy thổi khí, oxy đáy ao", "sector": "aquatic", "display_order": 16 },
+    { "name": "Vắc xin", "slug": "vac-xin", "icon": "fa-syringe", "color": "#7F1D1D", "description": "Vắc xin gia súc, gia cầm, bảo quản lạnh", "sector": "livestock", "display_order": 17 },
+    { "name": "Dụng cụ chăn nuôi", "slug": "dung-cu-chan-nuoi", "icon": "fa-bottle-water", "color": "#57534E", "description": "Máng ăn, núm uống, đèn sưởi, lồng chở", "sector": "livestock", "display_order": 18 },
+    { "name": "Drone nông nghiệp", "slug": "drone-nong-nghiep", "icon": "fa-helicopter", "color": "#111827", "description": "Drone phun thuốc, rải phân, pin và bộ sạc", "display_order": 19 },
+    { "name": "Phụ tùng máy", "slug": "phu-tung-may", "icon": "fa-screwdriver-wrench", "color": "#374151", "description": "Phụ tùng máy cày, máy gặt, máy bơm", "display_order": 20 },
+    { "name": "Dầu nhớt", "slug": "dau-nhot", "icon": "fa-oil-can", "color": "#44403C", "description": "Nhớt máy, dầu thuỷ lực, mỡ bò", "display_order": 21 },
+    { "name": "Bao bì nông sản", "slug": "bao-bi", "icon": "fa-boxes-stacked", "color": "#92400E", "description": "Bao lúa, sọt, thùng carton, lưới đựng trái", "display_order": 22 },
+    { "name": "Cây giống lâm nghiệp", "slug": "cay-giong-lam-nghiep", "icon": "fa-tree", "color": "#14532D", "description": "Cây tràm, keo, bạch đàn giống", "sector": "lam-nghiep", "display_order": 23 },
+    { "name": "Phôi nấm, meo giống", "slug": "phoi-nam", "icon": "fa-spa", "color": "#6B21A8", "description": "Meo nấm rơm, phôi nấm bào ngư", "sector": "nam-duoc-lieu", "display_order": 24 },
+    { "name": "Bộ kiểm tra nhanh", "slug": "bo-kiem-tra-nhanh", "icon": "fa-vials", "color": "#4C1D95", "description": "Test nhanh pH, độ mặn, kiềm, khí độc", "display_order": 25 },
+    { "name": "Tấm pin mặt trời", "slug": "tam-pin-mat-troi", "icon": "fa-solar-panel", "color": "#CA8A04", "description": "Tấm pin, bộ đổi điện cho máy bơm, trại nuôi", "display_order": 26 },
+    { "name": "Dụng cụ cầm tay", "slug": "dung-cu-cam-tay", "icon": "fa-trowel", "color": "#78350F", "description": "Kéo cắt cành, dao, cuốc, bình xịt tay", "display_order": 27 },
+    { "name": "Bạt, màng phủ", "slug": "bat-mang-phu", "icon": "fa-ruler-combined", "color": "#525252", "description": "Màng phủ nông nghiệp, bạt lót ao, lưới che nắng", "display_order": 28 }
+  ],
+  "supply_items": {
+    "giong": [
+      { "name": "Lúa giống OM 18 xác nhận", "unit": "kg", "price": [18000, 24000], "commodity": "Lúa" },
+      { "name": "Lúa giống Đài Thơm 8", "unit": "kg", "price": [17000, 23000], "commodity": "Lúa" },
+      { "name": "Cây giống sầu riêng Monthong", "unit": "cây", "price": [55000, 90000], "commodity": "Sầu riêng" },
+      { "name": "Cây giống bưởi da xanh", "unit": "cây", "price": [25000, 45000], "commodity": "Bưởi" },
+      { "name": "Hạt giống rau cải", "unit": "gói", "price": [8000, 20000], "commodity": "Rau màu" },
+      { "name": "Ngô giống lai F1", "unit": "kg", "price": [120000, 180000], "commodity": "Ngô" }
+    ],
+    "phan-bon": [
+      { "name": "Phân NPK 20-20-15", "unit": "bao 50 kg", "price": [700000, 900000] },
+      { "name": "Phân Urê hạt đục", "unit": "bao 50 kg", "price": [500000, 650000] },
+      { "name": "Phân DAP", "unit": "bao 50 kg", "price": [850000, 1050000] },
+      { "name": "Phân Kali clorua", "unit": "bao 50 kg", "price": [450000, 600000] },
+      { "name": "Phân bón lá dưỡng trái sầu riêng", "unit": "chai 1 lít", "price": [120000, 250000], "commodity": "Sầu riêng" },
+      { "name": "Phân bón chuyên lúa", "unit": "bao 50 kg", "price": [600000, 780000], "commodity": "Lúa" }
+    ],
+    "thuoc-bvtv": [
+      { "name": "Thuốc trừ rầy nâu", "unit": "chai 500 ml", "price": [80000, 160000], "commodity": "Lúa" },
+      { "name": "Thuốc trừ đạo ôn", "unit": "gói 100 g", "price": [35000, 70000], "commodity": "Lúa" },
+      { "name": "Thuốc trị nấm Phytophthora", "unit": "gói 1 kg", "price": [180000, 350000], "commodity": "Sầu riêng" },
+      { "name": "Thuốc trừ sâu sinh học", "unit": "chai 250 ml", "price": [60000, 120000] },
+      { "name": "Thuốc trừ ốc bươu vàng", "unit": "gói 1 kg", "price": [40000, 80000], "commodity": "Lúa" }
+    ],
+    "thuc-an": [
+      { "name": "Cám heo thịt", "unit": "bao 25 kg", "price": [280000, 360000], "commodity": "Heo" },
+      { "name": "Cám gà con", "unit": "bao 25 kg", "price": [300000, 380000], "commodity": "Gà" },
+      { "name": "Thức ăn vịt đẻ", "unit": "bao 25 kg", "price": [260000, 330000], "commodity": "Vịt" },
+      { "name": "Cỏ voi tươi", "unit": "kg", "price": [800, 1500], "commodity": "Bò" }
+    ],
+    "thuoc-thu-y": [
+      { "name": "Kháng sinh tiêm heo", "unit": "chai 100 ml", "price": [60000, 140000], "commodity": "Heo" },
+      { "name": "Men tiêu hoá gia súc", "unit": "gói 1 kg", "price": [50000, 110000] },
+      { "name": "Thuốc sát trùng chuồng trại", "unit": "can 5 lít", "price": [150000, 300000] },
+      { "name": "Vitamin điện giải gia cầm", "unit": "gói 1 kg", "price": [40000, 90000], "commodity": "Gà" }
+    ],
+    "nong-cu": [
+      { "name": "Máy xới đất mini", "unit": "cái", "price": [6500000, 12000000] },
+      { "name": "Máy cắt cỏ đeo vai", "unit": "cái", "price": [2200000, 4500000] },
+      { "name": "Bình xịt điện 20 lít", "unit": "cái", "price": [900000, 1600000] },
+      { "name": "Máy sạ hàng kéo tay", "unit": "cái", "price": [2500000, 4000000], "commodity": "Lúa" }
+    ],
+    "phan-huu-co": [
+      { "name": "Phân trùn quế", "unit": "bao 25 kg", "price": [80000, 140000] },
+      { "name": "Phân bò ủ hoai", "unit": "bao 50 kg", "price": [40000, 70000] },
+      { "name": "Phân vi sinh Trichoderma", "unit": "gói 1 kg", "price": [35000, 70000] },
+      { "name": "Phân gà ủ hoai", "unit": "bao 25 kg", "price": [60000, 100000] }
+    ],
+    "voi-cai-tao-dat": [
+      { "name": "Vôi bột nông nghiệp", "unit": "bao 25 kg", "price": [35000, 60000] },
+      { "name": "Dolomite", "unit": "bao 50 kg", "price": [70000, 120000] },
+      { "name": "Chế phẩm hạ phèn", "unit": "bao 10 kg", "price": [90000, 160000] }
+    ],
+    "tui-bao-trai": [
+      { "name": "Túi bao trái xoài", "unit": "100 túi", "price": [35000, 70000], "commodity": "Xoài" },
+      { "name": "Túi bao trái bưởi", "unit": "100 túi", "price": [40000, 80000], "commodity": "Bưởi" },
+      { "name": "Túi lưới bao mít", "unit": "100 túi", "price": [60000, 120000], "commodity": "Mít" }
+    ],
+    "ong-tuoi": [
+      { "name": "Ống PE 20 mm", "unit": "cuộn 100 m", "price": [250000, 450000] },
+      { "name": "Béc tưới phun mưa", "unit": "cái", "price": [8000, 25000] },
+      { "name": "Bộ tưới nhỏ giọt 1.000 m²", "unit": "bộ", "price": [1800000, 3500000] }
+    ],
+    "may-bom": [
+      { "name": "Máy bơm nước 2 HP", "unit": "cái", "price": [2500000, 4500000] },
+      { "name": "Máy bơm chìm", "unit": "cái", "price": [1500000, 3200000] },
+      { "name": "Máy bơm dầu cánh to", "unit": "cái", "price": [6000000, 11000000] }
+    ],
+    "con-giong": [
+      { "name": "Heo con giống 3 máu", "unit": "con", "price": [1200000, 1900000], "commodity": "Heo" },
+      { "name": "Gà con tam hoàng", "unit": "con", "price": [8000, 15000], "commodity": "Gà" },
+      { "name": "Vịt con Super", "unit": "con", "price": [9000, 16000], "commodity": "Vịt" },
+      { "name": "Bê lai Sind", "unit": "con", "price": [9000000, 15000000], "commodity": "Bò" },
+      { "name": "Dê con giống", "unit": "con", "price": [1500000, 3000000], "commodity": "Dê" }
+    ],
+    "tom-ca-giong": [
+      { "name": "Tôm thẻ post 12", "unit": "1.000 con", "price": [90000, 160000], "commodity": "Tôm" },
+      { "name": "Tôm sú giống", "unit": "1.000 con", "price": [120000, 220000], "commodity": "Tôm sú" },
+      { "name": "Cá tra giống", "unit": "kg", "price": [25000, 45000], "commodity": "Cá tra" },
+      { "name": "Cá lóc giống", "unit": "con", "price": [300, 800], "commodity": "Cá lóc" },
+      { "name": "Tôm càng xanh giống", "unit": "1.000 con", "price": [250000, 450000], "commodity": "Tôm càng xanh" }
+    ],
+    "thuc-an-thuy-san": [
+      { "name": "Thức ăn tôm số 2", "unit": "bao 20 kg", "price": [550000, 750000], "commodity": "Tôm" },
+      { "name": "Thức ăn cá tra 28 đạm", "unit": "bao 25 kg", "price": [320000, 420000], "commodity": "Cá tra" },
+      { "name": "Thức ăn cá lóc", "unit": "bao 25 kg", "price": [380000, 480000], "commodity": "Cá lóc" }
+    ],
+    "che-pham-ao": [
+      { "name": "Vi sinh xử lý đáy ao", "unit": "gói 1 kg", "price": [150000, 300000] },
+      { "name": "Khoáng tạt ao", "unit": "bao 10 kg", "price": [120000, 220000] },
+      { "name": "Yucca hấp thu khí độc", "unit": "chai 1 lít", "price": [180000, 320000] }
+    ],
+    "may-suc-khi": [
+      { "name": "Quạt nước 10 cánh", "unit": "dàn", "price": [5500000, 9000000] },
+      { "name": "Máy thổi khí con sò", "unit": "cái", "price": [3500000, 7000000] },
+      { "name": "Đĩa oxy đáy ao", "unit": "cái", "price": [60000, 150000] }
+    ],
+    "vac-xin": [
+      { "name": "Vắc xin dịch tả heo", "unit": "lọ 10 liều", "price": [60000, 120000], "commodity": "Heo" },
+      { "name": "Vắc xin Newcastle", "unit": "lọ 500 liều", "price": [80000, 150000], "commodity": "Gà" },
+      { "name": "Vắc xin lở mồm long móng", "unit": "lọ 25 liều", "price": [250000, 450000], "commodity": "Bò" }
+    ],
+    "dung-cu-chan-nuoi": [
+      { "name": "Máng ăn heo inox", "unit": "cái", "price": [350000, 700000] },
+      { "name": "Núm uống tự động", "unit": "cái", "price": [15000, 40000] },
+      { "name": "Đèn sưởi úm gà", "unit": "cái", "price": [60000, 150000] }
+    ],
+    "drone-nong-nghiep": [
+      { "name": "Drone phun thuốc 30 lít", "unit": "bộ", "price": [180000000, 320000000] },
+      { "name": "Pin drone nông nghiệp", "unit": "cục", "price": [18000000, 35000000] },
+      { "name": "Bộ rải phân hạt cho drone", "unit": "bộ", "price": [6000000, 12000000] }
+    ],
+    "phu-tung-may": [
+      { "name": "Dây curoa máy gặt", "unit": "sợi", "price": [150000, 450000], "commodity": "Lúa" },
+      { "name": "Lưỡi cày máy kéo", "unit": "cái", "price": [250000, 600000] },
+      { "name": "Bạc piston máy nổ", "unit": "bộ", "price": [120000, 350000] }
+    ],
+    "dau-nhot": [
+      { "name": "Nhớt máy nông nghiệp", "unit": "can 4 lít", "price": [280000, 420000] },
+      { "name": "Dầu thuỷ lực", "unit": "can 18 lít", "price": [900000, 1400000] },
+      { "name": "Mỡ bò bôi trơn", "unit": "hộp 1 kg", "price": [60000, 120000] }
+    ],
+    "bao-bi": [
+      { "name": "Bao lúa 50 kg", "unit": "100 bao", "price": [350000, 550000], "commodity": "Lúa" },
+      { "name": "Thùng carton trái cây", "unit": "100 thùng", "price": [800000, 1500000] },
+      { "name": "Sọt nhựa", "unit": "cái", "price": [45000, 90000] }
+    ],
+    "cay-giong-lam-nghiep": [
+      { "name": "Cây tràm giống", "unit": "100 cây", "price": [40000, 90000], "commodity": "Tràm" },
+      { "name": "Cây keo lai giống", "unit": "100 cây", "price": [70000, 140000], "commodity": "Keo lai" },
+      { "name": "Cây đước giống", "unit": "100 cây", "price": [60000, 120000], "commodity": "Đước" }
+    ],
+    "phoi-nam": [
+      { "name": "Meo nấm rơm", "unit": "bịch", "price": [8000, 15000], "commodity": "Nấm rơm" },
+      { "name": "Phôi nấm bào ngư", "unit": "phôi", "price": [5000, 9000], "commodity": "Nấm bào ngư" }
+    ],
+    "bo-kiem-tra-nhanh": [
+      { "name": "Test pH nước", "unit": "hộp", "price": [60000, 150000] },
+      { "name": "Khúc xạ kế đo độ mặn", "unit": "cái", "price": [250000, 600000] },
+      { "name": "Test NH3, NO2", "unit": "hộp", "price": [120000, 250000] }
+    ],
+    "tam-pin-mat-troi": [
+      { "name": "Tấm pin 550 W", "unit": "tấm", "price": [2200000, 3200000] },
+      { "name": "Bộ đổi điện cho máy bơm", "unit": "bộ", "price": [5000000, 9000000] }
+    ],
+    "dung-cu-cam-tay": [
+      { "name": "Kéo cắt cành", "unit": "cái", "price": [90000, 350000] },
+      { "name": "Dao cắt sầu riêng", "unit": "cái", "price": [70000, 180000], "commodity": "Sầu riêng" },
+      { "name": "Cuốc bàn", "unit": "cái", "price": [80000, 160000] }
+    ],
+    "bat-mang-phu": [
+      { "name": "Màng phủ nông nghiệp", "unit": "cuộn 400 m", "price": [550000, 900000] },
+      { "name": "Bạt lót ao HDPE", "unit": "m²", "price": [15000, 35000] },
+      { "name": "Lưới che nắng 70%", "unit": "m²", "price": [6000, 15000] }
+    ]
+  },
+  "farm_sizes": ["2 công", "3 công", "5 công", "7 công", "1 ha", "1,5 ha", "2 ha", "nửa mẫu", "1 mẫu", "vườn 300 gốc", "vườn 150 gốc", "ao 2.000 m²", "ao 5.000 m²", "trại 200 con", "trại 50 con"],
+  "when": ["trong tuần này", "sáng mai", "cuối tuần", "đầu tháng sau", "trước khi lúa trổ", "trước mùa mưa", "càng sớm càng tốt", "khi nước rút"],
+  "inquiry_notes": [
+    "Cần {item} cho {size}, gọi lại giúp.",
+    "Hỏi giá {item}, nhà ở {ward}.",
+    "{size}, muốn làm {when}. Có đi xa được không?",
+    "Cho hỏi {item} còn không, lấy {when}.",
+    "Nhờ báo giá {item} giao tận nhà ở {ward}.",
+    "Nhà có {size}, cần tư vấn trước khi đặt."
+  ],
+  "job_descriptions": [
+    "Cần {service} cho {size}, làm {when}.",
+    "Tìm người {service} ở {ward}, {size}.",
+    "{size} cần {service} {when}, trả tiền ngay.",
+    "Nhờ giới thiệu chỗ {service} gần {ward}, {when}.",
+    "Có {size}, cần {service}. Ai làm được gọi giúp."
+  ],
+  "reviews": {
+    "good": ["Làm kỹ, đúng hẹn, giá hợp lý.", "Rất hài lòng, vụ sau gọi tiếp.", "Thợ nhiệt tình, làm nhanh.", "Hàng tốt, giao tận nơi.", "Giá rẻ hơn chỗ khác, làm sạch sẽ.", "Tư vấn kỹ, bà con nên gọi.", "Đến đúng giờ, máy móc tốt."],
+    "mixed": ["Làm được, hơi trễ hẹn.", "Giá hơi cao nhưng làm kỹ.", "Tạm được, cần nghe điện thoại nhanh hơn.", "Hàng ổn, giao hơi chậm."],
+    "bad": ["Hẹn mà không tới.", "Làm ẩu, phải gọi làm lại.", "Giá đổi so với lúc báo.", "Hàng không đúng như nói."]
+  },
+  "replies": ["Cảm ơn bà con đã tin tưởng.", "Dạ cảm ơn, vụ sau em làm tiếp.", "Xin lỗi bà con, lần sau em sắp xếp đúng giờ.", "Cảm ơn, có gì cần cứ gọi em.", "Dạ em ghi nhận, sẽ cải thiện."],
+  "search_queries_unmet": ["thue may cay mini", "drone bon phan huu co", "thu mua sau rieng", "ky su nong nghiep", "thue nhan cong hai xoai", "sua quat nuoc ao tom", "giong ca keo", "say kho nam", "thue xe cuoc mini", "lam ma so vung trong mit"],
+  "alerts": {
+    "disease": [
+      { "title": "Dịch tả heo châu Phi tại {province}", "body": "Không mua heo không rõ nguồn gốc, sát trùng chuồng hằng ngày. Heo sốt, bỏ ăn thì báo ngay thú y xã." },
+      { "title": "Cúm gia cầm tại {province}", "body": "Không thả rông gà vịt, tiêm phòng đủ mũi, không ăn gia cầm bệnh chết." }
+    ],
+    "salinity": [
+      { "title": "Mặn xâm nhập sâu tại {province}", "body": "Đo độ mặn trước khi bơm, trữ nước ngọt cho vườn, lấy nước lúc triều thấp." }
+    ],
+    "weather": [
+      { "title": "Mưa lớn kéo dài ở {province}", "body": "Gia cố bờ bao, khơi thông mương thoát nước, hoãn phun thuốc khi trời mưa." }
+    ],
+    "sau-benh": [
+      { "title": "Rầy nâu tăng mật số tại {province}", "body": "Thăm đồng hằng ngày, chỉ phun khi mật số cao, dùng thuốc đặc trị theo khuyến cáo." },
+      { "title": "Sâu đục trái sầu riêng tại {province}", "body": "Bao trái, vệ sinh vườn, phun thuốc sinh học khi trái còn non." }
+    ],
+    "nang-nong": [
+      { "title": "Nắng nóng gay gắt tại {province}", "body": "Tưới vào sáng sớm, che mát chuồng trại, tăng nước uống cho gia súc." }
+    ],
+    "lu-ngap": [
+      { "title": "Lũ lên tại {province}", "body": "Gia cố đê bao, thu hoạch sớm lúa chín, đưa gia súc lên chỗ cao." }
+    ],
+    "han-han": [
+      { "title": "Hạn cục bộ tại {province}", "body": "Tưới tiết kiệm, phủ gốc giữ ẩm, ưu tiên nước cho cây ăn trái." }
+    ],
+    "dong-loc": [
+      { "title": "Dông lốc trên địa bàn {province}", "body": "Chằng chống nhà, chuồng trại; không ra đồng khi có sấm sét." }
+    ]
+  },
+  "partners": {
+    "brand": ["Phân bón {name}", "Thuốc bảo vệ thực vật {name}", "Thức ăn chăn nuôi {name}", "Giống cây trồng {name}"],
+    "dealer": ["Đại lý máy nông nghiệp {name}", "Drone nông nghiệp {name}", "Đại lý vật tư {name}"],
+    "cooperative": ["Hợp tác xã {name}", "Liên hiệp HTX {name}"],
+    "exporter": ["Xuất khẩu trái cây {name}", "Công ty nông sản {name}"],
+    "names": ["Phương Nam", "Cửu Long", "Mekong", "Hậu Giang", "Tiền Giang", "Đồng Bằng", "Miền Tây", "Sông Hậu", "Phú Nông", "Việt Xanh", "Bình Minh", "An Phú", "Tân Thành", "Thạnh Phú", "Mỹ Phước", "Long Hưng", "Hòa Bình", "Thuận Phát", "Hưng Thịnh", "Đất Việt"],
+    "notes": ["Tài trợ các nhà cung cấp đã mua máy.", "Báo cáo nhu cầu theo tháng.", "Thử nghiệm một vụ.", "Gia hạn từ hợp đồng trước.", "Vùng nguyên liệu xuất khẩu.", "Tài trợ danh mục dịch vụ tuân thủ xuất khẩu."]
+  }
+}

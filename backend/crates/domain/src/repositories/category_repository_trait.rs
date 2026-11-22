@@ -11,6 +11,22 @@ pub trait CategoryRepositoryTrait {
 
     async fn list_admin(&self) -> Result<Vec<CategoryAdmin>, Error>;
 
+    /// The ids of the types of `category_type` that some live service or
+    /// supply is filed under.
+    async fn used_ids(&self, category_type: &str) -> Result<Vec<i32>, Error>;
+
+    /// A page of one type's categories (`CATEGORY_TYPE_SERVICE` or
+    /// `CATEGORY_TYPE_PRODUCT`), hidden ones too, by display order then id.
+    async fn list_admin_page(
+        &self,
+        category_type: &str,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<CategoryAdmin>, Error>;
+
+    /// How many categories of that type there are, hidden ones too.
+    async fn count_admin(&self, category_type: &str) -> Result<i64, Error>;
+
     async fn find_by_id_admin(&self, id: i32) -> Result<Option<CategoryAdmin>, Error>;
 
     async fn create(&self, category: NewCategory) -> Result<i32, Error>;

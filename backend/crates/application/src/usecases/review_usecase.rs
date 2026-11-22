@@ -26,12 +26,15 @@ use crate::{
     authz::Actor,
     catalogue::PERM_OWN_REVIEW_REPLY,
     constants::{
-        PUBLIC_REVIEWS_SHOWN, RATING_MAX, RATING_MIN, REQUESTER_NAME_MAX_LEN, REVIEW_COMMENT_MAX,
-        REVIEW_REPLY_MAX,
+        PAGE_SIZE, PUBLIC_REVIEWS_SHOWN, RATING_MAX, RATING_MIN, REQUESTER_NAME_MAX_LEN,
+        REVIEW_COMMENT_MAX, REVIEW_REPLY_MAX,
     },
     hashing::sha256_hex,
     inputs::ReviewInput,
-    outputs::{OwnReviewDto, ProviderReviewsDto, PublicReviewDto, RatingDto, ReviewSentDto},
+    outputs::{
+        OwnReviewDto, PagedResponse, ProviderReviewsDto, PublicReviewDto, RatingDto, ReviewSentDto,
+    },
+    pagination::{paginate_public, total_or_count},
     ports::EventBus,
     validation::{max_chars, max_chars_opt, non_blank, validate_phone},
 };
@@ -173,16 +176,31 @@ impl ReviewUseCase {
             .collect())
     }
 
-    /// Every review of the actor's business, shown or waiting. A session is
-    /// enough: they are about the provider's own business.
-    pub async fn list_own_reviews(&self, actor: &Actor) -> Result<Vec<OwnReviewDto>> {
-        Ok(self
+    /// A page of the reviews of the actor's business, shown or waiting,
+    /// newest first. A session is enough: they are about the provider's own
+    /// business.
+    pub async fn list_own_reviews(
+        &self,
+        actor: &Actor,
+        page: i64,
+    ) -> Result<PagedResponse<OwnReviewDto>> {
+        let (page, offset) = paginate_public(page);
+        let rows = self
             .review_repo
-            .list_for_owner(actor.user_id)
-            .await?
-            .into_iter()
-            .map(OwnReviewDto::from)
-            .collect())
+            .list_for_owner(actor.user_id, PAGE_SIZE, offset)
+            .await?;
+        let total = total_or_count(offset, rows.len(), PAGE_SIZE, || async {
+            Ok(self.review_repo.count_for_owner(actor.user_id).await?.0)
+        })
+        .await?;
+        let items = rows.into_iter().map(OwnReviewDto::from).collect();
+        Ok(PagedResponse::public(items, total, page))
+    }
+
+    /// How many reviews the actor's business has, and how many of them wait
+    /// to be shown: the dashboard's link to them.
+    pub async fn count_own_reviews(&self, actor: &Actor) -> Result<(i64, i64)> {
+        self.review_repo.count_for_owner(actor.user_id).await
     }
 
     /// Answers a review of the actor's business publicly; a blank answer

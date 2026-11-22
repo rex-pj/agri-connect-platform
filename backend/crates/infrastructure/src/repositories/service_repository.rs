@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 use domain::{
     models::{
+        admin_list::AdminFilter,
         business::{ListingEditor, ProviderSort},
         service::{
             AdminService, NewService, ProviderService, PublicService, PublicServiceFilter,
@@ -23,6 +24,7 @@ use domain::{
 use domain::Error;
 
 use crate::{
+    admin_list::{admin_order, shown_state, OrderColumns},
     db_types::DateTimeWithTimeZone,
     entities::{
         business,
@@ -302,44 +304,42 @@ fn new_service_model(service: NewService) -> service::ActiveModel {
 impl ServiceRepositoryTrait for ServiceRepository {
     async fn list_admin(
         &self,
-        provider_id: Option<i32>,
-        search: Option<&str>,
+        filter: &AdminFilter,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<AdminService>, Error> {
-        let mut query = base_admin_service_query().filter(admin_service_search(search));
-        if let Some(bid) = provider_id {
-            query = query.filter(service::Column::BusinessId.eq(bid));
-        }
-        query
-            .order_by_desc(service::Column::CreatedOn)
-            .order_by_desc(service::Column::Id)
-            .limit(limit as u64)
-            .offset(offset as u64)
-            .into_model::<AdminServiceRow>()
-            .all(self.db.as_ref())
-            .await
-            .map(|rows| rows.into_iter().map(map_admin_row).collect())
-            .map_err(|e| {
-                error!("service list_admin error: {e}");
-                Error::internal("Failed to load services.")
-            })
+        let query = base_admin_service_query().filter(admin_condition(filter));
+        admin_order(
+            query,
+            filter.sort,
+            OrderColumns {
+                created: service::Column::CreatedOn,
+                name: service::Column::Name,
+                id: service::Column::Id,
+            },
+            |q| {
+                q.order_by_desc(service::Column::CreatedOn)
+                    .order_by_desc(service::Column::Id)
+            },
+        )
+        .limit(limit as u64)
+        .offset(offset as u64)
+        .into_model::<AdminServiceRow>()
+        .all(self.db.as_ref())
+        .await
+        .map(|rows| rows.into_iter().map(map_admin_row).collect())
+        .map_err(|e| {
+            error!("service list_admin error: {e}");
+            Error::internal("Failed to load services.")
+        })
     }
 
-    async fn count_admin(
-        &self,
-        provider_id: Option<i32>,
-        search: Option<&str>,
-    ) -> Result<i64, Error> {
-        let mut query = ServiceEntity::find()
+    async fn count_admin(&self, filter: &AdminFilter) -> Result<i64, Error> {
+        ServiceEntity::find()
             .join(JoinType::InnerJoin, service::Relation::Business.def())
             .filter(service::Column::DeletedAt.is_null())
             .filter(business::Column::DeletedAt.is_null())
-            .filter(admin_service_search(search));
-        if let Some(bid) = provider_id {
-            query = query.filter(service::Column::BusinessId.eq(bid));
-        }
-        query
+            .filter(admin_condition(filter))
             .count(self.db.as_ref())
             .await
             .map(|c| c as i64)
@@ -664,21 +664,21 @@ impl ServiceRepositoryTrait for ServiceRepository {
         radius: f64,
         category_id: Option<i32>,
         limit: i64,
+        offset: i64,
     ) -> Result<Vec<PublicService>, Error> {
         let distance = distance(business_location(), geography_from_text(point_wkt));
-        let within = within(business_location(), geography_from_text(point_wkt), radius);
-        let filter = PublicServiceFilter {
-            category_id,
-            sector: None,
-            text: None,
-        };
         // Nearest first, taking turns: each provider's first service before
         // anyone's second (a provider's services all share its distance).
-        let mut query = with_provider_turn(public_filtered(base_public_query(), &filter))
-            .expr_as(distance, QueryAs::DistanceM)
-            .filter(within)
-            .order_by(output(QueryAs::ProviderTurn), Order::Asc)
-            .limit(limit as u64);
+        let mut query = with_provider_turn(near_public(
+            base_public_query(),
+            point_wkt,
+            radius,
+            category_id,
+        ))
+        .expr_as(distance, QueryAs::DistanceM)
+        .order_by(output(QueryAs::ProviderTurn), Order::Asc)
+        .limit(limit as u64)
+        .offset(offset as u64);
         QueryTrait::query(&mut query).order_by_expr(output(QueryAs::DistanceM), Order::Asc);
         query
             .order_by_asc(service::Column::Id)
@@ -692,4 +692,73 @@ impl ServiceRepositoryTrait for ServiceRepository {
             })
             .map_err(|e| Error::internal(format!("service search_geo_public: {e}")))
     }
+
+    async fn count_geo_public(
+        &self,
+        point_wkt: &str,
+        radius: f64,
+        category_id: Option<i32>,
+    ) -> Result<i64, Error> {
+        near_public(
+            live_public(ServiceEntity::find()),
+            point_wkt,
+            radius,
+            category_id,
+        )
+        .count(self.db.as_ref())
+        .await
+        .map(|c| c as i64)
+        .map_err(|e| Error::internal(format!("service count_geo_public: {e}")))
+    }
+}
+
+/// A public query narrowed to the services within `radius` metres of
+/// `point_wkt` (`category_id`: of that category): what the geo search pages
+/// through and what its count counts, the one definition.
+fn near_public(
+    query: Select<ServiceEntity>,
+    point_wkt: &str,
+    radius: f64,
+    category_id: Option<i32>,
+) -> Select<ServiceEntity> {
+    let filter = PublicServiceFilter {
+        category_id,
+        sector: None,
+        text: None,
+    };
+    public_filtered(query, &filter).filter(within(
+        business_location(),
+        geography_from_text(point_wkt),
+        radius,
+    ))
+}
+
+/// The admin list's criteria, shared by the list and its count.
+fn admin_condition(filter: &AdminFilter) -> sea_orm::Condition {
+    admin_condition_base(filter).add(crate::admin_list::created_between(
+        (
+            crate::entities::service::Entity,
+            crate::entities::service::Column::CreatedOn,
+        ),
+        filter,
+    ))
+}
+
+fn admin_condition_base(filter: &AdminFilter) -> sea_orm::Condition {
+    let mut cond = sea_orm::Condition::all()
+        .add(admin_service_search(filter.search()))
+        .add(shown_state(service::Column::IsActive, filter.state));
+    if let Some(bid) = filter.provider_id {
+        cond = cond.add(service::Column::BusinessId.eq(bid));
+    }
+    if let Some(sector) = filter.sector.as_deref() {
+        cond = cond.add(crate::sql::category_in_sector(sector));
+    }
+    if filter.gap.as_deref() == Some("no_image") {
+        cond = cond.add(service::Column::ImageFileId.is_null());
+    }
+    if let Some(id) = filter.category_id {
+        cond = cond.add(service::Column::ServiceTypeId.eq(id));
+    }
+    cond
 }

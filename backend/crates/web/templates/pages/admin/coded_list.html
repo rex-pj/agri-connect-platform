@@ -1,4 +1,5 @@
 {% extends "layouts/admin.html" %}
+{% import "molecules/admin_search.html" as search %}
 {% import "molecules/form_field.html" as field %}
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/alert.html" as alerts %}
@@ -26,6 +27,7 @@
 {{ header::admin_header(title=w.title, icon=b.icon, sub=w.sub, action_href="#them-moi", action_icon="fa-plus", action_label=w.add, action_opens=true) }}
 <div class="admin-body">
   {% if b.tabs %}{{ tabs::admin_tabs(tabs=b.tabs, label=w.title) }}{% endif %}
+  {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.coded"), chips=b.states, chips_label=t(key="admin_state.label")) }}
   {% if b.flash_text %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=b.flash_text) }}{% endif %}
 
   <div class="admin-card">
@@ -54,7 +56,7 @@
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="5" class="text-center text-muted py-4">{{ w.none }}</td></tr>
+          <tr><td colspan="5" class="text-center text-muted py-4">{{ search::empty(s=b.search, none=w.none) }}</td></tr>
           {% endfor %}
         </tbody>
       </table>

@@ -3,7 +3,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 
 use crate::{
     error::Error,
-    models::demand::{BusinessArea, DemoScope, LeadCount, NewSearch, SearchCount, SoleCategory},
+    models::demand::{DemoScope, LeadCount, NewSearch, SearchCount, SoleCategory},
 };
 
 /// The reads behind the demand report: the leads and searches of a window,
@@ -20,9 +20,9 @@ pub trait DemandRepositoryTrait {
         scope: DemoScope,
     ) -> Result<Vec<LeadCount>, Error>;
 
-    /// Each positioned business's ward, as stored with its position;
-    /// businesses with none are absent; only the businesses in `scope`.
-    async fn business_areas(&self, scope: DemoScope) -> Result<Vec<BusinessArea>, Error>;
+    /// Whether a demo business (not deleted) is loaded: a report counting
+    /// demo data then says so.
+    async fn any_demo_business(&self) -> Result<bool, Error>;
 
     /// Businesses with exactly one live service, with its category.
     async fn sole_categories(&self) -> Result<Vec<SoleCategory>, Error>;

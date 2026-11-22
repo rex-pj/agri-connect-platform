@@ -1,3 +1,4 @@
+use crate::models::admin_list::AdminSort;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
@@ -129,6 +130,20 @@ pub struct AdminProductFilter {
     /// Those for one commodity.
     pub commodity_id: Option<i32>,
     pub search: Option<String>,
+    /// `shown` / `hidden` (`admin_list::LISTING_LIST_STATES`).
+    pub state: Option<&'static str>,
+    /// `None`: the newest first.
+    pub sort: Option<AdminSort>,
+    /// Those of one sector (`supply_in_sector`).
+    pub sector: Option<String>,
+    /// What a supply lacks: `no_image` or `no_price`.
+    pub gap: Option<String>,
+    /// The price between these, in đồng.
+    pub price_min: Option<i64>,
+    pub price_max: Option<i64>,
+    /// Made on or after / on or before this day (Vietnam time).
+    pub created_from: Option<chrono::NaiveDate>,
+    pub created_to: Option<chrono::NaiveDate>,
 }
 
 /// Public product search criteria; every field narrows the result.

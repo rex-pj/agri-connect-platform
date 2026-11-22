@@ -4,7 +4,7 @@
 {% import "atoms/status_badge.html" as status %}
 {% import "atoms/stars.html" as stars %}
 {% import "molecules/admin_header.html" as header %}
-{% import "molecules/admin_filter.html" as filter %}
+{% import "molecules/admin_search.html" as search %}
 {% import "molecules/pagination_nav.html" as paging %}
 {% import "molecules/row_action.html" as row %}
 {% import "organisms/confirm_sheet.html" as confirm %}
@@ -21,8 +21,8 @@
 <div class="admin-body" x-data="dialog" data-open="{% if b.confirm %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
   {% if b.flash == "review_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.review_hidden")) }}{% endif %}
   {% if b.flash == "review_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.review_shown")) }}{% endif %}
-  {% if b.filter %}{{ filter::admin_filter(f=b.filter) }}{% endif %}
-
+  {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.reviews"), chips=b.states, chips_label=t(key="admin_state.label")) }}
+  {{ search::admin_results(s=b.search, total=b.total) }}
   <div class="admin-card">
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0 admin-table admin-table--cards">
@@ -49,7 +49,7 @@
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="6" class="text-center text-muted py-4">{{ t(key="admin.no_reviews") }}</td></tr>
+          <tr><td colspan="6" class="text-center text-muted py-4">{{ search::empty(s=b.search, none=t(key="admin.no_reviews")) }}</td></tr>
           {% endfor %}
         </tbody>
       </table>

@@ -9,6 +9,10 @@ pub trait LocationRepositoryTrait {
 
     // ── Admin ─────────────────────────────────────────────────────────────────
     async fn list_all(&self) -> Result<Vec<Location>, Error>;
+    /// A page of every preset (hidden ones too), by display order then id.
+    async fn list_page(&self, limit: i64, offset: i64) -> Result<Vec<Location>, Error>;
+    /// How many presets there are, hidden ones too.
+    async fn count(&self) -> Result<i64, Error>;
     async fn find_by_id(&self, id: i32) -> Result<Option<Location>, Error>;
     async fn create(
         &self,

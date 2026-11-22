@@ -5,9 +5,11 @@
 {% import "atoms/status_badge.html" as status %}
 {% import "molecules/empty_state.html" as empty %}
 {% import "molecules/form_field.html" as field %}
+{% import "molecules/pagination_nav.html" as paging %}
 {#- The reviews of the provider's business, newest first, shown or waiting
-    for an admin. `page` is web::pages::own_reviews::ReviewsPage. Each card's
-    public answer is a small form (with `own.review.reply`); a blank answer
+    for an admin, a page at a time. `page` is
+    web::pages::own_reviews::ReviewsPage. Each card's public answer is a small
+    form (with `own.review.reply`) that returns to its page; a blank answer
     takes it down. -#}
 {% block title %}{{ t(key="review.title") }} — {{ site.name }}{% endblock title %}
 {% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
@@ -16,7 +18,7 @@
   <a class="acct-avatar text-decoration-none" href="{{ page.dashboard_href }}" aria-label="{{ t(key="dashboard.back") }}">{{ atoms::icon(name="fa-arrow-left") }}</a>
   <div>
     <h1 class="acct-name">{{ t(key="review.title") }}</h1>
-    <span class="acct-role">{{ t(key="review.own_counts", total=page.rows | length, waiting=page.waiting) }}</span>
+    <span class="acct-role">{{ t(key="review.own_counts", total=page.total, waiting=page.waiting) }}</span>
   </div>
 </header>
 
@@ -35,6 +37,7 @@
     <p class="small text-muted mb-2"><time datetime="{{ v.created_on | utc_iso }}">{{ v.created_on | vn_datetime }}</time>{% if not v.is_visible %} · {{ t(key="review.waiting") }}{% endif %}</p>
     {% if page.can_reply %}
     <form class="form-stack" method="post" action="{{ r.action }}#review-{{ v.id }}" novalidate>
+      {% if page.page_param %}<input type="hidden" name="page" value="{{ page.page_param }}">{% endif %}
       {% if r.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=r.errors.message) }}{% endif %}
       {{ field::textarea(id="reply-" ~ v.id, name="reply", label=t(key="review.your_reply"), value=r.reply, error=r.errors.fields.reply | default(value=""), placeholder=t(key="review.reply_placeholder"), maxlength=page.reply_max, rows=2) }}
       <button type="submit" class="btn btn-outline-success">{{ atoms::icon(name="fa-reply") }} {{ t(key="review.save_reply") }}</button>
@@ -48,5 +51,6 @@
     {{ empty::empty_state(icon="fa-star", title=t(key="review.none_own"), hint=t(key="review.none_own_hint")) }}
   </section>
   {% endfor %}
+  {% if page.pagination %}{{ paging::pagination_nav(p=page.pagination) }}{% endif %}
 </div>
 {% endblock main %}

@@ -20,6 +20,7 @@ use application::{
 use axum::{extract::State, http::StatusCode, response::Response};
 use domain::{
     constants::{CATEGORY_TYPES, CATEGORY_TYPE_SERVICE},
+    models::admin_list::LISTING_LIST_STATES,
     Error, ErrorCode,
 };
 use serde::{Deserialize, Serialize};
@@ -33,10 +34,10 @@ use crate::{
     pages::{
         admin::{
             catalogue_tabs, is_refusal, render_admin, url, AdminTab, CatalogueTab, ListPosition,
-            ListReturn, Outcome, RowConfirm, BACK_TO_LIST,
+            ListReturn, Outcome, RowConfirm, SearchBox, BACK_TO_LIST, CATALOGUE_SORTS,
         },
         forms::{reason, whole_number, FormErrors},
-        listing::{parse_opt, with_query},
+        listing::{parse_opt, past_the_end, with_query, Pagination},
         parse_id, see_other,
     },
 };
@@ -123,16 +124,19 @@ fn tab_type(text: &str) -> &'static str {
         .unwrap_or(CATEGORY_TYPE_SERVICE)
 }
 
-/// The list on the tab of `kind`.
-fn list_href(kind: &str) -> Result<String, Error> {
-    Ok(with_query(
-        &url("admin_categories", &[])?,
-        &[("type", kind)],
-    ))
+/// The list on the tab of `kind`, at the list page `page` (a number, else
+/// the first).
+fn list_href(kind: &str, position: &ListPosition) -> Result<String, Error> {
+    let query = position.query();
+    let mut params = vec![("type", kind)];
+    params.extend(query.iter().map(|(k, v)| (*k, v.as_str())));
+    Ok(with_query(&url("admin_categories", &[])?, &params))
 }
 
 #[derive(Serialize)]
 pub struct CategoriesPage {
+    /// How many types match, for the result bar.
+    pub total: i64,
     /// The tab shown and every tab.
     pub kind: &'static str,
     pub tabs: Vec<AdminTab>,
@@ -146,6 +150,10 @@ pub struct CategoriesPage {
     pub confirm: Option<RowConfirm>,
     /// The hidden fields of every row action: land back here.
     pub keep: ListReturn,
+    pub search: SearchBox,
+    /// The shown / hidden chips.
+    pub states: Vec<AdminTab>,
+    pub pagination: Option<Pagination>,
     pub flash: Option<Flash>,
 }
 
@@ -153,8 +161,16 @@ pub struct CategoriesPage {
 /// confirmation is open.
 struct ListView {
     kind: &'static str,
+    /// The list page shown (`?page=`).
+    page: String,
     form: CategoryForm,
     errors: FormErrors,
+    /// The words searched.
+    q: String,
+    sector: String,
+    state: String,
+    sort: String,
+    gap: String,
     hide: Option<i32>,
     flash: Option<Flash>,
     status: StatusCode,
@@ -163,16 +179,49 @@ struct ListView {
 async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Response, Error> {
     let ListView {
         kind,
+        page,
         form,
         errors,
         hide,
+        q,
+        sector,
+        state: chosen_state,
+        sort,
+        gap,
         flash,
         status,
     } = view;
-    let (all, sectors) = tokio::try_join!(
-        state.usecases.admin.list_categories(actor),
+    let asked = ListPosition {
+        page,
+        q,
+        sector,
+        state: chosen_state,
+        sort,
+        gap,
+        ..ListPosition::default()
+    }
+    .checked(LISTING_LIST_STATES, CATALOGUE_SORTS);
+    let criteria = asked.filter(LISTING_LIST_STATES);
+    let requested = asked.page();
+    let (categories, sectors) = tokio::try_join!(
+        state
+            .usecases
+            .admin
+            .list_categories_page(actor, kind, requested, &criteria),
         state.usecases.sector.named(),
     )?;
+    let path = url("admin_categories", &[])?;
+    let wanted = asked.query();
+    let mut tab = vec![("type", kind)];
+    tab.extend(
+        wanted
+            .iter()
+            .filter(|(k, _)| *k != "page")
+            .map(|(k, v)| (*k, v.as_str())),
+    );
+    if let Some(redirect) = past_the_end(&path, &tab, categories.page, categories.total_pages) {
+        return redirect;
+    }
     let tabs = catalogue_tabs(
         state,
         if kind == CATEGORY_TYPE_SERVICE {
@@ -181,14 +230,13 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
             CatalogueTab::SupplyTypes
         },
     )?;
-    let categories: Vec<AdminCategoryDto> = all
-        .into_iter()
-        .filter(|c| c.category_type == kind)
-        .collect();
-    let position = ListPosition::default();
+    let position = ListPosition {
+        page: categories.page.to_string(),
+        ..asked
+    };
     let mut confirm = None;
-    let mut rows = Vec::with_capacity(categories.len());
-    for category in categories {
+    let mut rows = Vec::with_capacity(categories.items.len());
+    for category in categories.items {
         let id = category.id.to_string();
         let status_action = url("admin_category_status", &[("id", &id)])?;
         if hide == Some(category.id) && category.is_active {
@@ -209,8 +257,32 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
             category,
         });
     }
-    let path = url("admin_categories", &[])?;
+    let locale = state.locale();
+    let search = position
+        .search_box_in("admin_categories", &[("type", kind)])?
+        .picked(
+            "sector",
+            locale.text("sector.label"),
+            locale.text("admin_pick.all_sectors"),
+            sectors
+                .iter()
+                .map(|s| (s.code.clone(), s.name.clone()))
+                .collect(),
+        )
+        .toggled("gap", "unused", locale.text("admin_toggle.unused"))
+        .sorted(
+            locale,
+            &position,
+            "admin_sort.display_order",
+            CATALOGUE_SORTS,
+        );
+    let states =
+        position.shared_state_chips(locale, "admin_categories", LISTING_LIST_STATES, None)?;
     let body = CategoriesPage {
+        search,
+        total: categories.total,
+        states,
+        pagination: Pagination::new(&path, &tab, categories.page, categories.total_pages),
         kind,
         tabs,
         limits: &LIMITS,
@@ -241,6 +313,13 @@ pub struct ListQuery {
     pub kind: String,
     /// The category whose hide confirmation is open.
     pub hide: String,
+    pub page: String,
+    /// The words searched, the sector, shown / hidden.
+    pub q: String,
+    pub sector: String,
+    pub state: String,
+    pub sort: String,
+    pub gap: String,
 }
 
 /// GET /admin/categories
@@ -262,6 +341,12 @@ pub async fn list(
         },
         errors: FormErrors::default(),
         hide: parse_opt(&q.hide),
+        page: q.page,
+        q: q.q,
+        sector: q.sector,
+        state: q.state,
+        sort: q.sort,
+        gap: q.gap,
         flash: flash.0,
         status: StatusCode::OK,
     };
@@ -293,9 +378,15 @@ pub async fn create(
         Err(err) if is_refusal(&err) => {
             let view = ListView {
                 kind: tab_type(&form.category_type),
+                page: String::new(),
                 errors: FormErrors::from_error(&state, &err),
                 form,
                 hide: None,
+                q: String::new(),
+                sector: String::new(),
+                state: String::new(),
+                sort: String::new(),
+                gap: String::new(),
                 flash: None,
                 status: err.kind().status(),
             };
@@ -357,7 +448,7 @@ async fn category_page(
     };
     let body = CategoryPage {
         listings_href,
-        list_href: list_href(&category.category_type)?,
+        list_href: list_href(&category.category_type, &ListPosition::default())?,
         limits: &LIMITS,
         sectors: sector_options(&sectors),
         form: form.unwrap_or_else(|| CategoryForm::from_dto(&category)),
@@ -442,6 +533,13 @@ pub struct StatusForm {
     pub reason: String,
     /// `list` when sent from the list's row: land back there.
     pub back: String,
+    /// The list page the row was on (`ListReturn`).
+    pub page: String,
+    pub q: String,
+    pub sector: String,
+    pub state: String,
+    pub sort: String,
+    pub gap: String,
 }
 
 /// POST /admin/categories/{id}/status
@@ -470,7 +568,18 @@ pub async fn change_status(
         Ok(_) if form.back == BACK_TO_LIST => {
             // Back to the list on the category's own tab.
             let category = state.usecases.admin.get_category_detail(&actor, id).await?;
-            let mut response = see_other(&list_href(&category.category_type)?)?;
+            let mut response = see_other(&list_href(
+                &category.category_type,
+                &ListPosition {
+                    page: form.page,
+                    q: form.q,
+                    sector: form.sector,
+                    state: form.state,
+                    sort: form.sort,
+                    gap: form.gap,
+                    ..ListPosition::default()
+                },
+            )?)?;
             flash.set_on(&mut response);
             Ok(response)
         }

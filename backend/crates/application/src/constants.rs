@@ -209,6 +209,9 @@ pub const CATEGORY_NAME_MAX: usize = 100;
 pub const CATEGORY_SLUG_MAX: usize = 100;
 /// Icon names an icon box's search gives back at once (`GET /api/admin/icons`).
 pub const ICON_SEARCH_RESULTS: usize = 60;
+/// Shops a contract's sponsor search lists at once (its page, `?q=`): the
+/// first by name, or those matching the words; an area can hold thousands.
+pub const SPONSOR_CANDIDATES_SHOWN: u64 = 20;
 pub const CATEGORY_COLOR_MAX: usize = 20;
 pub const CATEGORY_DESCRIPTION_MAX: usize = 300;
 /// Numbered slug candidates (`base`, `base-2`, …) checked per query while
@@ -258,5 +261,3 @@ pub const JOB_POSTS_OPEN_PER_PHONE_DEFAULT: i64 = 3;
 pub const JOB_NOTIFY_RADIUS_KM_DEFAULT: i64 = RADIUS_DEFAULT_M as i64 / METRES_PER_KM;
 /// At most this many providers (the nearest) are emailed about one job.
 pub const JOB_NOTIFY_MAX_DEFAULT: i64 = 20;
-/// At most this many posts on a provider's jobs page.
-pub const JOBS_SHOWN: i64 = 50;

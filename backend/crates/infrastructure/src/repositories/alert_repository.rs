@@ -6,8 +6,8 @@ use std::{collections::HashMap, sync::Arc};
 use async_trait::async_trait;
 use chrono::{NaiveDate, Utc};
 use sea_orm::{
-    sea_query::Expr, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait, QueryFilter,
-    QueryOrder, QuerySelect, Set,
+    sea_query::Expr, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set,
 };
 use tracing::error;
 
@@ -85,14 +85,24 @@ impl AlertRepository {
 
 #[async_trait]
 impl AlertRepositoryTrait for AlertRepository {
-    async fn list(&self) -> Result<Vec<Alert>, Error> {
+    async fn list(&self, limit: i64, offset: i64) -> Result<Vec<Alert>, Error> {
         let rows = AlertEntity::find()
             .order_by_desc(alert::Column::EndsOn)
             .order_by_desc(alert::Column::Id)
+            .limit(limit as u64)
+            .offset(offset as u64)
             .all(self.db.as_ref())
             .await
             .map_err(Self::fail("list"))?;
         self.named(rows).await
+    }
+
+    async fn count(&self) -> Result<i64, Error> {
+        AlertEntity::find()
+            .count(self.db.as_ref())
+            .await
+            .map(|c| c as i64)
+            .map_err(Self::fail("count"))
     }
 
     async fn find(&self, id: i32) -> Result<Option<Alert>, Error> {

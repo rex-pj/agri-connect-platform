@@ -45,3 +45,29 @@ pub struct NewCropPrice {
     pub price_high: i64,
     pub note: Option<String>,
 }
+
+/// Words searched in the price list: a price matches when its crop or its
+/// area is one of those whose name has them, or its note has them.
+#[derive(Debug, Clone)]
+pub struct PriceWords {
+    pub text: String,
+    pub crop_ids: Vec<i32>,
+    pub location_ids: Vec<i32>,
+}
+
+/// What the admin's price list is narrowed to; every one set narrows it.
+#[derive(Debug, Default, Clone)]
+pub struct PriceFilter {
+    pub crop_id: Option<i32>,
+    /// The words searched, with the crops and areas whose name has them.
+    pub words: Option<PriceWords>,
+    pub location_id: Option<i32>,
+    /// Observed on or after / on or before this day.
+    pub observed_from: Option<NaiveDate>,
+    pub observed_to: Option<NaiveDate>,
+    /// Only prices older than their commodity's freshness window: asked by
+    /// `stale`, worked out by the use case into `stale_groups` (crops with
+    /// the same window, and the day before which a price is stale).
+    pub stale: bool,
+    pub stale_groups: Vec<(Vec<i32>, NaiveDate)>,
+}

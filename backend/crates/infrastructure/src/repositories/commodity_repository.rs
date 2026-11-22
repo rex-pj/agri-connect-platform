@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use sea_orm::{
-    sea_query::Expr, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, QueryOrder,
-    Set,
+    sea_query::Expr, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, JoinType, PaginatorTrait,
+    QueryFilter, QueryOrder, QuerySelect, Select, Set,
 };
 use tracing::error;
 
@@ -17,7 +17,7 @@ use domain::{
 
 use crate::{
     entities::{commodity, sector},
-    repositories::{coded_repository::all_sectors, unique_or_internal},
+    repositories::unique_or_internal,
 };
 
 pub struct CommodityRepository {
@@ -50,33 +50,51 @@ fn to_commodity(c: commodity::Model) -> Commodity {
     }
 }
 
-/// Where a sector comes in the admin's order of the sectors.
-fn sector_rank(sectors: &[sector::Model], code: &str) -> usize {
-    sectors
-        .iter()
-        .position(|s| s.code == code)
-        .unwrap_or(sectors.len())
+/// Every commodity in the admin's order: by its sector's place among the
+/// sectors, then its own display order, name and id.
+fn ordered() -> Select<commodity::Entity> {
+    commodity::Entity::find()
+        .join(
+            JoinType::InnerJoin,
+            commodity::Entity::belongs_to(sector::Entity)
+                .from(commodity::Column::Sector)
+                .to(sector::Column::Code)
+                .into(),
+        )
+        .order_by_asc(sector::Column::DisplayOrder)
+        .order_by_asc(sector::Column::Name)
+        .order_by_asc(sector::Column::Id)
+        .order_by_asc(commodity::Column::DisplayOrder)
+        .order_by_asc(commodity::Column::Name)
+        .order_by_asc(commodity::Column::Id)
 }
 
 #[async_trait]
 impl CommodityRepositoryTrait for CommodityRepository {
     async fn list_all(&self) -> Result<Vec<Commodity>, Error> {
-        let mut all: Vec<Commodity> = commodity::Entity::find()
-            .order_by_asc(commodity::Column::DisplayOrder)
-            .order_by_asc(commodity::Column::Name)
-            .order_by_asc(commodity::Column::Id)
+        ordered()
             .all(self.db.as_ref())
             .await
-            .map_err(Self::fail("list"))?
-            .into_iter()
-            .map(to_commodity)
-            .collect();
-        // Stable: within a sector the database's order stays.
-        let sectors = all_sectors(self.db.as_ref())
+            .map(|rows| rows.into_iter().map(to_commodity).collect())
+            .map_err(Self::fail("list"))
+    }
+
+    async fn list_page(&self, limit: i64, offset: i64) -> Result<Vec<Commodity>, Error> {
+        ordered()
+            .limit(limit as u64)
+            .offset(offset as u64)
+            .all(self.db.as_ref())
             .await
-            .map_err(Self::fail("list"))?;
-        all.sort_by_key(|c| sector_rank(&sectors, &c.sector));
-        Ok(all)
+            .map(|rows| rows.into_iter().map(to_commodity).collect())
+            .map_err(Self::fail("list_page"))
+    }
+
+    async fn count(&self) -> Result<i64, Error> {
+        commodity::Entity::find()
+            .count(self.db.as_ref())
+            .await
+            .map(|c| c as i64)
+            .map_err(Self::fail("count"))
     }
 
     async fn find(&self, id: i32) -> Result<Option<Commodity>, Error> {

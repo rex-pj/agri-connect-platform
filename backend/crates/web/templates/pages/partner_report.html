@@ -2,11 +2,14 @@
 {% import "atoms/icon.html" as atoms %}
 {% import "organisms/demand_table.html" as demand %}
 {% import "organisms/unmet_searches.html" as unmet %}
+{% import "molecules/area_filter.html" as filter %}
+{% import "molecules/form_field.html" as field %}
 {#- A partner's own area: the demand report of the areas and categories its
     contracts in force cover, and those contracts. `page` is
-    web::pages::partner::PartnerPage. The area filter is a GET form; the CSV
-    is the same table. -#}
+    web::pages::partner::PartnerPage. The area filter is
+    molecules/area_filter.html; the CSV is the same table. -#}
 {% block title %}{{ t(key="partner_area.title") }} — {{ site.name }}{% endblock title %}
+{% block vendor %}{{ field::searchable_select_assets() }}{% endblock vendor %}
 {% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
 {% block main %}
 {% set o = page.own %}
@@ -22,17 +25,10 @@
 <div class="detail-body">
   <section class="detail-card">
     <p class="small text-muted">{{ t(key="demand.hint", min=r.min_count) }}</p>
-    <form class="d-flex flex-wrap gap-2 align-items-end mb-3" method="get" action="{{ page.action }}" x-data="autoSubmit" x-on:change="submit">
-      <div>
-        <label class="form-label small fw-semibold" for="partner-area">{{ t(key="demand.area") }}</label>
-        <select class="form-select" id="partner-area" name="area">
-          <option value="">{{ t(key="demand.all_areas") }}</option>
-          {% for a in page.areas %}<option value="{{ a.value }}"{% if a.value == page.area %} selected{% endif %}>{{ a.label }}</option>{% endfor %}
-        </select>
-      </div>
-      <button type="submit" class="btn btn-outline-success" x-show="withoutScript">{{ atoms::icon(name="fa-filter") }} {{ t(key="demand.apply") }}</button>
-      <a class="btn btn-outline-secondary" href="{{ page.csv_href }}">{{ atoms::icon(name="fa-file-arrow-down") }} {{ t(key="demand.download") }}</a>
-    </form>
+    <div class="d-flex flex-wrap gap-2 align-items-start justify-content-between mb-3">
+      {{ filter::area_filter(id="partner-area", action=page.action, areas=page.areas, value=page.area) }}
+      <a class="btn btn-outline-secondary area-filter__aside" href="{{ page.csv_href }}">{{ atoms::icon(name="fa-file-arrow-down") }} {{ t(key="demand.download") }}</a>
+    </div>
     {{ demand::demand_table(r=r, sectors=page.sectors) }}
   </section>
 

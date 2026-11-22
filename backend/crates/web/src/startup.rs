@@ -38,6 +38,7 @@ use application::{
         zalo_usecase::ZaloUseCase,
     },
 };
+use domain::models::catalogue::{DemoReport, DemoVolume};
 use infrastructure::{
     bcrypt_password_hasher::BcryptPasswordHasher,
     catalogue_repository::CatalogueRepository,
@@ -82,9 +83,10 @@ use crate::{
     app_state::{AppState, UseCases},
     constants::{
         DB_ACQUIRE_TIMEOUT_SECS, DB_MAX_CONNECTIONS, DB_STATEMENT_TIMEOUT_SECS, DEFAULT_APP_URL,
-        DEFAULT_BIND_ADDR, DEFAULT_UPLOAD_DIR, EVENT_ROLL_UP_EVERY_SECS, HEALTHCHECK_TIMEOUT_SECS,
-        RATE_LIMIT_PRUNE_EVERY_SECS, SESSION_PURGE_EVERY_SECS, SMTP_PORT_DEFAULT, ZALO_GRAPH_URL,
-        ZALO_TIMEOUT_SECS,
+        DEFAULT_BIND_ADDR, DEFAULT_UPLOAD_DIR, DEMO_VOLUME_PROVIDERS_DEFAULT,
+        DEMO_VOLUME_PROVIDERS_MAX, DEMO_VOLUME_SEED_DEFAULT, EVENT_ROLL_UP_EVERY_SECS,
+        HEALTHCHECK_TIMEOUT_SECS, RATE_LIMIT_PRUNE_EVERY_SECS, SESSION_PURGE_EVERY_SECS,
+        SMTP_PORT_DEFAULT, ZALO_GRAPH_URL, ZALO_TIMEOUT_SECS,
     },
     locale::{Lang, Locale, Locales},
     middleware::{origin::origin_of, rate_limit::Limiters},
@@ -114,6 +116,8 @@ pub enum StartupError {
     },
     #[error("server: {0}")]
     Serve(std::io::Error),
+    #[error("{0}")]
+    Usage(String),
 }
 
 fn required_env(name: &'static str) -> Result<String, StartupError> {
@@ -143,14 +147,42 @@ fn setup_token() -> Result<Option<String>, StartupError> {
     }
 }
 
-fn load_env_files() {
+fn load_env_files() -> Result<(), StartupError> {
     // `.env` first; otherwise the per-environment file. Real environment
-    // variables always win over both.
-    if dotenvy::dotenv().is_err() {
-        let env = optional_env("APP_ENV").unwrap_or_else(|| "dev".to_owned());
-        // A missing file is normal in production, where the env comes from
-        // the container; nothing to report.
-        let _ = dotenvy::from_filename(format!("environments/.env.{env}"));
+    // variables always win over both. A missing file is normal (production
+    // takes its env from the container); a file that does not parse is not:
+    // dotenvy stops at the bad line, so every setting after it would be
+    // silently left out.
+    match dotenvy::dotenv() {
+        Ok(_) => Ok(()),
+        Err(e) if e.not_found() => {
+            let env = optional_env("APP_ENV").unwrap_or_else(|| "dev".to_owned());
+            let file = format!("environments/.env.{env}");
+            match dotenvy::from_filename(&file) {
+                Err(e) if !e.not_found() => Err(env_file_error(&file, &e)),
+                _ => Ok(()),
+            }
+        }
+        Err(e) => Err(env_file_error(".env", &e)),
+    }
+}
+
+/// A settings file that does not parse. Never says the text dotenvy quotes
+/// back: it is the value from the bad spot on, which may be a secret. The
+/// usual cause is a value with spaces left unquoted
+/// (`SITE_NAME="Agri Connect"`).
+fn env_file_error(file: &str, e: &dotenvy::Error) -> StartupError {
+    let reason = match e {
+        dotenvy::Error::LineParse(..) => format!(
+            "{file} has a line that does not parse (a value with spaces must be quoted); \
+             every setting after it would be ignored"
+        ),
+        dotenvy::Error::Io(io) => format!("{file}: {io}"),
+        _ => format!("{file} could not be read"),
+    };
+    StartupError::InvalidEnv {
+        name: "env file",
+        reason,
     }
 }
 
@@ -567,7 +599,7 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
 
     let demand_repo = Arc::new(DemandRepository::new(Arc::clone(&db)));
     let demand = DemandReportUseCase::new(DemandDeps {
-        demand_repo: demand_repo.clone(),
+        demand_repo,
         category_repo: category_repo.clone(),
         location_repo: location_repo.clone(),
         admin_unit_repo: admin_unit_repo.clone(),
@@ -631,9 +663,8 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
             user_repo: user_repo.clone(),
             category_repo: category_repo.clone(),
             admin_unit_repo: admin_unit_repo.clone(),
-            demand_repo,
             demand: demand.clone(),
-            password_hasher,
+            password_hasher: password_hasher.clone(),
             settings: settings.clone(),
             events: events.clone(),
         }),
@@ -688,6 +719,7 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
             demo_repo,
             business_repo.clone(),
             user_repo.clone(),
+            password_hasher,
             media,
         ),
         settings: SettingsUseCase::new(setting_repo, events),
@@ -742,8 +774,12 @@ async fn shutdown_signal() {
     info!("shutdown signal received; draining in-flight requests");
 }
 
-pub async fn start() -> Result<(), StartupError> {
-    load_env_files();
+/// The environment read, the schema brought up to date, every use case
+/// wired, and the platform data (roles, permissions, provinces, wards) in
+/// place: what both the server and the command-line tasks start from. With
+/// it, `APP_URL`.
+async fn prepared_state() -> Result<(AppState, String), StartupError> {
+    load_env_files()?;
     init_tracing()?;
 
     let database_url = required_env("DATABASE_URL")?;
@@ -790,6 +826,11 @@ pub async fn start() -> Result<(), StartupError> {
     state.usecases.setup.seed_catalogue(&CATALOGUE).await?;
     // The demand report and partner areas place every point in a ward.
     state.usecases.setup.seed_admin_units().await?;
+    Ok((state, app_url))
+}
+
+pub async fn start() -> Result<(), StartupError> {
+    let (state, app_url) = prepared_state().await?;
 
     // A public server with no admin and an open setup form belongs to the
     // first stranger who finds it.
@@ -881,6 +922,63 @@ pub async fn start() -> Result<(), StartupError> {
     .map_err(StartupError::Serve)?;
     info!("shut down cleanly");
     Ok(())
+}
+
+/// What `agri-connect demo-data` was asked for: `--providers N` (default
+/// `DEMO_VOLUME_PROVIDERS_DEFAULT`, at most `DEMO_VOLUME_PROVIDERS_MAX`) and
+/// `--seed S` (default `DEMO_VOLUME_SEED_DEFAULT`).
+pub fn demo_volume(args: &[String]) -> Result<DemoVolume, StartupError> {
+    let mut volume = DemoVolume {
+        providers: DEMO_VOLUME_PROVIDERS_DEFAULT,
+        seed: DEMO_VOLUME_SEED_DEFAULT,
+    };
+    let mut args = args.iter();
+    while let Some(flag) = args.next() {
+        let value = args.next();
+        let bad = || StartupError::Usage(format!("{flag} needs a whole number"));
+        match flag.as_str() {
+            "--providers" => {
+                volume.providers = value
+                    .and_then(|v| v.parse().ok())
+                    .filter(|n| (1..=DEMO_VOLUME_PROVIDERS_MAX).contains(n))
+                    .ok_or_else(|| {
+                        StartupError::Usage(format!(
+                            "--providers takes 1 to {DEMO_VOLUME_PROVIDERS_MAX}"
+                        ))
+                    })?;
+            }
+            "--seed" => volume.seed = value.and_then(|v| v.parse().ok()).ok_or_else(bad)?,
+            other => {
+                return Err(StartupError::Usage(format!(
+                    "unknown option {other:?}; use --providers N and --seed S"
+                )))
+            }
+        }
+    }
+    Ok(volume)
+}
+
+/// `agri-connect demo-data [--providers N] [--seed S]`: loads the demo data
+/// at volume into `DATABASE_URL`, for trying the pages and timing the reads
+/// at a realistic size. Every demo account (providers', partners') signs in
+/// with `DEMO_ACCOUNT_PASSWORD`. Never in production: those accounts share
+/// one known password. Removed like the file's demo data, from
+/// `/setup/seed`.
+pub async fn demo_data(args: &[String]) -> Result<DemoReport, StartupError> {
+    let volume = demo_volume(args)?;
+    load_env_files()?;
+    if is_production() {
+        return Err(StartupError::Usage(
+            "the demo data at volume is never loaded with APP_ENV=prod".into(),
+        ));
+    }
+    let password = required_env("DEMO_ACCOUNT_PASSWORD")?;
+    let (state, _) = prepared_state().await?;
+    Ok(state
+        .usecases
+        .setup
+        .load_demo_volume(&volume, &password)
+        .await?)
 }
 
 /// `agri-connect healthcheck [live|ready]`: probes the running server on

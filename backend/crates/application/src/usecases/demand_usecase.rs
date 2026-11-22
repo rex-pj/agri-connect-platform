@@ -116,10 +116,10 @@ impl DemandReportUseCase {
     ) -> Result<DemandReportDto> {
         let weeks = report_weeks(now)?;
         let (from, to) = window(&weeks)?;
-        let (events, searches, areas, sole, categories, units, settings) = tokio::try_join!(
+        let (events, searches, any_demo, sole, categories, units, settings) = tokio::try_join!(
             self.demand_repo.lead_counts(from, to, scope.demo),
             self.demand_repo.search_counts(from, to, scope.demo),
-            self.demand_repo.business_areas(scope.demo),
+            self.demand_repo.any_demo_business(),
             self.demand_repo.sole_categories(),
             self.category_repo.list_admin(),
             AdminUnits::load(self.admin_unit_repo.as_ref()),
@@ -131,7 +131,7 @@ impl DemandReportUseCase {
             searches: &searches,
             sole: &sole,
             // Demo businesses are among those counted: the page says so.
-            with_demo: areas.iter().any(|a| a.is_demo),
+            with_demo: any_demo && scope.demo.only() != Some(false),
             categories,
             units: &units,
             scope,
@@ -517,7 +517,8 @@ fn category_rows(
     (rows, all_row, all)
 }
 
-const LEVEL_PROVINCE: &str = "province";
+/// `DemandAreaDto::level` of a province.
+pub const LEVEL_PROVINCE: &str = "province";
 const LEVEL_WARD: &str = "ward";
 const LEVEL_NONE: &str = "none";
 

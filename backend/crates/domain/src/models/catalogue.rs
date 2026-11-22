@@ -85,6 +85,8 @@ pub struct DemoCounts {
     pub partners: u64,
     pub contracts: u64,
     pub alerts: u64,
+    /// Provider and partner accounts of the demo data at volume.
+    pub accounts: u64,
 }
 
 impl DemoCounts {
@@ -103,10 +105,21 @@ impl DemoCounts {
             self.jobs,
             self.partners,
             self.alerts,
+            self.accounts,
         ]
         .iter()
         .any(|n| *n > 0)
     }
+}
+
+/// How much demo data `agri-connect demo-data` generates on top of the
+/// file's: `providers` providers, everything around them in proportion
+/// (services, supplies, accounts, contact requests, reviews, taps, prices,
+/// job posts, alerts, partners). The same `seed` gives the same rows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DemoVolume {
+    pub providers: u32,
+    pub seed: u64,
 }
 
 /// Platform data: what the platform runs on, never demo data and never

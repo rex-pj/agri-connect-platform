@@ -9,12 +9,16 @@ use sea_orm::{
     Condition, EntityTrait,
 };
 
-use crate::entities::{business, product, service, user};
+use crate::admin_list::{phone_contains, phone_digits};
+use crate::entities::{
+    business, crop_price, inquiry, job_post, partner, product, review, service, user,
+};
 
 /// A text column the searches match.
 #[derive(Clone, Copy, Debug)]
 pub enum SearchColumn {
     BusinessName,
+    BusinessAddress,
     BusinessDescription,
     ServiceName,
     ServiceDescription,
@@ -23,6 +27,15 @@ pub enum SearchColumn {
     UserUsername,
     UserFullName,
     UserEmail,
+    InquiryRequesterName,
+    ReviewReviewerName,
+    ReviewComment,
+    JobRequesterName,
+    JobDescription,
+    PartnerName,
+    PartnerContactName,
+    PartnerEmail,
+    PriceNote,
 }
 
 impl SearchColumn {
@@ -30,6 +43,9 @@ impl SearchColumn {
     pub fn column_ref(self) -> ColumnRef {
         match self {
             Self::BusinessName => (business::Entity, business::Column::Name).into_column_ref(),
+            Self::BusinessAddress => {
+                (business::Entity, business::Column::Address).into_column_ref()
+            }
             Self::BusinessDescription => {
                 (business::Entity, business::Column::Description).into_column_ref()
             }
@@ -44,6 +60,25 @@ impl SearchColumn {
             Self::UserUsername => (user::Entity, user::Column::Username).into_column_ref(),
             Self::UserFullName => (user::Entity, user::Column::FullName).into_column_ref(),
             Self::UserEmail => (user::Entity, user::Column::Email).into_column_ref(),
+            Self::InquiryRequesterName => {
+                (inquiry::Entity, inquiry::Column::RequesterName).into_column_ref()
+            }
+            Self::ReviewReviewerName => {
+                (review::Entity, review::Column::ReviewerName).into_column_ref()
+            }
+            Self::ReviewComment => (review::Entity, review::Column::Comment).into_column_ref(),
+            Self::JobRequesterName => {
+                (job_post::Entity, job_post::Column::RequesterName).into_column_ref()
+            }
+            Self::JobDescription => {
+                (job_post::Entity, job_post::Column::Description).into_column_ref()
+            }
+            Self::PartnerName => (partner::Entity, partner::Column::Name).into_column_ref(),
+            Self::PartnerContactName => {
+                (partner::Entity, partner::Column::ContactName).into_column_ref()
+            }
+            Self::PartnerEmail => (partner::Entity, partner::Column::Email).into_column_ref(),
+            Self::PriceNote => (crop_price::Entity, crop_price::Column::Note).into_column_ref(),
         }
     }
 }
@@ -58,7 +93,11 @@ pub const BUSINESS_SEARCH_COLUMNS: &[SearchColumn] = &[BusinessName, BusinessDes
 pub const SERVICE_SEARCH_COLUMNS: &[SearchColumn] = &[ServiceName, ServiceDescription];
 /// The provider's name alone: what a service or supply matches of the
 /// business behind it, and the admin's provider search.
+/// A price's own note: searched by the admin's price list.
+pub const PRICE_NOTE_SEARCH_COLUMNS: &[SearchColumn] = &[PriceNote];
 pub const BUSINESS_NAME_SEARCH_COLUMNS: &[SearchColumn] = &[BusinessName];
+/// A provider's address: what the admin list's area box matches.
+pub const BUSINESS_ADDRESS_SEARCH_COLUMNS: &[SearchColumn] = &[BusinessAddress];
 /// Searched by the product listing (/supplies, /search).
 pub const PRODUCT_SEARCH_COLUMNS: &[SearchColumn] = &[ProductName, ProductDescription];
 
@@ -68,6 +107,13 @@ pub const PRODUCT_SEARCH_COLUMNS: &[SearchColumn] = &[ProductName, ProductDescri
 const PRODUCT_NAME_SEARCH_COLUMNS: &[SearchColumn] = &[ProductName];
 const SERVICE_NAME_SEARCH_COLUMNS: &[SearchColumn] = &[ServiceName];
 pub const ADMIN_USER_SEARCH_COLUMNS: &[SearchColumn] = &[UserUsername, UserFullName, UserEmail];
+/// The admin queues' searches: who sent it and what it says (a contact
+/// request or a review also by its provider's name, `own_or_business_matches`).
+const ADMIN_INQUIRY_SEARCH_COLUMNS: &[SearchColumn] = &[InquiryRequesterName];
+const ADMIN_REVIEW_SEARCH_COLUMNS: &[SearchColumn] = &[ReviewReviewerName, ReviewComment];
+const ADMIN_JOB_SEARCH_COLUMNS: &[SearchColumn] = &[JobRequesterName, JobDescription];
+const ADMIN_PARTNER_SEARCH_COLUMNS: &[SearchColumn] =
+    &[PartnerName, PartnerContactName, PartnerEmail];
 
 /// Postgres' default LIKE escape character.
 const LIKE_ESCAPE: char = '\\';
@@ -170,6 +216,59 @@ pub fn admin_product_search(search: Option<&str>) -> Condition {
             product::Column::BusinessId,
             PRODUCT_NAME_SEARCH_COLUMNS,
             q,
+        )
+    })
+}
+
+/// The admin's contact-request search: a phone typed as digits finds the
+/// sender's phone, other words the sender's or the provider's name.
+pub fn admin_inquiry_search(search: Option<&str>) -> Condition {
+    typed(search).map_or_else(Condition::all, |q| {
+        phone_digits(q).map_or_else(
+            || {
+                own_or_business_matches::<inquiry::Entity>(
+                    inquiry::Column::Id,
+                    inquiry::Column::BusinessId,
+                    ADMIN_INQUIRY_SEARCH_COLUMNS,
+                    q,
+                )
+            },
+            |digits| phone_contains(inquiry::Column::RequesterPhone, &digits),
+        )
+    })
+}
+
+/// The admin's review search: the reviewer's name, the comment or the
+/// provider's name (the phone is kept only as a hash: never searched).
+pub fn admin_review_search(search: Option<&str>) -> Condition {
+    typed(search).map_or_else(Condition::all, |q| {
+        own_or_business_matches::<review::Entity>(
+            review::Column::Id,
+            review::Column::BusinessId,
+            ADMIN_REVIEW_SEARCH_COLUMNS,
+            q,
+        )
+    })
+}
+
+/// The admin's job-post search: a phone typed as digits, else the farmer's
+/// name or the description.
+pub fn admin_job_search(search: Option<&str>) -> Condition {
+    typed(search).map_or_else(Condition::all, |q| {
+        phone_digits(q).map_or_else(
+            || text_contains(ADMIN_JOB_SEARCH_COLUMNS, q),
+            |digits| phone_contains(job_post::Column::RequesterPhone, &digits),
+        )
+    })
+}
+
+/// The admin's partner search: a phone typed as digits, else the name, the
+/// contact's name or the email.
+pub fn admin_partner_search(search: Option<&str>) -> Condition {
+    typed(search).map_or_else(Condition::all, |q| {
+        phone_digits(q).map_or_else(
+            || text_contains(ADMIN_PARTNER_SEARCH_COLUMNS, q),
+            |digits| phone_contains(partner::Column::Phone, &digits),
         )
     })
 }

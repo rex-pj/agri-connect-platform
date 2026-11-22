@@ -1,7 +1,13 @@
 use application::authz::require_actor;
 use application::inputs::{CategoryInput, CreateProductInput, UpdateProductInput};
+use application::usecases::admin_usecase::AdminUseCase;
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
-use domain::Error;
+use domain::{
+    models::admin_list::{
+        LISTING_LIST_STATES, PROVIDER_LIST_STATES, REVIEW_LIST_STATES, SWITCH_LIST_STATES,
+    },
+    Error,
+};
 
 use crate::{
     app_state::AppState,
@@ -9,12 +15,12 @@ use crate::{
     labels::Worded,
     middleware::auth::MaybeActor,
     requests::{
-        AdminCreateProductRequest, AdminCreateServiceRequest, AdminListQuery, AdminPageQuery,
+        AdminCreateProductRequest, AdminCreateServiceRequest, AdminListQuery,
         AdminUpdateProductRequest, AdminUpdateServiceRequest, AssignUserRequest,
         CreateCategoryRequest, DeleteWithReasonBody, IconSearchQuery, LocationRequest,
-        SetVerificationRequest, SlugSuggestionQuery, StatusListQuery, ToggleActiveRequest,
-        ToggleVisibleRequest, UpdateCategoryRequest, UpdateInquiryStatusRequest,
-        UpdateProfileRequest, UpdateUserRoleRequest,
+        SetVerificationRequest, SlugSuggestionQuery, ToggleActiveRequest, ToggleVisibleRequest,
+        UpdateCategoryRequest, UpdateInquiryStatusRequest, UpdateProfileRequest,
+        UpdateUserRoleRequest,
     },
 };
 
@@ -36,13 +42,17 @@ impl AdminHandler {
     pub async fn list_providers(
         MaybeActor(actor): MaybeActor,
         State(state): State<AppState>,
-        ApiQuery(q): ApiQuery<AdminPageQuery>,
+        ApiQuery(q): ApiQuery<AdminListQuery>,
     ) -> Result<impl IntoResponse, Error> {
         let actor = require_actor(actor)?;
         let result = state
             .usecases
             .admin
-            .list_providers(&actor, q.page.unwrap_or(1), q.name.as_deref())
+            .list_providers(
+                &actor,
+                q.page.unwrap_or(1),
+                &q.filter_in(PROVIDER_LIST_STATES),
+            )
             .await?;
         Ok(Json(result))
     }
@@ -138,13 +148,17 @@ impl AdminHandler {
     pub async fn list_users(
         MaybeActor(actor): MaybeActor,
         State(state): State<AppState>,
-        ApiQuery(q): ApiQuery<AdminPageQuery>,
+        ApiQuery(q): ApiQuery<AdminListQuery>,
     ) -> Result<impl IntoResponse, Error> {
         let actor = require_actor(actor)?;
         let result = state
             .usecases
             .admin
-            .list_users(&actor, q.page.unwrap_or(1), q.name.as_deref())
+            .list_users(
+                &actor,
+                q.page.unwrap_or(1),
+                &q.filter_in(SWITCH_LIST_STATES),
+            )
             .await?;
         Ok(Json(result.worded(state.locale())))
     }
@@ -303,18 +317,14 @@ impl AdminHandler {
     pub async fn list_inquiries(
         MaybeActor(actor): MaybeActor,
         State(state): State<AppState>,
-        ApiQuery(q): ApiQuery<StatusListQuery>,
+        ApiQuery(q): ApiQuery<AdminListQuery>,
     ) -> Result<impl IntoResponse, Error> {
         let actor = require_actor(actor)?;
+        let status = AdminUseCase::inquiry_state(q.status.as_deref())?;
         let result = state
             .usecases
             .admin
-            .list_inquiries(
-                &actor,
-                q.page.unwrap_or(1),
-                q.provider_id,
-                q.status.as_deref(),
-            )
+            .list_inquiries(&actor, q.page.unwrap_or(1), &q.filter(status))
             .await?;
         Ok(Json(result))
     }
@@ -345,7 +355,11 @@ impl AdminHandler {
         let result = state
             .usecases
             .admin
-            .list_reviews(&actor, q.page.unwrap_or(1), q.provider_id)
+            .list_reviews(
+                &actor,
+                q.page.unwrap_or(1),
+                &q.filter_in(REVIEW_LIST_STATES),
+            )
             .await?;
         Ok(Json(result))
     }
@@ -470,7 +484,9 @@ impl AdminHandler {
                 q.page.unwrap_or(1),
                 &domain::models::product::AdminProductFilter {
                     provider_id: q.provider_id,
-                    search: q.name,
+                    search: q.name.clone(),
+                    state: q.filter_in(LISTING_LIST_STATES).state,
+                    sort: q.filter(None).sort,
                     ..Default::default()
                 },
             )
@@ -591,8 +607,7 @@ impl AdminHandler {
             .list_services_admin(
                 &actor,
                 q.page.unwrap_or(1),
-                q.provider_id,
-                q.name.as_deref(),
+                &q.filter_in(LISTING_LIST_STATES),
             )
             .await?;
         Ok(Json(result))

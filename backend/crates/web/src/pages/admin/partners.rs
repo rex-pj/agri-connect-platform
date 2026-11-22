@@ -1,28 +1,29 @@
 //! /admin/partners and /admin/partners/{id}: the partners (brands, dealers,
 //! cooperatives, exporters), what they bring in, and one partner's details,
-//! account, contracts and sponsored providers.
+//! account and contracts (each a short line to its own page:
+//! `contracts.rs`).
 //!
 //! The create form is a sheet on the list. On a partner's page, turning it
-//! off and deleting a contract ask for confirmation and a reason; turning it
-//! on is one button. A contract's categories are checkboxes (`cat.<id>`), so
-//! the form works without JS; its sponsored providers are chosen from those
-//! counting under its area.
+//! off asks for confirmation and a reason; turning it on is one button. A
+//! contract's categories are checkboxes (`cat.<id>`), so the form works
+//! without JS.
 
 use std::collections::HashMap;
 
 use application::{
     authz::Actor,
     inputs::{ContractInput, PartnerInput},
-    outputs::{
-        AreaGroupDto, CategoryDto, CodedDto, NamedDto, PartnerDetailDto, PartnerDto, PartnerKpiDto,
-        SponsorCandidateDto,
-    },
+    outputs::{AreaGroupDto, CategoryDto, CodedDto, ContractDto, PartnerDto, PartnerKpiDto},
     usecases::admin_usecase::HistoryOf,
 };
 use axum::{extract::State, http::StatusCode, response::Response};
 use chrono::NaiveDate;
 use domain::{
     constants::{CATEGORY_TYPE_PRODUCT, CATEGORY_TYPE_SERVICE, PARTNER_KINDS},
+    models::{
+        admin_list::{AdminSort, CONTRACT_LIST_STATES, SWITCH_LIST_STATES},
+        partner::ContractFilter,
+    },
     Error, ErrorCode,
 };
 use serde::{Deserialize, Serialize};
@@ -37,10 +38,11 @@ use crate::{
     pages::{
         admin::{
             chosen_tab, history_rows, is_refusal, record_tabs, render_admin, tab_href, to_tab, url,
-            user_href, AdminTab, Badge, Confirm, HistoryRow, Outcome, ReasonForm, RecordAction,
-            RecordHeader, Says, TabQuery, TabSpec, Toggle,
+            user_href, AdminTab, Badge, Confirm, HistoryRow, ListPosition, Outcome, RecordAction,
+            RecordHeader, Says, SearchBox, TabSpec, Toggle,
         },
         forms::{reason, FormErrors},
+        listing::{past_the_end, with_query, Pagination},
         parse_id, see_other,
     },
 };
@@ -95,7 +97,7 @@ pub struct ContractForm {
 
 impl ContractForm {
     /// A contract as stored, for its edit form.
-    fn from_dto(c: &application::outputs::ContractDto) -> Self {
+    pub(super) fn from_dto(c: &ContractDto) -> Self {
         Self {
             area: c.area.clone(),
             starts_on: c.starts_on.to_string(),
@@ -106,7 +108,7 @@ impl ContractForm {
         }
     }
 
-    fn from_map(form: &HashMap<String, String>) -> Self {
+    pub(super) fn from_map(form: &HashMap<String, String>) -> Self {
         let get = |k: &str| form.get(k).cloned().unwrap_or_default();
         let mut category_ids: Vec<i32> = form
             .keys()
@@ -124,7 +126,7 @@ impl ContractForm {
         }
     }
 
-    fn input(&self) -> ContractInput {
+    pub(super) fn input(&self) -> ContractInput {
         let date = |s: &str| NaiveDate::parse_from_str(s.trim(), "%Y-%m-%d").ok();
         // "2.000.000 đ" or "2,000,000": the digits are the amount.
         let digits: String = self
@@ -151,6 +153,20 @@ impl ContractForm {
 pub struct KindOption {
     pub label: String,
     pub value: &'static str,
+}
+
+/// The contract form's category boxes: what a lead is counted under,
+/// services and supplies (never a produce group of the price board), by
+/// sector.
+pub(super) async fn category_choices(state: &AppState) -> Result<Vec<CategoryOption>, Error> {
+    let explore = &state.usecases.explore;
+    let (mut categories, supplies, sectors) = tokio::try_join!(
+        explore.get_categories(Some(CATEGORY_TYPE_SERVICE)),
+        explore.get_categories(Some(CATEGORY_TYPE_PRODUCT)),
+        state.usecases.sector.named(),
+    )?;
+    categories.extend(supplies);
+    Ok(category_options(state.locale(), &sectors, categories))
 }
 
 /// The contract form's category boxes, by sector (in the order of
@@ -213,32 +229,103 @@ pub struct PartnerRow {
 pub struct PartnersPage {
     pub rows: Vec<PartnerRow>,
     pub kpis: PartnerKpiDto,
+    /// Each revenue area's demand report, by its value (`p82`, `w28439`).
+    pub demand_hrefs: HashMap<String, String>,
     pub kinds: Vec<KindOption>,
     pub create_action: String,
     pub form: PartnerForm,
     pub errors: FormErrors,
+    pub pagination: Option<Pagination>,
+    pub search: SearchBox,
+    /// The on / off chips.
+    pub states: Vec<AdminTab>,
+    /// How many partners the list shows (narrowed).
+    pub total: i64,
+}
+
+/// The orders the partner list offers besides its own (on first, by name).
+const PARTNER_SORTS: &[AdminSort] = &[AdminSort::Newest, AdminSort::Name];
+
+/// The demand report of each area the revenue figures name: what the
+/// partners pay for, next to what farmers there ask for.
+fn demand_hrefs(kpis: &PartnerKpiDto) -> Result<HashMap<String, String>, Error> {
+    let report = url("admin_demand", &[])?;
+    Ok(kpis
+        .provinces
+        .iter()
+        .flat_map(|p| p.areas.iter())
+        .map(|a| (a.area.clone(), with_query(&report, &[("area", &a.area)])))
+        .collect())
 }
 
 async fn list_page(
     state: &AppState,
     actor: &Actor,
+    position: ListPosition,
     typed: Option<(PartnerForm, FormErrors)>,
     status: StatusCode,
 ) -> Result<Response, Error> {
+    let position = position.checked(SWITCH_LIST_STATES, PARTNER_SORTS);
     let partners = &state.usecases.partner;
-    let (list, kpis) = tokio::try_join!(partners.list_partners(actor), partners.kpis(actor))?;
-    let mut rows = Vec::with_capacity(list.len());
-    for partner in list {
+    let filter = position.filter(SWITCH_LIST_STATES);
+    let (list, kpis) = tokio::try_join!(
+        partners.list_partners(actor, position.page(), &filter),
+        partners.kpis(actor)
+    )?;
+    let path = url("admin_partners", &[])?;
+    let mut kept = position.query();
+    kept.retain(|(k, _)| *k != "page");
+    let kept: Vec<(&str, &str)> = kept.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    if let Some(redirect) = past_the_end(&path, &kept, list.page, list.total_pages) {
+        return redirect;
+    }
+    let mut rows = Vec::with_capacity(list.items.len());
+    for partner in list.items {
         rows.push(PartnerRow {
             href: url("admin_partner", &[("id", &partner.id.to_string())])?,
             kind_label: kind_label(state.locale(), &partner.kind),
             partner,
         });
     }
-    let path = url("admin_partners", &[])?;
     let (form, errors) = typed.unwrap_or_default();
     let body = PartnersPage {
+        pagination: position.pagination(&path, list.page, list.total_pages),
+        search: position
+            .search_box("admin_partners")?
+            .picked(
+                "contract",
+                state.locale().text("admin_pick.contract"),
+                state.locale().text("admin_pick.all_contracts"),
+                ["in_force", "expiring", "ended", "none"]
+                    .into_iter()
+                    .map(|c| (c, state.locale().text(&format!("admin_pick.contract_{c}"))))
+                    .collect(),
+            )
+            .picked(
+                "kind",
+                state.locale().text("admin_pick.partner_kind"),
+                state.locale().text("admin_pick.all_partner_kinds"),
+                PARTNER_KINDS
+                    .iter()
+                    .map(|k| (*k, kind_label(state.locale(), k)))
+                    .collect(),
+            )
+            .dated(state.locale())
+            .sorted(
+                state.locale(),
+                &position,
+                "admin_sort.on_first",
+                PARTNER_SORTS,
+            ),
+        states: position.shared_state_chips(
+            state.locale(),
+            "admin_partners",
+            SWITCH_LIST_STATES,
+            None,
+        )?,
+        total: list.total,
         rows,
+        demand_hrefs: demand_hrefs(&kpis)?,
         kpis,
         kinds: kinds(state.locale()),
         create_action: path.clone(),
@@ -255,15 +342,16 @@ async fn list_page(
     )
 }
 
-/// GET /admin/partners
+/// GET /admin/partners (`?page=`)
 pub async fn list(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
+    ApiQuery(position): ApiQuery<ListPosition>,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
-    list_page(&state, &actor, None, StatusCode::OK).await
+    list_page(&state, &actor, position, None, StatusCode::OK).await
 }
 
 /// POST /admin/partners
@@ -284,7 +372,8 @@ pub async fn create(
         Ok(id) => redirect_to(id, Flash::PartnerCreated),
         Err(err) if is_refusal(&err) => {
             let typed = (form, FormErrors::from_error(&state, &err));
-            list_page(&state, &actor, Some(typed), err.kind().status()).await
+            let position = ListPosition::default();
+            list_page(&state, &actor, position, Some(typed), err.kind().status()).await
         }
         Err(err) => Err(err),
     }
@@ -305,30 +394,14 @@ pub enum Typed {
     Profile(PartnerForm),
     Account(AccountForm),
     Contract(ContractForm),
-    /// The edit form of the contract with this id.
-    ContractEdit(i32, ContractForm),
 }
 
-#[derive(Serialize)]
-pub struct SponsoredRow {
-    pub provider: NamedDto,
-    pub remove_action: String,
-}
-
-/// One contract on the page: its edit form (open again after a refusal),
-/// its actions and the providers it may sponsor.
+/// One contract on the partner's page: a short line leading to its own
+/// page (`contracts::show`), where it is edited and its shops sponsored.
 #[derive(Serialize)]
 pub struct ContractRow {
-    pub contract: application::outputs::ContractDto,
-    pub edit_action: String,
-    pub form: ContractForm,
-    pub errors: FormErrors,
-    pub edit_open: bool,
-    pub delete_action: String,
-    pub sponsor_action: String,
-    pub candidates: Vec<SponsorCandidateDto>,
-    /// Its sponsored providers, each with its "remove" action.
-    pub sponsored: Vec<SponsoredRow>,
+    pub contract: ContractDto,
+    pub href: String,
 }
 
 #[derive(Serialize)]
@@ -471,7 +544,13 @@ pub struct PartnerPage {
     pub kind_label: String,
     /// The one-time message after a change, worded.
     pub flash_text: Option<String>,
+    /// A page of its contracts, newest start first, and the links to the
+    /// others.
     pub contracts: Vec<ContractRow>,
+    /// The contracts' toolbar and its state chips (contracts part only).
+    pub contract_search: SearchBox,
+    pub contract_states: Vec<AdminTab>,
+    pub pagination: Option<Pagination>,
     pub kinds: Vec<KindOption>,
     /// Each province (the whole of it), with its wards.
     pub areas: Vec<AreaGroupDto>,
@@ -493,22 +572,108 @@ async fn partner_page(
     state: &AppState,
     actor: &Actor,
     id: i32,
-    tab: &'static str,
+    (tab, asked): (&'static str, ListPosition),
     outcome: Outcome<Typed>,
 ) -> Result<Response, Error> {
     let partners = &state.usecases.partner;
-    let PartnerDetailDto { partner, contracts } = partners.get_partner(actor, id).await?;
-    // What a lead is counted under: services and supplies, never a produce
-    // group of the price board.
-    let explore = &state.usecases.explore;
-    let (areas, mut categories, supplies, sectors) = tokio::try_join!(
-        partners.area_choices(actor),
-        explore.get_categories(Some(CATEGORY_TYPE_SERVICE)),
-        explore.get_categories(Some(CATEGORY_TYPE_PRODUCT)),
-        state.usecases.sector.named(),
+    // A refused form is shown on its part of the page.
+    let tab = match &outcome.form {
+        Some(Typed::Profile(_)) => TAB_PROFILE,
+        Some(Typed::Contract(_)) => TAB_CONTRACTS,
+        _ => tab,
+    };
+    // The add form's choices (every ward, every category) only where it is.
+    let on_contracts = tab == TAB_CONTRACTS;
+    let asked = if on_contracts {
+        asked.checked(CONTRACT_LIST_STATES, &[])
+    } else {
+        ListPosition::default()
+    };
+    let criteria = ContractFilter {
+        state: asked.state_in(CONTRACT_LIST_STATES),
+        area: asked.param("area"),
+        fee_min: asked.fee(&asked.fee_min),
+        fee_max: asked.fee(&asked.fee_max),
+        start_from: ListPosition::day(&asked.start_from),
+        start_to: ListPosition::day(&asked.start_to),
+        end_from: ListPosition::day(&asked.end_from),
+        end_to: ListPosition::day(&asked.end_to),
+        category_id: asked.category_id(),
+    };
+    let (partner, contracts, areas, categories, contract_areas) = tokio::try_join!(
+        partners.partner(actor, id),
+        partners.partner_contracts(actor, id, asked.page(), &criteria),
+        async {
+            if on_contracts {
+                partners.area_choices(actor).await
+            } else {
+                Ok(Vec::new())
+            }
+        },
+        async {
+            if on_contracts {
+                category_choices(state).await
+            } else {
+                Ok(Vec::new())
+            }
+        },
+        async {
+            if on_contracts {
+                partners.contract_areas(actor, id).await
+            } else {
+                Ok(Vec::new())
+            }
+        },
     )?;
-    categories.extend(supplies);
     let id_text = id.to_string();
+    let path = url("admin_partner", &[("id", &id_text)])?;
+    let position = ListPosition {
+        tab: TAB_CONTRACTS.to_owned(),
+        ..asked
+    };
+    if on_contracts {
+        let wanted_query = position.query();
+        let params: Vec<(&str, &str)> = wanted_query
+            .iter()
+            .filter(|(k, _)| *k != "page")
+            .map(|(k, v)| (*k, v.as_str()))
+            .collect();
+        if let Some(redirect) = past_the_end(&path, &params, contracts.page, contracts.total_pages)
+        {
+            return redirect;
+        }
+    }
+    let locale = state.locale();
+    let contract_search = position
+        .search_box_at(&path, &[])?
+        .without_words()
+        .picked(
+            "area",
+            locale.text("partner.contract_area"),
+            locale.text("partner.all_areas"),
+            contract_areas
+                .into_iter()
+                .map(|a| (a.code, a.name))
+                .collect(),
+        )
+        .ranged(
+            ("fee_min", "fee_max"),
+            locale.text("partner.contract_fee"),
+            (
+                locale.text("admin_search.from"),
+                locale.text("admin_search.to"),
+            ),
+        );
+    let contract_states = position.state_chips_at(
+        &path,
+        CONTRACT_LIST_STATES,
+        locale.text("filters.all"),
+        |s| locale.text(&format!("contract_state.{s}")),
+        None,
+    )?;
+    let pagination = position.pagination(&path, contracts.page, contracts.total_pages);
+    let contract_count = usize::try_from(contracts.total).unwrap_or_default();
+    let contracts = contracts.items;
     // The messages go with the form that was refused.
     let refused = |typed: bool| {
         if typed {
@@ -520,66 +685,28 @@ async fn partner_page(
             FormErrors::default()
         }
     };
-    let (mut profile, mut account, mut contract, mut edited) = (None, None, None, None);
+    let (mut profile, mut account, mut contract) = (None, None, None);
     match outcome.form {
         Some(Typed::Profile(f)) => profile = Some(f),
         Some(Typed::Account(f)) => account = Some(f),
         Some(Typed::Contract(f)) => contract = Some(f),
-        Some(Typed::ContractEdit(cid, f)) => edited = Some((cid, f)),
         None => {}
     }
     let mut rows = Vec::with_capacity(contracts.len());
     for contract in contracts {
-        let (form, edit_open) = match edited.take_if(|(cid, _)| *cid == contract.id) {
-            Some((_, f)) => (f, true),
-            None => (ContractForm::from_dto(&contract), false),
-        };
-        let cid = contract.id.to_string();
-        let mut sponsored = Vec::with_capacity(contract.sponsored.len());
-        for s in &contract.sponsored {
-            let action = url(
-                "admin_partner_sponsored_remove",
-                &[("id", &id_text), ("cid", &cid), ("bid", &s.id.to_string())],
-            )?;
-            sponsored.push(SponsoredRow {
-                provider: s.clone(),
-                remove_action: action,
-            });
-        }
         rows.push(ContractRow {
-            edit_action: url("admin_partner_contract", &[("id", &id_text), ("cid", &cid)])?,
-            errors: refused(edit_open),
-            edit_open,
-            form,
-            candidates: partners.sponsor_candidates(actor, id, contract.id).await?,
-            delete_action: url(
-                "admin_partner_contract_delete",
-                &[("id", &id_text), ("cid", &cid)],
+            href: url(
+                "admin_partner_contract",
+                &[("id", &id_text), ("cid", &contract.id.to_string())],
             )?,
-            sponsor_action: url(
-                "admin_partner_sponsored",
-                &[("id", &id_text), ("cid", &cid)],
-            )?,
-            sponsored,
             contract,
         });
     }
-    let any_edit = rows.iter().any(|r| r.edit_open);
-    let refused_form = profile.is_some() || account.is_some() || contract.is_some() || any_edit;
-    let path = url("admin_partner", &[("id", &id_text)])?;
-    // A refused form is shown on its part of the page.
-    let tab = if profile.is_some() {
-        TAB_PROFILE
-    } else if contract.is_some() || any_edit {
-        TAB_CONTRACTS
-    } else {
-        tab
-    };
+    let refused_form = profile.is_some() || account.is_some() || contract.is_some();
     let contracts_href = tab_href(&path, &PARTNER_TABS, TAB_CONTRACTS);
     let (header, confirms) = partner_controls(state, &partner, &contracts_href)?;
-    let count = rows.len();
     let tabs = record_tabs(state, &path, &PARTNER_TABS, tab, |code| {
-        (code == TAB_CONTRACTS).then_some(count)
+        (code == TAB_CONTRACTS).then_some(contract_count)
     });
     let account_label = state.locale().text(if partner.account_username.is_some() {
         "admin.change_account"
@@ -612,9 +739,12 @@ async fn partner_page(
         }),
         partner,
         contracts: rows,
+        pagination,
+        contract_search,
+        contract_states,
         kinds: kinds(state.locale()),
         areas,
-        categories: category_options(state.locale(), &sectors, categories),
+        categories,
         profile_action: tab_href(&path, &PARTNER_TABS, TAB_PROFILE),
         account_action: url("admin_partner_account", &[("id", &id_text)])?,
         contract_action: url("admin_partner_contracts", &[("id", &id_text)])?,
@@ -630,7 +760,13 @@ async fn partner_page(
 }
 
 /// 303 to the partner's page, on the part the change belongs to.
-fn redirect_to(id: i32, flash: Flash) -> Result<Response, Error> {
+/// The partner's contracts: where a contract's page leads back to.
+pub(super) fn contracts_href(id: i32) -> Result<String, Error> {
+    let page = url("admin_partner", &[("id", &id.to_string())])?;
+    Ok(tab_href(&page, &PARTNER_TABS, TAB_CONTRACTS))
+}
+
+pub(super) fn redirect_to(id: i32, flash: Flash) -> Result<Response, Error> {
     let page = url("admin_partner", &[("id", &id.to_string())])?;
     to_tab(&page, &PARTNER_TABS, tab_after(flash), flash)
 }
@@ -649,19 +785,26 @@ async fn after(
         Ok(()) => redirect_to(id, flash),
         Err(err) if is_refusal(&err) => {
             let outcome = Outcome::refused(state, &err, typed, false);
-            partner_page(state, actor, id, TAB_OVERVIEW, outcome).await
+            partner_page(
+                state,
+                actor,
+                id,
+                (TAB_OVERVIEW, ListPosition::default()),
+                outcome,
+            )
+            .await
         }
         Err(err) => Err(err),
     }
 }
 
-/// GET /admin/partners/{id}
+/// GET /admin/partners/{id} (`?tab=`, the contracts' `?page=`)
 pub async fn show(
     Viewer(viewer): Viewer,
     flash: TakeFlash,
     State(state): State<AppState>,
     ApiPath(raw_id): ApiPath<String>,
-    ApiQuery(q): ApiQuery<TabQuery>,
+    ApiQuery(q): ApiQuery<ListPosition>,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
@@ -672,7 +815,7 @@ pub async fn show(
         ..Outcome::default()
     };
     let tab = chosen_tab(&PARTNER_TABS, &q.tab);
-    let mut response = partner_page(&state, &actor, id, tab, outcome).await?;
+    let mut response = partner_page(&state, &actor, id, (tab, q), outcome).await?;
     flash.clear_on(&mut response);
     Ok(response)
 }
@@ -798,103 +941,6 @@ pub async fn create_contract(
         Some(Typed::Contract(form)),
     )
     .await
-}
-
-/// POST /admin/partners/{id}/contracts/{cid}: the contract's edit form.
-pub async fn update_contract(
-    Viewer(viewer): Viewer,
-    State(state): State<AppState>,
-    ApiPath((raw_id, raw_cid)): ApiPath<(String, String)>,
-    ApiForm(raw): ApiForm<HashMap<String, String>>,
-) -> Result<Response, Error> {
-    let Some(actor) = viewer else {
-        return see_other(&url("login", &[])?);
-    };
-    let id = parse_id(&raw_id, ErrorCode::PartnerNotFound)?;
-    let cid = parse_id(&raw_cid, ErrorCode::ContractNotFound)?;
-    let form = ContractForm::from_map(&raw);
-    let result = state
-        .usecases
-        .partner
-        .update_contract(&actor, id, cid, form.input())
-        .await;
-    after(
-        &state,
-        &actor,
-        id,
-        result,
-        Flash::ContractSaved,
-        Some(Typed::ContractEdit(cid, form)),
-    )
-    .await
-}
-
-/// POST /admin/partners/{id}/contracts/{cid}/delete
-pub async fn delete_contract(
-    Viewer(viewer): Viewer,
-    State(state): State<AppState>,
-    ApiPath((raw_id, raw_cid)): ApiPath<(String, String)>,
-    ApiForm(form): ApiForm<ReasonForm>,
-) -> Result<Response, Error> {
-    let Some(actor) = viewer else {
-        return see_other(&url("login", &[])?);
-    };
-    let id = parse_id(&raw_id, ErrorCode::PartnerNotFound)?;
-    let cid = parse_id(&raw_cid, ErrorCode::ContractNotFound)?;
-    let result = state
-        .usecases
-        .partner
-        .delete_contract(&actor, id, cid, reason(&form.reason))
-        .await;
-    after(&state, &actor, id, result, Flash::ContractDeleted, None).await
-}
-
-#[derive(Debug, Default, Deserialize)]
-#[serde(default)]
-pub struct SponsorForm {
-    pub business_id: String,
-}
-
-/// POST /admin/partners/{id}/contracts/{cid}/sponsored
-pub async fn add_sponsored(
-    Viewer(viewer): Viewer,
-    State(state): State<AppState>,
-    ApiPath((raw_id, raw_cid)): ApiPath<(String, String)>,
-    ApiForm(form): ApiForm<SponsorForm>,
-) -> Result<Response, Error> {
-    let Some(actor) = viewer else {
-        return see_other(&url("login", &[])?);
-    };
-    let id = parse_id(&raw_id, ErrorCode::PartnerNotFound)?;
-    let cid = parse_id(&raw_cid, ErrorCode::ContractNotFound)?;
-    let business = parse_id(&form.business_id, ErrorCode::ProviderNotFound)?;
-    let result = state
-        .usecases
-        .partner
-        .add_sponsored(&actor, id, cid, business)
-        .await;
-    after(&state, &actor, id, result, Flash::SponsoredAdded, None).await
-}
-
-/// POST /admin/partners/{id}/contracts/{cid}/sponsored/{bid}/delete
-pub async fn remove_sponsored(
-    Viewer(viewer): Viewer,
-    State(state): State<AppState>,
-    ApiPath((raw_id, raw_cid, raw_bid)): ApiPath<(String, String, String)>,
-    ApiForm(form): ApiForm<ReasonForm>,
-) -> Result<Response, Error> {
-    let Some(actor) = viewer else {
-        return see_other(&url("login", &[])?);
-    };
-    let id = parse_id(&raw_id, ErrorCode::PartnerNotFound)?;
-    let cid = parse_id(&raw_cid, ErrorCode::ContractNotFound)?;
-    let bid = parse_id(&raw_bid, ErrorCode::ProviderNotFound)?;
-    let result = state
-        .usecases
-        .partner
-        .remove_sponsored(&actor, id, cid, bid, reason(&form.reason))
-        .await;
-    after(&state, &actor, id, result, Flash::SponsoredRemoved, None).await
 }
 
 #[cfg(test)]

@@ -16,6 +16,14 @@
 {% if on %}<span class="badge text-bg-success"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> {{ t(key="status.verified") }}</span>{% else %}<span class="badge text-bg-secondary">{{ t(key="status.unverified") }}</span>{% endif %}
 {%- endmacro verified %}
 
+{% macro alert(state) -%}
+{% if state == "live" %}<span class="badge text-bg-success">{{ t(key="alert_state.live") }}</span>{% elif state == "upcoming" %}<span class="badge text-bg-info">{{ t(key="alert_state.upcoming") }}</span>{% else %}<span class="badge text-bg-secondary">{% if state == "ended" %}{{ t(key="alert_state.ended") }}{% else %}{{ t(key="alert_state.off") }}{% endif %}</span>{% endif %}
+{%- endmacro alert %}
+
+{% macro contract(state) -%}
+<span class="badge {% if state == "in_force" %}text-bg-success{% elif state == "upcoming" %}text-bg-info{% else %}text-bg-secondary{% endif %}">{% if state == "in_force" %}{{ t(key="contract_state.in_force") }}{% elif state == "upcoming" %}{{ t(key="contract_state.upcoming") }}{% elif state == "ended" %}{{ t(key="contract_state.ended") }}{% else %}{{ t(key="contract_state.paused") }}{% endif %}</span>
+{%- endmacro contract %}
+
 {% macro demo() -%}
 <span class="badge rounded-pill border text-body-secondary bg-body"><i class="fa-solid fa-flask" aria-hidden="true"></i> {{ t(key="status.demo") }}</span>
 {%- endmacro demo %}

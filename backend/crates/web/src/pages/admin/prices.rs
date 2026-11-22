@@ -17,7 +17,7 @@ use application::{
 };
 use axum::{extract::State, http::StatusCode, response::Response};
 use chrono::{NaiveDate, Utc};
-use domain::{Error, ErrorCode};
+use domain::{models::price::PriceFilter, Error, ErrorCode};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -28,7 +28,7 @@ use crate::{
     pages::{
         admin::{
             crops, is_refusal, render_admin, url, AdminTab, Asked, ListPosition, ProviderFilter,
-            RowConfirm,
+            RowConfirm, SearchBox,
         },
         forms::{reason, vnd_amount, FormErrors},
         listing::{parse_opt, Pagination},
@@ -90,10 +90,23 @@ pub struct ListQuery {
     pub delete: String,
     /// Only this crop's prices.
     pub crop_id: String,
+    /// Only this area's prices.
+    pub location_id: String,
     /// `crops`: the second tab, the produce followed.
     pub tab: String,
     /// The crop whose hide confirmation is open (crops tab).
     pub hide: String,
+    /// The words searched (crops tab).
+    pub q: String,
+    /// One commodity, shown / hidden (crops tab).
+    pub commodity_id: String,
+    pub state: String,
+    pub sort: String,
+    /// The days observed between (prices tab).
+    pub from: String,
+    pub to: String,
+    /// `stale`: only the prices past their freshness window (prices tab).
+    pub gap: String,
 }
 
 /// The value of `?tab=` for the produce followed.
@@ -136,6 +149,8 @@ pub struct PricesPage {
     pub tabs: Vec<AdminTab>,
     /// The crop the list is narrowed to, and the way back to every price.
     pub filter: Option<ProviderFilter>,
+    /// The area select.
+    pub search: SearchBox,
     pub total: i64,
     pub rows: Vec<PriceRow>,
     pub pagination: Option<Pagination>,
@@ -166,8 +181,21 @@ struct ListView {
 
 async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Response, Error> {
     let prices = &state.usecases.price;
+    let criteria = PriceFilter {
+        crop_id: crop_filter(&view.position),
+        location_id: view.position.location_id(),
+        observed_from: view.position.created_from(),
+        observed_to: view.position.created_to(),
+        stale: view.position.gap() == Some("stale"),
+        ..PriceFilter::default()
+    };
     let (listed, choices) = tokio::try_join!(
-        prices.list_prices(actor, crop_filter(&view.position), view.position.page()),
+        prices.list_prices_in(
+            actor,
+            view.position.page(),
+            &criteria,
+            view.position.search()
+        ),
         prices.price_choices(actor),
     )?;
     let AdminPagedResponse {
@@ -213,9 +241,28 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
         }),
         None => None,
     };
+    let search = position
+        .search_box("admin_prices")?
+        .dated(state.locale())
+        .toggled(
+            "gap",
+            "stale",
+            state.locale().text("admin_toggle.stale_price"),
+        )
+        .picked(
+            "location_id",
+            state.locale().text("admin_pick.area"),
+            state.locale().text("admin_pick.all_areas"),
+            choices
+                .areas
+                .iter()
+                .map(|a| (a.id, a.name.clone()))
+                .collect(),
+        );
     let body = PricesPage {
         tabs: tabs(state, false)?,
         filter,
+        search,
         total,
         pagination: position.pagination(&path, page, total_pages),
         rows,
@@ -258,7 +305,12 @@ pub async fn list(
         let mut response = crops::list_page(
             &state,
             &actor,
-            crops::ListView::asked(&q.hide, flash.0, &state),
+            crops::ListView::asked(&q.hide, flash.0, &state).narrowed(
+                q.q,
+                q.commodity_id,
+                q.state,
+                q.sort,
+            ),
         )
         .await?;
         flash.clear_on(&mut response);
@@ -267,6 +319,11 @@ pub async fn list(
     let position = ListPosition {
         page: q.page,
         crop_id: q.crop_id,
+        location_id: q.location_id,
+        q: q.q,
+        from: q.from,
+        to: q.to,
+        gap: q.gap,
         ..ListPosition::default()
     };
     let view = ListView {
@@ -321,6 +378,11 @@ pub struct DeleteForm {
     /// The list page to land back on, and its crop filter.
     pub page: String,
     pub crop_id: String,
+    pub location_id: String,
+    pub q: String,
+    pub from: String,
+    pub to: String,
+    pub gap: String,
 }
 
 /// POST /admin/prices/{id}/delete
@@ -342,6 +404,11 @@ pub async fn delete(
     ListPosition {
         page: form.page,
         crop_id: form.crop_id,
+        location_id: form.location_id,
+        q: form.q,
+        from: form.from,
+        to: form.to,
+        gap: form.gap,
         ..ListPosition::default()
     }
     .back_to("admin_prices", Flash::PriceDeleted)

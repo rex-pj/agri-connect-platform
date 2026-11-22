@@ -15,7 +15,13 @@ use application::{
     usecases::admin_usecase::HistoryOf,
 };
 use axum::{extract::State, http::StatusCode, response::Response};
-use domain::{models::business::ListingRef, Error, ErrorCode};
+use domain::{
+    models::{
+        admin_list::{AdminSort, LISTING_LIST_STATES},
+        business::ListingRef,
+    },
+    Error, ErrorCode,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -30,8 +36,8 @@ use crate::{
         admin::{
             history_rows, is_refusal,
             listing_record::{listing_controls, ListingState, SERVICE_WORDS},
-            render_admin, url, Asked, Confirm, HistoryRow, ListPosition, ListReturn, Outcome,
-            ProviderFilter, ReasonForm, RecordHeader, RowConfirm, SearchBox, BACK_TO_LIST,
+            render_admin, url, AdminTab, Asked, Confirm, HistoryRow, ListPosition, ListReturn,
+            Outcome, ProviderFilter, ReasonForm, RecordHeader, RowConfirm, SearchBox, BACK_TO_LIST,
         },
         canonical_url,
         dashboard::{max_upload_mb, prepare},
@@ -52,6 +58,16 @@ pub struct ListQuery {
     pub page: String,
     pub provider_id: String,
     pub q: String,
+    /// The service type the list is narrowed to, shown / hidden, the
+    /// order, the days made between.
+    pub category_id: String,
+    pub state: String,
+    pub sort: String,
+    pub from: String,
+    pub to: String,
+    /// The sector, what the service lacks (`no_image`).
+    pub sector: String,
+    pub gap: String,
     /// The service whose hide confirmation is open.
     pub hide: String,
     /// The service whose delete confirmation is open.
@@ -91,6 +107,8 @@ pub struct ServicesPage {
     /// Set when the list is one provider's.
     pub filter: Option<ProviderFilter>,
     pub search: SearchBox,
+    /// The shown / hidden chips.
+    pub states: Vec<AdminTab>,
     pub create: Option<CreateForm>,
     pub limits: &'static Limits,
     pub confirm: Option<RowConfirm>,
@@ -98,6 +116,9 @@ pub struct ServicesPage {
     pub keep: ListReturn,
     pub flash: Option<Flash>,
 }
+
+/// The orders a listing list offers besides its own (the newest first).
+const LISTING_SORTS: &[AdminSort] = &[AdminSort::Oldest, AdminSort::Name];
 
 async fn list_page(
     state: &AppState,
@@ -108,6 +129,7 @@ async fn list_page(
     flash: Option<Flash>,
     status: StatusCode,
 ) -> Result<Response, Error> {
+    let position = position.checked(LISTING_LIST_STATES, LISTING_SORTS);
     let provider_id = position.provider_id();
     let AdminPagedResponse {
         items,
@@ -118,7 +140,11 @@ async fn list_page(
     } = state
         .usecases
         .admin
-        .list_services_admin(actor, position.page(), provider_id, position.search())
+        .list_services_admin(
+            actor,
+            position.page(),
+            &position.filter(LISTING_LIST_STATES),
+        )
         .await?;
     let position = ListPosition {
         page: page.to_string(),
@@ -180,7 +206,45 @@ async fn list_page(
     let body = ServicesPage {
         total,
         filter: position.provider_filter("admin_services", name)?,
-        search: position.search_box("admin_services")?,
+        search: position
+            .search_box("admin_services")?
+            .picked(
+                "sector",
+                state.locale().text("sector.label"),
+                state.locale().text("admin_pick.all_sectors"),
+                sectors
+                    .iter()
+                    .map(|s| (s.code.clone(), s.name.clone()))
+                    .collect(),
+            )
+            .toggled(
+                "gap",
+                "no_image",
+                state.locale().text("admin_toggle.no_image"),
+            )
+            .picked(
+                "category_id",
+                state.locale().text("admin_pick.service_type"),
+                state.locale().text("admin_pick.all_types"),
+                service_categories(state)
+                    .await?
+                    .into_iter()
+                    .map(|c| (c.id, c.name))
+                    .collect(),
+            )
+            .dated(state.locale())
+            .sorted(
+                state.locale(),
+                &position,
+                "admin_sort.newest",
+                LISTING_SORTS,
+            ),
+        states: position.shared_state_chips(
+            state.locale(),
+            "admin_services",
+            LISTING_LIST_STATES,
+            None,
+        )?,
         pagination: position.pagination(&path, page, total_pages),
         rows,
         create,
@@ -213,6 +277,13 @@ pub async fn list(
         page: q.page,
         provider_id: q.provider_id,
         q: q.q,
+        category_id: q.category_id,
+        state: q.state,
+        sort: q.sort,
+        from: q.from,
+        to: q.to,
+        sector: q.sector,
+        gap: q.gap,
         ..ListPosition::default()
     };
     let asked = Asked::new(&q.hide, &q.delete);

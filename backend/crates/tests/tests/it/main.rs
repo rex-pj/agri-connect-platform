@@ -10,6 +10,7 @@ mod admin_layout;
 mod admin_moderation;
 mod admin_pages;
 mod admin_providers;
+mod admin_toolbar;
 mod admin_users;
 mod auth_pages;
 mod authz;

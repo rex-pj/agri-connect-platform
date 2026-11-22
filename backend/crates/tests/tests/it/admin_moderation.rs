@@ -257,7 +257,11 @@ async fn inquiry_status_and_review_visibility_are_set_from_their_lists() {
     // The status is a badge; the row offers the next steps only, spam
     // through its confirmation.
     let html = page(&e, "/admin/inquiries", &admin).await;
-    assert!(!html.contains("<select"));
+    assert_eq!(
+        html.matches("<select").count(),
+        3,
+        "the kind, the wait and the order only: no status select"
+    );
     assert!(html.contains(r#"<span class="badge text-bg-info">Mới</span>"#));
     assert!(html.contains(r#"name="status" value="contacted""#));
     assert!(html.contains(r#"name="status" value="closed""#));
@@ -289,7 +293,7 @@ async fn inquiry_status_and_review_visibility_are_set_from_their_lists() {
     for list in ["inquiries", "reviews"] {
         let html = page(&e, &format!("/admin/{list}?provider_id={other}"), &admin).await;
         assert!(!html.contains("Chú Tư"), "{list}: another provider's rows");
-        assert!(html.contains(r#"class="admin-filter""#));
+        assert!(html.contains("admin-toolbar__tag--link"));
     }
     assert!(page(
         &e,
@@ -562,6 +566,188 @@ async fn admin_lists_find_records_by_name_without_diacritics() {
         .await
         .contains("Vườn nongdan"));
     assert!(!page(&e, "/admin/providers?q=khong-co", &admin)
+        .await
+        .contains("Vườn nongdan"));
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn admin_lists_search_filter_and_sort_together_and_keep_it_all() {
+    let e = env_with_origin().await;
+    let (admin, token, business) = setup(&e).await;
+    let (category, _) = categories_of(&e, "product").await[0].clone();
+    for name in ["Bón lá A", "Bón lá B"] {
+        create_product(
+            &e,
+            &token,
+            &format!(r#"{{"category_id":{category},"name":"{name}"}}"#),
+        )
+        .await;
+    }
+    for (name, phone, age) in [("Chú Tư", "0987654321", 2), ("Cô Ba", "0911222333", 1)] {
+        one_i32(
+            &e,
+            &format!(
+                "INSERT INTO inquiries (business_id, topic, requester_name, requester_phone, \
+                 created_on) VALUES ({business}, 'Múc bùn', '{name}', '{phone}', \
+                 now() - interval '{age} day') RETURNING id"
+            ),
+        )
+        .await;
+    }
+
+    // Contact requests: by the sender's phone, typed as people type it.
+    let html = page(&e, "/admin/inquiries?q=0911+222", &admin).await;
+    assert!(html.contains("Cô Ba") && !html.contains("Chú Tư"));
+    // By name, with the status chip: both narrow; the chips keep the words,
+    // the search form keeps the chip.
+    let html = page(&e, "/admin/inquiries?q=chu+tu&state=new", &admin).await;
+    assert!(html.contains("Chú Tư") && !html.contains("Cô Ba"));
+    assert!(html.contains(r#"<input type="hidden" name="state" value="new">"#));
+    assert!(html.contains(r#"href="/admin/inquiries?q=chu+tu&amp;state=closed""#));
+    // The order: newest first by default, the oldest first when asked; the
+    // row forms carry it so a step lands back on the same order.
+    let html = page(&e, "/admin/inquiries", &admin).await;
+    assert!(html.find("Cô Ba") < html.find("Chú Tư"));
+    let html = page(&e, "/admin/inquiries?sort=oldest", &admin).await;
+    assert!(html.find("Chú Tư") < html.find("Cô Ba"));
+    assert!(html.contains(r#"<option value="oldest" selected>"#));
+    assert!(html.contains(r#"name="sort" value="oldest""#));
+    let inquiry = one_i32(
+        &e,
+        "SELECT id FROM inquiries WHERE requester_name = 'Cô Ba'",
+    )
+    .await;
+    let res = send(
+        &e.router,
+        post_form(
+            &format!("/admin/inquiries/{inquiry}/status"),
+            &[
+                ("status", "contacted"),
+                ("q", "ba"),
+                ("sort", "oldest"),
+                ("state", "new"),
+            ],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(
+        res.headers()[header::LOCATION],
+        "/admin/inquiries?q=ba&state=new&sort=oldest"
+    );
+    // An order the list does not offer is its own order, never carried.
+    let html = page(&e, "/admin/inquiries?sort=name", &admin).await;
+    assert!(!html.contains(r#"name="sort" value="name""#));
+
+    // Supplies: the search keeps the list's narrowing to one supply type
+    // (it used to drop it), and the hidden chip shows only the hidden ones.
+    let html = page(
+        &e,
+        &format!("/admin/supplies?category_id={category}&q=bon+la"),
+        &admin,
+    )
+    .await;
+    assert!(html.contains(&format!(
+        r#"<input type="hidden" name="category_id" value="{category}">"#
+    )));
+    assert!(html.contains("Bón lá A") && html.contains("Bón lá B"));
+    let html = page(&e, "/admin/supplies?sort=name", &admin).await;
+    assert!(html.find("Bón lá A") < html.find("Bón lá B"));
+    e.t.db
+        .execute_unprepared("UPDATE products SET is_active = FALSE WHERE name = 'Bón lá B'")
+        .await
+        .unwrap();
+    let html = page(&e, "/admin/supplies?state=hidden", &admin).await;
+    assert!(html.contains("Bón lá B") && !html.contains("Bón lá A"));
+    let html = page(&e, "/admin/supplies?state=shown&q=khong-co", &admin).await;
+    assert!(html.contains("Không có kết quả cho “khong-co”"));
+    assert!(html.contains("Bỏ lọc"));
+
+    // Providers by phone, and the queue of the ones to vet.
+    assert!(page(&e, "/admin/providers?q=0901+234", &admin)
+        .await
+        .contains("Vườn nongdan"));
+    assert!(page(&e, "/admin/providers?state=unverified", &admin)
+        .await
+        .contains("Vườn nongdan"));
+    assert!(!page(&e, "/admin/providers?state=verified", &admin)
+        .await
+        .contains("Vườn nongdan"));
+    assert!(!page(&e, "/admin/providers?state=off", &admin)
+        .await
+        .contains("Vườn nongdan"));
+
+    // Accounts and reviews by their chips.
+    assert!(page(&e, "/admin/users?state=on&q=nongdan", &admin)
+        .await
+        .contains("nongdan"));
+    assert!(!page(&e, "/admin/users?state=off&q=nongdan", &admin)
+        .await
+        .contains(">nongdan<"));
+    let inquiry = one_i32(
+        &e,
+        "SELECT id FROM inquiries WHERE requester_name = 'Chú Tư'",
+    )
+    .await;
+    e.t.db
+        .execute_unprepared(&format!(
+            "UPDATE inquiries SET status = 'contacted' WHERE id = {inquiry}"
+        ))
+        .await
+        .unwrap();
+    one_i32(
+        &e,
+        &format!(
+            "INSERT INTO reviews (business_id, inquiry_id, rating, comment, reviewer_name, \
+             reviewer_phone_hash) VALUES ({business}, {inquiry}, 5, 'Làm kỹ', 'Chú Tư', \
+             encode(sha256('0987654321'), 'hex')) RETURNING id"
+        ),
+    )
+    .await;
+    assert!(page(&e, "/admin/reviews?state=waiting&q=lam+ky", &admin)
+        .await
+        .contains("Làm kỹ"));
+    assert!(!page(&e, "/admin/reviews?state=shown", &admin)
+        .await
+        .contains("Làm kỹ"));
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn the_json_admin_lists_take_the_same_criteria() {
+    let e = env_with_origin().await;
+    let (admin, _, business) = setup(&e).await;
+    one_i32(
+        &e,
+        &format!(
+            "INSERT INTO inquiries (business_id, topic, requester_name, requester_phone) \
+             VALUES ({business}, 'Múc bùn', 'Chú Tư', '0987654321') RETURNING id"
+        ),
+    )
+    .await;
+    let get = |path: &'static str| {
+        let admin = admin.clone();
+        let router = e.router.clone();
+        async move { body_text(send(&router, get_page(path, Some(&admin))).await).await }
+    };
+    assert!(get("/api/admin/inquiries?name=0987")
+        .await
+        .contains("Chú Tư"));
+    assert!(!get("/api/admin/inquiries?name=co+ba")
+        .await
+        .contains("Chú Tư"));
+    let refused = get("/api/admin/inquiries?status=xoa").await;
+    assert!(
+        refused.contains(r#""code":"validation_failed""#) && refused.contains(r#""status":["#),
+        "{refused}"
+    );
+    assert!(get("/api/admin/providers?status=unverified&sort=name")
+        .await
+        .contains("Vườn nongdan"));
+    assert!(!get("/api/admin/providers?status=off")
         .await
         .contains("Vườn nongdan"));
     e.cleanup().await;

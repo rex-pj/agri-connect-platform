@@ -390,6 +390,7 @@ fn every_use_case_taking_an_actor_checks_a_permission_first() {
         "count_own_calls",
         "own_business_id",
         "list_own_reviews",
+        "count_own_reviews",
     ];
     let sig = regex::Regex::new(r"pub async fn (\w+)\(\s*&self,\s*actor: &Actor").unwrap();
     let mut missing = Vec::new();
@@ -596,4 +597,25 @@ fn integration_tests_are_one_binary() {
         undeclared.is_empty(),
         "declare these in tests/it/main.rs: {undeclared:?}"
     );
+}
+
+/// One toolbar for every admin list: the order lives on the result bar, the
+/// status chips inside the toolbar, never beside it as before.
+#[test]
+fn admin_lists_share_one_toolbar() {
+    let mut broken = Vec::new();
+    for (file, src) in templates() {
+        if !file.contains("pages/admin/") {
+            continue;
+        }
+        if src.contains("status_chips") {
+            broken.push(format!(
+                "{file}: status chips go through admin_search(chips=)"
+            ));
+        }
+        if src.contains("admin_results(") && !src.contains("admin_search(") {
+            broken.push(format!("{file}: a result bar without the toolbar"));
+        }
+    }
+    assert!(broken.is_empty(), "{}", broken.join("\n"));
 }

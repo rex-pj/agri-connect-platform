@@ -24,9 +24,7 @@ use tracing::error;
 
 use domain::{
     constants::{CALL_CHANNEL_ZALO, INQUIRY_STATUS_SPAM},
-    models::demand::{
-        BusinessArea, DemoScope, LeadChannel, LeadCount, NewSearch, SearchCount, SoleCategory,
-    },
+    models::demand::{DemoScope, LeadChannel, LeadCount, NewSearch, SearchCount, SoleCategory},
     repositories::demand_repository_trait::DemandRepositoryTrait,
     Error,
 };
@@ -107,23 +105,13 @@ struct SearchRow {
 }
 
 #[derive(FromQueryResult)]
-struct AreaRow {
-    business_id: i32,
-    ward_code: Option<String>,
-    name: String,
-    phone: String,
-    address: Option<String>,
-    is_demo: bool,
-}
-
-#[derive(FromQueryResult)]
 struct SoleRow {
     business_id: i32,
     category_id: i32,
 }
 
 /// `businesses.is_demo` as `scope` counts it: one value, or any.
-fn business_in(scope: DemoScope) -> Condition {
+pub(crate) fn business_in(scope: DemoScope) -> Condition {
     match scope.only() {
         Some(demo) => {
             Condition::all().add(Expr::col((business::Entity, business::Column::IsDemo)).eq(demo))
@@ -337,39 +325,17 @@ impl DemandRepositoryTrait for DemandRepository {
         Ok(taps.chain(inquiries).collect())
     }
 
-    async fn business_areas(&self, scope: DemoScope) -> Result<Vec<BusinessArea>, Error> {
-        let rows = Business::find()
-            .select_only()
-            .column_as(business::Column::Id, QueryAs::BusinessId)
-            .column(business::Column::Name)
-            .column(business::Column::Phone)
-            .column(business::Column::Address)
-            .column(business::Column::IsDemo)
-            .column(business::Column::WardCode)
-            .filter(business::Column::WardCode.is_not_null())
-            .filter(business_in(scope))
+    async fn any_demo_business(&self) -> Result<bool, Error> {
+        Business::find()
+            .filter(business::Column::IsDemo.eq(true))
             .filter(business::Column::DeletedAt.is_null())
-            .into_model::<AreaRow>()
-            .all(self.db.as_ref())
+            .one(self.db.as_ref())
             .await
+            .map(|b| b.is_some())
             .map_err(|e| {
-                error!("demand business_areas error: {e}");
+                error!("demand any_demo_business error: {e}");
                 Error::internal("Failed to load the demand report.")
-            })?;
-        Ok(rows
-            .into_iter()
-            .filter_map(|r| {
-                let (name, phone, address, is_demo) = (r.name, r.phone, r.address, r.is_demo);
-                r.ward_code.map(|ward_code| BusinessArea {
-                    name,
-                    phone,
-                    address,
-                    business_id: r.business_id,
-                    ward_code,
-                    is_demo,
-                })
             })
-            .collect())
     }
 
     async fn sole_categories(&self) -> Result<Vec<SoleCategory>, Error> {

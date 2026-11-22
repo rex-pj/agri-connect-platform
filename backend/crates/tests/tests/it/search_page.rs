@@ -1,6 +1,6 @@
 //! /search: services, products and shops, link tabs that work without JS, previews with
-//! "see more" links. Database tests need TEST_DATABASE_URL and
-//! `--include-ignored`.
+//! "see more" links to each kind's tab, each kind paged on its own tab. Database tests
+//! need TEST_DATABASE_URL and `--include-ignored`.
 
 use axum::{
     body::Body,
@@ -94,9 +94,51 @@ async fn long_results_preview_six_and_link_to_the_full_list() {
     assert_eq!(page.matches("service-card hover-lift").count(), 6);
     assert_eq!(page.matches("provider-card hover-lift").count(), 6);
     assert_eq!(page.matches("product-card hover-lift").count(), 6);
-    assert!(page.contains(r#"href="/services?q=phan+bon""#));
-    assert!(page.contains(r#"href="/providers?q=phan+bon""#));
-    assert!(page.contains(r#"href="/supplies?q=phan+bon""#));
+    // "See more" stays on the search: that kind's tab, its whole list.
+    assert!(page.contains(r#"class="section-more" href="/search?q=phan+bon&amp;tab=services""#));
+    assert!(page.contains(r#"class="section-more" href="/search?q=phan+bon&amp;tab=providers""#));
+    assert!(page.contains(r#"class="section-more" href="/search?q=phan+bon&amp;tab=products""#));
+    // The tabs load (a tab's list is more than its preview).
+    assert!(!page.contains(r#"x-on:click.prevent="select""#));
+
+    let tab = html(&e, "/search?q=phan+bon&tab=products").await;
+    assert_eq!(tab.matches("product-card hover-lift").count(), 9);
+    assert!(!tab.contains("pagination-row"), "one page: no page links");
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn each_kind_is_paged_on_its_own_tab() {
+    use application::constants::PAGE_SIZE;
+
+    let e = Env::new().await;
+    let size = PAGE_SIZE as usize;
+    seeded(&e, 2, size + 3).await;
+
+    // The products' tab: its first page, and page links that keep the tab.
+    let first = html(&e, "/search?q=phan+bon&tab=products").await;
+    assert_eq!(first.matches("product-card hover-lift").count(), size);
+    assert!(first.contains(r#"href="/search?q=phan+bon&amp;tab=products&amp;page=2""#));
+    let second = html(&e, "/search?q=phan+bon&tab=products&page=2").await;
+    assert_eq!(second.matches("product-card hover-lift").count(), 3);
+    assert!(second.contains(
+        r#"href="/search?q=phan+bon&amp;tab=products" aria-label="Trang trước" rel="prev""#
+    ));
+
+    // `page` belongs to the tab: on the products' second page the services
+    // and shops are not its tabs' lists, and a page past a list's end lands
+    // on its last page.
+    let req = Request::get("/search?q=phan+bon&tab=services&page=2")
+        .header(header::ACCEPT, "text/html")
+        .body(Body::empty())
+        .unwrap();
+    let res = send(&e.router, req).await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        res.headers()[header::LOCATION],
+        "/search?q=phan+bon&tab=services"
+    );
     e.cleanup().await;
 }
 
@@ -114,7 +156,7 @@ async fn only_what_was_found_is_shown() {
             page.contains("<strong>3</strong> kết quả cho “npk”"),
             "{uri}"
         );
-        assert!(page.contains(r#"data-panel="products" :hidden"#), "{uri}");
+        assert!(page.contains(r#"data-panel="products">"#), "{uri}");
         assert!(!page.contains(r#"data-panel="services""#), "{uri}");
         assert!(!page.contains(r#"data-panel="providers""#), "{uri}");
         assert!(!page.contains("search-tabs"), "{uri}");

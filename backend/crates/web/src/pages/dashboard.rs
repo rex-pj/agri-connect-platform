@@ -90,15 +90,15 @@ pub struct ServicesSection {
 pub struct JobsLink {
     pub href: String,
     /// Open posts near the business in its categories.
-    pub open: usize,
+    pub open: i64,
 }
 
 #[derive(Serialize)]
 pub struct ReviewsLink {
     pub href: String,
-    pub total: usize,
+    pub total: i64,
     /// Waiting for an admin to show them.
-    pub waiting: usize,
+    pub waiting: i64,
 }
 
 #[derive(Serialize)]
@@ -223,11 +223,11 @@ async fn dashboard_page(
     };
     let reviews = match &profile {
         Some(_) => {
-            let own = state.usecases.review.list_own_reviews(actor).await?;
+            let (total, waiting) = state.usecases.review.count_own_reviews(actor).await?;
             Some(ReviewsLink {
                 href: url("provider_reviews", &[])?,
-                total: own.len(),
-                waiting: own.iter().filter(|r| !r.is_visible).count(),
+                total,
+                waiting,
             })
         }
         None => None,
@@ -235,7 +235,7 @@ async fn dashboard_page(
     let jobs = match (&profile, actor.can(PERM_OWN_JOB_READ)) {
         (Some(_), true) => Some(JobsLink {
             href: url("provider_jobs", &[])?,
-            open: state.usecases.job.list_own(actor).await?.len(),
+            open: state.usecases.job.count_own(actor).await?,
         }),
         _ => None,
     };

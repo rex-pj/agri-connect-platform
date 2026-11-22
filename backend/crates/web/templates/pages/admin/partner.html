@@ -1,10 +1,14 @@
 {% extends "layouts/admin.html" %}
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/alert.html" as alerts %}
+{% import "atoms/status_badge.html" as status %}
+{% import "molecules/admin_search.html" as search %}
 {% import "molecules/admin_tabs.html" as tabs %}
 {% import "molecules/form_field.html" as field %}
 {% import "molecules/sheet_header.html" as sheet_head %}
 {% import "molecules/history_list.html" as history %}
+{% import "molecules/pagination_nav.html" as paging %}
+{% import "molecules/row_action.html" as row %}
 {% import "organisms/record_header.html" as record %}
 {% import "organisms/confirm_sheet.html" as confirm %}
 {% import "organisms/partner_fields.html" as fields %}
@@ -14,8 +18,8 @@
     stops its contracts, in its menu: `b.header`, `partners::partner_controls`),
     one status strip (on or off and why, who reads its report, what its
     contracts in force bring in), then one part at a time (`?tab=`): the
-    overview (how to reach it), its contracts (each with its edit form in a
-    <details>, its sponsored shops and a delete confirmation; the add form
+    overview (how to reach it), its contracts (one line each, to its own
+    page: pages/admin/contract.html, where it is edited and sponsors; the add form
     after them, a long form on the page), its profile form, its history. A
     refused form comes back on its part with its messages; the account form
     is a sheet, open again after a refusal. `page.body` is
@@ -55,58 +59,21 @@
   {% elif b.tab == "contracts" %}
   <section class="admin-section" id="hop-dong" aria-labelledby="hd-title">
     <h2 class="admin-section__title" id="hd-title">{{ t(key="partner.contracts") }}</h2>
+    {{ search::admin_search(s=b.contract_search, placeholder="", chips=b.contract_states, chips_label=t(key="admin_state.label")) }}
     {% for r in b.contracts %}
     {% set c = r.contract %}
-    <article class="py-3 border-bottom" id="hd-{{ c.id }}" aria-labelledby="hd-{{ c.id }}-title">
-      <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
-        <h3 class="fs-6 fw-bold mb-1" id="hd-{{ c.id }}-title">{{ c.area_label }}</h3>
-        {% if c.in_force %}<span class="badge text-bg-success">{{ t(key="partner.in_force_badge") }}</span>{% else %}<span class="badge text-bg-secondary">{{ t(key="partner.not_in_force") }}</span>{% endif %}
+    <article class="d-flex align-items-center gap-2 py-2 border-bottom" id="hd-{{ c.id }}" aria-labelledby="hd-{{ c.id }}-title">
+      <div class="flex-grow-1">
+        <h3 class="fs-6 fw-bold mb-1" id="hd-{{ c.id }}-title"><a class="link-body-emphasis text-decoration-none" href="{{ r.href }}">{{ c.area_label }}</a> {{ status::contract(state=c.state) }}</h3>
+        <p class="small mb-0"><time datetime="{{ c.starts_on }}">{{ c.starts_on | full_date }}</time> – <time datetime="{{ c.ends_on }}">{{ c.ends_on | full_date }}</time> · <strong>{{ c.monthly_fee | vnd }}</strong> {{ t(key="partner.per_month") }}</p>
+        <p class="small text-muted mb-0">{{ t(key="partner.categories_count", count=c.categories | length) }} · {{ t(key="partner.sponsored_count", count=c.sponsored | length) }}</p>
       </div>
-      <p class="small mb-1"><time datetime="{{ c.starts_on }}">{{ c.starts_on | full_date }}</time> – <time datetime="{{ c.ends_on }}">{{ c.ends_on | full_date }}</time> · <strong>{{ c.monthly_fee | vnd }}</strong> {{ t(key="partner.per_month") }}</p>
-      <p class="mb-1">{% for cat in c.categories %}<span class="ac-tag">{{ cat.name }}</span> {% endfor %}</p>
-      {% if c.note %}<p class="small text-muted mb-1">{{ c.note }}</p>{% endif %}
-
-      <details class="my-2"{% if r.edit_open %} open{% endif %}>
-        <summary class="btn btn-sm btn-outline-secondary">{{ atoms::icon(name="fa-pen") }} {{ t(key="partner.edit_contract") }}</summary>
-        <form class="form-stack mt-2" method="post" action="{{ r.edit_action }}#hd-{{ c.id }}" novalidate>
-          {% if r.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=r.errors.message) }}{% endif %}
-          <p class="small text-muted mb-0">{{ t(key="partner.area_fixed") }}</p>
-          {{ contract::contract_fields(form=r.form, errors=r.errors, areas=b.areas, categories=b.categories, prefix="hd" ~ c.id, with_area=false) }}
-          <button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="common.save") }}</button>
-        </form>
-      </details>
-
-      <p class="small fw-semibold mb-1">{{ t(key="partner.sponsored") }}</p>
-      <ul class="list-unstyled mb-2">
-        {% for s in r.sponsored %}
-        <li class="d-flex justify-content-between align-items-center gap-2 py-1" x-data="dialog" x-on:keydown.escape.window="hide">
-          <span>{{ s.provider.name }}</span>
-          <a class="btn btn-sm btn-outline-warning" href="#bo-tai-tro-{{ c.id }}-{{ s.provider.id }}" x-on:click.prevent="show">{{ atoms::icon(name="fa-xmark") }} {{ t(key="partner.unsponsor_short") }}</a>
-          {{ confirm::confirm_sheet(id="bo-tai-tro-" ~ c.id ~ "-" ~ s.provider.id, title=t(key="partner.unsponsor", name=s.provider.name), icon="fa-xmark", action=s.remove_action, button=t(key="partner.unsponsor_confirm"), reason_max=limits.audit_reason_max, note=t(key="partner.unsponsor_note")) }}
-        </li>
-        {% else %}
-        <li class="small text-muted">{{ t(key="partner.no_sponsored") }}</li>
-        {% endfor %}
-      </ul>
-      {% if r.candidates %}
-      <form class="d-flex flex-wrap gap-2 align-items-end mb-2" method="post" action="{{ r.sponsor_action }}">
-        <div class="flex-grow-1">
-          <label class="form-label small" for="sp-{{ c.id }}">{{ t(key="partner.sponsor") }}</label>
-          <select class="form-select" id="sp-{{ c.id }}" name="business_id">
-            {% for o in r.candidates %}<option value="{{ o.id }}">{{ o.name }} · {{ o.phone | phone }}{% if o.address %} · {{ o.address }}{% endif %}</option>{% endfor %}
-          </select>
-        </div>
-        <button type="submit" class="btn btn-outline-success">{{ atoms::icon(name="fa-plus") }} {{ t(key="partner.add_sponsored") }}</button>
-      </form>
-      {% endif %}
-      <div x-data="dialog" x-on:keydown.escape.window="hide">
-        <a class="btn btn-sm btn-outline-danger" href="#xoa-hd-{{ c.id }}" x-on:click.prevent="show">{{ atoms::icon(name="fa-trash") }} {{ t(key="partner.delete_contract") }}</a>
-        {{ confirm::confirm_sheet(id="xoa-hd-" ~ c.id, title=t(key="partner.delete_contract_title", name=c.area_label), icon="fa-trash", action=r.delete_action, button=t(key="common.confirm_delete"), reason_max=limits.audit_reason_max, effect="delete", what=t(key="partner.contract_what"), button_class="btn-danger") }}
-      </div>
+      <div class="row-actions">{{ row::open(href=r.href, name=c.area_label) }}</div>
     </article>
     {% else %}
-    <p class="small text-muted mb-0">{{ t(key="partner.no_contracts") }}</p>
+    <p class="small text-muted mb-0">{{ search::empty(s=b.contract_search, none=t(key="partner.no_contracts")) }}</p>
     {% endfor %}
+    {% if b.pagination %}{{ paging::pagination_nav(p=b.pagination) }}{% endif %}
   </section>
 
   <section class="admin-section" id="them-hop-dong" aria-labelledby="them-hop-dong-title">

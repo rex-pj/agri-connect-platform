@@ -14,7 +14,7 @@ use crate::{
     labels::{sector_options, CodeOption},
     middleware::auth::Viewer,
     pages::{
-        admin::demand::{area_options, csv_response, focus_value, AreaOption},
+        admin::demand::{area_options, csv_response, focus_value, AreaChoiceGroup},
         listing::with_query,
         see_other,
     },
@@ -37,7 +37,7 @@ pub struct PartnerPage {
     /// Every sector, to name a row's.
     pub sectors: Vec<CodeOption>,
     pub area: String,
-    pub areas: Vec<AreaOption>,
+    pub areas: Vec<AreaChoiceGroup>,
     pub action: String,
     pub csv_href: String,
 }
@@ -59,7 +59,7 @@ pub async fn show(
     let area = focus_value(q.focus());
     let page = PartnerPage {
         sectors: sector_options(&sectors),
-        areas: area_options(state.locale(), &own.report),
+        areas: area_options(state.locale(), &own.report.areas),
         csv_href: with_query(&url("partner_report_csv", &[])?, &[("area", &area)]),
         action: url("partner_report", &[])?,
         area,

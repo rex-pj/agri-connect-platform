@@ -223,6 +223,21 @@ pub fn search_text(typed: Option<String>) -> Result<Option<String>> {
     }
 }
 
+/// A list's status filter as typed (the JSON API's `status`): blank is none,
+/// one of `states` is that one, anything else is `invalid` on `status`.
+pub fn typed_state(
+    states: &[&'static str],
+    typed: Option<&str>,
+    invalid: ErrorCode,
+) -> Result<Option<&'static str>> {
+    match typed.map(str::trim).filter(|s| !s.is_empty()) {
+        None => Ok(None),
+        Some(s) => domain::models::admin_list::state_in(states, s)
+            .map(Some)
+            .ok_or_else(|| Error::field("status", invalid)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

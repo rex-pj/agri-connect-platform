@@ -8,6 +8,7 @@ use domain::{
     },
     events::{Change, DomainEvent, Entity},
     models::{
+        admin_list::{AdminFilter, LIST_STATE_SHOWN, LIST_STATE_UNVERIFIED, LIST_STATE_WAITING},
         business::ListingRef,
         category::{CategoryAdmin, NewCategory, UpdateCategory},
         coded::CodedEntry,
@@ -61,10 +62,12 @@ use crate::{
         ProviderActivityDto, ProviderStatusDto, ReviewCountsDto, RoleDto, SlugSuggestionDto,
         VerificationDto,
     },
-    pagination::{admin_total_pages, paginate_admin, total_or_count},
+    pagination::{
+        admin_page_of, admin_total_pages, order_admin_list, paginate_admin, total_or_count,
+    },
     ports::{EventBus, PasswordHasher},
     settings::SettingsReader,
-    slug::{numbered, slugify},
+    slug::{matches_search, numbered, slugify},
     usecases::{
         account_rules::account_for_role,
         business_rules::validate_profile,
@@ -73,7 +76,7 @@ use crate::{
         service_rules::{validate_service, ServiceFields},
     },
     validation::{
-        self, audit_reason, max_chars, max_chars_opt, non_blank, validate_coordinates,
+        self, audit_reason, max_chars, max_chars_opt, non_blank, typed_state, validate_coordinates,
         validate_slug,
     },
 };
@@ -338,7 +341,11 @@ impl AdminUseCase {
         let since = Utc::now() - Duration::days(CALL_STATS_DAYS);
         let taps = self.call_repo.count_since(Some(id), since).await?;
         let inquiries = if actor.can(PERM_INQUIRY_READ) {
-            let count = |status| self.inquiry_repo.count_admin(Some(id), status);
+            let of_provider = AdminFilter::of_provider(Some(id));
+            let count = |status| {
+                let filter = of_provider.in_state(status);
+                async move { self.inquiry_repo.count_admin(&filter).await }
+            };
             let all = count(None).await?;
             let spam = count(Some(INQUIRY_STATUS_SPAM)).await?;
             Some(InquiryCountsDto {
@@ -349,7 +356,10 @@ impl AdminUseCase {
             None
         };
         let reviews = if actor.can(PERM_REVIEW_MODERATE) {
-            let all = self.review_repo.count_admin(Some(id)).await?;
+            let all = self
+                .review_repo
+                .count_admin(&AdminFilter::of_provider(Some(id)))
+                .await?;
             let shown = self.review_repo.summary_public(id).await?;
             Some(ReviewCountsDto {
                 shown: shown.count,
@@ -367,20 +377,30 @@ impl AdminUseCase {
         })
     }
 
+    /// How many providers are not yet verified: the count on the
+    /// "unverified" chip.
+    pub async fn count_unverified_providers(&self, actor: &Actor) -> Result<i64> {
+        actor.require(PERM_PROVIDER_READ)?;
+        self.business_repo
+            .count_for_admin(&AdminFilter::default().in_state(Some(LIST_STATE_UNVERIFIED)))
+            .await
+    }
+
+    /// `filter`: the name or phone, `PROVIDER_LIST_STATES`, an order.
     pub async fn list_providers(
         &self,
         actor: &Actor,
         page: i64,
-        search: Option<&str>,
+        filter: &AdminFilter,
     ) -> Result<AdminPagedResponse<AdminProviderDto>> {
         actor.require(PERM_PROVIDER_READ)?;
         let (page, offset) = paginate_admin(page);
         let items = self
             .business_repo
-            .list_for_admin(search, ADMIN_PAGE_SIZE, offset)
+            .list_for_admin(filter, ADMIN_PAGE_SIZE, offset)
             .await?;
         let total = total_or_count(offset, items.len(), ADMIN_PAGE_SIZE, || {
-            self.business_repo.count_for_admin(search)
+            self.business_repo.count_for_admin(filter)
         })
         .await?;
 
@@ -622,20 +642,21 @@ impl AdminUseCase {
         })
     }
 
+    /// `filter`: the username, name or email, `SWITCH_LIST_STATES`, an order.
     pub async fn list_users(
         &self,
         actor: &Actor,
         page: i64,
-        search: Option<&str>,
+        filter: &AdminFilter,
     ) -> Result<AdminPagedResponse<AdminUserDto>> {
         actor.require(PERM_USER_READ)?;
         let (page, offset) = paginate_admin(page);
         let items = self
             .user_repo
-            .list_for_admin(search, ADMIN_PAGE_SIZE, offset)
+            .list_for_admin(filter, ADMIN_PAGE_SIZE, offset)
             .await?;
         let total = total_or_count(offset, items.len(), ADMIN_PAGE_SIZE, || {
-            self.user_repo.count_for_admin(search)
+            self.user_repo.count_for_admin(filter)
         })
         .await?;
 
@@ -650,6 +671,7 @@ impl AdminUseCase {
                     role_code: u.role_code,
                     role_name: u.role_name,
                     is_active: u.is_active,
+                    is_demo: u.is_demo,
                     created_on: u.created_on,
                     updated_on: u.updated_on,
                     created_by_name: u.created_by_name,
@@ -739,6 +761,74 @@ impl AdminUseCase {
         actor.require(PERM_CATEGORY_MANAGE)?;
         let cats = self.category_repo.list_admin().await?;
         Ok(cats.into_iter().map(to_category_dto).collect())
+    }
+
+    /// A page of one type's categories (service or supply types), hidden
+    /// ones too: the admin's list of that tab.
+    pub async fn list_categories_page(
+        &self,
+        actor: &Actor,
+        category_type: &str,
+        page: i64,
+        filter: &AdminFilter,
+    ) -> Result<AdminPagedResponse<AdminCategoryDto>> {
+        actor.require(PERM_CATEGORY_MANAGE)?;
+        if !CATEGORY_TYPES.contains(&category_type) {
+            return Err(Error::field(
+                "category_type",
+                ErrorCode::InvalidCategoryType,
+            ));
+        }
+        if filter.search().is_some()
+            || filter.state.is_some()
+            || filter.sector.is_some()
+            || filter.gap.is_some()
+            || filter.sort.is_some()
+        {
+            let used: Vec<i32> = if filter.gap.as_deref() == Some("unused") {
+                self.category_repo.used_ids(category_type).await?
+            } else {
+                Vec::new()
+            };
+            let mut found: Vec<AdminCategoryDto> = self
+                .category_repo
+                .list_admin()
+                .await?
+                .into_iter()
+                .filter(|c| c.category_type == category_type)
+                .map(to_category_dto)
+                .filter(|c| {
+                    filter
+                        .search()
+                        .is_none_or(|q| matches_search(&[&c.name, &c.slug], q))
+                })
+                .filter(|c| {
+                    filter
+                        .sector
+                        .as_deref()
+                        .is_none_or(|s| c.sector.as_deref() == Some(s))
+                })
+                .filter(|c| {
+                    filter
+                        .state
+                        .is_none_or(|s| (s == LIST_STATE_SHOWN) == c.is_active)
+                })
+                .filter(|c| filter.gap.as_deref() != Some("unused") || !used.contains(&c.id))
+                .collect();
+            order_admin_list(&mut found, filter.sort, |c| &c.name, |c| c.id);
+            return Ok(admin_page_of(found, page));
+        }
+        let (page, offset) = paginate_admin(page);
+        let rows = self
+            .category_repo
+            .list_admin_page(category_type, ADMIN_PAGE_SIZE, offset)
+            .await?;
+        let total = total_or_count(offset, rows.len(), ADMIN_PAGE_SIZE, || {
+            self.category_repo.count_admin(category_type)
+        })
+        .await?;
+        let items = rows.into_iter().map(to_category_dto).collect();
+        Ok(AdminPagedResponse::admin(items, total, page))
     }
 
     pub async fn create_category(
@@ -905,26 +995,31 @@ impl AdminUseCase {
 
     // ── Inquiries ─────────────────────────────────────────────────────────────
 
-    /// `provider_id`: only that provider's inquiries; `status`: only those
-    /// in it (one of `INQUIRY_STATUSES`).
+    /// The status a list of contact requests is narrowed to, as typed: one
+    /// of `INQUIRY_STATUSES`, blank for every one, else refused.
+    pub fn inquiry_state(typed: Option<&str>) -> Result<Option<&'static str>> {
+        typed_state(INQUIRY_STATUSES, typed, ErrorCode::InvalidInquiryStatus)
+    }
+
+    /// `filter`: one provider's, one of `INQUIRY_STATUSES`, the sender's
+    /// name or phone or the provider's name, an order.
     pub async fn list_inquiries(
         &self,
         actor: &Actor,
         page: i64,
-        provider_id: Option<i32>,
-        status: Option<&str>,
+        filter: &AdminFilter,
     ) -> Result<AdminPagedResponse<AdminInquiryDto>> {
         actor.require(PERM_INQUIRY_READ)?;
-        if status.is_some_and(|s| !INQUIRY_STATUSES.contains(&s)) {
+        if filter.state.is_some_and(|s| !INQUIRY_STATUSES.contains(&s)) {
             return Err(Error::field("status", ErrorCode::InvalidInquiryStatus));
         }
         let (page, offset) = paginate_admin(page);
         let items = self
             .inquiry_repo
-            .list_admin(provider_id, status, ADMIN_PAGE_SIZE, offset)
+            .list_admin(filter, ADMIN_PAGE_SIZE, offset)
             .await?;
         let total = total_or_count(offset, items.len(), ADMIN_PAGE_SIZE, || {
-            self.inquiry_repo.count_admin(provider_id, status)
+            self.inquiry_repo.count_admin(filter)
         })
         .await?;
 
@@ -964,7 +1059,10 @@ impl AdminUseCase {
             return Err(Error::field("status", ErrorCode::InvalidInquiryStatus));
         }
         self.inquiry_repo
-            .count_admin(provider_id, Some(status))
+            .count_admin(
+                &AdminFilter::of_provider(provider_id)
+                    .in_state(INQUIRY_STATUSES.iter().copied().find(|s| *s == status)),
+            )
             .await
     }
 
@@ -1014,22 +1112,23 @@ impl AdminUseCase {
 
     // ── Reviews ───────────────────────────────────────────────────────────────
 
-    /// `provider_id`: only that provider's reviews.
+    /// `filter`: one provider's, `REVIEW_LIST_STATES`, the reviewer's
+    /// name, the comment or the provider's name, an order.
     pub async fn list_reviews(
         &self,
         actor: &Actor,
         page: i64,
-        provider_id: Option<i32>,
+        filter: &AdminFilter,
     ) -> Result<AdminPagedResponse<AdminReviewDto>> {
         actor.require(PERM_REVIEW_MODERATE)?;
         let suspect_minutes = self.settings.load().await?.review_suspect_minutes();
         let (page, offset) = paginate_admin(page);
         let items = self
             .review_repo
-            .list_admin(provider_id, ADMIN_PAGE_SIZE, offset)
+            .list_admin(filter, ADMIN_PAGE_SIZE, offset)
             .await?;
         let total = total_or_count(offset, items.len(), ADMIN_PAGE_SIZE, || {
-            self.review_repo.count_admin(provider_id)
+            self.review_repo.count_admin(filter)
         })
         .await?;
 
@@ -1043,6 +1142,14 @@ impl AdminUseCase {
             per_page: ADMIN_PAGE_SIZE,
             total_pages: admin_total_pages(total),
         })
+    }
+
+    /// How many reviews wait for approval: the count on the "waiting" chip.
+    pub async fn count_waiting_reviews(&self, actor: &Actor) -> Result<i64> {
+        actor.require(PERM_REVIEW_MODERATE)?;
+        self.review_repo
+            .count_admin(&AdminFilter::default().in_state(Some(LIST_STATE_WAITING)))
+            .await
     }
 
     pub async fn toggle_review_visible(
@@ -1082,6 +1189,48 @@ impl AdminUseCase {
             .list_all()
             .await
             .map(|locs| locs.into_iter().map(to_location_dto).collect())
+    }
+
+    /// A page of every location preset, hidden ones too: the admin's list.
+    pub async fn list_locations_page(
+        &self,
+        actor: &Actor,
+        page: i64,
+        filter: &AdminFilter,
+    ) -> Result<AdminPagedResponse<AdminLocationDto>> {
+        actor.require(PERM_LOCATION_MANAGE)?;
+        if filter.search().is_some() || filter.state.is_some() || filter.sort.is_some() {
+            let mut found: Vec<AdminLocationDto> = self
+                .location_repo
+                .list_all()
+                .await?
+                .into_iter()
+                .map(to_location_dto)
+                .filter(|l| {
+                    filter
+                        .search()
+                        .is_none_or(|q| matches_search(&[&l.label], q))
+                })
+                .filter(|l| {
+                    filter
+                        .state
+                        .is_none_or(|s| (s == LIST_STATE_SHOWN) == l.is_active)
+                })
+                .collect();
+            order_admin_list(&mut found, filter.sort, |l| &l.label, |l| l.id);
+            return Ok(admin_page_of(found, page));
+        }
+        let (page, offset) = paginate_admin(page);
+        let rows = self
+            .location_repo
+            .list_page(ADMIN_PAGE_SIZE, offset)
+            .await?;
+        let total = total_or_count(offset, rows.len(), ADMIN_PAGE_SIZE, || {
+            self.location_repo.count()
+        })
+        .await?;
+        let items = rows.into_iter().map(to_location_dto).collect();
+        Ok(AdminPagedResponse::admin(items, total, page))
     }
 
     pub async fn get_location_admin(&self, actor: &Actor, id: i32) -> Result<AdminLocationDto> {
@@ -1404,21 +1553,22 @@ impl AdminUseCase {
 
     // ── Admin Services ────────────────────────────────────────────────────────
 
+    /// `filter`: one provider's, the name (the provider's too),
+    /// `LISTING_LIST_STATES`, an order.
     pub async fn list_services_admin(
         &self,
         actor: &Actor,
         page: i64,
-        provider_id: Option<i32>,
-        search: Option<&str>,
+        filter: &AdminFilter,
     ) -> Result<AdminPagedResponse<AdminServiceDto>> {
         actor.require(PERM_SERVICE_MANAGE)?;
         let (page, offset) = paginate_admin(page);
         let items = self
             .service_repo
-            .list_admin(provider_id, search, ADMIN_PAGE_SIZE, offset)
+            .list_admin(filter, ADMIN_PAGE_SIZE, offset)
             .await?;
         let total = total_or_count(offset, items.len(), ADMIN_PAGE_SIZE, || {
-            self.service_repo.count_admin(provider_id, search)
+            self.service_repo.count_admin(filter)
         })
         .await?;
         Ok(AdminPagedResponse {
@@ -1580,6 +1730,16 @@ impl AdminUseCase {
 
     pub async fn list_roles(&self, actor: &Actor) -> Result<Vec<RoleDto>> {
         actor.require(PERM_ROLE_READ)?;
+        self.role_repo
+            .list()
+            .await
+            .map(|roles| roles.into_iter().map(RoleDto::from).collect())
+    }
+
+    /// The roles the account list can be narrowed to: every role, for
+    /// whoever may read accounts.
+    pub async fn role_choices(&self, actor: &Actor) -> Result<Vec<RoleDto>> {
+        actor.require(PERM_USER_READ)?;
         self.role_repo
             .list()
             .await

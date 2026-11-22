@@ -3,10 +3,9 @@
 {% import "atoms/alert.html" as alerts %}
 {% import "atoms/inquiry_status.html" as inquiry %}
 {% import "molecules/admin_header.html" as header %}
-{% import "molecules/admin_filter.html" as filter %}
+{% import "molecules/admin_search.html" as search %}
 {% import "molecules/pagination_nav.html" as paging %}
 {% import "molecules/row_action.html" as row %}
-{% import "molecules/status_chips.html" as chips %}
 {% import "organisms/confirm_sheet.html" as confirm %}
 {#- `page.body` is web::pages::admin::inquiries::InquiriesPage. The status
     is a badge (who set it under it); the row ends with its next steps
@@ -21,8 +20,8 @@
 {{ header::admin_header(title=t(key="contact.title"), icon="fa-envelope-open-text", sub=sub) }}
 <div class="admin-body" x-data="dialog" data-open="{% if b.confirm %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
   {% if b.flash == "inquiry_status_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="inbox.status_saved")) }}{% endif %}
-  {% if b.filter %}{{ filter::admin_filter(f=b.filter) }}{% endif %}
-  {{ chips::status_chips(chips=b.states, label=t(key="admin.status_filter")) }}
+  {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.inquiries"), chips=b.states, chips_label=t(key="admin.status_filter")) }}
+  {{ search::admin_results(s=b.search, total=b.total) }}
 
   <div class="admin-card">
     <div class="table-responsive">
@@ -51,7 +50,7 @@
             {% endif %}
           </tr>
           {% else %}
-          <tr><td colspan="{% if b.can_manage %}6{% else %}5{% endif %}" class="text-center text-muted py-4">{% if b.narrowed %}{{ t(key="admin.no_inquiries_in_state") }}{% else %}{{ t(key="admin.no_inquiries") }}{% endif %}</td></tr>
+          <tr><td colspan="{% if b.can_manage %}6{% else %}5{% endif %}" class="text-center text-muted py-4">{% if b.search.q %}{{ t(key="admin_search.none", q=b.search.q) }}{% elif b.narrowed %}{{ t(key="admin.no_inquiries_in_state") }}{% else %}{{ search::empty(s=b.search, none=t(key="admin.no_inquiries")) }}{% endif %}</td></tr>
           {% endfor %}
         </tbody>
       </table>

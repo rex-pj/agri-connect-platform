@@ -10,8 +10,8 @@ use application::constants::{
     BUSINESS_DESCRIPTION_MAX, BUSINESS_NAME_MAX, CODED_NAME_MAX, COMMODITY_NAME_MAX, CROP_NAME_MAX,
     CROP_UNIT_MAX, FULL_NAME_MAX, JOB_DESCRIPTION_MAX, PASSWORD_MIN_CHARS,
     PASSWORD_RESET_EXPIRY_HOURS, PRICE_FRESH_DAYS_MAX, PRICE_NOTE_MAX, PRODUCT_DESCRIPTION_MAX,
-    PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX, SEARCH_QUERY_MIN, USERNAME_MAX_LEN, USERNAME_MIN_LEN,
-    VN_UTC_OFFSET_SECS,
+    PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX, SEARCH_QUERY_MAX, SEARCH_QUERY_MIN, USERNAME_MAX_LEN,
+    USERNAME_MIN_LEN, VN_UTC_OFFSET_SECS,
 };
 use application::icons;
 use application::settings::SETTING_VALUE_MAX;
@@ -107,6 +107,9 @@ struct FieldLimits {
     audit_reason_max: usize,
     /// `SEARCH_QUERY_MIN`, for a public search box's `minlength`.
     search_min: usize,
+    /// `SEARCH_QUERY_MAX`: the longest search kept, an admin search box's
+    /// `maxlength`.
+    search_max: usize,
     coded_name_max: usize,
     commodity_name_max: usize,
     crop_name_max: usize,
@@ -143,6 +146,7 @@ const FIELD_LIMITS: FieldLimits = FieldLimits {
     product_description_max: PRODUCT_DESCRIPTION_MAX,
     audit_reason_max: AUDIT_REASON_MAX,
     search_min: SEARCH_QUERY_MIN,
+    search_max: SEARCH_QUERY_MAX,
     coded_name_max: CODED_NAME_MAX,
     commodity_name_max: COMMODITY_NAME_MAX,
     crop_name_max: CROP_NAME_MAX,

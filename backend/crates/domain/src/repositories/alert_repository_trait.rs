@@ -8,8 +8,12 @@ use crate::{
 
 #[async_trait]
 pub trait AlertRepositoryTrait {
-    /// Every alert (switched off ones too), the latest to end first.
-    async fn list(&self) -> Result<Vec<Alert>, Error>;
+    /// A page of every alert (switched off ones too), the latest to end
+    /// first.
+    async fn list(&self, limit: i64, offset: i64) -> Result<Vec<Alert>, Error>;
+
+    /// How many alerts there are, switched off ones too.
+    async fn count(&self) -> Result<i64, Error>;
 
     async fn find(&self, id: i32) -> Result<Option<Alert>, Error>;
 

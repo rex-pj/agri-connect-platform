@@ -15,7 +15,7 @@ use application::{
     usecases::admin_usecase::HistoryOf,
 };
 use axum::{extract::State, http::StatusCode, response::Response};
-use domain::{Error, ErrorCode};
+use domain::{models::admin_list::LISTING_LIST_STATES, Error, ErrorCode};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -26,11 +26,12 @@ use crate::{
     middleware::auth::Viewer,
     pages::{
         admin::{
-            history_rows, is_refusal, render_admin, url, Asked, Badge, Confirm, HistoryRow,
-            ListPosition, ListReturn, Outcome, RecordAction, RecordHeader, RowConfirm, Says,
-            Toggle, BACK_TO_LIST,
+            history_rows, is_refusal, render_admin, url, AdminTab, Asked, Badge, Confirm,
+            HistoryRow, ListPosition, ListReturn, Outcome, RecordAction, RecordHeader, RowConfirm,
+            Says, SearchBox, Toggle, BACK_TO_LIST, CATALOGUE_SORTS,
         },
         forms::{coordinate, reason, whole_number, FormErrors},
+        listing::{past_the_end, Pagination},
         parse_id, see_other,
     },
 };
@@ -82,6 +83,8 @@ pub struct LocationRow {
 
 #[derive(Serialize)]
 pub struct LocationsPage {
+    /// The shown / hidden chips.
+    pub states: Vec<AdminTab>,
     /// The use case's limit, for the box's `maxlength`.
     pub label_max: usize,
     pub rows: Vec<LocationRow>,
@@ -89,8 +92,12 @@ pub struct LocationsPage {
     pub errors: FormErrors,
     pub create_action: String,
     pub confirm: Option<RowConfirm>,
+    pub search: SearchBox,
     /// The hidden fields of every row action: land back here.
     pub keep: ListReturn,
+    /// Every preset, for the header's count.
+    pub total: i64,
+    pub pagination: Option<Pagination>,
     pub flash: Option<Flash>,
     /// The wards the create form fills itself from, by province.
     pub wards: Vec<AreaGroupDto>,
@@ -99,6 +106,8 @@ pub struct LocationsPage {
 /// The list page around the create form; `asked`: the row whose hide or
 /// delete confirmation is open.
 struct ListView {
+    /// The list page shown (`?page=`).
+    position: ListPosition,
     form: LocationForm,
     errors: FormErrors,
     asked: Asked,
@@ -108,20 +117,39 @@ struct ListView {
 
 async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Response, Error> {
     let ListView {
+        position,
         form,
         errors,
         asked,
         flash,
         status,
     } = view;
+    let position = position.checked(LISTING_LIST_STATES, CATALOGUE_SORTS);
+    let criteria = position.filter(LISTING_LIST_STATES);
     let (locations, wards) = tokio::try_join!(
-        state.usecases.admin.list_locations_admin(actor),
+        state
+            .usecases
+            .admin
+            .list_locations_page(actor, position.page(), &criteria),
         state.usecases.admin.location_choices(actor),
     )?;
-    let position = ListPosition::default();
+    let path = url("admin_locations", &[])?;
+    let wanted_query = position.query();
+    let wanted: Vec<(&str, &str)> = wanted_query
+        .iter()
+        .filter(|(k, _)| *k != "page")
+        .map(|(k, v)| (*k, v.as_str()))
+        .collect();
+    if let Some(redirect) = past_the_end(&path, &wanted, locations.page, locations.total_pages) {
+        return redirect;
+    }
+    let position = ListPosition {
+        page: locations.page.to_string(),
+        ..position
+    };
     let mut confirm = None;
-    let mut rows = Vec::with_capacity(locations.len());
-    for location in locations {
+    let mut rows = Vec::with_capacity(locations.items.len());
+    for location in locations.items {
         let id = location.id.to_string();
         let status_action = url("admin_location_status", &[("id", &id)])?;
         if asked.hide == Some(location.id) && location.is_active {
@@ -146,8 +174,23 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
             location,
         });
     }
-    let path = url("admin_locations", &[])?;
+    let search = position.search_box("admin_locations")?.sorted(
+        state.locale(),
+        &position,
+        "admin_sort.display_order",
+        CATALOGUE_SORTS,
+    );
+    let states = position.shared_state_chips(
+        state.locale(),
+        "admin_locations",
+        LISTING_LIST_STATES,
+        None,
+    )?;
     let body = LocationsPage {
+        search,
+        states,
+        total: locations.total,
+        pagination: position.pagination(&path, locations.page, locations.total_pages),
         label_max: LOCATION_LABEL_MAX,
         rows,
         form,
@@ -174,6 +217,11 @@ pub struct ListQuery {
     /// The location whose hide / delete confirmation is open.
     pub hide: String,
     pub delete: String,
+    pub page: String,
+    /// The words searched, shown / hidden.
+    pub q: String,
+    pub state: String,
+    pub sort: String,
 }
 
 /// GET /admin/locations
@@ -187,6 +235,13 @@ pub async fn list(
         return see_other(&url("login", &[])?);
     };
     let view = ListView {
+        position: ListPosition {
+            page: q.page,
+            q: q.q,
+            state: q.state,
+            sort: q.sort,
+            ..ListPosition::default()
+        },
         form: LocationForm::default(),
         errors: FormErrors::default(),
         asked: Asked::new(&q.hide, &q.delete),
@@ -216,6 +271,7 @@ pub async fn create(
         Ok(created) => redirect_to(created.id, Flash::LocationCreated),
         Err(err) if is_refusal(&err) => {
             let view = ListView {
+                position: ListPosition::default(),
                 errors: FormErrors::from_error(&state, &err),
                 form,
                 asked: Asked::default(),
@@ -391,6 +447,11 @@ pub struct StatusForm {
     pub reason: String,
     /// `list` when sent from the list's row: land back there.
     pub back: String,
+    /// The list page the row was on (`ListReturn`).
+    pub page: String,
+    pub q: String,
+    pub state: String,
+    pub sort: String,
 }
 
 /// POST /admin/locations/{id}/status
@@ -416,7 +477,14 @@ pub async fn change_status(
         Flash::LocationHidden
     };
     if form.back == BACK_TO_LIST {
-        return ListPosition::default().back_to("admin_locations", flash);
+        let position = ListPosition {
+            page: form.page,
+            q: form.q,
+            state: form.state,
+            sort: form.sort,
+            ..ListPosition::default()
+        };
+        return position.back_to("admin_locations", flash);
     }
     redirect_to(id, flash)
 }
@@ -425,6 +493,12 @@ pub async fn change_status(
 #[serde(default)]
 pub struct DeleteForm {
     pub reason: String,
+    /// The list page the row was on (`ListReturn`), when sent from the
+    /// list; deleted, the list is shown there (or its new last page).
+    pub page: String,
+    pub q: String,
+    pub state: String,
+    pub sort: String,
 }
 
 /// POST /admin/locations/{id}/delete
@@ -445,9 +519,14 @@ pub async fn delete(
         .await;
     match result {
         Ok(()) => {
-            let mut response = see_other(&url("admin_locations", &[])?)?;
-            Flash::LocationDeleted.set_on(&mut response);
-            Ok(response)
+            let position = ListPosition {
+                page: form.page,
+                q: form.q,
+                state: form.state,
+                sort: form.sort,
+                ..ListPosition::default()
+            };
+            position.back_to("admin_locations", Flash::LocationDeleted)
         }
         Err(err) if is_refusal(&err) => {
             let outcome = Outcome::refused(&state, &err, None, true);

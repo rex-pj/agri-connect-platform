@@ -214,6 +214,18 @@ pub fn redirect_to_canonical(
     Some(moved_permanently(&with_query(canonical, keep)))
 }
 
+/// The page of one list on a page holding several lists, each in its own
+/// tab (`/search`, `/explore`): `page` belongs to the chosen tab's list;
+/// every other list opens on its first page. Each list then has its own page
+/// links, carrying its `tab`, so paging one never moves another.
+pub fn tab_page(chosen: &str, tab: &str, page: i64) -> i64 {
+    if chosen == tab {
+        page.max(1)
+    } else {
+        1
+    }
+}
+
 /// A page number past the last page (an old link after listings were
 /// removed, or a typed one): 303 to the last page, keeping the filters,
 /// instead of an empty list. `None` when `page` is a page that exists.

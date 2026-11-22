@@ -4,6 +4,7 @@ use uuid::Uuid;
 use crate::{
     error::Error,
     models::{
+        admin_list::AdminFilter,
         business::{ListingEditor, ProviderSort},
         service::{
             AdminService, NewService, ProviderService, PublicService, PublicServiceFilter,
@@ -14,21 +15,17 @@ use crate::{
 
 #[async_trait]
 pub trait ServiceRepositoryTrait {
-    /// The admin list, narrowed to one provider and / or to names containing
-    /// `search` (accents and case ignored).
+    /// The admin list, narrowed to one provider, to names containing
+    /// `search` (accents and case ignored; the provider's name too) and / or
+    /// to the `shown` / `hidden` ones.
     async fn list_admin(
         &self,
-        provider_id: Option<i32>,
-        search: Option<&str>,
+        filter: &AdminFilter,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<AdminService>, Error>;
 
-    async fn count_admin(
-        &self,
-        provider_id: Option<i32>,
-        search: Option<&str>,
-    ) -> Result<i64, Error>;
+    async fn count_admin(&self, filter: &AdminFilter) -> Result<i64, Error>;
 
     async fn find_by_id_admin(&self, id: i32) -> Result<Option<AdminService>, Error>;
 
@@ -104,12 +101,21 @@ pub trait ServiceRepositoryTrait {
     ) -> Result<Vec<PublicService>, Error>;
 
     /// Services whose business lies within `radius` metres of `point_wkt`,
-    /// nearest first, at most `limit`.
+    /// nearest first: `limit` of them after the first `offset`.
     async fn search_geo_public(
         &self,
         point_wkt: &str,
         radius: f64,
         category_id: Option<i32>,
         limit: i64,
+        offset: i64,
     ) -> Result<Vec<PublicService>, Error>;
+
+    /// How many services `search_geo_public` finds, over all its pages.
+    async fn count_geo_public(
+        &self,
+        point_wkt: &str,
+        radius: f64,
+        category_id: Option<i32>,
+    ) -> Result<i64, Error>;
 }

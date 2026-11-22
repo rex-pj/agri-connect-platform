@@ -1,9 +1,10 @@
 {% extends "layouts/app.html" %}
 {% import "atoms/icon.html" as atoms %}
 {% import "molecules/empty_state.html" as empty %}
+{% import "molecules/pagination_nav.html" as paging %}
 {#- Jobs farmers posted near the provider's business, in its services'
-    categories: what, where, how far, when, and a call button. `page` is
-    web::pages::own_jobs::OwnJobsPage. -#}
+    categories: what, where, how far, when, and a call button; a page at a
+    time. `page` is web::pages::own_jobs::OwnJobsPage. -#}
 {% block title %}{{ t(key="own_jobs.title") }} — {{ site.name }}{% endblock title %}
 {% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
 {% block main %}
@@ -31,5 +32,6 @@
     {{ empty::empty_state(icon="fa-bullhorn", title=t(key="own_jobs.empty"), hint=t(key="own_jobs.empty_hint")) }}
   </section>
   {% endfor %}
+  {% if page.pagination %}{{ paging::pagination_nav(p=page.pagination) }}{% endif %}
 </div>
 {% endblock main %}

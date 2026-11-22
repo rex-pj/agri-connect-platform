@@ -15,10 +15,14 @@ use application::{
     authz::Actor,
     inputs::CropInput,
     outputs::{CommodityDto, CropDto, CropPriceDto},
+    slug::matches_search,
     usecases::admin_usecase::HistoryOf,
 };
 use axum::{extract::State, http::StatusCode, response::Response};
-use domain::{Error, ErrorCode};
+use domain::{
+    models::admin_list::{LISTING_LIST_STATES, LIST_STATE_SHOWN},
+    Error, ErrorCode,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -30,7 +34,7 @@ use crate::{
         admin::{
             history_rows, is_refusal, prices, render_admin, url, AdminTab, Asked, Badge, Confirm,
             HistoryRow, ListPosition, ListReturn, Outcome, RecordAction, RecordHeader, RowConfirm,
-            Says, Toggle, BACK_TO_LIST,
+            Says, SearchBox, Toggle, BACK_TO_LIST, CATALOGUE_SORTS,
         },
         forms::{reason, whole_number, FormErrors},
         listing::parse_opt,
@@ -96,6 +100,9 @@ pub struct CropRow {
 #[derive(Serialize)]
 pub struct CropsPage {
     pub tabs: Vec<AdminTab>,
+    pub search: SearchBox,
+    /// The shown / hidden chips.
+    pub states: Vec<AdminTab>,
     pub rows: Vec<CropRow>,
     /// The shown commodities the form offers.
     pub commodities: Vec<CommodityDto>,
@@ -111,6 +118,11 @@ pub struct CropsPage {
 
 /// The list around the create sheet.
 pub struct ListView {
+    /// The words searched.
+    q: String,
+    commodity_id: String,
+    state: String,
+    sort: String,
     form: CropForm,
     errors: FormErrors,
     asked: Asked,
@@ -119,10 +131,26 @@ pub struct ListView {
 }
 
 impl ListView {
+    /// The list narrowed to the names with `q`, one commodity, shown or
+    /// hidden.
+    pub fn narrowed(self, q: String, commodity_id: String, state: String, sort: String) -> Self {
+        Self {
+            q,
+            commodity_id,
+            state,
+            sort,
+            ..self
+        }
+    }
+
     /// The list as first shown: a fresh form, maybe a row's hide
     /// confirmation open (`hide`), maybe a flash.
     pub fn asked(hide: &str, flash: Option<Flash>, state: &AppState) -> Self {
         Self {
+            q: String::new(),
+            commodity_id: String::new(),
+            state: String::new(),
+            sort: String::new(),
             form: CropForm::fresh(state),
             errors: FormErrors::default(),
             asked: Asked::new(hide, ""),
@@ -144,7 +172,45 @@ pub async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Resul
     let prices = &state.usecases.price;
     let (crops, commodities) =
         tokio::try_join!(prices.list_crops(actor), prices.commodity_choices(actor))?;
-    let position = list_position();
+    let position = ListPosition {
+        q: view.q.clone(),
+        commodity_id: view.commodity_id.clone(),
+        state: view.state.clone(),
+        sort: view.sort.clone(),
+        ..list_position()
+    }
+    .checked(LISTING_LIST_STATES, CATALOGUE_SORTS);
+    let locale = state.locale();
+    let search = position
+        .search_box("admin_prices")?
+        .picked(
+            "commodity_id",
+            locale.text("admin_pick.commodity"),
+            locale.text("admin_pick.all_commodities"),
+            commodities.iter().map(|c| (c.id, c.name.clone())).collect(),
+        )
+        .sorted(
+            locale,
+            &position,
+            "admin_sort.display_order",
+            CATALOGUE_SORTS,
+        );
+    let states = position.shared_state_chips(locale, "admin_prices", LISTING_LIST_STATES, None)?;
+    let wanted_commodity = position
+        .param("commodity_id")
+        .and_then(|v| v.parse::<i32>().ok());
+    let wanted_state = position.state_in(LISTING_LIST_STATES);
+    let mut crops: Vec<CropDto> = crops
+        .into_iter()
+        .filter(|c| {
+            position.search().is_none_or(|q| {
+                matches_search(&[&c.name, c.commodity.as_deref().unwrap_or_default()], q)
+            })
+        })
+        .filter(|c| wanted_commodity.is_none_or(|id| c.commodity_id == id))
+        .filter(|c| wanted_state.is_none_or(|s| (s == LIST_STATE_SHOWN) == c.is_active))
+        .collect();
+    application::pagination::order_admin_list(&mut crops, position.sort(), |c| &c.name, |c| c.id);
     let mut confirm = None;
     let mut rows = Vec::with_capacity(crops.len());
     for crop in crops {
@@ -167,6 +233,8 @@ pub async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Resul
     let path = url("admin_prices", &[])?;
     let body = CropsPage {
         tabs: prices::tabs(state, true)?,
+        search,
+        states,
         rows,
         commodities,
         commodities_href: url("admin_commodities", &[])?,
@@ -220,6 +288,10 @@ pub async fn create(
         Ok(id) => redirect_to(id, Flash::CropCreated),
         Err(err) if is_refusal(&err) => {
             let view = ListView {
+                q: String::new(),
+                commodity_id: String::new(),
+                state: String::new(),
+                sort: String::new(),
                 errors: FormErrors::from_error(&state, &err),
                 form,
                 asked: Asked::default(),
@@ -315,7 +387,7 @@ async fn crop_page(
     let (crop, commodities, recent) = tokio::try_join!(
         prices.get_crop(actor, id),
         prices.commodity_choices(actor),
-        prices.list_prices(actor, Some(id), 1),
+        prices.list_prices(actor, Some(id), None, 1),
     )?;
     let id_text = id.to_string();
     let of_crop = ListPosition {

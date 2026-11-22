@@ -115,8 +115,9 @@ async fn the_report_counts_real_leads_by_area_and_hides_small_figures() {
     assert!(page.contains(&category));
     assert!(page.contains("Xã Bình Phú"), "the commune of the shop");
     assert!(
-        page.contains(r#"<option value="p82">Đồng Tháp</option>"#),
-        "its province"
+        page.contains(r#"<optgroup label="Đồng Tháp">"#)
+            && page.contains(r#"<option value="p82" data-name="Cả tỉnh Đồng Tháp""#),
+        "its province, a group led by the whole province"
     );
     assert!(page.contains("&lt; 5"), "2 Zalo taps are hidden");
 
@@ -173,7 +174,9 @@ async fn the_report_counts_real_leads_by_area_and_hides_small_figures() {
     assert!(page.contains(r#": 10"></span>"#));
     assert!(!page.contains("area-progress__week--met"));
     assert!(page.contains("0/8 tuần"));
-    assert!(page.contains(&format!(r#"href="/admin/demand?area=w{BINH_PHU}""#)));
+    // Every area: the province's row, its wards only once it is in focus.
+    assert!(page.contains(r#"href="/admin/demand?area=p82""#));
+    assert!(!page.contains(&format!(r#"href="/admin/demand?area=w{BINH_PHU}""#)));
     // The category × week table is shaded: the one week with leads is the
     // darkest, the legend under it.
     assert!(page.contains("demand-heat demand-heat--4"));

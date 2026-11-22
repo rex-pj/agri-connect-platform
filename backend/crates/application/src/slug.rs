@@ -30,6 +30,26 @@ pub fn slugify(text: &str) -> String {
     out
 }
 
+/// Whether any of `fields` holds `query`, ignoring case and accents ("gao"
+/// finds "Gạo"), or a synonym of it ("heo" finds "Lợn"). A blank query
+/// matches everything. Meant for the short catalogue lists, which are read
+/// whole and searched here rather than in the database.
+pub fn matches_search(fields: &[&str], query: &str) -> bool {
+    let variants: Vec<String> = domain::search_terms::query_variants(query)
+        .iter()
+        .map(|v| slugify(v))
+        .collect();
+    if variants.iter().all(String::is_empty) {
+        return true;
+    }
+    fields.iter().any(|field| {
+        let folded = slugify(field);
+        variants
+            .iter()
+            .any(|v| !v.is_empty() && folded.contains(v.as_str()))
+    })
+}
+
 /// The `n`-th candidate for a free slug: `base` for 1, then `base-2`,
 /// `base-3`, …, cut to `max` characters with the suffix kept whole (and no
 /// hyphen left dangling before it).
@@ -96,7 +116,16 @@ pub fn sort_key(text: &str) -> (Vec<u32>, Vec<u8>) {
 #[cfg(test)]
 #[allow(clippy::expect_used)]
 mod tests {
-    use super::{numbered, slugify, sort_key};
+    use super::{matches_search, numbered, slugify, sort_key};
+
+    #[test]
+    fn a_search_ignores_case_and_accents_and_knows_synonyms() {
+        assert!(matches_search(&["Gạo thơm"], "gao"));
+        assert!(matches_search(&["Đồng Tháp"], "dong thap"));
+        assert!(matches_search(&["Heo hơi"], "lợn"));
+        assert!(matches_search(&["Lúa"], "  "));
+        assert!(!matches_search(&["Lúa", "rice"], "tôm"));
+    }
 
     #[test]
     fn names_sort_in_vietnamese_dictionary_order() {

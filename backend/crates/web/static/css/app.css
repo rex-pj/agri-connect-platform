@@ -3692,6 +3692,235 @@ ac-geolocate {
 .admin-actions .form-select {
   min-height: 44px;
 }
+/* The toolbar above an admin list (molecules/admin_search.html). One card
+   holds the words, the filters with their captions and the order, then the
+   criteria in force; every control is 44 px tall and shares one 10 px
+   radius, so nothing in it is rounder than its neighbour. The words field is
+   one piece (icon, input, clear) with the search button joined to it. The
+   filter grid fills the width in equal columns and the order stays last. */
+.admin-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.admin-toolbar__find {
+  display: flex;
+  gap: 8px;
+}
+.admin-toolbar__field {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.admin-toolbar__field:focus-within {
+  border-color: var(--p600);
+  box-shadow: 0 0 0 3px var(--p50);
+}
+.admin-toolbar__lead {
+  flex: none;
+  padding-inline: 14px 4px;
+  color: var(--muted);
+}
+.admin-toolbar__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 12px 0 8px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+}
+.admin-toolbar__clear {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  min-height: 44px;
+  color: var(--muted);
+  text-decoration: none;
+}
+.admin-toolbar__go {
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 10px;
+}
+.admin-toolbar__filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 10px 12px;
+  align-items: end;
+}
+.admin-toolbar__item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.admin-toolbar__caption {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.admin-toolbar .form-select,
+.admin-toolbar .form-control {
+  min-height: 44px;
+  border-radius: 10px;
+}
+.admin-toolbar__active {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.admin-toolbar__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--p50);
+  box-shadow: inset 0 0 0 1px var(--p600);
+  color: var(--p800);
+  font-size: var(--admin-text);
+  text-decoration: none;
+}
+.admin-toolbar__reset {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: var(--admin-text);
+  text-decoration: none;
+}
+/* The "Filters" button of the toolbar: an outlined 44 px square on a phone,
+   with its word from 576 px, and the number of filters on in a badge. Tinted
+   like the chosen chips while the panel is open. */
+.admin-toolbar__more {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 10px;
+}
+.admin-toolbar__more.active {
+  border-color: var(--p600);
+  background: var(--p50);
+  color: var(--p800);
+}
+.admin-toolbar__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--p600);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+/* The filters fold up behind the button; without JS the class is absent and
+   the panel is simply open. A folded panel is out of the tab order. */
+.admin-toolbar__panel {
+  display: grid;
+  grid-template-rows: 1fr;
+}
+.admin-toolbar__panel.is-collapsible {
+  grid-template-rows: 0fr;
+  margin-top: -12px;
+  transition: grid-template-rows 0.22s ease, margin-top 0.22s ease;
+}
+.admin-toolbar__panel.is-collapsible.open {
+  grid-template-rows: 1fr;
+  margin-top: 0;
+}
+.admin-toolbar__panel-inner {
+  min-height: 0;
+  margin: -3px;
+  padding: 3px;
+  overflow: hidden;
+}
+.admin-toolbar__panel.is-collapsible:not(.open) .admin-toolbar__panel-inner {
+  visibility: hidden;
+}
+.admin-toolbar__item--check {
+  justify-content: flex-end;
+}
+.admin-toolbar__check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  cursor: pointer;
+}
+/* A criterion that is a record the list is narrowed to: its name leads to the
+   record, its cross to the whole list. */
+.admin-toolbar__tag--link {
+  gap: 0;
+  padding: 0;
+}
+.admin-toolbar__tag--link a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  color: inherit;
+  text-decoration: none;
+}
+.admin-toolbar__tag--link > a:first-child {
+  padding-left: 12px;
+}
+.admin-toolbar__tag-x {
+  justify-content: center;
+  width: 36px;
+}
+/* The bar between the toolbar and the rows: the count, and the order. */
+.admin-results {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+.admin-results__count {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--admin-text);
+}
+.admin-results__sort {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.admin-results__label {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--admin-text);
+  white-space: nowrap;
+}
+.admin-results__sort .form-select {
+  width: auto;
+  min-height: 36px;
+  border-radius: 10px;
+}
 /* The status chips above a list (molecules/status_chips.html): one row that
    scrolls sideways on a narrow phone rather than wrapping. */
 .admin-chips {
@@ -4144,6 +4373,77 @@ ac-geolocate {
  * and never more than half the screen (a sheet on a phone). */
 .form-field .ts-dropdown .ts-dropdown-content {
   max-height: min(22rem, 50vh);
+}
+
+/* The demand report's area filter (molecules/area_filter.html): the box wide
+ * enough for "Đồng Tháp — Phường Cai Lậy" beside its buttons, the whole row
+ * on a phone. In the list (Alpine searchableSelect) a tree: the whole
+ * province bold with a map icon, its wards indented on a guide line, each
+ * with a pin. */
+.area-filter {
+  flex: 1 1 22rem;
+  max-width: 44rem;
+}
+/* In a toolbar card (a column) the filter's flex-basis would be its height. */
+.admin-toolbar > .area-filter {
+  flex: none;
+  max-width: none;
+}
+.area-filter__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.area-filter__row > .area-filter__select,
+.area-filter__row > .ts-wrapper {
+  flex: 1 1 22rem;
+  max-width: 30rem;
+  min-width: 0;
+}
+.area-filter__aside {
+  margin-top: 1.75rem;
+}
+@media (max-width: 575.98px) {
+  .area-filter,
+  .area-filter__row > .area-filter__select,
+  .area-filter__row > .ts-wrapper {
+    flex-basis: 100%;
+    max-width: none;
+  }
+  .area-filter__aside {
+    margin-top: 0;
+  }
+}
+.area-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.area-choice__icon {
+  flex: 0 0 1.25em;
+  text-align: center;
+}
+.area-choice--whole {
+  font-weight: 600;
+}
+.area-choice--whole .area-choice__icon {
+  color: var(--p700);
+}
+/* The rendered div is Tom Select's .option itself, so the guide line runs
+ * through its padding and joins the next ward's. Tom Select's stylesheet
+ * loads after this one: `.option` outweighs its padding. */
+.ts-dropdown .option.area-choice--ward {
+  margin-left: 1.3rem;
+  padding-left: 1rem;
+  border-left: 2px solid var(--bs-border-color);
+}
+.area-choice--ward .area-choice__icon {
+  font-size: 0.8em;
+  color: var(--bs-secondary-color);
+}
+.ts-dropdown .active .area-choice__icon {
+  color: inherit;
 }
 
 /* The icon picker's options and choice (Alpine iconSelect): the glyph in a

@@ -135,3 +135,12 @@ pub const ZALO_GRAPH_URL: &str = "https://graph.zalo.me/v2.0/me/info";
 /// How long that call may take, in seconds, before the farmer is told to
 /// try again (a token expires two minutes after it was issued).
 pub const ZALO_TIMEOUT_SECS: u64 = 10;
+
+// ── `agri-connect demo-data` (the demo data at volume) ────────────────────────
+/// Providers generated when `--providers` is not given: the size the
+/// platform is tried and timed at (about 5 000 rows of each kind).
+pub const DEMO_VOLUME_PROVIDERS_DEFAULT: u32 = 5_000;
+/// The most `--providers` takes: everything is written in one transaction.
+pub const DEMO_VOLUME_PROVIDERS_MAX: u32 = 50_000;
+/// The seed when `--seed` is not given: the same rows on every machine.
+pub const DEMO_VOLUME_SEED_DEFAULT: u64 = 2_026;

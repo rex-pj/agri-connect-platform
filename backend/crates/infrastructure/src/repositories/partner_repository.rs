@@ -7,28 +7,38 @@ use std::{collections::HashMap, sync::Arc};
 use async_trait::async_trait;
 use chrono::{NaiveDate, Utc};
 use sea_orm::{
-    sea_query::{Expr, OnConflict},
-    ColumnTrait, ConnectionTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, QueryOrder,
-    QuerySelect, Set, TransactionTrait,
+    sea_query::{Expr, OnConflict, Query},
+    ColumnTrait, Condition, ConnectionTrait, DatabaseConnection, DbErr, EntityTrait,
+    FromQueryResult, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Select, Set,
+    TransactionTrait,
 };
 use tracing::error;
 
 use domain::{
-    models::partner::{
-        ActiveContract, Contract, ContractArea, NewContract, Partner, PartnerFields,
-        SponsoredBusiness,
+    models::{
+        admin_list::AdminFilter,
+        demand::DemoScope,
+        partner::{
+            ActiveContract, AreaShop, Contract, ContractArea, ContractFee, NewContract, Partner,
+            PartnerFields, SponsoredBusiness,
+        },
     },
     repositories::partner_repository_trait::PartnerRepositoryTrait,
     Error,
 };
 
-use crate::entities::{
-    business,
-    partner::{self, Entity as PartnerEntity},
-    partner_contract::{self, Entity as ContractEntity},
-    partner_contract_service_type, partner_contract_supply_type,
-    partner_sponsored::{self, Entity as Sponsored},
-    service_type, user,
+use crate::{
+    admin_list::{admin_order, switch_state, OrderColumns},
+    entities::{
+        business,
+        partner::{self, Entity as PartnerEntity},
+        partner_contract::{self, Entity as ContractEntity},
+        partner_contract_service_type, partner_contract_supply_type,
+        partner_sponsored::{self, Entity as Sponsored},
+        service_type, user, ward,
+    },
+    repositories::demand_repository::business_in,
+    search::{admin_partner_search, search_condition, BUSINESS_NAME_SEARCH_COLUMNS},
 };
 
 /// A contract's area: its province, and maybe one ward of it.
@@ -208,17 +218,88 @@ fn fields_model(f: &PartnerFields) -> partner::ActiveModel {
     }
 }
 
+/// A business lying in `area`: in its ward, or in a ward of its province.
+fn business_in_area(area: &ContractArea) -> Condition {
+    let ward = Expr::col((business::Entity, business::Column::WardCode));
+    Condition::all().add(match &area.ward_code {
+        Some(code) => ward.eq(code.clone()),
+        None => ward.in_subquery(
+            Query::select()
+                .column(ward::Column::Code)
+                .from(ward::Entity)
+                .and_where(Expr::col(ward::Column::ProvinceCode).eq(area.province_code.clone()))
+                .to_owned(),
+        ),
+    })
+}
+
+#[derive(FromQueryResult)]
+struct ShopRow {
+    id: i32,
+    name: String,
+    phone: String,
+    address: Option<String>,
+}
+
+impl From<ShopRow> for AreaShop {
+    fn from(r: ShopRow) -> Self {
+        Self {
+            business_id: r.id,
+            name: r.name,
+            phone: r.phone,
+            address: r.address,
+        }
+    }
+}
+
+/// The live (not deleted) businesses of `scope` lying in `area`, read as
+/// `ShopRow`s.
+fn shops_in_area(area: &ContractArea, scope: DemoScope) -> Select<business::Entity> {
+    business::Entity::find()
+        .select_only()
+        .column(business::Column::Id)
+        .column(business::Column::Name)
+        .column(business::Column::Phone)
+        .column(business::Column::Address)
+        .filter(business::Column::DeletedAt.is_null())
+        .filter(business_in(scope))
+        .filter(business_in_area(area))
+}
+
 #[async_trait]
 impl PartnerRepositoryTrait for PartnerRepository {
-    async fn list(&self) -> Result<Vec<Partner>, Error> {
-        let rows = PartnerEntity::find()
-            .order_by_desc(partner::Column::IsActive)
-            .order_by_asc(partner::Column::Name)
-            .order_by_asc(partner::Column::Id)
-            .all(self.db.as_ref())
-            .await
-            .map_err(Self::fail("list"))?;
+    async fn list(
+        &self,
+        filter: &AdminFilter,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Partner>, Error> {
+        let columns = OrderColumns {
+            created: partner::Column::CreatedOn,
+            name: partner::Column::Name,
+            id: partner::Column::Id,
+        };
+        let query = PartnerEntity::find().filter(admin_condition(filter));
+        let rows = admin_order(query, filter.sort, columns, |q| {
+            q.order_by_desc(partner::Column::IsActive)
+                .order_by_asc(partner::Column::Name)
+                .order_by_asc(partner::Column::Id)
+        })
+        .limit(limit as u64)
+        .offset(offset as u64)
+        .all(self.db.as_ref())
+        .await
+        .map_err(Self::fail("list"))?;
         self.with_accounts(rows).await
+    }
+
+    async fn count(&self, filter: &AdminFilter) -> Result<i64, Error> {
+        PartnerEntity::find()
+            .filter(admin_condition(filter))
+            .count(self.db.as_ref())
+            .await
+            .map(|c| c as i64)
+            .map_err(Self::fail("count"))
     }
 
     async fn find(&self, id: i32) -> Result<Option<Partner>, Error> {
@@ -320,6 +401,59 @@ impl PartnerRepositoryTrait for PartnerRepository {
             .await
             .map_err(Self::fail("contracts"))?;
         self.assemble(rows).await
+    }
+
+    async fn contracts_page(
+        &self,
+        partner_id: i32,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Contract>, Error> {
+        let rows = ContractEntity::find()
+            .filter(partner_contract::Column::PartnerId.eq(partner_id))
+            .order_by_desc(partner_contract::Column::StartsOn)
+            .order_by_desc(partner_contract::Column::Id)
+            .limit(u64::try_from(limit).unwrap_or(0))
+            .offset(u64::try_from(offset).unwrap_or(0))
+            .all(self.db.as_ref())
+            .await
+            .map_err(Self::fail("contracts_page"))?;
+        self.assemble(rows).await
+    }
+
+    async fn count_contracts(&self, partner_id: i32) -> Result<i64, Error> {
+        ContractEntity::find()
+            .filter(partner_contract::Column::PartnerId.eq(partner_id))
+            .count(self.db.as_ref())
+            .await
+            .map(|n| i64::try_from(n).unwrap_or(i64::MAX))
+            .map_err(Self::fail("count_contracts"))
+    }
+
+    async fn fees_in_force(&self, day: NaiveDate) -> Result<Vec<ContractFee>, Error> {
+        let on = Query::select()
+            .column(partner::Column::Id)
+            .from(PartnerEntity)
+            .and_where(Expr::col(partner::Column::IsActive).eq(true))
+            .to_owned();
+        ContractEntity::find()
+            .filter(partner_contract::Column::PartnerId.in_subquery(on))
+            .filter(partner_contract::Column::StartsOn.lte(day))
+            .filter(partner_contract::Column::EndsOn.gte(day))
+            .order_by_asc(partner_contract::Column::Id)
+            .all(self.db.as_ref())
+            .await
+            .map(|rows| {
+                rows.into_iter()
+                    .map(|c| ContractFee {
+                        contract_id: c.id,
+                        partner_id: c.partner_id,
+                        area: area_of(&c),
+                        monthly_fee: c.monthly_fee,
+                    })
+                    .collect()
+            })
+            .map_err(Self::fail("fees_in_force"))
     }
 
     async fn create_contract(&self, c: &NewContract, actor_id: i32) -> Result<i32, Error> {
@@ -434,6 +568,47 @@ impl PartnerRepositoryTrait for PartnerRepository {
         .map_err(Self::fail("add_sponsored"))
     }
 
+    async fn sponsor_candidates(
+        &self,
+        contract_id: i32,
+        area: &ContractArea,
+        scope: DemoScope,
+        search: Option<&str>,
+        limit: u64,
+    ) -> Result<Vec<AreaShop>, Error> {
+        let sponsored = Query::select()
+            .column(partner_sponsored::Column::BusinessId)
+            .from(Sponsored)
+            .and_where(Expr::col(partner_sponsored::Column::ContractId).eq(contract_id))
+            .to_owned();
+        shops_in_area(area, scope)
+            .filter(business::Column::Id.not_in_subquery(sponsored))
+            .filter(search_condition(BUSINESS_NAME_SEARCH_COLUMNS, search))
+            .order_by_asc(business::Column::Name)
+            .order_by_asc(business::Column::Id)
+            .limit(limit)
+            .into_model::<ShopRow>()
+            .all(self.db.as_ref())
+            .await
+            .map(|rows| rows.into_iter().map(AreaShop::from).collect())
+            .map_err(Self::fail("sponsor_candidates"))
+    }
+
+    async fn shop_in_area(
+        &self,
+        business_id: i32,
+        area: &ContractArea,
+        scope: DemoScope,
+    ) -> Result<Option<AreaShop>, Error> {
+        shops_in_area(area, scope)
+            .filter(business::Column::Id.eq(business_id))
+            .into_model::<ShopRow>()
+            .one(self.db.as_ref())
+            .await
+            .map(|row| row.map(AreaShop::from))
+            .map_err(Self::fail("shop_in_area"))
+    }
+
     async fn remove_sponsored(&self, contract_id: i32, business_id: i32) -> Result<bool, Error> {
         Sponsored::delete_many()
             .filter(partner_sponsored::Column::ContractId.eq(contract_id))
@@ -475,5 +650,80 @@ impl PartnerRepositoryTrait for PartnerRepository {
                 business_ids: c.sponsored.iter().map(|s| s.business_id).collect(),
             })
             .collect())
+    }
+}
+
+/// The admin list's criteria, shared by the list and its count.
+fn admin_condition(filter: &AdminFilter) -> sea_orm::Condition {
+    admin_condition_base(filter).add(crate::admin_list::created_between(
+        (
+            crate::entities::partner::Entity,
+            crate::entities::partner::Column::CreatedOn,
+        ),
+        filter,
+    ))
+}
+
+fn admin_condition_base(filter: &AdminFilter) -> sea_orm::Condition {
+    let cond = sea_orm::Condition::all()
+        .add(admin_partner_search(filter.search()))
+        .add(switch_state(partner::Column::IsActive, filter.state));
+    let cond = match filter.kind.as_deref() {
+        Some(kind) => cond.add(partner::Column::Kind.eq(kind)),
+        None => cond,
+    };
+    match (filter.contract.as_deref(), filter.today) {
+        (Some(code), Some(today)) => cond.add(contract_state(code, today)),
+        _ => cond,
+    }
+}
+
+/// How soon a contract in force counts as ending.
+const EXPIRING_DAYS: i64 = 30;
+
+/// The contracts of the partner of the outer query.
+fn contracts_here() -> Select<ContractEntity> {
+    ContractEntity::find()
+        .select_only()
+        .column(partner_contract::Column::Id)
+        .filter(
+            Expr::col((
+                partner_contract::Entity,
+                partner_contract::Column::PartnerId,
+            ))
+            .equals((partner::Entity, partner::Column::Id)),
+        )
+}
+
+/// A partner by its contracts on `today`: one in force, one in force that
+/// ends within `EXPIRING_DAYS`, contracts all over, or none at all.
+fn contract_state(code: &str, today: NaiveDate) -> Condition {
+    let in_force = || {
+        contracts_here()
+            .filter(partner_contract::Column::StartsOn.lte(today))
+            .filter(partner_contract::Column::EndsOn.gte(today))
+    };
+    match code {
+        "in_force" => Condition::all().add(Expr::exists(in_force().into_query())),
+        "expiring" => {
+            let soon = today + chrono::Duration::days(EXPIRING_DAYS);
+            Condition::all().add(Expr::exists(
+                in_force()
+                    .filter(partner_contract::Column::EndsOn.lte(soon))
+                    .into_query(),
+            ))
+        }
+        "ended" => Condition::all()
+            .add(Expr::exists(contracts_here().into_query()))
+            .add(
+                Expr::exists(
+                    contracts_here()
+                        .filter(partner_contract::Column::EndsOn.gte(today))
+                        .into_query(),
+                )
+                .not(),
+            ),
+        "none" => Condition::all().add(Expr::exists(contracts_here().into_query()).not()),
+        _ => Condition::all(),
     }
 }

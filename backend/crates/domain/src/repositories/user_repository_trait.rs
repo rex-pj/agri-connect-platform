@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use crate::{
     error::Error,
     models::{
+        admin_list::AdminFilter,
         role::UserRole,
         user::{
             ExistingUser, LoginName, NewResetToken, NewUser, UserAdmin, UserAdminDetail,
@@ -102,15 +103,16 @@ pub trait UserRepositoryTrait {
     async fn count_all(&self) -> Result<i64, Error>;
 
     /// The admin list; `search` narrows it to accounts whose username, name
-    /// or email contains it (accents and case ignored).
+    /// or email contains it (accents and case ignored); `state`: `on` /
+    /// `off`.
     async fn list_for_admin(
         &self,
-        search: Option<&str>,
+        filter: &AdminFilter,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<UserAdmin>, Error>;
 
-    async fn count_for_admin(&self, search: Option<&str>) -> Result<i64, Error>;
+    async fn count_for_admin(&self, filter: &AdminFilter) -> Result<i64, Error>;
 
     async fn find_by_id_for_admin(&self, id: i32) -> Result<Option<UserAdminDetail>, Error>;
 

@@ -50,6 +50,7 @@ pub enum Users {
     DeletedAt,
     SessionsValidAfter,
     EmailVerifiedAt,
+    IsDemo,
 }
 
 #[derive(DeriveIden, Clone, Copy)]

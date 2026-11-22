@@ -11,7 +11,12 @@ use std::sync::Arc;
 use chrono::{NaiveDate, Utc};
 use domain::{
     events::{Change, DomainEvent, Entity},
-    models::alert::{Alert, AlertFields},
+    models::{
+        admin_list::{
+            AdminFilter, ALERT_STATE_ENDED, ALERT_STATE_LIVE, ALERT_STATE_UPCOMING, LIST_STATE_OFF,
+        },
+        alert::{Alert, AlertFields},
+    },
     repositories::{
         admin_unit_repository_trait::AdminUnitRepositoryTrait,
         alert_repository_trait::AlertRepositoryTrait, coded_repository_trait::CodedRepositoryTrait,
@@ -22,10 +27,12 @@ use domain::{
 use crate::{
     authz::Actor,
     catalogue::PERM_ALERT_MANAGE,
-    constants::{ALERTS_SHOWN, ALERT_BODY_MAX, ALERT_TITLE_MAX},
+    constants::{ADMIN_PAGE_SIZE, ALERTS_SHOWN, ALERT_BODY_MAX, ALERT_TITLE_MAX},
     inputs::AlertInput,
-    outputs::{AlertDto, NamedCodeDto},
+    outputs::{AdminPagedResponse, AlertDto, NamedCodeDto},
+    pagination::{admin_page_of, order_admin_list, paginate_admin, total_or_count},
     ports::EventBus,
+    slug::matches_search,
     usecases::demand_usecase::vn_today,
     validation::{self, audit_reason, max_chars},
 };
@@ -68,17 +75,55 @@ impl AlertUseCase {
             .await;
     }
 
-    /// Every alert, switched off ones too, the latest to end first.
-    pub async fn list(&self, actor: &Actor) -> Result<Vec<AlertDto>> {
+    /// A page of every alert, switched off ones too, the latest to end first;
+    /// `filter`: the words in its title or text, its kind, its sector, its
+    /// state by dates (one of `ALERT_LIST_STATES`).
+    pub async fn list(
+        &self,
+        actor: &Actor,
+        page: i64,
+        filter: &AdminFilter,
+    ) -> Result<AdminPagedResponse<AlertDto>> {
         actor.require(PERM_ALERT_MANAGE)?;
         let today = vn_today(Utc::now())?;
-        Ok(self
-            .alert_repo
-            .list()
-            .await?
-            .into_iter()
-            .map(|a| alert_dto(a, today))
-            .collect())
+        if filter.search().is_some()
+            || filter.state.is_some()
+            || filter.kind.is_some()
+            || filter.sector.is_some()
+            || filter.sort.is_some()
+        {
+            let total = self.alert_repo.count().await?;
+            let mut found: Vec<AlertDto> = self
+                .alert_repo
+                .list(total.max(1), 0)
+                .await?
+                .into_iter()
+                .map(|a| alert_dto(a, today))
+                .filter(|a| {
+                    filter
+                        .search()
+                        .is_none_or(|q| matches_search(&[&a.title, &a.body], q))
+                })
+                .filter(|a| filter.kind.as_deref().is_none_or(|k| a.kind == k))
+                .filter(|a| {
+                    filter
+                        .sector
+                        .as_deref()
+                        .is_none_or(|s| a.sector.as_deref() == Some(s))
+                })
+                .filter(|a| filter.state.is_none_or(|s| a.state == s))
+                .collect();
+            order_admin_list(&mut found, filter.sort, |a| &a.title, |a| a.id);
+            return Ok(admin_page_of(found, page));
+        }
+        let (page, offset) = paginate_admin(page);
+        let rows = self.alert_repo.list(ADMIN_PAGE_SIZE, offset).await?;
+        let total = total_or_count(offset, rows.len(), ADMIN_PAGE_SIZE, || {
+            self.alert_repo.count()
+        })
+        .await?;
+        let items = rows.into_iter().map(|a| alert_dto(a, today)).collect();
+        Ok(AdminPagedResponse::admin(items, total, page))
     }
 
     pub async fn get(&self, actor: &Actor, id: i32) -> Result<AlertDto> {
@@ -226,8 +271,21 @@ impl AlertUseCase {
     }
 }
 
+fn alert_state(a: &Alert, today: NaiveDate) -> &'static str {
+    if !a.is_active {
+        LIST_STATE_OFF
+    } else if a.starts_on > today {
+        ALERT_STATE_UPCOMING
+    } else if a.ends_on < today {
+        ALERT_STATE_ENDED
+    } else {
+        ALERT_STATE_LIVE
+    }
+}
+
 fn alert_dto(a: Alert, today: NaiveDate) -> AlertDto {
     AlertDto {
+        state: alert_state(&a, today),
         live: a.is_active && a.starts_on <= today && today <= a.ends_on,
         id: a.id,
         kind: a.kind,

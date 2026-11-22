@@ -16,7 +16,11 @@ use application::{
 };
 use axum::{extract::State, http::StatusCode, response::Response};
 use domain::{
-    models::{business::ListingRef, product::AdminProductFilter},
+    models::{
+        admin_list::{AdminSort, LISTING_LIST_STATES},
+        business::ListingRef,
+        product::AdminProductFilter,
+    },
     Error, ErrorCode,
 };
 use serde::{Deserialize, Serialize};
@@ -33,7 +37,7 @@ use crate::{
         admin::{
             history_rows, is_refusal,
             listing_record::{listing_controls, ListingState, PRODUCT_WORDS},
-            render_admin, url, Confirm, HistoryRow, ListPosition, ListReturn, Outcome,
+            render_admin, url, AdminTab, Confirm, HistoryRow, ListPosition, ListReturn, Outcome,
             ProviderFilter, ReasonForm, RecordHeader, RowConfirm, SearchBox, BACK_TO_LIST,
         },
         canonical_url,
@@ -59,6 +63,16 @@ pub struct ListQuery {
     /// Those for one commodity, or of one supply type.
     pub commodity_id: String,
     pub category_id: String,
+    /// Shown / hidden (`?state=`), the order (`?sort=`).
+    pub state: String,
+    pub sort: String,
+    /// The sector, what it lacks, the price between, the days made between.
+    pub sector: String,
+    pub gap: String,
+    pub fee_min: String,
+    pub fee_max: String,
+    pub from: String,
+    pub to: String,
     /// The product whose hide confirmation is open.
     pub hide: String,
     /// The product whose delete confirmation is open.
@@ -93,6 +107,8 @@ pub struct ProductsPage {
     /// Set when the list is one commodity's or one supply type's.
     pub narrowed: Option<ProviderFilter>,
     pub search: SearchBox,
+    /// The shown / hidden chips.
+    pub states: Vec<AdminTab>,
     /// Set when the list is one provider's.
     pub create: Option<CreateForm>,
     /// The hidden fields of every row action: land back here.
@@ -151,6 +167,9 @@ struct Listing {
     status: StatusCode,
 }
 
+/// The orders a listing list offers besides its own (the newest first).
+const LISTING_SORTS: &[AdminSort] = &[AdminSort::Oldest, AdminSort::Name];
+
 async fn list_page(state: &AppState, actor: &Actor, asked: Listing) -> Result<Response, Error> {
     let Listing {
         query: q,
@@ -164,8 +183,17 @@ async fn list_page(state: &AppState, actor: &Actor, asked: Listing) -> Result<Re
         q: q.q.clone(),
         commodity_id: q.commodity_id.clone(),
         category_id: q.category_id.clone(),
+        state: q.state.clone(),
+        sort: q.sort.clone(),
+        sector: q.sector.clone(),
+        gap: q.gap.clone(),
+        fee_min: q.fee_min.clone(),
+        fee_max: q.fee_max.clone(),
+        from: q.from.clone(),
+        to: q.to.clone(),
         ..ListPosition::default()
-    };
+    }
+    .checked(LISTING_LIST_STATES, LISTING_SORTS);
     let commodity_id = parse_opt::<i32>(&q.commodity_id).filter(|c| *c > 0);
     let category_id = parse_opt::<i32>(&q.category_id).filter(|c| *c > 0);
     let provider_id = position.provider_id();
@@ -186,6 +214,14 @@ async fn list_page(state: &AppState, actor: &Actor, asked: Listing) -> Result<Re
                 category_id,
                 commodity_id,
                 search: position.search().map(str::to_owned),
+                state: position.state_in(LISTING_LIST_STATES),
+                sort: position.sort(),
+                sector: position.sector().map(str::to_owned),
+                gap: position.gap().map(str::to_owned),
+                price_min: position.fee(&position.fee_min),
+                price_max: position.fee(&position.fee_max),
+                created_from: position.created_from(),
+                created_to: position.created_to(),
             },
         )
         .await?;
@@ -264,7 +300,67 @@ async fn list_page(state: &AppState, actor: &Actor, asked: Listing) -> Result<Re
         total,
         narrowed,
         filter: position.provider_filter("admin_products", name)?,
-        search: position.search_box("admin_products")?,
+        search: position
+            .search_box("admin_products")?
+            .picked(
+                "sector",
+                state.locale().text("sector.label"),
+                state.locale().text("admin_pick.all_sectors"),
+                sectors
+                    .iter()
+                    .map(|s| (s.code.clone(), s.name.clone()))
+                    .collect(),
+            )
+            .picked(
+                "gap",
+                state.locale().text("admin_pick.gap"),
+                state.locale().text("admin_pick.all_gaps"),
+                ["no_image", "no_price"]
+                    .into_iter()
+                    .map(|g| (g, state.locale().text(&format!("admin_pick.gap_{g}"))))
+                    .collect(),
+            )
+            .ranged(
+                ("fee_min", "fee_max"),
+                state.locale().text("admin_pick.price"),
+                (
+                    state.locale().text("admin_search.from"),
+                    state.locale().text("admin_search.to"),
+                ),
+            )
+            .dated(state.locale())
+            .picked(
+                "category_id",
+                state.locale().text("admin_pick.supply_type"),
+                state.locale().text("admin_pick.all_supply_types"),
+                product_categories(state)
+                    .await?
+                    .into_iter()
+                    .map(|c| (c.id, c.name))
+                    .collect(),
+            )
+            .picked(
+                "commodity_id",
+                state.locale().text("admin_pick.commodity"),
+                state.locale().text("admin_pick.all_commodities"),
+                product_commodities(state)
+                    .await?
+                    .into_iter()
+                    .map(|c| (c.id, c.name))
+                    .collect(),
+            )
+            .sorted(
+                state.locale(),
+                &position,
+                "admin_sort.newest",
+                LISTING_SORTS,
+            ),
+        states: position.shared_state_chips(
+            state.locale(),
+            "admin_products",
+            LISTING_LIST_STATES,
+            None,
+        )?,
         pagination: position.pagination(&path, page, total_pages),
         rows,
         create,

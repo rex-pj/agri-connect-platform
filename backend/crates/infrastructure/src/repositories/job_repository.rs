@@ -7,14 +7,15 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sea_orm::{
-    sea_query::{Expr, IntoIden, Order, Query, SelectStatement, SimpleExpr},
+    sea_query::{Asterisk, Expr, Func, IntoIden, Order, Query, SelectStatement, SimpleExpr},
     ColumnTrait, ConnectionTrait, DatabaseConnection, DbErr, EntityTrait, FromQueryResult,
-    PaginatorTrait, QueryFilter, QueryTrait, StatementBuilder,
+    PaginatorTrait, QueryFilter, StatementBuilder,
 };
 use tracing::error;
 
 use domain::{
     constants::JOB_STATUS_OPEN,
+    models::admin_list::{AdminFilter, AdminSort},
     models::job::{JobForNotice, JobPost, JobRecipient, NewJobPost},
     repositories::job_repository_trait::JobRepositoryTrait,
     Error,
@@ -22,6 +23,7 @@ use domain::{
 
 use crate::{
     entities::{business, job_post, location, service, service_type as category, user},
+    search::admin_job_search,
     sql::{
         business_location, distance, geography_from_text, live_owner_on, notice_email, null_float,
         within, Geo, QueryAs,
@@ -141,9 +143,42 @@ fn live_business() -> SimpleExpr {
         .and(Expr::expr(business_location()).is_not_null())
 }
 
+/// The open posts since `since` within `radius_m` of the business the
+/// account `owner_user` manages, in the categories of its live services:
+/// what its list pages through and what its count counts, the one
+/// definition (`OFFERS_THE_JOB`).
+fn near_owner(
+    query: &mut SelectStatement,
+    owner_user: i32,
+    since: DateTime<Utc>,
+    radius_m: f64,
+) -> &mut SelectStatement {
+    query
+        .inner_join(
+            business::Entity,
+            Expr::col((business::Entity, business::Column::OwnerId))
+                .eq(owner_user)
+                .and(live_business()),
+        )
+        .and_where(Expr::col((job_post::Entity, job_post::Column::Status)).eq(JOB_STATUS_OPEN))
+        .and_where(Expr::col((job_post::Entity, job_post::Column::CreatedOn)).gte(since))
+        .and_where(within(job_location(), business_location(), radius_m))
+        .and_where(offers_the_job())
+        // A real business sees real posts, a demo one demo posts.
+        .and_where(
+            Expr::col((job_post::Entity, job_post::Column::IsDemo))
+                .equals((business::Entity, business::Column::IsDemo)),
+        )
+}
+
 #[derive(FromQueryResult)]
 struct IdRow {
     id: i32,
+}
+
+#[derive(FromQueryResult)]
+struct TotalRow {
+    total: i64,
 }
 
 #[derive(FromQueryResult)]
@@ -291,52 +326,64 @@ impl JobRepositoryTrait for JobRepository {
         since: DateTime<Utc>,
         radius_m: f64,
         limit: i64,
+        offset: i64,
     ) -> Result<Vec<JobPost>, Error> {
         let mut query = job_select(distance(job_location(), business_location()));
-        query
-            .inner_join(
-                business::Entity,
-                Expr::col((business::Entity, business::Column::OwnerId))
-                    .eq(owner_user)
-                    .and(live_business()),
-            )
-            .and_where(Expr::col((job_post::Entity, job_post::Column::Status)).eq(JOB_STATUS_OPEN))
-            .and_where(Expr::col((job_post::Entity, job_post::Column::CreatedOn)).gte(since))
-            .and_where(within(job_location(), business_location(), radius_m))
-            .and_where(offers_the_job())
-            // A real business sees real posts, a demo one demo posts.
-            .and_where(
-                Expr::col((job_post::Entity, job_post::Column::IsDemo))
-                    .equals((business::Entity, business::Column::IsDemo)),
-            )
-            .limit(u64::try_from(limit).unwrap_or(0));
+        near_owner(&mut query, owner_user, since, radius_m)
+            .limit(u64::try_from(limit).unwrap_or(0))
+            .offset(u64::try_from(offset).unwrap_or(0));
         self.rows::<JobRow, _>(&*newest_first(&mut query), "open_near_owner")
             .await
             .map(|rows| rows.into_iter().map(JobPost::from).collect())
     }
 
+    async fn count_open_near_owner(
+        &self,
+        owner_user: i32,
+        since: DateTime<Utc>,
+        radius_m: f64,
+    ) -> Result<i64, Error> {
+        let mut query = Query::select()
+            .expr_as(Func::count(Expr::col(Asterisk)), QueryAs::Total)
+            .from(job_post::Entity)
+            .to_owned();
+        near_owner(&mut query, owner_user, since, radius_m);
+        let rows = self
+            .rows::<TotalRow, _>(&query, "count_open_near_owner")
+            .await?;
+        Ok(rows.first().map_or(0, |r| r.total))
+    }
+
     async fn list_admin(
         &self,
-        status: Option<&str>,
+        filter: &AdminFilter,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<JobPost>, Error> {
         let mut query = job_select(null_float());
-        if let Some(status) = status {
-            query.and_where(Expr::col((job_post::Entity, job_post::Column::Status)).eq(status));
-        }
         query
+            .cond_where(admin_condition(filter))
             .limit(u64::try_from(limit).unwrap_or(0))
             .offset(u64::try_from(offset).unwrap_or(0));
-        let rows = self
-            .rows::<JobRow, _>(&*newest_first(&mut query), "list_admin")
-            .await?;
+        let ordered = match filter.sort {
+            Some(AdminSort::Oldest) => query
+                .order_by((job_post::Entity, job_post::Column::CreatedOn), Order::Asc)
+                .order_by((job_post::Entity, job_post::Column::Id), Order::Asc),
+            Some(AdminSort::Name) => query
+                .order_by(
+                    (job_post::Entity, job_post::Column::RequesterName),
+                    Order::Asc,
+                )
+                .order_by((job_post::Entity, job_post::Column::Id), Order::Asc),
+            Some(AdminSort::Newest) | None => newest_first(&mut query),
+        };
+        let rows = self.rows::<JobRow, _>(&*ordered, "list_admin").await?;
         Ok(rows.into_iter().map(JobPost::from).collect())
     }
 
-    async fn count_admin(&self, status: Option<&str>) -> Result<i64, Error> {
+    async fn count_admin(&self, filter: &AdminFilter) -> Result<i64, Error> {
         job_post::Entity::find()
-            .apply_if(status, |q, s| q.filter(job_post::Column::Status.eq(s)))
+            .filter(admin_condition(filter))
             .count(self.db.as_ref())
             .await
             .map(|total| i64::try_from(total).unwrap_or(i64::MAX))
@@ -360,5 +407,45 @@ impl JobRepositoryTrait for JobRepository {
             .await
             .map(|r| r.rows_affected)
             .map_err(Self::fail("delete_older_than"))
+    }
+}
+
+/// The admin list's criteria, shared by the list and its count.
+fn admin_condition(filter: &AdminFilter) -> sea_orm::Condition {
+    admin_condition_base(filter).add(crate::admin_list::created_between(
+        (
+            crate::entities::job_post::Entity,
+            crate::entities::job_post::Column::CreatedOn,
+        ),
+        filter,
+    ))
+}
+
+fn admin_condition_base(filter: &AdminFilter) -> sea_orm::Condition {
+    // The search is an OR of its columns: wrapped, so every other
+    // criterion narrows it rather than joining the OR.
+    let cond = sea_orm::Condition::all().add(admin_job_search(filter.search()));
+    let cond = match filter.category_id {
+        Some(id) => cond.add(Expr::col((job_post::Entity, job_post::Column::ServiceTypeId)).eq(id)),
+        None => cond,
+    };
+    let cond = match crate::admin_list::stale_cutoff(filter) {
+        Some(cutoff) => cond
+            .add(
+                Expr::col((job_post::Entity, job_post::Column::Status))
+                    .eq(domain::constants::JOB_STATUS_OPEN),
+            )
+            .add(Expr::col((job_post::Entity, job_post::Column::CreatedOn)).lt(cutoff)),
+        None => cond,
+    };
+    let cond = match filter.location_id {
+        Some(id) => cond.add(Expr::col((job_post::Entity, job_post::Column::LocationId)).eq(id)),
+        None => cond,
+    };
+    match filter.state {
+        Some(status) => {
+            cond.add(Expr::col((job_post::Entity, job_post::Column::Status)).eq(status))
+        }
+        None => cond,
     }
 }

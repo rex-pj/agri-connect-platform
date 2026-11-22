@@ -25,7 +25,10 @@ use application::{
     usecases::admin_usecase::HistoryOf,
 };
 use axum::{extract::State, http::StatusCode, response::Response};
-use domain::{Error, ErrorCode};
+use domain::{
+    models::admin_list::{AdminSort, LIST_STATE_UNVERIFIED, PROVIDER_LIST_STATES},
+    Error, ErrorCode,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -52,6 +55,7 @@ use crate::{
         parse_id,
         profile_form::ProfileForm,
         see_other,
+        service_form::service_categories,
     },
 };
 
@@ -67,6 +71,8 @@ pub struct ProvidersPage {
     pub rows: Vec<ProviderRow>,
     pub pagination: Option<Pagination>,
     pub search: SearchBox,
+    /// The unverified / verified / off chips.
+    pub states: Vec<AdminTab>,
     /// The create form, `None` without `provider.manage`.
     pub create: Option<CreateSheet>,
 }
@@ -79,6 +85,10 @@ pub struct CreateSheet {
     pub errors: FormErrors,
 }
 
+/// The orders the provider list offers besides its own (verified first,
+/// then the newest).
+const PROVIDER_SORTS: &[AdminSort] = &[AdminSort::Newest, AdminSort::Oldest, AdminSort::Name];
+
 async fn list_page(
     state: &AppState,
     actor: &Actor,
@@ -86,6 +96,9 @@ async fn list_page(
     typed: Option<(ProfileForm, FormErrors)>,
     status: StatusCode,
 ) -> Result<Response, Error> {
+    let position = &position
+        .clone()
+        .checked(PROVIDER_LIST_STATES, PROVIDER_SORTS);
     let AdminPagedResponse {
         items,
         total,
@@ -95,8 +108,18 @@ async fn list_page(
     } = state
         .usecases
         .admin
-        .list_providers(actor, position.page(), position.search())
+        .list_providers(
+            actor,
+            position.page(),
+            &position.filter(PROVIDER_LIST_STATES),
+        )
         .await?;
+    let unverified = state
+        .usecases
+        .admin
+        .count_unverified_providers(actor)
+        .await?;
+    let sectors = state.usecases.sector.named().await?;
     let path = url("admin_providers", &[])?;
     let mut rows = Vec::with_capacity(items.len());
     for provider in items {
@@ -115,7 +138,70 @@ async fn list_page(
         total,
         rows,
         pagination: position.pagination(&path, page, total_pages),
-        search: position.search_box("admin_providers")?,
+        search: position
+            .search_box("admin_providers")?
+            .picked(
+                "sector",
+                state.locale().text("sector.label"),
+                state.locale().text("admin_pick.all_sectors"),
+                sectors
+                    .iter()
+                    .map(|s| (s.code.clone(), s.name.clone()))
+                    .collect(),
+            )
+            .picked(
+                "rating",
+                state.locale().text("admin_pick.rating_from"),
+                state.locale().text("admin_pick.all_ratings"),
+                (3..=5)
+                    .rev()
+                    .map(|n| {
+                        (
+                            n,
+                            state
+                                .locale()
+                                .text_with("admin_pick.stars_up", &[("n", &n.to_string())]),
+                        )
+                    })
+                    .collect(),
+            )
+            .texted(
+                "area",
+                state.locale().text("admin_pick.address"),
+                state.locale().text("admin_pick.address_hint"),
+            )
+            .picked(
+                "category_id",
+                state.locale().text("admin_pick.service_type"),
+                state.locale().text("admin_pick.all_types"),
+                service_categories(state)
+                    .await?
+                    .into_iter()
+                    .map(|c| (c.id, c.name))
+                    .collect(),
+            )
+            .picked(
+                "gap",
+                state.locale().text("admin_pick.gap"),
+                state.locale().text("admin_pick.all_gaps"),
+                ["no_services", "no_products", "no_account"]
+                    .into_iter()
+                    .map(|g| (g, state.locale().text(&format!("admin_pick.gap_{g}"))))
+                    .collect(),
+            )
+            .dated(state.locale())
+            .sorted(
+                state.locale(),
+                position,
+                "admin_sort.verified",
+                PROVIDER_SORTS,
+            ),
+        states: position.shared_state_chips(
+            state.locale(),
+            "admin_providers",
+            PROVIDER_LIST_STATES,
+            Some((LIST_STATE_UNVERIFIED, unverified)),
+        )?,
         create,
     };
     render_admin(

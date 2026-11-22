@@ -10,11 +10,12 @@ use std::sync::Arc;
 
 use chrono::{Duration, Utc};
 use domain::{
-    models::demand::DemoScope,
+    models::{catalogue::DemoVolume, demand::DemoScope},
     repositories::{
         demand_repository_trait::DemandRepositoryTrait,
         demo_data_repository_trait::DemoDataRepositoryTrait,
     },
+    ErrorCode,
 };
 use infrastructure::{
     demo_data_repository::DemoDataRepository, repositories::demand_repository::DemandRepository,
@@ -213,5 +214,129 @@ async fn demo_data_agrees_with_itself_and_leaves_nothing_behind() {
         assert_eq!(n, 0, "{table}");
     }
     assert!(count(&e.t.db, "SELECT COUNT(*) AS n FROM wards").await > 3000);
+    e.cleanup().await;
+}
+
+/// The demo data at volume (`agri-connect demo-data`) keeps the same rules
+/// as the file's, at a size where a rule broken one time in a hundred shows:
+/// every review from an answered request of its shop, every sponsored shop
+/// in its contract's area, every shop managed by a demo provider account.
+/// A second load is refused; removing it takes the accounts too.
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn demo_data_at_volume_keeps_the_rules_and_leaves_nothing_behind() {
+    let e = Env::new().await;
+    load_admin_units(&e).await;
+    let admin = first_admin(&e.state).await;
+    let volume = DemoVolume {
+        providers: 150,
+        seed: 11,
+    };
+    let password = "Demo-volume-pass-2026";
+    let setup = &e.state.usecases.setup;
+    let report = setup.load_demo_volume(&volume, password).await.unwrap();
+    assert!(report.businesses >= 140, "{report:?}");
+    assert!(report.accounts >= 130, "{report:?}");
+    assert!(
+        report.services >= 140 && report.products >= 70,
+        "{report:?}"
+    );
+    assert!(
+        report.inquiries >= 250 && report.reviews >= 100,
+        "{report:?}"
+    );
+    assert!(report.jobs >= 150 && report.alerts >= 150, "{report:?}");
+    assert!(report.partners >= 6 && report.contracts >= 6, "{report:?}");
+    assert!(report.prices >= 1_000 && report.calls > 0, "{report:?}");
+    let present = DemoDataRepository::new(Arc::new(e.t.db.clone()))
+        .count()
+        .await
+        .unwrap();
+    assert_eq!(present.accounts, report.accounts);
+    assert_eq!(present.reviews, report.reviews);
+
+    // Nothing the generator wrote was dropped by a reference it got wrong.
+    let file: Value = serde_json::from_str(DATA).unwrap();
+    assert!(report.jobs >= len(&file, "jobs") + u64::from(volume.providers));
+    assert_eq!(
+        count(
+            &e.t.db,
+            "SELECT COUNT(*) AS n FROM reviews r JOIN inquiries i ON i.id = r.inquiry_id
+             WHERE i.business_id = r.business_id AND i.status IN ('contacted', 'closed')"
+        )
+        .await,
+        report.reviews as i64
+    );
+    assert_eq!(
+        count(
+            &e.t.db,
+            "SELECT COUNT(*) AS n FROM partner_sponsored s
+             JOIN partner_contracts c ON c.id = s.contract_id
+             JOIN businesses b ON b.id = s.business_id
+             JOIN wards w ON w.code = b.ward_code
+             WHERE (c.ward_code IS NOT NULL AND c.ward_code <> b.ward_code)
+                OR (c.ward_code IS NULL AND c.province_code <> w.province_code)"
+        )
+        .await,
+        0,
+        "a sponsored shop outside its contract's area"
+    );
+    assert_eq!(
+        count(
+            &e.t.db,
+            "SELECT COUNT(*) AS n FROM businesses b JOIN users u ON u.id = b.owner_id
+             JOIN roles r ON r.id = u.role_id
+             WHERE b.is_demo AND (NOT u.is_demo OR r.code <> 'provider')"
+        )
+        .await,
+        0,
+        "a demo shop managed by anything but a demo provider account"
+    );
+    assert!(
+        count(
+            &e.t.db,
+            "SELECT COUNT(*) AS n FROM businesses WHERE is_demo AND ward_code IS NOT NULL"
+        )
+        .await
+            >= 130,
+        "shops are placed in wards"
+    );
+
+    // The pages read it: the price board, the admin's report.
+    let board = e.state.usecases.price.board(None, None).await.unwrap();
+    assert!(
+        board.crops.len() > 20,
+        "{} crops on the board",
+        board.crops.len()
+    );
+    let demand = e.state.usecases.demand.report(&admin, None).await.unwrap();
+    // The total is shown, or hidden with what it is at least (it would give
+    // one small hidden figure away): leads are counted either way.
+    let total = &demand.all.total;
+    assert!(demand.with_demo && total.value.or(total.at_least).unwrap_or(0) > 0);
+
+    // Once is enough: a second load would double it.
+    let again = setup.load_demo_volume(&volume, password).await.unwrap_err();
+    assert_eq!(again.code(), ErrorCode::DemoAlreadyLoaded);
+
+    setup.remove_demo(&admin).await.unwrap();
+    for table in [
+        "businesses",
+        "partners",
+        "job_posts",
+        "alerts",
+        "crop_prices",
+    ] {
+        let n = count(&e.t.db, &format!("SELECT COUNT(*) AS n FROM {table}")).await;
+        assert_eq!(n, 0, "{table}");
+    }
+    assert_eq!(
+        count(&e.t.db, "SELECT COUNT(*) AS n FROM users WHERE is_demo").await,
+        0
+    );
+    assert!(
+        count(&e.t.db, "SELECT COUNT(*) AS n FROM users").await >= 1,
+        "the admin stays"
+    );
     e.cleanup().await;
 }

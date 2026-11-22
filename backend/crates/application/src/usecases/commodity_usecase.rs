@@ -7,7 +7,11 @@ use std::sync::Arc;
 
 use domain::{
     events::{Change, DomainEvent, Entity},
-    models::{coded::CodedEntry, commodity::CommodityFields},
+    models::{
+        admin_list::{AdminFilter, LIST_STATE_SHOWN},
+        coded::CodedEntry,
+        commodity::CommodityFields,
+    },
     repositories::{
         coded_repository_trait::CodedRepositoryTrait,
         commodity_repository_trait::CommodityRepositoryTrait,
@@ -18,10 +22,12 @@ use domain::{
 use crate::{
     authz::Actor,
     catalogue::PERM_CATEGORY_MANAGE,
-    constants::{COMMODITY_NAME_MAX, PRICE_FRESH_DAYS_MAX},
+    constants::{ADMIN_PAGE_SIZE, COMMODITY_NAME_MAX, PRICE_FRESH_DAYS_MAX},
     inputs::CommodityInput,
-    outputs::CommodityDto,
+    outputs::{AdminPagedResponse, CommodityDto},
+    pagination::{admin_page_of, order_admin_list, paginate_admin, total_or_count},
     ports::EventBus,
+    slug::matches_search,
     validation::{self, audit_reason, max_chars, sector},
 };
 
@@ -80,6 +86,53 @@ impl CommodityUseCase {
             .into_iter()
             .map(CommodityDto::from)
             .collect())
+    }
+
+    /// A page of every commodity, hidden ones too: the admin's list;
+    /// `filter`: only those whose name has the words, in the sector, shown
+    /// or hidden.
+    pub async fn list_page(
+        &self,
+        actor: &Actor,
+        page: i64,
+        filter: &AdminFilter,
+    ) -> Result<AdminPagedResponse<CommodityDto>> {
+        actor.require(PERM_CATEGORY_MANAGE)?;
+        if filter.search().is_some()
+            || filter.state.is_some()
+            || filter.sector.is_some()
+            || filter.sort.is_some()
+        {
+            let rows = self.commodity_repo.list_all().await?;
+            let mut found: Vec<CommodityDto> = rows
+                .into_iter()
+                .map(CommodityDto::from)
+                .filter(|c| {
+                    filter
+                        .search()
+                        .is_none_or(|q| matches_search(&[&c.name], q))
+                })
+                .filter(|c| filter.sector.as_deref().is_none_or(|s| c.sector == s))
+                .filter(|c| {
+                    filter
+                        .state
+                        .is_none_or(|s| (s == LIST_STATE_SHOWN) == c.is_active)
+                })
+                .collect();
+            order_admin_list(&mut found, filter.sort, |c| &c.name, |c| c.id);
+            return Ok(admin_page_of(found, page));
+        }
+        let (page, offset) = paginate_admin(page);
+        let rows = self
+            .commodity_repo
+            .list_page(ADMIN_PAGE_SIZE, offset)
+            .await?;
+        let total = total_or_count(offset, rows.len(), ADMIN_PAGE_SIZE, || {
+            self.commodity_repo.count()
+        })
+        .await?;
+        let items = rows.into_iter().map(CommodityDto::from).collect();
+        Ok(AdminPagedResponse::admin(items, total, page))
     }
 
     pub async fn get(&self, actor: &Actor, id: i32) -> Result<CommodityDto> {

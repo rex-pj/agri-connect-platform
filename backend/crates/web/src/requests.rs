@@ -2,6 +2,7 @@
 //! JSON API and the server-rendered forms enforce exactly the same ones.
 
 use application::inputs::{ReviewInput, ServiceInput, UpdateProfileInput};
+use domain::models::admin_list::{state_in, AdminFilter, AdminSort};
 use serde::Deserialize;
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -59,11 +60,10 @@ pub struct AdminPricesQuery {
     pub crop_id: Option<i32>,
 }
 
+/// A paged list with no filter: `page?` (1 when absent).
 #[derive(Deserialize)]
-pub struct AdminPageQuery {
+pub struct PageQuery {
     pub page: Option<i64>,
-    /// Narrows a searchable list to names containing it.
-    pub name: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -144,15 +144,6 @@ pub struct UpdateCategoryRequest {
 pub struct UpdateInquiryStatusRequest {
     pub status: String,
     pub reason: Option<String>,
-}
-
-/// GET /api/admin/inquiries and /api/admin/jobs: a page, narrowed to one
-/// provider (inquiries) and to one status.
-#[derive(Deserialize)]
-pub struct StatusListQuery {
-    pub page: Option<i64>,
-    pub provider_id: Option<i32>,
-    pub status: Option<String>,
 }
 
 /// POST /api/admin/locations and PUT /api/admin/locations/{id}.
@@ -267,12 +258,50 @@ impl OwnServiceRequest {
 
 // ── Admin products & services ─────────────────────────────────────────────────
 
+/// The query of every admin JSON list: a page, narrowed to one provider
+/// (where the list has one), by `name` (what the matching page's search box
+/// searches), to one `status` (the list's own: `INQUIRY_STATUSES`,
+/// `JOB_STATUSES`, `admin_list::*_LIST_STATES`), ordered by `sort`
+/// (`newest`, `oldest`, `name`; absent: the list's own order).
 #[derive(Deserialize)]
 pub struct AdminListQuery {
     pub page: Option<i64>,
     pub provider_id: Option<i32>,
-    /// Names containing it (the record's or its business's).
     pub name: Option<String>,
+    pub status: Option<String>,
+    pub sort: Option<String>,
+}
+
+impl AdminListQuery {
+    /// The criteria, `status` already checked (`None`: every one).
+    pub fn filter(&self, state: Option<&'static str>) -> AdminFilter {
+        AdminFilter {
+            provider_id: self.provider_id,
+            category_id: None,
+            location_id: None,
+            rating: None,
+            unanswered: false,
+            kind: None,
+            role_id: None,
+            gap: None,
+            area: None,
+            contract: None,
+            today: None,
+            sector: None,
+            created_from: None,
+            created_to: None,
+            search: self.name.clone(),
+            state,
+            sort: self.sort.as_deref().and_then(AdminSort::parse),
+        }
+    }
+
+    /// The criteria of a list whose statuses are `states`; any other
+    /// status is every one.
+    pub fn filter_in(&self, states: &[&'static str]) -> AdminFilter {
+        let state = self.status.as_deref().and_then(|s| state_in(states, s));
+        self.filter(state)
+    }
 }
 
 #[derive(Deserialize)]

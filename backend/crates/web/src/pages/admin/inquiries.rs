@@ -26,7 +26,9 @@ use crate::{
     extract::{ApiForm, ApiPath, ApiQuery},
     middleware::auth::Viewer,
     pages::{
-        admin::{render_admin, url, AdminTab, ListPosition, ProviderFilter},
+        admin::{
+            render_admin, url, AdminTab, ListPosition, ProviderFilter, SearchBox, QUEUE_SORTS,
+        },
         forms::reason,
         listing::{parse_opt, Pagination},
         parse_id, see_other,
@@ -41,6 +43,15 @@ pub struct ListQuery {
     pub provider_id: String,
     /// The status the list is narrowed to.
     pub state: String,
+    /// The words searched, the order asked.
+    pub q: String,
+    pub sort: String,
+    pub from: String,
+    pub to: String,
+    /// What the request is about: `service` or `product`.
+    pub kind: String,
+    /// How long it has waited: `stale_3`, `stale_7`.
+    pub gap: String,
     /// The inquiry whose spam confirmation is open.
     pub spam: String,
 }
@@ -69,6 +80,7 @@ pub struct InquiriesPage {
     pub pagination: Option<Pagination>,
     /// The status chips above the list.
     pub states: Vec<AdminTab>,
+    pub search: SearchBox,
     /// The list is narrowed to one status.
     pub narrowed: bool,
     pub can_manage: bool,
@@ -89,14 +101,20 @@ pub async fn list(
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
-    let mut position = ListPosition {
+    let position = ListPosition {
         page: q.page,
         provider_id: q.provider_id,
         state: q.state,
+        q: q.q,
+        sort: q.sort,
+        from: q.from,
+        to: q.to,
+        kind: q.kind,
+        gap: q.gap,
         ..ListPosition::default()
-    };
+    }
+    .checked(INQUIRY_STATUSES, QUEUE_SORTS);
     let state_filter = position.state_in(INQUIRY_STATUSES);
-    position.state = state_filter.unwrap_or_default().to_owned();
     let AdminPagedResponse {
         items,
         total,
@@ -106,12 +124,7 @@ pub async fn list(
     } = state
         .usecases
         .admin
-        .list_inquiries(
-            &actor,
-            position.page(),
-            position.provider_id(),
-            state_filter,
-        )
+        .list_inquiries(&actor, position.page(), &position.filter(INQUIRY_STATUSES))
         .await?;
     let position = ListPosition {
         page: page.to_string(),
@@ -153,19 +166,38 @@ pub async fn list(
         INQUIRY_STATUSES,
         locale.text("filters.all"),
         |s| locale.text(inquiry_status_key(s)),
-        (INQUIRY_STATUS_NEW, new),
+        Some((INQUIRY_STATUS_NEW, new)),
     )?;
     let path = url("admin_inquiries", &[])?;
     let name = rows.first().map(|r| r.inquiry.business_name.clone());
+    let provider = position.provider_filter("admin_inquiries", name)?;
     let body = InquiriesPage {
         total,
         rows,
         pagination: position.pagination(&path, page, total_pages),
+        search: position
+            .search_box("admin_inquiries")?
+            .provider(
+                provider.clone(),
+                locale.text("admin_filter.selected_provider"),
+            )
+            .picked(
+                "kind",
+                locale.text("admin_pick.kind"),
+                locale.text("admin_pick.all_kinds"),
+                vec![
+                    ("service", locale.text("admin_pick.kind_service")),
+                    ("product", locale.text("admin_pick.kind_product")),
+                ],
+            )
+            .waiting(state.locale())
+            .dated(state.locale())
+            .sorted(locale, &position, "admin_sort.newest", QUEUE_SORTS),
         states,
         narrowed: state_filter.is_some(),
         can_manage,
         confirm,
-        filter: position.provider_filter("admin_inquiries", name)?,
+        filter: provider,
         position,
         flash: flash.0,
     };
@@ -190,6 +222,14 @@ pub struct StatusForm {
     pub page: String,
     pub provider_id: String,
     pub state: String,
+    pub q: String,
+    pub sort: String,
+    pub from: String,
+    pub to: String,
+    /// What the request is about: `service` or `product`.
+    pub kind: String,
+    /// How long it has waited: `stale_3`, `stale_7`.
+    pub gap: String,
 }
 
 /// POST /admin/inquiries/{id}/status
@@ -212,6 +252,12 @@ pub async fn change_status(
         page: form.page,
         provider_id: form.provider_id,
         state: form.state,
+        q: form.q,
+        sort: form.sort,
+        from: form.from,
+        to: form.to,
+        kind: form.kind,
+        gap: form.gap,
         ..ListPosition::default()
     }
     .back_to("admin_inquiries", Flash::InquiryStatusSaved)

@@ -14,6 +14,7 @@ use tracing::error;
 
 use domain::{
     models::{
+        admin_list::AdminFilter,
         role::UserRole,
         user::{
             ExistingUser, LoginName, NewResetToken, NewUser, UserAdmin, UserAdminDetail,
@@ -25,6 +26,7 @@ use domain::{
 
 use domain::{Error, ErrorCode};
 
+use crate::admin_list::{admin_order, switch_state, OrderColumns};
 use crate::repositories::{business_repository::insert_registration_business, unique_or_internal};
 use crate::search::{search_condition, ADMIN_USER_SEARCH_COLUMNS};
 use crate::sql::{advisory_xact_lock, null, username_of, PgType, QueryAs};
@@ -85,6 +87,7 @@ struct UserAdminRow {
     role_code: String,
     role_name: String,
     is_active: bool,
+    is_demo: bool,
     created_on: DateTimeWithTimeZone,
     updated_on: DateTimeWithTimeZone,
     created_by_name: Option<String>,
@@ -296,10 +299,10 @@ impl UserRepositoryTrait for UserRepository {
             })
     }
 
-    async fn count_for_admin(&self, search: Option<&str>) -> Result<i64, Error> {
+    async fn count_for_admin(&self, filter: &AdminFilter) -> Result<i64, Error> {
         UserEntity::find()
             .filter(user::Column::DeletedAt.is_null())
-            .filter(search_condition(ADMIN_USER_SEARCH_COLUMNS, search))
+            .filter(admin_condition(filter))
             .count(self.db.as_ref())
             .await
             .map(|c| c as i64)
@@ -311,11 +314,11 @@ impl UserRepositoryTrait for UserRepository {
 
     async fn list_for_admin(
         &self,
-        search: Option<&str>,
+        filter: &AdminFilter,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<UserAdmin>, Error> {
-        UserEntity::find()
+        let query = UserEntity::find()
             .select_only()
             .column(user::Column::Id)
             .column(user::Column::Username)
@@ -324,6 +327,7 @@ impl UserRepositoryTrait for UserRepository {
             .column_as(role::Column::Code, QueryAs::RoleCode)
             .column_as(role::Column::Name, QueryAs::RoleName)
             .column(user::Column::IsActive)
+            .column(user::Column::IsDemo)
             .column(user::Column::CreatedOn)
             .column(user::Column::UpdatedOn)
             .expr_as(
@@ -336,34 +340,44 @@ impl UserRepositoryTrait for UserRepository {
             )
             .join(JoinType::LeftJoin, user::Relation::Role.def())
             .filter(user::Column::DeletedAt.is_null())
-            .filter(search_condition(ADMIN_USER_SEARCH_COLUMNS, search))
-            .order_by_asc(user::Column::Id)
-            .limit(limit as u64)
-            .offset(offset as u64)
-            .into_model::<UserAdminRow>()
-            .all(self.db.as_ref())
-            .await
-            .map(|rows| {
-                rows.into_iter()
-                    .map(|r| UserAdmin {
-                        id: r.id,
-                        username: r.username,
-                        email: r.email,
-                        full_name: r.full_name,
-                        role_code: r.role_code,
-                        role_name: r.role_name,
-                        is_active: r.is_active,
-                        created_on: r.created_on.with_timezone(&Utc),
-                        updated_on: r.updated_on.with_timezone(&Utc),
-                        created_by_name: r.created_by_name,
-                        updated_by_name: r.updated_by_name,
-                    })
-                    .collect()
-            })
-            .map_err(|e| {
-                error!("user list_for_admin error: {e}");
-                Error::internal("Failed to load users.")
-            })
+            .filter(admin_condition(filter));
+        admin_order(
+            query,
+            filter.sort,
+            OrderColumns {
+                created: user::Column::CreatedOn,
+                name: user::Column::Username,
+                id: user::Column::Id,
+            },
+            |q| q.order_by_asc(user::Column::Id),
+        )
+        .limit(limit as u64)
+        .offset(offset as u64)
+        .into_model::<UserAdminRow>()
+        .all(self.db.as_ref())
+        .await
+        .map(|rows| {
+            rows.into_iter()
+                .map(|r| UserAdmin {
+                    id: r.id,
+                    username: r.username,
+                    email: r.email,
+                    full_name: r.full_name,
+                    role_code: r.role_code,
+                    role_name: r.role_name,
+                    is_active: r.is_active,
+                    is_demo: r.is_demo,
+                    created_on: r.created_on.with_timezone(&Utc),
+                    updated_on: r.updated_on.with_timezone(&Utc),
+                    created_by_name: r.created_by_name,
+                    updated_by_name: r.updated_by_name,
+                })
+                .collect()
+        })
+        .map_err(|e| {
+            error!("user list_for_admin error: {e}");
+            Error::internal("Failed to load users.")
+        })
     }
 
     async fn find_by_id_for_admin(&self, id: i32) -> Result<Option<UserAdminDetail>, Error> {
@@ -822,5 +836,30 @@ impl UserRepositoryTrait for UserRepository {
                 error!("reset_failed_login error: {e}");
                 Error::internal("System error.")
             })
+    }
+}
+
+/// The admin list's criteria: the words in the username, name or email,
+/// and the on / off chip.
+fn admin_condition(filter: &AdminFilter) -> sea_orm::Condition {
+    admin_condition_base(filter).add(crate::admin_list::created_between(
+        (
+            crate::entities::user::Entity,
+            crate::entities::user::Column::CreatedOn,
+        ),
+        filter,
+    ))
+}
+
+fn admin_condition_base(filter: &AdminFilter) -> sea_orm::Condition {
+    let mut cond = sea_orm::Condition::all()
+        .add(search_condition(ADMIN_USER_SEARCH_COLUMNS, filter.search()))
+        .add(switch_state(user::Column::IsActive, filter.state));
+    if filter.gap.as_deref() == Some("unverified_email") {
+        cond = cond.add(user::Column::EmailVerifiedAt.is_null());
+    }
+    match filter.role_id {
+        Some(id) => cond.add(user::Column::RoleId.eq(id)),
+        None => cond,
     }
 }

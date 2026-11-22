@@ -2,6 +2,7 @@ use async_trait::async_trait;
 
 use crate::{
     error::Error,
+    models::admin_list::AdminFilter,
     models::review::{
         BusinessRating, NewReview, OwnReview, PublicReview, RatingSummary, ReviewAdmin,
     },
@@ -9,11 +10,13 @@ use crate::{
 
 #[async_trait]
 pub trait ReviewRepositoryTrait {
-    /// `provider_id`: only that business's.
-    async fn count_admin(&self, provider_id: Option<i32>) -> Result<i64, Error>;
+    /// How many reviews `list_admin` pages through.
+    async fn count_admin(&self, filter: &AdminFilter) -> Result<i64, Error>;
+    /// The admin list (`state`: `waiting` / `shown`; `search`: the
+    /// reviewer's name, the comment or the provider's name).
     async fn list_admin(
         &self,
-        provider_id: Option<i32>,
+        filter: &AdminFilter,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<ReviewAdmin>, Error>;
@@ -34,8 +37,18 @@ pub trait ReviewRepositoryTrait {
     /// business with none is absent.
     async fn ratings_public(&self, business_ids: &[i32]) -> Result<Vec<BusinessRating>, Error>;
 
-    /// Every review of the business `owner_user` manages, newest first.
-    async fn list_for_owner(&self, owner_user: i32) -> Result<Vec<OwnReview>, Error>;
+    /// A page of the reviews of the business `owner_user` manages, newest
+    /// first.
+    async fn list_for_owner(
+        &self,
+        owner_user: i32,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<OwnReview>, Error>;
+
+    /// How many reviews the business `owner_user` manages has, and how many
+    /// of them wait to be shown.
+    async fn count_for_owner(&self, owner_user: i32) -> Result<(i64, i64), Error>;
 
     /// Sets (or with `None` removes) the answer to a review of the business
     /// `owner_user` manages, in one statement; false when it is not theirs.

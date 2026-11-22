@@ -25,7 +25,8 @@
 {{ header::admin_header(title=t(key="admin_menu.providers"), icon="fa-store", sub=t(key="directory.count", count=b.total)) }}
 {% endif %}
 <div class="admin-body">
-  {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.providers")) }}
+  {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.providers"), chips=b.states, chips_label=t(key="admin_state.label")) }}
+  {{ search::admin_results(s=b.search, total=b.total) }}
   <div class="admin-card">
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0 admin-table admin-table--cards">
@@ -46,7 +47,7 @@
             <td data-label="" class="text-end"><div class="row-actions">{{ row::open(href=r.href, name=p.name) }}</div></td>
           </tr>
           {% else %}
-          <tr><td colspan="8" class="text-center text-muted py-4">{% if b.search.q %}{{ t(key="admin_search.none", q=b.search.q) }}{% else %}{{ t(key="admin.no_providers") }}{% endif %}</td></tr>
+          <tr><td colspan="8" class="text-center text-muted py-4">{{ search::empty(s=b.search, none=t(key="admin.no_providers")) }}</td></tr>
           {% endfor %}
         </tbody>
       </table>

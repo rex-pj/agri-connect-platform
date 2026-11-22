@@ -13,6 +13,7 @@ use sea_orm::{
 use tracing::error;
 
 use domain::{
+    models::admin_list::{AdminFilter, LIST_STATE_OFF, LIST_STATE_UNVERIFIED, LIST_STATE_VERIFIED},
     models::business::{
         BusinessAdminDetail, BusinessAdminView, BusinessBrowse, BusinessDetail, BusinessGeoResult,
         BusinessProfile, ProductAdminItem, ProfileUpdate, ProviderSort, Service, ServiceAdminItem,
@@ -24,17 +25,18 @@ use domain::{
 use application::constants::ADMIN_UNIT_SNAP_M;
 use domain::{Error, ErrorCode};
 
+use crate::admin_list::{admin_order, phone_contains, phone_digits, OrderColumns};
 use crate::repositories::{admin_unit_repository::ward_code_at, unique_or_internal};
 use crate::search::{
-    search_condition, text_contains, BUSINESS_NAME_SEARCH_COLUMNS, BUSINESS_SEARCH_COLUMNS,
-    SERVICE_SEARCH_COLUMNS,
+    text_contains, BUSINESS_ADDRESS_SEARCH_COLUMNS, BUSINESS_NAME_SEARCH_COLUMNS,
+    BUSINESS_SEARCH_COLUMNS, SERVICE_SEARCH_COLUMNS,
 };
 use crate::{
     db_types::DateTimeWithTimeZone,
     entities::{
         business::{self, Entity as Business},
         product::{self, Entity as ProductEntity},
-        province,
+        province, review,
         service::{self, Entity as ServiceEntity},
         service_type as category, supply_type, user, ward,
     },
@@ -230,27 +232,27 @@ impl BusinessRepositoryTrait for BusinessRepository {
         radius: f64,
         service_id: Option<i32>,
         limit: i64,
+        offset: i64,
     ) -> Result<Vec<BusinessGeoResult>, Error> {
         let db = self.db.as_ref();
 
         let distance_expr = distance(business_location(), geography_from_text(point_wkt));
-        let within_filter = within(business_location(), geography_from_text(point_wkt), radius);
 
-        let mut query = Business::find()
-            .select_only()
-            .column(business::Column::Id)
-            .column(business::Column::Name)
-            .column(business::Column::Phone)
-            .column(business::Column::Address)
-            .column(business::Column::IsVerified)
-            .expr_as(distance_expr, QueryAs::DistanceM)
-            .filter(business::Column::IsActive.eq(true))
-            .filter(business::Column::DeletedAt.is_null())
-            .filter(within_filter)
-            .limit(limit as u64);
-        if let Some(id) = service_id {
-            query = query.filter(offers_service(id));
-        }
+        let mut query = near_live(
+            Business::find()
+                .select_only()
+                .column(business::Column::Id)
+                .column(business::Column::Name)
+                .column(business::Column::Phone)
+                .column(business::Column::Address)
+                .column(business::Column::IsVerified)
+                .expr_as(distance_expr, QueryAs::DistanceM),
+            point_wkt,
+            radius,
+            service_id,
+        )
+        .limit(limit as u64)
+        .offset(offset as u64);
 
         QueryTrait::query(&mut query).order_by_expr(output(QueryAs::DistanceM), Order::Asc);
         let query = query.order_by_asc(business::Column::Id);
@@ -282,6 +284,19 @@ impl BusinessRepositoryTrait for BusinessRepository {
                 }
             })
             .collect())
+    }
+
+    async fn count_geo(
+        &self,
+        point_wkt: &str,
+        radius: f64,
+        service_id: Option<i32>,
+    ) -> Result<i64, Error> {
+        near_live(Business::find(), point_wkt, radius, service_id)
+            .count(self.db.as_ref())
+            .await
+            .map(|c| c as i64)
+            .map_err(|e| Error::internal(format!("business count_geo: {e}")))
     }
 
     // ── Browse — businesses with their services (two-query, avoids ARRAY_AGG) ─
@@ -510,7 +525,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
 
     async fn list_for_admin(
         &self,
-        search: Option<&str>,
+        filter: &AdminFilter,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<BusinessAdminView>, Error> {
@@ -537,19 +552,30 @@ impl BusinessRepositoryTrait for BusinessRepository {
             )
             .join(JoinType::LeftJoin, business::Relation::Owner.def())
             .filter(business::Column::DeletedAt.is_null())
-            .filter(search_condition(BUSINESS_NAME_SEARCH_COLUMNS, search))
-            .order_by_desc(business::Column::IsVerified)
-            .order_by_desc(business::Column::CreatedOn)
-            .order_by_desc(business::Column::Id)
-            .limit(limit as u64)
-            .offset(offset as u64)
-            .into_model::<BusinessAdminRow>()
-            .all(db)
-            .await
-            .map_err(|e| {
-                error!("business list_for_admin error: {e}");
-                Error::internal("Failed to load providers.")
-            })?;
+            .filter(admin_condition(filter));
+        let businesses = admin_order(
+            businesses,
+            filter.sort,
+            OrderColumns {
+                created: business::Column::CreatedOn,
+                name: business::Column::Name,
+                id: business::Column::Id,
+            },
+            |q| {
+                q.order_by_desc(business::Column::IsVerified)
+                    .order_by_desc(business::Column::CreatedOn)
+                    .order_by_desc(business::Column::Id)
+            },
+        )
+        .limit(limit as u64)
+        .offset(offset as u64)
+        .into_model::<BusinessAdminRow>()
+        .all(db)
+        .await
+        .map_err(|e| {
+            error!("business list_for_admin error: {e}");
+            Error::internal("Failed to load providers.")
+        })?;
 
         if businesses.is_empty() {
             return Ok(vec![]);
@@ -926,10 +952,10 @@ impl BusinessRepositoryTrait for BusinessRepository {
             })
     }
 
-    async fn count_for_admin(&self, search: Option<&str>) -> Result<i64, Error> {
+    async fn count_for_admin(&self, filter: &AdminFilter) -> Result<i64, Error> {
         Business::find()
             .filter(business::Column::DeletedAt.is_null())
-            .filter(search_condition(BUSINESS_NAME_SEARCH_COLUMNS, search))
+            .filter(admin_condition(filter))
             .count(self.db.as_ref())
             .await
             .map(|c| c as i64)
@@ -1034,6 +1060,88 @@ fn profile_update(profile: &ProfileUpdate, which: SimpleExpr) -> UpdateMany<Busi
 /// services yet (a new sign-up) is still listed, so farmers can find it.
 /// The business's own name or description contains `q`, or one of its live
 /// services does: a provider who only listed "Phun thuốc" is found by it.
+/// The admin list's criteria: a phone typed as digits finds that phone,
+/// other words the name; the state chip by the on and verified switches.
+fn admin_condition(filter: &AdminFilter) -> sea_orm::Condition {
+    admin_condition_base(filter).add(crate::admin_list::created_between(
+        (
+            crate::entities::business::Entity,
+            crate::entities::business::Column::CreatedOn,
+        ),
+        filter,
+    ))
+}
+
+fn admin_condition_base(filter: &AdminFilter) -> sea_orm::Condition {
+    let search = filter.search().map_or_else(Condition::all, |q| {
+        phone_digits(q).map_or_else(
+            || text_contains(BUSINESS_NAME_SEARCH_COLUMNS, q),
+            |digits| phone_contains(business::Column::Phone, &digits),
+        )
+    });
+    let on = business::Column::IsActive.eq(true);
+    let state = match filter.state {
+        Some(LIST_STATE_UNVERIFIED) => Condition::all()
+            .add(on)
+            .add(business::Column::IsVerified.eq(false)),
+        Some(LIST_STATE_VERIFIED) => Condition::all()
+            .add(on)
+            .add(business::Column::IsVerified.eq(true)),
+        Some(LIST_STATE_OFF) => Condition::all().add(business::Column::IsActive.eq(false)),
+        _ => Condition::all(),
+    };
+    let mut cond = Condition::all().add(search).add(state);
+    if let Some(area) = filter.area.as_deref() {
+        cond = cond.add(text_contains(BUSINESS_ADDRESS_SEARCH_COLUMNS, area));
+    }
+    if let Some(id) = filter.category_id {
+        cond = cond.add(offers_service(id));
+    }
+    if let Some(sector) = filter.sector.as_deref() {
+        cond = cond.add(Expr::exists(
+            live_services_here()
+                .filter(category::Column::Sector.eq(sector))
+                .into_query(),
+        ));
+    }
+    if let Some(rating) = filter.rating {
+        // Its shown reviews average at least this many stars.
+        let rated = sea_orm::sea_query::Query::select()
+            .column(review::Column::BusinessId)
+            .from(review::Entity)
+            .and_where(review::Column::IsVisible.eq(true))
+            .group_by_col(review::Column::BusinessId)
+            .and_having(
+                Expr::expr(sea_orm::sea_query::Func::avg(Expr::col(
+                    review::Column::Rating,
+                )))
+                .gte(f64::from(rating)),
+            )
+            .to_owned();
+        cond = cond.add(Expr::col((business::Entity, business::Column::Id)).in_subquery(rated));
+    }
+    match filter.gap.as_deref() {
+        Some("no_services") => cond.add(Expr::exists(live_services_here().into_query()).not()),
+        Some("no_products") => cond.add(Expr::exists(products_here().into_query()).not()),
+        Some("no_account") => cond.add(business::Column::OwnerId.is_null()),
+        _ => cond,
+    }
+}
+
+/// The live supplies (shown, not deleted) of the business of the outer
+/// query.
+fn products_here() -> Select<ProductEntity> {
+    ProductEntity::find()
+        .select_only()
+        .column(product::Column::Id)
+        .filter(
+            Expr::col((product::Entity, product::Column::BusinessId))
+                .equals((business::Entity, business::Column::Id)),
+        )
+        .filter(product::Column::IsActive.eq(true))
+        .filter(product::Column::DeletedAt.is_null())
+}
+
 /// The services are searched once, on their own (through their folded
 /// indexes), and the directory looks each business up in what they found;
 /// asked per business, every service would be folded and compared.
@@ -1102,6 +1210,29 @@ fn directory_filtered(
         query = query.filter(matches_text(q));
     }
     query
+}
+
+/// The live businesses within `radius` metres of `point_wkt` (`service_id`:
+/// offering it live): what the geo search pages through and what its count
+/// counts, the one definition.
+fn near_live(
+    query: Select<Business>,
+    point_wkt: &str,
+    radius: f64,
+    service_id: Option<i32>,
+) -> Select<Business> {
+    let query = query
+        .filter(business::Column::IsActive.eq(true))
+        .filter(business::Column::DeletedAt.is_null())
+        .filter(within(
+            business_location(),
+            geography_from_text(point_wkt),
+            radius,
+        ));
+    match service_id {
+        Some(id) => query.filter(offers_service(id)),
+        None => query,
+    }
 }
 
 // ── Shared helper: load distinct service category names per business ──────────

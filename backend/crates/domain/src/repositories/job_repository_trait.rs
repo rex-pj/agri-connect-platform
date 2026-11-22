@@ -3,7 +3,10 @@ use chrono::{DateTime, Utc};
 
 use crate::{
     error::Error,
-    models::job::{JobForNotice, JobPost, NewJobPost},
+    models::{
+        admin_list::AdminFilter,
+        job::{JobForNotice, JobPost, NewJobPost},
+    },
 };
 
 #[async_trait]
@@ -26,26 +29,36 @@ pub trait JobRepositoryTrait {
 
     /// Open posts since `since` within `radius_m` of the business the
     /// account `owner_user` manages, in the categories of its live services,
-    /// newest first. Empty when it has no business, no position or no
-    /// service.
+    /// newest first: `limit` after the first `offset`. Empty when it has no
+    /// business, no position or no service.
     async fn open_near_owner(
         &self,
         owner_user: i32,
         since: DateTime<Utc>,
         radius_m: f64,
         limit: i64,
+        offset: i64,
     ) -> Result<Vec<JobPost>, Error>;
 
-    /// A page of every post (`status`: only those in it), newest first.
+    /// How many posts `open_near_owner` finds, over all its pages.
+    async fn count_open_near_owner(
+        &self,
+        owner_user: i32,
+        since: DateTime<Utc>,
+        radius_m: f64,
+    ) -> Result<i64, Error>;
+
+    /// A page of every post (`state`: only those in that status; `search`:
+    /// the farmer's name or phone, or the description), newest first.
     async fn list_admin(
         &self,
-        status: Option<&str>,
+        filter: &AdminFilter,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<JobPost>, Error>;
 
     /// How many posts `list_admin` pages through.
-    async fn count_admin(&self, status: Option<&str>) -> Result<i64, Error>;
+    async fn count_admin(&self, filter: &AdminFilter) -> Result<i64, Error>;
 
     /// False when there is no such post.
     async fn set_status(&self, id: i32, status: &str) -> Result<bool, Error>;

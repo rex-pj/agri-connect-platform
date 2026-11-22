@@ -22,6 +22,8 @@ pub struct Model {
     pub sessions_valid_after: Option<DateTimeWithTimeZone>,
     /// When the link sent to `email` was opened; none until then.
     pub email_verified_at: Option<DateTimeWithTimeZone>,
+    /// Created by the demo data at volume; deleted with it.
+    pub is_demo: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

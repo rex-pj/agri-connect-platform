@@ -16,7 +16,7 @@ use chrono::{Duration, NaiveDate, Utc};
 use domain::{
     events::{Change, DomainEvent, Entity},
     models::commodity::Commodity,
-    models::price::{Crop, CropFields, CropPrice, NewCropPrice},
+    models::price::{Crop, CropFields, CropPrice, NewCropPrice, PriceFilter, PriceWords},
     repositories::{
         commodity_repository_trait::CommodityRepositoryTrait,
         location_repository_trait::LocationRepositoryTrait,
@@ -182,25 +182,81 @@ impl PriceUseCase {
 
     // ── Prices (admin) ─────────────────────────────────────────────────────────
 
-    /// Every price entered (or `crop`'s only), the newest day first.
+    /// Every price entered (or `crop`'s, or `area`'s, only), the newest day first.
     pub async fn list_prices(
         &self,
         actor: &Actor,
         crop: Option<i32>,
+        area: Option<i32>,
         page: i64,
     ) -> Result<AdminPagedResponse<CropPriceDto>> {
         actor.require(PERM_PRICE_MANAGE)?;
+        let filter = PriceFilter {
+            crop_id: crop,
+            location_id: area,
+            ..PriceFilter::default()
+        };
+        self.list_prices_in(actor, page, &filter, None).await
+    }
+
+    /// A page of prices (`filter`), those of the crops whose name has the
+    /// `words` when given, the newest day first.
+    pub async fn list_prices_in(
+        &self,
+        actor: &Actor,
+        page: i64,
+        filter: &PriceFilter,
+        words: Option<&str>,
+    ) -> Result<AdminPagedResponse<CropPriceDto>> {
+        actor.require(PERM_PRICE_MANAGE)?;
+        let mut filter = filter.clone();
+        if let Some(q) = words {
+            let (crops, areas) =
+                tokio::try_join!(self.price_repo.list_crops(), self.location_repo.list_all())?;
+            filter.words = Some(PriceWords {
+                text: q.to_owned(),
+                crop_ids: crops
+                    .into_iter()
+                    .filter(|c| crate::slug::matches_search(&[&c.name], q))
+                    .map(|c| c.id)
+                    .collect(),
+                location_ids: areas
+                    .into_iter()
+                    .filter(|l| crate::slug::matches_search(&[&l.label], q))
+                    .map(|l| l.id)
+                    .collect(),
+            });
+        }
+        if filter.stale {
+            let today = vn_today(Utc::now())?;
+            let (crops, commodities) =
+                tokio::try_join!(self.price_repo.list_crops(), self.commodity_repo.list_all())?;
+            let mut by_days: std::collections::BTreeMap<i64, Vec<i32>> = Default::default();
+            for crop in crops {
+                if let Some(c) = commodities.iter().find(|c| c.id == crop.commodity_id) {
+                    by_days
+                        .entry(i64::from(c.price_fresh_days))
+                        .or_default()
+                        .push(crop.id);
+                }
+            }
+            filter.stale_groups = by_days
+                .into_iter()
+                .map(|(days, ids)| (ids, today - Duration::days(days)))
+                .collect();
+        }
+        let filter = &filter;
         let (page, offset) = paginate_admin(page);
         let rows = self
             .price_repo
             .list_prices(
-                crop,
+                filter,
                 u64::try_from(ADMIN_PAGE_SIZE).unwrap_or(0),
                 u64::try_from(offset).unwrap_or(0),
             )
             .await?;
         let total = total_or_count(offset, rows.len(), ADMIN_PAGE_SIZE, || {
-            self.price_repo.count_prices(crop)
+            self.price_repo.count_prices(filter)
         })
         .await?;
         Ok(AdminPagedResponse {

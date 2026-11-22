@@ -18,7 +18,7 @@ use application::{
     outputs::{CommodityDto, CropDto},
 };
 use axum::{extract::State, http::StatusCode, response::Response};
-use domain::models::product::AdminProductFilter;
+use domain::models::{admin_list::LISTING_LIST_STATES, product::AdminProductFilter};
 use domain::{Error, ErrorCode};
 use serde::{Deserialize, Serialize};
 
@@ -31,9 +31,11 @@ use crate::{
     pages::{
         admin::{
             catalogue_tabs, crops::CropForm, is_refusal, render_admin, url, AdminTab, Asked,
-            CatalogueTab, ListPosition, ListReturn, Outcome, RowConfirm, BACK_TO_LIST,
+            CatalogueTab, ListPosition, ListReturn, Outcome, RowConfirm, SearchBox, BACK_TO_LIST,
+            CATALOGUE_SORTS,
         },
         forms::{reason, whole_number, FormErrors},
+        listing::{past_the_end, Pagination},
         parse_id, see_other,
     },
 };
@@ -95,11 +97,19 @@ pub struct CommoditiesPage {
     pub errors: FormErrors,
     pub create_action: String,
     pub confirm: Option<RowConfirm>,
+    pub search: SearchBox,
     pub keep: ListReturn,
+    /// Every commodity, for the header's count.
+    pub total: i64,
+    /// The shown / hidden chips.
+    pub states: Vec<AdminTab>,
+    pub pagination: Option<Pagination>,
     pub flash: Option<Flash>,
 }
 
 struct ListView {
+    /// The list page shown (`?page=`).
+    position: ListPosition,
     form: CommodityForm,
     errors: FormErrors,
     asked: Asked,
@@ -108,14 +118,33 @@ struct ListView {
 }
 
 async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Response, Error> {
+    let asked_position = view
+        .position
+        .clone()
+        .checked(LISTING_LIST_STATES, CATALOGUE_SORTS);
+    let criteria = asked_position.filter(LISTING_LIST_STATES);
     let (commodities, sectors) = tokio::try_join!(
-        state.usecases.commodity.list(actor),
+        state
+            .usecases
+            .commodity
+            .list_page(actor, asked_position.page(), &criteria,),
         state.usecases.sector.named(),
     )?;
-    let position = ListPosition::default();
+    let path = url("admin_commodities", &[])?;
+    let mut wanted_query = asked_position.query();
+    wanted_query.retain(|(k, _)| *k != "page");
+    let wanted: Vec<(&str, &str)> = wanted_query.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    if let Some(redirect) = past_the_end(&path, &wanted, commodities.page, commodities.total_pages)
+    {
+        return redirect;
+    }
+    let position = ListPosition {
+        page: commodities.page.to_string(),
+        ..asked_position
+    };
     let mut confirm = None;
-    let mut rows = Vec::with_capacity(commodities.len());
-    for commodity in commodities {
+    let mut rows = Vec::with_capacity(commodities.items.len());
+    for commodity in commodities.items {
         let id = commodity.id.to_string();
         let status_action = url("admin_commodity_status", &[("id", &id)])?;
         if view.asked.hide == Some(commodity.id) && commodity.is_active {
@@ -133,8 +162,31 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
             commodity,
         });
     }
-    let path = url("admin_commodities", &[])?;
+    let locale = state.locale();
+    let search = position
+        .search_box("admin_commodities")?
+        .picked(
+            "sector",
+            locale.text("sector.label"),
+            locale.text("admin_pick.all_sectors"),
+            sectors
+                .iter()
+                .map(|s| (s.code.clone(), s.name.clone()))
+                .collect(),
+        )
+        .sorted(
+            locale,
+            &position,
+            "admin_sort.display_order",
+            CATALOGUE_SORTS,
+        );
+    let states =
+        position.shared_state_chips(locale, "admin_commodities", LISTING_LIST_STATES, None)?;
     let body = CommoditiesPage {
+        search,
+        total: commodities.total,
+        states,
+        pagination: position.pagination(&path, commodities.page, commodities.total_pages),
         tabs: catalogue_tabs(state, CatalogueTab::Commodities)?,
         rows,
         sectors: sector_options(&sectors),
@@ -160,6 +212,12 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
 pub struct ListQuery {
     /// The commodity whose hide confirmation is open.
     pub hide: String,
+    pub page: String,
+    /// The words searched, the sector, shown / hidden.
+    pub q: String,
+    pub sector: String,
+    pub state: String,
+    pub sort: String,
 }
 
 /// GET /admin/commodities
@@ -173,6 +231,14 @@ pub async fn list(
         return see_other(&url("login", &[])?);
     };
     let view = ListView {
+        position: ListPosition {
+            page: q.page,
+            q: q.q,
+            sector: q.sector,
+            state: q.state,
+            sort: q.sort,
+            ..ListPosition::default()
+        },
         form: CommodityForm {
             price_fresh_days: PRICE_FRESH_DAYS_DEFAULT.to_string(),
             ..CommodityForm::default()
@@ -205,6 +271,7 @@ pub async fn create(
         Ok(id) => redirect_to(id, Flash::CommodityCreated),
         Err(err) if is_refusal(&err) => {
             let view = ListView {
+                position: ListPosition::default(),
                 errors: FormErrors::from_error(&state, &err),
                 form,
                 asked: Asked::default(),
@@ -381,6 +448,12 @@ pub struct StatusForm {
     pub reason: String,
     /// `list` when sent from the list's row: land back there.
     pub back: String,
+    /// The list page the row was on (`ListReturn`).
+    pub page: String,
+    pub q: String,
+    pub sector: String,
+    pub state: String,
+    pub sort: String,
 }
 
 /// POST /admin/commodities/{id}/status
@@ -406,7 +479,15 @@ pub async fn change_status(
         Flash::CommodityHidden
     };
     if form.back == BACK_TO_LIST {
-        return ListPosition::default().back_to("admin_commodities", flash);
+        let position = ListPosition {
+            page: form.page,
+            q: form.q,
+            sector: form.sector,
+            state: form.state,
+            sort: form.sort,
+            ..ListPosition::default()
+        };
+        return position.back_to("admin_commodities", flash);
     }
     redirect_to(id, flash)
 }

@@ -37,7 +37,7 @@ macro_rules! type_table {
         mod $table {
             use sea_orm::{
                 sea_query::Expr, ColumnTrait, ConnectionTrait, DbErr, EntityTrait, FromQueryResult,
-                QueryFilter, QueryOrder, QuerySelect, Set,
+                PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Select, Set,
             };
 
             use domain::models::category::{Category, CategoryAdmin, NewCategory, UpdateCategory};
@@ -118,7 +118,44 @@ macro_rules! type_table {
                 db: &C,
                 id: Option<i32>,
             ) -> Result<Vec<CategoryAdmin>, DbErr> {
-                let mut query = Entity::find()
+                let mut query = admin_select();
+                if let Some(id) = id {
+                    query = query.filter(Column::Id.eq(id));
+                }
+                fetch_admin(db, query).await
+            }
+
+            /// A page of every one (hidden too), in the same order.
+            pub(super) async fn admin_page<C: ConnectionTrait>(
+                db: &C,
+                limit: i64,
+                offset: i64,
+            ) -> Result<Vec<CategoryAdmin>, DbErr> {
+                let query = admin_select().limit(limit as u64).offset(offset as u64);
+                fetch_admin(db, query).await
+            }
+
+            /// How many there are, hidden ones too.
+            pub(super) async fn count<C: ConnectionTrait>(db: &C) -> Result<i64, DbErr> {
+                Ok(Entity::find().count(db).await? as i64)
+            }
+
+            async fn fetch_admin<C: ConnectionTrait>(
+                db: &C,
+                query: Select<Entity>,
+            ) -> Result<Vec<CategoryAdmin>, DbErr> {
+                Ok(query
+                    .into_model::<AdminRow>()
+                    .all(db)
+                    .await?
+                    .into_iter()
+                    .map(to_admin)
+                    .collect())
+            }
+
+            /// The admin's columns, in display order then id.
+            fn admin_select() -> Select<Entity> {
+                Entity::find()
                     .select_only()
                     .column(Column::Id)
                     .column(Column::Name)
@@ -141,17 +178,7 @@ macro_rules! type_table {
                         QueryAs::UpdatedByName,
                     )
                     .order_by_asc(Column::DisplayOrder)
-                    .order_by_asc(Column::Id);
-                if let Some(id) = id {
-                    query = query.filter(Column::Id.eq(id));
-                }
-                Ok(query
-                    .into_model::<AdminRow>()
-                    .all(db)
-                    .await?
-                    .into_iter()
-                    .map(to_admin)
-                    .collect())
+                    .order_by_asc(Column::Id)
             }
 
             pub(super) async fn create<C: ConnectionTrait>(
@@ -261,6 +288,59 @@ impl CategoryRepositoryTrait for CategoryRepository {
                 .map_err(db_error("list_admin"))?;
         all.extend(supplies);
         Ok(all)
+    }
+
+    async fn used_ids(&self, category_type: &str) -> Result<Vec<i32>, Error> {
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
+
+        use crate::entities::{product, service};
+        let db = self.db.as_ref();
+        match category_type {
+            service_type::KIND => {
+                service::Entity::find()
+                    .select_only()
+                    .column(service::Column::ServiceTypeId)
+                    .filter(service::Column::DeletedAt.is_null())
+                    .distinct()
+                    .into_tuple::<i32>()
+                    .all(db)
+                    .await
+            }
+            _ => {
+                product::Entity::find()
+                    .select_only()
+                    .column(product::Column::SupplyTypeId)
+                    .filter(product::Column::DeletedAt.is_null())
+                    .distinct()
+                    .into_tuple::<i32>()
+                    .all(db)
+                    .await
+            }
+        }
+        .map_err(db_error("used_ids"))
+    }
+
+    async fn list_admin_page(
+        &self,
+        category_type: &str,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<CategoryAdmin>, Error> {
+        let db = self.db.as_ref();
+        match category_type {
+            service_type::KIND => service_type::admin_page(db, limit, offset).await,
+            _ => supply_type::admin_page(db, limit, offset).await,
+        }
+        .map_err(db_error("list_admin_page"))
+    }
+
+    async fn count_admin(&self, category_type: &str) -> Result<i64, Error> {
+        let db = self.db.as_ref();
+        match category_type {
+            service_type::KIND => service_type::count(db).await,
+            _ => supply_type::count(db).await,
+        }
+        .map_err(db_error("count_admin"))
     }
 
     async fn find_by_id_admin(&self, id: i32) -> Result<Option<CategoryAdmin>, Error> {

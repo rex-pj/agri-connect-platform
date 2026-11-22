@@ -16,10 +16,14 @@ use application::{
     authz::Actor,
     inputs::CodedInput,
     outputs::CodedDto,
+    slug::matches_search,
     usecases::{admin_usecase::HistoryOf, coded_usecase::CodedUseCase},
 };
 use axum::{http::StatusCode, response::Response};
-use domain::{Error, ErrorCode};
+use domain::{
+    models::admin_list::{LISTING_LIST_STATES, LIST_STATE_SHOWN},
+    Error, ErrorCode,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -30,7 +34,7 @@ use crate::{
         admin::{
             history_rows, render_admin, url, AdminTab, Asked, Badge, Confirm, HistoryRow,
             ListPosition, ListReturn, Outcome, RecordAction, RecordHeader, RowConfirm, Says,
-            Toggle, BACK_TO_LIST,
+            SearchBox, Toggle, BACK_TO_LIST,
         },
         forms::{reason, whole_number, FormErrors},
         parse_id, see_other,
@@ -221,11 +225,18 @@ pub struct CodedListPage {
     pub confirm_title: String,
     pub keep: ListReturn,
     pub flash_text: Option<String>,
+    pub search: SearchBox,
+    /// The shown / hidden chips.
+    pub states: Vec<AdminTab>,
 }
 
 /// What a list render starts from: the form as typed, its errors, the row
 /// asked about, the flash.
 pub struct ListView {
+    /// The words searched.
+    pub q: String,
+    /// Shown / hidden.
+    pub state: String,
     pub form: CodedForm,
     pub errors: FormErrors,
     pub asked: Asked,
@@ -234,9 +245,16 @@ pub struct ListView {
 }
 
 impl ListView {
+    /// The list narrowed to the entries with `q`, shown or hidden.
+    pub fn narrowed(self, q: String, state: String) -> Self {
+        Self { q, state, ..self }
+    }
+
     /// The list as first shown, maybe with a row's hide confirmation open.
     pub fn asked(hide: &str, flash: Option<Flash>) -> Self {
         Self {
+            q: String::new(),
+            state: String::new(),
             form: CodedForm::default(),
             errors: FormErrors::default(),
             asked: Asked::new(hide, ""),
@@ -253,7 +271,28 @@ pub async fn list_page(
     view: ListView,
 ) -> Result<Response, Error> {
     let entries = pages.uc(state).list(actor).await?;
-    let position = pages.position();
+    let total = entries.len();
+    let position = ListPosition {
+        q: view.q.clone(),
+        state: view.state.clone(),
+        ..pages.position()
+    }
+    .checked(LISTING_LIST_STATES, &[]);
+    let search = position.search_box(pages.list_route)?;
+    let entries: Vec<CodedDto> = match position.search() {
+        Some(q) => entries
+            .into_iter()
+            .filter(|e| matches_search(&[&e.name, &e.code], q))
+            .collect(),
+        None => entries,
+    };
+    let wanted = position.state_in(LISTING_LIST_STATES);
+    let entries: Vec<CodedDto> = entries
+        .into_iter()
+        .filter(|e| wanted.is_none_or(|s| (s == LIST_STATE_SHOWN) == e.is_active))
+        .collect();
+    let states =
+        position.shared_state_chips(state.locale(), pages.list_route, LISTING_LIST_STATES, None)?;
     let mut confirm = None;
     let mut rows = Vec::with_capacity(entries.len());
     for entry in entries {
@@ -276,7 +315,8 @@ pub async fn list_page(
     }
     let path = url(pages.list_route, &[])?;
     let body = CodedListPage {
-        words: pages.words(state, rows.len()),
+        words: pages.words(state, total),
+        states,
         icon: pages.icon,
         tabs: match pages.tabs {
             Some(tabs) => tabs(state, true)?,
@@ -293,6 +333,7 @@ pub async fn list_page(
         confirm,
         keep: ListReturn::new(position),
         flash_text: pages.flash_text(state, view.flash),
+        search,
     };
     render_admin(
         state,
@@ -320,6 +361,8 @@ pub async fn create(
         Ok(id) => pages.redirect_to(id, pages.created),
         Err(err) if super::is_refusal(&err) => {
             let view = ListView {
+                q: String::new(),
+                state: String::new(),
                 errors: FormErrors::from_error(state, &err),
                 form,
                 asked: Asked::default(),

@@ -11,7 +11,7 @@ use application::{
 };
 use axum::{extract::State, http::StatusCode, response::Response};
 use chrono::NaiveDate;
-use domain::{Error, ErrorCode};
+use domain::{models::admin_list::ALERT_LIST_STATES, Error, ErrorCode};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -24,10 +24,11 @@ use crate::{
         admin::{
             alert_kinds::{self, TAB_KINDS},
             coded, history_rows, is_refusal, render_admin, url, AdminTab, Asked, Badge, Confirm,
-            HistoryRow, ListPosition, ListReturn, Outcome, RecordHeader, RowConfirm, Says, Toggle,
-            BACK_TO_LIST,
+            HistoryRow, ListPosition, ListReturn, Outcome, RecordHeader, RowConfirm, Says,
+            SearchBox, Toggle, BACK_TO_LIST, CATALOGUE_SORTS,
         },
         forms::{reason, FormErrors},
+        listing::{past_the_end, Pagination},
         parse_id, see_other,
     },
 };
@@ -130,6 +131,11 @@ pub struct AlertRow {
 
 #[derive(Serialize)]
 pub struct AlertsPage {
+    /// How many alerts match, for the result bar.
+    pub total: i64,
+    pub search: SearchBox,
+    /// The in force / upcoming / ended / off chips.
+    pub states: Vec<AdminTab>,
     pub tabs: Vec<AdminTab>,
     pub rows: Vec<AlertRow>,
     pub choices: AlertChoices,
@@ -138,10 +144,13 @@ pub struct AlertsPage {
     pub create_action: String,
     pub confirm: Option<RowConfirm>,
     pub keep: ListReturn,
+    pub pagination: Option<Pagination>,
     pub flash: Option<Flash>,
 }
 
 struct ListView {
+    /// The list page shown (`?page=`).
+    position: ListPosition,
     form: AlertForm,
     errors: FormErrors,
     asked: Asked,
@@ -150,14 +159,67 @@ struct ListView {
 }
 
 async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Response, Error> {
+    let asked_position = view
+        .position
+        .clone()
+        .checked(ALERT_LIST_STATES, CATALOGUE_SORTS);
+    let criteria = asked_position.filter(ALERT_LIST_STATES);
     let (alerts, sectors) = tokio::try_join!(
-        state.usecases.alert.list(actor),
+        state
+            .usecases
+            .alert
+            .list(actor, asked_position.page(), &criteria),
         state.usecases.sector.named(),
     )?;
-    let position = ListPosition::default();
+    let path = url("admin_alerts", &[])?;
+    let wanted_query = asked_position.query();
+    let wanted: Vec<(&str, &str)> = wanted_query
+        .iter()
+        .filter(|(k, _)| *k != "page")
+        .map(|(k, v)| (*k, v.as_str()))
+        .collect();
+    if let Some(redirect) = past_the_end(&path, &wanted, alerts.page, alerts.total_pages) {
+        return redirect;
+    }
+    let position = ListPosition {
+        page: alerts.page.to_string(),
+        ..asked_position
+    };
+    let locale = state.locale();
+    let form_choices = choices(state, actor).await?;
+    let search = position
+        .search_box("admin_alerts")?
+        .picked(
+            "kind",
+            locale.text("alert.kind"),
+            locale.text("admin_pick.all_kinds_of_alert"),
+            form_choices
+                .kinds
+                .iter()
+                .map(|k| (k.value.clone(), k.label.clone()))
+                .collect(),
+        )
+        .picked(
+            "sector",
+            locale.text("sector.label"),
+            locale.text("admin_pick.all_sectors"),
+            form_choices
+                .sectors
+                .iter()
+                .map(|s| (s.value.clone(), s.label.clone()))
+                .collect(),
+        )
+        .sorted(locale, &position, "admin_sort.latest_end", CATALOGUE_SORTS);
+    let states = position.state_chips(
+        "admin_alerts",
+        ALERT_LIST_STATES,
+        locale.text("filters.all"),
+        |s| locale.text(&format!("alert_state.{s}")),
+        None,
+    )?;
     let mut confirm = None;
-    let mut rows = Vec::with_capacity(alerts.len());
-    for alert in alerts {
+    let mut rows = Vec::with_capacity(alerts.items.len());
+    for alert in alerts.items {
         let id = alert.id.to_string();
         let status_action = url("admin_alert_status", &[("id", &id)])?;
         if view.asked.hide == Some(alert.id) && alert.is_active {
@@ -176,11 +238,14 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
             alert,
         });
     }
-    let path = url("admin_alerts", &[])?;
     let body = AlertsPage {
+        search,
+        total: alerts.total,
+        states,
+        pagination: position.pagination(&path, alerts.page, alerts.total_pages),
         tabs: tabs(state, false)?,
         rows,
-        choices: choices(state, actor).await?,
+        choices: form_choices,
         form: view.form,
         errors: view.errors,
         create_action: path.clone(),
@@ -205,6 +270,14 @@ pub struct ListQuery {
     pub hide: String,
     /// `kinds`: the second tab, the kinds of alert.
     pub tab: String,
+    pub page: String,
+    /// The words searched (kinds tab).
+    pub q: String,
+    /// The kind, the sector, the state by dates (alerts tab).
+    pub kind: String,
+    pub sector: String,
+    pub state: String,
+    pub sort: String,
 }
 
 /// The page's two tabs: the alerts, and their kinds (`kinds_tab`).
@@ -240,12 +313,21 @@ pub async fn list(
         return see_other(&url("login", &[])?);
     };
     if q.tab == TAB_KINDS {
-        let view = coded::ListView::asked(&q.hide, flash.0);
+        let view = coded::ListView::asked(&q.hide, flash.0).narrowed(q.q, q.state);
         let mut response = coded::list_page(&alert_kinds::PAGES, &state, &actor, view).await?;
         flash.clear_on(&mut response);
         return Ok(response);
     }
     let view = ListView {
+        position: ListPosition {
+            page: q.page,
+            q: q.q,
+            kind: q.kind,
+            sector: q.sector,
+            state: q.state,
+            sort: q.sort,
+            ..ListPosition::default()
+        },
         form: AlertForm::default(),
         errors: FormErrors::default(),
         asked: Asked::new(&q.hide, ""),
@@ -270,6 +352,7 @@ pub async fn create(
         Ok(id) => redirect_to(id, Flash::AlertCreated),
         Err(err) if is_refusal(&err) => {
             let view = ListView {
+                position: ListPosition::default(),
                 errors: FormErrors::from_error(&state, &err),
                 form,
                 asked: Asked::default(),
@@ -414,6 +497,13 @@ pub struct StatusForm {
     pub reason: String,
     /// `list` when sent from the list's row: land back there.
     pub back: String,
+    /// The list page the row was on (`ListReturn`).
+    pub page: String,
+    pub q: String,
+    pub kind: String,
+    pub sector: String,
+    pub state: String,
+    pub sort: String,
 }
 
 /// POST /admin/alerts/{id}/status
@@ -439,7 +529,16 @@ pub async fn change_status(
         Flash::AlertHidden
     };
     if form.back == BACK_TO_LIST {
-        return ListPosition::default().back_to("admin_alerts", flash);
+        let position = ListPosition {
+            page: form.page,
+            q: form.q,
+            kind: form.kind,
+            sector: form.sector,
+            state: form.state,
+            sort: form.sort,
+            ..ListPosition::default()
+        };
+        return position.back_to("admin_alerts", flash);
     }
     redirect_to(id, flash)
 }

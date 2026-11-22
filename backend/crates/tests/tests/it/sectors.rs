@@ -453,3 +453,53 @@ async fn with_no_sector_shown_there_is_no_switch() {
     assert!(!list.contains("sector-switch"), "nothing to choose from");
     e.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn the_alert_list_is_paged_and_a_row_lands_back_on_its_page() {
+    use application::constants::ADMIN_PAGE_SIZE;
+    use sea_orm::ConnectionTrait;
+
+    let e = env_with_origin().await;
+    let admin = install_admin(&e).await;
+    e.t.db
+        .execute_unprepared(&format!(
+            "INSERT INTO alerts (kind, title, body, starts_on, ends_on)
+             SELECT 'disease', 'Cảnh báo ' || n, 'Nội dung', CURRENT_DATE, CURRENT_DATE + n
+             FROM generate_series(1, {}) AS n",
+            ADMIN_PAGE_SIZE + 2
+        ))
+        .await
+        .unwrap();
+
+    let first = page(&e, "/admin/alerts", Some(&admin)).await;
+    assert!(first.contains(r#"href="/admin/alerts?page=2""#));
+    // The latest to end first: the two that end soonest are on page 2.
+    let second = page(&e, "/admin/alerts?page=2", Some(&admin)).await;
+    assert!(second.contains("Cảnh báo 1<") && second.contains("Cảnh báo 2<"));
+    assert!(!second.contains("Cảnh báo 3<"));
+
+    // A row's "turn off" sent from page 2 lands back on page 2.
+    let id = scalar(
+        &e,
+        "SELECT id::text AS v FROM alerts WHERE title = 'Cảnh báo 1'",
+    )
+    .await;
+    let res = send(
+        &e.router,
+        post_form(
+            &format!("/admin/alerts/{id}/status"),
+            &[("is_active", "false"), ("back", "list"), ("page", "2")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res.headers()[header::LOCATION], "/admin/alerts?page=2");
+
+    // Past the last page: the last one.
+    let res = send(&e.router, get_page("/admin/alerts?page=9", Some(&admin))).await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res.headers()[header::LOCATION], "/admin/alerts?page=2");
+    e.cleanup().await;
+}

@@ -1,14 +1,15 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    sea_query::{Expr, Func, SimpleExpr},
+    sea_query::{Asterisk, Expr, Func, SimpleExpr},
     ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, JoinType, PaginatorTrait,
-    QueryFilter, QueryOrder, QuerySelect, QueryTrait, RelationTrait, Select, Set,
+    QueryFilter, QueryOrder, QuerySelect, RelationTrait, Select, Set,
 };
 use std::sync::Arc;
 use tracing::error;
 
 use domain::{
+    models::admin_list::{AdminFilter, LIST_STATE_SHOWN, LIST_STATE_WAITING},
     models::review::{
         BusinessRating, NewReview, OwnReview, PublicReview, RatingSummary, ReviewAdmin,
     },
@@ -17,7 +18,9 @@ use domain::{
 
 use domain::{Error, ErrorCode};
 
+use crate::admin_list::{admin_order, OrderColumns};
 use crate::repositories::unique_or_internal;
+use crate::search::admin_review_search;
 use crate::{
     db_types::DateTimeWithTimeZone,
     entities::{
@@ -78,6 +81,13 @@ impl From<ReviewAdminRow> for ReviewAdmin {
 struct SummaryRow {
     count: i64,
     average: Option<f64>,
+}
+
+/// An owner's reviews: all, and those waiting to be shown.
+#[derive(FromQueryResult)]
+struct OwnerCountsRow {
+    total: i64,
+    fresh: i64,
 }
 
 #[derive(FromQueryResult)]
@@ -146,11 +156,9 @@ fn shown_of(business_id: i32) -> Select<Review> {
 
 #[async_trait]
 impl ReviewRepositoryTrait for ReviewRepository {
-    async fn count_admin(&self, provider_id: Option<i32>) -> Result<i64, Error> {
+    async fn count_admin(&self, filter: &AdminFilter) -> Result<i64, Error> {
         Review::find()
-            .apply_if(provider_id, |q, id| {
-                q.filter(review::Column::BusinessId.eq(id))
-            })
+            .filter(admin_condition(filter))
             .count(self.db.as_ref())
             .await
             .map(|c| c as i64)
@@ -162,26 +170,34 @@ impl ReviewRepositoryTrait for ReviewRepository {
 
     async fn list_admin(
         &self,
-        provider_id: Option<i32>,
+        filter: &AdminFilter,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<ReviewAdmin>, Error> {
-        admin_select()
-            .apply_if(provider_id, |q, id| {
-                q.filter(review::Column::BusinessId.eq(id))
-            })
-            .order_by_desc(review::Column::CreatedOn)
-            .order_by_desc(review::Column::Id)
-            .limit(limit as u64)
-            .offset(offset as u64)
-            .into_model::<ReviewAdminRow>()
-            .all(self.db.as_ref())
-            .await
-            .map(|rows| rows.into_iter().map(ReviewAdmin::from).collect())
-            .map_err(|e| {
-                error!("review list_admin error: {e}");
-                Error::internal("Failed to load reviews.")
-            })
+        let columns = OrderColumns {
+            created: review::Column::CreatedOn,
+            name: review::Column::ReviewerName,
+            id: review::Column::Id,
+        };
+        admin_order(
+            admin_select().filter(admin_condition(filter)),
+            filter.sort,
+            columns,
+            |q| {
+                q.order_by_desc(review::Column::CreatedOn)
+                    .order_by_desc(review::Column::Id)
+            },
+        )
+        .limit(limit as u64)
+        .offset(offset as u64)
+        .into_model::<ReviewAdminRow>()
+        .all(self.db.as_ref())
+        .await
+        .map(|rows| rows.into_iter().map(ReviewAdmin::from).collect())
+        .map_err(|e| {
+            error!("review list_admin error: {e}");
+            Error::internal("Failed to load reviews.")
+        })
     }
 
     async fn find_by_id_admin(&self, id: i32) -> Result<Option<ReviewAdmin>, Error> {
@@ -322,11 +338,41 @@ impl ReviewRepositoryTrait for ReviewRepository {
             })
     }
 
-    async fn list_for_owner(&self, owner_user: i32) -> Result<Vec<OwnReview>, Error> {
+    async fn count_for_owner(&self, owner_user: i32) -> Result<(i64, i64), Error> {
+        let row = Review::find()
+            .filter(owned_by(owner_user))
+            .select_only()
+            .expr_as(Func::count(Expr::col(Asterisk)), QueryAs::Total)
+            // COUNT skips the NULL the CASE gives every shown review.
+            .expr_as(
+                Func::count(Expr::case(
+                    review::Column::IsVisible.eq(false),
+                    Expr::val(1),
+                )),
+                QueryAs::Fresh,
+            )
+            .into_model::<OwnerCountsRow>()
+            .one(self.db.as_ref())
+            .await
+            .map_err(|e| {
+                error!("review count_for_owner error: {e}");
+                Error::internal("Failed to load reviews.")
+            })?;
+        Ok(row.map_or((0, 0), |r| (r.total, r.fresh)))
+    }
+
+    async fn list_for_owner(
+        &self,
+        owner_user: i32,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<OwnReview>, Error> {
         Review::find()
             .filter(owned_by(owner_user))
             .order_by_desc(review::Column::CreatedOn)
             .order_by_desc(review::Column::Id)
+            .limit(u64::try_from(limit).unwrap_or(0))
+            .offset(u64::try_from(offset).unwrap_or(0))
             .all(self.db.as_ref())
             .await
             .map(|rows| {
@@ -372,5 +418,42 @@ impl ReviewRepositoryTrait for ReviewRepository {
                 error!("review set_reply_for_owner error: {e}");
                 Error::internal("Failed to save the reply.")
             })
+    }
+}
+
+/// The admin list's criteria, shared by the list and its count: a waiting
+/// review is one not shown yet.
+fn admin_condition(filter: &AdminFilter) -> sea_orm::Condition {
+    admin_condition_base(filter).add(crate::admin_list::created_between(
+        (
+            crate::entities::review::Entity,
+            crate::entities::review::Column::CreatedOn,
+        ),
+        filter,
+    ))
+}
+
+fn admin_condition_base(filter: &AdminFilter) -> sea_orm::Condition {
+    // The search is an OR of its columns: wrapped, so every other
+    // criterion narrows it rather than joining the OR.
+    let mut cond = sea_orm::Condition::all().add(admin_review_search(filter.search()));
+    if let Some(id) = filter.provider_id {
+        cond = cond.add(review::Column::BusinessId.eq(id));
+    }
+    if let Some(rating) = filter.rating {
+        cond = cond.add(review::Column::Rating.eq(rating));
+    }
+    if filter.unanswered {
+        cond = cond.add(review::Column::Reply.is_null());
+    }
+    if let Some(cutoff) = crate::admin_list::stale_cutoff(filter) {
+        cond = cond
+            .add(review::Column::IsVisible.eq(false))
+            .add(review::Column::CreatedOn.lt(cutoff));
+    }
+    match filter.state {
+        Some(LIST_STATE_WAITING) => cond.add(review::Column::IsVisible.eq(false)),
+        Some(LIST_STATE_SHOWN) => cond.add(review::Column::IsVisible.eq(true)),
+        _ => cond,
     }
 }

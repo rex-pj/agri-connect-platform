@@ -2,7 +2,11 @@
 //! and providers (shops, found by their name or by what they offer).
 //!
 //! Tabs are links (`tab=services`), so they work without JS; the server marks
-//! the other sections `hidden`. Alpine `tabs` switches them in place.
+//! the other sections `hidden`. A page of several lists pages each on its
+//! own: the "all" tab previews every kind with a "see more" link to that
+//! kind's tab, and a kind's tab (or the one kind found) is its whole list a
+//! page at a time, its page links carrying the tab (`listing::tab_page`).
+//! Since a tab's content differs from its preview, tabs always load.
 //!
 //! Only what was found is shown: a kind with no result has no section and no
 //! tab (its tab in an old link shows everything), one kind alone needs no
@@ -33,7 +37,10 @@ use crate::{
     extract::ApiQuery,
     pages::{
         cards::{rated_providers, rated_services, ProviderCard, ServiceCard},
-        listing::{sector_links, typed_sector, with_query, SectorLink},
+        listing::{
+            parse_opt, sector_links, tab_page, typed_sector, with_query, Pagination, SectorLink,
+        },
+        see_other,
     },
     routes,
     shell::Shell,
@@ -47,6 +54,8 @@ pub struct SearchQuery {
     pub tab: String,
     /// One sector's results; blank or unknown: every sector's.
     pub sector: String,
+    /// The page of the chosen tab's list.
+    pub page: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -112,41 +121,50 @@ pub struct SearchPage {
     /// The sectors to narrow the results to, "every sector" first; none
     /// while no sector is shown.
     pub sectors: Vec<SectorLink>,
+    /// A preview (the "all" tab) or one page of the kind's whole list.
     pub services: Vec<ServiceCard>,
     pub service_total: i64,
-    /// "Xem thêm": the full listing with this search (and its sector), when
-    /// there is more.
+    /// "Xem thêm" under a preview with more: this kind's tab of this search.
     pub services_more: Option<String>,
+    /// The page links of the kind's whole list, on its own tab.
+    pub service_pages: Option<Pagination>,
     pub products: Vec<ProductDto>,
     pub product_total: i64,
     pub products_more: Option<String>,
+    pub product_pages: Option<Pagination>,
     pub providers: Vec<ProviderCard>,
     pub provider_total: i64,
     pub providers_more: Option<String>,
+    pub provider_pages: Option<Pagination>,
 }
 
 fn url(name: &str) -> Result<String, Error> {
     routes::url(name, &[]).map_err(|e| Error::internal(format!("search links: {e}")))
 }
 
-/// The results of one search, each kind's first page.
+/// The results of one search: of each kind, the page `page_of` it says.
 struct Found {
     services: ServiceBrowseResponse,
     products: application::outputs::ProductBrowseResponse,
     providers: BrowseResponse,
 }
 
-async fn find(state: &AppState, q: &str, sector: Option<&str>) -> Result<Found, Error> {
+async fn find(
+    state: &AppState,
+    q: &str,
+    sector: Option<&str>,
+    page_of: impl Fn(Tab) -> i64,
+) -> Result<Found, Error> {
     let explore = &state.usecases.explore;
-    let text = || BrowseParams {
+    let text = |page: i64| BrowseParams {
         service_id: None,
         sector: sector.map(str::to_owned),
         name: Some(q.to_owned()),
         sort: ProviderSort::default(),
-        page: 1,
+        page,
     };
     let (services, products, providers) = tokio::try_join!(
-        explore.browse_services(text()),
+        explore.browse_services(text(page_of(Tab::Services))),
         state.usecases.product.browse_products(
             ProductFilter {
                 name: Some(q.to_owned()),
@@ -154,9 +172,9 @@ async fn find(state: &AppState, q: &str, sector: Option<&str>) -> Result<Found, 
                 ..ProductFilter::default()
             },
             ProductSort::default(),
-            1,
+            page_of(Tab::Products),
         ),
-        explore.browse_providers(text()),
+        explore.browse_providers(text(page_of(Tab::Providers))),
     )?;
     Ok(Found {
         services,
@@ -178,10 +196,13 @@ pub async fn show(
     let sector = sector.as_deref();
     let tab_param = |t: Tab| if t == Tab::All { "" } else { t.as_str() };
 
+    // `page` belongs to the tab asked for; every other kind opens on page 1.
+    let page_no = parse_opt::<i64>(&query.page).unwrap_or(1);
+    let page_of = |t: Tab| tab_page(tab.as_str(), t.as_str(), page_no);
     let found = if q.is_empty() {
         None
     } else {
-        Some(find(&state, &q, sector).await?)
+        Some(find(&state, &q, sector, page_of).await?)
     };
     let service_total = found.as_ref().map_or(0, |f| f.services.total);
     let product_total = found.as_ref().map_or(0, |f| f.products.total);
@@ -197,17 +218,22 @@ pub async fn show(
             visitor: visitor(&shell, ip.as_ref().map(|e| &e.0)),
         });
     }
-    let more = |route: &str, total: i64| -> Result<Option<String>, Error> {
-        (total > SEARCH_PREVIEW_COUNT as i64)
-            .then(|| {
-                url(route).map(|path| {
-                    with_query(
-                        &path,
-                        &[("q", q.as_str()), ("sector", sector.unwrap_or_default())],
-                    )
-                })
-            })
-            .transpose()
+    // This search on one kind's tab (its `page`, when past the first).
+    let tab_href = |t: Tab, page: i64| {
+        let page = if page > 1 {
+            page.to_string()
+        } else {
+            String::new()
+        };
+        with_query(
+            &search_url,
+            &[
+                ("q", q.as_str()),
+                ("tab", tab_param(t)),
+                ("sector", sector.unwrap_or_default()),
+                ("page", &page),
+            ],
+        )
     };
 
     let count = |t: Tab| match t {
@@ -232,48 +258,112 @@ pub async fn show(
         .map(|t| TabLink {
             tab: t.as_str(),
             label: state.locale().text(t.label()),
-            href: with_query(
+            href: tab_href(t, 1),
+            count: count(t),
+            active: t == tab,
+        })
+        .collect();
+    // The kind shown whole, a page at a time: the chosen tab's, or the one
+    // kind found. On the "all" tab of several kinds, each is a preview.
+    let whole = match tab {
+        Tab::All if kinds == 1 => Tab::ALL
+            .into_iter()
+            .find(|t| count(*t).is_some_and(|n| n > 0)),
+        Tab::All => None,
+        t => Some(t),
+    };
+    // A kind's own page links, or under a preview with more, its "see more".
+    let paging = |t: Tab, page: i64, total_pages: i64, total: i64| {
+        if whole == Some(t) {
+            let pages = Pagination::new(
                 &search_url,
                 &[
                     ("q", q.as_str()),
                     ("tab", tab_param(t)),
                     ("sector", sector.unwrap_or_default()),
                 ],
-            ),
-            count: count(t),
-            active: t == tab,
-        })
-        .collect();
+                page,
+                total_pages,
+            );
+            (None, pages)
+        } else {
+            let more = (total > SEARCH_PREVIEW_COUNT as i64).then(|| tab_href(t, 1));
+            (more, None)
+        }
+    };
+    // A preview keeps the first few; a whole list keeps its page.
+    let shown = |t: Tab| {
+        if whole == Some(t) {
+            usize::MAX
+        } else {
+            SEARCH_PREVIEW_COUNT
+        }
+    };
 
+    let mut paged = [(None, None), (None, None), (None, None)];
     let (services, products, providers) = match found {
-        Some(f) => (
-            rated_services(
-                &state,
-                f.services
+        Some(f) => {
+            if let Some(t) = whole {
+                let (page, total_pages) = match t {
+                    Tab::Products => (f.products.page, f.products.total_pages),
+                    Tab::Providers => (f.providers.page, f.providers.total_pages),
+                    _ => (f.services.page, f.services.total_pages),
+                };
+                if page > total_pages && total_pages >= 1 {
+                    return see_other(&tab_href(t, total_pages));
+                }
+            }
+            paged = [
+                paging(
+                    Tab::Services,
+                    f.services.page,
+                    f.services.total_pages,
+                    service_total,
+                ),
+                paging(
+                    Tab::Products,
+                    f.products.page,
+                    f.products.total_pages,
+                    product_total,
+                ),
+                paging(
+                    Tab::Providers,
+                    f.providers.page,
+                    f.providers.total_pages,
+                    provider_total,
+                ),
+            ];
+            (
+                rated_services(
+                    &state,
+                    f.services
+                        .items
+                        .into_iter()
+                        .take(shown(Tab::Services))
+                        .collect(),
+                )
+                .await?,
+                f.products
                     .items
                     .into_iter()
-                    .take(SEARCH_PREVIEW_COUNT)
+                    .take(shown(Tab::Products))
                     .collect(),
+                rated_providers(
+                    &state,
+                    f.providers
+                        .items
+                        .into_iter()
+                        .take(shown(Tab::Providers))
+                        .map(ProviderCard::from)
+                        .collect(),
+                )
+                .await?,
             )
-            .await?,
-            f.products
-                .items
-                .into_iter()
-                .take(SEARCH_PREVIEW_COUNT)
-                .collect(),
-            rated_providers(
-                &state,
-                f.providers
-                    .items
-                    .into_iter()
-                    .take(SEARCH_PREVIEW_COUNT)
-                    .map(ProviderCard::from)
-                    .collect(),
-            )
-            .await?,
-        ),
+        }
         None => (Vec::new(), Vec::new(), Vec::new()),
     };
+    let [(services_more, service_pages), (products_more, product_pages), (providers_more, provider_pages)] =
+        paged;
 
     let sectors = sector_links(
         &shell.sectors,
@@ -291,18 +381,21 @@ pub async fn show(
             .map(|s| s.label.clone()),
         every_sector_href: with_query(&search_url, &[("q", q.as_str())]),
         sectors,
-        services_more: more("services", service_total)?,
-        products_more: more("products", product_total)?,
-        providers_more: more("providers", provider_total)?,
         q,
         tab: tab.as_str(),
         tabs,
         services,
         service_total,
+        services_more,
+        service_pages,
         products,
         product_total,
+        products_more,
+        product_pages,
         providers,
         provider_total,
+        providers_more,
+        provider_pages,
     };
     render_page(&state, &shell, "pages/search.html", &page)
 }

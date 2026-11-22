@@ -613,3 +613,161 @@ async fn a_location_page_acts_from_its_header_and_says_who_hid_it() {
     );
     e.cleanup().await;
 }
+
+/// A whole number the query answers as `n`.
+async fn count_of(e: &Env, sql: &str) -> i64 {
+    e.t.db
+        .query_one(Statement::from_string(
+            e.t.db.get_database_backend(),
+            sql.to_owned(),
+        ))
+        .await
+        .unwrap()
+        .unwrap()
+        .try_get::<i64>("", "n")
+        .unwrap()
+}
+
+/// One admin catalogue list grown past a page: every row on exactly one of
+/// its pages, the first page linking the second, past the end the last page.
+struct PagedList {
+    /// The list's address, `?` and its other parameters included when any.
+    list: &'static str,
+    table: &'static str,
+    /// Adds `ADMIN_PAGE_SIZE + 2` rows named `Zz {n}`.
+    insert: String,
+}
+
+async fn assert_paged(e: &Env, admin: &str, l: &PagedList) {
+    use application::constants::ADMIN_PAGE_SIZE;
+
+    e.t.db.execute_unprepared(&l.insert).await.unwrap();
+    let total = count_of(e, &format!("SELECT count(*) AS n FROM {}", l.table)).await;
+    let last = (total + ADMIN_PAGE_SIZE - 1) / ADMIN_PAGE_SIZE;
+    assert!(last >= 2, "{}: more than one page", l.list);
+    let join = if l.list.contains('?') { "&" } else { "?" };
+
+    let first = page(e, l.list, admin).await;
+    let next = format!(r#"href="{}{}page=2""#, l.list, join).replace('&', "&amp;");
+    assert!(first.contains(&next), "{}: no link to page 2", l.list);
+
+    let mut seen = vec![0; (ADMIN_PAGE_SIZE + 2) as usize];
+    for p in 1..=last {
+        let body = page(e, &format!("{}{}page={p}", l.list, join), admin).await;
+        for (n, hits) in seen.iter_mut().enumerate() {
+            if body.contains(&format!(">Zz {}<", n + 1)) {
+                *hits += 1;
+            }
+        }
+    }
+    assert!(seen.iter().all(|h| *h == 1), "{}: {seen:?}", l.list);
+
+    let res = send(
+        &e.router,
+        get_page(&format!("{}{}page=99", l.list, join), Some(admin)),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(location_of(&res), format!("{}{}page={last}", l.list, join));
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn the_catalogue_lists_are_paged_and_a_row_lands_back_on_its_page() {
+    use application::constants::ADMIN_PAGE_SIZE;
+
+    let e = env_with_origin().await;
+    let admin = install_admin(&e).await;
+    let rows = ADMIN_PAGE_SIZE + 2;
+    let types = |table: &str, slug: &str| {
+        format!(
+            "INSERT INTO {table} (name, slug, display_order)
+             SELECT 'Zz ' || n, '{slug}-' || n, 30000 + n FROM generate_series(1, {rows}) AS n"
+        )
+    };
+    let lists = [
+        PagedList {
+            list: "/admin/commodities",
+            table: "commodities",
+            insert: format!(
+                "INSERT INTO commodities (name, sector, display_order)
+                 SELECT 'Zz ' || n, (SELECT code FROM sectors ORDER BY id LIMIT 1), 30000 + n
+                 FROM generate_series(1, {rows}) AS n"
+            ),
+        },
+        PagedList {
+            list: "/admin/categories?type=service",
+            table: "service_types",
+            insert: types("service_types", "zz-dich-vu"),
+        },
+        PagedList {
+            list: "/admin/categories?type=product",
+            table: "supply_types",
+            insert: types("supply_types", "zz-vat-tu"),
+        },
+        PagedList {
+            list: "/admin/locations",
+            table: "locations",
+            insert: format!(
+                "INSERT INTO locations (label, lat, lng, display_order)
+                 SELECT 'Zz ' || n, 10.3, 106.1, 30000 + n FROM generate_series(1, {rows}) AS n"
+            ),
+        },
+    ];
+    for list in &lists {
+        assert_paged(&e, &admin, list).await;
+    }
+
+    // A row's "show" sent from page 2 lands back on page 2, on its tab.
+    for (route, table, label, back) in [
+        (
+            "commodities",
+            "commodities",
+            "name",
+            "/admin/commodities?page=2",
+        ),
+        (
+            "categories",
+            "supply_types",
+            "name",
+            "/admin/categories?type=product&page=2",
+        ),
+        ("locations", "locations", "label", "/admin/locations?page=2"),
+    ] {
+        let id = count_of(
+            &e,
+            &format!("SELECT id::bigint AS n FROM {table} WHERE {label} = 'Zz 1'"),
+        )
+        .await;
+        let res = send(
+            &e.router,
+            post_form(
+                &format!("/admin/{route}/{id}/status"),
+                &[("is_active", "true"), ("back", "list"), ("page", "2")],
+                Some(&admin),
+            ),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::SEE_OTHER, "{route}");
+        assert_eq!(location_of(&res), back);
+    }
+
+    // A preset deleted from page 2 lands back there.
+    let id = count_of(
+        &e,
+        "SELECT id::bigint AS n FROM locations WHERE label = 'Zz 2'",
+    )
+    .await;
+    let res = send(
+        &e.router,
+        post_form(
+            &format!("/admin/locations/{id}/delete"),
+            &[("page", "2")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(location_of(&res), "/admin/locations?page=2");
+    e.cleanup().await;
+}

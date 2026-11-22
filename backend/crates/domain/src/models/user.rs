@@ -63,6 +63,8 @@ pub struct UserAdmin {
     pub role_code: String,
     pub role_name: String,
     pub is_active: bool,
+    /// Created by the demo data at volume.
+    pub is_demo: bool,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
     pub created_by_name: Option<String>,

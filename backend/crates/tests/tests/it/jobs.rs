@@ -144,10 +144,14 @@ async fn a_job_reaches_the_providers_nearby_that_offer_it() {
 
     // The jobs pages: the near one has it, the far one does not.
     let mine = own_jobs(&e, &near).await;
-    assert_eq!(mine.as_array().map(Vec::len), Some(1));
-    assert_eq!(mine[0]["requester_phone"], "0912345678");
-    assert!(mine[0]["distance_m"].as_f64().is_some());
-    assert_eq!(own_jobs(&e, &far).await.as_array().map(Vec::len), Some(0));
+    assert_eq!(mine["items"].as_array().map(Vec::len), Some(1));
+    assert_eq!(mine["total"], 1);
+    assert_eq!(mine["items"][0]["requester_phone"], "0912345678");
+    assert!(mine["items"][0]["distance_m"].as_f64().is_some());
+    assert_eq!(
+        own_jobs(&e, &far).await["items"].as_array().map(Vec::len),
+        Some(0)
+    );
     for page in ["/provider/jobs", "/provider/dashboard"] {
         let res = send(
             &e.router,
@@ -189,7 +193,10 @@ async fn a_job_reaches_the_providers_nearby_that_offer_it() {
     )
     .await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
-    assert_eq!(own_jobs(&e, &near).await.as_array().map(Vec::len), Some(2));
+    assert_eq!(
+        own_jobs(&e, &near).await["items"].as_array().map(Vec::len),
+        Some(2)
+    );
     let res = send(&e.router, get_page("/admin/jobs", Some(&admin))).await;
     assert_eq!(res.status(), StatusCode::OK);
     let html = body_text(res).await;

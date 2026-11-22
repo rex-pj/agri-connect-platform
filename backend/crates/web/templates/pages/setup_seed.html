@@ -44,6 +44,7 @@
       {{ rows::count_row(count=demo.alerts, label=t(key="seed.demo_alerts"), href=url_for(name="admin_alerts")) }}
       {{ rows::count_row(count=demo.partners, label=t(key="seed.demo_partners"), href=url_for(name="admin_partners")) }}
       {{ rows::count_row(count=demo.contracts, label=t(key="seed.demo_contracts"), href=url_for(name="admin_partners")) }}
+      {{ rows::count_row(count=demo.accounts, label=t(key="seed.demo_accounts"), href=url_for(name="admin_users")) }}
     </div>
     <p class="admin-status">{{ t(key="seed.all_providers", count=page.status.business_count) }}</p>
 

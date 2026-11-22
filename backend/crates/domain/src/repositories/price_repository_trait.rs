@@ -3,7 +3,7 @@ use chrono::NaiveDate;
 
 use crate::{
     error::Error,
-    models::price::{Crop, CropFields, CropPrice, NewCropPrice},
+    models::price::{Crop, CropFields, CropPrice, NewCropPrice, PriceFilter},
 };
 
 #[async_trait]
@@ -31,16 +31,16 @@ pub trait PriceRepositoryTrait {
     /// False when there is no such price.
     async fn delete_price(&self, id: i32) -> Result<bool, Error>;
 
-    /// A page of every price (or of one crop's), the newest day first.
+    /// A page of every price (or of one crop's, or one area's), the newest day first.
     async fn list_prices(
         &self,
-        crop_id: Option<i32>,
+        filter: &PriceFilter,
         limit: u64,
         offset: u64,
     ) -> Result<Vec<CropPrice>, Error>;
 
     /// How many prices `list_prices` pages through.
-    async fn count_prices(&self, crop_id: Option<i32>) -> Result<i64, Error>;
+    async fn count_prices(&self, filter: &PriceFilter) -> Result<i64, Error>;
 
     /// The newest `per_area` prices of each crop in each area, observed on
     /// or after `since`, of shown crops in shown areas, the newest day first.

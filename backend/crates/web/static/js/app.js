@@ -176,6 +176,33 @@ document.addEventListener("alpine:init", () => {
     },
   }));
 
+  // The admin list toolbar: any change of a filter sends it (its apply button,
+  // in a <noscript>, is for visitors without JS), and its filters fold behind
+  // a button, open from the start when one is on (data-open="true"). Without
+  // JS the panel stays open and the button (x-cloak) stays hidden.
+  Alpine.data("adminToolbar", () => ({
+    open: false,
+
+    init() {
+      this.open = this.$root.dataset.open === "true";
+    },
+    submit() {
+      this.$root.requestSubmit();
+    },
+    toggle() {
+      this.open = !this.open;
+    },
+    get expanded() {
+      return this.open ? "true" : "false";
+    },
+    get buttonClass() {
+      return this.open ? "active" : "";
+    },
+    get panelClass() {
+      return this.open ? "is-collapsible open" : "is-collapsible";
+    },
+  }));
+
   // Folds a panel behind a toggle button. Without JS the panel stays open and
   // the button (x-cloak) stays hidden.
   Alpine.data("collapse", () => ({
@@ -352,15 +379,33 @@ document.addEventListener("alpine:init", () => {
   // The words typed together ("ca mau") rank first, and the province of the
   // best match leads; equal matches keep the official order. A page without
   // the library keeps the plain select. data-no-results: the words when
-  // nothing matches.
+  // nothing matches; data-allow-empty: the empty option ("every area") stays
+  // a choice.
+  //
+  // An option with data-name (molecules/area_filter.html) is drawn as a
+  // tree: the whole province with a map icon, each ward (data-ward) indented
+  // on a guide line under it with a pin; chosen, the box shows its full name
+  // (data-full).
   Alpine.data("searchableSelect", () => ({
     init() {
       if (typeof TomSelect === "undefined") return;
       const select = this.$el;
+      const option = (data, escape) => {
+        if (!data.name) return `<div>${escape(data.text)}</div>`;
+        const [kind, icon] = data.ward
+          ? ["area-choice--ward", "fa-location-dot"]
+          : ["area-choice--whole", "fa-map"];
+        return (
+          `<div class="area-choice ${kind}"><i class="fa-solid ${icon} area-choice__icon" aria-hidden="true"></i>` +
+          `<span>${escape(data.name)}</span></div>`
+        );
+      };
+      const item = (data, escape) => `<div>${escape(data.full || data.text)}</div>`;
       new TomSelect(select, {
         // Every option, as a plain select scrolls through them all (the
         // provinces alphabetical, each ward by name: application::admin_units).
         maxOptions: null,
+        allowEmptyOption: select.dataset.allowEmpty === "true",
         lockOptgroupOrder: false,
         sortField: [{ field: "$score", direction: "desc" }, { field: "$order" }],
         // Called on the Tom Select instance: an option's group is an id into
@@ -369,14 +414,14 @@ document.addEventListener("alpine:init", () => {
           const words = fold(query).split(/\s+/).filter(Boolean);
           const phrase = words.join(" ");
           const groups = this.optgroups;
-          return (item) => {
-            const province = groups[item.optgroup]?.label || "";
-            const text = fold(`${province} ${item.text}`);
+          return (data) => {
+            const province = groups[data.optgroup]?.label || "";
+            const text = fold(`${province} ${data.text}`);
             if (!words.every((w) => text.includes(w))) return 0;
             return text.includes(phrase) ? 2 : 1;
           };
         },
-        render: { no_results: noResults(select) },
+        render: { option, item, no_results: noResults(select) },
       });
     },
   }));

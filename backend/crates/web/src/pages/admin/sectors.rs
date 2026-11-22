@@ -67,6 +67,10 @@ pub const PAGES: CodedPages = CodedPages {
 pub struct ListQuery {
     /// The sector whose hide confirmation is open.
     pub hide: String,
+    /// The words searched.
+    pub q: String,
+    /// Shown / hidden.
+    pub state: String,
 }
 
 /// GET /admin/sectors
@@ -79,7 +83,7 @@ pub async fn list(
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
-    let view = ListView::asked(&q.hide, flash.0);
+    let view = ListView::asked(&q.hide, flash.0).narrowed(q.q, q.state);
     let mut response = coded::list_page(&PAGES, &state, &actor, view).await?;
     flash.clear_on(&mut response);
     Ok(response)

@@ -4,7 +4,9 @@
     and its total. `areas` are application::outputs::DemandAreaDto, `weeks`
     the report's (to name each square), `min` the smallest figure shown.
 
-    Each row links to its own report (`hrefs`: one per area). A province
+    Each row links to its own report (`hrefs`: one per area). `wards`, when
+    given, says under each province how many wards it holds (the demand
+    page lists only the wards of the province in focus). A province
     (or "no area") is a top row; its wards follow it (`a.nested`), each by
     its own name, joined to it by a tree line (`--last` ends the line). A
     hidden week is always under the goal (it is under `min`), so it is
@@ -14,7 +16,7 @@
     (widths in %, corners in px, so the pill keeps round ends at any width),
     the squares spans. -#}
 {% import "atoms/figure.html" as fig %}
-{% macro area_progress(areas, weeks, bar, min, hrefs) -%}
+{% macro area_progress(areas, weeks, bar, min, hrefs, wards=false) -%}
 {%- set n = weeks | length -%}
 <div class="table-responsive">
   <table class="table align-middle mb-0 admin-table admin-table--matrix area-progress">
@@ -51,6 +53,7 @@
           {%- if href %}<a class="area-progress__link link-body-emphasis link-offset-2 link-underline-opacity-0 link-underline-opacity-75-hover" href="{{ href }}">{{ name }}</a>{% else %}{{ name }}{% endif %}
           {%- else %}<span class="text-muted">{{ t(key="demand.unplaced") }}</span>{% endif %}
           {%- if a.steady %} <span class="badge rounded-pill text-bg-success">{{ t(key="demand.steady") }}</span>{% endif %}
+          {%- if wards %}{% set held = wards[loop.index0] %}{% else %}{% set held = 0 %}{% endif %}{% if held > 0 %}<span class="d-block small fw-normal text-muted">{{ t(key="demand.wards_count", count=held) }}</span>{% endif %}
         </th>
         <td>
           <div class="area-progress__average">

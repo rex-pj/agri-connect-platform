@@ -53,18 +53,6 @@ pub struct LeadCount {
     pub requester_phone: Option<String>,
 }
 
-/// The ward a business counts under: the one its position lies in (or the
-/// nearest within `ADMIN_UNIT_SNAP_M`), kept with the position. Businesses
-/// without one are absent.
-pub struct BusinessArea {
-    pub business_id: i32,
-    pub ward_code: String,
-    pub name: String,
-    pub phone: String,
-    pub address: Option<String>,
-    pub is_demo: bool,
-}
-
 /// A business with exactly one live service, and that service's category:
 /// a tap on its shop page is about that service.
 pub struct SoleCategory {

@@ -3,9 +3,9 @@
 {% import "atoms/alert.html" as alerts %}
 {% import "atoms/job_status.html" as job_status %}
 {% import "molecules/admin_header.html" as header %}
+{% import "molecules/admin_search.html" as search %}
 {% import "molecules/pagination_nav.html" as paging %}
 {% import "molecules/row_action.html" as row %}
-{% import "molecules/status_chips.html" as chips %}
 {% import "organisms/confirm_sheet.html" as confirm %}
 {#- `page.body` is web::pages::admin::jobs::JobsPage: every job post,
     newest first. The state is a badge; the row ends with its next steps
@@ -18,7 +18,8 @@
 {{ header::admin_header(title=t(key="admin_menu.jobs"), icon="fa-bullhorn", sub=t(key="admin_jobs.sub", count=b.total)) }}
 <div class="admin-body" x-data="dialog" data-open="{% if b.confirm %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
   {% if b.flash == "job_status_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin_jobs.saved")) }}{% endif %}
-  {{ chips::status_chips(chips=b.states, label=t(key="admin.status_filter")) }}
+  {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.jobs"), chips=b.states, chips_label=t(key="admin.status_filter")) }}
+  {{ search::admin_results(s=b.search, total=b.total) }}
 
   <div class="admin-card">
     <div class="table-responsive">
@@ -46,7 +47,7 @@
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="7" class="text-center text-muted py-4">{% if b.narrowed %}{{ t(key="admin_jobs.none_in_state") }}{% else %}{{ t(key="admin_jobs.none") }}{% endif %}</td></tr>
+          <tr><td colspan="7" class="text-center text-muted py-4">{% if b.search.q %}{{ t(key="admin_search.none", q=b.search.q) }}{% elif b.narrowed %}{{ t(key="admin_jobs.none_in_state") }}{% else %}{{ search::empty(s=b.search, none=t(key="admin_jobs.none")) }}{% endif %}</td></tr>
           {% endfor %}
         </tbody>
       </table>

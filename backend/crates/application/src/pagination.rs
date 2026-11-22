@@ -65,10 +65,44 @@ pub fn paginate_admin(page: i64) -> (i64, i64) {
     paginate(page.min(ADMIN_MAX_PAGE), ADMIN_PAGE_SIZE)
 }
 
+/// One page of a short list read whole and already narrowed (a search over a
+/// catalogue): `rows` are all the matches in their order.
+pub fn admin_page_of<T: serde::Serialize>(
+    rows: Vec<T>,
+    page: i64,
+) -> crate::outputs::AdminPagedResponse<T> {
+    let (page, offset) = paginate_admin(page);
+    let total = i64::try_from(rows.len()).unwrap_or(i64::MAX);
+    let items = rows
+        .into_iter()
+        .skip(usize::try_from(offset).unwrap_or(usize::MAX))
+        .take(usize::try_from(ADMIN_PAGE_SIZE).unwrap_or(0))
+        .collect();
+    crate::outputs::AdminPagedResponse::admin(items, total, page)
+}
+
 /// The pages an admin list of `total` rows offers: never past
 /// `ADMIN_MAX_PAGE`.
 pub fn admin_total_pages(total: i64) -> i64 {
     total_pages(total, ADMIN_PAGE_SIZE).min(ADMIN_MAX_PAGE)
+}
+
+/// Puts a short list read whole in the order an admin asked for: by name
+/// (case ignored), the newest made first (the highest id) or the oldest. No
+/// order asked leaves it as it came (the list's own).
+pub fn order_admin_list<T>(
+    rows: &mut [T],
+    sort: Option<domain::models::admin_list::AdminSort>,
+    name: impl Fn(&T) -> &str,
+    id: impl Fn(&T) -> i32,
+) {
+    use domain::models::admin_list::AdminSort;
+    match sort {
+        Some(AdminSort::Name) => rows.sort_by_key(|r| (name(r).to_lowercase(), id(r))),
+        Some(AdminSort::Newest) => rows.sort_by_key(|r| std::cmp::Reverse(id(r))),
+        Some(AdminSort::Oldest) => rows.sort_by_key(|r| id(r)),
+        None => {}
+    }
 }
 
 #[cfg(test)]

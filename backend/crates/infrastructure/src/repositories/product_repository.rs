@@ -22,6 +22,7 @@ use domain::{
 
 use domain::Error;
 
+use crate::admin_list::{admin_order, shown_state, OrderColumns};
 use crate::repositories::lock_business;
 use crate::search::{admin_product_search, text_contains, PRODUCT_SEARCH_COLUMNS};
 use crate::{
@@ -145,6 +146,19 @@ fn base_product_view_query() -> sea_orm::Select<ProductEntity> {
         .filter(category::Column::IsActive.eq(true))
 }
 
+/// The live products whose seller lies within `radius` metres of
+/// `point_wkt`: what the geo search pages through and what its count counts.
+fn near_live(point_wkt: &str, radius: f64) -> sea_orm::Select<ProductEntity> {
+    base_product_view_query()
+        .filter(product::Column::IsActive.eq(true))
+        .filter(product::Column::DeletedAt.is_null())
+        .filter(within(
+            business_location(),
+            geography_from_text(point_wkt),
+            radius,
+        ))
+}
+
 fn base_provider_product_query() -> sea_orm::Select<ProductEntity> {
     ProductEntity::find()
         .select_only()
@@ -204,19 +218,29 @@ impl ProductRepositoryTrait for ProductRepository {
         limit: i64,
         offset: i64,
     ) -> Result<Vec<AdminProduct>, Error> {
-        apply_admin_filter(base_admin_product_query(), filter)
-            .order_by_desc(product::Column::CreatedOn)
-            .order_by_desc(product::Column::Id)
-            .limit(limit as u64)
-            .offset(offset as u64)
-            .into_model::<AdminProductRow>()
-            .all(self.db.as_ref())
-            .await
-            .map(|rows| rows.into_iter().map(map_admin_row).collect())
-            .map_err(|e| {
-                error!("product list_admin error: {e}");
-                Error::internal("Failed to load products.")
-            })
+        admin_order(
+            apply_admin_filter(base_admin_product_query(), filter),
+            filter.sort,
+            OrderColumns {
+                created: product::Column::CreatedOn,
+                name: product::Column::Name,
+                id: product::Column::Id,
+            },
+            |q| {
+                q.order_by_desc(product::Column::CreatedOn)
+                    .order_by_desc(product::Column::Id)
+            },
+        )
+        .limit(limit as u64)
+        .offset(offset as u64)
+        .into_model::<AdminProductRow>()
+        .all(self.db.as_ref())
+        .await
+        .map(|rows| rows.into_iter().map(map_admin_row).collect())
+        .map_err(|e| {
+            error!("product list_admin error: {e}");
+            Error::internal("Failed to load products.")
+        })
     }
 
     async fn count_admin(&self, filter: &AdminProductFilter) -> Result<i64, Error> {
@@ -383,15 +407,13 @@ impl ProductRepositoryTrait for ProductRepository {
         point_wkt: &str,
         radius: f64,
         limit: i64,
+        offset: i64,
     ) -> Result<Vec<ProductView>, Error> {
         let distance = distance(business_location(), geography_from_text(point_wkt));
-        let within = within(business_location(), geography_from_text(point_wkt), radius);
-        let mut query = base_product_view_query()
-            .filter(product::Column::IsActive.eq(true))
-            .filter(product::Column::DeletedAt.is_null())
+        let mut query = near_live(point_wkt, radius)
             .expr_as(distance, QueryAs::DistanceM)
-            .filter(within)
-            .limit(limit as u64);
+            .limit(limit as u64)
+            .offset(offset as u64);
         QueryTrait::query(&mut query).order_by_expr(output(QueryAs::DistanceM), Order::Asc);
         query
             .order_by_asc(product::Column::Id)
@@ -404,6 +426,14 @@ impl ProductRepositoryTrait for ProductRepository {
                     .collect()
             })
             .map_err(|e| Error::internal(format!("product search_geo: {e}")))
+    }
+
+    async fn count_geo(&self, point_wkt: &str, radius: f64) -> Result<i64, Error> {
+        near_live(point_wkt, radius)
+            .count(self.db.as_ref())
+            .await
+            .map(|c| c as i64)
+            .map_err(|e| Error::internal(format!("product count_geo: {e}")))
     }
 
     async fn list_by_user(&self, user_id: i32) -> Result<Vec<ProviderProduct>, Error> {
@@ -771,7 +801,26 @@ fn apply_admin_filter<Q: QueryFilter>(mut query: Q, filter: &AdminProductFilter)
     if let Some(id) = filter.commodity_id {
         query = query.filter(product::Column::CommodityId.eq(id));
     }
-    query
+    if let Some(sector) = filter.sector.as_deref() {
+        query = query.filter(supply_in_sector(sector));
+    }
+    match filter.gap.as_deref() {
+        Some("no_image") => query = query.filter(product::Column::ImageFileId.is_null()),
+        Some("no_price") => query = query.filter(product::Column::Price.is_null()),
+        _ => {}
+    }
+    if let Some(min) = filter.price_min {
+        query = query.filter(product::Column::Price.gte(min));
+    }
+    if let Some(max) = filter.price_max {
+        query = query.filter(product::Column::Price.lte(max));
+    }
+    query = query.filter(crate::admin_list::created_within(
+        (product::Entity, product::Column::CreatedOn),
+        filter.created_from,
+        filter.created_to,
+    ));
+    query.filter(shown_state(product::Column::IsActive, filter.state))
 }
 
 /// The public search criteria, shared by `browse` and `count_browse` so the

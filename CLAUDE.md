@@ -58,6 +58,7 @@ agri-connect-platform/
 - **Templates:** Tera, rendered by `web::views`; every page works without JavaScript
 - **UI Framework:** Bootstrap 5.3 (vendored under `static/vendor`)
 - **Interactivity:** Alpine.js (CSP build), components registered in `static/js/app.js`
+- **Admin list toolbar:** every admin list is one GET form (`molecules/admin_search.html`, built by `SearchBox` in `web/src/pages/admin/mod.rs`), so the result is a URL. Four rows, each only when the list has it: the words, the status chips (`chips=`, worded like the badge in the row), the filters folded behind a "Filters" button (`picked` selects, `toggled` checkboxes, `texted` words, `ranged` / `date_ranged` ranges, `dated` the days made; open when one is on, Alpine `adminToolbar`), and the criteria in force as removable chips. The order is not a filter: it is chosen on the result bar (`admin_results`, `sorted`), a form of its own that carries every criterion. A criterion is one field of `ListPosition` (`param` / `without` / `query`) that `AdminFilter` (or the list's own filter) carries to the repository; a handler must pass the whole position on, never pick fields (a dropped field means a filter that does nothing). `it/conventions.rs` `admin_lists_share_one_toolbar` keeps the lists on this one macro.
 - **Islands:** Svelte 5 custom elements for what Alpine cannot do (today: geolocation)
 - **Searchable selects:** Tom Select 2.6 (vendored, `static/vendor/VERSIONS`) over the province / ward selects (`molecules/form_field.html` `area_select`, Alpine `searchableSelect`, accents ignored; every option listed, provinces in Vietnamese dictionary order and each ward by its own name: `slug::sort_key`, `AdminUnits::choices`; the demand report keeps the official code order); a page loads it with `searchable_select_assets()` in its `vendor` block, and without JS the select is a plain one
 - **Icon picker:** every icon box (sectors, alert kinds, commodities, service and supply types) is `molecules/form_field.html` `icon_select`: a text box holding the Font Awesome name, which Alpine `iconSelect` (Tom Select) turns into a picker loading its matches as the name is typed from `GET /api/admin/icons` (`icons::search`, best first, `ICON_SEARCH_RESULTS`), each drawn with its glyph; without JS the name is typed. `application::icons::ICONS` is every name the vendored Font Awesome defines, aliases too (`icons/names.rs`, generated from `fontawesome.min.css`; `it/conventions.rs` `the_icon_list_is_the_vendored_fonts` fails when they differ, so a Font Awesome update regenerates it). Stored as `fa-…` (`cow` and an older `fa-solid fa-cow` are taken as `fa-cow`); `validation::icon` refuses any other name (`invalid_icon`); a stored one no longer listed is said under the box
@@ -99,12 +100,12 @@ infrastructure/repositories/  — Sea-ORM implementations injected at startup
 
 Templates live under `backend/crates/web/templates/` and are organized by atomic level (Tera macros):
 
-| Level     | Folder       | Examples                                                                                       |
-| --------- | ------------ | ---------------------------------------------------------------------------------------------- |
-| Atoms     | `atoms/`     | `icon`, `logo`, `alert`, `inquiry_status`, `photo_placeholder`                                 |
-| Molecules | `molecules/` | `form_field`, `page_hero`, `section_header`, `pagination_nav`, `empty_state`, `admin_header`   |
+| Level | Folder | Examples |
+| --- | --- | --- |
+| Atoms | `atoms/` | `icon`, `logo`, `alert`, `inquiry_status`, `photo_placeholder` |
+| Molecules | `molecules/` | `form_field`, `page_hero`, `section_header`, `pagination_nav`, `empty_state`, `admin_header` |
 | Organisms | `organisms/` | `product_card`, `provider_card`, `category_grid`, `contact_sheet`, `confirm_sheet`, `*_fields` |
-| Layouts   | `layouts/`   | `app.html` (public + provider), `admin.html` (admin panel), `partner.html` (partner report)   |
+| Layouts | `layouts/` | `app.html` (public + provider), `admin.html` (admin panel), `partner.html` (partner report) |
 
 **Rules:**
 
@@ -120,34 +121,34 @@ Templates live under `backend/crates/web/templates/` and are organized by atomic
 
 ### Core Entities
 
-| Entity                  | Key Fields                                                                                             | Notes                                          |
-| ----------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
-| `roles`                 | id, code, name, is_active                                                                              | Codes: `admin`, `provider`, `partner`          |
-| `users`                 | id, username, email, password_hash, full_name, role_id, is_active, failed_login_attempts, locked_until, email_verified_at, sessions_valid_after | Soft-deletable                                 |
-| `sectors`               | id, code (UNIQUE), name (UNIQUE), icon, display_order, is_active, is_demo                              | What the platform serves ("ngành": trồng trọt, chăn nuôi, thuỷ sản), kept by the admin; `code` made from the name once, never changed (the sector cookie and `sector=` carry it); the other tables' `sector` columns point to it |
-| `commodities`           | id, name (UNIQUE), sector, icon, display_order, price_fresh_days, is_active, is_demo                   | What a farmer raises ("cây trồng, vật nuôi": lúa, sầu riêng, heo, tôm); fixes the sector of its crops and of the supplies for it; `price_fresh_days` (1–60, default 14) how long a price of its crops stays on the board |
-| `service_types`         | id, name, slug, icon, display_order, sector?, is_active, is_demo                                       | What a provider is hired for ("loại dịch vụ"); `sector` none = every sector |
-| `supply_types`          | id, name, slug, icon, display_order, sector?, is_active, is_demo                                       | What a provider sells ("loại vật tư"); one id sequence (`catalogue_type_ids`) with `service_types`, so a bare id names one row of either |
-| `businesses`            | id, name, phone, email, description, address, lat, lng, ward_code, is_verified, is_active              | Provider/business listing; `ward_code` the ward of its position, written with it |
-| `services`              | id, business_id, service_type_id, name, description, price_note, is_active, image_file_id                  | Offered by a business; `is_active` is admin's  |
-| `products`              | id, business_id, supply_type_id, commodity_id?, name, description, price, unit, is_active             | Supplies ("vật tư") a business sells; `commodity_id` what it is for (lúa giống ST25: Lúa), none = every one |
-| `inquiries`             | id, business_id, service_id, product_id, topic, requester_name, requester_phone, note, status                      | Statuses: `new`, `contacted`, `closed`, `spam`; about a service or a supply of its own business, never both |
-| `reviews`               | id, business_id, inquiry_id, reviewer_name, reviewer_phone_hash, rating (1–5), comment, reply, replied_at, is_visible | Hidden until an admin shows it |
-| `call_clicks`           | id, business_id, service_id, product_id, channel, created_on                                           | Call / Zalo taps (`call`, `zalo`); never who   |
-| `password_reset_tokens` | id, user_id, token, expires_at, used_at                                                               | Single-use, 1-hour TTL                         |
-| `email_verification_tokens` | id, user_id, token_hash, expires_at, used_at                                                      | Single-use, 24-hour TTL; stamps `users.email_verified_at` |
-| `search_events`         | id, query, service_type_id?, supply_type_id?, ward_code, results, created_on                                                 | What was searched and in which ward; never who |
+| Entity | Key Fields | Notes |
+| --- | --- | --- |
+| `roles` | id, code, name, is_active | Codes: `admin`, `provider`, `partner` |
+| `users` | id, username, email, password_hash, full_name, role_id, is_active, failed_login_attempts, locked_until, email_verified_at, sessions_valid_after, is_demo | Soft-deletable; `is_demo`: an account of the demo data at volume |
+| `sectors` | id, code (UNIQUE), name (UNIQUE), icon, display_order, is_active, is_demo | What the platform serves ("ngành": trồng trọt, chăn nuôi, thuỷ sản), kept by the admin; `code` made from the name once, never changed (the sector cookie and `sector=` carry it); the other tables' `sector` columns point to it |
+| `commodities` | id, name (UNIQUE), sector, icon, display_order, price_fresh_days, is_active, is_demo | What a farmer raises ("cây trồng, vật nuôi": lúa, sầu riêng, heo, tôm); fixes the sector of its crops and of the supplies for it; `price_fresh_days` (1–60, default 14) how long a price of its crops stays on the board |
+| `service_types` | id, name, slug, icon, display_order, sector?, is_active, is_demo | What a provider is hired for ("loại dịch vụ"); `sector` none = every sector |
+| `supply_types` | id, name, slug, icon, display_order, sector?, is_active, is_demo | What a provider sells ("loại vật tư"); one id sequence (`catalogue_type_ids`) with `service_types`, so a bare id names one row of either |
+| `businesses` | id, name, phone, email, description, address, lat, lng, ward_code, is_verified, is_active | Provider/business listing; `ward_code` the ward of its position, written with it |
+| `services` | id, business_id, service_type_id, name, description, price_note, is_active, image_file_id | Offered by a business; `is_active` is admin's |
+| `products` | id, business_id, supply_type_id, commodity_id?, name, description, price, unit, is_active | Supplies ("vật tư") a business sells; `commodity_id` what it is for (lúa giống ST25: Lúa), none = every one |
+| `inquiries` | id, business_id, service_id, product_id, topic, requester_name, requester_phone, note, status | Statuses: `new`, `contacted`, `closed`, `spam`; about a service or a supply of its own business, never both |
+| `reviews` | id, business_id, inquiry_id, reviewer_name, reviewer_phone_hash, rating (1–5), comment, reply, replied_at, is_visible | Hidden until an admin shows it |
+| `call_clicks` | id, business_id, service_id, product_id, channel, created_on | Call / Zalo taps (`call`, `zalo`); never who |
+| `password_reset_tokens` | id, user_id, token, expires_at, used_at | Single-use, 1-hour TTL |
+| `email_verification_tokens` | id, user_id, token_hash, expires_at, used_at | Single-use, 24-hour TTL; stamps `users.email_verified_at` |
+| `search_events` | id, query, service_type_id?, supply_type_id?, ward_code, results, created_on | What was searched and in which ward; never who |
 | `call_click_weeks`, `search_event_weeks` | week_starts_on, (business_id, channel, taps) / (ward_code, searches, unmet, is_demo), service_type_id?, supply_type_id? | Taps and searches older than `EVENT_KEEP_WEEKS`, counted by week; the rows they were counted from are deleted |
-| `partners`              | id, name, kind, contact_name, phone, email, account_id, is_active                                      | Kinds: `brand`, `dealer`, `cooperative`, `exporter` |
-| `partner_contracts`     | id, partner_id, province_code, ward_code?, starts_on, ends_on, monthly_fee (+ `partner_contract_service_types`, `partner_contract_supply_types`, `partner_sponsored`) | A whole province or one ward of it; in force between its dates while the partner is on |
-| `provinces`             | code (official, 2 digits), name, full_name, unit_type, center, is_active                               | The 34 since 1 July 2025; loaded from the bundled dataset, never deleted |
-| `wards`                 | code (official, 5 digits), province_code, name, full_name, unit_type, center, boundary, is_active      | 3 321 wards, communes, special zones; `boundary` a simplified `GEOGRAPHY(MULTIPOLYGON)` |
-| `crops`                 | id, commodity_id, name (UNIQUE), unit, display_order, is_active, is_demo                               | Farm produce ("nông sản") on the price board: a variety or grade of one commodity ("Lúa ST25", "Heo hơi"); demo ones from `/setup/seed`, hidden never deleted |
-| `crop_prices`           | id, crop_id, location_id, observed_on, price_low, price_high, note                                     | One per crop × area × day (again replaces it)  |
-| `job_posts`             | id, service_type_id, location_id, location, description, requester_name, requester_phone, status         | Statuses: `open`, `closed`, `spam`; never public |
-| `alert_kinds`           | id, code (UNIQUE), name (UNIQUE), icon, display_order, is_active, is_demo                              | What an alert warns of (dịch bệnh, xâm nhập mặn, thời tiết), kept by the admin like the sectors (same columns, `CodedUseCase`) |
-| `alerts`                | id, kind, sector?, province_code?, title, body, starts_on, ends_on, is_active                         | `kind` one of `alert_kinds` (by code); never deleted, turned off |
-| `platform_settings`     | key (PK, dotted: `jobs.open_days`), value (text), updated_on, updated_by                               | The settings an admin moved off their defaults (`application::settings`); no row = the default; never seeded |
+| `partners` | id, name, kind, contact_name, phone, email, account_id, is_active | Kinds: `brand`, `dealer`, `cooperative`, `exporter` |
+| `partner_contracts` | id, partner_id, province_code, ward_code?, starts_on, ends_on, monthly_fee (+ `partner_contract_service_types`, `partner_contract_supply_types`, `partner_sponsored`) | A whole province or one ward of it; in force between its dates while the partner is on |
+| `provinces` | code (official, 2 digits), name, full_name, unit_type, center, is_active | The 34 since 1 July 2025; loaded from the bundled dataset, never deleted |
+| `wards` | code (official, 5 digits), province_code, name, full_name, unit_type, center, boundary, is_active | 3 321 wards, communes, special zones; `boundary` a simplified `GEOGRAPHY(MULTIPOLYGON)` |
+| `crops` | id, commodity_id, name (UNIQUE), unit, display_order, is_active, is_demo | Farm produce ("nông sản") on the price board: a variety or grade of one commodity ("Lúa ST25", "Heo hơi"); demo ones from `/setup/seed`, hidden never deleted |
+| `crop_prices` | id, crop_id, location_id, observed_on, price_low, price_high, note | One per crop × area × day (again replaces it) |
+| `job_posts` | id, service_type_id, location_id, location, description, requester_name, requester_phone, status | Statuses: `open`, `closed`, `spam`; never public |
+| `alert_kinds` | id, code (UNIQUE), name (UNIQUE), icon, display_order, is_active, is_demo | What an alert warns of (dịch bệnh, xâm nhập mặn, thời tiết), kept by the admin like the sectors (same columns, `CodedUseCase`) |
+| `alerts` | id, kind, sector?, province_code?, title, body, starts_on, ends_on, is_active | `kind` one of `alert_kinds` (by code); never deleted, turned off |
+| `platform_settings` | key (PK, dotted: `jobs.open_days`), value (text), updated_on, updated_by | The settings an admin moved off their defaults (`application::settings`); no row = the default; never seeded |
 
 ### Geo Query Pattern
 
@@ -169,159 +170,159 @@ All routes are assembled in `backend/crates/web/src/routings/app_routing.rs`. Ev
 
 ### Public (no auth)
 
-| Method | Path                               | Description                                                                                            |
-| ------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| GET    | `/health/live`, `/health/ready`    | Liveness; readiness (database reachable)                                                               |
-| GET    | `/api/explore/providers`           | Geo-search (`lat`, `lng`, `radius?` default 10 km, `category_id?`) or browse (paginated, `page?`)      |
-| GET    | `/api/explore/providers/{id}`      | Provider detail                                                                                        |
-| GET    | `/api/explore/services`            | Same two modes as providers, over public services (`name?` = text, `sort?`, `sector?`); each with its business |
-| GET    | `/api/explore/services/{id}`       | Public service detail                                                                                  |
-| GET    | `/api/explore/featured`            | Home featured data: services (one per verified provider), providers, products (`sector?`)              |
-| GET    | `/api/explore/alerts`              | Alerts in force today (`sector?`: that sector's and every sector's), newest first, as the home page    |
-| GET    | `/api/explore/categories`          | Category listing (filter by `type=service\|product`)                                                   |
-| GET    | `/api/explore/locations`           | Location presets listing                                                                               |
-| GET    | `/api/explore/sectors`            | The shown sectors, in their order: what every `sector=` filter takes                                   |
-| GET    | `/api/explore/alert-kinds`        | The shown alert kinds, in their order                                                                    |
-| GET    | `/api/explore/commodities`         | The shown commodities (cây trồng, vật nuôi), by sector and order: what `commodity_id` filters take             |
-| POST   | `/api/explore/jobs`                | A job post (`category_id`, `lat`+`lng` or `location_id`, description, name, phone; 201 `{id}`; 30/min) |
-| POST   | `/api/zalo/location`, `/api/zalo/phone` | The Zalo Mini App's `{access_token, token}` → `{lat, lng}` / `{phone}` through the Zalo Graph API (`ZALO_APP_SECRET`; unset: 503 `zalo_not_configured`; 30/min) |
-| GET    | `/api/explore/prices`              | Farm prices by commodity (`commodities`, each crop's `commodity_id`): each shown crop's latest price per area within its commodity's `price_fresh_days`, its move (`location_id?`, `sector?`) |
-| GET    | `/api/explore/products`            | Browse products (paginated, `category_id?`, `commodity_id?`)                                                |
-| GET    | `/api/explore/products/{id}`       | Product detail                                                                                         |
-| POST   | `/api/explore/contact`             | Submit contact/inquiry (`service_id?` or `product_id?`: what it is about; rate-limited: 30/min)   |
-| GET    | `/api/explore/providers/{id}/reviews` | Shown reviews: `count`, `average`, the newest `PUBLIC_REVIEWS_SHOWN` with the provider's replies   |
-| POST   | `/api/explore/reviews`             | A review (`business_id`, name, phone, `rating` 1–5, comment; 201, hidden until approved; 30/min)       |
-| POST   | `/reviews`                         | Same review as a page form (urlencoded); 303 + flash, or the page re-shown with the sheet open          |
-| POST   | `/api/explore/calls`               | A tap on a public call or Zalo button (`{kind, id, channel?}`: `call` default, `zalo`; 204; 30/min); the business is looked up from the record |
-| POST   | `/contact`                         | Same inquiry as a page form (urlencoded); 303 + one-time flash, or the page re-shown with field errors |
-| GET    | `/files/{id}`, `/files/{id}/thumb` | Uploaded image (JPEG, cached forever; ids are never reused)                                            |
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/health/live`, `/health/ready` | Liveness; readiness (database reachable) |
+| GET | `/api/explore/providers` | Geo-search (`lat`, `lng`, `radius?` default 10 km, `category_id?`) or browse (paginated, `page?`) |
+| GET | `/api/explore/providers/{id}` | Provider detail |
+| GET | `/api/explore/services` | Same two modes as providers, over public services (`name?` = text, `sort?`, `sector?`); each with its business |
+| GET | `/api/explore/services/{id}` | Public service detail |
+| GET | `/api/explore/featured` | Home featured data: services (one per verified provider), providers, products (`sector?`) |
+| GET | `/api/explore/alerts` | Alerts in force today (`sector?`: that sector's and every sector's), newest first, as the home page |
+| GET | `/api/explore/categories` | Category listing (filter by `type=service\|product`) |
+| GET | `/api/explore/locations` | Location presets listing |
+| GET | `/api/explore/sectors` | The shown sectors, in their order: what every `sector=` filter takes |
+| GET | `/api/explore/alert-kinds` | The shown alert kinds, in their order |
+| GET | `/api/explore/commodities` | The shown commodities (cây trồng, vật nuôi), by sector and order: what `commodity_id` filters take |
+| POST | `/api/explore/jobs` | A job post (`category_id`, `lat`+`lng` or `location_id`, description, name, phone; 201 `{id}`; 30/min) |
+| POST | `/api/zalo/location`, `/api/zalo/phone` | The Zalo Mini App's `{access_token, token}` → `{lat, lng}` / `{phone}` through the Zalo Graph API (`ZALO_APP_SECRET`; unset: 503 `zalo_not_configured`; 30/min) |
+| GET | `/api/explore/prices` | Farm prices by commodity (`commodities`, each crop's `commodity_id`): each shown crop's latest price per area within its commodity's `price_fresh_days`, its move (`location_id?`, `sector?`) |
+| GET | `/api/explore/products` | Browse products (paginated, `category_id?`, `commodity_id?`) |
+| GET | `/api/explore/products/{id}` | Product detail |
+| POST | `/api/explore/contact` | Submit contact/inquiry (`service_id?` or `product_id?`: what it is about; rate-limited: 30/min) |
+| GET | `/api/explore/providers/{id}/reviews` | Shown reviews: `count`, `average`, the newest `PUBLIC_REVIEWS_SHOWN` with the provider's replies |
+| POST | `/api/explore/reviews` | A review (`business_id`, name, phone, `rating` 1–5, comment; 201, hidden until approved; 30/min) |
+| POST | `/reviews` | Same review as a page form (urlencoded); 303 + flash, or the page re-shown with the sheet open |
+| POST | `/api/explore/calls` | A tap on a public call or Zalo button (`{kind, id, channel?}`: `call` default, `zalo`; 204; 30/min); the business is looked up from the record |
+| POST | `/contact` | Same inquiry as a page form (urlencoded); 303 + one-time flash, or the page re-shown with field errors |
+| GET | `/files/{id}`, `/files/{id}/thumb` | Uploaded image (JPEG, cached forever; ids are never reused) |
 
 ### Auth (rate-limited: 10 req/min)
 
-| Method | Path                                | Description                                         |
-| ------ | ----------------------------------- | --------------------------------------------------- |
-| POST   | `/api/auth/tokens`                  | Login → JWT (in a session of its own); `username` takes the email too |
-| DELETE | `/api/auth/tokens`                  | Logout: the caller's token stops working at once (204) |
-| POST   | `/api/users`                        | Provider self-registration                          |
-| POST   | `/api/auth/password-resets`         | Send password reset email                           |
-| PATCH  | `/api/auth/password-resets/{token}` | Consume reset token, set new password               |
-| POST   | `/api/admin/setup`                  | Create first admin account (rate-limited, one-time) |
+| Method | Path | Description |
+| --- | --- | --- |
+| POST | `/api/auth/tokens` | Login → JWT (in a session of its own); `username` takes the email too |
+| DELETE | `/api/auth/tokens` | Logout: the caller's token stops working at once (204) |
+| POST | `/api/users` | Provider self-registration |
+| POST | `/api/auth/password-resets` | Send password reset email |
+| PATCH | `/api/auth/password-resets/{token}` | Consume reset token, set new password |
+| POST | `/api/admin/setup` | Create first admin account (rate-limited, one-time) |
 
 ### User (session required)
 
-| Method | Path                     | Description          |
-| ------ | ------------------------ | -------------------- |
-| GET    | `/api/users/me`          | Current user profile |
-| PATCH  | `/api/users/me/password` | Change password      |
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/users/me` | Current user profile |
+| PATCH | `/api/users/me/password` | Change password |
 
 ### Admin (each route checks its own permission key, e.g. `user.read`, `provider.verify`)
 
-| Method | Path                                     | Description                                                       |
-| ------ | ---------------------------------------- | ----------------------------------------------------------------- |
-| GET    | `/api/admin/stats`                       | Dashboard statistics (with `previous_calls`, the `CALL_STATS_DAYS` before, and `new_businesses`, real ones of the last `NEW_BUSINESS_DAYS`) |
-| GET    | `/api/admin/reports/demand`              | Demand report (`area?`: `p82`, `w28439`, `none`; each area's `value`, `level`, `label`, `weeks`, `weeks_at_bar`; hidden figures are `value: null`; `report.demand.read`) |
-| GET    | `/api/admin/partners`                    | Partners, with contracts in force and monthly revenue (`partner.manage`) |
-| POST   | `/api/admin/partners`                    | Create a partner (201 + detail)                                   |
-| GET    | `/api/admin/partners/kpis`               | Paying partners, monthly revenue, by area                         |
-| GET    | `/api/admin/partners/{id}`               | Partner detail with contracts                                     |
-| PUT    | `/api/admin/partners/{id}`               | Update a partner                                                  |
-| PATCH  | `/api/admin/partners/{id}/status`        | Turn on / off (`is_active`, `reason?`; off: its contracts stop)   |
-| POST   | `/api/admin/partners/{id}/account`       | Link or create its report account (role `partner`)                |
-| POST   | `/api/admin/partners/{id}/contracts`     | Add a contract (`area`: `p82` / `w28439`, `category_ids`, `starts_on`, `ends_on`, `monthly_fee`, `note?`) |
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/admin/stats` | Dashboard statistics (with `previous_calls`, the `CALL_STATS_DAYS` before, and `new_businesses`, real ones of the last `NEW_BUSINESS_DAYS`) |
+| GET | `/api/admin/reports/demand` | Demand report (`area?`: `p82`, `w28439`, `none`; each area's `value`, `level`, `label`, `weeks`, `weeks_at_bar`; hidden figures are `value: null`; `report.demand.read`) |
+| GET | `/api/admin/partners` | Partners, a page (`page?`), with contracts in force and monthly revenue (`partner.manage`) |
+| POST | `/api/admin/partners` | Create a partner (201 + detail) |
+| GET | `/api/admin/partners/kpis` | Paying partners, monthly revenue, by province (`provinces`, the most first, each with its contract `areas`) |
+| GET | `/api/admin/partners/{id}` | Partner detail with contracts |
+| PUT | `/api/admin/partners/{id}` | Update a partner |
+| PATCH | `/api/admin/partners/{id}/status` | Turn on / off (`is_active`, `reason?`; off: its contracts stop) |
+| POST | `/api/admin/partners/{id}/account` | Link or create its report account (role `partner`) |
+| POST | `/api/admin/partners/{id}/contracts` | Add a contract (`area`: `p82` / `w28439`, `category_ids`, `starts_on`, `ends_on`, `monthly_fee`, `note?`) |
 | PUT / DELETE | `/api/admin/partners/{id}/contracts/{cid}` | Edit a contract (dates, fee, note, categories; not its area) / delete it (`reason?`) |
 | POST / DELETE | `/api/admin/partners/{id}/contracts/{cid}/sponsored[/{bid}]` | Sponsor a shop of the area of the contract / stop (`reason?`, audited) |
-| GET    | `/api/admin/users`                       | User list (paginated)                                             |
-| GET    | `/api/admin/users/{id}`                  | User detail                                                       |
-| PATCH  | `/api/admin/users/{id}/role`             | Update user role                                                  |
-| PATCH  | `/api/admin/users/{id}/status`           | Toggle user active state                                          |
-| GET    | `/api/admin/users/{id}/permissions`      | Effective permissions (via role)                                  |
-| GET    | `/api/admin/roles`                       | Role listing                                                      |
-| GET    | `/api/admin/roles/{id}`                  | Role detail                                                       |
-| GET    | `/api/admin/permissions`                 | All available permissions                                         |
-| GET    | `/api/admin/categories`                  | Category listing                                                  |
-| POST   | `/api/admin/categories`                  | Create category                                                   |
-| GET    | `/api/admin/categories/{id}`             | Category detail                                                   |
-| PUT    | `/api/admin/categories/{id}`             | Update category                                                   |
-| GET    | `/api/admin/categories/slug`             | Free slug for `text` (name or slug; `id?` = the one edited): `{slug, taken}` |
-| GET    | `/api/admin/icons`                       | Font Awesome names matching `q` (`fa-` and dashes optional), best first, at most `ICON_SEARCH_RESULTS`: `{icons}` (`category.manage` or `alert.manage`) |
-| PATCH  | `/api/admin/categories/{id}/status`      | Toggle category active state                                      |
-| GET    | `/api/admin/providers`                   | Provider list (paginated)                                         |
-| POST   | `/api/admin/providers`                   | Create a provider with no account (profile boxes; 201 + detail; `provider.manage`) |
-| GET    | `/api/admin/providers/{id}`              | Provider detail                                                   |
-| PUT    | `/api/admin/providers/{id}`              | Replace its profile (the owner's rules; detail; `provider.manage`) |
-| PATCH  | `/api/admin/providers/{id}/verification` | Set verification badge (`is_verified`, `reason?`)                 |
-| PATCH  | `/api/admin/providers/{id}/status`       | Turn a provider on / off (`is_active`, `reason?`; off: gone from public pages) |
-| POST   | `/api/admin/providers/{id}/users`        | Link a provider account (or create one); one business per account |
-| GET    | `/api/admin/inquiries`                   | Inquiry list (paginated, `provider_id?`, `status?`)               |
-| PATCH  | `/api/admin/inquiries/{id}/status`       | Update inquiry status (`status`, `reason?`)                       |
-| GET    | `/api/admin/reviews`                     | Review list (paginated, `provider_id?`)                           |
-| PATCH  | `/api/admin/reviews/{id}/visibility`     | Toggle review visibility                                          |
-| GET    | `/api/admin/jobs`                        | Job posts, newest first (`page?`, `status?`; `job.moderate`)      |
-| GET / PATCH | `/api/admin/settings`               | Every setting by group (value, default, bounds, `changed_on`) / change some (`{values: {key: text}, reason?}`; 204; each broken value a field error on its key; `unknown_setting`) (`setting.manage`) |
-| PATCH  | `/api/admin/jobs/{id}/status`            | `open` / `closed` / `spam` (`reason?`)                            |
+| GET | `/api/admin/users` | User list (paginated) |
+| GET | `/api/admin/users/{id}` | User detail |
+| PATCH | `/api/admin/users/{id}/role` | Update user role |
+| PATCH | `/api/admin/users/{id}/status` | Toggle user active state |
+| GET | `/api/admin/users/{id}/permissions` | Effective permissions (via role) |
+| GET | `/api/admin/roles` | Role listing |
+| GET | `/api/admin/roles/{id}` | Role detail |
+| GET | `/api/admin/permissions` | All available permissions |
+| GET | `/api/admin/categories` | Category listing |
+| POST | `/api/admin/categories` | Create category |
+| GET | `/api/admin/categories/{id}` | Category detail |
+| PUT | `/api/admin/categories/{id}` | Update category |
+| GET | `/api/admin/categories/slug` | Free slug for `text` (name or slug; `id?` = the one edited): `{slug, taken}` |
+| GET | `/api/admin/icons` | Font Awesome names matching `q` (`fa-` and dashes optional), best first, at most `ICON_SEARCH_RESULTS`: `{icons}` (`category.manage` or `alert.manage`) |
+| PATCH | `/api/admin/categories/{id}/status` | Toggle category active state |
+| GET | `/api/admin/providers` | Provider list (paginated) |
+| POST | `/api/admin/providers` | Create a provider with no account (profile boxes; 201 + detail; `provider.manage`) |
+| GET | `/api/admin/providers/{id}` | Provider detail |
+| PUT | `/api/admin/providers/{id}` | Replace its profile (the owner's rules; detail; `provider.manage`) |
+| PATCH | `/api/admin/providers/{id}/verification` | Set verification badge (`is_verified`, `reason?`) |
+| PATCH | `/api/admin/providers/{id}/status` | Turn a provider on / off (`is_active`, `reason?`; off: gone from public pages) |
+| POST | `/api/admin/providers/{id}/users` | Link a provider account (or create one); one business per account |
+| GET | `/api/admin/inquiries` | Inquiry list (paginated, `provider_id?`, `status?`) |
+| PATCH | `/api/admin/inquiries/{id}/status` | Update inquiry status (`status`, `reason?`) |
+| GET | `/api/admin/reviews` | Review list (paginated, `provider_id?`) |
+| PATCH | `/api/admin/reviews/{id}/visibility` | Toggle review visibility |
+| GET | `/api/admin/jobs` | Job posts, newest first (`page?`, `status?`; `job.moderate`) |
+| GET / PATCH | `/api/admin/settings` | Every setting by group (value, default, bounds, `changed_on`) / change some (`{values: {key: text}, reason?}`; 204; each broken value a field error on its key; `unknown_setting`) (`setting.manage`) |
+| PATCH | `/api/admin/jobs/{id}/status` | `open` / `closed` / `spam` (`reason?`) |
 | GET / POST, GET / PUT, PATCH | `/api/admin/alert-kinds`, `…/{id}`, `…/{id}/status` | Alert kinds, as the sectors (`alert.manage`) |
-| GET / POST | `/api/admin/sectors`                 | Sectors (hidden too) / add one (`name`, `icon?`, `display_order?`; the code from the name; 201) (`category.manage`) |
-| GET / PUT | `/api/admin/sectors/{id}`            | Sector detail / edit (name, icon, order; the code stays)            |
-| PATCH  | `/api/admin/sectors/{id}/status`        | Show / hide a sector (`is_active`, `reason?`)                     |
-| GET / POST | `/api/admin/commodities`             | Commodities (hidden too) / add one (`name`, `sector`, `icon?`, `display_order?`; 201) (`category.manage`) |
-| GET / PUT | `/api/admin/commodities/{id}`         | Commodity detail / edit                                           |
-| PATCH  | `/api/admin/commodities/{id}/status`     | Show / hide a commodity (`is_active`, `reason?`)                  |
-| GET / POST | `/api/admin/crops`                   | Crops (hidden too) / add one (201) (`price.manage`)               |
-| GET / PUT | `/api/admin/crops/{id}`               | Crop detail / edit                                                |
-| PATCH  | `/api/admin/crops/{id}/status`           | Show / hide a crop (`is_active`, `reason?`)                       |
-| GET / POST | `/api/admin/prices`                  | Prices entered, newest day first (`page?`) / enter one (`crop_id`, `location_id`, `observed_on`, `price_low`, `price_high?`, `note?`; 201 `{id}`) |
-| DELETE | `/api/admin/prices/{id}`                 | Delete a price (`reason?`)                                        |
-| GET    | `/api/admin/locations`                   | Location preset list                                              |
-| POST   | `/api/admin/locations`                   | Create location preset (`ward?` `w28471` fills a blank label and a missing lat/lng) |
-| GET    | `/api/admin/locations/{id}`              | Location preset detail                                            |
-| PUT    | `/api/admin/locations/{id}`              | Update location preset                                            |
-| PATCH  | `/api/admin/locations/{id}/status`       | Toggle location active state                                      |
-| DELETE | `/api/admin/locations/{id}`              | Delete location preset                                            |
-| GET    | `/api/admin/products`                    | Product list (paginated)                                          |
-| POST   | `/api/admin/products`                    | List a supply for a provider (`business_id` + the product boxes; the owner's rules and cap; 201 + detail) |
-| GET    | `/api/admin/products/{id}`               | Product detail                                                    |
-| PATCH  | `/api/admin/products/{id}/active`        | Toggle product active state                                       |
-| DELETE | `/api/admin/products/{id}`               | Delete product                                                    |
-| GET    | `/api/admin/services`                    | Service list (paginated)                                          |
-| POST   | `/api/admin/services`                    | Create service                                                    |
-| GET    | `/api/admin/services/{id}`               | Service detail                                                    |
-| PUT    | `/api/admin/services/{id}`               | Update service                                                    |
-| PATCH  | `/api/admin/services/{id}/active`        | Toggle service active state                                       |
-| DELETE | `/api/admin/services/{id}`               | Delete service                                                    |
+| GET / POST | `/api/admin/sectors` | Sectors (hidden too) / add one (`name`, `icon?`, `display_order?`; the code from the name; 201) (`category.manage`) |
+| GET / PUT | `/api/admin/sectors/{id}` | Sector detail / edit (name, icon, order; the code stays) |
+| PATCH | `/api/admin/sectors/{id}/status` | Show / hide a sector (`is_active`, `reason?`) |
+| GET / POST | `/api/admin/commodities` | Commodities (hidden too) / add one (`name`, `sector`, `icon?`, `display_order?`; 201) (`category.manage`) |
+| GET / PUT | `/api/admin/commodities/{id}` | Commodity detail / edit |
+| PATCH | `/api/admin/commodities/{id}/status` | Show / hide a commodity (`is_active`, `reason?`) |
+| GET / POST | `/api/admin/crops` | Crops (hidden too) / add one (201) (`price.manage`) |
+| GET / PUT | `/api/admin/crops/{id}` | Crop detail / edit |
+| PATCH | `/api/admin/crops/{id}/status` | Show / hide a crop (`is_active`, `reason?`) |
+| GET / POST | `/api/admin/prices` | Prices entered, newest day first (`page?`) / enter one (`crop_id`, `location_id`, `observed_on`, `price_low`, `price_high?`, `note?`; 201 `{id}`) |
+| DELETE | `/api/admin/prices/{id}` | Delete a price (`reason?`) |
+| GET | `/api/admin/locations` | Location preset list |
+| POST | `/api/admin/locations` | Create location preset (`ward?` `w28471` fills a blank label and a missing lat/lng) |
+| GET | `/api/admin/locations/{id}` | Location preset detail |
+| PUT | `/api/admin/locations/{id}` | Update location preset |
+| PATCH | `/api/admin/locations/{id}/status` | Toggle location active state |
+| DELETE | `/api/admin/locations/{id}` | Delete location preset |
+| GET | `/api/admin/products` | Product list (paginated) |
+| POST | `/api/admin/products` | List a supply for a provider (`business_id` + the product boxes; the owner's rules and cap; 201 + detail) |
+| GET | `/api/admin/products/{id}` | Product detail |
+| PATCH | `/api/admin/products/{id}/active` | Toggle product active state |
+| DELETE | `/api/admin/products/{id}` | Delete product |
+| GET | `/api/admin/services` | Service list (paginated) |
+| POST | `/api/admin/services` | Create service |
+| GET | `/api/admin/services/{id}` | Service detail |
+| PUT | `/api/admin/services/{id}` | Update service |
+| PATCH | `/api/admin/services/{id}/active` | Toggle service active state |
+| DELETE | `/api/admin/services/{id}` | Delete service |
 
 ### Provider Dashboard (`own.*` permissions; reads need only a session, except the inquiry inbox: `own.inquiry.manage`)
 
-| Method | Path                                | Description                                             |
-| ------ | ----------------------------------- | ------------------------------------------------------- |
-| GET    | `/api/provider/profile`             | View own business profile                               |
-| PUT    | `/api/provider/profile`             | Update own business profile                             |
-| GET    | `/api/provider/products`            | List own products                                       |
-| POST   | `/api/provider/products`            | Create product                                          |
-| PUT    | `/api/provider/products/{id}`       | Update product                                          |
-| DELETE | `/api/provider/products/{id}`       | Delete product                                          |
-| PUT    | `/api/provider/products/{id}/image` | Replace product image (multipart field `image`; 20/min) |
-| GET    | `/api/provider/services`            | List own services (admin-hidden ones too)               |
-| POST   | `/api/provider/services`            | Create service (blank name → category name; max 20)     |
-| PUT    | `/api/provider/services/{id}`       | Update service (never changes admin visibility)         |
-| DELETE | `/api/provider/services/{id}`       | Delete service                                          |
-| PUT    | `/api/provider/services/{id}/image` | Replace service image (multipart field `image`; 20/min) |
-| GET    | `/api/provider/reviews`             | Reviews of the own business (waiting ones too)          |
-| GET    | `/api/provider/jobs`                | Open job posts near the own business in its services' categories (`own.job.read`) |
-| PUT    | `/api/provider/reviews/{id}/reply`  | Public answer (`{reply}`; blank removes it; 204; `own.review.reply`) |
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/provider/profile` | View own business profile |
+| PUT | `/api/provider/profile` | Update own business profile |
+| GET | `/api/provider/products` | List own products |
+| POST | `/api/provider/products` | Create product |
+| PUT | `/api/provider/products/{id}` | Update product |
+| DELETE | `/api/provider/products/{id}` | Delete product |
+| PUT | `/api/provider/products/{id}/image` | Replace product image (multipart field `image`; 20/min) |
+| GET | `/api/provider/services` | List own services (admin-hidden ones too) |
+| POST | `/api/provider/services` | Create service (blank name → category name; max 20) |
+| PUT | `/api/provider/services/{id}` | Update service (never changes admin visibility) |
+| DELETE | `/api/provider/services/{id}` | Delete service |
+| PUT | `/api/provider/services/{id}/image` | Replace service image (multipart field `image`; 20/min) |
+| GET | `/api/provider/reviews` | A page of the own business's reviews (waiting ones too; `page?`) |
+| GET | `/api/provider/jobs` | A page of the open job posts near the own business (`page?`; `own.job.read`) |
+| PUT | `/api/provider/reviews/{id}/reply` | Public answer (`{reply}`; blank removes it; 204; `own.review.reply`) |
 
 ### Partner (`partner.report.read`)
 
-| Method | Path                  | Description                                                              |
-| ------ | --------------------- | ------------------------------------------------------------------------ |
-| GET    | `/api/partner/report` | The partner account's own demand report (`area?`), its contracts in force |
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/partner/report` | The partner account's own demand report (`area?`), its contracts in force |
 
 ### Setup (first-run / development only)
 
-| Method | Path                | Description                      |
-| ------ | ------------------- | -------------------------------- |
-| GET    | `/api/setup/status` | Check whether first admin exists |
-| POST   | `/api/setup/seed`   | Load demo data (flagged is_demo) |
-| DELETE | `/api/setup/seed`   | Remove all demo data             |
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/setup/status` | Check whether first admin exists |
+| POST | `/api/setup/seed` | Load demo data (flagged is_demo) |
+| DELETE | `/api/setup/seed` | Remove all demo data |
 
 ---
 
@@ -361,80 +362,81 @@ Every page is a handler in `backend/crates/web/src/pages/`, routed in `web/src/r
 
 ### Auth
 
-| Route              | Description                                                                                  |
-| ------------------ | -------------------------------------------------------------------------------------------- |
-| `/login`           | Login (`web/src/pages/auth.rs`); signed in → own area by permission; no admin yet → `/setup` |
-| `/register`        | Provider self-registration                                                                   |
-| `/forgot-password` | Request password reset email                                                                 |
-| `/reset-password`  | Consume reset token, set new password                                                        |
-| `/verify-email`    | The emailed confirmation link: GET shows the button, POST confirms the address (`pages/auth.rs`) |
-| `/setup`           | First admin + optional demo data (`web/src/pages/setup.rs`); closed once an admin exists     |
-| `/setup/seed`      | Demo data page: the demo data (load / remove) apart from the platform data it never touches (counts, each linked to its admin page) (`system.demo.manage`) |
-| `/logout`          | POST: ends the session family, clears both cookies (`web/src/session.rs`)                    |
-| `/language`        | POST only: the language choice (`lang` = vi / en, `back` = a local path, else home); `lang` cookie for a year, 303 back, so no language URL ever shows (`web/src/pages/language.rs`) |
-| `/sector`          | POST only: the visitor's sector (`crop` / `livestock` / `aquatic`, empty = every sector, `back`); `sector` cookie for a year, 303 back (`web/src/pages/sector.rs`) |
+| Route | Description |
+| --- | --- |
+| `/login` | Login (`web/src/pages/auth.rs`); signed in → own area by permission; no admin yet → `/setup` |
+| `/register` | Provider self-registration |
+| `/forgot-password` | Request password reset email |
+| `/reset-password` | Consume reset token, set new password |
+| `/verify-email` | The emailed confirmation link: GET shows the button, POST confirms the address (`pages/auth.rs`) |
+| `/setup` | First admin + optional demo data (`web/src/pages/setup.rs`); closed once an admin exists |
+| `/setup/seed` | Demo data page: the demo data (load / remove) apart from the platform data it never touches (counts, each linked to its admin page) (`system.demo.manage`) |
+| `/logout` | POST: ends the session family, clears both cookies (`web/src/session.rs`) |
+| `/language` | POST only: the language choice (`lang` = vi / en, `back` = a local path, else home); `lang` cookie for a year, 303 back, so no language URL ever shows (`web/src/pages/language.rs`) |
+| `/sector` | POST only: the visitor's sector (`crop` / `livestock` / `aquatic`, empty = every sector, `back`); `sector` cookie for a year, 303 back (`web/src/pages/sector.rs`) |
 
 ### App
 
-| Route                                                    | Description                                                                                                                              |
-| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `/`                                                      | Home: alerts, two named rows of category tiles ("Thuê làm" services, "Mua vật tư" supplies), near-me banner, featured services, prices, featured supplies (`web/src/pages/home.rs`) |
-| `/supplies`                                              | Supplies ("vật tư") listing: GET filter form, page links, `commodity=` (the supplies for one cây trồng, vật nuôi and those for every one; the price board leads here) (`web/src/pages/products.rs`); the former `/products…` addresses 301 here (`pages::moved`) |
-| `/supplies/[id]`                                         | 301 → `/supplies/[id]/[slug]`                                                                                                            |
-| `/supplies/[id]/[slug]`                                  | Supply detail + the seller's services + contact form about it (`return_to=product`) (`product.rs`; other spellings 301)                                   |
-| `/supplies/category/[id]/[slug]`                         | Supplies in a category (slug is the category slug, others 301)                                                                           |
-| `/services`                                              | Service listing: one card per public service (photo, price, provider, call); GET filter form, page links (`web/src/pages/services.rs`)   |
-| `/services/category/[id]/[slug]`                         | Services in one category (category slug canonical)                                                                                       |
-| `/services/[id]`                                         | 301 → `/services/[id]/[slug]`                                                                                                            |
-| `/services/[id]/[slug]`                                  | Service detail + the provider's other services + contact form with it chosen (`return_to=service`) (`web/src/pages/service.rs`)          |
-| `/search`                                                | Services + products + shops for `q`, only the kinds with a result (no section, no tab for an empty kind; tabs only when two kinds have one; nothing at all: one message leading to every sector, a job post, near me); link tabs (`tab=`) work without JS; sector links (`sector=`) narrow the one search (`web/src/pages/search.rs`)                                      |
-| `/explore`                                               | Services, products and shops near a position (`ac-geolocate`) or preset, tabs in that order (as `/search`); featured services before one (`explore.rs`)     |
-| `/jobs/new`                                              | Post a job (`POST /jobs`): service, where (`ac-geolocate` fills hidden boxes, else an area), what, name, phone; the home page's "Chưa tìm được nhà cung cấp?" card leads here (`web/src/pages/jobs.rs`) |
-| `/prices`                                                | Farm prices, a section per commodity of the visitor's sector, latest per area with its move, each with a link to the supplies for it; sector switch; GET area filter (`autoSubmit`) (`web/src/pages/prices.rs`); home shows `HOME_PRICES_SHOWN` |
-| `/providers`                                             | Provider directory (new sign-ups without a service too); found by name or by their services (`web/src/pages/directory.rs`)               |
-| `/providers/[id]`                                        | 301 → `/providers/[id]/[slug]`                                                                                                           |
-| `/providers/[id]/[slug]`                                 | Provider detail: services, products, shown reviews with replies + "write a review" sheet, contact form (`web/src/pages/provider.rs`)                       |
-| `/account`                                               | Profile, password change (signs out other devices), logout, in the visitor's frame (admin panel, partner, app) (`web/src/pages/account.rs`)                                                  |
-| `/provider/dashboard`                                    | Services + products (photo thumbs) + business profile with GPS fill (`ac-geolocate` fill mode) (`web/src/pages/dashboard.rs`)            |
-| `/provider/supplies/new`, `/provider/supplies/[id]/edit` | Multipart supply form with photo (checked before anything is saved), delete (confirm)                                                   |
-| `/provider/services/new`, `/provider/services/[id]/edit` | Multipart service form: category cards, optional photo, delete (confirm) (`own.service.*`) (`web/src/pages/own_services.rs`)             |
-| `/provider/inquiries`                                    | Farmers' contact requests to this business: call button, the status's next steps per card (the admin list's buttons, spam confirmed) (`own.inquiry.manage`) (`web/src/pages/inbox.rs`)              |
-| `/provider/jobs`                                         | Job posts near the business in its services' categories, distance and call button (`own.job.read`) (`web/src/pages/own_jobs.rs`) |
-| `/provider/reviews`                                      | Reviews of this business (shown or waiting), a public answer per card (`own.review.reply`) (`web/src/pages/own_reviews.rs`)              |
-| `/partner`                                               | A partner account's home: the demand report of its contracts in force (areas × categories), its contracts; `/partner/report.csv` (`partner.report.read`) (`web/src/pages/partner.rs`) |
+| Route | Description |
+| --- | --- |
+| `/` | Home: alerts, two named rows of category tiles ("Thuê làm" services, "Mua vật tư" supplies), near-me banner, featured services, prices, featured supplies (`web/src/pages/home.rs`) |
+| `/supplies` | Supplies ("vật tư") listing: GET filter form, page links, `commodity=` (the supplies for one cây trồng, vật nuôi and those for every one; the price board leads here) (`web/src/pages/products.rs`); the former `/products…` addresses 301 here (`pages::moved`) |
+| `/supplies/[id]` | 301 → `/supplies/[id]/[slug]` |
+| `/supplies/[id]/[slug]` | Supply detail + the seller's services + contact form about it (`return_to=product`) (`product.rs`; other spellings 301) |
+| `/supplies/category/[id]/[slug]` | Supplies in a category (slug is the category slug, others 301) |
+| `/services` | Service listing: one card per public service (photo, price, provider, call); GET filter form, page links (`web/src/pages/services.rs`) |
+| `/services/category/[id]/[slug]` | Services in one category (category slug canonical) |
+| `/services/[id]` | 301 → `/services/[id]/[slug]` |
+| `/services/[id]/[slug]` | Service detail + the provider's other services + contact form with it chosen (`return_to=service`) (`web/src/pages/service.rs`) |
+| `/search` | Services + products + shops for `q`, only the kinds with a result (no section, no tab for an empty kind; tabs only when two kinds have one; nothing at all: one message leading to every sector, a job post, near me); link tabs (`tab=`) work without JS; "all" previews each kind, a kind's tab is its whole list paged (`tab=`+`page=`); sector links (`sector=`) narrow the one search (`web/src/pages/search.rs`) |
+| `/explore` | Services, products and shops near a position (`ac-geolocate`) or preset, tabs in that order (as `/search`), each list paged on its own (`tab=`+`page=`; sponsored on the first page); featured services before one (`explore.rs`) |
+| `/jobs/new` | Post a job (`POST /jobs`): service, where (`ac-geolocate` fills hidden boxes, else an area), what, name, phone; the home page's "Chưa tìm được nhà cung cấp?" card leads here (`web/src/pages/jobs.rs`) |
+| `/prices` | Farm prices, a section per commodity of the visitor's sector, latest per area with its move, each with a link to the supplies for it; sector switch; GET area filter (`autoSubmit`) (`web/src/pages/prices.rs`); home shows `HOME_PRICES_SHOWN` |
+| `/providers` | Provider directory (new sign-ups without a service too); found by name or by their services (`web/src/pages/directory.rs`) |
+| `/providers/[id]` | 301 → `/providers/[id]/[slug]` |
+| `/providers/[id]/[slug]` | Provider detail: services, products, shown reviews with replies + "write a review" sheet, contact form (`web/src/pages/provider.rs`) |
+| `/account` | Profile, password change (signs out other devices), logout, in the visitor's frame (admin panel, partner, app) (`web/src/pages/account.rs`) |
+| `/provider/dashboard` | Services + products (photo thumbs) + business profile with GPS fill (`ac-geolocate` fill mode) (`web/src/pages/dashboard.rs`) |
+| `/provider/supplies/new`, `/provider/supplies/[id]/edit` | Multipart supply form with photo (checked before anything is saved), delete (confirm) |
+| `/provider/services/new`, `/provider/services/[id]/edit` | Multipart service form: category cards, optional photo, delete (confirm) (`own.service.*`) (`web/src/pages/own_services.rs`) |
+| `/provider/inquiries` | Farmers' contact requests to this business: call button, the status's next steps per card (the admin list's buttons, spam confirmed) (`own.inquiry.manage`) (`web/src/pages/inbox.rs`) |
+| `/provider/jobs` | Job posts near the business in its services' categories, distance and call button (`own.job.read`) (`web/src/pages/own_jobs.rs`) |
+| `/provider/reviews` | Reviews of this business (shown or waiting), a public answer per card (`own.review.reply`) (`web/src/pages/own_reviews.rs`) |
+| `/partner` | A partner account's home: the demand report of its contracts in force (areas × categories), its contracts; `/partner/report.csv` (`partner.report.read`) (`web/src/pages/partner.rs`) |
 
 ### Admin
 
-| Route                    | Description                                                                                                                    |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| `/admin`                 | 303 → `/admin/dashboard` (anonymous → `/login`)                                                                                |
-| `/admin/dashboard`       | Stats + demo-data warning (`web/src/pages/admin/`; frame `layouts/admin.html`, menu filtered by permission)                    |
-| `/admin/users`           | User list, paged (`web/src/pages/admin/users.rs`)                                                                              |
-| `/admin/users/[id]`      | Role change, deactivate (confirm + reason) / reactivate, effective permissions                                                 |
-| `/admin/roles`           | Two tabs (`molecules/admin_tabs.html`): roles with grant counts; `?tab=permissions` every permission × role, read-only (`/admin/permissions` 301s there); one menu entry "Vai trò & quyền" |
-| `/admin/roles/[id]`      | Editable permission grid, `POST …/permissions` (`role.permission.manage`; cannot revoke it from your own role; audited)        |
+| Route | Description |
+| --- | --- |
+| `/admin` | 303 → `/admin/dashboard` (anonymous → `/login`) |
+| `/admin/dashboard` | Stats + demo-data warning (`web/src/pages/admin/`; frame `layouts/admin.html`, menu filtered by permission) |
+| `/admin/users` | User list, paged (`web/src/pages/admin/users.rs`) |
+| `/admin/users/[id]` | Role change, deactivate (confirm + reason) / reactivate, effective permissions |
+| `/admin/roles` | Two tabs (`molecules/admin_tabs.html`): roles with grant counts; `?tab=permissions` every permission × role, read-only (`/admin/permissions` 301s there); one menu entry "Vai trò & quyền" |
+| `/admin/roles/[id]` | Editable permission grid, `POST …/permissions` (`role.permission.manage`; cannot revoke it from your own role; audited) |
 | `/admin/sectors`, `/admin/sectors/[id]` | Ngành: name, its code (shown, never edited), icon, order (row: hide (confirm + reason) / show, open) + create sheet; edit, hide / show; the first tab of the classification screen, where its menu entry leads (`category.manage`) (`web/src/pages/admin/sectors.rs`) |
 | `/admin/commodities`, `/admin/commodities/[id]` | Cây trồng, vật nuôi: name, sector, icon, order (row: hide (confirm + reason) / show, open) + create sheet; edit, hide / show; its page gathers what hangs on it: its crops (each to its page) with an add-crop sheet, the commodity chosen, the supplies for it (`/admin/supplies?commodity_id=`), the public board (`category.manage`) (`web/src/pages/admin/commodities.rs`) |
-| `/admin/categories`      | The classification screen's last two tabs (`?type=` `service` (service types) / `product` (supply types)); the tab's list (row: hide (confirm + reason) / show, open) + create sheet (`web/src/pages/admin/categories.rs`) |
-| `/admin/categories/[id]` | Edit; hide (confirm + reason) / show; its header leads to what is filed under it (a supply type: `/admin/supplies?category_id=`; a service type: its public list)                                                                                           |
-| `/admin/locations`       | Location presets (row: hide (confirm + reason) / show, delete (confirm), open) + create sheet: choosing a ward fills the name ("Đồng Tháp — Bình Phú") and point (Alpine `wardFill`; without JS the blank boxes take the ward's, `AdminUseCase::create_location`) (`web/src/pages/admin/locations.rs`) |
-| `/admin/locations/[id]`  | Edit (the same `organisms/location_fields.html` as the create sheet, ward picker included; the same `AdminUseCase` rule), hide (confirm + reason) / show, delete (confirm + reason) → list                                                                         |
-| `/admin/providers`         | Provider list, paged + create sheet (`provider.manage`: a listing from name + phone, no account; GPS fill) (`web/src/pages/admin/providers.rs`) |
-| `/admin/providers/[id]`    | A record page (`provider_controls`: verify, turn on and the public page as buttons; the account (assign / change, remove), unverify and turn off in the menu; the strip says who turned it off, verified it, manages it), its parts as tabs (`ProviderTab`: overview, offers, profile, history). A summary first: its states as badges (on, verified, account, demo), phone with call and Zalo links, its area (`AdminProviderDetailDto.area`, the ward of its position, else "no position: not on near-me") with a map link (`MAP_POINT_URL`), and its activity as the dashboard's cards (`molecules/stat_card.html`: taps over `CALL_STATS_DAYS`, contact requests waiting / all but spam, shown reviews with their average and the waiting ones; each to its list, each only with the permission to read it: `AdminUseCase::provider_activity`). Then one "status" card (turn off (confirm + reason) / on, verify / unverify (confirm + reason), assign or change the managing account, remove it (confirm + reason; the account stays; an unconfirmed email is said, since notices reach only a confirmed one)), its services and products (thumbs, count against the `listings.*` cap, "add" straight to the create sheet of the list narrowed to it), and the profile form last (the owner's rules: `business_rules::validate_profile`; `organisms/business_fields.html`) |
-| `/admin/supplies`        | Supplies (filters `provider_id`, `commodity_id`, `category_id`: `AdminProductFilter`, each one bar of `molecules/admin_filter.html`; each row its supply type (linked to `?category_id=`) and its sector (`AdminProductDto.sector`: `sql::supply_sector`, the select-side twin of `supply_in_sector`); each row says what it is for; `/admin/products` 301s here): hide (confirm + reason) / show, delete (confirm + reason); create sheet only for one provider (`?provider_id=`), as services (`web/src/pages/admin/products.rs`) |
+| `/admin/categories` | The classification screen's last two tabs (`?type=` `service` (service types) / `product` (supply types)); the tab's list (row: hide (confirm + reason) / show, open) + create sheet (`web/src/pages/admin/categories.rs`) |
+| `/admin/categories/[id]` | Edit; hide (confirm + reason) / show; its header leads to what is filed under it (a supply type: `/admin/supplies?category_id=`; a service type: its public list) |
+| `/admin/locations` | Location presets (row: hide (confirm + reason) / show, delete (confirm), open) + create sheet: choosing a ward fills the name ("Đồng Tháp — Bình Phú") and point (Alpine `wardFill`; without JS the blank boxes take the ward's, `AdminUseCase::create_location`) (`web/src/pages/admin/locations.rs`) |
+| `/admin/locations/[id]` | Edit (the same `organisms/location_fields.html` as the create sheet, ward picker included; the same `AdminUseCase` rule), hide (confirm + reason) / show, delete (confirm + reason) → list |
+| `/admin/providers` | Provider list, paged + create sheet (`provider.manage`: a listing from name + phone, no account; GPS fill) (`web/src/pages/admin/providers.rs`) |
+| `/admin/providers/[id]` | A record page (`provider_controls`: verify, turn on and the public page as buttons; the account (assign / change, remove), unverify and turn off in the menu; the strip says who turned it off, verified it, manages it), its parts as tabs (`ProviderTab`: overview, offers, profile, history). A summary first: its states as badges (on, verified, account, demo), phone with call and Zalo links, its area (`AdminProviderDetailDto.area`, the ward of its position, else "no position: not on near-me") with a map link (`MAP_POINT_URL`), and its activity as the dashboard's cards (`molecules/stat_card.html`: taps over `CALL_STATS_DAYS`, contact requests waiting / all but spam, shown reviews with their average and the waiting ones; each to its list, each only with the permission to read it: `AdminUseCase::provider_activity`). Then one "status" card (turn off (confirm + reason) / on, verify / unverify (confirm + reason), assign or change the managing account, remove it (confirm + reason; the account stays; an unconfirmed email is said, since notices reach only a confirmed one)), its services and products (thumbs, count against the `listings.*` cap, "add" straight to the create sheet of the list narrowed to it), and the profile form last (the owner's rules: `business_rules::validate_profile`; `organisms/business_fields.html`) |
+| `/admin/supplies` | Supplies (filters `provider_id`, `commodity_id`, `category_id`: `AdminProductFilter`, each one bar of `molecules/admin_filter.html`; each row its supply type (linked to `?category_id=`) and its sector (`AdminProductDto.sector`: `sql::supply_sector`, the select-side twin of `supply_in_sector`); each row says what it is for; `/admin/products` 301s here): hide (confirm + reason) / show, delete (confirm + reason); create sheet only for one provider (`?provider_id=`), as services (`web/src/pages/admin/products.rs`) |
 | `/admin/supplies/[id]`, `/admin/services/[id]` | A record page (`listing_record::listing_controls`: hide / show and the public page as buttons; view or remove the photo and delete in the menu). Whose it is on top (`listing_facts::provider_line`: the provider to its page, its phone, its badge, "off" while it is). Edit (multipart: the boxes and `molecules/photo_picker.html`, the photo checked before anything is saved; `MediaUseCase::attach_*_image_admin`), remove the photo (confirm + reason, `…/image/delete`, `Change::ImageRemoved`), hide / show, delete (confirm + reason). The status line is whether farmers see it (`is_public`: shown, its provider on, its type shown, the admin read of `live_public`), and `molecules/offstage_note.html` says what else holds it back with the link to fix it; the public-page link only while public. Above the form, its sector, what it is for (supplies), when added and changed, and whether its provider listed it (`molecules/listing_facts.html`; editing a provider's own listing says the change shows in its history); under its state, its taps and contact requests (`AdminUseCase::listing_activity`, `ListingRef`). Opened from a list, the list's position rides on its URL and every form and redirect of the page (`ListPosition::record_href` / `to_record`), so "back" and a deletion land on that list page; opened bare, on the provider's list |
-| `/admin/services`        | Services (each row its service type and that type's sector, "Mọi ngành" for none; filter `provider_id`; row: hide / show, delete, open; create sheet only for one provider; an admin's service counts against `listings.services_per_business` like the owner's) |
-| `/admin/inquiries`       | Status as a badge, the row's next steps as `row_action` buttons (`pages::status_steps`: contacted, done, reopen; spam confirm + reason, `?spam=`); status chips (`?state=`, `molecules/status_chips.html`); filter `provider_id` |
-| `/admin/reviews`         | Hide (confirm + reason) / show; filter `provider_id`                                                                                               |
-| `/admin/demand`          | Demand report: category × week for one area (`?area=` `p82` a province, `w28439` a ward, or `none`) or all, by channel, searches, unmet searches, steady areas; `/admin/demand.csv` (`report.demand.read`) (`web/src/pages/admin/demand.rs`) |
-| `/admin/partners`        | Partners, paying ones and monthly revenue by area + create sheet (`partner.manage`) (`web/src/pages/admin/partners.rs`)      |
-| `/admin/jobs`            | Job posts, state as a badge (`atoms/job_status.html`), next steps as buttons like the contact requests (done, reopen; spam confirm + reason), state chips (`?state=`) (`job.moderate`) (`web/src/pages/admin/jobs.rs`) |
-| `/admin/settings`        | The platform settings, one tab per group (`?tab=` support, access, jobs, listings, market; `molecules/admin_tabs.html`, each tab counting the settings off their defaults): the group as one `admin-section` card (status badge, `form-stack`, an optional reason, save), then, while one is off its default, a "back to defaults" card listing "now → default"; every box says its default and bounds; saved, back on its tab with a flash (`setting.manage`, menu "Hệ thống") (`web/src/pages/admin/settings.rs`) |
-| `/admin/prices`          | The price board, one menu entry, two tabs: the prices entered, paged, each row linking to its crop and area, `?crop_id=` one crop's (row: delete, confirm + reason) + "enter a price" sheet (the crop chosen when filtered); `?tab=crops` the produce followed (`crops::list_page`) (`price.manage`) (`web/src/pages/admin/prices.rs`) |
+| `/admin/services` | Services (each row its service type and that type's sector, "Mọi ngành" for none; filter `provider_id`; row: hide / show, delete, open; create sheet only for one provider; an admin's service counts against `listings.services_per_business` like the owner's) |
+| `/admin/inquiries` | Status as a badge, the row's next steps as `row_action` buttons (`pages::status_steps`: contacted, done, reopen; spam confirm + reason, `?spam=`); status chips (`?state=`, `molecules/status_chips.html`); filter `provider_id` |
+| `/admin/reviews` | Hide (confirm + reason) / show; filter `provider_id` |
+| `/admin/demand` | Demand report: category × week for one area (`?area=` `p82` a province, `w28439` a ward, or `none`) or all, by channel, searches, unmet searches, steady areas; `/admin/demand.csv` (`report.demand.read`) (`web/src/pages/admin/demand.rs`) |
+| `/admin/partners` | Partners, paying ones and monthly revenue by province (at most 34 rows, each a `<details>` of its contract areas linking to their demand report; `fees_in_force`, the contracts in force without what they cover) + create sheet (`partner.manage`) (`web/src/pages/admin/partners.rs`) |
+| `/admin/jobs` | Job posts, state as a badge (`atoms/job_status.html`), next steps as buttons like the contact requests (done, reopen; spam confirm + reason), state chips (`?state=`) (`job.moderate`) (`web/src/pages/admin/jobs.rs`) |
+| `/admin/settings` | The platform settings, one tab per group (`?tab=` support, access, jobs, listings, market; `molecules/admin_tabs.html`, each tab counting the settings off their defaults): the group as one `admin-section` card (status badge, `form-stack`, an optional reason, save), then, while one is off its default, a "back to defaults" card listing "now → default"; every box says its default and bounds; saved, back on its tab with a flash (`setting.manage`, menu "Hệ thống") (`web/src/pages/admin/settings.rs`) |
+| `/admin/prices` | The price board, one menu entry, two tabs: the prices entered, paged, each row linking to its crop and area, `?crop_id=` one crop's (row: delete, confirm + reason) + "enter a price" sheet (the crop chosen when filtered); `?tab=crops` the produce followed (`crops::list_page`) (`price.manage`) (`web/src/pages/admin/prices.rs`) |
 | `/admin/crops/[id]` | A produce item, of a commodity (linked): its recent prices, "enter today's price" (the price list with it chosen), every price of it; `/admin/crops` 301s to `/admin/prices?tab=crops`; the crop pages light the price board's entry (`MENU_OWNERS`). Each (row: hide (confirm + reason) / show, open) + create sheet; edit, hide / show (`web/src/pages/admin/crops.rs`) |
 | `/admin/alerts`, `/admin/alerts/[id]` | Two tabs: the alerts (row: turn off (confirm + reason) / on, open) + create sheet, each row with its kind's name; `?tab=kinds` the alert kinds (`alert_kinds.rs`: create sheet POST `/admin/alert-kinds`, a kind's page `/admin/alert-kinds/[id]` lighting the alerts entry, `/admin/alert-kinds` 301s to the tab); an alert's page: edit, turn off / on (`alert.manage`) (`web/src/pages/admin/alerts.rs`) |
-| `/admin/partners/[id]`   | Edit, turn off (confirm + reason) / on, report account (sheet), contracts (edit in place: dates, fee, categories, the area stays; delete confirm + reason) with the sponsored shops of their area (remove: confirm + reason), the add-contract form at the end (on the page, not a sheet: long form) |
-| `/admin/logout`          | POST: same as `/logout`, lands on `/login`                                                                                     |
+| `/admin/partners/[id]` | Edit, turn off (confirm + reason) / on, report account (sheet), contracts (one line each: area, in force, dates, fee, how many categories and sponsored shops, to its own page; paged, `?tab=contracts&page=`), the add-contract form (its ward and category choices loaded on that tab only) at the end (on the page, not a sheet: long form)
+| `/admin/partners/[id]/contracts/[cid]` | A contract's record page (`web/src/pages/admin/contracts.rs`): its partner as the way back, delete in the menu (confirm + reason, lands on the partner's contracts); two parts (`?tab=`): its sponsored shops (remove: confirm + reason) and the search of the shops of its area to add (`?q=`, a GET form: the first `SPONSOR_CANDIDATES_SHOWN` by name, picked by the database, `PartnerRepositoryTrait::sponsor_candidates`; adding keeps the search), and its terms (dates, fee, categories; the area stays). Each part loads only what it shows |
+| `/admin/logout` | POST: same as `/logout`, lands on `/login` |
 
 ---
 
@@ -544,13 +546,13 @@ The weekly leads table is the sales argument: "last week in Cai Lậy, X farmers
   - **No server-side cache.** Every read goes to the database: a copy kept in memory has to be cleared by every write that could change it, and one write forgotten is a page showing stale data. A read that is slow is made cheaper (the points below); what a browser may keep (static files, images) is said with `Cache-Control`. Nothing measured so far needs more.
   - **The database counts, Rust never does.** A report reads rows already grouped by what it shows (`DemandRepository::lead_counts`: by week, ward and category, the business only where a lead names no category; `search_counts`; weeks with `week_since`), never by business or by tap: grouped by business a million taps came back as 800 000 rows. A board only the rows it shows (`latest_public_prices`: the newest two per crop and area). Never load a window of rows to count or pick from them in Rust.
   - **What is derived from a position is stored with it.** `businesses.ward_code` is written by the same statement as `location` (`ward_code_at`; the profile update, the demo insert) and refilled for every business once per dataset version (`AdminUnitRepository::sync`, `catalogue_state` key `business_wards.<version>`). A new way to write a business's position must set it too.
-  - **Public lists** (`/services`, `/providers`, `/supplies` and their JSON) end at `PUBLIC_MAX_PAGE` (`paginate_public`, `public_total_pages`), admin lists at `ADMIN_MAX_PAGE` (`paginate_admin`, `admin_total_pages`; past it the admin narrows with the search box or filter). Every paged list reads its page first and counts its rows only when that page is full (`pagination::total_or_count`), so a repository has a list method and a count method, never one returning both.
+  - **Public lists** (`/services`, `/providers`, `/supplies` and their JSON) end at `PUBLIC_MAX_PAGE` (`paginate_public`, `public_total_pages`), admin lists at `ADMIN_MAX_PAGE` (`paginate_admin`, `admin_total_pages`; past it the admin narrows with the search box or filter). Every paged list reads its page first and counts its rows only when that page is full (`pagination::total_or_count`), so a repository has a list method and a count method, never one returning both; a use case answers `PagedResponse::public` / `::admin`. Every list that can grow is paged, one way: `?page=`, `listing::Pagination` and `molecules/pagination_nav.html` under it, `past_the_end` to the last page, a row's form sending its page back (admin lists, the alerts and partners included; the provider's inquiries, reviews and jobs). The admin's commodities, service and supply types (each tab paged on its own, `?type=` kept) and area presets are paged like the rest (`list_page` + `count`; the JSON `/api/admin/commodities`, `/categories`, `/locations` still answer the whole list). Only the shortest catalogues (sectors, alert kinds, crops, roles) are whole lists. A page of several lists (`/search`, `/explore`) pages each on its own: `page` belongs to the chosen tab (`listing::tab_page`), each list has its own page links carrying its `tab`, and `/search`'s "all" tab previews each kind with "Xem thêm" to its tab (its tabs load, `tab_nav` `in_place=false`). The JSON near-me lists (`/api/explore/providers`, `/services` with a position) still answer the nearest `GEO_RESULTS_MAX`.
   - **What a business lists is capped**: the `listings.services_per_business` services and `listings.products_per_business` supplies settings (never past `SERVICES_PER_BUSINESS_MAX` / `PRODUCTS_PER_BUSINESS_MAX`; `create_capped` with `repositories::lock_business`; `service_limit_reached`, `product_limit_reached`), so an owner's page shows its whole list at once.
   - **Text search across two tables is two subqueries**, each over one table's folded indexes (`search::service_listing_matches`, `admin_service_search`, `admin_product_search`, the directory's `matches_text`), never one OR over the joined rows. A public search takes at least `SEARCH_QUERY_MIN` characters (`validation::search_text`, `search_too_short`; the boxes carry it as `minlength` from `limits.search_min`): one letter is in nearly every name and no index answers it.
   - **Taps and searches are kept as rows for `EVENT_KEEP_WEEKS`**; older ones are counted into `call_click_weeks` / `search_event_weeks` and deleted (`DemandReportUseCase::roll_up_old_events`, daily). Nothing may read a tap or a search older than that. Job posts older than `JOB_POST_KEEP_DAYS` are deleted by the same daily task, whatever their status (`JobUseCase::purge_old_posts`).
   - **The pool**: `DB_MAX_CONNECTIONS`, a statement cancelled after `DB_STATEMENT_TIMEOUT_SECS`, a request failing after `DB_ACQUIRE_TIMEOUT_SECS` without a connection; migrations run on their own connection without the timeout. The repeat filters and rate limiters are pruned by one background task (`RATE_LIMIT_PRUNE_EVERY_SECS`), never on the request.
 - Integration tests are one binary (`crates/tests/tests/it/`, each file a module of `main.rs`; a convention test fails on a file elsewhere or undeclared). Third-party crates build at `opt-level = 2` in dev and every crate with line tables only (`[profile.dev]`); `CARGO_PROFILE_DEV_DEBUG=full` for a debugger session.
-- Migrations are DDL only and append-only from the baseline (`m20261120_000001_baseline`, the whole schema; nothing before it ever ran in production; then `m20261121_000002_email_verification`, `m20261122_000003_scale`, `m20261123_000004_settings`, `m20261124_000005_username_no_at`): never edit or delete one that has run anywhere. Platform data and demo data never mix. Platform data is only what the system runs on: roles and permissions (`application/src/catalogue.rs`, seeded idempotently at startup) and provinces and wards (the bundled dataset), the base an admin picks the supported areas from. Sectors, commodities, service and supply types, location presets and crops are demo data like the demo businesses (`infrastructure/src/demo/data.json`, `is_demo`); startup seeds none, and an admin adds the real ones. Demo data only through `/setup/seed` (`DemoDataRepositoryTrait`, `demo/data.json`, `demo_activity.rs`): a set that agrees with itself for testing: the catalogue, businesses with services and products, and around them inquiries, reviews (only from an answered request's phone), call and Zalo taps and searches by report week (counted back from the day of loading with `report_weeks`), prices, job posts, alerts, partners with contracts over the ward or province a demo shop lies in (`ward_code_at`) and the shops of that area they sponsor. Unit tests check every reference and the forms' rules on the file; `it/demo_data.rs` reads it back through the reports, KPIs, price board and reviews. Loading reuses a commodity, type, area or crop already there (same name, slug, label, name); removing deletes the demo businesses (services, products, their photos, inquiries, reviews, call taps by cascade), the demo partners (contracts, sponsored shops), prices, job posts and searches, then every demo crop, type, commodity and area no real row uses (services, products, job posts, partner contracts, crops, prices), and the ones real data uses stay, unflagged, as real. An admin's price for a demo price's day makes it real. A demo job post is shown only to a demo business and never counts against a farmer's phone. Admin lists mark demo rows (`status_badge.html` `demo`). A new kind of demo row must belong to a demo business or carry its own `is_demo`. Tests start from the demo catalogue (`Env`, `DemoDataRepository::load_catalogue`).
+- Migrations are DDL only and append-only from the baseline (`m20261120_000001_baseline`, the whole schema; nothing before it ever ran in production; then `m20261121_000002_email_verification`, `m20261122_000003_scale`, `m20261123_000004_settings`, `m20261124_000005_username_no_at`, `m20261125_000006_user_demo`): never edit or delete one that has run anywhere. Platform data and demo data never mix. Platform data is only what the system runs on: roles and permissions (`application/src/catalogue.rs`, seeded idempotently at startup) and provinces and wards (the bundled dataset), the base an admin picks the supported areas from. Sectors, commodities, service and supply types, location presets and crops are demo data like the demo businesses (`infrastructure/src/demo/data.json`, `is_demo`); startup seeds none, and an admin adds the real ones. Demo data only through `/setup/seed` (`DemoDataRepositoryTrait`, `demo/data.json`, `demo_activity.rs`): a set that agrees with itself for testing: the catalogue, businesses with services and products, and around them inquiries, reviews (only from an answered request's phone), call and Zalo taps and searches by report week (counted back from the day of loading with `report_weeks`), prices, job posts, alerts, partners with contracts over the ward or province a demo shop lies in (`ward_code_at`) and the shops of that area they sponsor. The demo data at volume (`agri-connect demo-data [--providers N] [--seed S]`, default 5 000 providers, development only: refused with `APP_ENV=prod`) is the same file grown by `infrastructure/src/demo_volume.rs`, a pure, seeded generator over the words of `demo/vocabulary.json` (no Vietnamese in Rust) and the wards of the Mekong Delta provinces, written by the same loader in one transaction (`DemoDataRepositoryTrait::load_volume`, `SetupUseCase::load_demo_volume`): about 5 000 of each kind (accounts, services, supplies, reviews from 10 000 contact requests, job posts, alerts, prices) and 200 partners, busier wards getting more shops and leads; its provider and partner accounts carry `users.is_demo`, sign in with `DEMO_ACCOUNT_PASSWORD`, and go when the demo data is removed. Unit tests check every reference and the forms' rules on the file and on a generated sample (`datasets`); `it/demo_data.rs` reads it back through the reports, KPIs, price board and reviews. Loading reuses a commodity, type, area or crop already there (same name, slug, label, name); removing deletes the demo businesses (services, products, their photos, inquiries, reviews, call taps by cascade), the demo partners (contracts, sponsored shops), prices, job posts and searches, then every demo crop, type, commodity and area no real row uses (services, products, job posts, partner contracts, crops, prices), and the ones real data uses stay, unflagged, as real. An admin's price for a demo price's day makes it real. A demo job post is shown only to a demo business and never counts against a farmer's phone. Admin lists mark demo rows (`status_badge.html` `demo`). A new kind of demo row must belong to a demo business or carry its own `is_demo`. Tests start from the demo catalogue (`Env`, `DemoDataRepository::load_catalogue`).
 - Keep internal logs in English.
 - All location data uses **SRID 4326** (WGS84). Never mix geometry and geography types in the same query.
 - Phone number pattern for Vietnamese mobile: `0\d{9}` (10 digits starting with 0).
@@ -631,6 +633,7 @@ middleware / handlers  →  application (use cases, ports)  →  domain  ←  in
 - An action that needs a second look (deactivate, hide, delete) uses `organisms/confirm_sheet.html` inside an `x-data="dialog"` element; without JS it is an anchored form on the page. It says what will happen (`effect="hide"` / `"delete"` with `what`, else `note`), and its reason box is optional, capped at `limits.audit_reason_max` (`AUDIT_REASON_MAX`, also cut server-side by `validation::audit_reason`). On a list, the row's link reloads the list with `?hide={id}` (or `?delete=`) and the server renders that confirmation open. Row forms send the list position back as `page` / `provider_id` (`pages::admin::ListPosition`), rebuilt from numbers, never a posted URL; for a record that also has its own page they add `back=list` (`ListReturn`), else its handler lands on that page.
 - The admin menu (`pages::admin::MENU`) is grouped by which way a thing flows, so related entries sit together: what farmers sent in ("Bà con gửi về": contact requests, job posts, reviews), what the admin publishes to them ("Đăng cho bà con": the price board, alerts), the directory (providers, their services and supplies), business, the setup (the classification, areas), the system (users, roles & permissions, demo data, settings). The classification is one entry ("Ngành & phân loại") and one screen of four tabs, each list at its own address: sectors, then what is filed under a sector: commodities, service types, supply types (`catalogue_tabs`, `CatalogueTab`). Each group folds (a `<details>`, so without JS too; Alpine `adminMenu` remembers the folded ones in the browser, the current page's group always open), and the sidebar opens with a search box (with JS only): typing keeps the entries whose name, group or tab lists (`MENU_KEYWORDS`, an entry's `data-keywords`) hold every word, accents ignored, and Enter opens the first. A page with no entry of its own lights its owner's (`MENU_OWNERS`). A page showing one of several lists uses `molecules/admin_tabs.html` (`AdminTab`), each tab a URL (`?tab=`), never a second menu entry; `ListPosition` carries the tab and the list's filters (`crop_id`, `commodity_id`, `category_id`) so row actions and page links keep them.
 - Every admin hide / deactivate / delete asks for confirmation and a reason (audited); show / activate is one button. Lists narrowed to one provider (`provider_id`: products, services, inquiries, reviews) use `ListPosition::provider_filter` / `pagination` and `molecules/admin_filter.html`.
+- Admin list tools, one layout everywhere: the header, then what the list is narrowed to (`admin_filter`: a provider, commodity or type, cleared by its own bar), then the search bar (`molecules/admin_search.html`, `ListPosition::search_box`: one GET form, the words beside an order select that sends itself, `SearchBox::sorted`; it sends every other criterion back as hidden fields and starts at page 1; "Bỏ tìm kiếm" clears the words, "Bỏ lọc" the words, chip and order but not the narrowing), then the state chips (`status_chips`, `ListPosition::state_chips` / `shared_state_chips`), then the table (`admin_search::empty` says why it is empty) and the page links. Which lists search what: providers (name, or a phone typed as digits: `admin_list::phone_digits`; chips unverified / verified / off), services and supplies (own or provider name; shown / hidden), accounts (username, name, email; on / off), contact requests (sender name or phone, provider name; their statuses), reviews (reviewer, comment, provider; waiting / shown), job posts (farmer name or phone, description; their statuses), partners (name, contact, phone, email; on / off). The short whole lists (sectors, alert kinds, crops, roles) have none. One criteria type for all of them, `domain::models::admin_list::AdminFilter` (provider, search, state, `AdminSort`), applied by one `admin_condition` per repository (the list and its count share it; the search's OR is wrapped in an AND) and ordered by `infrastructure::admin_list::admin_order` (`None` = the list's own order, every order ending with the id). A list offers only the orders that help it (`QUEUE_SORTS`: the oldest first, to work a queue through; `newest` / `oldest` / `name` elsewhere); `ListPosition::checked` drops a state or order the list does not take, so no link carries it. `ListPosition` carries `q`, `state` and `sort` with the page through chips, page links, row forms and record links, so every action lands back on the same view. The JSON lists take the same criteria (`AdminListQuery`: `name`, `status`, `sort`).
 - Admin lists end each row with `molecules/row_action.html` macros, one per kind (`show` green or `hide` amber, `delete` red, then `open`), in that order; icon-only on a narrow screen, icon and a short word from 992 px. A table has only the ones its records support. States are `atoms/status_badge.html` (`visibility`, `account`, `verified`); a hidden or switched-off row is grey (`table-light text-body-secondary`), never amber, and green never marks anything but shown / active / verified / call. Rows start with `atoms/admin_thumb.html` where the record has a photo. Inquiry statuses are `inquiry_status::label(badge=true)` (new is blue, contacted soft blue; every badge filled, never bordered like a button). A record with a status (contact request, job post) offers its next steps (`status_steps`): the one it waits for filled (`Step.primary`), the others outlined, spam never stretched on a card; its status chips count the waiting status (`state_chips` `waiting`), the chosen chip tinted, not filled. Amber row buttons use the dark amber text (`--a800`), never Bootstrap's unreadable yellow. Detail pages are `admin-section` cards (title, then `admin-status` line, then one `admin-actions` row); forms are `form-stack`; deleting is its own card at the end. Every record's own admin page (provider, service, supply, crop, alert, sector, alert kind, location, partner, user, role) is a record page, in three layers: `organisms/record_header.html` (`RecordHeader`, built in Rust: its states once as badges, the actions done often as buttons, the rare or harmful ones in a "more" menu, harmful last), one read-only status strip (`record-strip`: what the states mean, who changed them and why, its leads), then the content (a two-column form and details on a wide screen, or `?tab=` parts); its confirmations (`Confirm`, `opened` to come back open after a refusal) close the page, each in its own `dialog`, opened by any link to the sheet's id (the `dialog` component follows the URL hash). An on / off pair is `Toggle` (`visibility` for shown / hidden: off behind its confirmation, on one button), the page placing it among the buttons or in the menu (turning off a provider, partner or account is in the menu); parts are `TabSpec` (`chosen_tab`, `record_tabs`, `to_tab`: a change lands on its part); every one ends with its history (`HistoryOf`). An admin page's one top action (add, public page) goes in `admin_header`'s `action_*`.
 - The session lives in httpOnly cookies (`auth_token`, `refresh_token`); no script ever reads a token.
 - **Languages:** Vietnamese by default; English when the `lang` cookie says so. The browser's `Accept-Language` is never applied (farmers' phones are often set to English), only offered: a visitor with no cookie whose browser prefers another language of ours sees a one-time strip under the top bar (`molecules/language_offer.html`, `shell.language_offer`), worded in that language with the way out in Vietnamese; either answer sets the cookie. `middleware::language` scopes every request with it (outermost of the page layers, so error bodies and the JSON API follow it); `locale::current()` reads it. One switch, `molecules/language_switch.html`, the same everywhere: a button with the language icon and the current code ("VI"), a `<details>` menu that opens without JS (Alpine `languageMenu`, sharing `topBarMenu` with the account menu, adds closing on Escape / outside). One place per page, never repeated (not in the footer, not in the account menu): the right end of the top bar on app pages and of the admin bar; under the card, at its right edge, on auth pages (`up=true`: the menu opens above it), never above the form nor pinned to a screen corner. Each language is named in itself, never a flag. Emails go out in the default language.
@@ -639,20 +642,20 @@ middleware / handlers  →  application (use cases, ports)  →  domain  ←  in
 
 Public content pages fill `{% block title %}` and `{% block meta %}` (a `<meta name="description">`) from the loaded data; never a generic fallback.
 
-| Route group                                                  | SEO required | Notes                                                   |
-| ------------------------------------------------------------ | ------------ | ------------------------------------------------------- |
-| `/` (home)                                                   | Yes          | Static title + description                              |
-| `/supplies`, `/supplies/[id]/[slug]`                         | Yes          | Supply name & description in meta                       |
-| `/supplies/category/[id]/[slug]`                             | Yes          | Category name in title                                  |
-| `/services`, `/services/category/[id]/[slug]`                | Yes          | Category name in title                                  |
-| `/services/[id]/[slug]`                                      | Yes          | Service + provider name in title, description in meta   |
-| `/providers`                                                 | Yes          | Static title + description                              |
-| `/prices`                                                    | Yes          | Area name in title when filtered                        |
-| `/explore`                                                   | Yes          | Near-me page                                            |
-| `/providers/[id]/[slug]`                                     | Yes          | Provider name & description in meta                     |
-| `/account`, `/provider/**`                                   | No           | Authenticated; `<meta name="robots" content="noindex">` |
-| `/login`, `/register`, `/forgot-password`, `/reset-password` | No           | Auth flows; `noindex`                                   |
-| `/admin/**`                                                  | No           | Admin panel; `noindex`                                  |
+| Route group | SEO required | Notes |
+| --- | --- | --- |
+| `/` (home) | Yes | Static title + description |
+| `/supplies`, `/supplies/[id]/[slug]` | Yes | Supply name & description in meta |
+| `/supplies/category/[id]/[slug]` | Yes | Category name in title |
+| `/services`, `/services/category/[id]/[slug]` | Yes | Category name in title |
+| `/services/[id]/[slug]` | Yes | Service + provider name in title, description in meta |
+| `/providers` | Yes | Static title + description |
+| `/prices` | Yes | Area name in title when filtered |
+| `/explore` | Yes | Near-me page |
+| `/providers/[id]/[slug]` | Yes | Provider name & description in meta |
+| `/account`, `/provider/**` | No | Authenticated; `<meta name="robots" content="noindex">` |
+| `/login`, `/register`, `/forgot-password`, `/reset-password` | No | Auth flows; `noindex` |
+| `/admin/**` | No | Admin panel; `noindex` |
 
 ---
 
@@ -670,6 +673,10 @@ cargo test --workspace
 # Database tests (each copies its own database from a template kept until the migrations change, and drops it):
 # TEST_DATABASE_URL=postgres://... cargo test --workspace -- --include-ignored
 # One file's tests: cargo test -p integration-tests --test it search_page:: -- --include-ignored
+
+# Demo data at volume (about 5 000 rows of each kind; development only):
+DEMO_ACCOUNT_PASSWORD=... cargo run --bin agri-connect -- demo-data [--providers 5000] [--seed 2026]
+# Remove it from /setup/seed like the small demo set.
 
 # Only after changing backend/islands/src: rebuild and commit the bundle
 cd islands; npm ci; npm run build

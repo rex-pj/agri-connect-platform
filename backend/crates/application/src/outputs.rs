@@ -9,6 +9,11 @@ use domain::models::{
 use serde::Serialize;
 use uuid::Uuid;
 
+use crate::{
+    constants::{ADMIN_PAGE_SIZE, PAGE_SIZE},
+    pagination::{admin_total_pages, public_total_pages},
+};
+
 // ── Location presets ──────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize)]
@@ -474,6 +479,7 @@ pub struct AdminUserDto {
     pub role_code: String,
     pub role_name: String,
     pub is_active: bool,
+    pub is_demo: bool,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
     pub created_by_name: Option<String>,
@@ -683,14 +689,41 @@ impl From<OwnReview> for OwnReviewDto {
     }
 }
 
+/// One page of a list, with what its page links need.
 #[derive(Serialize)]
-pub struct AdminPagedResponse<T: Serialize> {
+pub struct PagedResponse<T: Serialize> {
     pub items: Vec<T>,
     pub total: i64,
     pub page: i64,
     pub per_page: i64,
     pub total_pages: i64,
 }
+
+impl<T: Serialize> PagedResponse<T> {
+    /// A page of an admin list (`paginate_admin`).
+    pub fn admin(items: Vec<T>, total: i64, page: i64) -> Self {
+        Self {
+            items,
+            total,
+            page,
+            per_page: ADMIN_PAGE_SIZE,
+            total_pages: admin_total_pages(total),
+        }
+    }
+
+    /// A page of a public or provider list (`paginate_public`).
+    pub fn public(items: Vec<T>, total: i64, page: i64) -> Self {
+        Self {
+            items,
+            total,
+            page,
+            per_page: PAGE_SIZE,
+            total_pages: public_total_pages(total),
+        }
+    }
+}
+
+pub type AdminPagedResponse<T> = PagedResponse<T>;
 
 // ── Admin products ────────────────────────────────────────────────────────────
 
@@ -1077,6 +1110,8 @@ pub struct ContractDto {
     /// Sponsored providers (`id` is the business).
     pub sponsored: Vec<NamedDto>,
     pub in_force: bool,
+    /// Where it stands today: one of `CONTRACT_LIST_STATES`.
+    pub state: &'static str,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1095,12 +1130,25 @@ pub struct AreaRevenueDto {
     pub monthly_revenue: i64,
 }
 
-/// The partner KPIs: paying partners today, the monthly revenue, by area.
+/// What one province brings in, its whole-province contracts and those of
+/// its wards together: partners counted once, and each of its contract
+/// areas (`areas`, the most first).
+#[derive(Debug, Clone, Serialize)]
+pub struct ProvinceRevenueDto {
+    pub area: String,
+    pub label: String,
+    pub partners: usize,
+    pub monthly_revenue: i64,
+    pub areas: Vec<AreaRevenueDto>,
+}
+
+/// The partner KPIs: paying partners today, the monthly revenue, by
+/// province (at most the 34, the most first), each with its areas.
 #[derive(Debug, Clone, Serialize)]
 pub struct PartnerKpiDto {
     pub paying_partners: usize,
     pub monthly_revenue: i64,
-    pub areas: Vec<AreaRevenueDto>,
+    pub provinces: Vec<ProvinceRevenueDto>,
 }
 
 /// A partner's own page: its report over the areas and categories it pays
@@ -1343,6 +1391,8 @@ pub struct AlertDto {
     pub is_demo: bool,
     /// In force today: on, and today between its dates.
     pub live: bool,
+    /// Where it stands by its dates: one of `ALERT_LIST_STATES`.
+    pub state: &'static str,
 }
 
 /// A choice named by its code (a province).

@@ -33,6 +33,14 @@ pub struct SponsoredBusiness {
     pub name: String,
 }
 
+/// A shop lying in a contract's area, as the sponsor search lists it.
+pub struct AreaShop {
+    pub business_id: i32,
+    pub name: String,
+    pub phone: String,
+    pub address: Option<String>,
+}
+
 /// Where a contract applies: a whole province, or one ward of it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContractArea {
@@ -75,8 +83,17 @@ pub struct NewContract {
     pub category_ids: Vec<i32>,
 }
 
-/// A contract in force on a day, of a partner that is on: what the revenue
-/// figures, the partner's report and the sponsored places read.
+/// A contract in force on a day, of a partner that is on, as the revenue
+/// figures read it: whose, where, and its monthly fee.
+pub struct ContractFee {
+    pub contract_id: i32,
+    pub partner_id: i32,
+    pub area: ContractArea,
+    pub monthly_fee: i64,
+}
+
+/// A contract in force with what it covers: its categories and sponsored
+/// shops (the partner's report, the sponsored places).
 pub struct ActiveContract {
     pub contract_id: i32,
     pub partner_id: i32,
@@ -84,4 +101,37 @@ pub struct ActiveContract {
     pub monthly_fee: i64,
     pub category_ids: Vec<i32>,
     pub business_ids: Vec<i32>,
+}
+
+/// What a partner's contract list is narrowed to; every one set narrows it.
+#[derive(Debug, Default, Clone)]
+pub struct ContractFilter {
+    /// One of `CONTRACT_LIST_STATES`.
+    pub state: Option<&'static str>,
+    /// One area, as its text (`p82`, `w28439`).
+    pub area: Option<String>,
+    /// The monthly fee between these, in đồng.
+    pub fee_min: Option<i64>,
+    pub fee_max: Option<i64>,
+    /// Begins between these days, ends between these days.
+    pub start_from: Option<NaiveDate>,
+    pub start_to: Option<NaiveDate>,
+    pub end_from: Option<NaiveDate>,
+    pub end_to: Option<NaiveDate>,
+    /// Covers this category.
+    pub category_id: Option<i32>,
+}
+
+impl ContractFilter {
+    pub fn is_empty(&self) -> bool {
+        self.state.is_none()
+            && self.area.is_none()
+            && self.fee_min.is_none()
+            && self.fee_max.is_none()
+            && self.start_from.is_none()
+            && self.start_to.is_none()
+            && self.end_from.is_none()
+            && self.end_to.is_none()
+            && self.category_id.is_none()
+    }
 }

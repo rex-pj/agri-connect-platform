@@ -38,9 +38,9 @@
   {% elif not b.narrowed %}
   <p class="small text-muted mb-0">{{ t(key="admin.products_add_hint", action=t(key="admin.manage_products")) }}</p>
   {% endif %}
-  {% if b.narrowed %}{{ filter::admin_filter(f=b.narrowed) }}{% endif %}
 
-  {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.products")) }}
+  {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.products"), chips=b.states, chips_label=t(key="admin_state.label")) }}
+  {{ search::admin_results(s=b.search, total=b.total) }}
   <div class="admin-card">
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0 admin-table admin-table--cards">
@@ -75,7 +75,7 @@
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="7" class="text-center text-muted py-4">{% if b.search.q %}{{ t(key="admin_search.none", q=b.search.q) }}{% else %}{{ t(key="admin.no_products") }}{% endif %}</td></tr>
+          <tr><td colspan="7" class="text-center text-muted py-4">{{ search::empty(s=b.search, none=t(key="admin.no_products")) }}</td></tr>
           {% endfor %}
         </tbody>
       </table>

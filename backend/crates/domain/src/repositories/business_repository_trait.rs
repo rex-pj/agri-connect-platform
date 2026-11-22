@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 
 use crate::{
     error::Error,
+    models::admin_list::AdminFilter,
     models::business::{
         BusinessAdminDetail, BusinessAdminView, BusinessBrowse, BusinessDetail, BusinessGeoResult,
         BusinessProfile, ProfileUpdate, ProviderSort,
@@ -12,13 +13,24 @@ use crate::{
 
 #[async_trait]
 pub trait BusinessRepositoryTrait {
+    /// Live businesses within `radius` metres of `point_wkt` (`service_id`:
+    /// offering it live), nearest first: `limit` after the first `offset`.
     async fn search_geo(
         &self,
         point_wkt: &str,
         radius: f64,
         service_id: Option<i32>,
         limit: i64,
+        offset: i64,
     ) -> Result<Vec<BusinessGeoResult>, Error>;
+
+    /// How many businesses `search_geo` finds, over all its pages.
+    async fn count_geo(
+        &self,
+        point_wkt: &str,
+        radius: f64,
+        service_id: Option<i32>,
+    ) -> Result<i64, Error>;
 
     /// The directory: `filter.category_id` a service category it offers live,
     /// `sector` providers with nothing yet or something live in that sector.
@@ -41,15 +53,16 @@ pub trait BusinessRepositoryTrait {
     async fn find_detail(&self, id: i32) -> Result<Option<BusinessDetail>, Error>;
 
     /// The admin list; `search` narrows it to names containing it (accents
-    /// and case ignored).
+    /// and case ignored) or, typed as a phone, to that phone; `state`:
+    /// `unverified` / `verified` (both on) / `off`.
     async fn list_for_admin(
         &self,
-        search: Option<&str>,
+        filter: &AdminFilter,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<BusinessAdminView>, Error>;
 
-    async fn count_for_admin(&self, search: Option<&str>) -> Result<i64, Error>;
+    async fn count_for_admin(&self, filter: &AdminFilter) -> Result<i64, Error>;
 
     /// Sets the badge; `Some((name, changed))`, or `None` when there is no
     /// such business.

@@ -19,7 +19,7 @@ use crate::{
     extract::{ApiForm, ApiPath, ApiQuery},
     middleware::auth::Viewer,
     pages::{
-        admin::{render_admin, url, AdminTab, ListPosition},
+        admin::{render_admin, url, AdminTab, ListPosition, SearchBox, QUEUE_SORTS},
         forms::reason,
         listing::{parse_opt, Pagination},
         parse_id, see_other,
@@ -33,6 +33,17 @@ pub struct ListQuery {
     pub page: String,
     /// The state the list is narrowed to.
     pub state: String,
+    /// The words searched, the order asked.
+    pub q: String,
+    /// The service type the list is narrowed to.
+    pub category_id: String,
+    /// The area the list is narrowed to.
+    pub location_id: String,
+    /// How long it has waited: `stale_3`, `stale_7`.
+    pub gap: String,
+    pub sort: String,
+    pub from: String,
+    pub to: String,
     /// The post whose spam confirmation is open.
     pub spam: String,
 }
@@ -60,6 +71,7 @@ pub struct JobsPage {
     pub pagination: Option<Pagination>,
     /// The state chips above the list.
     pub states: Vec<AdminTab>,
+    pub search: SearchBox,
     /// The list is narrowed to one state.
     pub narrowed: bool,
     pub confirm: Option<Confirm>,
@@ -77,13 +89,20 @@ pub async fn list(
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
-    let mut position = ListPosition {
+    let position = ListPosition {
         page: q.page,
         state: q.state,
+        q: q.q,
+        sort: q.sort,
+        from: q.from,
+        to: q.to,
+        category_id: q.category_id,
+        location_id: q.location_id,
+        gap: q.gap,
         ..ListPosition::default()
-    };
+    }
+    .checked(JOB_STATUSES, QUEUE_SORTS);
     let state_filter = position.state_in(JOB_STATUSES);
-    position.state = state_filter.unwrap_or_default().to_owned();
     let AdminPagedResponse {
         items,
         total,
@@ -93,7 +112,7 @@ pub async fn list(
     } = state
         .usecases
         .job
-        .list_admin(&actor, position.page(), state_filter)
+        .list_admin(&actor, position.page(), &position.filter(JOB_STATUSES))
         .await?;
     let position = ListPosition {
         page: page.to_string(),
@@ -119,6 +138,10 @@ pub async fn list(
             job,
         });
     }
+    let (types, areas) = tokio::try_join!(
+        state.usecases.job.service_type_choices(&actor),
+        state.usecases.job.area_choices(&actor),
+    )?;
     let open = state
         .usecases
         .job
@@ -130,15 +153,34 @@ pub async fn list(
         JOB_STATUSES,
         locale.text("filters.all"),
         |s| locale.text(job_status_key(s)),
-        (JOB_STATUS_OPEN, open),
+        Some((JOB_STATUS_OPEN, open)),
     )?;
     let path = url("admin_jobs", &[])?;
     let body = JobsPage {
         total,
         rows,
         pagination: position.pagination(&path, page, total_pages),
+        search: position
+            .search_box("admin_jobs")?
+            .picked(
+                "category_id",
+                locale.text("admin_pick.service_type"),
+                locale.text("admin_pick.all_types"),
+                types.into_iter().map(|t| (t.id, t.name)).collect(),
+            )
+            .picked(
+                "location_id",
+                locale.text("admin_pick.area"),
+                locale.text("admin_pick.all_areas"),
+                areas.into_iter().map(|a| (a.id, a.name)).collect(),
+            )
+            .waiting(state.locale())
+            .dated(locale)
+            .sorted(locale, &position, "admin_sort.newest", QUEUE_SORTS),
         states,
-        narrowed: state_filter.is_some(),
+        narrowed: state_filter.is_some()
+            || position.category_id().is_some()
+            || position.location_id().is_some(),
         confirm,
         position,
         flash: flash.0,
@@ -164,6 +206,13 @@ pub struct StatusForm {
     /// The list page and state to land back on.
     pub page: String,
     pub state: String,
+    pub q: String,
+    pub sort: String,
+    pub from: String,
+    pub to: String,
+    pub category_id: String,
+    pub location_id: String,
+    pub gap: String,
 }
 
 /// POST /admin/jobs/{id}/status
@@ -185,6 +234,13 @@ pub async fn change_status(
     ListPosition {
         page: form.page,
         state: form.state,
+        q: form.q,
+        sort: form.sort,
+        from: form.from,
+        to: form.to,
+        category_id: form.category_id,
+        location_id: form.location_id,
+        gap: form.gap,
         ..ListPosition::default()
     }
     .back_to("admin_jobs", Flash::JobStatusSaved)

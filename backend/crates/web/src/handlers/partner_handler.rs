@@ -3,28 +3,39 @@
 
 use application::authz::require_actor;
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
-use domain::Error;
+use domain::{models::admin_list::SWITCH_LIST_STATES, Error};
 
 use crate::{
     app_state::AppState,
     extract::{ApiJson, ApiPath, ApiQuery},
     middleware::auth::MaybeActor,
     requests::{
-        AssignUserRequest, ContractRequest, DeleteWithReasonBody, DemandQuery, PartnerRequest,
-        SponsorRequest, ToggleActiveRequest,
+        AdminListQuery, AssignUserRequest, ContractRequest, DeleteWithReasonBody, DemandQuery,
+        PartnerRequest, SponsorRequest, ToggleActiveRequest,
     },
 };
 
 pub struct PartnerHandler;
 
 impl PartnerHandler {
-    /// GET /api/admin/partners
+    /// GET /api/admin/partners — a page of them (`page?`).
     pub async fn list(
         MaybeActor(actor): MaybeActor,
         State(state): State<AppState>,
+        ApiQuery(q): ApiQuery<AdminListQuery>,
     ) -> Result<impl IntoResponse, Error> {
         let actor = require_actor(actor)?;
-        Ok(Json(state.usecases.partner.list_partners(&actor).await?))
+        Ok(Json(
+            state
+                .usecases
+                .partner
+                .list_partners(
+                    &actor,
+                    q.page.unwrap_or(1),
+                    &q.filter_in(SWITCH_LIST_STATES),
+                )
+                .await?,
+        ))
     }
 
     /// GET /api/admin/partners/kpis — paying partners, monthly revenue, by area.

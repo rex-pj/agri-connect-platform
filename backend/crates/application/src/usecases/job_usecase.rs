@@ -16,6 +16,7 @@ use chrono::{DateTime, Duration, Utc};
 use domain::{
     constants::{CATEGORY_TYPE_SERVICE, JOB_STATUSES},
     events::{Change, DomainEvent, Entity},
+    models::admin_list::AdminFilter,
     models::job::{JobPost, NewJobPost},
     repositories::{
         category_repository_trait::CategoryRepositoryTrait,
@@ -29,17 +30,19 @@ use crate::{
     authz::Actor,
     catalogue::{PERM_JOB_MODERATE, PERM_OWN_JOB_READ},
     constants::{
-        ADMIN_PAGE_SIZE, JOBS_SHOWN, JOB_DESCRIPTION_MAX, JOB_POST_CLIENT_WINDOW_SECS,
-        JOB_POST_KEEP_DAYS, REQUESTER_NAME_MAX_LEN,
+        ADMIN_PAGE_SIZE, JOB_DESCRIPTION_MAX, JOB_POST_CLIENT_WINDOW_SECS, JOB_POST_KEEP_DAYS,
+        PAGE_SIZE, REQUESTER_NAME_MAX_LEN,
     },
     hashing::sha256_hex,
     inputs::JobInput,
-    outputs::{AdminPagedResponse, JobPostDto},
-    pagination::{admin_total_pages, paginate_admin, total_or_count},
+    outputs::{AdminPagedResponse, JobPostDto, NamedDto, PagedResponse},
+    pagination::{paginate_admin, paginate_public, total_or_count},
     ports::EventBus,
     repeats::WindowCounter,
     settings::SettingsReader,
-    validation::{audit_reason, max_chars, point_wkt, validate_coordinates, validate_phone},
+    validation::{
+        audit_reason, max_chars, point_wkt, typed_state, validate_coordinates, validate_phone,
+    },
 };
 
 #[derive(Clone)]
@@ -184,23 +187,35 @@ impl JobUseCase {
 
     /// The provider's jobs page: posts still open (`jobs.open_days`) within
     /// the notice radius of its business, in the categories of its live
-    /// services.
-    pub async fn list_own(&self, actor: &Actor) -> Result<Vec<JobPostDto>> {
+    /// services: one page of them, newest first.
+    pub async fn list_own(&self, actor: &Actor, page: i64) -> Result<PagedResponse<JobPostDto>> {
         actor.require(PERM_OWN_JOB_READ)?;
         let settings = self.settings.load().await?;
         let since = Utc::now() - Duration::days(settings.job_post_days());
-        Ok(self
+        let radius_m = settings.job_notify_radius_m();
+        let (page, offset) = paginate_public(page);
+        let rows = self
             .job_repo
-            .open_near_owner(
-                actor.user_id,
-                since,
-                settings.job_notify_radius_m(),
-                JOBS_SHOWN,
-            )
-            .await?
-            .into_iter()
-            .map(job_dto)
-            .collect())
+            .open_near_owner(actor.user_id, since, radius_m, PAGE_SIZE, offset)
+            .await?;
+        let total = total_or_count(offset, rows.len(), PAGE_SIZE, || {
+            self.job_repo
+                .count_open_near_owner(actor.user_id, since, radius_m)
+        })
+        .await?;
+        let items = rows.into_iter().map(job_dto).collect();
+        Ok(PagedResponse::public(items, total, page))
+    }
+
+    /// How many posts the provider's jobs page lists, all its pages: the
+    /// dashboard's link to it.
+    pub async fn count_own(&self, actor: &Actor) -> Result<i64> {
+        actor.require(PERM_OWN_JOB_READ)?;
+        let settings = self.settings.load().await?;
+        let since = Utc::now() - Duration::days(settings.job_post_days());
+        self.job_repo
+            .count_open_near_owner(actor.user_id, since, settings.job_notify_radius_m())
+            .await
     }
 
     /// How many posts are in `status`: the count the list's chip of that
@@ -210,37 +225,74 @@ impl JobUseCase {
         if !JOB_STATUSES.contains(&status) {
             return Err(Error::field("status", ErrorCode::InvalidJobStatus));
         }
-        self.job_repo.count_admin(Some(status)).await
+        let state = JOB_STATUSES.iter().copied().find(|s| *s == status);
+        self.job_repo
+            .count_admin(&AdminFilter::default().in_state(state))
+            .await
     }
 
-    /// Every post (`status`: only those in it, one of `JOB_STATUSES`),
-    /// newest first.
+    /// The service types the post list can be narrowed to: every service
+    /// type, hidden ones too (a post may name one since hidden).
+    pub async fn service_type_choices(&self, actor: &Actor) -> Result<Vec<NamedDto>> {
+        actor.require(PERM_JOB_MODERATE)?;
+        Ok(self
+            .category_repo
+            .list_admin()
+            .await?
+            .into_iter()
+            .filter(|c| c.category_type == CATEGORY_TYPE_SERVICE)
+            .map(|c| NamedDto {
+                id: c.id,
+                name: c.name,
+            })
+            .collect())
+    }
+
+    /// The areas the post list can be narrowed to: every area, hidden ones
+    /// too (a post may name one since hidden).
+    pub async fn area_choices(&self, actor: &Actor) -> Result<Vec<NamedDto>> {
+        actor.require(PERM_JOB_MODERATE)?;
+        Ok(self
+            .location_repo
+            .list_all()
+            .await?
+            .into_iter()
+            .map(|l| NamedDto {
+                id: l.id,
+                name: l.label,
+            })
+            .collect())
+    }
+
+    /// The status a list of posts is narrowed to, as typed: one of
+    /// `JOB_STATUSES`, blank for every one, else refused.
+    pub fn job_state(typed: Option<&str>) -> Result<Option<&'static str>> {
+        typed_state(JOB_STATUSES, typed, ErrorCode::InvalidJobStatus)
+    }
+
+    /// Every post (`filter`: one of `JOB_STATUSES`, the farmer's name or
+    /// phone or the description, an order), newest first by default.
     pub async fn list_admin(
         &self,
         actor: &Actor,
         page: i64,
-        status: Option<&str>,
+        filter: &AdminFilter,
     ) -> Result<AdminPagedResponse<JobPostDto>> {
         actor.require(PERM_JOB_MODERATE)?;
-        if status.is_some_and(|s| !JOB_STATUSES.contains(&s)) {
+        if filter.state.is_some_and(|s| !JOB_STATUSES.contains(&s)) {
             return Err(Error::field("status", ErrorCode::InvalidJobStatus));
         }
         let (page, offset) = paginate_admin(page);
         let rows = self
             .job_repo
-            .list_admin(status, ADMIN_PAGE_SIZE, offset)
+            .list_admin(filter, ADMIN_PAGE_SIZE, offset)
             .await?;
         let total = total_or_count(offset, rows.len(), ADMIN_PAGE_SIZE, || {
-            self.job_repo.count_admin(status)
+            self.job_repo.count_admin(filter)
         })
         .await?;
-        Ok(AdminPagedResponse {
-            items: rows.into_iter().map(job_dto).collect(),
-            total,
-            page,
-            per_page: ADMIN_PAGE_SIZE,
-            total_pages: admin_total_pages(total),
-        })
+        let items = rows.into_iter().map(job_dto).collect();
+        Ok(AdminPagedResponse::admin(items, total, page))
     }
 
     /// Deletes the posts older than `JOB_POST_KEEP_DAYS`, whatever their

@@ -29,14 +29,15 @@ use domain::{
 };
 use sea_orm::{
     sea_query::{Expr, IntoIden, Query},
-    ColumnTrait, ConnectionTrait, DatabaseTransaction, DbErr, EntityTrait, FromQueryResult,
-    QueryFilter, Set,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseTransaction, DbErr, EntityTrait,
+    FromQueryResult, IntoActiveModel, QueryFilter, QuerySelect, Set,
 };
 use serde::Deserialize;
 
 use crate::{
+    demo_data_repository::demo_business_ids,
     entities::{
-        alert, call_click, crop, crop_price, inquiry, job_post, location, partner,
+        alert, business, call_click, crop, crop_price, inquiry, job_post, location, partner,
         partner_contract, partner_contract_service_type, partner_contract_supply_type,
         partner_sponsored, product, review, search_event, service, ward,
     },
@@ -143,6 +144,21 @@ pub(crate) struct DemoPartner {
     pub(crate) phone: String,
     pub(crate) email: String,
     pub(crate) contracts: Vec<DemoContract>,
+    /// Its report account (role partner); loaded only at volume.
+    #[serde(default)]
+    pub(crate) account: Option<DemoAccount>,
+}
+
+/// A demo account (flagged `is_demo`): a provider's managing account or a
+/// partner's report account. Loaded only at volume, where every demo
+/// account signs in with the one password given.
+#[derive(Deserialize, Clone)]
+pub(crate) struct DemoAccount {
+    pub(crate) username: String,
+    pub(crate) email: String,
+    pub(crate) full_name: String,
+    /// Whether its email address is confirmed.
+    pub(crate) verified: bool,
 }
 
 /// The area of a contract: the ward, or the whole province, a demo shop
@@ -175,6 +191,8 @@ pub(crate) struct Refs {
     pub(crate) service_types: HashMap<String, i32>,
     /// Supply types by slug.
     pub(crate) supply_types: HashMap<String, i32>,
+    /// Demo accounts by username.
+    pub(crate) accounts: HashMap<String, i32>,
 }
 
 #[derive(FromQueryResult)]
@@ -239,11 +257,68 @@ async fn place_of(txn: &DatabaseTransaction, lat: f64, lng: f64) -> Result<Optio
         }))
 }
 
+/// Rows written per statement: far under Postgres' 65 535 parameters for
+/// the widest demo row, and few statements for the demo data at volume.
+pub(crate) const CHUNK: usize = 1_000;
+
+/// Inserts `rows` a chunk at a time; the number inserted.
+pub(crate) async fn insert_chunks<A>(
+    txn: &DatabaseTransaction,
+    rows: Vec<A>,
+    step: &'static str,
+) -> Result<u64>
+where
+    A: ActiveModelTrait + Send,
+    <A::Entity as EntityTrait>::Model: IntoActiveModel<A>,
+{
+    let total = rows.len() as u64;
+    let mut rows = rows.into_iter().peekable();
+    while rows.peek().is_some() {
+        let chunk: Vec<A> = rows.by_ref().take(CHUNK).collect();
+        <A::Entity as EntityTrait>::insert_many(chunk)
+            .exec_without_returning(txn)
+            .await
+            .map_err(db_error(step))?;
+    }
+    Ok(total)
+}
+
+/// Where each demo business lies, by name: the ward written with its
+/// position (`ward_code`, as the report places it) and that ward's
+/// province. One read, however many businesses.
+async fn shop_places(txn: &DatabaseTransaction) -> Result<HashMap<String, Place>> {
+    let provinces: HashMap<String, String> = ward::Entity::find()
+        .select_only()
+        .column(ward::Column::Code)
+        .column(ward::Column::ProvinceCode)
+        .into_tuple::<(String, String)>()
+        .all(txn)
+        .await
+        .map_err(db_error("wards"))?
+        .into_iter()
+        .collect();
+    Ok(business::Entity::find()
+        .select_only()
+        .column(business::Column::Name)
+        .column(business::Column::WardCode)
+        .filter(business::Column::IsDemo.eq(true))
+        .filter(business::Column::WardCode.is_not_null())
+        .into_tuple::<(String, String)>()
+        .all(txn)
+        .await
+        .map_err(db_error("business wards"))?
+        .into_iter()
+        .filter_map(|(name, ward)| {
+            let province = provinces.get(&ward)?.clone();
+            Some((name, Place { ward, province }))
+        })
+        .collect())
+}
+
 /// Loads the activity; returns its counts (the listing fields left at 0).
 pub(crate) async fn insert(
     txn: &DatabaseTransaction,
     data: &Activity,
-    businesses: &[(String, f64, f64)],
     refs: &Refs,
 ) -> Result<DemoCounts> {
     let now = Utc::now();
@@ -252,9 +327,8 @@ pub(crate) async fn insert(
     let ago = |days: i64| (now - Duration::days(days)).fixed_offset();
 
     // Ids of the demo services and products by (business, name).
-    let ids: Vec<i32> = refs.businesses.values().copied().collect();
     let services: HashMap<(i32, String), i32> = service::Entity::find()
-        .filter(service::Column::BusinessId.is_in(ids.clone()))
+        .filter(service::Column::BusinessId.in_subquery(demo_business_ids()))
         .all(txn)
         .await
         .map_err(db_error("services"))?
@@ -262,7 +336,7 @@ pub(crate) async fn insert(
         .map(|s| ((s.business_id, s.name), s.id))
         .collect();
     let products: HashMap<(i32, String), i32> = product::Entity::find()
-        .filter(product::Column::BusinessId.is_in(ids))
+        .filter(product::Column::BusinessId.in_subquery(demo_business_ids()))
         .all(txn)
         .await
         .map_err(db_error("products"))?
@@ -283,12 +357,7 @@ pub(crate) async fn insert(
         .into_iter()
         .map(|c| (c.name, c.id))
         .collect();
-    let mut shop_places: HashMap<String, Place> = HashMap::new();
-    for (name, lat, lng) in businesses {
-        if let Some(place) = place_of(txn, *lat, *lng).await? {
-            shop_places.insert(name.clone(), place);
-        }
-    }
+    let shop_places = shop_places(txn).await?;
     let item = |business: i32, service: &Option<String>, product: &Option<String>| {
         (
             service
@@ -319,22 +388,16 @@ pub(crate) async fn insert(
             });
         }
     }
-    counts.calls = taps.len() as u64;
-    if !taps.is_empty() {
-        call_click::Entity::insert_many(taps)
-            .exec_without_returning(txn)
-            .await
-            .map_err(db_error("calls"))?;
-    }
+    counts.calls = insert_chunks(txn, taps, "calls").await?;
 
     // Contact requests, then the reviews their answered phones may write.
-    let mut answered: HashMap<(i32, String), i32> = HashMap::new();
+    let mut requests = Vec::new();
     for q in &data.inquiries {
         let Some(&business_id) = refs.businesses.get(&q.business) else {
             continue;
         };
         let (service_id, product_id) = item(business_id, &q.service, &q.product);
-        let id = inquiry::Entity::insert(inquiry::ActiveModel {
+        requests.push(inquiry::ActiveModel {
             business_id: Set(business_id),
             service_id: Set(service_id),
             product_id: Set(product_id),
@@ -346,16 +409,25 @@ pub(crate) async fn insert(
             created_on: Set(ago(q.days_ago)),
             updated_on: Set(ago(q.days_ago)),
             ..Default::default()
-        })
-        .exec(txn)
-        .await
-        .map_err(db_error("inquiries"))?
-        .last_insert_id;
-        counts.inquiries += 1;
-        if INQUIRY_STATUSES_REVIEWABLE.contains(&q.status.as_str()) {
-            answered.insert((business_id, q.phone.clone()), id);
-        }
+        });
     }
+    counts.inquiries = insert_chunks(txn, requests, "inquiries").await?;
+    // The answered requests, read back: a review links to one of them.
+    let answered: HashMap<(i32, String), i32> = inquiry::Entity::find()
+        .select_only()
+        .column(inquiry::Column::BusinessId)
+        .column(inquiry::Column::RequesterPhone)
+        .column(inquiry::Column::Id)
+        .filter(inquiry::Column::BusinessId.in_subquery(demo_business_ids()))
+        .filter(inquiry::Column::Status.is_in(INQUIRY_STATUSES_REVIEWABLE.iter().copied()))
+        .into_tuple::<(i32, String, i32)>()
+        .all(txn)
+        .await
+        .map_err(db_error("answered inquiries"))?
+        .into_iter()
+        .map(|(business, phone, id)| ((business, phone), id))
+        .collect();
+    let mut reviews = Vec::new();
     for r in &data.reviews {
         let Some(&business_id) = refs.businesses.get(&r.business) else {
             continue;
@@ -364,7 +436,7 @@ pub(crate) async fn insert(
         let Some(&inquiry_id) = answered.get(&(business_id, r.phone.clone())) else {
             continue;
         };
-        review::Entity::insert(review::ActiveModel {
+        reviews.push(review::ActiveModel {
             business_id: Set(business_id),
             inquiry_id: Set(Some(inquiry_id)),
             rating: Set(r.rating),
@@ -377,20 +449,25 @@ pub(crate) async fn insert(
             reply: Set(r.reply.clone()),
             replied_at: Set(r.reply.as_ref().map(|_| ago(r.days_ago - 1))),
             ..Default::default()
-        })
-        .exec_without_returning(txn)
-        .await
-        .map_err(db_error("reviews"))?;
-        counts.reviews += 1;
+        });
     }
+    counts.reviews = insert_chunks(txn, reviews, "reviews").await?;
 
-    // Searches near a preset, in its ward.
+    // Searches near a preset, in its ward (looked up once per preset).
+    let mut preset_wards: HashMap<&str, Option<String>> = HashMap::new();
     let mut searches = Vec::new();
     for s in &data.searches {
         let Some(preset) = presets.get(&s.location) else {
             continue;
         };
-        let ward_code = place_of(txn, preset.lat, preset.lng).await?.map(|p| p.ward);
+        let ward_code = match preset_wards.get(s.location.as_str()) {
+            Some(code) => code.clone(),
+            None => {
+                let code = place_of(txn, preset.lat, preset.lng).await?.map(|p| p.ward);
+                preset_wards.insert(&s.location, code.clone());
+                code
+            }
+        };
         let slug = s.category_slug.as_deref().unwrap_or_default();
         let service_type_id = refs.service_types.get(slug).copied();
         let supply_type_id = refs.supply_types.get(slug).copied();
@@ -407,13 +484,7 @@ pub(crate) async fn insert(
             });
         }
     }
-    counts.searches = searches.len() as u64;
-    if !searches.is_empty() {
-        search_event::Entity::insert_many(searches)
-            .exec_without_returning(txn)
-            .await
-            .map_err(db_error("searches"))?;
-    }
+    counts.searches = insert_chunks(txn, searches, "searches").await?;
 
     // Farm-gate prices.
     let mut prices = Vec::new();
@@ -433,23 +504,11 @@ pub(crate) async fn insert(
             });
         }
     }
-    counts.prices = prices.len() as u64;
-    if !prices.is_empty() {
-        crop_price::Entity::insert_many(prices)
-            .exec_without_returning(txn)
-            .await
-            .map_err(db_error("prices"))?;
-    }
+    counts.prices = insert_chunks(txn, prices, "prices").await?;
 
-    // Job posts, at their preset's point.
-    for j in &data.jobs {
-        let (Some(&category_id), Some(preset)) = (
-            refs.service_types.get(&j.category_slug),
-            presets.get(&j.location),
-        ) else {
-            continue;
-        };
-        let insert = Query::insert()
+    // Job posts, at their preset's point, a chunk per statement.
+    for chunk in data.jobs.chunks(CHUNK) {
+        let mut insert = Query::insert()
             .into_table(job_post::Entity)
             .columns([
                 job_post::Column::ServiceTypeId.into_iden(),
@@ -462,23 +521,36 @@ pub(crate) async fn insert(
                 job_post::Column::CreatedOn.into_iden(),
                 job_post::Column::IsDemo.into_iden(),
             ])
-            .values([
-                Expr::val(category_id).into(),
-                Expr::val(preset.id).into(),
-                geography_from_text(&point_wkt(preset.lat, preset.lng)),
-                Expr::val(j.description.clone()).into(),
-                Expr::val(j.name.clone()).into(),
-                Expr::val(j.phone.clone()).into(),
-                Expr::val(j.status.clone()).into(),
-                Expr::val(ago(j.days_ago)).into(),
-                Expr::val(true).into(),
-            ])
-            .map_err(|e| Error::internal(format!("demo activity jobs: {e}")))?
             .to_owned();
-        txn.execute(txn.get_database_backend().build(&insert))
-            .await
-            .map_err(db_error("jobs"))?;
-        counts.jobs += 1;
+        let mut rows = 0;
+        for j in chunk {
+            let (Some(&category_id), Some(preset)) = (
+                refs.service_types.get(&j.category_slug),
+                presets.get(&j.location),
+            ) else {
+                continue;
+            };
+            insert
+                .values([
+                    Expr::val(category_id).into(),
+                    Expr::val(preset.id).into(),
+                    geography_from_text(&point_wkt(preset.lat, preset.lng)),
+                    Expr::val(j.description.clone()).into(),
+                    Expr::val(j.name.clone()).into(),
+                    Expr::val(j.phone.clone()).into(),
+                    Expr::val(j.status.clone()).into(),
+                    Expr::val(ago(j.days_ago)).into(),
+                    Expr::val(true).into(),
+                ])
+                .map_err(|e| Error::internal(format!("demo activity jobs: {e}")))?;
+            rows += 1;
+        }
+        if rows > 0 {
+            txn.execute(txn.get_database_backend().build(&insert))
+                .await
+                .map_err(db_error("jobs"))?;
+        }
+        counts.jobs += rows;
     }
 
     // Partners, their contracts over a demo shop's ward or province, and
@@ -490,6 +562,10 @@ pub(crate) async fn insert(
             contact_name: Set(Some(p.contact_name.clone())),
             phone: Set(Some(p.phone.clone())),
             email: Set(Some(p.email.clone())),
+            account_id: Set(p
+                .account
+                .as_ref()
+                .and_then(|a| refs.accounts.get(&a.username).copied())),
             is_demo: Set(true),
             ..Default::default()
         })
@@ -599,13 +675,7 @@ pub(crate) async fn insert(
             ..Default::default()
         })
         .collect();
-    counts.alerts = alerts.len() as u64;
-    if !alerts.is_empty() {
-        alert::Entity::insert_many(alerts)
-            .exec_without_returning(txn)
-            .await
-            .map_err(db_error("alerts"))?;
-    }
+    counts.alerts = insert_chunks(txn, alerts, "alerts").await?;
     Ok(counts)
 }
 

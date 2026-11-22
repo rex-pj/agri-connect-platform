@@ -19,14 +19,20 @@ use domain::{
     constants::{PARTNER_KINDS, ROLE_PARTNER},
     events::{Change, ContractChange, DomainEvent, Entity},
     models::{
+        admin_list::{
+            AdminFilter, CONTRACT_STATE_ENDED, CONTRACT_STATE_IN_FORCE, CONTRACT_STATE_PAUSED,
+            CONTRACT_STATE_UPCOMING,
+        },
         admin_unit::Ward,
         demand::DemoScope,
-        partner::{ActiveContract, Contract, ContractArea, NewContract, Partner, PartnerFields},
+        partner::{
+            ActiveContract, Contract, ContractArea, ContractFee, ContractFilter, NewContract,
+            Partner, PartnerFields,
+        },
     },
     repositories::{
         admin_unit_repository_trait::AdminUnitRepositoryTrait,
         category_repository_trait::CategoryRepositoryTrait,
-        demand_repository_trait::DemandRepositoryTrait,
         partner_repository_trait::PartnerRepositoryTrait,
         user_repository_trait::UserRepositoryTrait,
     },
@@ -37,12 +43,17 @@ use crate::{
     admin_units::{AdminUnits, AreaKey},
     authz::Actor,
     catalogue::{PERM_PARTNER_MANAGE, PERM_PARTNER_REPORT_READ},
-    constants::{ADMIN_UNIT_SNAP_M, CONTRACT_NOTE_MAX, PARTNER_NAME_MAX},
+    constants::{
+        ADMIN_PAGE_SIZE, ADMIN_UNIT_SNAP_M, CONTRACT_NOTE_MAX, PARTNER_NAME_MAX,
+        SPONSOR_CANDIDATES_SHOWN,
+    },
     inputs::{ContractInput, PartnerInput},
     outputs::{
-        AreaGroupDto, AreaRevenueDto, ContractDto, NamedDto, PartnerAccountDto, PartnerDetailDto,
-        PartnerDto, PartnerKpiDto, PartnerReportDto, PublicServiceDto, SponsorCandidateDto,
+        AdminPagedResponse, AreaGroupDto, AreaRevenueDto, ContractDto, NamedCodeDto, NamedDto,
+        PartnerAccountDto, PartnerDetailDto, PartnerDto, PartnerKpiDto, PartnerReportDto,
+        ProvinceRevenueDto, PublicServiceDto, SponsorCandidateDto,
     },
+    pagination::{admin_page_of, paginate_admin, total_or_count},
     ports::{EventBus, PasswordHasher},
     settings::SettingsReader,
     usecases::{
@@ -60,7 +71,6 @@ pub struct PartnerUseCase {
     user_repo: Arc<dyn UserRepositoryTrait + Send + Sync>,
     category_repo: Arc<dyn CategoryRepositoryTrait + Send + Sync>,
     admin_unit_repo: Arc<dyn AdminUnitRepositoryTrait + Send + Sync>,
-    demand_repo: Arc<dyn DemandRepositoryTrait + Send + Sync>,
     demand: DemandReportUseCase,
     password_hasher: Arc<dyn PasswordHasher>,
     settings: SettingsReader,
@@ -74,7 +84,6 @@ pub struct PartnerDeps {
     pub user_repo: Arc<dyn UserRepositoryTrait + Send + Sync>,
     pub category_repo: Arc<dyn CategoryRepositoryTrait + Send + Sync>,
     pub admin_unit_repo: Arc<dyn AdminUnitRepositoryTrait + Send + Sync>,
-    pub demand_repo: Arc<dyn DemandRepositoryTrait + Send + Sync>,
     pub demand: DemandReportUseCase,
     pub password_hasher: Arc<dyn PasswordHasher>,
     pub settings: SettingsReader,
@@ -88,7 +97,6 @@ impl PartnerUseCase {
             user_repo: d.user_repo,
             category_repo: d.category_repo,
             admin_unit_repo: d.admin_unit_repo,
-            demand_repo: d.demand_repo,
             demand: d.demand,
             password_hasher: d.password_hasher,
             settings: d.settings,
@@ -119,6 +127,12 @@ impl PartnerUseCase {
         self.partner_repo
             .active_contracts(vn_today(Utc::now())?)
             .await
+    }
+
+    /// The contracts in force today, without what they cover: what the
+    /// revenue figures and the in-force marks read.
+    async fn fees(&self) -> Result<Vec<ContractFee>> {
+        self.partner_repo.fees_in_force(vn_today(Utc::now())?).await
     }
 
     async fn units(&self) -> Result<AdminUnits> {
@@ -162,13 +176,34 @@ impl PartnerUseCase {
 
     // ── Admin ──────────────────────────────────────────────────────────────────
 
-    pub async fn list_partners(&self, actor: &Actor) -> Result<Vec<PartnerDto>> {
+    /// A page of the partners, on ones first, with their contracts in force
+    /// (`filter`: the name, contact, phone or email, `SWITCH_LIST_STATES`,
+    /// an order).
+    pub async fn list_partners(
+        &self,
+        actor: &Actor,
+        page: i64,
+        filter: &AdminFilter,
+    ) -> Result<AdminPagedResponse<PartnerDto>> {
         actor.require(PERM_PARTNER_MANAGE)?;
-        let (partners, in_force) = tokio::try_join!(self.partner_repo.list(), self.in_force())?;
-        Ok(partners
+        let filter = &AdminFilter {
+            today: Some(vn_today(Utc::now())?),
+            ..filter.clone()
+        };
+        let (page, offset) = paginate_admin(page);
+        let (partners, in_force) = tokio::try_join!(
+            self.partner_repo.list(filter, ADMIN_PAGE_SIZE, offset),
+            self.fees()
+        )?;
+        let total = total_or_count(offset, partners.len(), ADMIN_PAGE_SIZE, || {
+            self.partner_repo.count(filter)
+        })
+        .await?;
+        let items = partners
             .into_iter()
             .map(|p| partner_dto(p, &in_force))
-            .collect())
+            .collect();
+        Ok(AdminPagedResponse::admin(items, total, page))
     }
 
     /// The partner whose report account `user_id` is, for the link from the
@@ -185,19 +220,103 @@ impl PartnerUseCase {
             .find(id)
             .await?
             .ok_or_else(|| Error::new(ErrorCode::PartnerNotFound))?;
-        let (contracts, in_force, names, units) = tokio::try_join!(
+        let (contracts, fees, names, units) = tokio::try_join!(
             self.partner_repo.contracts(id),
-            self.in_force(),
+            self.fees(),
             self.category_names(),
             self.units(),
         )?;
+        let in_force = ids_of(&fees);
         Ok(PartnerDetailDto {
             contracts: contracts
                 .into_iter()
                 .map(|c| contract_dto(c, &in_force, &names, &units))
                 .collect(),
-            partner: partner_dto(partner, &in_force),
+            partner: partner_dto(partner, &fees),
         })
+    }
+
+    /// One partner, with what its contracts in force bring in (its page's
+    /// header and strip).
+    pub async fn partner(&self, actor: &Actor, id: i32) -> Result<PartnerDto> {
+        actor.require(PERM_PARTNER_MANAGE)?;
+        let (partner, fees) = tokio::try_join!(self.partner_repo.find(id), self.fees())?;
+        let partner = partner.ok_or_else(|| Error::new(ErrorCode::PartnerNotFound))?;
+        Ok(partner_dto(partner, &fees))
+    }
+
+    /// A page of a partner's contracts, the newest start first; `filter`: only
+    /// those in the state, in the area, with a monthly fee in the range.
+    pub async fn partner_contracts(
+        &self,
+        actor: &Actor,
+        id: i32,
+        page: i64,
+        filter: &ContractFilter,
+    ) -> Result<AdminPagedResponse<ContractDto>> {
+        actor.require(PERM_PARTNER_MANAGE)?;
+        if !filter.is_empty() {
+            let (contracts, fees, names, units) = tokio::try_join!(
+                self.partner_repo.contracts(id),
+                self.fees(),
+                self.category_names(),
+                self.units(),
+            )?;
+            let in_force = ids_of(&fees);
+            let found = contracts
+                .into_iter()
+                .map(|c| contract_dto(c, &in_force, &names, &units))
+                .filter(|c| filter.state.is_none_or(|s| c.state == s))
+                .filter(|c| filter.area.as_deref().is_none_or(|a| c.area == a))
+                .filter(|c| filter.fee_min.is_none_or(|m| c.monthly_fee >= m))
+                .filter(|c| filter.fee_max.is_none_or(|m| c.monthly_fee <= m))
+                .filter(|c| filter.start_from.is_none_or(|d| c.starts_on >= d))
+                .filter(|c| filter.start_to.is_none_or(|d| c.starts_on <= d))
+                .filter(|c| filter.end_from.is_none_or(|d| c.ends_on >= d))
+                .filter(|c| filter.end_to.is_none_or(|d| c.ends_on <= d))
+                .filter(|c| {
+                    filter
+                        .category_id
+                        .is_none_or(|id| c.categories.iter().any(|k| k.id == id))
+                })
+                .collect();
+            return Ok(admin_page_of(found, page));
+        }
+        let (page, offset) = paginate_admin(page);
+        let (contracts, fees, names, units) = tokio::try_join!(
+            self.partner_repo
+                .contracts_page(id, ADMIN_PAGE_SIZE, offset),
+            self.fees(),
+            self.category_names(),
+            self.units(),
+        )?;
+        let total = total_or_count(offset, contracts.len(), ADMIN_PAGE_SIZE, || {
+            self.partner_repo.count_contracts(id)
+        })
+        .await?;
+        let in_force = ids_of(&fees);
+        let items = contracts
+            .into_iter()
+            .map(|c| contract_dto(c, &in_force, &names, &units))
+            .collect();
+        Ok(AdminPagedResponse::admin(items, total, page))
+    }
+
+    /// The areas a partner's contracts are in, each once: what its contract
+    /// list can be narrowed to.
+    pub async fn contract_areas(&self, actor: &Actor, id: i32) -> Result<Vec<NamedCodeDto>> {
+        actor.require(PERM_PARTNER_MANAGE)?;
+        let (contracts, units) = tokio::try_join!(self.partner_repo.contracts(id), self.units())?;
+        let mut seen = HashSet::new();
+        Ok(contracts
+            .iter()
+            .map(|c| AreaKey::of_contract(&c.area))
+            .filter(|a| seen.insert(a.value()))
+            .map(|a| NamedCodeDto {
+                name: units.label(&a).unwrap_or_default(),
+                code: a.value(),
+            })
+            .collect())
     }
 
     /// What a contract may cover: each active province, and its wards.
@@ -450,33 +569,63 @@ impl PartnerUseCase {
         Ok(scope_of(&partner))
     }
 
-    /// The providers a contract may sponsor: those counting under its area,
-    /// not sponsored by it yet.
+    /// One contract of a partner, with the partner (its page's header).
+    pub async fn get_contract(
+        &self,
+        actor: &Actor,
+        partner_id: i32,
+        contract_id: i32,
+    ) -> Result<(PartnerDto, ContractDto)> {
+        actor.require(PERM_PARTNER_MANAGE)?;
+        let partner = self
+            .partner_repo
+            .find(partner_id)
+            .await?
+            .ok_or_else(|| Error::new(ErrorCode::PartnerNotFound))?;
+        let (contract, fees, names, units) = tokio::try_join!(
+            self.contract_of(partner_id, contract_id),
+            self.fees(),
+            self.category_names(),
+            self.units(),
+        )?;
+        Ok((
+            partner_dto(partner, &fees),
+            contract_dto(contract, &ids_of(&fees), &names, &units),
+        ))
+    }
+
+    /// The providers a contract may sponsor: those of its area not
+    /// sponsored by it yet, their name matching `search` when given; the
+    /// first `SPONSOR_CANDIDATES_SHOWN` by name.
     pub async fn sponsor_candidates(
         &self,
         actor: &Actor,
         partner_id: i32,
         contract_id: i32,
+        search: Option<&str>,
     ) -> Result<Vec<SponsorCandidateDto>> {
         actor.require(PERM_PARTNER_MANAGE)?;
         let contract = self.contract_of(partner_id, contract_id).await?;
-        let taken: HashSet<i32> = contract.sponsored.iter().map(|s| s.business_id).collect();
         let scope = self.sponsor_scope(partner_id).await?;
-        let (areas, units) =
-            tokio::try_join!(self.demand_repo.business_areas(scope), self.units())?;
-        let mut candidates: Vec<SponsorCandidateDto> = areas
+        let shops = self
+            .partner_repo
+            .sponsor_candidates(
+                contract_id,
+                &contract.area,
+                scope,
+                search,
+                SPONSOR_CANDIDATES_SHOWN,
+            )
+            .await?;
+        Ok(shops
             .into_iter()
-            .filter(|a| in_area(&contract.area, &a.ward_code, &units))
-            .filter(|a| !taken.contains(&a.business_id))
-            .map(|a| SponsorCandidateDto {
-                id: a.business_id,
-                name: a.name,
-                phone: a.phone,
-                address: a.address,
+            .map(|s| SponsorCandidateDto {
+                id: s.business_id,
+                name: s.name,
+                phone: s.phone,
+                address: s.address,
             })
-            .collect();
-        candidates.sort_by(|a, b| a.name.cmp(&b.name).then(a.id.cmp(&b.id)));
-        Ok(candidates)
+            .collect())
     }
 
     /// Sponsors a provider of the contract's area; twice changes nothing.
@@ -490,14 +639,16 @@ impl PartnerUseCase {
         actor.require(PERM_PARTNER_MANAGE)?;
         let contract = self.contract_of(partner_id, contract_id).await?;
         let scope = self.sponsor_scope(partner_id).await?;
-        let (areas, units) =
-            tokio::try_join!(self.demand_repo.business_areas(scope), self.units())?;
-        let Some(shop) = areas.iter().find(|a| {
-            a.business_id == business_id && in_area(&contract.area, &a.ward_code, &units)
-        }) else {
+        let Some(shop) = self
+            .partner_repo
+            .shop_in_area(business_id, &contract.area, scope)
+            .await?
+        else {
             return Err(Error::field("business_id", ErrorCode::SponsoredOutsideArea));
         };
-        let about = area_about(&units, &contract.area, Some(&shop.name));
+        let about = self
+            .contract_about(&contract.area, Some(&shop.name))
+            .await?;
         self.partner_repo
             .add_sponsored(contract_id, business_id)
             .await?;
@@ -544,7 +695,7 @@ impl PartnerUseCase {
     /// Paying partners today, the monthly revenue, and by area.
     pub async fn kpis(&self, actor: &Actor) -> Result<PartnerKpiDto> {
         actor.require(PERM_PARTNER_MANAGE)?;
-        let (in_force, units) = tokio::try_join!(self.in_force(), self.units())?;
+        let (in_force, units) = tokio::try_join!(self.fees(), self.units())?;
         Ok(kpis_of(&in_force, &units))
     }
 
@@ -574,6 +725,7 @@ impl PartnerUseCase {
             .iter()
             .filter(|c| c.partner_id == partner.id)
             .collect();
+        let mine_ids: HashSet<i32> = mine.iter().map(|c| c.contract_id).collect();
         let mut areas: Vec<AreaKey> = mine.iter().map(|c| AreaKey::of_contract(&c.area)).collect();
         areas.sort();
         areas.dedup();
@@ -593,7 +745,7 @@ impl PartnerUseCase {
             report,
             contracts: contracts
                 .into_iter()
-                .map(|c| contract_dto(c, &in_force, &names, &units))
+                .map(|c| contract_dto(c, &mine_ids, &names, &units))
                 .filter(|c| c.in_force)
                 .collect(),
         })
@@ -657,13 +809,6 @@ fn sponsored_of(in_force: &[ActiveContract], place: &Ward, category_id: Option<i
     ids
 }
 
-/// Whether a business in this ward counts under a contract's area.
-fn in_area(area: &ContractArea, ward_code: &str, units: &AdminUnits) -> bool {
-    units
-        .province_of(ward_code)
-        .is_some_and(|province| area.covers(ward_code, province))
-}
-
 /// Every rule of a partner's boxes, reported together.
 fn validate_partner(input: PartnerInput) -> Result<PartnerFields> {
     let name = input.name.trim().to_owned();
@@ -695,8 +840,13 @@ fn validate_partner(input: PartnerInput) -> Result<PartnerFields> {
     })
 }
 
-fn partner_dto(p: Partner, in_force: &[ActiveContract]) -> PartnerDto {
-    let mine: Vec<&ActiveContract> = in_force.iter().filter(|c| c.partner_id == p.id).collect();
+/// The ids of the contracts in force.
+fn ids_of(in_force: &[ContractFee]) -> HashSet<i32> {
+    in_force.iter().map(|c| c.contract_id).collect()
+}
+
+fn partner_dto(p: Partner, in_force: &[ContractFee]) -> PartnerDto {
+    let mine: Vec<&ContractFee> = in_force.iter().filter(|c| c.partner_id == p.id).collect();
     PartnerDto {
         contracts_in_force: mine.len(),
         monthly_revenue: mine.iter().map(|c| c.monthly_fee).sum(),
@@ -716,13 +866,25 @@ fn partner_dto(p: Partner, in_force: &[ActiveContract]) -> PartnerDto {
 
 fn contract_dto(
     c: Contract,
-    in_force: &[ActiveContract],
+    in_force: &HashSet<i32>,
     names: &HashMap<i32, String>,
     units: &AdminUnits,
 ) -> ContractDto {
     let area = AreaKey::of_contract(&c.area);
+    let today = vn_today(Utc::now()).unwrap_or(c.starts_on);
+    let live = in_force.contains(&c.id);
+    let state = if live {
+        CONTRACT_STATE_IN_FORCE
+    } else if c.ends_on < today {
+        CONTRACT_STATE_ENDED
+    } else if c.starts_on > today {
+        CONTRACT_STATE_UPCOMING
+    } else {
+        CONTRACT_STATE_PAUSED
+    };
     ContractDto {
-        in_force: in_force.iter().any(|a| a.contract_id == c.id),
+        in_force: live,
+        state,
         categories: c
             .category_ids
             .iter()
@@ -769,32 +931,59 @@ fn split_sponsored(
     (first, rest)
 }
 
-fn kpis_of(in_force: &[ActiveContract], units: &AdminUnits) -> PartnerKpiDto {
-    let paying: HashSet<i32> = in_force.iter().map(|c| c.partner_id).collect();
-    let mut by_area: BTreeMap<AreaKey, (HashSet<i32>, i64)> = BTreeMap::new();
-    for c in in_force {
-        let entry = by_area.entry(AreaKey::of_contract(&c.area)).or_default();
-        entry.0.insert(c.partner_id);
-        entry.1 += c.monthly_fee;
+/// The revenue figures of the contracts in force: paying partners, the
+/// monthly fees, by province (the whole province and its wards together,
+/// each partner once), each with its contract areas; the most first.
+fn kpis_of(in_force: &[ContractFee], units: &AdminUnits) -> PartnerKpiDto {
+    #[derive(Default)]
+    struct Sum {
+        partners: HashSet<i32>,
+        revenue: i64,
     }
-    let mut areas: Vec<AreaRevenueDto> = by_area
+    let mut provinces: BTreeMap<String, (Sum, BTreeMap<AreaKey, Sum>)> = BTreeMap::new();
+    for c in in_force {
+        let (province, areas) = provinces.entry(c.area.province_code.clone()).or_default();
+        let area = areas.entry(AreaKey::of_contract(&c.area)).or_default();
+        for sum in [province, area] {
+            sum.partners.insert(c.partner_id);
+            sum.revenue += c.monthly_fee;
+        }
+    }
+    let most_first = |a: &i64, b: &i64, x: &str, y: &str| b.cmp(a).then(x.cmp(y));
+    let mut provinces: Vec<ProvinceRevenueDto> = provinces
         .into_iter()
-        .map(|(area, (partners, revenue))| AreaRevenueDto {
-            label: units.label(&area).unwrap_or_default(),
-            area: area.value(),
-            partners: partners.len(),
-            monthly_revenue: revenue,
+        .map(|(code, (sum, areas))| {
+            let key = AreaKey::Province(code);
+            let mut areas: Vec<AreaRevenueDto> = areas
+                .into_iter()
+                .map(|(area, sum)| AreaRevenueDto {
+                    label: units.label(&area).unwrap_or_default(),
+                    area: area.value(),
+                    partners: sum.partners.len(),
+                    monthly_revenue: sum.revenue,
+                })
+                .collect();
+            areas.sort_by(|a, b| {
+                most_first(&a.monthly_revenue, &b.monthly_revenue, &a.area, &b.area)
+            });
+            ProvinceRevenueDto {
+                label: units.label(&key).unwrap_or_default(),
+                area: key.value(),
+                partners: sum.partners.len(),
+                monthly_revenue: sum.revenue,
+                areas,
+            }
         })
         .collect();
-    areas.sort_by(|a, b| {
-        b.monthly_revenue
-            .cmp(&a.monthly_revenue)
-            .then(a.area.cmp(&b.area))
-    });
+    provinces.sort_by(|a, b| most_first(&a.monthly_revenue, &b.monthly_revenue, &a.area, &b.area));
     PartnerKpiDto {
-        paying_partners: paying.len(),
+        paying_partners: in_force
+            .iter()
+            .map(|c| c.partner_id)
+            .collect::<HashSet<_>>()
+            .len(),
         monthly_revenue: in_force.iter().map(|c| c.monthly_fee).sum(),
-        areas,
+        provinces,
     }
 }
 
@@ -821,40 +1010,65 @@ fn area_about(units: &AdminUnits, area: &ContractArea, shop: Option<&str>) -> St
 mod tests {
     use super::*;
 
-    fn contract(id: i32, partner: i32, province: &str, fee: i64) -> ActiveContract {
-        ActiveContract {
+    fn contract(
+        id: i32,
+        partner: i32,
+        province: &str,
+        ward: Option<&str>,
+        fee: i64,
+    ) -> ContractFee {
+        ContractFee {
             contract_id: id,
             partner_id: partner,
             area: ContractArea {
                 province_code: province.into(),
-                ward_code: None,
+                ward_code: ward.map(str::to_owned),
             },
             monthly_fee: fee,
-            category_ids: vec![1],
-            business_ids: Vec::new(),
         }
     }
 
     #[test]
-    fn revenue_is_counted_once_per_partner_and_by_area() {
+    fn revenue_is_counted_once_per_partner_by_province_and_area() {
         let kpis = kpis_of(
             &[
-                contract(1, 7, "82", 2_000_000),
-                contract(2, 7, "91", 1_000_000),
-                contract(3, 8, "82", 500_000),
+                contract(1, 7, "82", None, 2_000_000),
+                contract(2, 7, "91", None, 1_000_000),
+                contract(3, 8, "82", Some("28439"), 500_000),
+                // The same partner in a ward of a province it already pays
+                // for whole: one partner there.
+                contract(4, 7, "82", Some("28441"), 300_000),
             ],
             &crate::admin_units::tests::units(),
         );
         assert_eq!(kpis.paying_partners, 2);
-        assert_eq!(kpis.monthly_revenue, 3_500_000);
-        let areas: Vec<_> = kpis
-            .areas
+        assert_eq!(kpis.monthly_revenue, 3_800_000);
+        let provinces: Vec<_> = kpis
+            .provinces
             .iter()
-            .map(|a| (a.label.as_str(), a.partners, a.monthly_revenue))
+            .map(|p| (p.label.as_str(), p.partners, p.monthly_revenue))
+            .collect();
+        assert_eq!(
+            provinces,
+            vec![("Đồng Tháp", 2, 2_800_000), ("An Giang", 1, 1_000_000)]
+        );
+        // A province's own areas, the most first: the whole of it, then its
+        // wards.
+        let areas: Vec<_> = kpis
+            .provinces
+            .first()
+            .map(|p| p.areas.iter())
+            .into_iter()
+            .flatten()
+            .map(|a| (a.area.as_str(), a.partners, a.monthly_revenue))
             .collect();
         assert_eq!(
             areas,
-            vec![("Đồng Tháp", 2, 2_500_000), ("An Giang", 1, 1_000_000)]
+            vec![
+                ("p82", 1, 2_000_000),
+                ("w28439", 1, 500_000),
+                ("w28441", 1, 300_000)
+            ]
         );
     }
 

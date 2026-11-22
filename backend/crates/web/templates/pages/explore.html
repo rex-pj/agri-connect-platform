@@ -7,8 +7,11 @@
 {% import "organisms/service_card.html" as services %}
 {% import "organisms/product_card.html" as products %}
 {% import "molecules/tab_nav.html" as tabs %}
+{% import "molecules/pagination_nav.html" as paging %}
 {#- Services, providers and products near the visitor, in three tabs (links without JS,
-    switched in place by Alpine `tabs`). `page` is web::pages::explore::ExplorePage.
+    switched in place by Alpine `tabs`). Each tab's list has its own page links
+    (`tab=` and `page=`), so paging one list never moves the others.
+    `page` is web::pages::explore::ExplorePage.
     The GPS button is the `ac-geolocate` island; the preset form beside it
     works without JS. The area's sponsored services (`page.sponsored`) come
     first under a "Tài trợ" label; they are moved up, never duplicated. -#}
@@ -82,9 +85,10 @@
     </div>
     {% endif %}
     {% if page.services %}
-    <p class="small text-muted mb-2"><strong>{{ page.services | length }}{% if page.services | length >= page.results_max %}+{% endif %}</strong> {{ t(key="explore.services_near") }}</p>
+    <p class="small text-muted mb-2"><strong>{{ page.service_total }}</strong> {{ t(key="explore.services_near") }}</p>
     {{ services::service_grid(services=page.services) }}
     {% endif %}
+    {% if page.service_pages %}{{ paging::pagination_nav(p=page.service_pages) }}{% endif %}
     {% elif page.wider %}
     {% set wider_label = t(key="explore.search_within", area=page.wider.label) %}
     {{ empty::empty_state(icon="fa-magnifying-glass", title=none_title, hint=t(key="explore.hint_services_wider"), action_href=page.wider.href, action_icon="fa-expand", action_label=wider_label) }}
@@ -95,10 +99,11 @@
 
   <section data-panel="products"{% if page.tab != "products" %} hidden{% endif %} :hidden="panelHidden">
     {% if page.products %}
-    <p class="small text-muted mb-2"><strong>{{ page.products | length }}{% if page.products | length >= page.results_max %}+{% endif %}</strong> {{ t(key="explore.products_near") }}</p>
+    <p class="small text-muted mb-2"><strong>{{ page.product_total }}</strong> {{ t(key="explore.products_near") }}</p>
     <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 row-cols-xl-6 g-2 g-md-3">
       {% for p in page.products %}<div class="col">{{ products::product_card(p=p) }}</div>{% endfor %}
     </div>
+    {% if page.product_pages %}{{ paging::pagination_nav(p=page.product_pages) }}{% endif %}
     {% elif page.wider %}
     {% set wider_label = t(key="explore.search_within", area=page.wider.label) %}
     {{ empty::empty_state(icon="fa-magnifying-glass", title=no_product_title, hint=t(key="explore.hint_products_wider"), action_href=page.wider.href, action_icon="fa-expand", action_label=wider_label) }}
@@ -109,10 +114,11 @@
 
   <section data-panel="providers"{% if page.tab != "providers" %} hidden{% endif %} :hidden="panelHidden">
     {% if page.providers %}
-    <p class="small text-muted mb-2"><strong>{{ page.providers | length }}{% if page.providers | length >= page.results_max %}+{% endif %}</strong> {{ t(key="explore.shops_near") }}</p>
+    <p class="small text-muted mb-2"><strong>{{ page.provider_total }}</strong> {{ t(key="explore.shops_near") }}</p>
     <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
       {% for p in page.providers %}<div class="col">{{ providers::provider_card(p=p) }}</div>{% endfor %}
     </div>
+    {% if page.provider_pages %}{{ paging::pagination_nav(p=page.provider_pages) }}{% endif %}
     {% elif page.wider %}
     {% set wider_label = t(key="explore.search_within", area=page.wider.label) %}
     {{ empty::empty_state(icon="fa-magnifying-glass", title=no_shop_title, hint=t(key="explore.hint_shops_wider"), action_href=page.wider.href, action_icon="fa-expand", action_label=wider_label) }}

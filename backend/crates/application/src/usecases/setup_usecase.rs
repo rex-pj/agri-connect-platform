@@ -3,7 +3,7 @@ use std::sync::Arc;
 use domain::{
     models::{
         admin_unit::AdminUnitSync,
-        catalogue::{Catalogue, DemoReport, SeedReport},
+        catalogue::{Catalogue, DemoReport, DemoVolume, SeedReport},
     },
     repositories::{
         admin_unit_repository_trait::AdminUnitRepositoryTrait,
@@ -20,7 +20,9 @@ use crate::{
     authz::Actor,
     catalogue::{PERM_ADMIN_DASHBOARD_VIEW, PERM_SYSTEM_DEMO_MANAGE},
     outputs::SetupStatusDto,
+    ports::PasswordHasher,
     usecases::media_usecase::MediaUseCase,
+    validation::validate_password,
 };
 
 #[derive(Clone)]
@@ -30,6 +32,8 @@ pub struct SetupUseCase {
     demo_repo: Arc<dyn DemoDataRepositoryTrait + Send + Sync>,
     business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
     user_repo: Arc<dyn UserRepositoryTrait + Send + Sync>,
+    /// Hashes the one password of the demo accounts.
+    password_hasher: Arc<dyn PasswordHasher>,
     /// Removes the photos of demo services and products when the demo data
     /// goes.
     media: MediaUseCase,
@@ -42,6 +46,7 @@ impl SetupUseCase {
         demo_repo: Arc<dyn DemoDataRepositoryTrait + Send + Sync>,
         business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
         user_repo: Arc<dyn UserRepositoryTrait + Send + Sync>,
+        password_hasher: Arc<dyn PasswordHasher>,
         media: MediaUseCase,
     ) -> Self {
         Self {
@@ -50,6 +55,7 @@ impl SetupUseCase {
             demo_repo,
             business_repo,
             user_repo,
+            password_hasher,
             media,
         }
     }
@@ -133,6 +139,38 @@ impl SetupUseCase {
             services = report.services,
             products = report.products,
             "demo data loaded"
+        );
+        Ok(report)
+    }
+
+    /// The demo data at volume, for trying the pages and timing the reads
+    /// on a database of realistic size. Run from the command line
+    /// (`agri-connect demo-data`), never from a request: it writes for
+    /// minutes. Refused while demo listings are present, as `load_demo` is,
+    /// so a second run never doubles them (a demo catalogue already there
+    /// is reused by name); every demo account signs in with `password`, which
+    /// must pass the sign-up rules.
+    pub async fn load_demo_volume(
+        &self,
+        volume: &DemoVolume,
+        password: &str,
+    ) -> Result<DemoReport> {
+        validate_password(password)?;
+        if self.demo_repo.count().await?.businesses > 0 {
+            return Err(Error::new(ErrorCode::DemoAlreadyLoaded));
+        }
+        let hash = self.password_hasher.hash(password).await?;
+        let report = self.demo_repo.load_volume(volume, &hash).await?;
+        info!(
+            providers = volume.providers,
+            seed = volume.seed,
+            businesses = report.businesses,
+            accounts = report.accounts,
+            services = report.services,
+            products = report.products,
+            inquiries = report.inquiries,
+            reviews = report.reviews,
+            "demo data at volume loaded"
         );
         Ok(report)
     }

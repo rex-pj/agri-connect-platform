@@ -1,0 +1,96 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "atoms/status_badge.html" as status %}
+{% import "molecules/admin_tabs.html" as tabs %}
+{% import "molecules/admin_search.html" as search %}
+{% import "organisms/record_header.html" as record %}
+{% import "organisms/confirm_sheet.html" as confirm %}
+{% import "organisms/contract_fields.html" as contract %}
+{#- One partner contract, as a record page: the header (its area, its
+    partner as the way back, deleting it in the menu: `b.header`,
+    `contracts::contract_controls`), one status strip (in force or not, its
+    dates and fee, its categories, its note), then one part at a time
+    (`?tab=`): its sponsored shops (each stopped behind a confirmation) and
+    the search of the shops of its area it may add (`?q=`, a GET form, so it
+    works without JS; the first `b.shown` by name, each added by one button
+    that keeps the search), or its terms form (the area stays). `page.body`
+    is web::pages::admin::contracts::ContractPage. -#}
+{% block title %}{{ page.body.contract.area_label }} · {{ page.body.partner.name }} — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+{% set c = b.contract %}
+{{ record::record_header(h=b.header) }}
+<div class="admin-body">
+  {% if b.flash_text %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=b.flash_text) }}{% endif %}
+  {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
+
+  <section class="admin-section record-strip" aria-labelledby="status-title">
+    <h2 class="visually-hidden" id="status-title">{{ t(key="admin.status_now") }}</h2>
+    <p class="small mb-0">{{ atoms::icon(name="fa-file-signature", class="text-muted") }} {{ status::contract(state=c.state) }} <time datetime="{{ c.starts_on }}">{{ c.starts_on | full_date }}</time> – <time datetime="{{ c.ends_on }}">{{ c.ends_on | full_date }}</time> · <strong>{{ c.monthly_fee | vnd }}</strong> {{ t(key="partner.per_month") }}</p>
+    <p class="small mb-0">{{ atoms::icon(name="fa-tags", class="text-muted") }} {% for cat in c.categories %}<span class="ac-tag">{{ cat.name }}</span> {% endfor %}</p>
+    {% if c.note %}<p class="small text-muted mb-0">{{ atoms::icon(name="fa-note-sticky") }} {{ c.note }}</p>{% endif %}
+  </section>
+
+  {{ tabs::admin_tabs(tabs=b.tabs, label=c.area_label) }}
+
+  {% if b.tab == "sponsored" %}
+  <div class="row g-3 g-lg-4">
+    <div class="col-lg-5">
+      <section class="admin-section" aria-labelledby="sponsored-title">
+        <h2 class="admin-section__title" id="sponsored-title">{{ t(key="partner.sponsored") }}</h2>
+        <ul class="list-unstyled mb-0">
+          {% for s in b.sponsored %}
+          <li class="d-flex justify-content-between align-items-center gap-2 py-2 border-bottom" x-data="dialog" x-on:keydown.escape.window="hide">
+            <span class="fw-semibold">{{ s.provider.name }}</span>
+            <a class="btn btn-sm btn-outline-warning" href="#bo-tai-tro-{{ s.provider.id }}" x-on:click.prevent="show">{{ atoms::icon(name="fa-xmark") }} {{ t(key="partner.unsponsor_short") }}</a>
+            {{ confirm::confirm_sheet(id="bo-tai-tro-" ~ s.provider.id, title=t(key="partner.unsponsor", name=s.provider.name), icon="fa-xmark", action=s.remove_action, button=t(key="partner.unsponsor_confirm"), reason_max=limits.audit_reason_max, note=t(key="partner.unsponsor_note")) }}
+          </li>
+          {% else %}
+          <li class="small text-muted">{{ t(key="partner.no_sponsored") }}</li>
+          {% endfor %}
+        </ul>
+      </section>
+    </div>
+    <div class="col-lg-7">
+      <section class="admin-section" id="tai-tro-them" aria-labelledby="candidates-title">
+        <h2 class="admin-section__title" id="candidates-title">{{ t(key="partner.sponsor") }}</h2>
+        {{ search::admin_search(s=b.search, placeholder=t(key="partner.search_shops")) }}
+        {% if b.more_candidates %}<p class="small text-muted mt-2 mb-0">{{ t(key="partner.candidates_first", count=b.shown) }}</p>{% endif %}
+        <ul class="list-unstyled mt-2 mb-0">
+          {% for o in b.candidates %}
+          <li class="d-flex justify-content-between align-items-center gap-2 py-2 border-bottom">
+            <span><span class="fw-semibold d-block">{{ o.name }}</span><span class="small text-muted">{{ o.phone | phone }}{% if o.address %} · {{ o.address }}{% endif %}</span></span>
+            <form method="post" action="{{ b.sponsor_action }}">
+              <input type="hidden" name="business_id" value="{{ o.id }}">
+              {% if b.search.q %}<input type="hidden" name="q" value="{{ b.search.q }}">{% endif %}
+              <button type="submit" class="btn btn-sm btn-outline-success text-nowrap" aria-label="{{ t(key="partner.sponsor_label", name=o.name) }}">{{ atoms::icon(name="fa-plus") }} {{ t(key="partner.add_sponsored") }}</button>
+            </form>
+          </li>
+          {% else %}
+          <li class="small text-muted">{% if b.search.q %}{{ t(key="partner.candidates_none_found") }}{% else %}{{ t(key="partner.candidates_none") }}{% endif %}</li>
+          {% endfor %}
+        </ul>
+      </section>
+    </div>
+  </div>
+
+  {% elif b.tab == "terms" %}
+  <section class="admin-section" aria-labelledby="terms-title">
+    <h2 class="admin-section__title" id="terms-title">{{ t(key="partner.edit_contract") }}</h2>
+    <form class="form-stack" method="post" action="{{ b.edit_action }}" novalidate>
+      {% if b.form_errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.form_errors.message) }}{% endif %}
+      <p class="small text-muted mb-0">{{ t(key="partner.area_fixed") }}</p>
+      {{ contract::contract_fields(form=b.form, errors=b.form_errors, areas=[], categories=b.categories, prefix="hd", with_area=false) }}
+      <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="common.save") }}</button></div>
+    </form>
+  </section>
+  {% endif %}
+
+  {% for x in b.confirms %}
+  <div x-data="dialog" data-open="{% if x.open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+    {{ confirm::confirm_sheet(id=x.id, title=x.title, icon=x.icon, action=x.action, button=x.button, reason_max=limits.audit_reason_max, effect=x.effect, what=x.what, note=x.note, hidden_name=x.hidden_name, hidden_value=x.hidden_value, button_class=x.button_class) }}
+  </div>
+  {% endfor %}
+</div>
+{% endblock content %}

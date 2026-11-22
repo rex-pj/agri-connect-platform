@@ -23,17 +23,6 @@ use crate::{
     repositories::unique_or_internal,
 };
 
-/// Every sector, in the order the admin gave them (the commodity list sorts
-/// by it).
-pub(crate) async fn all_sectors(db: &DatabaseConnection) -> Result<Vec<sector::Model>, DbErr> {
-    sector::Entity::find()
-        .order_by_asc(sector::Column::DisplayOrder)
-        .order_by_asc(sector::Column::Name)
-        .order_by_asc(sector::Column::Id)
-        .all(db)
-        .await
-}
-
 macro_rules! coded_repository {
     ($repo:ident, $table:ident, $taken:expr, $what:literal) => {
         pub struct $repo {

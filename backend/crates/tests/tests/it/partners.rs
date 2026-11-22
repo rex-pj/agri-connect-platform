@@ -68,7 +68,7 @@ async fn a_partner_pays_for_an_area_reads_its_report_and_sponsors_a_shop() {
     let admin = install_admin(&e).await;
     // Two shops in Xã Bình Phú by Cai Lậy (the second is sponsored), one in
     // Phường Long Xuyên.
-    let (_plain, category) = provider_at(&e, "thuong", "0901111111", 106.090, 10.420).await;
+    let (plain, category) = provider_at(&e, "thuong", "0901111111", 106.090, 10.420).await;
     let (sponsored, _) = provider_at(&e, "taitro", "0902222222", 106.085, 10.415).await;
     let (far, _) = provider_at(&e, "longxuyen", "0903333333", 105.446, 10.374).await;
     let cai_lay = location(&e, "Đồng Tháp — Cai Lậy").await;
@@ -209,12 +209,41 @@ async fn a_partner_pays_for_an_area_reads_its_report_and_sponsors_a_shop() {
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
     let list = body_text(send(&e.router, get_page("/admin/partners", Some(&admin))).await).await;
     assert!(list.contains("3.000.000"), "the new price counts");
+    // The partner's contracts are one line each, leading to the contract's
+    // own page, where its shops are sponsored.
     let tab = format!("{page}?tab=contracts");
     let detail = body_text(send(&e.router, get_page(&tab, Some(&admin))).await).await;
+    let contract_page = format!("{page}/contracts/{contract}");
+    assert!(detail.contains(&format!(r#"href="{contract_page}""#)));
     assert!(
-        detail.contains(&format!(r##"href="#bo-tai-tro-{contract}-{sponsored}""##)),
+        !detail.contains("bo-tai-tro-"),
+        "no sponsor forms on the partner"
+    );
+    let html = body_text(send(&e.router, get_page(&contract_page, Some(&admin))).await).await;
+    assert!(
+        html.contains(r##"href="#bo-tai-tro-"##)
+            && html.contains(&format!("bo-tai-tro-{sponsored}")),
         "stopping a sponsorship asks first"
     );
+    // The search lists the other shops of its area, never one outside it
+    // nor one sponsored already.
+    let other_shop = |h: &str| h.contains(&format!(r#"name="business_id" value="{plain}""#));
+    assert!(other_shop(&html), "the area's other shop can be added");
+    assert!(!html.contains(&format!(r#"name="business_id" value="{far}""#)));
+    assert!(!html.contains(&format!(r#"name="business_id" value="{sponsored}""#)));
+    let found = format!("{contract_page}?q=thuong");
+    let html = body_text(send(&e.router, get_page(&found, Some(&admin))).await).await;
+    assert!(other_shop(&html), "found by name");
+    let none = format!("{contract_page}?q=khongcoai");
+    let html = body_text(send(&e.router, get_page(&none, Some(&admin))).await).await;
+    assert!(
+        !html.contains(r#"name="business_id""#),
+        "nothing by that name"
+    );
+    // Its terms are the other part.
+    let terms = format!("{contract_page}?tab=terms");
+    let html = body_text(send(&e.router, get_page(&terms, Some(&admin))).await).await;
+    assert!(html.contains(r#"name="monthly_fee""#) && html.contains("3000000"));
     // Its contracts' changes are its own history, each named by its area.
     let history = format!("{page}?tab=history");
     let html = body_text(send(&e.router, get_page(&history, Some(&admin))).await).await;
@@ -392,7 +421,8 @@ async fn the_json_api_manages_partners_and_reports_their_revenue() {
     assert_eq!(detail["partner"]["monthly_revenue"], 500_000);
     let kpis = json_body(send(&e.router, json("GET", "/api/admin/partners/kpis", "")).await).await;
     assert_eq!(kpis["paying_partners"], 1);
-    assert_eq!(kpis["areas"][0]["monthly_revenue"], 500_000);
-    assert_eq!(kpis["areas"][0]["label"], "Đồng Tháp");
+    assert_eq!(kpis["provinces"][0]["monthly_revenue"], 500_000);
+    assert_eq!(kpis["provinces"][0]["label"], "Đồng Tháp");
+    assert_eq!(kpis["provinces"][0]["areas"][0]["area"], "p82");
     e.cleanup().await;
 }

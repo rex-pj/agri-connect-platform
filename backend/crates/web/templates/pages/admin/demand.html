@@ -6,13 +6,17 @@
 {% import "molecules/admin_header.html" as header %}
 {% import "organisms/demand_table.html" as demand %}
 {% import "organisms/unmet_searches.html" as unmet %}
+{% import "molecules/form_field.html" as field %}
+{% import "molecules/area_filter.html" as filter %}
 {#- The demand report. `page.body` is web::pages::admin::demand::DemandPage.
-    The area filter is a GET form that sends itself on change (`autoSubmit`;
-    its button shows without JS); the header's action
+    The area filter is molecules/area_filter.html; the header's action
     downloads the same table as CSV. The area list (organisms/area_progress)
     shows how near each area is to `steady_weekly_leads` a week; steady:
-    every week did. -#}
+    every week did. It lists every province and only the wards of the one
+    in focus (`grouped_areas`; each province says how many wards it holds
+    and opens them through its link). -#}
 {% block title %}{{ t(key="admin_menu.demand") }} — {{ site.name }} Admin{% endblock title %}
+{% block vendor %}{{ field::searchable_select_assets() }}{% endblock vendor %}
 {% block content %}
 {% set b = page.body %}
 {% set r = b.report %}
@@ -20,16 +24,7 @@
 <div class="admin-body">
   {% if r.with_demo %}{{ alerts::alert(kind="warning", icon="fa-flask", text=t(key="demand.with_demo")) }}{% endif %}
   <p class="small text-muted">{{ t(key="demand.hint", min=r.min_count) }}</p>
-  <form class="d-flex flex-wrap gap-2 align-items-end mb-3" method="get" action="{{ b.action }}" x-data="autoSubmit" x-on:change="submit">
-    <div>
-      <label class="form-label small fw-semibold" for="demand-area">{{ t(key="demand.area") }}</label>
-      <select class="form-select" id="demand-area" name="area">
-        <option value="">{{ t(key="demand.all_areas") }}</option>
-        {% for o in b.areas %}<option value="{{ o.value }}"{% if o.value == b.area %} selected{% endif %}>{{ o.label }}</option>{% endfor %}
-      </select>
-    </div>
-    <button type="submit" class="btn btn-outline-success" x-show="withoutScript">{{ atoms::icon(name="fa-filter") }} {{ t(key="demand.apply") }}</button>
-  </form>
+  <div class="admin-toolbar">{{ filter::area_filter(id="demand-area", action=b.action, areas=b.areas, value=b.area) }}</div>
 
   <section class="admin-card mb-4" aria-label="{{ t(key="demand.title") }}">
     {{ demand::demand_table(r=r, sectors=b.sectors) }}
@@ -40,7 +35,7 @@
   <section class="admin-section" aria-labelledby="areas-title">
     <h2 class="admin-section__title" id="areas-title">{{ t(key="demand.areas") }}</h2>
     <p class="small text-muted">{{ t(key="demand.steady_hint", count=r.steady_weekly_leads, weeks=r.weeks | length) }}</p>
-    {{ progress::area_progress(areas=r.areas, weeks=r.weeks, bar=r.steady_weekly_leads, min=r.min_count, hrefs=b.area_hrefs) }}
+    {{ progress::area_progress(areas=b.shown_areas, weeks=r.weeks, bar=r.steady_weekly_leads, min=r.min_count, hrefs=b.area_hrefs, wards=b.ward_counts) }}
   </section>
 </div>
 {% endblock content %}

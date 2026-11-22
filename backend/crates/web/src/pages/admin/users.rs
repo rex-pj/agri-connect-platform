@@ -15,7 +15,10 @@ use application::{
     usecases::admin_usecase::HistoryOf,
 };
 use axum::{extract::State, http::StatusCode, response::Response};
-use domain::{Error, ErrorCode};
+use domain::{
+    models::admin_list::{AdminSort, SWITCH_LIST_STATES},
+    Error, ErrorCode,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -26,8 +29,8 @@ use crate::{
     middleware::auth::Viewer,
     pages::{
         admin::{
-            history_rows, is_refusal, render_admin, url, Badge, Confirm, HistoryRow, ListPosition,
-            RecordAction, RecordHeader, Says, SearchBox, Toggle,
+            history_rows, is_refusal, render_admin, url, AdminTab, Badge, Confirm, HistoryRow,
+            ListPosition, RecordAction, RecordHeader, Says, SearchBox, Toggle,
         },
         forms::{reason, FormErrors},
         listing::Pagination,
@@ -47,7 +50,13 @@ pub struct UsersPage {
     pub rows: Vec<UserRow>,
     pub pagination: Option<Pagination>,
     pub search: SearchBox,
+    /// The on / off chips.
+    pub states: Vec<AdminTab>,
 }
+
+/// The orders the account list offers besides its own (oldest account
+/// first).
+const USER_SORTS: &[AdminSort] = &[AdminSort::Newest, AdminSort::Name];
 
 /// GET /admin/users
 pub async fn list(
@@ -58,6 +67,7 @@ pub async fn list(
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
+    let position = position.checked(SWITCH_LIST_STATES, USER_SORTS);
     let AdminPagedResponse {
         items,
         total,
@@ -67,9 +77,15 @@ pub async fn list(
     } = state
         .usecases
         .admin
-        .list_users(&actor, position.page(), position.search())
+        .list_users(
+            &actor,
+            position.page(),
+            &position.filter(SWITCH_LIST_STATES),
+        )
         .await?
         .worded(state.locale());
+    let roles = state.usecases.admin.role_choices(&actor).await?;
+    let locale = state.locale();
     let path = url("admin_users", &[])?;
     let mut rows = Vec::with_capacity(items.len());
     for user in items {
@@ -80,7 +96,22 @@ pub async fn list(
         total,
         rows,
         pagination: position.pagination(&path, page, total_pages),
-        search: position.search_box("admin_users")?,
+        search: position
+            .search_box("admin_users")?
+            .toggled(
+                "gap",
+                "unverified_email",
+                locale.text("admin_toggle.unverified_email"),
+            )
+            .picked(
+                "role_id",
+                locale.text("admin_pick.role"),
+                locale.text("admin_pick.all_roles"),
+                roles.into_iter().map(|r| (r.id, r.name)).collect(),
+            )
+            .dated(state.locale())
+            .sorted(locale, &position, "admin_sort.first_made", USER_SORTS),
+        states: position.shared_state_chips(locale, "admin_users", SWITCH_LIST_STATES, None)?,
     };
     render_admin(
         &state,

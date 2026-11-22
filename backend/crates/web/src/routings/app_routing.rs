@@ -550,19 +550,19 @@ impl AppRouting {
             )
             .route(
                 "/admin/partners/{id}/contracts/{cid}",
-                post(pages::admin::partners::update_contract),
+                get(pages::admin::contracts::show).post(pages::admin::contracts::update),
             )
             .route(
                 "/admin/partners/{id}/contracts/{cid}/delete",
-                post(pages::admin::partners::delete_contract),
+                post(pages::admin::contracts::delete),
             )
             .route(
                 "/admin/partners/{id}/contracts/{cid}/sponsored",
-                post(pages::admin::partners::add_sponsored),
+                post(pages::admin::contracts::add_sponsored),
             )
             .route(
                 "/admin/partners/{id}/contracts/{cid}/sponsored/{bid}/delete",
-                post(pages::admin::partners::remove_sponsored),
+                post(pages::admin::contracts::remove_sponsored),
             )
             .route("/partner", get(pages::partner::show))
             .route("/partner/report.csv", get(pages::partner::csv))

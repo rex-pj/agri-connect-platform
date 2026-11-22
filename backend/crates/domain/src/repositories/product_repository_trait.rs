@@ -46,13 +46,17 @@ pub trait ProductRepositoryTrait {
     async fn find_by_id(&self, id: i32) -> Result<Option<ProductView>, Error>;
 
     /// Live products whose seller lies within `radius` metres of
-    /// `point_wkt`, nearest first, at most `limit`.
+    /// `point_wkt`, nearest first: `limit` after the first `offset`.
     async fn search_geo(
         &self,
         point_wkt: &str,
         radius: f64,
         limit: i64,
+        offset: i64,
     ) -> Result<Vec<ProductView>, Error>;
+
+    /// How many products `search_geo` finds, over all its pages.
+    async fn count_geo(&self, point_wkt: &str, radius: f64) -> Result<i64, Error>;
 
     async fn list_by_user(&self, user_id: i32) -> Result<Vec<ProviderProduct>, Error>;
 

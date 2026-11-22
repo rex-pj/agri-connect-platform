@@ -8,7 +8,10 @@
 
 use application::outputs::{AdminPagedResponse, AdminReviewDto};
 use axum::{extract::State, http::StatusCode, response::Response};
-use domain::{Error, ErrorCode};
+use domain::{
+    models::admin_list::{LIST_STATE_WAITING, REVIEW_LIST_STATES},
+    Error, ErrorCode,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -17,7 +20,9 @@ use crate::{
     extract::{ApiForm, ApiPath, ApiQuery},
     middleware::auth::Viewer,
     pages::{
-        admin::{render_admin, url, ListPosition, ProviderFilter},
+        admin::{
+            render_admin, url, AdminTab, ListPosition, ProviderFilter, SearchBox, QUEUE_SORTS,
+        },
         forms::reason,
         listing::{parse_opt, Pagination},
         parse_id, see_other,
@@ -29,6 +34,17 @@ use crate::{
 pub struct ListQuery {
     pub page: String,
     pub provider_id: String,
+    /// Waiting / shown, the words searched, the order asked.
+    pub state: String,
+    pub q: String,
+    pub sort: String,
+    pub from: String,
+    pub to: String,
+    /// One star rating; "none": no reply yet.
+    pub rating: String,
+    pub reply: String,
+    /// How long it has waited: `stale_3`, `stale_7`.
+    pub gap: String,
     /// The review whose hide confirmation is open.
     pub hide: String,
 }
@@ -55,6 +71,9 @@ pub struct ReviewsPage {
     pub pagination: Option<Pagination>,
     /// Set when the list is one provider's.
     pub filter: Option<ProviderFilter>,
+    pub search: SearchBox,
+    /// The waiting / shown chips.
+    pub states: Vec<AdminTab>,
     pub position: ListPosition,
     pub confirm: Option<Confirm>,
     pub flash: Option<Flash>,
@@ -73,8 +92,17 @@ pub async fn list(
     let position = ListPosition {
         page: q.page,
         provider_id: q.provider_id,
+        state: q.state,
+        q: q.q,
+        sort: q.sort,
+        from: q.from,
+        to: q.to,
+        rating: q.rating,
+        reply: q.reply,
+        gap: q.gap,
         ..ListPosition::default()
-    };
+    }
+    .checked(REVIEW_LIST_STATES, QUEUE_SORTS);
     let AdminPagedResponse {
         items,
         total,
@@ -84,7 +112,11 @@ pub async fn list(
     } = state
         .usecases
         .admin
-        .list_reviews(&actor, position.page(), position.provider_id())
+        .list_reviews(
+            &actor,
+            position.page(),
+            &position.filter(REVIEW_LIST_STATES),
+        )
         .await?;
     let position = ListPosition {
         page: page.to_string(),
@@ -109,13 +141,51 @@ pub async fn list(
             review,
         });
     }
+    let waiting = state.usecases.admin.count_waiting_reviews(&actor).await?;
     let path = url("admin_reviews", &[])?;
     let name = rows.first().map(|r| r.review.business_name.clone());
+    let provider = position.provider_filter("admin_reviews", name)?;
     let body = ReviewsPage {
         total,
         rows,
         pagination: position.pagination(&path, page, total_pages),
-        filter: position.provider_filter("admin_reviews", name)?,
+        search: position
+            .search_box("admin_reviews")?
+            .provider(
+                provider.clone(),
+                state.locale().text("admin_filter.selected_provider"),
+            )
+            .picked(
+                "rating",
+                state.locale().text("admin_pick.rating"),
+                state.locale().text("admin_pick.all_ratings"),
+                (1..=5)
+                    .rev()
+                    .map(|n| {
+                        (
+                            n,
+                            state
+                                .locale()
+                                .text_with("admin_pick.stars", &[("n", &n.to_string())]),
+                        )
+                    })
+                    .collect(),
+            )
+            .toggled(
+                "reply",
+                "none",
+                state.locale().text("admin_toggle.unanswered"),
+            )
+            .waiting(state.locale())
+            .dated(state.locale())
+            .sorted(state.locale(), &position, "admin_sort.newest", QUEUE_SORTS),
+        filter: provider,
+        states: position.shared_state_chips(
+            state.locale(),
+            "admin_reviews",
+            REVIEW_LIST_STATES,
+            Some((LIST_STATE_WAITING, waiting)),
+        )?,
         position,
         confirm,
         flash: flash.0,
@@ -140,6 +210,14 @@ pub struct VisibilityForm {
     pub reason: String,
     pub page: String,
     pub provider_id: String,
+    pub state: String,
+    pub q: String,
+    pub sort: String,
+    pub from: String,
+    pub to: String,
+    pub rating: String,
+    pub reply: String,
+    pub gap: String,
 }
 
 /// POST /admin/reviews/{id}/visibility
@@ -167,6 +245,14 @@ pub async fn change_visibility(
     ListPosition {
         page: form.page,
         provider_id: form.provider_id,
+        state: form.state,
+        q: form.q,
+        sort: form.sort,
+        from: form.from,
+        to: form.to,
+        rating: form.rating,
+        reply: form.reply,
+        gap: form.gap,
         ..ListPosition::default()
     }
     .back_to("admin_reviews", flash)

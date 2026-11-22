@@ -114,7 +114,7 @@ impl PriceHandler {
             state
                 .usecases
                 .price
-                .list_prices(&actor, q.crop_id, page)
+                .list_prices(&actor, q.crop_id, None, page)
                 .await?,
         ))
     }

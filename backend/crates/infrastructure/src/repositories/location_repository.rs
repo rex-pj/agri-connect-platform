@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use sea_orm::{
-    sea_query::Expr, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set,
+    sea_query::Expr, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
+    QueryOrder, QuerySelect, Select, Set,
 };
 use std::sync::Arc;
 use tracing::error;
@@ -36,6 +37,13 @@ fn to_location(r: location::Model) -> Location {
     }
 }
 
+/// Every preset (hidden ones too), by display order then id.
+fn admin_order() -> Select<LocationEntity> {
+    LocationEntity::find()
+        .order_by_asc(location::Column::DisplayOrder)
+        .order_by_asc(location::Column::Id)
+}
+
 #[async_trait]
 impl LocationRepositoryTrait for LocationRepository {
     async fn list_active(&self) -> Result<Vec<Location>, Error> {
@@ -52,13 +60,36 @@ impl LocationRepositoryTrait for LocationRepository {
     }
 
     async fn list_all(&self) -> Result<Vec<Location>, Error> {
-        LocationEntity::find()
-            .order_by_asc(location::Column::DisplayOrder)
+        admin_order()
             .all(self.db.as_ref())
             .await
             .map(|rows| rows.into_iter().map(to_location).collect())
             .map_err(|e| {
                 error!("location list_all error: {e}");
+                Error::internal("Failed to load locations.")
+            })
+    }
+
+    async fn list_page(&self, limit: i64, offset: i64) -> Result<Vec<Location>, Error> {
+        admin_order()
+            .limit(limit as u64)
+            .offset(offset as u64)
+            .all(self.db.as_ref())
+            .await
+            .map(|rows| rows.into_iter().map(to_location).collect())
+            .map_err(|e| {
+                error!("location list_page error: {e}");
+                Error::internal("Failed to load locations.")
+            })
+    }
+
+    async fn count(&self) -> Result<i64, Error> {
+        LocationEntity::find()
+            .count(self.db.as_ref())
+            .await
+            .map(|c| c as i64)
+            .map_err(|e| {
+                error!("location count error: {e}");
                 Error::internal("Failed to load locations.")
             })
     }

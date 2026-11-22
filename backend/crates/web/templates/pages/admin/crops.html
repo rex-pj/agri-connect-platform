@@ -1,4 +1,5 @@
 {% extends "layouts/admin.html" %}
+{% import "molecules/admin_search.html" as search %}
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/alert.html" as alerts %}
 {% import "atoms/status_badge.html" as status %}
@@ -21,6 +22,8 @@
 {{ header::admin_header(title=t(key="admin_menu.price_board"), icon="fa-chart-line", sub=t(key="admin_crops.sub", count=b.rows | length), action_href="#them-cay", action_icon="fa-plus", action_label=t(key="admin_crops.add"), action_opens=true) }}
 <div class="admin-body">
   {{ tabs::admin_tabs(tabs=b.tabs, label=t(key="admin_menu.price_board")) }}
+  {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.crops"), chips=b.states, chips_label=t(key="admin_state.label")) }}
+  {{ search::admin_results(s=b.search, total=b.rows | length) }}
   {% if b.flash == "crop_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin_crops.hidden")) }}{% endif %}
   {% if b.flash == "crop_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin_crops.shown")) }}{% endif %}
 
@@ -51,7 +54,7 @@
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="6" class="text-center text-muted py-4">{{ t(key="admin_crops.none") }}</td></tr>
+          <tr><td colspan="6" class="text-center text-muted py-4">{{ search::empty(s=b.search, none=t(key="admin_crops.none")) }}</td></tr>
           {% endfor %}
         </tbody>
       </table>

@@ -11,11 +11,15 @@ use crate::{
 
 #[async_trait]
 pub trait JobRepositoryTrait {
-    /// Its id.
-    async fn create(&self, job: &NewJobPost) -> Result<i32, Error>;
-
-    /// Open posts from `phone` since `since`: the per-phone cap.
-    async fn count_open_by_phone(&self, phone: &str, since: DateTime<Utc>) -> Result<u64, Error>;
+    /// Its id, unless its phone already has `max` open posts since `since`
+    /// (`None`; demo posts never count). Counted and inserted under a lock
+    /// on the phone, so two posts sent at once cannot both pass the cap.
+    async fn create_capped(
+        &self,
+        job: &NewJobPost,
+        since: DateTime<Utc>,
+        max: u64,
+    ) -> Result<Option<i32>, Error>;
 
     /// A job and the providers within `radius_m` of it with a live service
     /// in its category (live, not demo, with an address to write to),

@@ -309,3 +309,60 @@ async fn one_client_posts_a_few_jobs_a_day_whatever_phones_it_types() {
     assert_eq!(res.status(), StatusCode::CREATED);
     e.cleanup().await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn posts_sent_at_the_same_moment_never_pass_a_cap() {
+    let e = env_with_origin().await;
+    let category = categories_of(&e, "service").await[0].0;
+    let area = scalar(&e, "SELECT min(id)::text AS v FROM locations").await;
+    let post = move |phone: String| {
+        Request::post("/api/explore/jobs")
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(header::ORIGIN, TEST_ORIGIN)
+            .body(Body::from(format!(
+                r#"{{"category_id":{category},"location_id":{area},"description":"Phun thuoc",
+                    "requester_name":"Chu Ba","requester_phone":"{phone}"}}"#
+            )))
+            .unwrap()
+    };
+    // Sends every request at once; how many were taken.
+    let at_once = |requests: Vec<(Request<Body>, [u8; 4])>| {
+        let router = e.router.clone();
+        async move {
+            let mut runs = tokio::task::JoinSet::new();
+            for (req, peer) in requests {
+                let router = router.clone();
+                runs.spawn(async move { integration_tests::send_from(&router, req, peer).await });
+            }
+            let mut created = 0;
+            while let Some(res) = runs.join_next().await {
+                if res.unwrap().status() == StatusCode::CREATED {
+                    created += 1;
+                }
+            }
+            created
+        }
+    };
+
+    // One phone from many addresses: only its open-post cap.
+    let one_phone = (0..10_u8)
+        .map(|n| (post("0912345678".into()), [10, 1, 0, n]))
+        .collect();
+    assert_eq!(
+        at_once(one_phone).await,
+        application::constants::JOB_POSTS_OPEN_PER_PHONE_DEFAULT,
+        "one phone"
+    );
+
+    // One address typing many phones: only its daily cap.
+    let one_client = (0..10_u8)
+        .map(|n| (post(format!("09876543{n:02}")), [10, 2, 0, 1]))
+        .collect();
+    assert_eq!(
+        at_once(one_client).await,
+        application::constants::JOB_POSTS_PER_CLIENT_PER_DAY_DEFAULT,
+        "one address"
+    );
+    e.cleanup().await;
+}

@@ -149,29 +149,45 @@ impl JobUseCase {
         let (Some(category_id), Some((lat, lng))) = (category, position) else {
             return Err(Error::new(ErrorCode::ValidationFailed));
         };
+        // The client's slot for the day is taken now, checked and counted
+        // in one step (the check above answers early), and given back if
+        // the post is not stored: posts sent at once cannot all pass.
+        if let Some(key) = &client_key {
+            if !self
+                .posts_by_client
+                .take(key, window, settings.job_posts_per_client_per_day())
+            {
+                return Err(Error::new(ErrorCode::JobPostDailyLimit));
+            }
+        }
         let since = Utc::now() - Duration::days(settings.job_post_days());
-        if self
+        let created = self
             .job_repo
-            .count_open_by_phone(&requester_phone, since)
-            .await?
-            >= settings.job_posts_open_per_phone()
-        {
-            return Err(Error::field("requester_phone", ErrorCode::JobPostLimit));
-        }
-        let id = self
-            .job_repo
-            .create(&NewJobPost {
-                category_id,
-                location_id: preset.map(|l| l.id),
-                point_wkt: point_wkt(lat, lng),
-                description,
-                requester_name,
-                requester_phone,
-            })
-            .await?;
-        if let Some(key) = client_key {
-            self.posts_by_client.hit(key, window);
-        }
+            .create_capped(
+                &NewJobPost {
+                    category_id,
+                    location_id: preset.map(|l| l.id),
+                    point_wkt: point_wkt(lat, lng),
+                    description,
+                    requester_name,
+                    requester_phone,
+                },
+                since,
+                settings.job_posts_open_per_phone(),
+            )
+            .await;
+        let id = match created {
+            Ok(Some(id)) => id,
+            refused => {
+                if let Some(key) = &client_key {
+                    self.posts_by_client.give_back(key);
+                }
+                return Err(match refused {
+                    Err(e) => e,
+                    Ok(_) => Error::field("requester_phone", ErrorCode::JobPostLimit),
+                });
+            }
+        };
         // A visitor's event: no actor, not audited; the subscriber emails.
         self.events
             .publish(DomainEvent {

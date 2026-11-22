@@ -9,7 +9,7 @@ use chrono::{DateTime, Utc};
 use sea_orm::{
     sea_query::{Asterisk, Expr, Func, IntoIden, Order, Query, SelectStatement, SimpleExpr},
     ColumnTrait, ConnectionTrait, DatabaseConnection, DbErr, EntityTrait, FromQueryResult,
-    PaginatorTrait, QueryFilter, StatementBuilder,
+    PaginatorTrait, QueryFilter, StatementBuilder, TransactionTrait,
 };
 use tracing::error;
 
@@ -25,8 +25,8 @@ use crate::{
     entities::{business, job_post, location, service, service_type as category, user},
     search::admin_job_search,
     sql::{
-        business_location, distance, geography_from_text, live_owner_on, notice_email, null_float,
-        within, Geo, QueryAs,
+        advisory_xact_lock, business_location, distance, geography_from_text, live_owner_on,
+        notice_email, null_float, within, Geo, QueryAs,
     },
 };
 
@@ -57,6 +57,17 @@ impl JobRepository {
             .await
             .map_err(Self::fail(what))
     }
+}
+
+/// The advisory lock of one phone's posts: a namespace of its own (the
+/// other locks are fixed ids) plus a fold of the phone. Two phones sharing a
+/// key only wait for each other.
+fn phone_lock(phone: &str) -> i64 {
+    const JOB_PHONE_LOCKS: i64 = 0x006a_6f62_0000_0000;
+    let fold = phone.bytes().fold(0_i64, |key, b| {
+        key.wrapping_mul(31).wrapping_add(i64::from(b))
+    });
+    JOB_PHONE_LOCKS ^ (fold & 0xffff_ffff)
 }
 
 /// `"job_posts"."location"`.
@@ -220,7 +231,34 @@ struct RecipientRow {
 
 #[async_trait]
 impl JobRepositoryTrait for JobRepository {
-    async fn create(&self, job: &NewJobPost) -> Result<i32, Error> {
+    async fn create_capped(
+        &self,
+        job: &NewJobPost,
+        since: DateTime<Utc>,
+        max: u64,
+    ) -> Result<Option<i32>, Error> {
+        let fail = Self::fail("create_capped");
+        let txn = self.db.begin().await.map_err(&fail)?;
+        // Posts from one phone wait for each other here until the first
+        // commits, so its count includes the post before it.
+        txn.execute(
+            txn.get_database_backend()
+                .build(&advisory_xact_lock(phone_lock(&job.requester_phone))),
+        )
+        .await
+        .map_err(&fail)?;
+        let open = job_post::Entity::find()
+            .filter(job_post::Column::RequesterPhone.eq(job.requester_phone.as_str()))
+            // Demo posts never hold a farmer back.
+            .filter(job_post::Column::IsDemo.eq(false))
+            .filter(job_post::Column::Status.eq(JOB_STATUS_OPEN))
+            .filter(job_post::Column::CreatedOn.gte(since))
+            .count(&txn)
+            .await
+            .map_err(&fail)?;
+        if open >= max {
+            return Ok(None);
+        }
         let insert = Query::insert()
             .into_table(job_post::Entity)
             .columns([
@@ -242,23 +280,14 @@ impl JobRepositoryTrait for JobRepository {
             .map_err(|e| Error::internal(format!("job insert: {e}")))?
             .returning_col(job_post::Column::Id)
             .to_owned();
-        self.rows::<IdRow, _>(&insert, "create")
-            .await?
-            .first()
-            .map(|r| r.id)
-            .ok_or_else(|| Error::internal("job insert returned no id"))
-    }
-
-    async fn count_open_by_phone(&self, phone: &str, since: DateTime<Utc>) -> Result<u64, Error> {
-        job_post::Entity::find()
-            .filter(job_post::Column::RequesterPhone.eq(phone))
-            // Demo posts never hold a farmer back.
-            .filter(job_post::Column::IsDemo.eq(false))
-            .filter(job_post::Column::Status.eq(JOB_STATUS_OPEN))
-            .filter(job_post::Column::CreatedOn.gte(since))
-            .count(self.db.as_ref())
+        let id = IdRow::find_by_statement(txn.get_database_backend().build(&insert))
+            .one(&txn)
             .await
-            .map_err(Self::fail("count_open_by_phone"))
+            .map_err(&fail)?
+            .map(|r| r.id)
+            .ok_or_else(|| Error::internal("job insert returned no id"))?;
+        txn.commit().await.map_err(&fail)?;
+        Ok(Some(id))
     }
 
     async fn find_for_notice(

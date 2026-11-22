@@ -454,18 +454,6 @@ impl ExploreUseCase {
             return Err(Error::new(ErrorCode::ProviderNotFound));
         }
 
-        // One client writes to one provider at most so often: each request
-        // emails the provider and counts as a lead. Hashed: the counter
-        // never holds an address.
-        let window = Duration::from_secs(CONTACT_CLIENT_WINDOW_SECS);
-        let client_key = (!input.client.is_empty())
-            .then(|| sha256_hex(format!("{}|{}", input.client, input.business_id)));
-        if client_key.as_deref().is_some_and(|k| {
-            self.contacts_by_client.count(k, window) >= CONTACT_REQUESTS_PER_CLIENT_AND_PROVIDER
-        }) {
-            return Err(Error::new(ErrorCode::ContactDailyLimit));
-        }
-
         // The supply the form was on, when it is still this provider's. The
         // farmer chose no supply in the form, so one that is gone since is
         // left out, never an error; a chosen service is what the request is
@@ -480,7 +468,23 @@ impl ExploreUseCase {
             None => None,
         };
 
-        let id = self
+        // One client writes to one provider at most so often: each request
+        // emails the provider and counts as a lead. The slot is taken
+        // (checked and counted in one step, so requests sent at once cannot
+        // all pass) and given back if the request is not stored. Hashed:
+        // the counter never holds an address.
+        let window = Duration::from_secs(CONTACT_CLIENT_WINDOW_SECS);
+        let client_key = (!input.client.is_empty())
+            .then(|| sha256_hex(format!("{}|{}", input.client, input.business_id)));
+        if let Some(key) = &client_key {
+            if !self
+                .contacts_by_client
+                .take(key, window, CONTACT_REQUESTS_PER_CLIENT_AND_PROVIDER)
+            {
+                return Err(Error::new(ErrorCode::ContactDailyLimit));
+            }
+        }
+        let created = self
             .inquiry_repo
             .create(NewInquiry {
                 business_id: input.business_id,
@@ -491,10 +495,16 @@ impl ExploreUseCase {
                 requester_phone,
                 note,
             })
-            .await?;
-        if let Some(key) = client_key {
-            self.contacts_by_client.hit(key, window);
-        }
+            .await;
+        let id = match created {
+            Ok(id) => id,
+            Err(e) => {
+                if let Some(key) = &client_key {
+                    self.contacts_by_client.give_back(key);
+                }
+                return Err(e);
+            }
+        };
 
         // No actor: the farmer is not signed in.
         self.events

@@ -84,6 +84,36 @@ impl WindowCounter {
         entry.1
     }
 
+    /// Takes one of `max` slots for `key` in its window: `true`, counted,
+    /// when one was free; `false`, nothing counted, when all are taken.
+    /// Checked and counted in one step, so callers at the same moment never
+    /// all see the same free slot (`count` then `hit` would let them).
+    pub fn take(&self, key: &str, window: Duration, max: u32) -> bool {
+        let now = Instant::now();
+        let Ok(mut counts) = self.counts.lock() else {
+            return true;
+        };
+        let entry = counts.entry(key.to_owned()).or_insert((now, 0));
+        if now.duration_since(entry.0) >= window {
+            *entry = (now, 0);
+        }
+        if entry.1 >= max {
+            return false;
+        }
+        entry.1 += 1;
+        true
+    }
+
+    /// Gives back a slot `take` took, for an attempt that came to nothing
+    /// (refused, or failed to store).
+    pub fn give_back(&self, key: &str) {
+        if let Ok(mut counts) = self.counts.lock() {
+            if let Some(entry) = counts.get_mut(key) {
+                entry.1 = entry.1.saturating_sub(1);
+            }
+        }
+    }
+
     /// Forgets `key` (the right password clears the wrong ones before it).
     pub fn clear(&self, key: &str) {
         if let Ok(mut counts) = self.counts.lock() {
@@ -145,5 +175,33 @@ mod tests {
         assert_eq!(remembered(), Some(1), "still in its window");
         filter.forget_older_than(Duration::ZERO);
         assert_eq!(remembered(), Some(0));
+    }
+
+    #[test]
+    fn a_slot_is_taken_only_while_one_is_free_and_can_be_given_back() {
+        let counter = WindowCounter::default();
+        let day = Duration::from_secs(86_400);
+        assert!(counter.take("k", day, 2));
+        assert!(counter.take("k", day, 2));
+        assert!(!counter.take("k", day, 2), "both taken");
+        assert_eq!(counter.count("k", day), 2, "a refusal is not counted");
+        counter.give_back("k");
+        assert!(counter.take("k", day, 2), "a slot given back is free again");
+        assert!(!counter.take("k", day, 0), "no slot at all");
+    }
+
+    #[test]
+    fn many_at_once_never_take_more_slots_than_there_are() {
+        let counter = WindowCounter::default();
+        let day = Duration::from_secs(86_400);
+        let taken: usize = std::thread::scope(|s| {
+            let runs: Vec<_> = (0..32)
+                .map(|_| s.spawn(|| counter.take("k", day, 5)))
+                .collect();
+            runs.into_iter()
+                .map(|r| usize::from(r.join().unwrap_or(false)))
+                .sum()
+        });
+        assert_eq!(taken, 5);
     }
 }

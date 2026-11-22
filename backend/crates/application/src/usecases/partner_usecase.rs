@@ -899,6 +899,12 @@ fn contract_dto(
                 })
             })
             .collect(),
+        sponsored_away: c
+            .sponsored
+            .iter()
+            .filter(|s| !s.in_area)
+            .map(|s| s.business_id)
+            .collect(),
         sponsored: c
             .sponsored
             .into_iter()

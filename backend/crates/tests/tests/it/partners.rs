@@ -296,6 +296,54 @@ async fn a_partner_pays_for_an_area_reads_its_report_and_sponsors_a_shop() {
         "text/csv; charset=utf-8"
     );
 
+    // The sponsored shop moves out of the contract's commune (its ward now
+    // Long Xuyên's; its point kept, so it is still near Cai Lậy): it is no
+    // longer moved up there, and the contract page says why.
+    let move_to = |from: i32, to: i32| {
+        format!(
+            "UPDATE businesses SET ward_code = (SELECT ward_code FROM businesses WHERE id = {from}) \
+             WHERE id = {to}"
+        )
+    };
+    let home = scalar(
+        &e,
+        &format!("SELECT ward_code AS v FROM businesses WHERE id = {sponsored}"),
+    )
+    .await;
+    e.t.db
+        .execute_unprepared(&move_to(far, sponsored))
+        .await
+        .unwrap();
+    let near_page = || async {
+        body_text(
+            send(
+                &e.router,
+                get_page(&format!("/explore?location_id={cai_lay}"), None),
+            )
+            .await,
+        )
+        .await
+    };
+    let near = near_page().await;
+    assert!(
+        near.contains("Phun drone taitro"),
+        "still listed near Cai Lậy"
+    );
+    assert!(
+        !near.contains(r#"aria-label="Tài trợ""#),
+        "but not as sponsored"
+    );
+    let html = body_text(send(&e.router, get_page(&contract_page, Some(&admin))).await).await;
+    assert!(html.contains("Đã dời khỏi khu vực của hợp đồng"));
+    // Back home: sponsored again.
+    e.t.db
+        .execute_unprepared(&format!(
+            "UPDATE businesses SET ward_code = '{home}' WHERE id = {sponsored}"
+        ))
+        .await
+        .unwrap();
+    assert!(near_page().await.contains(r#"aria-label="Tài trợ""#));
+
     // Stopping the sponsorship, with a reason, is audited.
     let res = send(
         &e.router,
@@ -329,7 +377,7 @@ async fn a_partner_pays_for_an_area_reads_its_report_and_sponsors_a_shop() {
         .await,
     )
     .await;
-    assert!(!near.contains("badge text-bg-warning"));
+    assert!(!near.contains(r#"aria-label="Tài trợ""#));
     assert_eq!(
         scalar(
             &e,

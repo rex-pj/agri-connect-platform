@@ -170,23 +170,41 @@ impl PartnerRepository {
             .all(db)
             .await
             .map_err(Self::fail("sponsored"))?;
-        let business_names: HashMap<i32, String> = business::Entity::find()
+        let shops: HashMap<i32, business::Model> = business::Entity::find()
             .filter(business::Column::Id.is_in(sponsored_rows.iter().map(|s| s.business_id)))
             .all(db)
             .await
             .map_err(Self::fail("sponsored names"))?
             .into_iter()
-            .map(|b| (b.id, b.name))
+            .map(|b| (b.id, b))
             .collect();
+        // The province of each sponsored shop's ward, to tell whether it
+        // still lies in its contract's area.
+        let provinces: HashMap<String, String> = ward::Entity::find()
+            .filter(ward::Column::Code.is_in(shops.values().filter_map(|b| b.ward_code.clone())))
+            .all(db)
+            .await
+            .map_err(Self::fail("sponsored wards"))?
+            .into_iter()
+            .map(|w| (w.code, w.province_code))
+            .collect();
+        let areas: HashMap<i32, ContractArea> = rows.iter().map(|c| (c.id, area_of(c))).collect();
         let mut sponsored: HashMap<i32, Vec<SponsoredBusiness>> = HashMap::new();
         for s in sponsored_rows {
-            if let Some(name) = business_names.get(&s.business_id) {
+            if let Some(shop) = shops.get(&s.business_id) {
+                let in_area = shop
+                    .ward_code
+                    .as_ref()
+                    .and_then(|w| provinces.get(w).map(|p| (w, p)))
+                    .zip(areas.get(&s.contract_id))
+                    .is_some_and(|((w, p), area)| area.covers(w, p));
                 sponsored
                     .entry(s.contract_id)
                     .or_default()
                     .push(SponsoredBusiness {
                         business_id: s.business_id,
-                        name: name.clone(),
+                        name: shop.name.clone(),
+                        in_area,
                     });
             }
         }
@@ -647,7 +665,13 @@ impl PartnerRepositoryTrait for PartnerRepository {
                 area: c.area,
                 monthly_fee: c.monthly_fee,
                 category_ids: c.category_ids,
-                business_ids: c.sponsored.iter().map(|s| s.business_id).collect(),
+                // Only the shops still in the area are moved up there.
+                business_ids: c
+                    .sponsored
+                    .iter()
+                    .filter(|s| s.in_area)
+                    .map(|s| s.business_id)
+                    .collect(),
             })
             .collect())
     }

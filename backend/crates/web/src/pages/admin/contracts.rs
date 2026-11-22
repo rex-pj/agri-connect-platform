@@ -74,6 +74,8 @@ impl ContractQuery {
 pub struct SponsoredRow {
     pub provider: NamedDto,
     pub remove_action: String,
+    /// It has moved out of the contract's area since it was sponsored.
+    pub away: bool,
 }
 
 #[derive(Serialize)]
@@ -222,6 +224,7 @@ async fn contract_page(
                     ("bid", &s.id.to_string()),
                 ],
             )?,
+            away: contract.sponsored_away.contains(&s.id),
             provider: s.clone(),
         });
     }

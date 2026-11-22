@@ -1121,6 +1121,9 @@ pub struct ContractDto {
     pub categories: Vec<NamedDto>,
     /// Sponsored providers (`id` is the business).
     pub sponsored: Vec<NamedDto>,
+    /// The sponsored ones no longer in the area (moved since): kept on the
+    /// contract, never moved up on a near-me page there.
+    pub sponsored_away: Vec<i32>,
     pub in_force: bool,
     /// Where it stands today: one of `CONTRACT_LIST_STATES`.
     pub state: &'static str,

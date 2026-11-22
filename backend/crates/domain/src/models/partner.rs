@@ -31,6 +31,10 @@ pub struct PartnerFields {
 pub struct SponsoredBusiness {
     pub business_id: i32,
     pub name: String,
+    /// It still lies in the contract's area. A shop moved away since it was
+    /// sponsored stays on the contract, for the admin to see, but is never
+    /// moved up on a near-me page there.
+    pub in_area: bool,
 }
 
 /// A shop lying in a contract's area, as the sponsor search lists it.

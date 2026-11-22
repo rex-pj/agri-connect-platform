@@ -42,7 +42,7 @@
         <ul class="list-unstyled mb-0">
           {% for s in b.sponsored %}
           <li class="d-flex justify-content-between align-items-center gap-2 py-2 border-bottom" x-data="dialog" x-on:keydown.escape.window="hide">
-            <span class="fw-semibold">{{ s.provider.name }}</span>
+            <span><span class="fw-semibold">{{ s.provider.name }}</span>{% if s.away %}<span class="d-block small text-danger">{{ atoms::icon(name="fa-triangle-exclamation") }} {{ t(key="partner.sponsored_away") }}</span>{% endif %}</span>
             <a class="btn btn-sm btn-outline-warning" href="#bo-tai-tro-{{ s.provider.id }}" x-on:click.prevent="show">{{ atoms::icon(name="fa-xmark") }} {{ t(key="partner.unsponsor_short") }}</a>
             {{ confirm::confirm_sheet(id="bo-tai-tro-" ~ s.provider.id, title=t(key="partner.unsponsor", name=s.provider.name), icon="fa-xmark", action=s.remove_action, button=t(key="partner.unsponsor_confirm"), reason_max=limits.audit_reason_max, note=t(key="partner.unsponsor_note")) }}
           </li>

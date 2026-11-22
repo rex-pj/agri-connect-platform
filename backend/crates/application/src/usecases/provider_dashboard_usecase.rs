@@ -129,16 +129,18 @@ impl ProviderDashboardUseCase {
     /// upload, so nobody else gets a photo decoded. `create_product` checks
     /// the same again.
     pub async fn may_create_product(&self, actor: &Actor) -> Result<()> {
-        self.may_create(actor, PERM_OWN_LISTING_CREATE).await
+        actor.require(PERM_OWN_LISTING_CREATE)?;
+        self.has_business(actor).await
     }
 
     /// The same for a service (`create_service`).
     pub async fn may_create_service(&self, actor: &Actor) -> Result<()> {
-        self.may_create(actor, PERM_OWN_SERVICE_CREATE).await
+        actor.require(PERM_OWN_SERVICE_CREATE)?;
+        self.has_business(actor).await
     }
 
-    async fn may_create(&self, actor: &Actor, permission: &str) -> Result<()> {
-        actor.require(permission)?;
+    /// The actor manages a business to list under.
+    async fn has_business(&self, actor: &Actor) -> Result<()> {
         self.business_repo
             .get_business_id_by_user(actor.user_id)
             .await?

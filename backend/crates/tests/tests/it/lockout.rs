@@ -441,3 +441,45 @@ async fn a_right_current_password_forgets_the_wrong_ones() {
     );
     e.cleanup().await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn sign_up_probes_sent_at_once_never_pass_the_cap() {
+    use application::constants::SIGNUP_ATTEMPTS_PER_CLIENT;
+    let e = Env::new().await;
+    register_provider(&e.state, "nongdan", "0901234567").await;
+    let mut runs = tokio::task::JoinSet::new();
+    for i in 0..SIGNUP_ATTEMPTS_PER_CLIENT * 3 {
+        let state = e.state.clone();
+        runs.spawn(async move {
+            let mut input = integration_tests::signup(
+                &format!("khach{i}"),
+                "nongdan@example.vn",
+                "matkhau123",
+                "Vườn",
+                "0907654321",
+            );
+            input.client = "203.0.113.7".to_owned();
+            state
+                .usecases
+                .auth
+                .register(input)
+                .await
+                .map(|_| ())
+                .map_err(|e| e.code())
+        });
+    }
+    let mut probes = 0;
+    while let Some(answer) = runs.join_next().await {
+        match answer.unwrap() {
+            Err(ErrorCode::EmailTaken) => probes += 1,
+            Err(ErrorCode::SignupDailyLimit) => {}
+            other => panic!("unexpected answer {other:?}"),
+        }
+    }
+    assert_eq!(
+        probes, SIGNUP_ATTEMPTS_PER_CLIENT,
+        "only the day's tries learn anything"
+    );
+    e.cleanup().await;
+}

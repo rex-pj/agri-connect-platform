@@ -497,9 +497,17 @@ impl AuthUseCase {
             .rule("business_phone", validate_phone(&business_phone))
             .finish()?;
 
-        // From here on a try learns whether the username or email is taken.
-        if let Some(key) = client_key {
-            self.signups_by_client.hit(key, window);
+        // From here on a try learns whether the username or email is taken,
+        // so it takes one of the day's tries (checked and counted in one
+        // step: sign-ups sent at once cannot all pass the check above). A
+        // try counts whatever it learns, so none is given back.
+        if let Some(key) = &client_key {
+            if !self
+                .signups_by_client
+                .take(key, window, SIGNUP_ATTEMPTS_PER_CLIENT)
+            {
+                return Err(Error::new(ErrorCode::SignupDailyLimit));
+            }
         }
         if self.user_repo.find_by_username(&username).await?.is_some() {
             return Err(Error::new(ErrorCode::UsernameTaken));

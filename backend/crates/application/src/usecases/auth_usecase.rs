@@ -444,7 +444,9 @@ impl AuthUseCase {
                 email,
                 password_hash,
                 role: ROLE_ADMIN.into(),
-                full_name: Some(full_name.unwrap_or_else(|| "Administrator".to_owned())),
+                // None when not given, like any account: pages show the
+                // username then (no word in code, CLAUDE.md).
+                full_name,
                 email_verified: true,
             })
             .await?

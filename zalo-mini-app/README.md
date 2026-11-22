@@ -11,6 +11,8 @@ The farmer's way in from Zalo: services near them (with a call button), crop pri
 
 Zalo gives the position and the phone number as one-time tokens (`getLocation`, `getPhoneNumber`, valid 2 minutes); the backend converts them with the Zalo app's secret key (`ZALO_APP_SECRET`) through the Zalo Graph API. Without that secret both buttons answer `zalo_not_configured`, and the farmer chooses an area and types the number instead.
 
+The phone from Zalo only fills the box: the job post still carries the number as text, like a typed one, and the server cannot tell the two apart. Nothing may rely on a post's phone having been checked by Zalo (no "verified" badge, no trust in a review or a cap). Making it a guarantee would need the post to carry the Zalo tokens and the server to read the number itself.
+
 ## Setup
 
 1. Create the Mini App on [mini.zalo.me](https://mini.zalo.me) and link it to a Zalo app on [developers.zalo.me](https://developers.zalo.me); note the app's secret key.

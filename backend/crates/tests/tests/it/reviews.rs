@@ -518,9 +518,9 @@ async fn a_review_that_looks_like_the_providers_own_is_flagged() {
 
     let list = body_text(send(&e.router, get_page("/admin/reviews", Some(&admin))).await).await;
     assert!(list.contains("gửi từ chính số điện thoại của nhà cung cấp"));
-    assert!(list.contains("Viết chưa tới một giờ sau yêu cầu liên hệ"));
+    assert!(list.contains("Viết chưa tới 60 phút sau yêu cầu liên hệ"));
     assert!(
-        list.contains("chỉ vài phút sau khi nhận yêu cầu"),
+        list.contains("chưa tới 60 phút sau khi nhận yêu cầu"),
         "marked answered at once"
     );
 
@@ -549,15 +549,26 @@ async fn a_review_that_looks_like_the_providers_own_is_flagged() {
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
     let list = body_text(send(&e.router, get_page("/admin/reviews", Some(&admin))).await).await;
     assert_eq!(
-        list.matches("Viết chưa tới một giờ sau yêu cầu liên hệ")
+        list.matches("Viết chưa tới 60 phút sau yêu cầu liên hệ")
             .count(),
         1
     );
     assert_eq!(list.matches("gửi từ chính số điện thoại").count(), 1);
     assert_eq!(
-        list.matches("chỉ vài phút sau khi nhận yêu cầu").count(),
+        list.matches("chưa tới 60 phút sau khi nhận yêu cầu")
+            .count(),
         1,
         "answered a day after it came in: no sign"
     );
+    // The words follow the window in force.
+    e.t.db
+        .execute_unprepared(
+            "INSERT INTO platform_settings (key, value) VALUES ('listings.review_suspect_minutes', '90')",
+        )
+        .await
+        .unwrap();
+    let list = body_text(send(&e.router, get_page("/admin/reviews", Some(&admin))).await).await;
+    assert!(list.contains("Viết chưa tới 90 phút sau yêu cầu liên hệ"));
+    assert!(!list.contains("60 phút"));
     e.cleanup().await;
 }

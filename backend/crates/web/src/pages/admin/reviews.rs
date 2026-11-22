@@ -77,6 +77,9 @@ pub struct ReviewsPage {
     pub position: ListPosition,
     pub confirm: Option<Confirm>,
     pub flash: Option<Flash>,
+    /// The `listings.review_suspect_minutes` setting the time signs use,
+    /// so their words say the window in force.
+    pub suspect_minutes: i64,
 }
 
 /// GET /admin/reviews
@@ -189,6 +192,12 @@ pub async fn list(
         position,
         confirm,
         flash: flash.0,
+        suspect_minutes: state
+            .usecases
+            .settings
+            .current()
+            .await?
+            .review_suspect_minutes(),
     };
     let mut response = render_admin(
         &state,

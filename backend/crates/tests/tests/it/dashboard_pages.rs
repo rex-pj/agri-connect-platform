@@ -345,3 +345,34 @@ async fn another_providers_product_looks_missing() {
     assert_eq!(res.headers()[header::LOCATION], "/login");
     e.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn an_account_that_may_not_list_is_refused_before_its_photo_is_read() {
+    let e = env_with_origin().await;
+    // The admin holds no own.* permission and manages no business.
+    let admin = install_admin(&e).await;
+    let (category, _) = categories_of(&e, "product").await[0].clone();
+    let (service_type, _) = categories_of(&e, "service").await[0].clone();
+    // Not a picture: read, it would come back as a photo error (400).
+    let junk = b"not a picture".to_vec();
+    for (path, field) in [
+        ("/provider/supplies/new", category.to_string()),
+        ("/provider/services/new", service_type.to_string()),
+    ] {
+        let res = send(
+            &e.router,
+            post_multipart_form(
+                path,
+                &[("category_id", &field), ("name", "Thử")],
+                Some(&junk),
+                &admin,
+            ),
+        )
+        .await;
+        // 403 permission_denied, not the 400 of a bad photo.
+        assert_eq!(res.status(), StatusCode::FORBIDDEN, "{path}");
+    }
+    assert_eq!(count(&e, "SELECT count(*) FROM files").await, 0);
+    e.cleanup().await;
+}

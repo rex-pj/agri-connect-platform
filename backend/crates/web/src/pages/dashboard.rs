@@ -425,10 +425,17 @@ pub async fn create_product(
     State(state): State<AppState>,
     upload: ApiMultipart,
 ) -> Result<Response, Error> {
-    // Before reading the body: an anonymous visitor never gets to upload.
+    // Before reading the body: only an account that may list one uploads
+    // (signed in, the permission, a business), so no one else gets a photo
+    // decoded.
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
+    state
+        .usecases
+        .provider_dashboard
+        .may_create_product(&actor)
+        .await?;
     let max = state.usecases.media.max_upload_bytes();
     let (form, file): (ProductForm, _) = upload.into_form(IMAGE_FIELD, max).await?;
     let image = match prepare(&state, file).await {

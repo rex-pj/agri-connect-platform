@@ -124,6 +124,28 @@ impl ProviderDashboardUseCase {
             .await
     }
 
+    /// Whether the actor may list a supply at all (the permission, and a
+    /// business to list it under): checked by a form before it reads an
+    /// upload, so nobody else gets a photo decoded. `create_product` checks
+    /// the same again.
+    pub async fn may_create_product(&self, actor: &Actor) -> Result<()> {
+        self.may_create(actor, PERM_OWN_LISTING_CREATE).await
+    }
+
+    /// The same for a service (`create_service`).
+    pub async fn may_create_service(&self, actor: &Actor) -> Result<()> {
+        self.may_create(actor, PERM_OWN_SERVICE_CREATE).await
+    }
+
+    async fn may_create(&self, actor: &Actor, permission: &str) -> Result<()> {
+        actor.require(permission)?;
+        self.business_repo
+            .get_business_id_by_user(actor.user_id)
+            .await?
+            .map(|_| ())
+            .ok_or_else(|| Error::new(ErrorCode::AccountNotLinkedToBusiness))
+    }
+
     /// Taps on the actor's call buttons in the last `CALL_STATS_DAYS` days;
     /// `None` when the account manages no business. A session is enough: it
     /// is the provider's own number.

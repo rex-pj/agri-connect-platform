@@ -15,7 +15,7 @@
 {% block title %}{{ t(key="admin_menu.jobs") }} — {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
-{{ header::admin_header(title=t(key="admin_menu.jobs"), icon="fa-bullhorn", sub=t(key="admin_jobs.sub", count=b.total)) }}
+{{ header::admin_header(title=t(key="admin_menu.jobs"), icon="fa-bullhorn", sub=t(key="admin_jobs.sub")) }}
 <div class="admin-body" x-data="dialog" data-open="{% if b.confirm %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
   {% if b.flash == "job_status_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin_jobs.saved")) }}{% endif %}
   {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.jobs"), chips=b.states, chips_label=t(key="admin.status_filter")) }}

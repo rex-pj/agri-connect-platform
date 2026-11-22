@@ -20,13 +20,12 @@
 {% block content %}
 {% set b = page.body %}
 <div x-data="dialog" data-open="{% if b.errors.message or b.errors.fields %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
-{{ header::admin_header(title=t(key="admin_menu.price_board"), icon="fa-chart-line", sub=t(key="admin_prices.sub", count=b.total), action_href="#nhap-gia", action_icon="fa-plus", action_label=t(key="admin_prices.add"), action_opens=true) }}
+{{ header::admin_header(title=t(key="admin_menu.price_board"), icon="fa-chart-line", sub=t(key="admin_prices.hint", days=b.fresh_days), action_href="#nhap-gia", action_icon="fa-plus", action_label=t(key="admin_prices.add"), action_opens=true) }}
 <div class="admin-body">
   {{ tabs::admin_tabs(tabs=b.tabs, label=t(key="admin_menu.price_board")) }}
   {% if b.flash == "price_recorded" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin_prices.recorded")) }}{% endif %}
   {% if b.flash == "price_deleted" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin_prices.deleted")) }}{% endif %}
   {% if b.filter %}{{ filter::admin_filter(f=b.filter) }}{% endif %}
-  <p class="small text-muted mb-0">{{ t(key="admin_prices.hint", days=b.fresh_days) }}</p>
   {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.prices")) }}
   {{ search::admin_results(s=b.search, total=b.total) }}
 

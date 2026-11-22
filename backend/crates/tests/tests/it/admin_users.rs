@@ -38,7 +38,7 @@ async fn the_list_and_detail_show_accounts_to_those_who_may_read_them() {
     let (admin, provider, id) = setup(&e).await;
 
     let list = body_text(send(&e.router, get_page("/admin/users", Some(&admin))).await).await;
-    assert!(list.contains("2 tài khoản"));
+    assert!(list.contains(r#"<strong class="admin-results__total">2</strong> kết quả"#));
     assert!(list.contains(&format!(r#"href="/admin/users/{id}""#)));
 
     let detail = body_text(

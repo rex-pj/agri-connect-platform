@@ -115,13 +115,14 @@
   {% endif %}
 </form>
 {%- endmacro admin_search %}
-{#- The bar between the toolbar and the rows: how many there are, and the
-    order they come in (a form of its own, sent on change, that carries
+{#- The bar between the toolbar and the rows: how many there are (the one
+    count of an admin list: the header says what the page is for, never how
+    many), and the order they come in (a form of its own, sent on change, that carries
     every criterion of the toolbar). `s` is the toolbar's SearchBox, `total`
     the number of rows in the whole result. -#}
 {% macro admin_results(s, total) -%}
 <div class="admin-results">
-  <p class="admin-results__count">{{ t(key="admin_search.results", count=total) }}</p>
+  <p class="admin-results__count"><strong class="admin-results__total">{{ total | number }}</strong> {{ t(key="admin_search.results_unit") }}</p>
   {% if s.sorts %}
   <form class="admin-results__sort" method="get" action="{{ s.action }}" x-data="autoSubmit">
     {% for f in s.sort_keep %}<input type="hidden" name="{{ f.name }}" value="{{ f.value }}">{% endfor %}

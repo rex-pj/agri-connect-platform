@@ -16,7 +16,7 @@
 {% block title %}{{ t(key="admin_menu.reviews") }} — {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
-{% if b.filter and b.filter.name %}{% set sub = b.filter.name ~ " · " ~ t(key="reviews.count", count=b.total) %}{% else %}{% set sub = t(key="reviews.count", count=b.total) %}{% endif %}
+{% set sub = t(key="admin.reviews_sub") %}
 {{ header::admin_header(title=t(key="admin_menu.reviews"), icon="fa-star", sub=sub) }}
 <div class="admin-body" x-data="dialog" data-open="{% if b.confirm %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
   {% if b.flash == "review_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.review_hidden")) }}{% endif %}

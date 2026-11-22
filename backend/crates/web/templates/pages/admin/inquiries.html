@@ -16,7 +16,7 @@
 {% block title %}{{ t(key="contact.title") }} — {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
-{% if b.filter and b.filter.name %}{% set sub = b.filter.name ~ " · " ~ t(key="inquiries.count", count=b.total) %}{% else %}{% set sub = t(key="inquiries.count", count=b.total) %}{% endif %}
+{% set sub = t(key="admin.inquiries_sub") %}
 {{ header::admin_header(title=t(key="contact.title"), icon="fa-envelope-open-text", sub=sub) }}
 <div class="admin-body" x-data="dialog" data-open="{% if b.confirm %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
   {% if b.flash == "inquiry_status_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="inbox.status_saved")) }}{% endif %}

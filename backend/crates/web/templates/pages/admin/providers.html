@@ -20,9 +20,9 @@
 {% set c = b.create %}
 <div x-data="dialog" data-open="{% if c and (c.errors.message or c.errors.fields) %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
 {% if c %}
-{{ header::admin_header(title=t(key="admin_menu.providers"), icon="fa-store", sub=t(key="directory.count", count=b.total), action_href="#them-nha-cung-cap", action_icon="fa-plus", action_label=t(key="admin.add_provider"), action_opens=true) }}
+{{ header::admin_header(title=t(key="admin_menu.providers"), icon="fa-store", sub=t(key="admin.providers_sub"), action_href="#them-nha-cung-cap", action_icon="fa-plus", action_label=t(key="admin.add_provider"), action_opens=true) }}
 {% else %}
-{{ header::admin_header(title=t(key="admin_menu.providers"), icon="fa-store", sub=t(key="directory.count", count=b.total)) }}
+{{ header::admin_header(title=t(key="admin_menu.providers"), icon="fa-store", sub=t(key="admin.providers_sub")) }}
 {% endif %}
 <div class="admin-body">
   {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.providers"), chips=b.states, chips_label=t(key="admin_state.label")) }}

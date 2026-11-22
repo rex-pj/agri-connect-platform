@@ -19,7 +19,7 @@
 {% block content %}
 {% set b = page.body %}
 <div x-data="dialog" data-open="{% if b.errors.message or b.errors.fields %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
-{{ header::admin_header(title=t(key="admin_menu.price_board"), icon="fa-chart-line", sub=t(key="admin_crops.sub", count=b.rows | length), action_href="#them-cay", action_icon="fa-plus", action_label=t(key="admin_crops.add"), action_opens=true) }}
+{{ header::admin_header(title=t(key="admin_menu.price_board"), icon="fa-chart-line", sub=t(key="admin_crops.sub"), action_href="#them-cay", action_icon="fa-plus", action_label=t(key="admin_crops.add"), action_opens=true) }}
 <div class="admin-body">
   {{ tabs::admin_tabs(tabs=b.tabs, label=t(key="admin_menu.price_board")) }}
   {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.crops"), chips=b.states, chips_label=t(key="admin_state.label")) }}

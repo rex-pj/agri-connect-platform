@@ -3904,6 +3904,16 @@ ac-geolocate {
   color: var(--muted);
   font-size: var(--admin-text);
 }
+/* The list's one count: the number reads first, the word after it quiet. */
+.admin-results__total {
+  color: var(--text);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+/* The bar belongs to the table under it: half the page's gap between them. */
+.admin-results + .admin-card {
+  margin-top: -8px;
+}
 .admin-results__sort {
   display: flex;
   align-items: center;

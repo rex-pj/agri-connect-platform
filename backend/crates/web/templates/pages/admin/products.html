@@ -22,7 +22,7 @@
 {% block title %}{{ t(key="admin_menu.products") }} — {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
-{% if b.filter and b.filter.name %}{% set sub = b.filter.name ~ " · " ~ t(key="products.count", count=b.total) %}{% else %}{% set sub = t(key="products.count", count=b.total) %}{% endif %}
+{% set sub = t(key="admin.products_sub") %}
 <div x-data="dialog" data-open="{% if b.create and (b.create.errors.message or b.create.errors.fields) %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
 {% if b.create %}
 {{ header::admin_header(title=t(key="admin_menu.products"), icon="fa-box-open", sub=sub, action_href="#them-vat-tu", action_icon="fa-plus", action_label=t(key="dashboard.add_product"), action_opens=true) }}

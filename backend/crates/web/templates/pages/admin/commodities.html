@@ -22,7 +22,7 @@
 {% block content %}
 {% set b = page.body %}
 <div x-data="dialog" data-open="{% if b.errors.message or b.errors.fields %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
-{{ header::admin_header(title=t(key="admin_menu.commodities"), icon="fa-leaf", sub=t(key="admin_commodities.sub", count=b.total), action_href="#them-cay-con", action_icon="fa-plus", action_label=t(key="admin_commodities.add"), action_opens=true) }}
+{{ header::admin_header(title=t(key="admin_menu.commodities"), icon="fa-leaf", sub=t(key="admin_commodities.sub"), action_href="#them-cay-con", action_icon="fa-plus", action_label=t(key="admin_commodities.add"), action_opens=true) }}
 <div class="admin-body">
   {{ tabs::admin_tabs(tabs=b.tabs, label=t(key="admin_menu.catalogue")) }}
   {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.commodities"), chips=b.states, chips_label=t(key="admin_state.label")) }}

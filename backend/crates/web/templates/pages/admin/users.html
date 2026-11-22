@@ -9,7 +9,7 @@
 {% block title %}{{ t(key="admin_menu.users") }} — {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
-{{ header::admin_header(title=t(key="admin_menu.users"), icon="fa-users", sub=t(key="users.count", count=b.total)) }}
+{{ header::admin_header(title=t(key="admin_menu.users"), icon="fa-users", sub=t(key="admin.users_sub")) }}
 <div class="admin-body">
   {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.users"), chips=b.states, chips_label=t(key="admin_state.label")) }}
   {{ search::admin_results(s=b.search, total=b.total) }}

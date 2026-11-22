@@ -5,6 +5,7 @@ use domain::models::business::ProviderSort;
 
 // ── Agri-connect ──────────────────────────────────────────────────────────────
 
+#[derive(Clone)]
 pub struct GeoSearchParams {
     pub lat: f64,
     pub lng: f64,

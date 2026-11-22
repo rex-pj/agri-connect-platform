@@ -481,3 +481,48 @@ async fn a_business_keeps_the_ward_of_its_position() {
     assert_eq!(ward().await, BINH_PHU);
     e.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_near_me_search_of_the_json_api_is_demand_too() {
+    let e = env_with_origin().await;
+    load_admin_units(&e).await;
+    let admin = install_admin(&e).await;
+    // The Zalo Mini App asks for what is near the farmer's phone.
+    let near = |list: &str| {
+        axum::http::Request::get(format!("/api/explore/{list}?lat=10.4150&lng=106.0850"))
+            .body(axum::body::Body::empty())
+            .unwrap()
+    };
+    for list in ["services", "providers"] {
+        let res = send_from(&e.router, near(list), [10, 0, 0, 1]).await;
+        assert_eq!(res.status(), StatusCode::OK, "{list}");
+    }
+    // Another farmer, same place.
+    send_from(&e.router, near("services"), [10, 0, 0, 2]).await;
+    searches_stored(&e, 2).await;
+    // An admin trying it is not demand.
+    let mut signed_in = near("services");
+    signed_in
+        .headers_mut()
+        .insert(axum::http::header::COOKIE, admin.parse().unwrap());
+    send_from(&e.router, signed_in, [10, 0, 0, 3]).await;
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    assert_eq!(
+        scalar(&e, "SELECT count(*)::text AS v FROM search_events").await,
+        "2",
+        "the services and providers of one place are one search; no admin"
+    );
+    assert_eq!(
+        scalar(
+            &e,
+            &format!(
+                "SELECT count(*)::text AS v FROM search_events WHERE ward_code = '{BINH_PHU}' AND query IS NULL"
+            )
+        )
+        .await,
+        "2",
+        "filed under the commune the phone is in"
+    );
+    e.cleanup().await;
+}

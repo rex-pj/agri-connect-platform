@@ -1,6 +1,8 @@
 use application::{
     constants::RADIUS_DEFAULT_M,
-    inputs::{BrowseParams, CallInput, ContactInput, GeoSearchParams, Visitor},
+    inputs::{
+        BrowseParams, CallInput, ContactInput, GeoSearchParams, SearchInput, SearchPlace, Visitor,
+    },
     outputs::{BrowseResponse, BusinessSearchDto, PublicServiceDto, ServiceBrowseResponse},
 };
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
@@ -70,18 +72,58 @@ async fn browse_params(state: &AppState, q: ProvidersQuery) -> Result<BrowsePara
     })
 }
 
+/// Who is asking, for the counts that tell visitors apart: anyone signed
+/// in is not demand; anyone else is their address (`client_key`, in memory
+/// only). A stale session cookie is nobody (`Viewer`).
+fn visitor_of(viewer: &Viewer, ip: Option<&ClientIp>) -> Visitor {
+    match viewer.0 {
+        Some(_) => Visitor::SignedIn,
+        None => Visitor::Anonymous {
+            key: client_key(ip),
+        },
+    }
+}
+
+/// A near-me search of the JSON API (the Zalo Mini App's): demand in that
+/// area, found or not, recorded like the near-me page's. Asking for the
+/// providers and the services of one place is one search (the repeat
+/// filter), as is asking again.
+fn record_near(state: &AppState, geo: &GeoSearchParams, results: usize, visitor: Visitor) {
+    state.usecases.demand.record_search(SearchInput {
+        query: String::new(),
+        category_id: geo.service_id,
+        place: SearchPlace::Point {
+            lat: geo.lat,
+            lng: geo.lng,
+        },
+        results: i64::try_from(results).unwrap_or(i64::MAX),
+        visitor,
+    });
+}
+
 pub struct ExploreHandler;
 
 impl ExploreHandler {
     /// GET /api/explore/providers
     /// Geo-search mode when `lat` + `lng` are present; paginated browse otherwise.
     pub async fn list_providers(
+        viewer: Viewer,
+        ip: Option<axum::Extension<ClientIp>>,
         State(state): State<AppState>,
         ApiQuery(q): ApiQuery<ProvidersQuery>,
     ) -> Result<impl IntoResponse, Error> {
         let explore = &state.usecases.explore;
         Ok(Json(match geo_params(&q) {
-            Some(geo) => ProvidersResponse::Nearby(explore.search_providers(geo).await?),
+            Some(geo) => {
+                let found = explore.search_providers(geo.clone()).await?;
+                record_near(
+                    &state,
+                    &geo,
+                    found.len(),
+                    visitor_of(&viewer, ip.as_deref()),
+                );
+                ProvidersResponse::Nearby(found)
+            }
             None => ProvidersResponse::Browse(
                 explore
                     .browse_providers(browse_params(&state, q).await?)
@@ -94,12 +136,23 @@ impl ExploreHandler {
     /// Near-me mode when `lat` + `lng` are present; paginated browse otherwise
     /// (`category_id`, `name` as the typed text, `sort`, `page`).
     pub async fn list_services(
+        viewer: Viewer,
+        ip: Option<axum::Extension<ClientIp>>,
         State(state): State<AppState>,
         ApiQuery(q): ApiQuery<ProvidersQuery>,
     ) -> Result<impl IntoResponse, Error> {
         let explore = &state.usecases.explore;
         Ok(Json(match geo_params(&q) {
-            Some(geo) => ServicesResponse::Nearby(explore.search_services(geo).await?),
+            Some(geo) => {
+                let found = explore.search_services(geo.clone()).await?;
+                record_near(
+                    &state,
+                    &geo,
+                    found.len(),
+                    visitor_of(&viewer, ip.as_deref()),
+                );
+                ServicesResponse::Nearby(found)
+            }
             None => ServicesResponse::Browse(
                 explore
                     .browse_services(browse_params(&state, q).await?)
@@ -176,7 +229,7 @@ impl ExploreHandler {
     /// call button was tapped; 204. Rate-limited like the contact form. A
     /// stale session cookie is nobody (`Viewer`): the tap still counts.
     pub async fn record_call(
-        Viewer(actor): Viewer,
+        viewer: Viewer,
         ip: Option<axum::Extension<ClientIp>>,
         State(state): State<AppState>,
         ApiJson(req): ApiJson<CallRequest>,
@@ -188,16 +241,8 @@ impl ExploreHandler {
                 kind: req.kind,
                 id: req.id,
                 channel: req.channel,
-                visitor: if actor.is_some() {
-                    Visitor::SignedIn
-                } else {
-                    Visitor::Anonymous {
-                        // Told apart by address (in memory only; an IPv6
-                        // client by its /64, as the rate limiter), so one
-                        // visitor's repeated taps are one lead.
-                        key: client_key(ip.as_deref()),
-                    }
-                },
+                // One visitor's repeated taps are one lead.
+                visitor: visitor_of(&viewer, ip.as_deref()),
             })
             .await?;
         Ok(StatusCode::NO_CONTENT)

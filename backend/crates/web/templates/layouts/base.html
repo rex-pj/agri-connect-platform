@@ -1,0 +1,34 @@
+<!doctype html>
+{#- Every page extends this. Shared context: `site`, `lang`; the handler's data is `page`.
+    Assets go through asset_url so their cache-busting version tracks the file. #}
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{% block title %}{{ site.name }}{% endblock title %}</title>
+  {% block meta %}<meta name="description" content="{% if site.description %}{{ site.description }}{% else %}{{ t(key="site.description") }}{% endif %}">{% endblock meta %}
+  <meta name="theme-color" content="#064E3B">
+  <meta name="format-detection" content="telephone=yes">
+  {#- SVG for current browsers, the .ico for the rest, a full-bleed PNG for
+      iOS home screens (which round the corners themselves). -#}
+  <link rel="icon" href="{{ asset_url(path='img/logo.svg') }}" type="image/svg+xml">
+  <link rel="icon" href="{{ asset_url(path='favicon.ico') }}" sizes="32x32">
+  <link rel="apple-touch-icon" href="{{ asset_url(path='img/apple-touch-icon.png') }}">
+  <link rel="stylesheet" href="{{ asset_url(path='vendor/bootstrap-5.3.8/bootstrap.min.css') }}">
+  <link rel="stylesheet" href="{{ asset_url(path='vendor/fontawesome-6.5.1/css/fontawesome.min.css') }}">
+  <link rel="stylesheet" href="{{ asset_url(path='vendor/fontawesome-6.5.1/css/solid.min.css') }}">
+  <link rel="stylesheet" href="{{ asset_url(path='css/fonts.css') }}">
+  <link rel="stylesheet" href="{{ asset_url(path='css/app.css') }}">
+  {#- Libraries a page's components build on (Tom Select): before app.js
+      and Alpine, so they exist when a component starts. -#}
+  {% block vendor %}{% endblock vendor %}
+  {#- Before Alpine: app.js registers the components on alpine:init. -#}
+  <script defer src="{{ asset_url(path='js/app.js') }}"></script>
+  <script defer src="{{ asset_url(path='vendor/alpinejs-csp-3.14.9/cdn.min.js') }}"></script>
+  {#- Pages with an island add js/islands.js here; the others never load it. -#}
+  {% block scripts %}{% endblock scripts %}
+</head>
+<body>
+{% block body %}{% endblock body %}
+</body>
+</html>

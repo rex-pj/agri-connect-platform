@@ -1,0 +1,64 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "atoms/status_badge.html" as status %}
+{% import "atoms/stars.html" as stars %}
+{% import "molecules/admin_header.html" as header %}
+{% import "molecules/admin_search.html" as search %}
+{% import "molecules/pagination_nav.html" as paging %}
+{% import "molecules/row_action.html" as row %}
+{% import "organisms/confirm_sheet.html" as confirm %}
+{#- `page.body` is web::pages::admin::reviews::ReviewsPage. "Ẩn" reloads the
+    list with that row's confirmation open (`b.confirm`); every form sends the
+    list position (page, `provider_id`) back so the redirect lands here
+    again; `b.filter` is set when the list is one provider's. A farmer's new
+    review arrives hidden ("waiting"): showing it is the approval. -#}
+{% block title %}{{ t(key="admin_menu.reviews") }} — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+{% set sub = t(key="admin.reviews_sub") %}
+{{ header::admin_header(title=t(key="admin_menu.reviews"), icon="fa-star", sub=sub) }}
+<div class="admin-body" x-data="dialog" data-open="{% if b.confirm %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+  {% if b.flash == "review_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.review_hidden")) }}{% endif %}
+  {% if b.flash == "review_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.review_shown")) }}{% endif %}
+  {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.reviews"), chips=b.states, chips_label=t(key="admin_state.label")) }}
+  {{ search::admin_results(s=b.search, total=b.total) }}
+  <div class="admin-card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 admin-table admin-table--cards">
+        <thead class="admin-table-head">
+          <tr><th>{{ t(key="admin.col_reviewer") }}</th><th>{{ t(key="admin.col_sent") }}</th><th>{{ t(key="common.provider") }}</th><th>{{ t(key="admin.col_content") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
+        </thead>
+        <tbody>
+          {% for r in b.rows %}
+          {% set v = r.review %}
+          <tr{% if not v.is_visible %} class="table-light text-body-secondary"{% endif %}>
+            <td data-label="" class="fw-semibold">{{ v.reviewer_name }}</td>
+            <td data-label="{{ t(key="admin.col_sent") }}" class="small text-muted text-nowrap"><time datetime="{{ v.created_on | utc_iso }}">{{ v.created_on | vn_datetime }}</time></td>
+            <td data-label="{{ t(key="common.provider") }}"><a class="text-decoration-none" href="{{ r.provider_href }}">{{ v.business_name }}</a></td>
+            <td data-label="{{ t(key="admin.col_content") }}"><div class="cell-prose">{{ stars::stars(rating=v.rating) }}{% if v.comment %}<span class="d-block small">{{ v.comment }}</span>{% endif %}{% if v.reply %}<span class="d-block small text-muted">{{ atoms::icon(name="fa-reply") }} {{ v.reply }}</span>{% endif %}</div></td>
+            <td data-label="{{ t(key="admin.col_status") }}" class="text-center cell-state">{{ status::visibility(on=v.is_visible) }}{% if not v.is_visible %}<span class="d-block small text-muted">{% if v.updated_by_name %}{{ v.updated_by_name }}{% else %}{{ t(key="review.waiting") }}{% endif %}</span>{% endif %}{% for sign in v.suspect %}<span class="cell-short d-block small text-danger mx-auto mt-1">{{ atoms::icon(name="fa-triangle-exclamation") }} {% if sign == "own_phone" %}{{ t(key="admin.review_suspect_own_phone") }}{% elif sign == "quick_answer" %}{{ t(key="admin.review_suspect_quick_answer", minutes=b.suspect_minutes) }}{% else %}{{ t(key="admin.review_suspect_quick", minutes=b.suspect_minutes) }}{% endif %}</span>{% endfor %}</td>
+            <td data-label="" class="text-end">
+              <div class="row-actions">
+                {% if v.is_visible %}
+                {{ row::hide(href=r.hide_href ~ "#xac-nhan", name=t(key="admin.review_of", name=v.reviewer_name)) }}
+                {% else %}
+                {{ row::show(action=r.action, name=t(key="admin.review_of", name=v.reviewer_name), field="is_visible", keep=b.position) }}
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="text-center text-muted py-4">{{ search::empty(s=b.search, none=t(key="admin.no_reviews")) }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% if b.pagination %}{{ paging::pagination_nav(p=b.pagination) }}{% endif %}
+
+  {% if b.confirm %}
+  {{ confirm::confirm_sheet(id="xac-nhan", title=t(key="admin.hide_review_title", name=b.confirm.reviewer), icon="fa-eye-slash", action=b.confirm.action, button=t(key="admin.confirm_hide"), reason_max=limits.audit_reason_max, effect="hide", what=t(key="admin.review_what"), hidden_name="is_visible", hidden_value="false", keep=b.position) }}
+  {% endif %}
+</div>
+{% endblock content %}

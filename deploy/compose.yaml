@@ -1,0 +1,97 @@
+# Production stack on the single Compute Engine VM. Started by
+# remote-deploy.sh with --env-file compose.env (DOMAIN, image tags, database
+# passwords, uploads bucket); the app's own secrets come from /etc/agri-connect/web.env.
+name: agri-connect
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      # Directories, not single files: a file replaced on the host stays
+      # unseen behind a single-file bind mount (it pins the old inode).
+      - ./caddy:/etc/caddy:ro
+      # The Cloudflare Origin Certificate, from Secret Manager (remote-deploy.sh).
+      - /etc/agri-connect/certs:/certs:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+
+  web:
+    image: ${WEB_IMAGE}
+    restart: unless-stopped
+    env_file:
+      - /etc/agri-connect/web.env
+    environment:
+      BIND_ADDR: 0.0.0.0:8080
+      # Rows only; the schema belongs to agri_owner, used just to migrate.
+      DATABASE_URL: postgres://agri_app:${APP_DB_PASSWORD}@db:5432/agri_connect
+      MIGRATION_DATABASE_URL: postgres://agri_owner:${OWNER_DB_PASSWORD}@db:5432/agri_connect
+      APP_ENV: prod
+      APP_URL: https://${DOMAIN}
+      # Product images in a private Cloudflare R2 bucket; its token's keys
+      # are in web.env.
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID}
+      R2_BUCKET: ${R2_BUCKET}
+      HTTPS_ENABLED: "true"
+      # Caddy sets the one address: the visitor's, from CF-Connecting-IP.
+      TRUSTED_PROXY_HOPS: "1"
+      LOG_FORMAT: json
+      RUST_LOG: info,sea_orm=warn,sqlx=warn
+    depends_on:
+      db:
+        condition: service_healthy
+    # Long enough for in-flight requests to drain after SIGTERM.
+    stop_grace_period: 30s
+
+  db:
+    image: postgis/postgis:16-3.5
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: agri_connect
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      OWNER_DB_PASSWORD: ${OWNER_DB_PASSWORD}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+    volumes:
+      # On the separate persistent disk, so the data outlives the VM.
+      - /mnt/disks/pgdata/postgres:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d agri_connect"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    shm_size: 256mb
+    # Sized for the e2-small VM (2 GB, shared with the app); each can be set in
+    # compose.env for a larger one. The image's defaults (128 MB of buffers,
+    # spinning-disk page costs) make every large table a disk read.
+    # pg_stat_statements records what each statement costs: what an index or
+    # a cache is decided on (see "Slow queries" in deploy/README.md).
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${PG_SHARED_BUFFERS:-256MB}
+      - -c
+      - effective_cache_size=${PG_EFFECTIVE_CACHE_SIZE:-768MB}
+      - -c
+      - work_mem=${PG_WORK_MEM:-8MB}
+      - -c
+      - maintenance_work_mem=${PG_MAINTENANCE_WORK_MEM:-64MB}
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=top
+    # No ports: reachable only on the compose network.
+
+volumes:
+  caddy_data:
+  caddy_config:

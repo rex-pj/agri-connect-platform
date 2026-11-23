@@ -1,0 +1,44 @@
+{% extends "layouts/app.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "organisms/service_fields.html" as fields %}
+{% import "molecules/photo_picker.html" as photo %}
+{% import "organisms/confirm_sheet.html" as confirm %}
+{#- Add or edit one of the provider's services, with an optional photo
+    (`multipart/form-data`, works without JS). `page` is
+    web::pages::own_services::ServicePage; `page.service` is set when editing.
+    The category is a set of large cards; the photo box takes the gallery or
+    the camera (no `capture`, so an existing photo can be chosen). Alpine
+    `imagePreview` shows the chosen photo before it is sent. -#}
+{% block title %}{% if page.service %}{{ t(key="common.edit_label", name=page.service.name) }}{% else %}{{ t(key="dashboard.add_service") }}{% endif %} — {{ site.name }}{% endblock title %}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
+{% block main %}
+{% set x = page.service %}
+{% set e = page.errors.fields %}
+<header class="acct-header">
+  <a class="acct-avatar text-decoration-none" href="{{ page.dashboard_href }}" aria-label="{{ t(key="dashboard.back") }}">{{ atoms::icon(name="fa-arrow-left") }}</a>
+  <div><h1 class="acct-name">{% if x %}{{ t(key="dashboard.edit_service") }}{% else %}{{ t(key="dashboard.add_service") }}{% endif %}</h1>{% if x %}<p class="acct-sub">{{ x.name }}</p>{% endif %}</div>
+</header>
+
+<div class="detail-body">
+  {% if x and not x.is_active %}{{ alerts::alert(kind="warning", icon="fa-eye-slash", text=t(key="dashboard.service_hidden_by_admin")) }}{% endif %}
+  {% if not page.can_save %}{{ alerts::alert(kind="secondary", icon="fa-lock", text=t(key="dashboard.service_cannot_edit")) }}{% endif %}
+  <section class="detail-card">
+    <form class="form-stack" method="post" action="{{ page.action }}" enctype="multipart/form-data" novalidate>
+      {% if page.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=page.errors.message) }}{% endif %}
+      <fieldset class="auth-fieldset"{% if not page.can_save %} disabled{% endif %}>
+      {{ fields::service_fields(form=page.form, errors=page.errors, categories=page.categories, limits=page.limits, prefix="sv", cards=true) }}
+      {{ photo::photo_picker(id="sv-image", label=t(key="dashboard.service_photo"), max_mb=page.max_upload_mb, hint=t(key="dashboard.service_photo_hint"), current=x.image_file_id | default(value=""), error=e.image | default(value="")) }}
+      {% if page.can_save %}<button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-floppy-disk") }} {% if x %}{{ t(key="common.save") }}{% else %}{{ t(key="dashboard.add_service") }}{% endif %}</button>{% endif %}
+      </fieldset>
+    </form>
+  </section>
+
+  {% if page.delete_action %}
+  <section class="detail-card" x-data="dialog" x-on:keydown.escape.window="hide">
+    <a class="btn btn-outline-danger w-100" href="#xoa-dich-vu" x-on:click.prevent="show">{{ atoms::icon(name="fa-trash") }} {{ t(key="dashboard.delete_service") }}</a>
+    {{ confirm::confirm_sheet(id="xoa-dich-vu", title=t(key="common.delete_title", name=x.name), icon="fa-trash", action=page.delete_action, button=t(key="common.confirm_delete"), reason_max=limits.audit_reason_max, effect="delete", what=t(key="dashboard.delete_service_what"), button_class="btn-danger", with_reason=false) }}
+  </section>
+  {% endif %}
+</div>
+{% endblock main %}

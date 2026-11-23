@@ -1,0 +1,70 @@
+{% extends "layouts/app.html" %}
+{% import "organisms/category_grid.html" as grid %}
+{% import "molecules/alert_banner.html" as banner %}
+{% import "organisms/product_card.html" as products %}
+{% import "organisms/service_card.html" as services %}
+{% import "molecules/section_header.html" as section %}
+{% import "molecules/geo_cta.html" as geo %}
+{% import "molecules/empty_state.html" as empty %}
+{% import "molecules/provider_cta.html" as seller %}
+{% import "molecules/price_line.html" as price %}
+{#- Home, in the order a farmer on a phone needs it: the alerts (one line
+    each, opened by a tap; the others folded; search is the top bar's), the
+    category shortcuts in two labelled rows, one per errand
+    (hire: services; buy: supplies), each ending in an "all" tile, the
+    near-me banner, the newest crop prices (each crop's, linking to /prices:
+    on a phone the only way there, so high on the page), featured services
+    (one per verified provider, `page.services_on_phone` of them on a phone),
+    the "post a job" card, then featured products.
+    `page` is web::pages::home::HomePage. -#}
+{% block title %}{{ site.name }} — {{ t(key="home.title") }}{% endblock title %}
+{% block meta %}<meta name="description" content="{{ t(key="home.meta") }}">{% endblock meta %}
+{% block main %}
+{{ banner::alert_banner(alerts=page.alerts) }}
+<div class="home-categories home-categories--strip">
+  {% for row in page.rows %}
+  <section class="home-errand">
+    <h2 class="home-categories__title">{{ row.title }}</h2>
+    {{ grid::category_grid(items=row.tiles, class="cat-strip") }}
+  </section>
+  {% endfor %}
+</div>
+
+<section class="home-section">{{ geo::geo_cta(href=url_for(name="explore"), sub=t(key="geo.sub_services", km=limits.near_me_km)) }}</section>
+
+{% if page.prices %}
+<section class="home-section">
+  {%- if page.prices_area %}{% set prices_title = t(key="prices.title_in", area=page.prices_area) %}{% else %}{% set prices_title = t(key="home.prices") %}{% endif %}
+  {{ section::section_header(title=prices_title, more_href=url_for(name="prices")) }}
+  <ul class="detail-card list-unstyled mb-0 price-strip">
+    {% for l in page.prices %}{{ price::price_line(l=l, show_area=not page.prices_area, compact=true, wide_only=loop.index > page.prices_on_phone) }}{% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if page.services %}
+<section class="home-section">
+  {{ section::section_header(title=t(key="home.featured_services"), more_href=url_for(name="services")) }}
+  {{ services::service_grid(services=page.services, phone_max=page.services_on_phone) }}
+</section>
+{% endif %}
+
+{% if page.job_cta %}<section class="home-section">{{ seller::provider_cta(cta=page.job_cta) }}</section>{% endif %}
+
+{% if page.products %}
+<section class="home-section">
+  {{ section::section_header(title=t(key="home.featured_products"), more_href=url_for(name="products")) }}
+  <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 row-cols-xl-6 g-2 g-md-3">
+    {% for p in page.products %}<div class="col">{{ products::product_card(p=p) }}</div>{% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if shell.provider_cta %}
+<section class="home-section">{{ seller::provider_cta(cta=shell.provider_cta) }}</section>
+{% endif %}
+
+{% if not page.products and not page.services %}
+{{ empty::empty_state(icon="fa-seedling", title=t(key="home.empty"), hint=t(key="home.empty_hint"), action_href=url_for(name="explore"), action_icon="fa-location-dot", action_label=t(key="home.empty_action")) }}
+{% endif %}
+{% endblock main %}

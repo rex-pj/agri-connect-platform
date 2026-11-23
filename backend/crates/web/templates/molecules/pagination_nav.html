@@ -1,0 +1,16 @@
+{#- Page links. `p` is web::pages::listing::Pagination: every link is a real
+    URL, so paging works without JS and each page can be shared. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro pagination_nav(p) -%}
+<nav class="pagination-row" aria-label="{{ t(key="pagination.label") }}">
+  {% if p.prev %}<a class="page-btn" href="{{ p.prev }}" aria-label="{{ t(key="pagination.prev") }}" rel="prev">{{ atoms::icon(name="fa-chevron-left") }}</a>{% else %}<span class="page-btn page-btn--disabled" aria-hidden="true">{{ atoms::icon(name="fa-chevron-left") }}</span>{% endif %}
+  {% for link in p.pages %}
+  {% if link.number %}
+  <a class="page-btn{% if link.current %} page-btn--active{% endif %}" href="{{ link.href }}" aria-label="{{ t(key="pagination.page", number=link.number) }}"{% if link.current %} aria-current="page"{% endif %}>{{ link.number }}</a>
+  {% else %}
+  <span class="page-ellipsis" aria-hidden="true">…</span>
+  {% endif %}
+  {% endfor %}
+  {% if p.next %}<a class="page-btn" href="{{ p.next }}" aria-label="{{ t(key="pagination.next") }}" rel="next">{{ atoms::icon(name="fa-chevron-right") }}</a>{% else %}<span class="page-btn page-btn--disabled" aria-hidden="true">{{ atoms::icon(name="fa-chevron-right") }}</span>{% endif %}
+</nav>
+{%- endmacro pagination_nav %}

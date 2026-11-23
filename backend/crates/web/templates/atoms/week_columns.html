@@ -1,0 +1,50 @@
+{#- One weekly figure of the demand report as a column chart, drawn on the
+    server (no script, no style attribute: the page CSP). `weeks` are the
+    report's, oldest first (each with `starts_on`, `ends_on`), `figures` the
+    matching application::outputs::Figure, `min` the smallest figure shown,
+    `tone` the colour (a `week-columns__bar--{tone}` class), `label` what
+    the chart counts (its accessible name).
+
+    Each column carries its number above it and its week under it, so the
+    chart needs no axis. The scale runs from 0 to the largest figure shown
+    (at least `min`). A hidden figure is an outline at the height of
+    "fewer than `min`", labelled so, never a zero; a zero is a hairline. -#}
+{% macro week_columns(weeks, figures, min, tone, label) -%}
+{%- set step = 40 -%}
+{%- set top = 16 -%}
+{%- set plot = 96 -%}
+{%- set foot = 18 -%}
+{%- set n = figures | length -%}
+{%- set width = n * step -%}
+{%- set base = top + plot -%}
+{%- set_global most = min -%}
+{%- for f in figures %}{% if f.value is number and f.value > most %}{% set_global most = f.value %}{% elif f.at_least is number and f.at_least > most %}{% set_global most = f.at_least %}{% endif %}{% endfor -%}
+<svg class="week-columns" viewBox="0 0 {{ width }} {{ base + foot }}" role="img" aria-label="{{ label }}">
+  <line class="week-columns__base" x1="0" x2="{{ width }}" y1="{{ base }}" y2="{{ base }}"/>
+  {%- for f in figures %}
+  {%- set w = weeks[loop.index0] %}
+  {%- if f.value is number %}
+    {%- if f.value == 0 %}{% set height = 1 %}{% set kind = tone %}{% else %}{% set height = f.value * plot / most %}{% set kind = tone %}{% endif %}
+    {%- set said = f.value | number %}
+  {%- elif f.at_least is number %}
+    {%- set height = f.at_least * plot / most %}
+    {%- set kind = "hidden" %}
+    {%- set said = t(key="demand.at_least", count=f.at_least) %}
+  {%- else %}
+    {%- set height = min * plot / most %}
+    {%- set kind = "hidden" %}
+    {%- set said = t(key="demand.fewer_than", min=min) %}
+  {%- endif %}
+  {%- set x = loop.index0 * step %}
+  {%- set y = base - height %}
+  {%- set mid = x + step / 2 %}
+  {%- set label_y = y - 4 %}
+  <g>
+    <title>{{ w.starts_on | day_month }} – {{ w.ends_on | day_month }}: {{ said }}</title>
+    <rect class="week-columns__bar week-columns__bar--{{ kind }}" x="{{ x + 6 }}" y="{{ y | round(precision=1) }}" width="{{ step - 12 }}" height="{{ height | round(precision=1) }}"/>
+    <text class="week-columns__value" x="{{ mid }}" y="{{ label_y | round(precision=1) }}" text-anchor="middle">{{ said }}</text>
+    <text class="week-columns__week" x="{{ mid }}" y="{{ base + foot - 4 }}" text-anchor="middle">{{ w.starts_on | day_month }}</text>
+  </g>
+  {%- endfor %}
+</svg>
+{%- endmacro week_columns %}

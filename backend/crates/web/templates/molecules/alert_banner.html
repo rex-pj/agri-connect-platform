@@ -1,0 +1,43 @@
+{#- The alerts in force today, every sector's, at the very top of
+    the home page: what to know at once comes before anything to browse.
+    `alerts` are web::pages::home::AlertCard (kind icon, title, what to do,
+    for whom and where, until when). One under another, each whole and kept
+    small by its type and spacing: a title, what to do, then for whom, where
+    and until when. The newest shows; the others (at most `ALERTS_SHOWN`
+    in all) fold under it: the newest alert is itself the `<summary>`, with
+    a small "+n" and a chevron at its right, so the fold costs no row of its
+    own and the whole card is the tap target (a `<details>`, so without JS
+    too). Amber; nothing when there is none. Spans only: a summary holds
+    phrasing content. One macro, one loop: Tera resolves `self::` against
+    the page rendering it, not this file. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro alert_banner(alerts) -%}
+{% if alerts %}
+{% set more = alerts | length - 1 %}
+<section class="home-alerts" aria-label="{{ t(key="alert.banner_label") }}">
+  {% if more > 0 %}<details class="home-alerts__fold">{% endif %}
+  {% for a in alerts %}
+  {% set toggle = loop.first and more > 0 %}
+  {% set until = a.until | day_month %}
+  {% if toggle %}<summary class="home-alerts__toggle">{% endif %}
+  <span class="home-alert">
+    <span class="home-alert__icon">{{ atoms::icon(name=a.icon) }}</span>
+    <span class="home-alert__text">
+      <strong class="home-alert__title">{{ a.title }}</strong>
+      <span class="home-alert__body">{{ a.body }}</span>
+      <span class="home-alert__meta">{{ a.reach }} · {{ t(key="alert.until", day=until) }}</span>
+    </span>
+    {% if toggle %}
+    <span class="home-alert__more">
+      <span class="home-alert__count" aria-hidden="true">{{ t(key="alert.more_short", count=more) }}</span>
+      <span class="visually-hidden">{{ t(key="alert.more", count=more) }}</span>
+      {{ atoms::icon(name="fa-chevron-down", class="home-alert__chevron") }}
+    </span>
+    {% endif %}
+  </span>
+  {% if toggle %}</summary>{% endif %}
+  {% endfor %}
+  {% if more > 0 %}</details>{% endif %}
+</section>
+{% endif %}
+{%- endmacro alert_banner %}

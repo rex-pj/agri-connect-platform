@@ -1,0 +1,128 @@
+{% extends "layouts/app.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "molecules/empty_state.html" as empty %}
+{% import "organisms/own_services.html" as own %}
+{% import "organisms/business_fields.html" as business %}
+{#- The provider's own area: services and products first (what they come to
+    change; services lead unless only products are listed), then the
+    business profile. `page` is web::pages::dashboard::DashboardPage. The
+    location boxes can be typed or filled by the `ac-geolocate` island. -#}
+{% block title %}{{ t(key="dashboard.title") }} — {{ site.name }}{% endblock title %}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
+{% block scripts %}<script defer src="{{ asset_url(path='js/islands.js') }}"></script>{% endblock scripts %}
+{% block main %}
+{% set p = page.profile %}
+<header class="acct-header">
+  <span class="acct-avatar">{{ atoms::icon(name="fa-store") }}</span>
+  <div>
+    <h1 class="acct-name">{% if p %}{{ p.name }}{% else %}{{ t(key="dashboard.title") }}{% endif %}</h1>
+    {% if p and p.is_verified %}<span class="acct-role">{{ atoms::icon(name="fa-circle-check", class="me-1") }}{{ t(key="status.verified") }}</span>{% endif %}
+  </div>
+</header>
+
+<div class="detail-body">
+  {% if page.flash == "product_created" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="dashboard.product_created")) }}{% endif %}
+  {% if page.flash == "product_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="dashboard.product_saved")) }}{% endif %}
+  {% if page.flash == "product_deleted" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="dashboard.product_deleted")) }}{% endif %}
+  {% if page.flash == "service_created" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="dashboard.service_created")) }}{% endif %}
+  {% if page.flash == "service_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="dashboard.service_saved")) }}{% endif %}
+  {% if page.flash == "service_deleted" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="dashboard.service_deleted")) }}{% endif %}
+  {% if page.flash == "profile_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="dashboard.profile_saved")) }}{% endif %}
+
+  {% if not p %}
+  <section class="detail-card">
+    {{ empty::empty_state(icon="fa-store-slash", title=t(key="dashboard.no_business"), hint=t(key="dashboard.no_business_hint")) }}
+  </section>
+  {% else %}
+  {% if page.calls is number %}
+  <section class="detail-card d-flex align-items-center gap-3" aria-label="{{ t(key="dashboard.calls_label") }}">
+    <span class="provider-cta__icon">{{ atoms::icon(name="fa-phone") }}</span>
+    <span class="flex-grow-1">
+      <strong class="d-block fs-5">{{ t(key="dashboard.calls", count=page.calls) }}</strong>
+      <span class="small text-muted">{{ t(key="dashboard.calls_sub", days=page.call_days) }}</span>
+    </span>
+  </section>
+  {% endif %}
+  {% if page.inbox %}
+  <a class="detail-card d-flex align-items-center gap-3 text-decoration-none" href="{{ page.inbox.href }}">
+    <span class="provider-cta__icon">{{ atoms::icon(name="fa-envelope-open-text") }}</span>
+    <span class="flex-grow-1">
+      <strong class="d-block text-body">{{ t(key="contact.title") }}</strong>
+      <span class="small text-muted">{% if page.inbox.new_count > 0 %}{{ t(key="dashboard.inbox_waiting", count=page.inbox.new_count) }}{% else %}{{ t(key="inquiries.count", count=page.inbox.total) }}{% endif %}</span>
+    </span>
+    {% if page.inbox.new_count > 0 %}<span class="badge text-bg-info fs-6">{{ page.inbox.new_count }}</span>{% endif %}
+    {{ atoms::icon(name="fa-chevron-right", class="text-muted") }}
+  </a>
+  {% endif %}
+  {% if page.jobs %}
+  <a class="detail-card d-flex align-items-center gap-3 text-decoration-none" href="{{ page.jobs.href }}">
+    <span class="provider-cta__icon">{{ atoms::icon(name="fa-bullhorn") }}</span>
+    <span class="flex-grow-1">
+      <strong class="d-block text-body">{{ t(key="own_jobs.title") }}</strong>
+      <span class="small text-muted">{{ t(key="own_jobs.count", count=page.jobs.open) }}</span>
+    </span>
+    {% if page.jobs.open > 0 %}<span class="badge text-bg-info fs-6">{{ page.jobs.open }}</span>{% endif %}
+    {{ atoms::icon(name="fa-chevron-right", class="text-muted") }}
+  </a>
+  {% endif %}
+  {% if page.reviews %}
+  <a class="detail-card d-flex align-items-center gap-3 text-decoration-none" href="{{ page.reviews.href }}">
+    <span class="provider-cta__icon">{{ atoms::icon(name="fa-star") }}</span>
+    <span class="flex-grow-1">
+      <strong class="d-block text-body">{{ t(key="review.title") }}</strong>
+      <span class="small text-muted">{{ t(key="reviews.count", count=page.reviews.total) }}</span>
+    </span>
+    {% if page.reviews.waiting > 0 %}<span class="badge text-bg-info fs-6" aria-label="{{ t(key="review.waiting_count", count=page.reviews.waiting) }}">{{ page.reviews.waiting }}</span>{% endif %}
+    {{ atoms::icon(name="fa-chevron-right", class="text-muted") }}
+  </a>
+  {% endif %}
+  {% if page.services_first %}{{ own::own_services(s=page.services) }}{% endif %}
+  <section class="detail-card" aria-labelledby="products-title">
+    <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+      <h2 class="detail-card__title mb-0" id="products-title">{{ atoms::icon(name="fa-box-open", class="me-1") }} {{ t(key="dashboard.products_count", count=page.rows | length) }}</h2>
+      {% if page.can_create and page.rows %}<a class="btn btn-success" href="{{ page.new_href }}">{{ atoms::icon(name="fa-plus") }} {{ t(key="common.add") }}</a>{% endif %}
+    </div>
+    {% if page.rows %}
+    <ul class="list-unstyled mb-0">
+      {% for r in page.rows %}
+      {% set x = r.product %}
+      <li class="d-flex align-items-center gap-3 py-2 border-bottom">
+        {% if x.image_file_id %}<img class="rounded object-fit-cover flex-shrink-0" width="56" height="56" src="{{ file_url(id=x.image_file_id, variant="thumb") }}" alt="" loading="lazy" decoding="async">{% else %}<span class="dash-thumb flex-shrink-0">{{ atoms::icon(name="fa-image") }}</span>{% endif %}
+        <div class="flex-grow-1 min-w-0">
+          {% if r.public_href %}<a class="fw-bold text-decoration-none d-block text-truncate" href="{{ r.public_href }}">{{ x.name }}</a>{% else %}<strong class="d-block text-truncate">{{ x.name }}</strong>{% endif %}
+          <span class="small text-muted">{% if x.price %}{{ x.price | vnd }}{% if x.unit %}/{{ x.unit }}{% endif %}{% else %}{{ t(key="price.ask") }}{% endif %} · {{ x.category }}{% if x.commodity %} · {{ x.commodity }}{% endif %}</span>
+          {% if not x.is_active %}<span class="badge text-bg-secondary ms-1">{{ t(key="dashboard.hidden_by_admin") }}</span>{% endif %}
+        </div>
+        <a class="btn btn-outline-success" href="{{ r.edit_href }}" aria-label="{{ t(key="common.edit_label", name=x.name) }}">{{ atoms::icon(name="fa-pen") }}</a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% if page.products_full %}<p class="small text-muted mt-2 mb-0">{{ t(key="dashboard.products_full", max=page.products_max) }}</p>{% endif %}
+    {% elif page.can_create %}
+    {{ empty::empty_state(icon="fa-box-open", title=t(key="dashboard.no_products"), hint=t(key="dashboard.no_products_hint"), action_href=page.new_href, action_icon="fa-plus", action_label=t(key="dashboard.add_product")) }}
+    {% else %}
+    {{ empty::empty_state(icon="fa-box-open", title=t(key="dashboard.no_products"), hint=t(key="dashboard.no_products_hint")) }}
+    {% endif %}
+  </section>
+  {% if not page.services_first %}{{ own::own_services(s=page.services) }}{% endif %}
+
+  <section class="detail-card" id="cua-hang" aria-labelledby="profile-title">
+    <h2 class="detail-card__title" id="profile-title">{{ atoms::icon(name="fa-id-card", class="me-1") }} {{ t(key="dashboard.profile") }}</h2>
+    {% if page.public_href %}<p class="small"><a href="{{ page.public_href }}">{{ atoms::icon(name="fa-arrow-up-right-from-square", class="me-1") }}{{ t(key="dashboard.public_page") }}</a></p>{% endif %}
+    {% if page.can_edit_profile %}
+    <form class="form-stack" method="post" action="{{ page.profile_action }}" novalidate>
+      {% if page.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=page.errors.message) }}{% endif %}
+      {{ business::business_fields(form=page.form, errors=page.errors, limits=limits, prefix="pf") }}
+      <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="dashboard.save_profile") }}</button>
+    </form>
+    {% else %}
+    <dl class="acct-rows">
+      <div class="acct-row"><dt>{{ t(key="form.phone_short") }}</dt><dd>{{ p.phone | phone }}</dd></div>
+      {% if p.address %}<div class="acct-row"><dt>{{ t(key="form.address") }}</dt><dd>{{ p.address }}</dd></div>{% endif %}
+    </dl>
+    {% endif %}
+  </section>
+  {% endif %}
+</div>
+{% endblock main %}

@@ -1,0 +1,31 @@
+{#- An optional photo box: one large square tile that opens the phone's
+    picker (camera or gallery). Empty, it asks for one; with a photo (the
+    stored one, `current`, or the one just chosen) it shows it with a
+    "change" tag. Alpine `imagePreview` shows the chosen photo before the
+    form is sent and hides the native file box; without JS that box stays
+    visible under the tile and works as usual. `hint` is the line about why
+    a photo helps; the format and size line is added here. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro photo_picker(id, label, max_mb, hint, current="", error="") -%}
+<div class="form-field photo-picker" x-data="imagePreview"{% if current %} data-has-current="true"{% endif %}>
+  <span class="form-label fw-semibold d-block">{{ label }} <span class="fw-normal text-muted">{{ t(key="form.optional") }}</span></span>
+  <label class="photo-picker__tile{% if current %} photo-picker__tile--filled{% endif %}{% if error %} photo-picker__tile--invalid{% endif %}" for="{{ id }}" :class="tileClass">
+    {% if current %}<img class="photo-picker__img" src="{{ file_url(id=current, variant="thumb") }}" alt="{{ t(key="photo.current_alt") }}" x-show="unchanged">{% endif %}
+    <img class="photo-picker__img" alt="{{ t(key="photo.chosen_alt") }}" x-show="chosen" x-cloak :src="src">
+    {% if not current %}
+    <span class="photo-picker__empty" x-show="unchanged">
+      {{ atoms::icon(name="fa-camera", class="photo-picker__icon") }}
+      <strong>{{ t(key="photo.choose") }}</strong>
+      <span class="small">{{ t(key="photo.choose_hint") }}</span>
+    </span>
+    {% endif %}
+    <span class="photo-picker__tag" x-show="hasPhoto"{% if not current %} x-cloak{% endif %}>{{ atoms::icon(name="fa-camera-rotate") }} {{ t(key="photo.change") }}</span>
+  </label>
+  <input class="form-control photo-picker__input{% if error %} is-invalid{% endif %}" id="{{ id }}" name="image" type="file" accept="image/jpeg,image/png,image/webp" :class="inputClass" x-on:change="pick" aria-describedby="{{ id }}-hint{% if error %} {{ id }}-error{% endif %}"{% if error %} aria-invalid="true"{% endif %}>
+  <div class="form-text" id="{{ id }}-hint">
+    <span class="d-block">{{ hint }}</span>
+    <span class="d-block">{{ t(key="photo.formats", max_mb=max_mb) }}</span>
+  </div>
+  {% if error %}<div class="invalid-feedback d-block" id="{{ id }}-error">{{ error }}</div>{% endif %}
+</div>
+{%- endmacro photo_picker %}

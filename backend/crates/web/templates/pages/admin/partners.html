@@ -1,0 +1,100 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "atoms/status_badge.html" as status %}
+{% import "molecules/admin_header.html" as header %}
+{% import "molecules/admin_search.html" as search %}
+{% import "molecules/pagination_nav.html" as paging %}
+{% import "molecules/row_action.html" as row %}
+{% import "molecules/sheet_header.html" as sheet_head %}
+{% import "organisms/partner_fields.html" as fields %}
+{#- `page.body` is web::pages::admin::partners::PartnersPage: what partners
+    bring in (paying partners today, monthly revenue, by area), every
+    partner, and the create form, a sheet opened by the header's "add" (an
+    anchored section without JS) that comes back open with its messages. -#}
+{% block title %}{{ t(key="admin_menu.partners") }} — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+{% set k = b.kpis %}
+<div x-data="dialog" data-open="{% if b.errors.message or b.errors.fields %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+{{ header::admin_header(title=t(key="admin_menu.partners"), icon="fa-handshake", sub=t(key="partner.sub", count=k.paying_partners), action_href="#them-doi-tac", action_icon="fa-plus", action_label=t(key="partner.add"), action_opens=true) }}
+<div class="admin-body">
+  <div class="row g-3 g-md-4 mb-4">
+    <div class="col-6 col-lg-3">
+      <div class="stat-card">
+        <span class="stat-card__icon stat-card__icon--green">{{ atoms::icon(name="fa-handshake") }}</span>
+        <div><p class="stat-card__label">{{ t(key="partner.paying") }}</p><p class="stat-card__value">{{ k.paying_partners | number }}</p></div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="stat-card">
+        <span class="stat-card__icon stat-card__icon--amber">{{ atoms::icon(name="fa-coins") }}</span>
+        <div><p class="stat-card__label">{{ t(key="partner.monthly_revenue") }}</p><p class="stat-card__value">{{ k.monthly_revenue | vnd }}</p></div>
+      </div>
+    </div>
+  </div>
+
+  {% if k.provinces %}
+  <section class="admin-section" aria-labelledby="revenue-title">
+    <h2 class="admin-section__title" id="revenue-title">{{ t(key="partner.by_area") }}</h2>
+    <p class="small text-muted">{{ t(key="partner.by_province_hint") }}</p>
+    {% for p in k.provinces %}
+    <details class="border-bottom">
+      <summary class="py-2 d-flex justify-content-between align-items-center gap-2">
+        <span><span class="fw-semibold">{{ p.label }}</span> <span class="small text-muted">· {{ t(key="partner.partners_count", count=p.partners) }} · {{ t(key="partner.areas_count", count=p.areas | length) }}</span></span>
+        <span class="fw-semibold text-nowrap">{{ p.monthly_revenue | vnd }}</span>
+      </summary>
+      <ul class="list-unstyled mb-2 ps-3">
+        {% for a in p.areas %}
+        <li class="py-1 d-flex justify-content-between gap-2 small">
+          <a class="link-body-emphasis" href="{{ b.demand_hrefs[a.area] }}">{% if a.area is starting_with("p") %}{{ t(key="partner.whole_province", name=a.label) }}{% else %}{{ a.label }}{% endif %}</a>
+          <span class="text-nowrap"><span class="text-muted">{{ t(key="partner.partners_count", count=a.partners) }} ·</span> {{ a.monthly_revenue | vnd }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.partners"), chips=b.states, chips_label=t(key="admin_state.label")) }}
+  {{ search::admin_results(s=b.search, total=b.total) }}
+  <div class="admin-card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 admin-table admin-table--cards">
+        <thead class="admin-table-head">
+          <tr><th>{{ t(key="partner.name") }}</th><th>{{ t(key="partner.kind") }}</th><th>{{ t(key="nav.account") }}</th><th class="text-center">{{ t(key="partner.in_force") }}</th><th class="text-end">{{ t(key="partner.monthly_revenue") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
+        </thead>
+        <tbody>
+          {% for r in b.rows %}
+          {% set p = r.partner %}
+          <tr{% if not p.is_active %} class="table-light text-body-secondary"{% endif %}>
+            <td data-label=""><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ p.name }}</a>{% if p.is_demo %} {{ status::demo() }}{% endif %}</td>
+            <td data-label="{{ t(key="partner.kind") }}">{{ r.kind_label }}</td>
+            <td data-label="{{ t(key="nav.account") }}">{% if p.account_username %}<span class="badge text-bg-light border">{{ p.account_username }}</span>{% else %}<span class="small text-muted">{{ t(key="admin.none") }}</span>{% endif %}</td>
+            <td data-label="{{ t(key="partner.in_force") }}" class="text-center">{{ p.contracts_in_force }}</td>
+            <td data-label="{{ t(key="partner.monthly_revenue") }}" class="text-end text-nowrap">{{ p.monthly_revenue | vnd }}</td>
+            <td data-label="{{ t(key="admin.col_status") }}" class="text-center cell-state">{{ status::account(on=p.is_active) }}</td>
+            <td data-label="" class="text-end"><div class="row-actions">{{ row::open(href=r.href, name=p.name) }}</div></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="text-center text-muted py-4">{{ search::empty(s=b.search, none=t(key="partner.none")) }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% if b.pagination %}{{ paging::pagination_nav(p=b.pagination) }}{% endif %}
+
+  <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
+  <section class="contact-sheet" id="them-doi-tac" aria-labelledby="them-doi-tac-title" :class="sheetClass">
+    {{ sheet_head::sheet_header(id="them-doi-tac", title=t(key="partner.add"), icon="fa-handshake") }}
+    <form class="contact-sheet__form" method="post" action="{{ b.create_action }}" novalidate>
+      {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
+      {{ fields::partner_fields(form=b.form, errors=b.errors, kinds=b.kinds, phone_pattern=limits.phone_pattern, prefix="new", first=true) }}
+      <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-plus") }} {{ t(key="partner.add") }}</button>
+    </form>
+  </section>
+</div>
+</div>
+{% endblock content %}

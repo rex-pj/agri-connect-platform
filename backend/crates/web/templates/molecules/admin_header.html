@@ -1,0 +1,18 @@
+{#- Title row of an admin page, with an optional way back above it and the
+    page's one action at its right (`action_class`: `btn-success` for "add",
+    `btn-outline-secondary` for a way out, e.g. the public page).
+    `action_opens`: the action is an anchor to a sheet on the page, which it
+    opens instead when the header sits inside that sheet's `dialog` scope. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro admin_header(title, icon, sub="", back_href="", back_label="", action_href="", action_icon="", action_label="", action_class="btn-success", action_opens=false) -%}
+<header class="admin-header">
+  {% if back_href %}<a class="admin-header__back" href="{{ back_href }}">{{ atoms::icon(name="fa-arrow-left", class="me-1") }}{{ back_label }}</a>{% endif %}
+  <div class="admin-header__row">
+    <div>
+      <h1 class="admin-header__title">{{ atoms::icon(name=icon, class="text-success me-2") }}{{ title }}</h1>
+      {% if sub %}<p class="admin-header__sub">{{ sub }}</p>{% endif %}
+    </div>
+    {% if action_href %}<a class="btn {{ action_class }} admin-header__action" href="{{ action_href }}"{% if action_opens %} x-on:click.prevent="show"{% endif %}>{{ atoms::icon(name=action_icon) }} {{ action_label }}</a>{% endif %}
+  </div>
+</header>
+{%- endmacro admin_header %}

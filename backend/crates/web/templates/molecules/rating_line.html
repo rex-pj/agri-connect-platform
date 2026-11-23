@@ -1,0 +1,9 @@
+{#- A provider's rating in one line: a star, the average and how many
+    reviews (`r` is application::outputs::RatingDto, `None` without any).
+    `href` makes it a link to the reviews; `compact` is the cards' "(3)". -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro rating_line(r, href="", compact=false) -%}
+{% if r %}
+{% if href %}<a class="rating-line text-decoration-none" href="{{ href }}">{% else %}<span class="rating-line">{% endif %}{{ atoms::icon(name="fa-star", class="text-warning") }} <strong>{{ r.average }}</strong> <span class="text-muted">{% if compact %}({{ r.count }}){% else %}· {{ t(key="reviews.count", count=r.count) }}{% endif %}</span>{% if href %}</a>{% else %}</span>{% endif %}
+{% endif %}
+{%- endmacro rating_line %}

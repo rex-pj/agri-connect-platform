@@ -1,0 +1,35 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/status_badge.html" as status %}
+{% import "molecules/admin_header.html" as header %}
+{% import "molecules/admin_tabs.html" as tabs %}
+{% import "molecules/row_action.html" as row %}
+{#- `page.body` is web::pages::admin::roles::RolesPage. -#}
+{% block title %}{{ t(key="admin_menu.roles") }} — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{{ header::admin_header(title=t(key="admin_menu.roles"), icon="fa-shield-halved", sub=t(key="admin.roles_sub")) }}
+<div class="admin-body">
+  {{ tabs::admin_tabs(tabs=page.body.tabs, label=t(key="admin_menu.roles")) }}
+  <div class="admin-card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 admin-table admin-table--cards">
+        <thead class="admin-table-head">
+          <tr><th>{{ t(key="form.name") }}</th><th>{{ t(key="admin.col_code") }}</th><th class="text-center">{{ t(key="admin.col_permission_count") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
+        </thead>
+        <tbody>
+          {% for r in page.body.roles %}
+          <tr{% if not r.role.is_active %} class="table-light text-body-secondary"{% endif %}>
+            <td data-label=""><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ r.role.name }}</a>{% if r.role.description %}<span class="d-block small text-muted">{{ r.role.description }}</span>{% endif %}</td>
+            <td data-label="{{ t(key="admin.col_code") }}"><code>{{ r.role.code }}</code></td>
+            <td data-label="{{ t(key="admin.col_permission_count") }}" class="text-center">{{ r.granted }}</td>
+            <td data-label="{{ t(key="admin.col_status") }}" class="text-center cell-state">{{ status::account(on=r.role.is_active) }}</td>
+            <td data-label="" class="text-end"><div class="row-actions">{{ row::open(href=r.href, name=r.role.name) }}</div></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-center text-muted py-4">{{ t(key="admin.no_roles") }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock content %}

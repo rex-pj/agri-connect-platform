@@ -1,0 +1,33 @@
+{#- The boxes of a partner's contract, shared by the "add" form and each
+    contract's edit form. `form` is web::pages::admin::partners::ContractForm
+    (as typed), `errors` its FormErrors, `areas` / `categories` the options.
+    `with_area`: a new contract chooses its area; an existing one keeps it
+    (its sponsored shops belong to it). `prefix` keeps the ids apart. -#}
+{% import "molecules/form_field.html" as field %}
+{% macro contract_fields(form, errors, areas, categories, prefix, with_area=true) -%}
+{% set e = errors.fields %}
+{% if with_area %}
+{{ field::area_select(id=prefix ~ "-area", name="area", label=t(key="demand.area"), groups=areas, value=form.area, error=e.area | default(value=""), required=true, placeholder=t(key="partner.choose_unit")) }}
+{% endif %}
+<fieldset class="form-field">
+  <legend class="form-label fw-semibold fs-6">{{ t(key="partner.categories") }} <span class="text-danger" aria-hidden="true">*</span></legend>
+  <div class="row row-cols-1 row-cols-md-2 g-1">
+    {% for cat in categories %}
+    {% if cat.group %}<p class="col-12 small fw-semibold text-muted mb-0 mt-2">{{ cat.group }}</p>{% endif %}
+    <div class="col">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="{{ prefix }}-cat-{{ cat.id }}" name="{{ cat.field }}"{% if cat.id in form.category_ids %} checked{% endif %}>
+        <label class="form-check-label" for="{{ prefix }}-cat-{{ cat.id }}">{{ cat.name }}</label>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% if e.category_ids %}<div class="invalid-feedback d-block">{{ e.category_ids }}</div>{% endif %}
+</fieldset>
+<div class="row g-2">
+  <div class="col-6">{{ field::input(id=prefix ~ "-start", name="starts_on", label=t(key="partner.starts_on"), type="date", value=form.starts_on, required=true) }}</div>
+  <div class="col-6">{{ field::input(id=prefix ~ "-end", name="ends_on", label=t(key="partner.ends_on"), type="date", value=form.ends_on, error=e.ends_on | default(value=""), required=true) }}</div>
+</div>
+{{ field::input(id=prefix ~ "-fee", name="monthly_fee", label=t(key="partner.monthly_fee"), value=form.monthly_fee, error=e.monthly_fee | default(value=""), required=true, inputmode="numeric", placeholder=t(key="partner.monthly_fee_placeholder")) }}
+{{ field::textarea(id=prefix ~ "-note", name="note", label=t(key="partner.note"), value=form.note, error=e.note | default(value=""), rows=2) }}
+{%- endmacro contract_fields %}

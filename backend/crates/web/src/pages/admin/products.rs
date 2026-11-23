@@ -1,0 +1,774 @@
+//! /admin/supplies: every provider's products, optionally for one provider or
+//! by name, with hide / show and delete; /admin/supplies/{id}: one product,
+//! to edit, hide / show or delete.
+//!
+//! Hiding and deleting ask for confirmation and a reason. The row's link
+//! reloads the list with `?hide={id}` or `?delete={id}`, which renders that
+//! confirmation open: a dialog with JS, an anchored form without. Showing a
+//! product again is one button. A row's action lands back on the same page of
+//! the list (`back=list`); the product page's own actions land back on it, a
+//! deletion on the provider's products.
+
+use application::{
+    authz::Actor,
+    outputs::{AdminPagedResponse, AdminProductDto, CategoryDto, CommodityDto, ListingActivityDto},
+    usecases::admin_usecase::HistoryOf,
+};
+use axum::{extract::State, http::StatusCode, response::Response};
+use domain::{
+    models::{
+        admin_list::{AdminSort, LISTING_LIST_STATES},
+        business::ListingRef,
+        product::AdminProductFilter,
+    },
+    Error, ErrorCode,
+};
+use serde::{Deserialize, Serialize};
+
+use crate::{
+    app_state::AppState,
+    constants::IMAGE_FIELD,
+    cookies::{Flash, TakeFlash},
+    extract::{ApiForm, ApiMultipart, ApiPath, ApiQuery},
+    labels::sector_label,
+    middleware::auth::Viewer,
+    pages::admin::sector_href,
+    pages::{
+        admin::{
+            history_rows, is_refusal,
+            listing_record::{listing_controls, ListingState, PRODUCT_WORDS},
+            render_admin, url, AdminTab, Confirm, HistoryRow, ListPosition, ListReturn, Outcome,
+            ProviderFilter, ReasonForm, RecordHeader, RowConfirm, SearchBox, BACK_TO_LIST,
+        },
+        canonical_url,
+        dashboard::{max_upload_mb, prepare},
+        forms::{reason, FormErrors},
+        listing::{parse_opt, Pagination},
+        parse_id,
+        product_form::{product_categories, product_commodities, ProductForm},
+        see_other,
+    },
+};
+
+/// The id of the create sheet on a provider's supplies list (`products.html`):
+/// the provider's page links straight to it.
+pub const CREATE_SHEET: &str = "them-vat-tu";
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct ListQuery {
+    pub page: String,
+    pub provider_id: String,
+    pub q: String,
+    /// Those for one commodity, or of one supply type.
+    pub commodity_id: String,
+    pub category_id: String,
+    /// Shown / hidden (`?state=`), the order (`?sort=`).
+    pub state: String,
+    pub sort: String,
+    /// The sector, what it lacks, the price between, the days made between.
+    pub sector: String,
+    pub gap: String,
+    pub fee_min: String,
+    pub fee_max: String,
+    pub from: String,
+    pub to: String,
+    /// The product whose hide confirmation is open.
+    pub hide: String,
+    /// The product whose delete confirmation is open.
+    pub delete: String,
+}
+
+#[derive(Serialize)]
+pub struct ProductRow {
+    pub product: AdminProductDto,
+    /// The product's admin page.
+    pub href: String,
+    pub provider_href: String,
+    /// The list narrowed to its supply type.
+    pub category_href: String,
+    /// Its sector's name, "every sector" for none.
+    pub sector_label: String,
+    pub sector_href: Option<String>,
+    /// The list narrowed to the commodity it is for.
+    pub commodity_href: Option<String>,
+    pub hide_href: String,
+    pub delete_href: String,
+    pub status_action: String,
+}
+
+#[derive(Serialize)]
+pub struct ProductsPage {
+    pub total: i64,
+    pub rows: Vec<ProductRow>,
+    pub pagination: Option<Pagination>,
+    /// Set when the list is one provider's.
+    pub filter: Option<ProviderFilter>,
+    /// Set when the list is one commodity's or one supply type's.
+    pub narrowed: Option<ProviderFilter>,
+    pub search: SearchBox,
+    /// The shown / hidden chips.
+    pub states: Vec<AdminTab>,
+    /// Set when the list is one provider's.
+    pub create: Option<CreateForm>,
+    /// The hidden fields of every row action: land back here.
+    pub keep: ListReturn,
+    pub confirm: Option<RowConfirm>,
+    pub flash: Option<Flash>,
+}
+
+/// The bar above a list narrowed to one commodity (else one supply type):
+/// its name from the rows, its admin page, and the way back to every supply.
+fn narrowed(
+    rows: &[ProductRow],
+    commodity_id: Option<i32>,
+    category_id: Option<i32>,
+    list: &str,
+) -> Result<Option<ProviderFilter>, Error> {
+    let first = rows.first().map(|r| &r.product);
+    if let Some(id) = commodity_id {
+        return Ok(Some(ProviderFilter {
+            icon: "fa-leaf",
+            name: first.and_then(|p| p.commodity.clone()),
+            href: url("admin_commodity", &[("id", &id.to_string())])?,
+            clear_href: list.to_owned(),
+        }));
+    }
+    category_id
+        .map(|id| {
+            Ok(ProviderFilter {
+                icon: "fa-tags",
+                name: first.map(|p| p.category.clone()),
+                href: url("admin_category", &[("id", &id.to_string())])?,
+                clear_href: list.to_owned(),
+            })
+        })
+        .transpose()
+}
+
+/// The create form, shown when the list is one provider's: a supply always
+/// belongs to a provider (e.g. one with no account met on a field visit).
+#[derive(Serialize)]
+pub struct CreateForm {
+    pub business_id: i32,
+    pub action: String,
+    pub categories: Vec<CategoryDto>,
+    pub commodities: Vec<CommodityDto>,
+    pub form: ProductForm,
+    pub errors: FormErrors,
+}
+
+/// The list as asked: its position, the confirmation to open, and the
+/// create form as typed after a refusal.
+struct Listing {
+    query: ListQuery,
+    create_form: Option<(ProductForm, FormErrors)>,
+    flash: Option<Flash>,
+    status: StatusCode,
+}
+
+/// The orders a listing list offers besides its own (the newest first).
+const LISTING_SORTS: &[AdminSort] = &[AdminSort::Oldest, AdminSort::Name];
+
+async fn list_page(state: &AppState, actor: &Actor, asked: Listing) -> Result<Response, Error> {
+    let Listing {
+        query: q,
+        create_form,
+        flash,
+        status,
+    } = asked;
+    let position = ListPosition {
+        page: q.page.clone(),
+        provider_id: q.provider_id.clone(),
+        q: q.q.clone(),
+        commodity_id: q.commodity_id.clone(),
+        category_id: q.category_id.clone(),
+        state: q.state.clone(),
+        sort: q.sort.clone(),
+        sector: q.sector.clone(),
+        gap: q.gap.clone(),
+        fee_min: q.fee_min.clone(),
+        fee_max: q.fee_max.clone(),
+        from: q.from.clone(),
+        to: q.to.clone(),
+        ..ListPosition::default()
+    }
+    .checked(LISTING_LIST_STATES, LISTING_SORTS);
+    let commodity_id = parse_opt::<i32>(&q.commodity_id).filter(|c| *c > 0);
+    let category_id = parse_opt::<i32>(&q.category_id).filter(|c| *c > 0);
+    let provider_id = position.provider_id();
+    let AdminPagedResponse {
+        items,
+        total,
+        page,
+        total_pages,
+        ..
+    } = state
+        .usecases
+        .admin
+        .list_products_admin(
+            actor,
+            position.page(),
+            &AdminProductFilter {
+                provider_id,
+                category_id,
+                commodity_id,
+                search: position.search().map(str::to_owned),
+                state: position.state_in(LISTING_LIST_STATES),
+                sort: position.sort(),
+                sector: position.sector().map(str::to_owned),
+                gap: position.gap().map(str::to_owned),
+                price_min: position.fee(&position.fee_min),
+                price_max: position.fee(&position.fee_max),
+                created_from: position.created_from(),
+                created_to: position.created_to(),
+            },
+        )
+        .await?;
+    let position = ListPosition {
+        page: page.to_string(),
+        ..position
+    };
+    let hide = parse_opt::<i32>(&q.hide);
+    let delete = parse_opt::<i32>(&q.delete);
+    let sectors = state.usecases.sector.named().await?;
+    let mut confirm = None;
+    let mut rows = Vec::with_capacity(items.len());
+    for product in items {
+        let id = product.id.to_string();
+        if hide == Some(product.id) && product.is_active {
+            confirm = Some(RowConfirm {
+                kind: "hide",
+                name: product.name.clone(),
+                action: url("admin_product_status", &[("id", &id)])?,
+            });
+        }
+        if delete == Some(product.id) {
+            confirm = Some(RowConfirm {
+                kind: "delete",
+                name: product.name.clone(),
+                action: url("admin_product_delete", &[("id", &id)])?,
+            });
+        }
+        rows.push(ProductRow {
+            href: position.record_href("admin_product", product.id)?,
+            category_href: ListPosition {
+                category_id: product.category_id.to_string(),
+                ..ListPosition::default()
+            }
+            .href("admin_products", &[])?,
+            sector_label: sector_label(state, &sectors, product.sector.as_deref()),
+            sector_href: sector_href(&sectors, product.sector.as_deref())?,
+            commodity_href: product
+                .commodity_id
+                .map(|c| {
+                    ListPosition {
+                        commodity_id: c.to_string(),
+                        ..ListPosition::default()
+                    }
+                    .href("admin_products", &[])
+                })
+                .transpose()?,
+            provider_href: url(
+                "admin_provider",
+                &[("id", &product.business_id.to_string())],
+            )?,
+            hide_href: position.href("admin_products", &[("hide", &id)])?,
+            delete_href: position.href("admin_products", &[("delete", &id)])?,
+            status_action: url("admin_product_status", &[("id", &id)])?,
+            product,
+        });
+    }
+    let path = url("admin_products", &[])?;
+    let create = match provider_id {
+        Some(business_id) => {
+            let (form, errors) = create_form.unwrap_or_default();
+            Some(CreateForm {
+                business_id,
+                action: path.clone(),
+                categories: product_categories(state).await?,
+                commodities: product_commodities(state).await?,
+                form,
+                errors,
+            })
+        }
+        None => None,
+    };
+    let name = rows.first().map(|r| r.product.business_name.clone());
+    let narrowed = narrowed(&rows, commodity_id, category_id, &path)?;
+    let body = ProductsPage {
+        total,
+        narrowed,
+        filter: position.provider_filter("admin_products", name)?,
+        search: position
+            .search_box("admin_products")?
+            .picked(
+                "sector",
+                state.locale().text("sector.label"),
+                state.locale().text("admin_pick.all_sectors"),
+                sectors
+                    .iter()
+                    .map(|s| (s.code.clone(), s.name.clone()))
+                    .collect(),
+            )
+            .picked(
+                "gap",
+                state.locale().text("admin_pick.gap"),
+                state.locale().text("admin_pick.all_gaps"),
+                ["no_image", "no_price"]
+                    .into_iter()
+                    .map(|g| (g, state.locale().text(&format!("admin_pick.gap_{g}"))))
+                    .collect(),
+            )
+            .ranged(
+                ("fee_min", "fee_max"),
+                state.locale().text("admin_pick.price"),
+                (
+                    state.locale().text("admin_search.from"),
+                    state.locale().text("admin_search.to"),
+                ),
+            )
+            .dated(state.locale())
+            .picked(
+                "category_id",
+                state.locale().text("admin_pick.supply_type"),
+                state.locale().text("admin_pick.all_supply_types"),
+                product_categories(state)
+                    .await?
+                    .into_iter()
+                    .map(|c| (c.id, c.name))
+                    .collect(),
+            )
+            .picked(
+                "commodity_id",
+                state.locale().text("admin_pick.commodity"),
+                state.locale().text("admin_pick.all_commodities"),
+                product_commodities(state)
+                    .await?
+                    .into_iter()
+                    .map(|c| (c.id, c.name))
+                    .collect(),
+            )
+            .sorted(
+                state.locale(),
+                &position,
+                "admin_sort.newest",
+                LISTING_SORTS,
+            ),
+        states: position.shared_state_chips(
+            state.locale(),
+            "admin_products",
+            LISTING_LIST_STATES,
+            None,
+        )?,
+        pagination: position.pagination(&path, page, total_pages),
+        rows,
+        create,
+        keep: ListReturn::new(position),
+        confirm,
+        flash,
+    };
+    render_admin(
+        state,
+        actor,
+        &path,
+        status,
+        "pages/admin/products.html",
+        &body,
+    )
+}
+
+/// GET /admin/supplies
+pub async fn list(
+    Viewer(viewer): Viewer,
+    flash: TakeFlash,
+    State(state): State<AppState>,
+    ApiQuery(q): ApiQuery<ListQuery>,
+) -> Result<Response, Error> {
+    let Some(actor) = viewer else {
+        return see_other(&url("login", &[])?);
+    };
+    let asked = Listing {
+        query: q,
+        create_form: None,
+        flash: flash.0,
+        status: StatusCode::OK,
+    };
+    let mut response = list_page(&state, &actor, asked).await?;
+    flash.clear_on(&mut response);
+    Ok(response)
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct CreateRequest {
+    pub business_id: String,
+    #[serde(flatten)]
+    pub product: ProductForm,
+}
+
+/// POST /admin/supplies: a supply for the provider the list is narrowed
+/// to; its page next, where a photo can be added.
+pub async fn create(
+    Viewer(viewer): Viewer,
+    State(state): State<AppState>,
+    ApiForm(req): ApiForm<CreateRequest>,
+) -> Result<Response, Error> {
+    let Some(actor) = viewer else {
+        return see_other(&url("login", &[])?);
+    };
+    let business_id = parse_id(&req.business_id, ErrorCode::ProviderNotFound)?;
+    let form = req.product;
+    let result = match form.create_input() {
+        Ok(input) => {
+            state
+                .usecases
+                .admin
+                .create_product_admin(&actor, business_id, input)
+                .await
+        }
+        Err(err) => Err(err),
+    };
+    match result {
+        Ok(created) => {
+            ListPosition::default().to_record("admin_product", created.id, Flash::ProductCreated)
+        }
+        Err(err) if is_refusal(&err) => {
+            let errors = FormErrors::from_error(&state, &err);
+            let asked = Listing {
+                query: ListQuery {
+                    provider_id: business_id.to_string(),
+                    ..ListQuery::default()
+                },
+                create_form: Some((form, errors)),
+                flash: None,
+                status: err.kind().status(),
+            };
+            list_page(&state, &actor, asked).await
+        }
+        Err(err) => Err(err),
+    }
+}
+
+#[derive(Serialize)]
+pub struct ProductPage {
+    pub product: AdminProductDto,
+    /// Its latest changes: who hid, edited or re-photographed it, and why.
+    pub history: Vec<HistoryRow>,
+    /// Its taps and contact requests lately.
+    pub activity: ListingActivityDto,
+    /// Its sector's name (its commodity's, else its type's), "every sector"
+    /// for none.
+    pub sector_label: String,
+    pub categories: Vec<CategoryDto>,
+    pub commodities: Vec<CommodityDto>,
+    pub form: ProductForm,
+    pub errors: FormErrors,
+    pub update_action: String,
+    /// The photo box's size line.
+    pub max_upload_mb: usize,
+    pub provider_href: String,
+    /// Its supply type's admin page, where a hidden type is shown again.
+    pub category_href: String,
+    /// Its name, state and actions (`listing_record`), and the
+    /// confirmations they open.
+    pub header: RecordHeader,
+    pub confirms: Vec<Confirm>,
+    pub flash: Option<Flash>,
+}
+
+/// The list a supply's page leads back to: the one it was opened from, else
+/// its provider's supplies.
+fn back_list(back: &ListPosition, business_id: i32) -> ListPosition {
+    if back.is_default() {
+        ListPosition {
+            provider_id: business_id.to_string(),
+            ..ListPosition::default()
+        }
+    } else {
+        back.clone()
+    }
+}
+
+async fn product_page(
+    state: &AppState,
+    actor: &Actor,
+    id: i32,
+    back: &ListPosition,
+    outcome: Outcome<ProductForm>,
+) -> Result<Response, Error> {
+    let admin = &state.usecases.admin;
+    let product = admin.get_product_admin(actor, id).await?;
+    let id_text = id.to_string();
+    let path = url("admin_product", &[("id", &id_text)])?;
+    let sectors = state.usecases.sector.named().await?;
+    let listing = ListingRef::Product {
+        business_id: product.business_id,
+        id,
+    };
+    let public_href = product
+        .is_public
+        .then(|| canonical_url("product", product.id, &product.name))
+        .transpose()?;
+    let back_label = if back.is_default() {
+        "admin.provider_products"
+    } else {
+        "admin_menu.products"
+    };
+    let (header, confirms) = listing_controls(
+        state,
+        &PRODUCT_WORDS,
+        ListingState {
+            name: &product.name,
+            is_active: product.is_active,
+            image_file_id: product.image_file_id,
+            public_href,
+            back_href: back_list(back, product.business_id).href("admin_products", &[])?,
+            back_label: state.locale().text(back_label),
+            status_action: back.record_href("admin_product_status", id)?,
+            delete_action: back.record_href("admin_product_delete", id)?,
+            image_delete_action: back.record_href("admin_product_image_delete", id)?,
+        },
+    )?;
+    let body = ProductPage {
+        header,
+        confirms,
+        history: history_rows(state, actor, HistoryOf::Product(id)).await?,
+        activity: admin.listing_activity(actor, listing).await?,
+        sector_label: sector_label(state, &sectors, product.sector.as_deref()),
+        form: outcome.form.unwrap_or_else(|| {
+            ProductForm::stored(
+                product.category_id,
+                product.commodity_id,
+                &product.name,
+                product.price,
+                product.unit.as_deref(),
+                product.description.as_deref(),
+            )
+        }),
+        categories: product_categories(state).await?,
+        commodities: product_commodities(state).await?,
+        errors: outcome.errors,
+        update_action: back.record_href("admin_product", id)?,
+        max_upload_mb: max_upload_mb(state),
+        provider_href: url(
+            "admin_provider",
+            &[("id", &product.business_id.to_string())],
+        )?,
+        category_href: url(
+            "admin_category",
+            &[("id", &product.category_id.to_string())],
+        )?,
+        product,
+        flash: outcome.flash,
+    };
+    render_admin(
+        state,
+        actor,
+        &path,
+        outcome.status,
+        "pages/admin/product.html",
+        &body,
+    )
+}
+
+/// GET /admin/supplies/{id}; opened from a list, its position rides along
+/// (`ListPosition::record_href`).
+pub async fn show(
+    Viewer(viewer): Viewer,
+    flash: TakeFlash,
+    State(state): State<AppState>,
+    ApiPath(raw_id): ApiPath<String>,
+    ApiQuery(back): ApiQuery<ListPosition>,
+) -> Result<Response, Error> {
+    let Some(actor) = viewer else {
+        return see_other(&url("login", &[])?);
+    };
+    let id = parse_id(&raw_id, ErrorCode::ProductNotFound)?;
+    let outcome = Outcome {
+        flash: flash.0,
+        ..Outcome::default()
+    };
+    let mut response = product_page(&state, &actor, id, &back, outcome).await?;
+    flash.clear_on(&mut response);
+    Ok(response)
+}
+
+/// POST /admin/supplies/{id} (multipart: the boxes and an optional photo,
+/// checked before anything is saved, as on the owner's form)
+pub async fn update(
+    Viewer(viewer): Viewer,
+    State(state): State<AppState>,
+    ApiPath(raw_id): ApiPath<String>,
+    ApiQuery(back): ApiQuery<ListPosition>,
+    upload: ApiMultipart,
+) -> Result<Response, Error> {
+    let Some(actor) = viewer else {
+        return see_other(&url("login", &[])?);
+    };
+    let id = parse_id(&raw_id, ErrorCode::ProductNotFound)?;
+    // Who is asking, and that the supply exists, before reading the photo.
+    state.usecases.admin.get_product_admin(&actor, id).await?;
+    let max = state.usecases.media.max_upload_bytes();
+    let (form, file): (ProductForm, _) = upload.into_form(IMAGE_FIELD, max).await?;
+    let media = &state.usecases.media;
+    // Uploaded before anything is saved, shown once the boxes are: never
+    // the new words with the old photo.
+    let staged = async {
+        match prepare(&state, file).await? {
+            Some(image) => media
+                .stage_product_image_admin(&actor, id, image)
+                .await
+                .map(Some),
+            None => Ok(None),
+        }
+    }
+    .await;
+    let staged = match staged {
+        Ok(staged) => staged,
+        Err(err) if is_refusal(&err) => {
+            let outcome = Outcome::photo_refused(&state, &err, form);
+            return product_page(&state, &actor, id, &back, outcome).await;
+        }
+        Err(err) => return Err(err),
+    };
+    let result = match form.update_input(id) {
+        Ok(input) => {
+            state
+                .usecases
+                .admin
+                .update_product_admin(&actor, input)
+                .await
+        }
+        Err(err) => Err(err),
+    };
+    if result.is_err() {
+        if let Some(staged) = staged {
+            media.abandon_staged(staged).await;
+        }
+    } else if let Some(staged) = staged {
+        media.commit_staged(&actor, staged).await?;
+    }
+    match result {
+        Ok(_) => back.to_record("admin_product", id, Flash::ProductSaved),
+        Err(err) if is_refusal(&err) => {
+            let outcome = Outcome::refused(&state, &err, Some(form), false);
+            product_page(&state, &actor, id, &back, outcome).await
+        }
+        Err(err) => Err(err),
+    }
+}
+
+/// POST /admin/supplies/{id}/image/delete: the photo off, the supply kept.
+pub async fn remove_image(
+    Viewer(viewer): Viewer,
+    State(state): State<AppState>,
+    ApiPath(raw_id): ApiPath<String>,
+    ApiQuery(back): ApiQuery<ListPosition>,
+    ApiForm(form): ApiForm<ReasonForm>,
+) -> Result<Response, Error> {
+    let Some(actor) = viewer else {
+        return see_other(&url("login", &[])?);
+    };
+    let id = parse_id(&raw_id, ErrorCode::ProductNotFound)?;
+    state
+        .usecases
+        .media
+        .remove_product_image(&actor, id, reason(&form.reason))
+        .await?;
+    back.to_record("admin_product", id, Flash::ImageRemoved)
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct StatusForm {
+    /// "true" to show, "false" to hide.
+    pub is_active: String,
+    pub reason: String,
+    /// `list` when sent from the list's row: land back there, at `page` /
+    /// `provider_id` / `q`.
+    pub back: String,
+    pub page: String,
+    pub provider_id: String,
+    pub q: String,
+}
+
+/// POST /admin/supplies/{id}/status: from a list's row back to that list,
+/// from its page back to it (with the list it was opened from).
+pub async fn change_status(
+    Viewer(viewer): Viewer,
+    State(state): State<AppState>,
+    ApiPath(raw_id): ApiPath<String>,
+    ApiQuery(back): ApiQuery<ListPosition>,
+    ApiForm(form): ApiForm<StatusForm>,
+) -> Result<Response, Error> {
+    let Some(actor) = viewer else {
+        return see_other(&url("login", &[])?);
+    };
+    let id = parse_id(&raw_id, ErrorCode::ProductNotFound)?;
+    let show = form.is_active == "true";
+    state
+        .usecases
+        .admin
+        .toggle_product_active(&actor, id, show, reason(&form.reason))
+        .await?;
+    let flash = if show {
+        Flash::ProductShown
+    } else {
+        Flash::ProductHidden
+    };
+    if form.back == BACK_TO_LIST {
+        return ListPosition {
+            page: form.page,
+            provider_id: form.provider_id,
+            q: form.q,
+            ..ListPosition::default()
+        }
+        .back_to("admin_products", flash);
+    }
+    back.to_record("admin_product", id, flash)
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct DeleteForm {
+    pub reason: String,
+    /// `list` when sent from the list's row: land back there, at `page` /
+    /// `provider_id` / `q`.
+    pub back: String,
+    pub page: String,
+    pub provider_id: String,
+    pub q: String,
+}
+
+/// POST /admin/supplies/{id}/delete: back to the list it was sent from (a
+/// row's, or the one its page was opened from), else to the provider's
+/// products.
+pub async fn delete(
+    Viewer(viewer): Viewer,
+    State(state): State<AppState>,
+    ApiPath(raw_id): ApiPath<String>,
+    ApiQuery(back): ApiQuery<ListPosition>,
+    ApiForm(form): ApiForm<DeleteForm>,
+) -> Result<Response, Error> {
+    let Some(actor) = viewer else {
+        return see_other(&url("login", &[])?);
+    };
+    let id = parse_id(&raw_id, ErrorCode::ProductNotFound)?;
+    let admin = &state.usecases.admin;
+    let business_id = admin.get_product_admin(&actor, id).await?.business_id;
+    admin
+        .delete_product_admin(&actor, id, reason(&form.reason))
+        .await?;
+    let position = if form.back == BACK_TO_LIST {
+        ListPosition {
+            page: form.page,
+            provider_id: form.provider_id,
+            q: form.q,
+            ..ListPosition::default()
+        }
+    } else {
+        back_list(&back, business_id)
+    };
+    position.back_to("admin_products", Flash::ProductDeleted)
+}

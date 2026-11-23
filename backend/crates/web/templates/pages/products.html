@@ -1,0 +1,41 @@
+{% extends "layouts/app.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "molecules/page_hero.html" as hero %}
+{% import "molecules/sector_switch.html" as sector %}
+{% import "molecules/empty_state.html" as empty %}
+{% import "molecules/geo_cta.html" as geo %}
+{% import "molecules/pagination_nav.html" as paging %}
+{% import "organisms/product_card.html" as cards %}
+{% import "organisms/list_filters.html" as filters %}
+{#- All products (with the filter form) or one category's. `page` is
+    web::pages::products::ProductsPage. -#}
+{% block title %}{% if page.category %}{{ page.category.name }}{% else %}{{ t(key="products.title") }}{% endif %} — {{ site.name }}{% endblock title %}
+{% block meta %}{% if page.category %}<meta name="description" content="{{ t(key="products.meta_category", category=page.category.name) }}">{% else %}<meta name="description" content="{{ t(key="products.meta") }}">{% endif %}{% endblock meta %}
+{% block main %}
+{{ hero::page_hero(title=page.title, back_href=page.back_href, back_label=page.back_label, variant="", icon=page.icon, sub=page.sub) }}
+
+{% if page.filters %}
+{% if page.sectors %}{{ sector::sector_links(sectors=page.sectors) }}{% else %}{{ sector::sector_switch(sectors=shell.sectors, back=shell.here) }}{% endif %}
+<div class="list-tools">{{ filters::list_filters(f=page.filters) }}</div>
+{% if page.commodity %}<p class="list-tools mb-0"><a class="chip text-decoration-none" aria-current="true" href="{{ page.commodity_clear_href }}" aria-label="{{ t(key="filters.reset") }}">{% if page.commodity.icon %}{{ atoms::icon(name=page.commodity.icon) }} {% endif %}{{ t(key="products.for_commodity", name=page.commodity.name) }} {{ atoms::icon(name="fa-xmark") }}</a></p>{% endif %}
+{% endif %}
+
+<section class="list-results">
+  {% if page.result.items %}
+  <p class="list-count small text-muted"><strong>{{ page.result.total }}</strong> {{ t(key="products.unit") }}{% if page.filters and page.filters.q %} {{ t(key="list.for_query", q=page.filters.q) }}{% endif %}</p>
+  <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 row-cols-xl-6 g-2 g-md-3">
+    {% for p in page.result.items %}<div class="col">{{ cards::product_card(p=p) }}</div>{% endfor %}
+  </div>
+  {#- The near-me banner, as on the services list; under the grid, which a
+      banner would cut across mid-row. -#}
+  <div class="list-break">{{ geo::geo_cta(href=page.near_href, title=t(key="geo.title_products"), sub=page.geo_sub) }}</div>
+  {% if page.pagination %}{{ paging::pagination_nav(p=page.pagination) }}{% endif %}
+  {% elif page.filtered %}
+  {{ empty::empty_state(icon="fa-bag-shopping", title=t(key="products.none_found"), hint=t(key="products.none_found_hint"), action_href=page.filters.reset_href, action_icon="fa-xmark", action_label=t(key="filters.reset")) }}
+  {% elif page.category %}
+  {{ empty::empty_state(icon="fa-inbox", title=t(key="products.none_in_category"), hint=t(key="products.none_in_category_hint"), action_href=url_for(name="products"), action_icon="fa-bag-shopping", action_label=t(key="list.all_products")) }}
+  {% else %}
+  {{ empty::empty_state(icon="fa-inbox", title=t(key="products.none_yet"), hint=t(key="list.come_back")) }}
+  {% endif %}
+</section>
+{% endblock main %}

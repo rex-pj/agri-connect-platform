@@ -1,0 +1,17 @@
+# cargo audit (CI: .github/workflows/audit.yml). An advisory is ignored here
+# only when the crate never reaches the binary or its input is not an
+# attacker's; each line says why, and goes when the reason does.
+[advisories]
+ignore = [
+    # rsa (Marvin timing attack): in Cargo.lock through sqlx's MySQL driver,
+    # never compiled (`cargo tree -i rsa` prints nothing): Postgres only.
+    "RUSTSEC-2023-0071",
+    # libsqlite3-sys (C SQLite): in Cargo.lock through sqlx's SQLite driver,
+    # never compiled (`cargo tree -i libsqlite3-sys` prints nothing).
+    "RUSTSEC-2026-0459",
+    # quick-xml (quadratic duplicate-attribute check, NsReader allocation):
+    # object_store 0.12 pins 0.38 and parses only Google Cloud Storage's own
+    # answers over TLS, never a user's XML. Drop with object_store's update.
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
+]

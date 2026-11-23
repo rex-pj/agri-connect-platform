@@ -1,0 +1,39 @@
+{% extends "layouts/auth.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "molecules/form_field.html" as field %}
+{#- `page` is web::pages::auth::LoginPage. -#}
+{% block title %}{{ t(key="account_menu.login") }} — {{ site.name }}{% endblock title %}
+{% block card %}
+{% if page.reset %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="auth.reset_done")) }}{% endif %}
+<h1 class="auth-title">{{ t(key="account_menu.login") }}</h1>
+<p class="auth-sub">{{ t(key="auth.login_sub") }}</p>
+
+{% if page.locked %}
+<div class="lockout-banner" role="alert">
+  <span class="lockout-banner__icon">{{ atoms::icon(name="fa-lock") }}</span>
+  <p class="lockout-banner__title">{{ t(key="auth.locked_title") }}</p>
+  <p class="lockout-banner__body">{{ page.errors.message }}</p>
+  <p class="lockout-banner__body">{{ t(key="auth.locked_reset") }}</p>
+  <a class="btn btn-success btn-lg w-100" href="{{ url_for(name="forgot_password") }}">{{ atoms::icon(name="fa-key") }} {{ t(key="auth.reset_password") }}</a>
+</div>
+{% else %}
+<form class="auth-form" method="post" action="{{ url_for(name="login") }}">
+  {% if page.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=page.errors.message) }}{% endif %}
+  {{ field::input(id="lg_user", name="username", label=t(key="form.login_name"), value=page.username, required=true, autocomplete="username") }}
+  {{ field::input(id="lg_pw", name="password", label=t(key="form.password"), type="password", required=true, autocomplete="current-password") }}
+  <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-right-to-bracket") }} {{ t(key="account_menu.login") }}</button>
+  <p class="text-center mb-0"><a class="text-muted small" href="{{ url_for(name="forgot_password") }}">{{ t(key="auth.forgot_link") }}</a></p>
+</form>
+{% endif %}
+
+{% if page.registration_open %}
+<p class="auth-footer">
+  <span class="text-muted small">{{ t(key="auth.no_account") }}</span>
+  <a class="small" href="{{ url_for(name="register") }}">{{ t(key="account_menu.register_provider") }}</a>
+</p>
+{% endif %}
+<p class="auth-footer">
+  <a class="text-muted small" href="{{ url_for(name="home") }}">{{ atoms::icon(name="fa-arrow-left", class="me-1") }}{{ t(key="common.back_home") }}</a>
+</p>
+{% endblock card %}

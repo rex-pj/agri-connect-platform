@@ -1,0 +1,6 @@
+target
+.env
+environments
+.claude
+data
+islands/node_modules

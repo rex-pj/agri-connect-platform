@@ -1,0 +1,514 @@
+//! The one error type every layer returns.
+//!
+//! An error is a machine `code` plus optional parameters and per-field codes.
+//! It never carries user-facing text: the web layer resolves text from the
+//! code through the locale files, so a code that is missing there fails the
+//! locale test instead of shipping an English string to farmers.
+
+use std::fmt;
+
+/// HTTP-shaped classification. The web layer maps it to a status code; nothing
+/// else in the codebase should branch on it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ErrorKind {
+    BadRequest,
+    Unauthorized,
+    Forbidden,
+    NotFound,
+    Conflict,
+    Locked,
+    TooManyRequests,
+    /// An upload over the size cap.
+    PayloadTooLarge,
+    Internal,
+    /// A dependency (the database) is down; retrying later may succeed.
+    Unavailable,
+}
+
+macro_rules! error_codes {
+    ($( $variant:ident => ($kind:ident, $key:literal) ),* $(,)?) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        pub enum ErrorCode { $($variant),* }
+
+        impl ErrorCode {
+            /// Every code, so tests can check each one has locale text.
+            pub const ALL: &'static [ErrorCode] = &[$(ErrorCode::$variant),*];
+
+            /// Stable wire identifier. Clients may branch on it, so renaming
+            /// one is a breaking API change.
+            pub const fn as_str(self) -> &'static str {
+                match self { $(ErrorCode::$variant => $key),* }
+            }
+
+            pub const fn kind(self) -> ErrorKind {
+                match self { $(ErrorCode::$variant => ErrorKind::$kind),* }
+            }
+        }
+    };
+}
+
+error_codes! {
+    // ── Generic ──────────────────────────────────────────────────────────────
+    Internal                  => (Internal,        "internal"),
+    RouteNotFound             => (NotFound,        "route_not_found"),
+    ValidationFailed          => (BadRequest,      "validation_failed"),
+    InvalidRequestBody        => (BadRequest,      "invalid_request_body"),
+    InvalidPathParam          => (BadRequest,      "invalid_path_param"),
+    InvalidQuery              => (BadRequest,      "invalid_query"),
+    TooManyRequests           => (TooManyRequests, "too_many_requests"),
+    RequestTimedOut           => (Unavailable,     "request_timed_out"),
+    DatabaseUnavailable       => (Unavailable,     "database_unavailable"),
+    ZaloNotConfigured         => (Unavailable,     "zalo_not_configured"),
+    ZaloUnavailable           => (Unavailable,     "zalo_unavailable"),
+    ZaloTokenRejected         => (BadRequest,      "zalo_token_rejected"),
+
+    // ── Authentication / access ──────────────────────────────────────────────
+    AuthenticationRequired    => (Unauthorized,    "authentication_required"),
+    InvalidToken              => (Unauthorized,    "invalid_token"),
+    InvalidCredentials        => (Unauthorized,    "invalid_credentials"),
+    CurrentPasswordIncorrect  => (Unauthorized,    "current_password_incorrect"),
+    AccountLocked             => (Locked,          "account_locked"),
+    AccountDeactivated        => (Forbidden,       "account_deactivated"),
+    AccountHasNoRole          => (Forbidden,       "account_has_no_role"),
+    PermissionDenied          => (Forbidden,       "permission_denied"),
+    CrossOriginRequest        => (Forbidden,       "cross_origin_request"),
+    CannotChangeOwnAccount    => (Forbidden,       "cannot_change_own_account"),
+    CannotRevokeOwnAccess     => (Forbidden,       "cannot_revoke_own_access"),
+    AdminAlreadyExists        => (Forbidden,       "admin_already_exists"),
+    SetupTokenInvalid         => (BadRequest,      "setup_token_invalid"),
+    ResetTokenInvalid         => (BadRequest,      "reset_token_invalid"),
+    EmailVerificationInvalid  => (BadRequest,      "email_verification_invalid"),
+
+    // ── Field rules ──────────────────────────────────────────────────────────
+    UsernameTooShort          => (BadRequest,      "username_too_short"),
+    UsernameHasSpaces         => (BadRequest,      "username_has_spaces"),
+    UsernameHasAt             => (BadRequest,      "username_has_at"),
+    InvalidEmail              => (BadRequest,      "invalid_email"),
+    PasswordTooShort          => (BadRequest,      "password_too_short"),
+    PasswordTooLong           => (BadRequest,      "password_too_long"),
+    PasswordTooCommon         => (BadRequest,      "password_too_common"),
+    PasswordMismatch          => (BadRequest,      "password_mismatch"),
+    ConfirmationRequired      => (BadRequest,      "confirmation_required"),
+    InvalidPhone              => (BadRequest,      "invalid_phone"),
+    InvalidCoordinates        => (BadRequest,      "invalid_coordinates"),
+    InvalidNumber             => (BadRequest,      "invalid_number"),
+    RadiusOutOfRange          => (BadRequest,      "radius_out_of_range"),
+    SearchTooShort            => (BadRequest,      "search_too_short"),
+    NameRequired              => (BadRequest,      "name_required"),
+    SlugRequired              => (BadRequest,      "slug_required"),
+    InvalidSlug               => (BadRequest,      "invalid_slug"),
+    FieldTooLong              => (BadRequest,      "field_too_long"),
+    LabelRequired             => (BadRequest,      "label_required"),
+    BusinessNameRequired      => (BadRequest,      "business_name_required"),
+    RequesterNameRequired     => (BadRequest,      "requester_name_required"),
+    RequesterNameTooLong      => (BadRequest,      "requester_name_too_long"),
+    TopicRequired             => (BadRequest,      "topic_required"),
+    TopicTooLong              => (BadRequest,      "topic_too_long"),
+    ServiceNotOffered         => (BadRequest,      "service_not_offered"),
+    NoteTooLong               => (BadRequest,      "note_too_long"),
+    InvalidPrice              => (BadRequest,      "invalid_price"),
+    InvalidRole               => (BadRequest,      "invalid_role"),
+    UnknownPermission         => (BadRequest,      "unknown_permission"),
+    PermissionNotForRole      => (BadRequest,      "permission_not_for_role"),
+    InvalidCategoryType       => (BadRequest,      "invalid_category_type"),
+    InvalidInquiryStatus      => (BadRequest,      "invalid_inquiry_status"),
+    InvalidProductCategory    => (BadRequest,      "invalid_product_category"),
+    InvalidServiceCategory    => (BadRequest,      "invalid_service_category"),
+    InvalidCallTarget         => (BadRequest,      "invalid_call_target"),
+    InvalidRating             => (BadRequest,      "invalid_rating"),
+    InvalidPartnerKind        => (BadRequest,      "invalid_partner_kind"),
+    InvalidContractDates      => (BadRequest,      "invalid_contract_dates"),
+    InvalidMonthlyFee         => (BadRequest,      "invalid_monthly_fee"),
+    ContractCategoriesRequired=> (BadRequest,      "contract_categories_required"),
+    SponsoredOutsideArea      => (BadRequest,      "sponsored_outside_area"),
+    InvalidCommodity          => (BadRequest,      "invalid_commodity"),
+    InvalidSector             => (BadRequest,      "invalid_sector"),
+    InvalidIcon               => (BadRequest,      "invalid_icon"),
+    InvalidAlertKind          => (BadRequest,      "invalid_alert_kind"),
+    AlertTitleRequired        => (BadRequest,      "alert_title_required"),
+    AlertBodyRequired         => (BadRequest,      "alert_body_required"),
+    InvalidAlertDates         => (BadRequest,      "invalid_alert_dates"),
+    InvalidProvince           => (BadRequest,      "invalid_province"),
+    UnitRequired              => (BadRequest,      "unit_required"),
+    InvalidPriceRange         => (BadRequest,      "invalid_price_range"),
+    InvalidPriceDate          => (BadRequest,      "invalid_price_date"),
+    JobDescriptionRequired    => (BadRequest,      "job_description_required"),
+    InvalidJobStatus          => (BadRequest,      "invalid_job_status"),
+    JobPlaceRequired          => (BadRequest,      "job_place_required"),
+    JobPostLimit              => (BadRequest,      "job_post_limit"),
+    JobPostDailyLimit         => (TooManyRequests, "job_post_daily_limit"),
+    JobPostsPaused            => (Forbidden,       "job_posts_paused"),
+    RegistrationClosed        => (Forbidden,       "registration_closed"),
+    SignupDailyLimit          => (TooManyRequests, "signup_daily_limit"),
+    ContactDailyLimit         => (TooManyRequests, "contact_daily_limit"),
+    UnknownSetting            => (BadRequest,      "unknown_setting"),
+    SettingOutOfRange         => (BadRequest,      "setting_out_of_range"),
+    InvalidUrl                => (BadRequest,      "invalid_url"),
+    InvalidFreshDays          => (BadRequest,      "invalid_fresh_days"),
+
+    // ── Uploads ──────────────────────────────────────────────────────────────
+    FileTooLarge              => (PayloadTooLarge, "file_too_large"),
+    ImageRequired             => (BadRequest,      "image_required"),
+    UnsupportedImageType      => (BadRequest,      "unsupported_image_type"),
+    ImageTooManyPixels        => (BadRequest,      "image_too_many_pixels"),
+    InvalidImage              => (BadRequest,      "invalid_image"),
+
+    // ── Conflicts ────────────────────────────────────────────────────────────
+    UsernameTaken             => (Conflict,        "username_taken"),
+    UsernameTakenByOtherRole  => (Conflict,        "username_taken_by_other_role"),
+    EmailTaken                => (Conflict,        "email_taken"),
+    ProviderAccountInUse      => (Conflict,        "provider_account_in_use"),
+    SlugTaken                 => (Conflict,        "slug_taken"),
+    LocationLabelTaken        => (Conflict,        "location_label_taken"),
+    DemoAlreadyLoaded         => (Conflict,        "demo_already_loaded"),
+    ServiceLimitReached       => (Conflict,        "service_limit_reached"),
+    ProductLimitReached       => (Conflict,        "product_limit_reached"),
+    ReviewAlreadySent         => (Conflict,        "review_already_sent"),
+    PartnerAccountInUse       => (Conflict,        "partner_account_in_use"),
+    CropNameTaken             => (Conflict,        "crop_name_taken"),
+    CommodityNameTaken        => (Conflict,        "commodity_name_taken"),
+    SectorNameTaken           => (Conflict,        "sector_name_taken"),
+    AlertKindNameTaken        => (Conflict,        "alert_kind_name_taken"),
+
+    // ── Not found ────────────────────────────────────────────────────────────
+    AccountNotFound           => (NotFound,        "account_not_found"),
+    AccountNotLinkedToBusiness=> (NotFound,        "account_not_linked_to_business"),
+    UserNotFound              => (NotFound,        "user_not_found"),
+    RoleNotFound              => (NotFound,        "role_not_found"),
+    ProviderNotFound          => (NotFound,        "provider_not_found"),
+    ProductNotFound           => (NotFound,        "product_not_found"),
+    ServiceNotFound           => (NotFound,        "service_not_found"),
+    CategoryNotFound          => (NotFound,        "category_not_found"),
+    LocationNotFound          => (NotFound,        "location_not_found"),
+    InquiryNotFound           => (NotFound,        "inquiry_not_found"),
+    ReviewNotFound            => (NotFound,        "review_not_found"),
+    PartnerNotFound           => (NotFound,        "partner_not_found"),
+    ContractNotFound          => (NotFound,        "contract_not_found"),
+    CropNotFound              => (NotFound,        "crop_not_found"),
+    CommodityNotFound         => (NotFound,        "commodity_not_found"),
+    SectorNotFound            => (NotFound,        "sector_not_found"),
+    AlertKindNotFound         => (NotFound,        "alert_kind_not_found"),
+    AlertNotFound             => (NotFound,        "alert_not_found"),
+    PriceNotFound             => (NotFound,        "price_not_found"),
+    JobNotFound               => (NotFound,        "job_not_found"),
+    FileNotFound              => (NotFound,        "file_not_found"),
+}
+
+/// One field that failed validation. Parameters belong to the field: two rules
+/// can both use `{min}` with different values (username 3, password 8).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FieldError {
+    pub field: &'static str,
+    pub code: ErrorCode,
+    pub params: Vec<(&'static str, String)>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Error {
+    code: ErrorCode,
+    params: Vec<(&'static str, String)>,
+    fields: Vec<FieldError>,
+    /// Context for the server log. Never sent to a client: it may contain SQL
+    /// errors or other internals.
+    detail: Option<String>,
+}
+
+pub type Result<T, E = Error> = std::result::Result<T, E>;
+
+impl Error {
+    pub fn new(code: ErrorCode) -> Self {
+        Self {
+            code,
+            params: Vec::new(),
+            fields: Vec::new(),
+            detail: None,
+        }
+    }
+
+    /// An unexpected failure. `detail` is logged, never shown to users.
+    pub fn internal(detail: impl Into<String>) -> Self {
+        Self {
+            detail: Some(detail.into()),
+            ..Self::new(ErrorCode::Internal)
+        }
+    }
+
+    /// A value the locale text interpolates, e.g. `{min}` in "at least {min} characters".
+    /// A validation failure on one field, for rules only storage can check
+    /// (a UNIQUE constraint lost to a concurrent write).
+    pub fn field(field: &'static str, code: ErrorCode) -> Self {
+        Self {
+            code: ErrorCode::ValidationFailed,
+            params: Vec::new(),
+            fields: vec![FieldError {
+                field,
+                code,
+                params: Vec::new(),
+            }],
+            detail: None,
+        }
+    }
+
+    pub fn with_param(mut self, name: &'static str, value: impl ToString) -> Self {
+        self.params.push((name, value.to_string()));
+        self
+    }
+
+    pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
+        self.detail = Some(detail.into());
+        self
+    }
+
+    pub fn code(&self) -> ErrorCode {
+        self.code
+    }
+
+    pub fn kind(&self) -> ErrorKind {
+        self.code.kind()
+    }
+
+    pub fn params(&self) -> &[(&'static str, String)] {
+        &self.params
+    }
+
+    pub fn fields(&self) -> &[FieldError] {
+        &self.fields
+    }
+
+    pub fn detail(&self) -> Option<&str> {
+        self.detail.as_deref()
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.code.as_str())?;
+        if let Some(detail) = &self.detail {
+            write!(f, ": {detail}")?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for Error {}
+
+impl From<ErrorCode> for Error {
+    fn from(code: ErrorCode) -> Self {
+        Self::new(code)
+    }
+}
+
+/// Collects field errors so a form gets every problem back at once instead of
+/// one per round trip.
+#[derive(Debug, Default)]
+pub struct Validation {
+    fields: Vec<FieldError>,
+}
+
+impl Validation {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Records `code` against `field` when `failed` is true. Only the first
+    /// failure per field is kept: the form shows one message per input.
+    pub fn check(&mut self, failed: bool, field: &'static str, code: ErrorCode) -> &mut Self {
+        if failed && !self.fields.iter().any(|f| f.field == field) {
+            self.fields.push(FieldError {
+                field,
+                code,
+                params: Vec::new(),
+            });
+        }
+        self
+    }
+
+    /// Like `check`, for a code whose text needs a parameter (e.g. a limit).
+    pub fn check_with(
+        &mut self,
+        failed: bool,
+        field: &'static str,
+        code: ErrorCode,
+        param: (&'static str, usize),
+    ) -> &mut Self {
+        if failed && !self.fields.iter().any(|f| f.field == field) {
+            self.fields.push(FieldError {
+                field,
+                code,
+                params: vec![(param.0, param.1.to_string())],
+            });
+        }
+        self
+    }
+
+    /// Records a field error from a rule that returns `Result`, keeping the
+    /// rule's parameters for interpolation.
+    pub fn rule(&mut self, field: &'static str, result: Result<()>) -> &mut Self {
+        if let Err(e) = result {
+            if !self.fields.iter().any(|f| f.field == field) {
+                self.fields.push(FieldError {
+                    field,
+                    code: e.code,
+                    params: e.params,
+                });
+            }
+        }
+        self
+    }
+
+    pub fn finish(&mut self) -> Result<()> {
+        if self.fields.is_empty() {
+            return Ok(());
+        }
+        Err(Error {
+            code: ErrorCode::ValidationFailed,
+            params: Vec::new(),
+            fields: std::mem::take(&mut self.fields),
+            detail: None,
+        })
+    }
+}
+
+#[cfg(feature = "axum")]
+mod http {
+    //! Status-code mapping for axum. The body is written later by the web
+    //! layer's error renderer, which has the locale; this impl only parks the
+    //! error in the response extensions. A route mounted outside that renderer
+    //! would answer with an empty body, which the web crate's tests guard.
+
+    use axum::{
+        extract::{
+            multipart::MultipartRejection,
+            rejection::{FormRejection, JsonRejection, PathRejection, QueryRejection},
+        },
+        http::StatusCode,
+        response::{IntoResponse, Response},
+    };
+
+    use super::{Error, ErrorCode, ErrorKind};
+
+    impl ErrorKind {
+        pub fn status(self) -> StatusCode {
+            match self {
+                ErrorKind::BadRequest => StatusCode::BAD_REQUEST,
+                ErrorKind::Unauthorized => StatusCode::UNAUTHORIZED,
+                ErrorKind::Forbidden => StatusCode::FORBIDDEN,
+                ErrorKind::NotFound => StatusCode::NOT_FOUND,
+                ErrorKind::Conflict => StatusCode::CONFLICT,
+                ErrorKind::Locked => StatusCode::LOCKED,
+                ErrorKind::TooManyRequests => StatusCode::TOO_MANY_REQUESTS,
+                ErrorKind::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
+                ErrorKind::Internal => StatusCode::INTERNAL_SERVER_ERROR,
+                ErrorKind::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
+            }
+        }
+    }
+
+    impl IntoResponse for Error {
+        fn into_response(self) -> Response {
+            let mut response = self.kind().status().into_response();
+            response.extensions_mut().insert(self);
+            response
+        }
+    }
+
+    impl From<JsonRejection> for Error {
+        fn from(rejection: JsonRejection) -> Self {
+            Error::new(ErrorCode::InvalidRequestBody).with_detail(rejection.body_text())
+        }
+    }
+
+    impl From<PathRejection> for Error {
+        fn from(rejection: PathRejection) -> Self {
+            Error::new(ErrorCode::InvalidPathParam).with_detail(rejection.body_text())
+        }
+    }
+
+    impl From<QueryRejection> for Error {
+        fn from(rejection: QueryRejection) -> Self {
+            Error::new(ErrorCode::InvalidQuery).with_detail(rejection.body_text())
+        }
+    }
+
+    impl From<FormRejection> for Error {
+        fn from(rejection: FormRejection) -> Self {
+            Error::new(ErrorCode::InvalidRequestBody).with_detail(rejection.body_text())
+        }
+    }
+
+    impl From<MultipartRejection> for Error {
+        fn from(rejection: MultipartRejection) -> Self {
+            Error::new(ErrorCode::InvalidRequestBody).with_detail(rejection.body_text())
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wire_codes_are_unique() {
+        let mut seen = std::collections::HashSet::new();
+        for code in ErrorCode::ALL {
+            assert!(
+                seen.insert(code.as_str()),
+                "duplicate wire code {}",
+                code.as_str()
+            );
+        }
+    }
+
+    #[test]
+    fn validation_keeps_first_error_per_field() {
+        let err = Validation::new()
+            .check(true, "phone", ErrorCode::InvalidPhone)
+            .check(true, "phone", ErrorCode::NameRequired)
+            .check(false, "name", ErrorCode::NameRequired)
+            .finish()
+            .err();
+        let fields = err.as_ref().map(Error::fields).unwrap_or_default();
+        assert_eq!(
+            fields,
+            [FieldError {
+                field: "phone",
+                code: ErrorCode::InvalidPhone,
+                params: vec![]
+            }]
+        );
+    }
+
+    #[test]
+    fn each_field_keeps_its_own_params() {
+        // Username and password both use `{min}`; merging them made the
+        // password message say "at least 3".
+        let err = Validation::new()
+            .rule(
+                "username",
+                Err(Error::new(ErrorCode::UsernameTooShort).with_param("min", 3)),
+            )
+            .rule(
+                "password",
+                Err(Error::new(ErrorCode::PasswordTooShort).with_param("min", 8)),
+            )
+            .finish()
+            .err();
+        let params: Vec<_> = err
+            .iter()
+            .flat_map(|e| e.fields())
+            .map(|f| f.params.clone())
+            .collect();
+        assert_eq!(
+            params,
+            [vec![("min", "3".to_owned())], vec![("min", "8".to_owned())]]
+        );
+    }
+
+    #[test]
+    fn validation_without_failures_is_ok() {
+        assert!(Validation::new()
+            .check(false, "x", ErrorCode::NameRequired)
+            .finish()
+            .is_ok());
+    }
+}

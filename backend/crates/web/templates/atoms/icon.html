@@ -1,0 +1,4 @@
+{#- Font Awesome solid icon. Decorative by default: screen readers skip it. -#}
+{% macro icon(name, class="") -%}
+<i class="fa-solid {{ name }}{% if class %} {{ class }}{% endif %}" aria-hidden="true"></i>
+{%- endmacro icon %}

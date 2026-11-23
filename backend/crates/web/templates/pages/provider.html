@@ -1,0 +1,106 @@
+{% extends "layouts/app.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "atoms/stars.html" as stars %}
+{% import "molecules/call_button.html" as call %}
+{% import "molecules/zalo_button.html" as zalo %}
+{% import "molecules/contact_sent.html" as sent %}
+{% import "molecules/rating_line.html" as rating %}
+{% import "organisms/detail_hero.html" as hero %}
+{% import "organisms/contact_sheet.html" as sheet %}
+{% import "organisms/product_card.html" as cards %}
+{% import "organisms/review_sheet.html" as review %}
+{#- Provider detail, in the detail-page frame shared with the service and
+    supply pages (`detail-page`, app.css). `page` is
+    web::pages::provider::ProviderPage. The call button is the main action:
+    the side box, lifted onto the header on a phone, a column that stays in
+    view on a wide screen; the contact form is the fallback for when nobody
+    answers, with their rating beside it. Then what they do and what they sell
+    (what a farmer came for), who they are, and the reviews of farmers who
+    reached them here (shown once an admin approved them),
+    with the "write a review" sheet in its own `dialog` scope. -#}
+{% block title %}{{ page.provider.name }} — {{ site.name }}{% endblock title %}
+{% block meta %}<meta name="description" content="{% if page.meta_description %}{{ page.meta_description }}{% else %}{{ t(key="provider.meta", name=page.provider.name, area=page.area) }}{% endif %}">{% endblock meta %}
+{% block main %}
+{% set p = page.provider %}
+<div class="detail-page" x-data="dialog" data-open="{% if page.contact.open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+  {{ hero::detail_hero(title=p.name, share_text=page.share_text, back_href=url_for(name="providers"), back_label=t(key="nav.shops"), manage=page.manage, verified=p.is_verified, address=p.address | default(value="")) }}
+  <div class="detail-layout">
+    <div class="detail-layout__aside">
+      <section class="detail-card decision-box">
+        {% if page.reviews.count > 0 %}<p class="decision-box__rating">{{ rating::rating_line(r=page.reviews, href="#" ~ page.reviews_anchor) }}</p>{% endif %}
+        <div class="provider-actions">
+          {{ call::call_button(phone=p.phone, kind="provider", id=p.id, class="btn btn-success btn-lg btn-call") }}
+          {{ zalo::zalo_button(phone=p.phone, kind="provider", id=p.id, class="btn btn-outline-primary btn-lg") }}
+          <a class="btn btn-outline-success btn-lg" href="#lien-he" x-on:click.prevent="show">{{ atoms::icon(name="fa-comment-dots") }} {{ t(key="contact.send") }}</a>
+        </div>
+      </section>
+      {% if page.sent %}{{ sent::contact_sent(review_href="#" ~ page.reviews_anchor) }}{% endif %}
+    </div>
+
+    <div class="detail-layout__main">
+      {% if p.services %}
+      <section class="detail-card">
+        <h2 class="detail-card__title">{{ t(key="provider.services") }}</h2>
+        <ul class="service-list">
+          {% for s in p.services %}
+          {% set href = url_for(name="service", id=s.id, slug=s.name | slugify) %}
+          <li class="service-list__item">
+            {% if s.image_file_id %}<a class="service-list__photo" href="{{ href }}" tabindex="-1" aria-hidden="true"><img src="{{ file_url(id=s.image_file_id, variant="thumb") }}" alt="" width="72" height="72" loading="lazy" decoding="async"></a>{% else %}<span class="service-list__icon">{{ atoms::icon(name=s.category_icon | default(value="fa-tag")) }}</span>{% endif %}
+            <div class="service-list__info">
+              <div class="service-list__head"><a class="service-list__name" href="{{ href }}">{{ s.name }}</a>{% if s.name | trim | lower != s.category | trim | lower %} <span class="service-list__cat">{{ s.category }}</span>{% endif %}</div>
+              {% if s.description %}<p class="service-list__desc">{{ s.description }}</p>{% endif %}
+              {% if s.price_note %}<span class="service-list__price">{{ atoms::icon(name="fa-tag") }} {{ s.price_note | price_note }}</span>{% endif %}
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+      </section>
+      {% endif %}
+
+      {% if page.products %}
+      <section class="detail-card">
+        <h2 class="detail-card__title">{{ t(key="provider.products") }}</h2>
+        <div class="row row-cols-2 row-cols-md-3 g-2 g-md-3">
+          {% for x in page.products %}<div class="col">{{ cards::product_card(p=x) }}</div>{% endfor %}
+        </div>
+      </section>
+      {% endif %}
+
+      {% if p.description %}
+      <section class="detail-card">
+        <h2 class="detail-card__title">{{ t(key="form.about") }}</h2>
+        <p class="detail-card__text">{{ p.description }}</p>
+      </section>
+      {% endif %}
+
+      {% set r = page.reviews %}
+      <section class="detail-card" id="{{ page.reviews_anchor }}" aria-labelledby="reviews-title" x-data="dialog" data-open="{% if page.review.open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+        <div class="detail-card__head">
+          <h2 class="detail-card__title" id="reviews-title">{{ t(key="review.title") }}</h2>
+          {% if r.count > 0 %}{{ rating::rating_line(r=r) }}{% endif %}
+        </div>
+        {% if page.review_sent %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="review.sent")) }}{% endif %}
+        {% if r.items %}
+        <ul class="review-list">
+          {% for x in r.items %}
+          <li class="review-list__item">
+            <div class="review-list__head"><span class="review-list__name">{{ x.reviewer_name }}</span>{{ stars::stars(rating=x.rating) }}</div>
+            {% if x.comment %}<p class="review-list__comment">{{ x.comment }}</p>{% endif %}
+            <time class="review-list__date" datetime="{{ x.created_on | utc_iso }}">{{ x.created_on | vn_datetime }}</time>
+            {% if x.reply %}<blockquote class="review-list__reply"><span class="fw-semibold">{{ t(key="review.reply_from", name=p.name) }}</span> {{ x.reply }}</blockquote>{% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="detail-card__empty">{{ t(key="review.none") }}</p>
+        {% endif %}
+        <a class="btn btn-outline-warning btn-lg w-100" href="#danh-gia" x-on:click.prevent="show">{{ atoms::icon(name="fa-star") }} {{ t(key="review.write") }}</a>
+        {{ review::review_sheet(provider=p, review=page.review, stars=page.stars, name_max=page.limits.name_max, comment_max=page.review_comment_max, phone_pattern=limits.phone_pattern) }}
+      </section>
+
+      {{ sheet::contact_sheet(provider=p, contact=page.contact, limits=page.limits) }}
+    </div>
+  </div>
+</div>
+{% endblock main %}

@@ -1,0 +1,10 @@
+{#- The title row of a sheet (a section that Alpine `dialog` turns into a
+    bottom sheet): its title, labelled `{{ id }}-title`, and a close button
+    shown only when the sheet is a modal. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro sheet_header(id, title, icon) -%}
+<div class="contact-sheet__header">
+  <h2 class="contact-sheet__title" id="{{ id }}-title">{{ atoms::icon(name=icon) }} {{ title }}</h2>
+  <button type="button" class="contact-sheet__close" aria-label="{{ t(key="common.close") }}" x-show="modal" x-cloak x-on:click="hide">{{ atoms::icon(name="fa-xmark") }}</button>
+</div>
+{%- endmacro sheet_header %}

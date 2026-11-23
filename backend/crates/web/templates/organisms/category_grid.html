@@ -1,0 +1,11 @@
+{#- Grid of category tiles; each item has name, icon, href, active,
+    wide_only (shown from 992 px), kind (`service` / `product`, or blank)
+    and more (the outlined "all" tile). `class` is added to the list. -#}
+{% import "molecules/category_item.html" as molecules %}
+{% macro category_grid(items, class="") -%}
+<ul class="cat-grid{% if class %} {{ class }}{% endif %}">
+  {% for item in items %}
+  <li class="{% if item.kind %}cat-grid__item--{{ item.kind }}{% endif %}{% if item.wide_only %} d-none d-lg-block{% endif %}">{{ molecules::category_item(name=item.name, icon=item.icon, href=item.href, active=item.active, kind=item.kind, more=item.more) }}</li>
+  {% endfor %}
+</ul>
+{%- endmacro category_grid %}

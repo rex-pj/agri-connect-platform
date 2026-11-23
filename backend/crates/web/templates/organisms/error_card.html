@@ -1,0 +1,20 @@
+{#- Full-page error: status, localised message, the way back, and a
+    reference the user can quote so support can find the request in the
+    logs. `back` is a `shell::Link`: home, or the visitor's own area (admin
+    panel, partner report, provider dashboard) when the error is inside it. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro error_card(status, message, back, request_id="") -%}
+<section class="error-page">
+  <div class="error-card">
+    <div class="error-card__icon">
+      {% if status == 404 %}{{ atoms::icon(name="fa-map-location-dot") }}{% else %}{{ atoms::icon(name="fa-triangle-exclamation") }}{% endif %}
+    </div>
+    <h1 class="error-card__code">{{ status }}</h1>
+    <p class="error-card__message">{{ message }}</p>
+    <a class="btn-pill" href="{{ back.href }}">{{ atoms::icon(name=back.icon) }} {{ back.label }}</a>
+    {% if request_id and status >= 500 %}
+    <p class="error-card__ref">{{ t(key="error_page.reference", id=request_id) }}</p>
+    {% endif %}
+  </div>
+</section>
+{%- endmacro error_card %}

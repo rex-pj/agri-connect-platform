@@ -1,0 +1,6 @@
+{#- The 44 px photo at the start of an admin row. Without a photo it is an
+    empty box of the same size, so every row's name starts at the same place. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro admin_thumb(file_id) -%}
+{% if file_id %}<img class="admin-thumb" width="44" height="44" src="{{ file_url(id=file_id, variant="thumb") }}" alt="" loading="lazy" decoding="async">{% else %}<span class="admin-thumb admin-thumb--empty">{{ atoms::icon(name="fa-image") }}</span>{% endif %}
+{%- endmacro admin_thumb %}

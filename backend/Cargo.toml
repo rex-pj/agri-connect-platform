@@ -1,43 +1,182 @@
 [workspace]
-members = [".", "migration"]
+resolver = "2"
+members = [
+    "crates/domain",
+    "crates/application",
+    "crates/infrastructure",
+    "crates/web",
+    "migration",
+    "crates/tests",
+]
+# Bare `cargo run` / `cargo build` target the server; CI and pre-push checks pass --workspace.
+default-members = ["crates/web"]
 
-[package]
-name = "agri_connect"
-version = "0.1.0"
+[workspace.package]
 edition = "2021"
+version = "0.1.0"
+publish = false
 
-[dependencies]
-axum           = { version = "0.8", features = ["macros"] }
-tokio          = { version = "1",   features = ["full"] }
-tower          = { version = "0.5", features = ["full"] }
-tower-http     = { version = "0.6", features = ["cors", "trace", "set-header"] }
-hyper          = { version = "1.0" }
-serde          = { version = "1.0", features = ["derive"] }
-serde_json     = "1.0"
-validator      = { version = "0.19", features = ["derive"] }
-async-trait    = "0.1"
-chrono         = { version = "0.4", features = ["serde"] }
-config         = "0.15"
-dotenvy        = "0.15"
-tracing        = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-thiserror      = "1.0"
-jsonwebtoken   = "9"
-bcrypt         = "0.15"
-lettre         = { version = "0.11", features = ["tokio1-native-tls", "smtp-transport", "builder"] }
-rand           = "0.8"
-hex            = "0.4"
-governor       = "0.6"
+# Third-party versions live here only; member crates write `{ workspace = true }`.
+# Every crate is `default-features = false`; each kept feature says what breaks without it.
+[workspace.dependencies]
+domain         = { path = "crates/domain" }
+application    = { path = "crates/application" }
+infrastructure = { path = "crates/infrastructure" }
+migration      = { path = "migration", package = "agri-connect-migration" }
 
-[dependencies.sea-orm]
-version  = "1"
-features = [
+async-trait = "0.1"
+hex         = "0.4"
+serde_json  = "1"
+dotenvy     = "0.15"
+
+axum = { version = "0.8", default-features = false, features = [
+    "http1", # axum::serve speaks HTTP/1.1 only through this
+    "tokio", # axum::serve and ConnectInfo (rate limiting keys on the peer address)
+    "json",  # Json extractor/response for the whole /api surface
+    "query", # Query extractor for list and search endpoints
+    "form",  # application/x-www-form-urlencoded: the no-JS page forms (contact, later login)
+    "multipart", # product image uploads (multipart/form-data, works without JS)
+] }
+tower = { version = "0.5", default-features = false, features = [
+    "util", # ServiceExt::oneshot drives the router in tests without a socket
+] }
+tower-http = { version = "0.6", default-features = false, features = [
+    "cors",       # CorsLayer driven by CORS_ORIGINS
+    "set-header", # security headers (CSP, HSTS, nosniff, frame options)
+    "request-id", # x-request-id on every request and response, tied to log lines
+    "trace",      # one span per request carrying that id, so JSON logs can be grouped
+] }
+tokio = { version = "1", default-features = false, features = [
+    "rt-multi-thread", # the server runtime; also needed by spawn_blocking for bcrypt
+    "macros",          # #[tokio::main], #[tokio::test] and try_join! in use cases
+    "net",             # TcpListener for axum::serve
+    "signal",          # SIGTERM/Ctrl-C for graceful shutdown
+    "time",            # timeout on the healthcheck probe
+    "sync",            # OnceCell for the login's decoy hash, made once
+] }
+serde = { version = "1", default-features = false, features = [
+    "std",    # String/Vec/HashMap impls
+    "derive", # #[derive(Serialize, Deserialize)] on DTOs and claims
+] }
+chrono = { version = "0.4", default-features = false, features = [
+    "std",
+    "clock", # Utc::now() for expiry and lockout checks
+    "serde", # DateTime<Utc> fields in JSON responses
+] }
+thiserror = { version = "2", default-features = false, features = [
+    "std", # std::error::Error impls for our error types
+] }
+tracing = { version = "0.1", default-features = false, features = [
+    "std",        # the log macros need std
+    "attributes", # keeps #[instrument] available; without it the attribute fails to compile
+] }
+tracing-subscriber = { version = "0.3", default-features = false, features = [
+    "std",
+    "fmt",        # human-readable dev logs
+    "ansi",       # coloured dev logs in a terminal
+    "env-filter", # RUST_LOG filtering
+    "json",       # LOG_FORMAT=json for production
+] }
+toml = { version = "0.8", default-features = false, features = [
+    "parse", # locale files are parsed at startup; without it toml::from_str does not exist
+] }
+
+tera = { version = "1.20", default-features = false } # builtins pull chrono-tz, rand and slug; our filters are registered in web::views
+rust-embed = { version = "8", default-features = false } # templates + static compiled into the binary; read from disk in debug builds
+hyper-util = { version = "0.1", default-features = false, features = [
+    "client-legacy", # the HTTP client of `agri-connect probe` (the container health check)
+    "http1",         # the probe calls our own server over HTTP/1.1
+    "tokio",         # TokioExecutor + connector for that client
+] }
+
+uuid = { version = "1", default-features = false, features = [
+    "std",
+    "v4",    # random file ids: unguessable, and never reused, so served images can be cached forever
+    "serde", # file ids in JSON responses
+] }
+sha2 = { version = "0.10", default-features = false } # content hash stored with each file
+image = { version = "0.25", default-features = false, features = [
+    "jpeg", # decode phone photos; also the only format we encode and serve
+    "png",  # decode screenshots and scanned price lists
+    "webp", # decode images saved from the web or Zalo
+] }
+object_store = { version = "0.12", default-features = false, features = [
+    "aws", # Cloudflare R2 in production, through its S3 API
+    "gcp", # Google Cloud Storage (VM service account via the metadata server)
+    "fs",  # local-disk storage in development and on a VM without a bucket
+] }
+flate2 = { version = "1", default-features = false, features = [
+    "rust_backend", # pure Rust inflate for the bundled provinces and wards (admin_units.tsv.gz)
+] }
+
+unicode-normalization = { version = "0.1", default-features = false, features = [
+    "std", # NFD for slugs: "Gạo Thơm" -> "gao-thom" (pinned by application/src/slugify.fixtures.json)
+] }
+
+regex = { version = "1", default-features = false, features = [
+    "std", # test-only: template convention scans; ASCII patterns need nothing more
+] }
+
+jsonwebtoken = { version = "9", default-features = false } # HS256 only: PEM/ASN.1 support is not needed
+bcrypt = { version = "0.15", default-features = false, features = [
+    "std", # bcrypt::hash needs getrandom/std for salts
+] }
+rand = { version = "0.8", default-features = false, features = [
+    "std",
+    "getrandom", # OsRng for password-reset tokens
+] }
+governor = { version = "0.6", default-features = false, features = [
+    "std",     # keyed limiters need std collections
+    "dashmap", # DefaultKeyedStateStore is DashMap-backed; without it keyed() needs a custom store
+    "quanta",  # DefaultClock is the quanta clock; without it the type alias changes
+] }
+reqwest = { version = "0.12", default-features = false, features = [
+    "rustls-tls-native-roots", # HTTPS to graph.zalo.me with the system roots, as object_store already does
+    "json",                    # the Zalo Graph API answers JSON
+] }
+lettre = { version = "0.11", default-features = false, features = [
+    "builder",           # Message::builder for the reset email
+    "smtp-transport",    # AsyncSmtpTransport
+    "tokio1-rustls-tls", # STARTTLS over rustls; native-tls would drag OpenSSL into the distroless image
+] }
+
+sea-orm = { version = "1.1", default-features = false, features = [
+    "sqlx-postgres",        # the only database we run
+    "runtime-tokio-rustls", # async runtime + TLS for the pool, matching the server runtime
+    "macros",               # DeriveEntityModel / FromQueryResult on entities and query rows
+    "with-chrono",          # TIMESTAMPTZ <-> chrono types
+    "with-uuid",            # files.id UUID <-> uuid::Uuid
+] }
+sea-orm-migration = { version = "1.1", default-features = false, features = [
     "sqlx-postgres",
     "runtime-tokio-rustls",
-    "with-chrono",
-    "macros",
-]
+    "cli", # `cargo run -p agri-connect-migration -- status|up|fresh` for local DB work
+] }
 
-[dependencies.migration]
-package = "agri-connect-migration"
-path    = "migration"
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+# Panics in production code take the whole server down. Each exception is
+# scoped to a single item with #[allow(...)] and carries its reason.
+[workspace.lints.clippy]
+unwrap_used      = "deny"
+expect_used      = "deny"
+panic            = "deny"
+unreachable      = "deny"
+todo             = "deny"
+unimplemented    = "deny"
+indexing_slicing = "deny"
+
+# `cargo build`, `cargo run` and `cargo test` (the test profile inherits dev).
+# Line tables keep file:line in backtraces and panics; full debug info made
+# each test binary's PDB ~350 MB, and writing it was most of every link. For a
+# debugger session that needs variables: CARGO_PROFILE_DEV_DEBUG=full.
+[profile.dev]
+debug = "line-tables-only"
+
+# Third-party crates are compiled once and cached, so optimizing them costs
+# one slower clean build. Unoptimized, they made every test spend seconds in
+# Tera's template parser, bcrypt, sha2 and the image codecs.
+[profile.dev.package."*"]
+opt-level = 2
+debug = false

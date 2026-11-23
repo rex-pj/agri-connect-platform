@@ -1,0 +1,27 @@
+{#- The one language switch, the same everywhere: a button with the language
+    icon and the current code ("VI"), and a menu naming each language in
+    itself ("English" stays readable to someone lost in the other language;
+    never a flag: a language is not a country), marked `lang` so screen
+    readers say it right, the current one checked. Each choice is a plain
+    POST to /language with the page to come back to (`back`, the shell's
+    `here`). A `<details>`, so it opens without JS; Alpine `languageMenu`
+    adds closing on Escape, on a tap outside, and when another top-bar menu
+    opens. Where it sits is the frame's: the top bar's right end on app and
+    admin pages, under the card on the auth pages, where `up` opens the menu
+    above the button. `languages` is the page context's list (macros do not
+    see globals). -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro language_switch(languages, back, up=false) -%}
+<details class="lang-menu{% if up %} lang-menu--up{% endif %}" x-data="languageMenu" :open="open" x-on:nav-search-opened.window="close" x-on:profile-menu-opened.window="close" x-on:keydown.escape.window="close">
+  <summary class="lang-menu__btn" aria-label="{{ t(key="language.choose") }}" title="{{ t(key="language.choose") }}" x-on:click.prevent="toggle" :class="buttonClass">
+    {{ atoms::icon(name="fa-language") }}<span class="lang-menu__code text-uppercase">{% for l in languages %}{% if l.current %}{{ l.code }}{% endif %}{% endfor %}</span>{{ atoms::icon(name="fa-chevron-down", class="lang-menu__chevron") }}
+  </summary>
+  <form class="lang-menu__list" method="post" action="{{ url_for(name="language") }}">
+    <input type="hidden" name="back" value="{{ back }}">
+    {% for l in languages %}
+    <button type="submit" class="lang-menu__item" name="lang" value="{{ l.code }}" lang="{{ l.code }}" aria-pressed="{% if l.current %}true{% else %}false{% endif %}">{{ l.name }}{% if l.current %}{{ atoms::icon(name="fa-check", class="ms-auto text-success") }}{% endif %}</button>
+    {% endfor %}
+  </form>
+  <button type="button" class="lang-menu__backdrop" tabindex="-1" aria-hidden="true" x-show="open" x-cloak x-on:click="close"></button>
+</details>
+{%- endmacro language_switch %}

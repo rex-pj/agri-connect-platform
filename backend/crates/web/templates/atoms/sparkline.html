@@ -1,0 +1,7 @@
+{#- A price's last days as a small line: the line in the text colour
+    (neutral, as the move), its last point a dot, sized by `app.css`
+    (`.sparkline`, the same ratio as its box). An image to a screen reader,
+    worded by `s.label`. `s` is web::pages::prices::Sparkline. -#}
+{% macro sparkline(s) -%}
+<svg class="sparkline" viewBox="{{ s.view_box }}" role="img" aria-label="{{ s.label }}" focusable="false"><title>{{ s.label }}</title><polyline class="sparkline__line" points="{{ s.points }}"/><circle class="sparkline__dot" cx="{{ s.last_x }}" cy="{{ s.last_y }}" r="2.5"/></svg>
+{%- endmacro sparkline %}

@@ -1,0 +1,14 @@
+{#- Result tabs as links (each works without JS, `tab=` in its URL); inside an
+    Alpine `tabs` scope a tap switches the panels in place (`in_place`).
+    `in_place=false` when a tab shows more than the other tabs' panels hold
+    (the search page: a kind's tab is its whole list, paged), so the link
+    loads. `tabs` are web::pages::search::TabLink. -#}
+{% macro tab_nav(tabs, label, in_place=true) -%}
+<nav class="search-tabs" aria-label="{{ label }}">
+  {% for tab in tabs %}
+  <a class="search-tab" href="{{ tab.href }}" data-tab="{{ tab.tab }}"{% if tab.active %} aria-current="page"{% endif %}{% if in_place %} x-on:click.prevent="select" :aria-current="current"{% endif %}>
+    {{ tab.label }}{% if tab.count %} <span class="search-tab__badge">{{ tab.count }}</span>{% endif %}
+  </a>
+  {% endfor %}
+</nav>
+{%- endmacro tab_nav %}

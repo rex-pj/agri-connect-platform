@@ -1,0 +1,10 @@
+{#- One row of a `list-group`: a label and its count, a link with a chevron
+    when `href` is given (the page that manages those rows). -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro count_row(count, label, href="") -%}
+{% if href %}<a class="list-group-item list-group-item-action count-row" href="{{ href }}">{% else %}<div class="list-group-item count-row">{% endif %}
+  <span class="flex-grow-1">{{ label }}</span>
+  <strong>{{ count | number }}</strong>
+  {% if href %}{{ atoms::icon(name="fa-chevron-right", class="text-body-secondary") }}{% endif %}
+{% if href %}</a>{% else %}</div>{% endif %}
+{%- endmacro count_row %}

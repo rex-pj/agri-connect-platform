@@ -1,0 +1,33 @@
+{% import "atoms/icon.html" as atoms %}
+{#- The demand report's area filter (admin and partner): a GET form that
+    sends itself on change (`autoSubmit`; its button shows without JS).
+    `areas` are web::pages::admin::demand::AreaChoiceGroup: one optgroup per
+    province, the whole province first, then its wards with leads by their
+    own name; "no area" on its own. With JS (Alpine `searchableSelect`, Tom
+    Select: the page loads `searchable_select_assets()`) the list indents
+    the wards under the whole province and the box shows the chosen area's
+    full name. With an area chosen, a link leads back to every area. -#}
+{% macro area_filter(id, action, areas, value) -%}
+<form class="area-filter" method="get" action="{{ action }}" x-data="autoSubmit" x-on:change="submit">
+  <div class="form-field mb-0">
+    <label class="form-label small fw-semibold" for="{{ id }}">{{ t(key="demand.area") }}</label>
+    <div class="area-filter__row">
+      <select class="form-select area-filter__select" id="{{ id }}" name="area" aria-describedby="{{ id }}-hint" x-data="searchableSelect" data-allow-empty="true" data-no-results="{{ t(key="form.no_results") }}">
+        <option value="">{{ t(key="demand.all_areas") }}</option>
+        {%- for g in areas %}
+        {%- if g.province %}<optgroup label="{{ g.province }}">{% endif %}
+        {%- for c in g.choices %}
+          <option value="{{ c.value }}"{% if c.value == value %} selected{% endif %} data-name="{{ c.name }}" data-full="{{ c.label }}"{% if g.province and not loop.first %} data-ward="true"{% endif %}>{{ c.name }}</option>
+        {%- endfor %}
+        {%- if g.province %}</optgroup>{% endif %}
+        {%- endfor %}
+      </select>
+      <button type="submit" class="btn btn-outline-success" x-show="withoutScript">{{ atoms::icon(name="fa-filter") }} {{ t(key="demand.apply") }}</button>
+      {%- if value %}
+      <a class="btn btn-outline-secondary" href="{{ action }}">{{ atoms::icon(name="fa-xmark") }} {{ t(key="demand.all_areas") }}</a>
+      {%- endif %}
+    </div>
+    <div class="form-text" id="{{ id }}-hint">{{ t(key="demand.area_hint") }}</div>
+  </div>
+</form>
+{%- endmacro area_filter %}

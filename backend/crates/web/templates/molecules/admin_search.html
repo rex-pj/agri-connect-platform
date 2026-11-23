@@ -1,0 +1,142 @@
+{#- The toolbar above an admin list: one GET form, so the result is a URL.
+    Every list has the same four rows, each only when the list has it:
+      1. the words (`s.searchable`): one field with its icon and its own
+         clear button, the "Filters" button (with how many are on) and the
+         search button, joined in one row;
+      2. the status chips (`chips`, the list's main way of narrowing it),
+         plain links that keep every other criterion;
+      3. the filters behind the button, folded by default and open when one
+         is on (`s.picks` selects, `s.toggles` checkboxes, `s.dated` a from /
+         to date range), each sending the form when changed (`adminToolbar`;
+         without JS the panel is open and the apply button sends it);
+      4. the criteria in force as removable chips, and a way back to the
+         whole list.
+    The order is not here: it is chosen on the result bar below
+    (`admin_results`), since it arranges the result rather than narrows it.
+    The toolbar sends back every other criterion of the list (`s.keep`: the
+    tab, the order, the status) and starts again at the first page. `s` is
+    web::pages::admin::SearchBox, `placeholder` says what is searched,
+    `chips` are web::pages::admin::AdminTab (`status_chips`). -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro admin_search(s, placeholder, chips="", chips_label="") -%}
+{% set has_options = s.picks or s.toggles or s.texts or s.ranges or s.dated %}
+<form class="admin-toolbar" method="get" action="{{ s.action }}" role="search" x-data="adminToolbar" data-open="{% if s.filters_on %}true{% else %}false{% endif %}">
+  {% for f in s.keep %}<input type="hidden" name="{{ f.name }}" value="{{ f.value }}">{% endfor %}
+  {% if s.searchable or has_options %}
+  <div class="admin-toolbar__find">
+    {% if s.searchable %}
+    <label class="visually-hidden" for="admin-q">{{ t(key="admin_search.label") }}</label>
+    <div class="admin-toolbar__field">
+      {{ atoms::icon(name="fa-magnifying-glass", class="admin-toolbar__lead") }}
+      <input class="admin-toolbar__input" id="admin-q" type="search" name="q" value="{{ s.q }}" placeholder="{{ placeholder }}" maxlength="{{ limits.search_max }}" enterkeyhint="search" autocomplete="off">
+      {% if s.q %}<a class="admin-toolbar__clear" href="{{ s.clear_href }}" title="{{ t(key="admin_search.clear") }}">{{ atoms::icon(name="fa-xmark") }}<span class="visually-hidden">{{ t(key="admin_search.clear") }}</span></a>{% endif %}
+    </div>
+    {% endif %}
+    {% if has_options %}
+    <button type="button" class="btn btn-outline-secondary admin-toolbar__more" aria-controls="admin-filters" x-cloak x-on:click="toggle" :class="buttonClass" :aria-expanded="expanded">
+      {{ atoms::icon(name="fa-sliders") }}<span class="d-none d-sm-inline">{{ t(key="admin_search.filters") }}</span>{% if s.filters_on %}<span class="admin-toolbar__badge">{{ s.filters_on }}</span>{% endif %}
+    </button>
+    {% endif %}
+    {% if s.searchable %}
+    <button class="btn btn-success admin-toolbar__go" type="submit">{{ atoms::icon(name="fa-magnifying-glass", class="d-sm-none") }}<span class="d-none d-sm-inline">{{ t(key="common.search") }}</span><span class="visually-hidden d-sm-none">{{ t(key="common.search") }}</span></button>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% if chips %}
+  <nav class="admin-chips" aria-label="{{ chips_label }}">
+    {% for c in chips %}
+    <a class="chip" href="{{ c.href }}"{% if c.current %} aria-current="true"{% endif %}>{{ c.label }}{% if c.count is number %} <span class="chip__count">{{ c.count }}</span>{% endif %}</a>
+    {% endfor %}
+  </nav>
+  {% endif %}
+  {% if has_options %}
+  <div class="admin-toolbar__panel" id="admin-filters" :class="panelClass">
+    <div class="admin-toolbar__panel-inner">
+      <div class="admin-toolbar__filters">
+        {% for p in s.picks %}
+        <div class="admin-toolbar__item">
+          <label class="admin-toolbar__caption" for="admin-pick-{{ p.name }}">{{ p.label }}</label>
+          <select class="form-select" id="admin-pick-{{ p.name }}" name="{{ p.name }}" x-on:change="submit">
+            <option value="">{{ p.all }}</option>
+            {% for o in p.options %}<option value="{{ o.value }}"{% if o.selected %} selected{% endif %}>{{ o.label }}</option>{% endfor %}
+          </select>
+        </div>
+        {% endfor %}
+        {% for x in s.texts %}
+        <div class="admin-toolbar__item">
+          <label class="admin-toolbar__caption" for="admin-text-{{ x.name }}">{{ x.label }}</label>
+          <input class="form-control" id="admin-text-{{ x.name }}" type="search" name="{{ x.name }}" value="{{ x.value }}" placeholder="{{ x.placeholder }}" maxlength="60" enterkeyhint="search" autocomplete="off" x-on:change="submit">
+        </div>
+        {% endfor %}
+        {% if s.dated %}
+        <div class="admin-toolbar__item">
+          <label class="admin-toolbar__caption" for="admin-from">{{ t(key="admin_search.from") }}</label>
+          <input class="form-control" id="admin-from" type="date" name="from" value="{{ s.from }}" x-on:change="submit">
+        </div>
+        <div class="admin-toolbar__item">
+          <label class="admin-toolbar__caption" for="admin-to">{{ t(key="admin_search.to") }}</label>
+          <input class="form-control" id="admin-to" type="date" name="to" value="{{ s.to }}" x-on:change="submit">
+        </div>
+        {% endif %}
+        {% for r in s.ranges %}
+        <div class="admin-toolbar__item">
+          <label class="admin-toolbar__caption" for="admin-{{ r.min_name }}">{{ r.label }}: {{ r.from_hint }}</label>
+          <input class="form-control" id="admin-{{ r.min_name }}" type="{% if r.date %}date{% else %}number{% endif %}"{% if not r.date %} min="0" inputmode="numeric"{% endif %} name="{{ r.min_name }}" value="{{ r.min }}" x-on:change="submit">
+        </div>
+        <div class="admin-toolbar__item">
+          <label class="admin-toolbar__caption" for="admin-{{ r.max_name }}">{{ r.label }}: {{ r.to_hint }}</label>
+          <input class="form-control" id="admin-{{ r.max_name }}" type="{% if r.date %}date{% else %}number{% endif %}"{% if not r.date %} min="0" inputmode="numeric"{% endif %} name="{{ r.max_name }}" value="{{ r.max }}" x-on:change="submit">
+        </div>
+        {% endfor %}
+        {% for g in s.toggles %}
+        <div class="admin-toolbar__item admin-toolbar__item--check">
+          <label class="admin-toolbar__check">
+            <input class="form-check-input" type="checkbox" name="{{ g.name }}" value="{{ g.value }}"{% if g.on %} checked{% endif %} x-on:change="submit">
+            <span>{{ g.label }}</span>
+          </label>
+        </div>
+        {% endfor %}
+      </div>
+      <noscript><button class="btn btn-outline-success" type="submit">{{ t(key="admin_search.apply") }}</button></noscript>
+    </div>
+  </div>
+  {% endif %}
+  {% if s.active or s.narrowed %}
+  <div class="admin-toolbar__active">
+    {% for a in s.active %}
+    {% if a.link %}
+    <span class="admin-toolbar__tag admin-toolbar__tag--link"><a href="{{ a.link }}">{{ atoms::icon(name="fa-store") }}{{ a.label }}</a><a class="admin-toolbar__tag-x" href="{{ a.href }}" title="{{ t(key="admin_search.remove") }}">{{ atoms::icon(name="fa-xmark") }}<span class="visually-hidden">{{ t(key="admin_search.remove") }}</span></a></span>
+    {% else %}
+    <a class="admin-toolbar__tag" href="{{ a.href }}" title="{{ t(key="admin_search.remove") }}">{{ a.label }}{{ atoms::icon(name="fa-xmark") }}</a>
+    {% endif %}
+    {% endfor %}
+    {% if s.narrowed %}<a class="admin-toolbar__reset" href="{{ s.reset_href }}">{{ atoms::icon(name="fa-rotate-left", class="me-1") }}{{ t(key="admin_search.reset") }}</a>{% endif %}
+  </div>
+  {% endif %}
+</form>
+{%- endmacro admin_search %}
+{#- The bar between the toolbar and the rows: how many there are (the one
+    count of an admin list: the header says what the page is for, never how
+    many), and the order they come in (a form of its own, sent on change, that carries
+    every criterion of the toolbar). `s` is the toolbar's SearchBox, `total`
+    the number of rows in the whole result. -#}
+{% macro admin_results(s, total) -%}
+<div class="admin-results">
+  <p class="admin-results__count"><strong class="admin-results__total">{{ total | number }}</strong> {{ t(key="admin_search.results_unit") }}</p>
+  {% if s.sorts %}
+  <form class="admin-results__sort" method="get" action="{{ s.action }}" x-data="autoSubmit">
+    {% for f in s.sort_keep %}<input type="hidden" name="{{ f.name }}" value="{{ f.value }}">{% endfor %}
+    <label class="admin-results__label" for="admin-sort">{{ atoms::icon(name="fa-arrow-down-wide-short", class="me-1") }}{{ t(key="admin_search.sort") }}</label>
+    <select class="form-select form-select-sm" id="admin-sort" name="sort" x-on:change="submit">
+      {% for o in s.sorts %}<option value="{{ o.value }}"{% if o.selected %} selected{% endif %}>{{ o.label }}</option>{% endfor %}
+    </select>
+    <noscript><button class="btn btn-sm btn-outline-success" type="submit">{{ t(key="admin_search.apply") }}</button></noscript>
+  </form>
+  {% endif %}
+</div>
+{%- endmacro admin_results %}
+{#- What an empty admin list says: no result for the words, nothing in the
+    chosen filters, else `none` (the list has no rows at all). -#}
+{% macro empty(s, none) -%}
+{% if s.q %}{{ t(key="admin_search.none", q=s.q) }}{% elif s.narrowed %}{{ t(key="admin_search.none_here") }}{% else %}{{ none }}{% endif %}
+{%- endmacro empty %}

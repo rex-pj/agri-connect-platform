@@ -1,0 +1,48 @@
+{#- The boxes of a category, shared by the create and edit forms. `form` is
+    web::pages::admin::categories::CategoryForm (the values as typed),
+    `errors` its FormErrors, `limits` the use case's lengths. The type is
+    chosen on create only (`with_type`): a category never changes type.
+    `category_id`: the one being edited (its own slug is free to it).
+    `first`: the type box takes the focus when its sheet opens (create).
+    The slug may be left blank: the server makes it from the name. With JS
+    (Alpine `slugField`) the box fills from the name as it is typed and says
+    at once when another category has the slug. -#}
+{% import "molecules/form_field.html" as field %}
+{% macro category_fields(form, errors, limits, prefix, sectors, with_type=false, category_id="", first=false) -%}
+{% if with_type %}
+<div class="form-field">
+  <label class="form-label fw-semibold" for="{{ prefix }}-type">{{ t(key="category_form.type") }} <span class="text-danger" aria-hidden="true">*</span></label>
+  <select class="form-select{% if errors.fields.category_type %} is-invalid{% endif %}" id="{{ prefix }}-type" name="category_type" required{% if first %} x-ref="first"{% endif %}{% if errors.fields.category_type %} aria-invalid="true" aria-describedby="{{ prefix }}-type-error"{% endif %}>
+    <option value="service"{% if form.category_type == "service" %} selected{% endif %}>{{ t(key="category_type.service") }}</option>
+    <option value="product"{% if form.category_type == "product" %} selected{% endif %}>{{ t(key="category_type.product") }}</option>
+  </select>
+  {% if errors.fields.category_type %}<div class="invalid-feedback" id="{{ prefix }}-type-error">{{ errors.fields.category_type }}</div>{% endif %}
+</div>
+{% endif %}
+{#- The sector it serves; "every sector" for what all farmers use (machine
+    repair, transport). `sectors` are web::labels::CodeOption. -#}
+<div class="form-field">
+  <label class="form-label fw-semibold" for="{{ prefix }}-sector">{{ t(key="sector.label") }}</label>
+  <select class="form-select{% if errors.fields.sector %} is-invalid{% endif %}" id="{{ prefix }}-sector" name="sector"{% if errors.fields.sector %} aria-invalid="true" aria-describedby="{{ prefix }}-sector-error"{% endif %}>
+    <option value="">{{ t(key="sector.all") }}</option>
+    {% for s in sectors %}<option value="{{ s.value }}"{% if form.sector == s.value %} selected{% endif %}>{{ s.label }}</option>{% endfor %}
+  </select>
+  {% if errors.fields.sector %}<div class="invalid-feedback" id="{{ prefix }}-sector-error">{{ errors.fields.sector }}</div>{% endif %}
+</div>
+<div class="form-stack" x-data="slugField" x-on:input="changed" data-url="{{ url_for(name="admin_category_slug") }}"{% if category_id %} data-id="{{ category_id }}"{% endif %} data-free-text="{{ t(key="category_form.slug_free") }}" data-numbered-text="{{ t(key="category_form.slug_numbered") }}" data-taken-text="{{ t(key="category_form.slug_taken") }}" data-fix-text="{{ t(key="category_form.slug_fix") }}">
+  {{ field::input(id=prefix ~ "-name", name="name", label=t(key="form.name"), value=form.name, error=errors.fields.name | default(value=""), required=true, maxlength=limits.name) }}
+  <div>
+    {{ field::input(id=prefix ~ "-slug", name="slug", label=t(key="category_form.slug"), value=form.slug, error=errors.fields.slug | default(value=""), maxlength=limits.slug, placeholder=t(key="category_form.slug_placeholder"), pattern=limits.slug_pattern, autocomplete="off", hint=t(key="category_form.slug_hint")) }}
+    <div class="slug-note" role="status" x-show="hasNote" x-cloak>
+      <span :class="noteClass" x-text="note"></span>
+      <button type="button" class="btn btn-outline-secondary" x-show="offers" x-on:click="apply">{{ t(key="category_form.slug_use") }} <code x-text="suggestion"></code></button>
+    </div>
+  </div>
+</div>
+<div class="row g-2">
+  <div class="col-sm-6">{{ field::icon_select(id=prefix ~ "-icon", name="icon", label=t(key="category_form.icon"), value=form.icon, error=errors.fields.icon | default(value="")) }}</div>
+  <div class="col-sm-3">{{ field::input(id=prefix ~ "-color", name="color", label=t(key="category_form.color"), value=form.color, error=errors.fields.color | default(value=""), maxlength=limits.color, placeholder=t(key="category_form.color_placeholder"), autocomplete="off") }}</div>
+  <div class="col-sm-3">{{ field::input(id=prefix ~ "-order", name="display_order", label=t(key="form.display_order"), value=form.display_order, type="number", inputmode="numeric", error=errors.fields.display_order | default(value="")) }}</div>
+</div>
+{{ field::textarea(id=prefix ~ "-description", name="description", label=t(key="form.description"), value=form.description, error=errors.fields.description | default(value=""), maxlength=limits.description, rows=2) }}
+{%- endmacro category_fields %}

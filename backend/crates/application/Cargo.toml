@@ -1,0 +1,24 @@
+[package]
+name = "application"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[dependencies]
+domain.workspace                = true
+async-trait.workspace           = true
+chrono.workspace                = true
+hex.workspace                   = true
+rand.workspace                  = true
+serde.workspace                 = true
+tokio.workspace                 = true
+tracing.workspace               = true
+uuid.workspace                  = true
+sha2.workspace                  = true
+unicode-normalization.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

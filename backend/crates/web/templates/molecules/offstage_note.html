@@ -1,0 +1,13 @@
+{#- Under a listing's visibility on its admin page (a service, a supply): what
+    else keeps it from farmers, whatever its own switch says, each with the
+    way to the page that turns it back on. `l` is AdminServiceDto or
+    AdminProductDto. Nothing while nothing else holds it back. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro offstage_note(l, provider_href, category_href) -%}
+{% if not l.provider_active or not l.category_active %}
+<ul class="list-unstyled small mb-0 d-grid gap-1 text-warning-emphasis">
+  {% if not l.provider_active %}<li>{{ atoms::icon(name="fa-store-slash") }} {{ t(key="admin.offstage_provider") }} <a class="fw-semibold" href="{{ provider_href }}">{{ t(key="admin.open_provider") }}</a></li>{% endif %}
+  {% if not l.category_active %}<li>{{ atoms::icon(name="fa-tags") }} {{ t(key="admin.offstage_category") }} <a class="fw-semibold" href="{{ category_href }}">{{ t(key="admin.open_category") }}</a></li>{% endif %}
+</ul>
+{% endif %}
+{%- endmacro offstage_note %}

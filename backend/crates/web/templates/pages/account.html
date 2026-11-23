@@ -1,0 +1,14 @@
+{% extends "layouts/app.html" %}
+{% import "organisms/account_sections.html" as account %}
+{#- The signed-in visitor's account in the app frame (providers, anyone
+    without an area of their own). Partners see the same in their frame
+    (`pages/partner_account.html`), admins in the panel
+    (`pages/admin/account.html`). `page` is web::pages::account::AccountPage. -#}
+{% block title %}{{ t(key="nav.account") }} — {{ site.name }}{% endblock title %}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
+{% block main %}
+{{ account::account_header(p=page) }}
+<div class="detail-body">
+  {{ account::account_sections(p=page, limits=limits, logout=url_for(name="logout")) }}
+</div>
+{% endblock main %}

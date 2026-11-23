@@ -1,0 +1,37 @@
+{% extends "layouts/app.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "molecules/empty_state.html" as empty %}
+{% import "molecules/pagination_nav.html" as paging %}
+{#- Jobs farmers posted near the provider's business, in its services'
+    categories: what, where, how far, when, and a call button; a page at a
+    time. `page` is web::pages::own_jobs::OwnJobsPage. -#}
+{% block title %}{{ t(key="own_jobs.title") }} — {{ site.name }}{% endblock title %}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
+{% block main %}
+<header class="acct-header">
+  <a class="acct-avatar text-decoration-none" href="{{ page.dashboard_href }}" aria-label="{{ t(key="dashboard.back") }}">{{ atoms::icon(name="fa-arrow-left") }}</a>
+  <div>
+    <h1 class="acct-name">{{ t(key="own_jobs.title") }}</h1>
+    <span class="acct-role">{{ t(key="own_jobs.sub", days=page.days) }}</span>
+  </div>
+</header>
+
+<div class="detail-body">
+  {% for j in page.jobs %}
+  <section class="detail-card" aria-labelledby="job-{{ j.id }}">
+    <div class="d-flex justify-content-between align-items-start gap-2">
+      <h2 class="detail-card__title mb-1" id="job-{{ j.id }}">{{ j.category }}</h2>
+      {% if j.distance_m is number %}<span class="badge text-bg-light border">{{ atoms::icon(name="fa-location-dot", class="me-1") }}{{ j.distance_m | distance }}</span>{% endif %}
+    </div>
+    <p class="detail-card__text mb-1">{{ j.description }}</p>
+    <p class="small text-muted mb-2">{{ j.requester_name }}{% if j.area %} · {{ j.area }}{% endif %} · <time datetime="{{ j.created_on | utc_iso }}">{{ j.created_on | vn_datetime }}</time></p>
+    <a class="btn btn-success btn-lg w-100" href="tel:{{ j.requester_phone }}">{{ atoms::icon(name="fa-phone") }} {{ t(key="inbox.call", phone=j.requester_phone | phone) }}</a>
+  </section>
+  {% else %}
+  <section class="detail-card">
+    {{ empty::empty_state(icon="fa-bullhorn", title=t(key="own_jobs.empty"), hint=t(key="own_jobs.empty_hint")) }}
+  </section>
+  {% endfor %}
+  {% if page.pagination %}{{ paging::pagination_nav(p=page.pagination) }}{% endif %}
+</div>
+{% endblock main %}

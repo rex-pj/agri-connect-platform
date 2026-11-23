@@ -1,0 +1,85 @@
+{% extends "layouts/admin.html" %}
+{% import "molecules/admin_search.html" as search %}
+{% import "molecules/form_field.html" as field %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "atoms/status_badge.html" as status %}
+{% import "molecules/admin_header.html" as header %}
+{% import "molecules/admin_tabs.html" as tabs %}
+{% import "molecules/row_action.html" as row %}
+{% import "molecules/sheet_header.html" as sheet_head %}
+{% import "organisms/coded_fields.html" as fields %}
+{% import "organisms/confirm_sheet.html" as confirm %}
+{#- A coded list (the sectors; the alert kinds, a tab of the alerts page).
+    `page.body` is web::pages::admin::coded::CodedListPage: every entry
+    (hidden ones too), its words, the page's tabs when it is one, and the
+    create sheet opened by the header's "add" (an anchored section without
+    JS), which comes back open with its messages when a rule is broken.
+    Hiding reloads the list with that row's confirmation open (`b.confirm`,
+    in its own `dialog` scope). Row actions send `back=list` (`b.keep`) so
+    they land here again. -#}
+{% block title %}{{ page.body.words.title }} — {{ site.name }} Admin{% endblock title %}
+{% block vendor %}{{ field::searchable_select_assets() }}{% endblock vendor %}
+{% block content %}
+{% set b = page.body %}
+{% set w = b.words %}
+<div x-data="dialog" data-open="{% if b.errors.message or b.errors.fields %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+{{ header::admin_header(title=w.title, icon=b.icon, sub=w.sub, action_href="#them-moi", action_icon="fa-plus", action_label=w.add, action_opens=true) }}
+<div class="admin-body">
+  {% if b.tabs %}{{ tabs::admin_tabs(tabs=b.tabs, label=w.title) }}{% endif %}
+  {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.coded"), chips=b.states, chips_label=t(key="admin_state.label")) }}
+  {% if b.flash_text %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=b.flash_text) }}{% endif %}
+
+  <div class="admin-card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 admin-table admin-table--cards">
+        <thead class="admin-table-head">
+          <tr><th>{{ w.name }}</th><th>{{ t(key="coded_form.code") }}</th><th class="text-center">{{ t(key="form.display_order") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
+        </thead>
+        <tbody>
+          {% for r in b.rows %}
+          {% set s = r.entry %}
+          <tr{% if not s.is_active %} class="table-light text-body-secondary"{% endif %}>
+            <td data-label="">{{ atoms::icon(name=r.icon, class="text-success me-2") }}<a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ s.name }}</a>{% if s.is_demo %} {{ status::demo() }}{% endif %}</td>
+            <td data-label="{{ t(key="coded_form.code") }}"><code>{{ s.code }}</code></td>
+            <td data-label="{{ t(key="form.display_order") }}" class="text-center">{{ s.display_order }}</td>
+            <td data-label="{{ t(key="admin.col_status") }}" class="text-center cell-state">{{ status::visibility(on=s.is_active) }}</td>
+            <td data-label="" class="text-end">
+              <div class="row-actions">
+                {% if s.is_active %}
+                {{ row::hide(href=r.hide_href ~ "#xac-nhan", name=s.name) }}
+                {% else %}
+                {{ row::show(action=r.status_action, name=s.name, field="is_active", keep=b.keep) }}
+                {% endif %}
+                {{ row::open(href=r.href, name=s.name) }}
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-center text-muted py-4">{{ search::empty(s=b.search, none=w.none) }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if b.confirm %}
+  {% set c = b.confirm %}
+  <div x-data="dialog" data-open="true" x-on:keydown.escape.window="hide">
+    {{ confirm::confirm_sheet(id="xac-nhan", title=b.confirm_title, icon="fa-eye-slash", action=c.action, button=t(key="admin.confirm_hide"), reason_max=limits.audit_reason_max, effect="hide", what=w.what, hidden_name="is_active", hidden_value="false", keep=b.keep) }}
+  </div>
+  {% endif %}
+
+  <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
+  <section class="contact-sheet" id="them-moi" aria-labelledby="them-moi-title" :class="sheetClass">
+    {{ sheet_head::sheet_header(id="them-moi", title=w.add, icon=b.icon) }}
+    <form class="contact-sheet__form" method="post" action="{{ b.create_action }}" novalidate>
+      {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
+      <p class="small text-muted mb-0">{{ t(key="coded_form.code_note") }}</p>
+      {{ fields::coded_fields(form=b.form, errors=b.errors, words=w, name_max=limits.coded_name_max, prefix="new", first=true) }}
+      <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-plus") }} {{ w.add }}</button>
+    </form>
+  </section>
+</div>
+</div>
+{% endblock content %}

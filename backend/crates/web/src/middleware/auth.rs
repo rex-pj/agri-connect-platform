@@ -1,0 +1,137 @@
+//! Who is calling. Extracts the session; never decides access. Every access
+//! decision is a permission check inside a use case (`actor.require(KEY)`), so
+//! an endpoint cannot be opened up by forgetting a guard here.
+
+use application::authz::Actor;
+use axum::{
+    extract::FromRequestParts,
+    http::{header, request::Parts},
+};
+use domain::{Error, ErrorCode};
+
+use crate::{app_state::AppState, cookies::request_cookie};
+
+/// The session cookie (httpOnly, set by `session` at sign-in and renewal).
+pub const SESSION_COOKIE: &str = "auth_token";
+
+/// The token from `Authorization: Bearer` (a script or app calling the JSON
+/// API) or else from the session cookie `cookie` (a browser).
+fn session_token<'a>(parts: &'a Parts, cookie: &str) -> Option<&'a str> {
+    let bearer = parts
+        .headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "));
+    bearer.or_else(|| request_cookie(&parts.headers, cookie))
+}
+
+/// `None` for an anonymous caller, and for a valid token whose account was
+/// deleted or deactivated since. A token that is present but forged or
+/// expired is rejected with `invalid_token`, so a client can tell "log in
+/// again" from "not logged in".
+pub struct MaybeActor(pub Option<Actor>);
+
+/// The actor already resolved for this request. A page takes `Shell` and
+/// `Viewer` (and some take both): the account and its permissions are read
+/// once per request, not once per extractor.
+#[derive(Clone)]
+struct ResolvedActor(Option<Actor>);
+
+impl FromRequestParts<AppState> for MaybeActor {
+    type Rejection = Error;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        if let Some(ResolvedActor(actor)) = parts.extensions.get::<ResolvedActor>() {
+            return Ok(Self(actor.clone()));
+        }
+        let Some(token) = session_token(parts, state.cookies.session_name()) else {
+            return Ok(Self(None));
+        };
+        let claims = state.token_service.verify(token)?;
+        let actor = state.usecases.auth.session_actor(&claims).await?;
+        parts.extensions.insert(ResolvedActor(actor.clone()));
+        Ok(Self(actor))
+    }
+}
+
+/// The caller's session (the claims of its token), for ending it. Like
+/// `MaybeActor` a forged or expired token is `invalid_token`; no token at
+/// all is `authentication_required`.
+pub struct CallerSession(pub application::ports::SessionClaims);
+
+impl FromRequestParts<AppState> for CallerSession {
+    type Rejection = Error;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let token = session_token(parts, state.cookies.session_name())
+            .ok_or_else(|| Error::new(ErrorCode::AuthenticationRequired))?;
+        Ok(Self(state.token_service.verify(token)?))
+    }
+}
+
+/// Who is looking at a page. Unlike `MaybeActor`, an expired or forged session
+/// cookie is simply "nobody": a stale cookie must never make a page fail.
+pub struct Viewer(pub Option<Actor>);
+
+impl FromRequestParts<AppState> for Viewer {
+    type Rejection = Error;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        match MaybeActor::from_request_parts(parts, state).await {
+            Ok(MaybeActor(actor)) => Ok(Self(actor)),
+            Err(e) if e.code() == ErrorCode::InvalidToken => Ok(Self(None)),
+            Err(e) => Err(e),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::http::Request;
+
+    use super::*;
+
+    fn parts(headers: &[(&str, &str)]) -> Parts {
+        let mut req = Request::builder();
+        for (k, v) in headers {
+            req = req.header(*k, *v);
+        }
+        req.body(())
+            .map(|r| r.into_parts().0)
+            .unwrap_or_else(|_| Request::new(()).into_parts().0)
+    }
+
+    #[test]
+    fn bearer_wins_over_cookie() {
+        let p = parts(&[
+            ("authorization", "Bearer from-header"),
+            ("cookie", "auth_token=from-cookie"),
+        ]);
+        assert_eq!(session_token(&p, SESSION_COOKIE), Some("from-header"));
+    }
+
+    #[test]
+    fn cookie_is_found_among_others() {
+        let p = parts(&[("cookie", "theme=dark; auth_token=abc.def; lang=vi")]);
+        assert_eq!(session_token(&p, SESSION_COOKIE), Some("abc.def"));
+    }
+
+    #[test]
+    fn similar_names_and_empty_values_are_not_sessions() {
+        let p = parts(&[("cookie", "xauth_token=nope; auth_token=")]);
+        assert_eq!(session_token(&p, SESSION_COOKIE), None);
+        // Behind TLS only the __Host- cookie is a session: a plain one
+        // another site under the domain set is not read.
+        let planted = parts(&[("cookie", "auth_token=planted")]);
+        assert_eq!(session_token(&planted, "__Host-auth_token"), None);
+    }
+}

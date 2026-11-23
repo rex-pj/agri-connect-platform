@@ -1,0 +1,64 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "molecules/history_list.html" as history %}
+{% import "organisms/record_header.html" as record %}
+{% import "organisms/crop_fields.html" as fields %}
+{% import "organisms/confirm_sheet.html" as confirm %}
+{#- One crop, as a record page: the header (entering today's price and
+    hide / show as buttons; its commodity and every price in the menu:
+    `b.header`, `crops::crop_controls`), one status strip (on the board or
+    not, who hid it and why), then its edit form, and beside it on a wide
+    screen its latest prices and history. A crop is never deleted: its
+    prices would go with it. `page.body` is web::pages::admin::crops::CropPage. -#}
+{% block title %}{{ page.body.crop.name }} — {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+{% set c = b.crop %}
+{{ record::record_header(h=b.header) }}
+<div class="admin-body">
+  {% if b.flash == "crop_created" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin_crops.created")) }}{% endif %}
+  {% if b.flash == "crop_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.saved")) }}{% endif %}
+  {% if b.flash == "crop_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin_crops.hidden")) }}{% endif %}
+  {% if b.flash == "crop_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin_crops.shown")) }}{% endif %}
+  {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
+
+  <section class="admin-section record-strip" aria-labelledby="status-title">
+    <h2 class="visually-hidden" id="status-title">{{ t(key="admin.status_now") }}</h2>
+    <p class="small mb-0">{% if c.is_active %}{{ t(key="admin_crops.on") }}{% else %}{{ t(key="admin_crops.off") }}{% endif %}</p>
+    {% if not c.is_active %}{% set off = b.history | filter(attribute="action", value="hide_crop") | first %}{% if off %}{{ history::last_change(row=off) }}{% endif %}{% endif %}
+  </section>
+
+  <div class="row g-3 g-lg-4">
+    <div class="col-lg-8">
+      <section class="admin-section" aria-labelledby="edit-title">
+        <h2 class="admin-section__title" id="edit-title">{{ t(key="admin.edit_title") }}</h2>
+        <form class="form-stack" method="post" action="{{ b.update_action }}" novalidate>
+          {{ fields::crop_fields(form=b.form, errors=b.errors, commodities=b.commodities, commodities_href=b.commodities_href, name_max=limits.crop_name_max, unit_max=limits.crop_unit_max, prefix="edit") }}
+          <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button></div>
+        </form>
+      </section>
+    </div>
+    <div class="col-lg-4 d-flex flex-column gap-3">
+      <section class="admin-section" aria-labelledby="gia-title">
+        <h2 class="admin-section__title" id="gia-title">{{ t(key="admin_crops.recent_prices") }}</h2>
+        {% if b.prices %}
+        <ul class="list-unstyled mb-0">
+          {% for p in b.prices %}<li class="d-flex flex-wrap justify-content-between gap-2 py-2 border-bottom"><span>{{ p.location_label }} · <span class="text-muted">{{ p.observed_on | full_date }}</span></span><span class="fw-semibold text-nowrap">{% if p.price_low == p.price_high %}{{ p.price_low | vnd }}{% else %}{{ p.price_low | number }} – {{ p.price_high | vnd }}{% endif %}<span class="small text-muted">/{{ p.unit }}</span></span></li>{% endfor %}
+        </ul>
+        {% if b.prices_total > b.prices | length %}<a class="admin-section__link" href="{{ b.prices_href }}">{{ t(key="admin_crops.all_prices", count=b.prices_total) }}</a>{% endif %}
+        {% else %}
+        <p class="small text-muted mb-0">{{ t(key="admin_crops.no_prices") }}</p>
+        {% endif %}
+      </section>
+      {{ history::history_list(rows=b.history) }}
+    </div>
+  </div>
+
+  {% for x in b.confirms %}
+  <div x-data="dialog" data-open="{% if x.open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+    {{ confirm::confirm_sheet(id=x.id, title=x.title, icon=x.icon, action=x.action, button=x.button, reason_max=limits.audit_reason_max, effect=x.effect, what=x.what, note=x.note, hidden_name=x.hidden_name, hidden_value=x.hidden_value, button_class=x.button_class) }}
+  </div>
+  {% endfor %}
+</div>
+{% endblock content %}

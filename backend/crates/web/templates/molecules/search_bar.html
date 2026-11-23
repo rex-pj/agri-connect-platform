@@ -1,0 +1,14 @@
+{#- A single search box that submits `q` by GET to `action`. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro search_bar(action, q, placeholder) -%}
+<form class="list-search" method="get" action="{{ action }}" role="search">
+  <div class="list-search__row">
+    <label class="list-search__input">
+      {{ atoms::icon(name="fa-magnifying-glass", class="list-search__icon") }}
+      <span class="visually-hidden">{{ t(key="common.search") }}</span>
+      <input type="search" name="q" value="{{ q }}" placeholder="{{ placeholder }}" enterkeyhint="search" minlength="{{ limits.search_min }}" required>
+    </label>
+    <button type="submit" class="list-search__submit" aria-label="{{ t(key="common.search") }}">{{ atoms::icon(name="fa-arrow-right") }}</button>
+  </div>
+</form>
+{%- endmacro search_bar %}

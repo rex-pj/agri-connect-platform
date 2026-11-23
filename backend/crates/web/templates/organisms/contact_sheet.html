@@ -1,0 +1,35 @@
+{#- The contact form for one provider. A normal section of the page that posts
+    to /contact; inside an Alpine `dialog` scope it becomes a bottom sheet.
+    `provider` is a BusinessDetailDto, `contact` a ContactState, `limits` the
+    field length caps. `return_to`: "service" on a service's page, "product"
+    (with `product_id`) on a product's, so the visitor lands back there. On a
+    product's page the topic is a text box filled with the product's name,
+    not the service select. -#}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "molecules/form_field.html" as field %}
+{% import "molecules/sheet_header.html" as sheet_head %}
+{% macro contact_sheet(provider, contact, limits, return_to="", product_id="") -%}
+<div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
+<section class="contact-sheet" id="lien-he" aria-labelledby="lien-he-title" :class="sheetClass">
+  {{ sheet_head::sheet_header(id="lien-he", title=t(key="contact.title"), icon="fa-comment-dots") }}
+  <p class="contact-sheet__sub">{{ t(key="contact.sub_before") }} <strong>{{ provider.name }}</strong>{{ t(key="contact.sub_after") }}</p>
+  <form class="contact-sheet__form" method="post" action="{{ url_for(name="contact") }}">
+    <input type="hidden" name="business_id" value="{{ provider.id }}">
+    {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
+    {% if product_id %}<input type="hidden" name="product_id" value="{{ product_id }}">{% endif %}
+    {% if contact.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=contact.message) }}{% endif %}
+    {{ field::input(id="cs_phone", name="requester_phone", label=t(key="form.phone"), type="tel", value=contact.values.requester_phone, error=contact.errors.requester_phone | default(value=""), required=true, placeholder=t(key="form.phone_placeholder"), pattern=limits.phone_pattern, inputmode="numeric", autocomplete="tel", first=true) }}
+    {% if provider.services and not product_id %}
+    {#- The service's name becomes the topic on the server; a topic or
+        service error is about this one box. -#}
+    {{ field::select(id="cs_topic", name="service_id", label=t(key="contact.service"), options=provider.services, value_key="id", label_key="name", value=contact.values.service_id, error=contact.errors.service_id | default(value=contact.errors.topic | default(value="")), required=true, placeholder=t(key="contact.choose_service")) }}
+    {% else %}
+    {{ field::input(id="cs_topic", name="topic", label=t(key="contact.topic"), value=contact.values.topic, error=contact.errors.topic | default(value=""), required=true, maxlength=limits.topic_max) }}
+    {% endif %}
+    {{ field::input(id="cs_name", name="requester_name", label=t(key="form.full_name"), value=contact.values.requester_name, error=contact.errors.requester_name | default(value=""), required=true, placeholder=t(key="contact.name_placeholder"), autocomplete="name", maxlength=limits.name_max) }}
+    {{ field::textarea(id="cs_note", name="note", label=t(key="contact.note"), value=contact.values.note, error=contact.errors.note | default(value=""), placeholder=t(key="contact.note_placeholder"), maxlength=limits.note_max) }}
+    <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-paper-plane") }} {{ t(key="contact.send") }}</button>
+  </form>
+</section>
+{%- endmacro contact_sheet %}

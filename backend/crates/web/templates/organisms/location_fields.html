@@ -1,0 +1,32 @@
+{#- The boxes of a location preset, shared by the create and edit forms.
+    `form` is web::pages::admin::locations::LocationForm (the values as
+    typed), `errors` its FormErrors, `wards` the AreaGroupDto list. First a
+    ward picker: choosing one fills the name and point, still editable
+    (Alpine `wardFill` on this block); without JS the boxes left blank take
+    the ward's on save. The page loads its library with
+    `field::searchable_select_assets()` in its `vendor` block. The use case
+    reports a bad coordinate pair once, on `lat`; it is shown under both
+    boxes' row. `first`: its first box takes the focus when its sheet
+    opens. -#}
+{% import "molecules/form_field.html" as field %}
+{% macro location_fields(form, errors, label_max, prefix, wards, first=false) -%}
+<div x-data="wardFill" x-on:change="filled">
+{{ field::area_select(id=prefix ~ "-ward", name="ward", label=t(key="location_form.ward"), groups=wards, value=form.ward, error=errors.fields.ward | default(value=""), placeholder=t(key="location_form.ward_placeholder"), whole=false, points=true, hint=t(key="location_form.ward_hint")) }}
+{{ field::input(id=prefix ~ "-label", name="label", label=t(key="location_form.label"), value=form.label, error=errors.fields.label | default(value=""), required=true, maxlength=label_max, placeholder=t(key="location_form.label_placeholder"), first=first) }}
+<fieldset class="form-field">
+  <legend class="form-label fw-semibold fs-6">{{ t(key="location_form.coordinates") }} <span class="text-danger" aria-hidden="true">*</span></legend>
+  <div class="row g-2">
+    <div class="col-6">
+      <label class="form-label small" for="{{ prefix }}-lat">{{ t(key="form.lat") }}</label>
+      <input class="form-control{% if errors.fields.lat %} is-invalid{% endif %}" id="{{ prefix }}-lat" name="lat" value="{{ form.lat }}" inputmode="decimal" required placeholder="{{ t(key="form.lat_placeholder") }}"{% if errors.fields.lat %} aria-invalid="true" aria-describedby="{{ prefix }}-coord-error"{% endif %}>
+    </div>
+    <div class="col-6">
+      <label class="form-label small" for="{{ prefix }}-lng">{{ t(key="form.lng") }}</label>
+      <input class="form-control{% if errors.fields.lat %} is-invalid{% endif %}" id="{{ prefix }}-lng" name="lng" value="{{ form.lng }}" inputmode="decimal" required placeholder="{{ t(key="form.lng_placeholder") }}"{% if errors.fields.lat %} aria-invalid="true" aria-describedby="{{ prefix }}-coord-error"{% endif %}>
+    </div>
+  </div>
+  {% if errors.fields.lat %}<div class="invalid-feedback d-block" id="{{ prefix }}-coord-error">{{ errors.fields.lat }}</div>{% endif %}
+</fieldset>
+{{ field::input(id=prefix ~ "-order", name="display_order", label=t(key="form.display_order"), value=form.display_order, type="number", inputmode="numeric", error=errors.fields.display_order | default(value="")) }}
+</div>
+{%- endmacro location_fields %}

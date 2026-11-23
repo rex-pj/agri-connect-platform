@@ -1,0 +1,71 @@
+{% extends "layouts/app.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/photo_placeholder.html" as placeholder %}
+{% import "molecules/call_button.html" as call %}
+{% import "molecules/zalo_button.html" as zalo %}
+{% import "molecules/contact_sent.html" as sent %}
+{% import "organisms/detail_hero.html" as hero %}
+{% import "organisms/vendor_summary.html" as vendor %}
+{% import "organisms/provider_offers.html" as offers %}
+{% import "organisms/contact_sheet.html" as sheet %}
+{#- One supply, ranked like a service's page (see pages/service.html), in
+    the same `detail-page` frame. `page` is web::pages::product::ProductPage.
+    What it is (header, photo); the decision box: the price, what it is for,
+    who sells it, the call button; the description; then the seller's
+    services and more of the category. The contact form about this supply is
+    a bottom sheet with JS, a plain section without. -#}
+{% block title %}{{ page.product.name }} — {{ site.name }}{% endblock title %}
+{% block meta %}<meta name="description" content="{% if page.meta_description %}{{ page.meta_description }}{% else %}{{ t(key="product.meta", name=page.product.name, vendor=page.product.vendor_name, site=site.name) }}{% endif %}">{% endblock meta %}
+{% block main %}
+{% set p = page.product %}
+{% set icon = p.category_icon | default(value="fa-tag") %}
+<div class="detail-page" x-data="dialog" data-open="{% if page.contact.open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+  {{ hero::detail_hero(title=p.name, share_text=page.share_text, back_href=page.category_href, back_label=p.category, manage=page.manage) }}
+  <div class="detail-layout">
+    <div class="detail-photo">
+      {% if p.image_file_id %}
+      <img src="{{ file_url(id=p.image_file_id) }}" alt="{{ p.name }}">
+      {% else %}
+      {{ placeholder::photo_placeholder(icon=icon, category=p.category, size="lg") }}
+      {% endif %}
+    </div>
+
+    <div class="detail-layout__aside">
+      <section class="detail-card decision-box">
+        <div class="detail-price">
+          {% if p.price %}
+          <span class="detail-price__amount">{{ p.price | vnd }}</span>
+          {% if p.unit %}<span class="detail-price__unit">/{{ p.unit }}</span>{% endif %}
+          {% else %}
+          <span class="detail-price__amount detail-price__amount--contact">{{ t(key="price.ask") }}</span>
+          {% endif %}
+        </div>
+        <p class="detail-price__note">{{ t(key="product.price_note") }}</p>
+        {% if p.commodity %}<p class="detail-for">{{ atoms::icon(name="fa-leaf") }} {{ t(key="product.for_commodity") }} <a href="{{ url_for(name="products") ~ "?commodity=" ~ p.commodity_id }}">{{ p.commodity }}</a>{% if page.prices_href %} · <a href="{{ page.prices_href }}">{{ atoms::icon(name="fa-chart-line") }} {{ t(key="product.commodity_prices", name=p.commodity) }}</a>{% endif %}</p>{% endif %}
+        {{ vendor::vendor_summary(name=p.vendor_name, verified=page.provider.is_verified, area=page.area, rating=page.rating.rating, href=page.provider_href) }}
+        <div class="provider-actions">
+          {{ call::call_button(phone=p.vendor_phone, kind="product", id=p.id, class="btn btn-success btn-lg btn-call") }}
+          {{ zalo::zalo_button(phone=p.vendor_phone, kind="product", id=p.id, class="btn btn-outline-primary btn-lg") }}
+          <a class="btn btn-outline-success btn-lg" href="#lien-he" x-on:click.prevent="show">{{ atoms::icon(name="fa-comment-dots") }} {{ t(key="contact.send") }}</a>
+        </div>
+      </section>
+      {% if page.sent %}{{ sent::contact_sent(review_href=page.rating.href) }}{% endif %}
+    </div>
+
+    <div class="detail-layout__main">
+      {% if p.description %}
+      <section class="detail-card">
+        <h2 class="detail-card__title">{{ t(key="product.description") }}</h2>
+        <p class="detail-card__text">{{ p.description }}</p>
+      </section>
+      {% endif %}
+
+      {{ offers::provider_offers(title=t(key="product.shop_also", provider=p.vendor_name), items=page.provider_services, provider_href=page.provider_href) }}
+
+      <a class="detail-more" href="{{ page.category_href }}">{{ atoms::icon(name=icon) }} {{ t(key="product.more_in_category", category=p.category) }} {{ atoms::icon(name="fa-chevron-right") }}</a>
+
+      {{ sheet::contact_sheet(provider=page.provider, contact=page.contact, limits=page.limits, return_to=page.return_to, product_id=p.id) }}
+    </div>
+  </div>
+</div>
+{% endblock main %}

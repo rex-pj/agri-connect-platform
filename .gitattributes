@@ -1,0 +1,16 @@
+# Store LF in the repository. CI, Docker and the VM are Linux: a shell script
+# checked out with CRLF fails with "bad interpreter", and a CRLF template
+# changes the bytes the asset hashes are computed from.
+* text=auto eol=lf
+
+# Vendored third-party files are kept byte-for-byte (their sha256 is recorded
+# in static/vendor/VERSIONS).
+backend/crates/web/static/vendor/** -text
+backend/crates/web/static/fonts/** -text
+
+*.woff2 binary
+*.png   binary
+*.ico   binary
+
+# Built from backend/islands by `npm run build`; reviewed as source there.
+backend/crates/web/static/js/islands.js linguist-generated=true -diff

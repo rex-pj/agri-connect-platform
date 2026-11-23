@@ -1,0 +1,22 @@
+{#- One figure of an admin page (the dashboard, a provider's page): its label
+    and icon, the figure, what it counts, how it moved. `s` is
+    web::pages::admin::dashboard::StatCard; with an `href` the whole card
+    links to the page behind the figure. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro stat_card(s) -%}
+{% if s.href %}<a class="stat-card stat-card--link" href="{{ s.href }}">{% else %}<div class="stat-card">{% endif %}
+  <div class="stat-card__head">
+    <p class="stat-card__label">{{ s.label }}</p>
+    <span class="stat-card__icon stat-card__icon--{{ s.tone }}">{{ atoms::icon(name=s.icon) }}</span>
+  </div>
+  <p class="stat-card__value">{% if s.money %}{{ s.value | vnd }}{% else %}{{ s.value | number }}{% endif %}</p>
+  {% if s.share is number %}<progress class="stat-card__share" value="{{ s.share }}" max="100" aria-hidden="true"></progress>{% endif %}
+  {% if s.note %}<p class="stat-card__note">{{ s.note }}</p>{% endif %}
+  {% if s.change %}
+  <p class="stat-card__change">
+    {% if s.change.delta %}<span class="stat-card__delta stat-card__delta--{{ s.change.way }}">{% if s.change.way == "up" %}{{ atoms::icon(name="fa-arrow-up") }} +{% else %}{{ atoms::icon(name="fa-arrow-down") }} −{% endif %}{{ s.change.delta | number }}</span>{% endif %}
+    <span>{{ s.change.text }}</span>
+  </p>
+  {% endif %}
+{% if s.href %}</a>{% else %}</div>{% endif %}
+{%- endmacro stat_card %}

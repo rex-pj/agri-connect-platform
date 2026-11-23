@@ -1,0 +1,8 @@
+{#- Small rounded label. variant: primary (green), danger, or hero (on a
+    green page hero). `compact=true`
+    shows the icon only, for a line too narrow for the words (they stay for
+    screen readers and as the tooltip). -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro badge(text, variant="primary", icon="", class="", compact=false) -%}
+<span class="ac-badge ac-badge--{{ variant }}{% if class %} {{ class }}{% endif %}"{% if compact %} title="{{ text }}"{% endif %}>{% if icon %}{{ atoms::icon(name=icon) }}{% endif %}{% if compact %}<span class="visually-hidden">{{ text }}</span>{% else %}{{ text }}{% endif %}</span>
+{%- endmacro badge %}

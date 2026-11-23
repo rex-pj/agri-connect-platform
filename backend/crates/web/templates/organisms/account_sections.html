@@ -1,0 +1,66 @@
+{#- The signed-in visitor's own account, the same in every frame (app,
+    partner, admin): who they are, the password change, logging out. `p` is
+    web::pages::account::AccountPage; `card` / `title_class` are the frame's
+    card classes (`detail-card` on app pages, `admin-section` in the admin
+    panel); `logout` is where the frame's logout posts. The role names are for
+    display only; nothing here decides access. -#}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "molecules/form_field.html" as field %}
+
+{#- The app and partner frames' header: avatar, name, role. -#}
+{% macro account_header(p) -%}
+{% set me = p.me %}
+<header class="acct-header">
+  <span class="acct-avatar">{{ atoms::icon(name="fa-circle-user") }}</span>
+  <div>
+    <h1 class="acct-name">{{ me.full_name | default(value=me.username) }}</h1>
+    {% if me.full_name %}<p class="acct-sub">@{{ me.username }}</p>{% endif %}
+    {#- The icon of the visitor's area (decided by permissions), not of a role name. -#}
+    <span class="acct-role">{% if p.area %}{{ atoms::icon(name=p.area.icon, class="me-1") }}{% else %}{{ atoms::icon(name="fa-user", class="me-1") }}{% endif %}{{ p.role_name }}</span>
+  </div>
+</header>
+{%- endmacro account_header %}
+
+{% macro account_sections(p, limits, logout, card="detail-card", title_class="detail-card__title") -%}
+{% set me = p.me %}
+<section class="{{ card }}">
+  <h2 class="{{ title_class }}">{{ atoms::icon(name="fa-id-card", class="me-1") }} {{ t(key="account.info") }}</h2>
+  <dl class="acct-rows">
+    {% if me.full_name %}<div class="acct-row"><dt>{{ t(key="form.full_name") }}</dt><dd>{{ me.full_name }}</dd></div>{% endif %}
+    <div class="acct-row"><dt>{{ t(key="form.username") }}</dt><dd>{{ me.username }}</dd></div>
+    <div class="acct-row"><dt>{{ t(key="form.email") }}</dt><dd>{{ me.email }}</dd></div>
+    <div class="acct-row"><dt>{{ t(key="account.role") }}</dt><dd>{{ p.role_name }}</dd></div>
+    <div class="acct-row"><dt>{{ t(key="account.joined") }}</dt><dd><time datetime="{{ me.created_on | utc_iso }}">{{ me.created_on | vn_datetime }}</time></dd></div>
+  </dl>
+  {% if p.verification_sent %}{{ alerts::alert(kind="success", icon="fa-envelope-circle-check", text=t(key="account.verification_sent")) }}
+  {% elif not me.email_verified %}
+  {{ alerts::alert(kind="warning", icon="fa-envelope", text=t(key="account.email_unverified")) }}
+  <form method="post" action="{{ url_for(name="account_email_verification") }}">
+    <button type="submit" class="btn btn-outline-success w-100">{{ atoms::icon(name="fa-paper-plane") }} {{ t(key="account.send_verification") }}</button>
+  </form>
+  {% endif %}
+  {% if p.area %}<a class="btn btn-outline-success w-100 mt-2" href="{{ p.area.href }}">{{ atoms::icon(name=p.area.icon) }} {{ p.area.label }}</a>{% endif %}
+</section>
+
+<section class="{{ card }}" id="security">
+  <h2 class="{{ title_class }}">{{ atoms::icon(name="fa-lock", class="me-1") }} {{ t(key="account.security") }}</h2>
+  {% if p.password_changed %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="account.password_changed")) }}{% endif %}
+  <form class="form-stack mt-2" method="post" action="{{ url_for(name="account_password") }}">
+    {% if p.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=p.errors.message) }}{% endif %}
+    {{ field::input(id="cp_cur", name="current_password", label=t(key="form.current_password"), type="password", error=p.errors.fields.current_password | default(value=""), required=true, autocomplete="current-password") }}
+    {{ field::input(id="cp_new", name="new_password", label=t(key="form.new_password"), type="password", error=p.errors.fields.new_password | default(value=""), required=true, autocomplete="new-password", minlength=limits.password_min_chars) }}
+    {{ field::input(id="cp_new2", name="password2", label=t(key="form.new_password_again"), type="password", error=p.errors.fields.password2 | default(value=""), required=true, autocomplete="new-password") }}
+    <p class="small text-muted mb-0">{{ t(key="account.password_note") }}</p>
+    <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-key") }} {{ t(key="account.change_password") }}</button>
+  </form>
+</section>
+
+<section class="{{ card }}">
+  <h2 class="{{ title_class }}">{{ atoms::icon(name="fa-right-from-bracket", class="me-1") }} {{ t(key="common.logout") }}</h2>
+  <p class="small text-muted">{{ t(key="account.logout_note") }}</p>
+  <form method="post" action="{{ logout }}">
+    <button type="submit" class="btn btn-outline-danger btn-lg w-100">{{ atoms::icon(name="fa-right-from-bracket") }} {{ t(key="common.logout") }}</button>
+  </form>
+</section>
+{%- endmacro account_sections %}

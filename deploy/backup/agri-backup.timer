@@ -1,0 +1,11 @@
+[Unit]
+Description=Nightly Agri-Connect database backup
+
+[Timer]
+# 19:00 UTC = 02:00 in Vietnam, the quietest hour.
+OnCalendar=*-*-* 19:00:00 UTC
+Persistent=true
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

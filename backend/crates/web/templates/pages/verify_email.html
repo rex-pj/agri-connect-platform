@@ -1,0 +1,30 @@
+{% extends "layouts/auth.html" %}
+{% import "atoms/icon.html" as atoms %}
+{#- The link from the "confirm your address" email. `page` is
+    web::pages::auth::VerifyEmailPage. Opening the link only shows the button:
+    the address is confirmed by the form, never by a GET. -#}
+{% block title %}{{ t(key="verify_email.title") }} — {{ site.name }}{% endblock title %}
+{% block card %}
+{% if page.done %}
+<div class="text-center">
+  <span class="auth-state-icon">{{ atoms::icon(name="fa-circle-check") }}</span>
+  <h1 class="auth-title">{{ t(key="verify_email.done") }}</h1>
+  <p class="auth-sub">{{ t(key="verify_email.done_sub") }}</p>
+  <a class="btn btn-success btn-lg w-100" href="{{ url_for(name="login") }}">{{ atoms::icon(name="fa-arrow-right") }} {{ t(key="verify_email.continue") }}</a>
+</div>
+{% elif page.invalid %}
+<div class="text-center">
+  <span class="auth-state-icon auth-state-icon--warn">{{ atoms::icon(name="fa-link-slash") }}</span>
+  <h1 class="auth-title">{{ t(key="auth.link_invalid") }}</h1>
+  <p class="auth-sub">{{ t(key="verify_email.invalid_sub") }}</p>
+  <a class="btn btn-success btn-lg w-100" href="{{ url_for(name="account") }}">{{ atoms::icon(name="fa-user") }} {{ t(key="verify_email.to_account") }}</a>
+</div>
+{% else %}
+<h1 class="auth-title">{{ t(key="verify_email.title") }}</h1>
+<p class="auth-sub">{{ t(key="verify_email.sub") }}</p>
+<form class="auth-form" method="post" action="{{ url_for(name="verify_email") }}">
+  <input type="hidden" name="token" value="{{ page.token }}">
+  <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-check") }} {{ t(key="verify_email.confirm") }}</button>
+</form>
+{% endif %}
+{% endblock card %}

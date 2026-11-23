@@ -1,0 +1,8 @@
+{% extends "layouts/app.html" %}
+{% import "organisms/error_card.html" as organisms %}
+{#- An error in the app frame. In the admin panel or the partner's report
+    it is shown in their frame instead (`pages/admin/error.html`,
+    `pages/partner_error.html`). `page` is web::error_response::ErrorPage. -#}
+{% block title %}{{ page.status }} – {{ site.name }}{% endblock title %}
+{% block meta %}<meta name="robots" content="noindex">{% endblock meta %}
+{% block main %}{{ organisms::error_card(status=page.status, message=page.message, back=page.back, request_id=page.request_id) }}{% endblock main %}

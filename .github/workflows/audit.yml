@@ -1,0 +1,55 @@
+name: Dependency audit
+
+# Known vulnerabilities in what we ship: on every change, and weekly, since
+# an advisory is usually published while our code stands still.
+on:
+  pull_request:
+  push:
+    branches: [master, develop]
+  schedule:
+    - cron: "0 1 * * 1" # Monday 08:00 in Vietnam
+  workflow_dispatch:
+
+concurrency:
+  group: audit-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: cargo audit (RustSec)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - run: rustup show active-toolchain
+      # Caches ~/.cargo/bin too, so cargo-audit is built once.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: backend
+          shared-key: audit
+      - run: cargo install cargo-audit --locked --version 0.22.2
+      # Ignored advisories, each with its reason: backend/.cargo/audit.toml.
+      - run: cargo audit
+
+  npm:
+    name: npm audit (${{ matrix.dir }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: [backend/islands, zalo-mini-app]
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20.19"
+      # Reads package-lock.json only; nothing is installed.
+      - run: npm audit

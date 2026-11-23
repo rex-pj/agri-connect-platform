@@ -1,0 +1,42 @@
+{#- Top bar: brand, search toggle, language switch, account menu. Without JS
+    the search button is a link to the search page, the account button a link
+    to /account, and the language switch (`molecules/language_switch`) opens
+    by itself; Alpine (navSearch, languageMenu, profileMenu) turns them into
+    the bar and the menus (`molecules/account_menu`), each closing the others.
+    Signed out there is no account menu, just a log-in button: the login page
+    links to sign-up. -#}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/logo.html" as brand %}
+{% import "molecules/language_switch.html" as lang %}
+{% import "molecules/account_menu.html" as account %}
+{% macro app_nav(shell, site_name, languages) -%}
+<nav class="app-nav" aria-label="{{ t(key="nav_bar.label") }}" x-data="navSearch" x-on:profile-menu-opened="close" x-on:language-menu-opened="close" data-open="{% if shell.search_query %}true{% else %}false{% endif %}">
+  <div class="app-nav__top">
+    <a class="app-nav__brand" href="{{ url_for(name='home') }}">
+      {{ brand::logo(class="app-nav__logo") }}
+      <span class="app-nav__name">{{ site_name }}</span>
+    </a>
+    <div class="app-nav__actions">
+      <a class="app-nav__icon-btn" href="{{ shell.search_url }}" role="button" aria-label="{{ t(key="common.search") }}" x-on:click.prevent="toggle" :class="buttonClass" :aria-expanded="expanded">
+        <span x-show="closed">{{ atoms::icon(name="fa-magnifying-glass") }}</span>
+        <span x-show="open" x-cloak>{{ atoms::icon(name="fa-xmark") }}</span>
+      </a>
+      {{ lang::language_switch(languages=languages, back=shell.here) }}
+      {% if shell.profile and not shell.profile.signed_in %}
+      <a class="app-nav__login" href="{{ url_for(name='login') }}">{{ atoms::icon(name="fa-right-to-bracket") }} <span>{{ t(key="account_menu.login") }}</span></a>
+      {% elif shell.profile %}
+      {{ account::account_menu(menu=shell.profile, label=t(key="nav.account")) }}
+      {% endif %}
+    </div>
+  </div>
+  <div class="app-nav__search-row" :class="rowClass" :aria-hidden="hidden">
+    <div class="app-nav__search-inner">
+      <form class="app-nav__search" action="{{ shell.search_url }}" method="get" role="search">
+        <span class="app-nav__search-icon">{{ atoms::icon(name="fa-magnifying-glass") }}</span>
+        <input class="app-nav__search-input" type="search" name="q" value="{{ shell.search_query }}" placeholder="{{ t(key="nav_bar.search_placeholder") }}" aria-label="{{ t(key="common.search") }}" enterkeyhint="search" minlength="{{ limits.search_min }}" required x-ref="input" :tabindex="tabIndex">
+        <button type="submit" class="app-nav__search-btn" aria-label="{{ t(key="common.search") }}" :tabindex="tabIndex">{{ atoms::icon(name="fa-arrow-right") }}</button>
+      </form>
+    </div>
+  </div>
+</nav>
+{%- endmacro app_nav %}

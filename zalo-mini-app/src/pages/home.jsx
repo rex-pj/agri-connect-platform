@@ -20,6 +20,60 @@ function newestQuotes(board) {
     .slice(0, HOME_PRICES_SHOWN);
 }
 
+/** One alert's words: its title, what to do, where and until when. */
+function AlertText({ alert }) {
+  return (
+    <span className="alert__text">
+      <strong>{alert.title}</strong>
+      <Text size="small">{alert.body}</Text>
+      <Text size="xSmall" className="muted">
+        {alert.province_name ? `${alert.province_name} · ` : ""}
+        {T.alertUntil(dayMonth(alert.ends_on))}
+      </Text>
+    </span>
+  );
+}
+
+/**
+ * The alerts in force, as the website's home: the newest shows, the others
+ * fold under it. The newest is itself the button that unfolds them, with a
+ * small "+n" and a chevron at its right, so the fold costs no row of its own.
+ */
+function Alerts({ alerts }) {
+  const [open, setOpen] = useState(false);
+  if (alerts.length === 0) return null;
+  const [newest, ...rest] = alerts;
+  return (
+    <section className="alerts" aria-label={T.alertsLabel}>
+      {rest.length === 0 ? (
+        <div className="alert" role="alert">
+          <AlertText alert={newest} />
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="alert alert--toggle"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          <AlertText alert={newest} />
+          <span className="alert__more">
+            {!open && <span aria-hidden="true">{T.alertsMoreShort(rest.length)}</span>}
+            <span className="sr-only">{T.alertsMore(rest.length)}</span>
+            <Icon icon={open ? "zi-chevron-up" : "zi-chevron-down"} size={16} />
+          </span>
+        </button>
+      )}
+      {open &&
+        rest.map((a) => (
+          <div key={a.id} className="alert" role="alert">
+            <AlertText alert={a} />
+          </div>
+        ))}
+    </section>
+  );
+}
+
 /** The alerts in force, the three errands (near me, prices, a job), the service categories, today's prices. */
 export default function HomePage() {
   const navigate = useNavigate();
@@ -42,20 +96,7 @@ export default function HomePage() {
         <Text size="small">{T.homeSub}</Text>
       </Box>
 
-      {alerts.length > 0 && (
-        <section className="alerts" aria-label={T.alertsLabel}>
-          {alerts.map((a) => (
-            <div key={a.id} className="alert" role="alert">
-              <strong>{a.title}</strong>
-              <Text size="small">{a.body}</Text>
-              <Text size="xSmall" className="muted">
-                {a.province_name ? `${a.province_name} · ` : ""}
-                {T.alertUntil(dayMonth(a.ends_on))}
-              </Text>
-            </div>
-          ))}
-        </section>
-      )}
+      <Alerts alerts={alerts} />
 
       <Box className="errands">
         <Button size="large" fullWidth prefixIcon={<Icon icon="zi-location-solid" />} onClick={() => navigate("/near")}>

@@ -14,6 +14,8 @@ export const T = {
   alertsLabel: "Cảnh báo cho bà con",
   alertUntil: (day) => `đến ${day}`,
 
+  alertsMore: (n) => `Xem thêm ${n} cảnh báo`,
+  alertsMoreShort: (n) => `+${n}`,
   usePosition: "Dùng vị trí của tôi",
   positionBusy: "Đang lấy vị trí…",
   positionSet: "Đã lấy vị trí của bạn.",

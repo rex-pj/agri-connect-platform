@@ -2453,9 +2453,90 @@ a.chip {
     flex: none;
   }
 }
-/* The alerts in force, at the top of the home page (molecules/alert_banner.html). */
+/* The alerts in force, at the top of the home page (molecules/alert_banner.html):
+   one under another, each whole and made small by its type and spacing; the
+   newest shown, the others folded under it. */
 .home-alerts {
   padding: 12px 16px 0;
+}
+/* The fold: the newest alert is itself the summary, the whole card the tap
+   target; a small "+n" and a chevron at its right say more lie under it.
+   No row of its own, so it never reads as one more (empty) alert. Open, the
+   count goes and the chevron turns: tapping the first card again folds. */
+.home-alerts__toggle {
+  display: block;
+  cursor: pointer;
+  list-style: none;
+}
+.home-alerts__toggle::-webkit-details-marker {
+  display: none;
+}
+.home-alerts__fold > .home-alert {
+  margin-top: 8px;
+}
+.home-alert__more {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-self: flex-start;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--bs-warning-border-subtle);
+  border-radius: var(--bs-border-radius-pill);
+  background: var(--bs-body-bg);
+  color: var(--a800);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.home-alerts__toggle:hover .home-alert__more {
+  border-color: currentColor;
+}
+.home-alert__chevron {
+  transition: transform 0.15s ease;
+}
+.home-alerts__fold[open] .home-alert__count {
+  display: none;
+}
+.home-alerts__fold[open] .home-alert__chevron {
+  transform: rotate(180deg);
+}
+/* One alert: the warning box's colours, not its bulk. */
+.home-alert {
+  display: flex;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--bs-warning-border-subtle);
+  border-radius: var(--bs-border-radius);
+  background: var(--bs-warning-bg-subtle);
+  color: var(--bs-warning-text-emphasis);
+  font-size: var(--fs-sm);
+  line-height: 1.35;
+}
+/* One width for every kind's icon, so the three texts line up. */
+.home-alert__icon {
+  flex-shrink: 0;
+  width: 1.25em;
+  font-size: var(--fs-md);
+  line-height: 1.2;
+  text-align: center;
+}
+.home-alert__text {
+  min-width: 0;
+}
+.home-alert__title {
+  display: block;
+}
+.home-alert__body {
+  display: block;
+  margin: 2px 0 0;
+}
+.home-alert__meta {
+  display: block;
+  margin: 2px 0 0;
+  font-size: var(--fs-xs);
+  opacity: 0.85;
 }
 /* The sector switch (molecules/sector_switch.html) is a row of chips that
    scrolls sideways on a narrow phone rather than wrapping. */

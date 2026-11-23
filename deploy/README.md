@@ -2,7 +2,7 @@
 
 One VM runs everything with docker compose behind Cloudflare's proxy: Cloudflare → Caddy (TLS with a Cloudflare Origin Certificate) → the Rust server, which serves every page and the API, and PostgreSQL + PostGIS. GitHub Actions builds the images, pushes them to Artifact Registry and rolls them out over IAP SSH. No service-account key file exists anywhere: GitHub authenticates with Workload Identity Federation, and the VM uses its attached service account.
 
-Everything below is done once. Afterwards a merge to `master` deploys by itself once CI passes.
+Everything below is done once. Afterwards a merge to `develop` deploys by itself once CI passes.
 
 Replace these placeholders throughout:
 

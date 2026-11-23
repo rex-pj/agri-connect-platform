@@ -1,12 +1,12 @@
 name: Deploy
 
-# Runs after CI passes on master, or by hand. Configuration lives in the
+# Runs after CI passes on develop, or by hand. Configuration lives in the
 # repository's "production" environment (deploy/README.md lists every value).
 on:
   workflow_run:
     workflows: [CI]
     types: [completed]
-    branches: [master]
+    branches: [develop]
   workflow_dispatch:
 
 concurrency:

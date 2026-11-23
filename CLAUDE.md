@@ -43,7 +43,7 @@ agri-connect-platform/
 - **Auth:** JWT (jsonwebtoken 9) + bcrypt 0.15
 - **Rate limiting:** governor 0.6
 - **Email:** Lettre 0.11 (SMTP)
-- **Uploads:** image 0.25 (re-encoding), object_store 0.12 (Cloud Storage or local disk)
+- **Uploads:** image 0.25 (re-encoding), object_store 0.12 (Cloudflare R2, Cloud Storage or local disk)
 - **HTTP client:** reqwest 0.12 (the Zalo Graph API only)
 - **Serialization:** Serde + serde_json; toml for the locale files
 - **Validation:** our own rules (`application/src/validation.rs`, collected with `domain::Validation`); no validation crate
@@ -68,7 +68,7 @@ agri-connect-platform/
 
 ### Infrastructure
 
-- **Cloud:** Google Compute Engine (one VM, docker compose), Artifact Registry, Cloud Storage for uploads; deployed by GitHub Actions
+- **Cloud:** Google Compute Engine (one VM, docker compose), Artifact Registry, Cloud Storage for backups; Cloudflare in front (proxy, Origin Certificate) and R2 for uploads; deployed by GitHub Actions
 - **Integration:** Zalo Mini App (`zalo-mini-app/`: near me, prices, job post over the JSON API; position and phone tokens read with `ZALO_APP_SECRET`); Zalo OA (planned)
 
 ---
@@ -612,7 +612,7 @@ middleware / handlers  →  application (use cases, ports)  →  domain  ←  in
 **Infrastructure layer (`infrastructure/`)**
 
 - Concrete library types (`jsonwebtoken`, `bcrypt`, Sea-ORM) are confined to `infrastructure/`. Implement the port traits from `application/src/ports.rs` here.
-- Uploads never reach storage as sent: `MediaUseCase` passes them through the `ImageProcessor` port (type sniffed from bytes, pixel cap checked before decoding, re-encoded as JPEG, EXIF dropped). Storage is the `FileStorage` port (`GCS_BUCKET`, else `UPLOAD_DIR`). Templates link images only with `file_url(id=…, variant="thumb")`. Old images are deleted by the file-cleanup event subscriber, never inline. Products and services each have one optional image, replaced through `MediaUseCase::swap_image`.
+- Uploads never reach storage as sent: `MediaUseCase` passes them through the `ImageProcessor` port (type sniffed from bytes, pixel cap checked before decoding, re-encoded as JPEG, EXIF dropped). Storage is the `FileStorage` port (`R2_ACCOUNT_ID` and its bucket and token, else `GCS_BUCKET`, else `UPLOAD_DIR`). Templates link images only with `file_url(id=…, variant="thumb")`. Old images are deleted by the file-cleanup event subscriber, never inline. Products and services each have one optional image, replaced through `MediaUseCase::swap_image`.
 - A write that can hit a UNIQUE constraint maps the failure with `repositories::unique_or_internal` to a field error (e.g. `slug_taken`), never a 500.
 - The schema holds its own rules; the use case's check before a write is for the message, never the only guard. A row that stores a parent and something of that parent references both columns (`add_reference`: an inquiry's or a tap's service and supply are its own business's, a review's contact request was sent to the business reviewed, a contract's ward is in its province); two optional references of which a row names one have a CHECK (`at_most_one`: what an inquiry or a tap is about, a search's type filter); `service_types` and `supply_types` keep their ids and slugs apart by trigger (`OFFER_TYPE_DISTINCT`, raised as a unique violation); a name is never blank (`not_blank`); usernames and emails are stored lower-cased, codes and slugs match `SLUG_PATTERN`, hashes are 64 hex digits. A new table follows the same rules, and `it/database.rs` (`the_schema_refuses_rows_that_contradict_each_other`) gets its cases.
 - `JwtTokenService` (in `infrastructure/src/jwt_token_service.rs`) is the only file that calls `jsonwebtoken::encode`. `BcryptPasswordHasher` (in `infrastructure/src/bcrypt_password_hasher.rs`) is the only file that calls `bcrypt::hash` / `bcrypt::verify`.

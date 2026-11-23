@@ -137,25 +137,22 @@ gcloud secrets create agri-origin-key --data-file=origin.key && rm origin.key
 
 The two database passwords take effect only when the data directory is first created (`db-init/01-app-role.sh`). To rotate one later, change it in Postgres (`ALTER ROLE ... PASSWORD`) and then add a new secret version.
 
-## 7. Buckets: uploads and backups
+## 7. Buckets: uploads (Cloudflare R2) and backups (Cloud Storage)
 
-Product images live in their own private bucket. Deploys refuse to run without it: the container has no persistent disk, so local uploads would vanish on the next deploy.
+Product images live in their own private R2 bucket. Deploys refuse to run without it: the container has no persistent disk, so local uploads would vanish on the next deploy.
+
+In the Cloudflare dashboard:
+1. *R2 Object Storage → Create bucket*: name `UPLOAD_BUCKET`, location hint *Asia-Pacific*. Leave public access off: images are served through the app (`/files/{id}`), never from the bucket.
+2. *R2 → Manage API tokens → Create API token*: permission **Object Read & Write**, applied to that bucket only. Keep the *Access Key ID* and *Secret Access Key* it shows once; the *Account ID* is on the R2 overview page.
 
 ```bash
-gcloud storage buckets create gs://UPLOAD_BUCKET --location=REGION --uniform-bucket-level-access \
-  --public-access-prevention
-# Deleted or replaced images stay recoverable for 30 days, so a database
-# restored from an older dump still finds the images it points at.
-gcloud storage buckets update gs://UPLOAD_BUCKET --versioning
-echo '{"rule":[{"action":{"type":"Delete"},"condition":{"isLive":false,"daysSinceNoncurrentTime":30}}]}' > /tmp/lc-uploads.json
-gcloud storage buckets update gs://UPLOAD_BUCKET --lifecycle-file=/tmp/lc-uploads.json
-gcloud storage buckets add-iam-policy-binding gs://UPLOAD_BUCKET \
-  --member="serviceAccount:$VM_SA" --role=roles/storage.objectAdmin
+read -rsp "Access Key ID: " K; echo; printf %s "$K" | gcloud secrets create agri-r2-access-key-id --data-file=-
+read -rsp "Secret Access Key: " K; echo; printf %s "$K" | gcloud secrets create agri-r2-secret-access-key --data-file=-; unset K
 ```
 
-Images are served through the app (`/files/{id}`), never from the bucket, so it stays private.
+R2 keeps no old versions: a deleted or replaced image is gone, and a database restored from an older dump shows those as missing images.
 
-Backups:
+Backups stay in Cloud Storage, which the VM reaches with its own service account:
 
 ```bash
 gcloud storage buckets create gs://BACKUP_BUCKET --location=REGION --uniform-bucket-level-access
@@ -190,7 +187,8 @@ Under *Settings → Environments → production*:
 | `GCE_VM` | `agri-vm` |
 | `GCE_ZONE` | `ZONE` |
 | `DOMAIN` | `DOMAIN` |
-| `UPLOAD_BUCKET` | `UPLOAD_BUCKET` (step 7, without `gs://`) |
+| `R2_ACCOUNT_ID` | the Cloudflare account id (step 7) |
+| `R2_BUCKET` | `UPLOAD_BUCKET` (step 7) |
 
 The first deploy: *Actions → Deploy → Run workflow*.
 
@@ -273,6 +271,6 @@ gcloud storage cat gs://BACKUP_BUCKET/postgres/agri_connect-YYYYMMDDTHHMMSSZ.dum
 sudo docker compose --env-file /etc/agri-connect/compose.env start web
 ```
 
-Images are not in the dump. A restored database points at images that existed when the dump was taken; any deleted since are noncurrent versions in the uploads bucket (kept 30 days) and can be restored with `gcloud storage cp` from their generation.
+Images are not in the dump. A restored database points at images that existed when the dump was taken; any deleted from the R2 bucket since are gone and show as missing images.
 
 If the disk itself is lost, restore the latest snapshot of `agri-pgdata` to a new disk, attach it as `pgdata`, and mount it as in step 5 (skip `mkfs`).

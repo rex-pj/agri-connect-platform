@@ -36,9 +36,10 @@ services:
       MIGRATION_DATABASE_URL: postgres://agri_owner:${OWNER_DB_PASSWORD}@db:5432/agri_connect
       APP_ENV: prod
       APP_URL: https://${DOMAIN}
-      # Product images. The VM service account reaches it through the metadata
-      # server; no key file.
-      GCS_BUCKET: ${GCS_BUCKET}
+      # Product images in a private Cloudflare R2 bucket; its token's keys
+      # are in web.env.
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID}
+      R2_BUCKET: ${R2_BUCKET}
       HTTPS_ENABLED: "true"
       # Caddy sets the one address: the visitor's, from CF-Connecting-IP.
       TRUSTED_PROXY_HOPS: "1"

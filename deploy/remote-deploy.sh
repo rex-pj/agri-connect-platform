@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs on the VM, invoked by .github/workflows/deploy.yml over IAP SSH:
 #
-#   DOMAIN=... GCP_PROJECT_ID=... REGISTRY_HOST=... UPLOAD_BUCKET=... \
+#   DOMAIN=... GCP_PROJECT_ID=... REGISTRY_HOST=... R2_ACCOUNT_ID=... R2_BUCKET=... \
 #   bash remote-deploy.sh <web-image>
 #
 # Renders env files from Secret Manager, starts the new images, waits for
@@ -12,9 +12,10 @@ WEB_IMAGE="$1"
 : "${DOMAIN:?DOMAIN is required}"
 : "${GCP_PROJECT_ID:?GCP_PROJECT_ID is required}"
 : "${REGISTRY_HOST:?REGISTRY_HOST is required (e.g. asia-southeast1-docker.pkg.dev)}"
-# The container has no persistent disk for uploads: without a bucket every
-# product image would vanish on the next deploy.
-: "${UPLOAD_BUCKET:?UPLOAD_BUCKET is required (README, step 7)}"
+# The container has no persistent disk for uploads: without the R2 bucket
+# every product image would vanish on the next deploy.
+: "${R2_ACCOUNT_ID:?R2_ACCOUNT_ID is required (README, step 7)}"
+: "${R2_BUCKET:?R2_BUCKET is required (README, step 7)}"
 
 APP_DIR=/opt/agri-connect
 ETC_DIR=/etc/agri-connect
@@ -51,6 +52,9 @@ umask 077
 tmp="$(mktemp)"
 {
   echo "JWT_SECRET=$(secret agri-jwt-secret)"
+  # The R2 API token for the uploads bucket (README, step 7).
+  echo "R2_ACCESS_KEY_ID=$(secret agri-r2-access-key-id)"
+  echo "R2_SECRET_ACCESS_KEY=$(secret agri-r2-secret-access-key)"
   # Needed until the first admin exists; harmless afterwards.
   setup_token="$(optional_secret agri-setup-token)"
   if [ -n "$setup_token" ]; then
@@ -78,7 +82,8 @@ sudo install -m 600 "$tmp" "$ETC_DIR/certs/origin.key"
 compose_env() {
   cat <<ENV
 DOMAIN=$DOMAIN
-GCS_BUCKET=$UPLOAD_BUCKET
+R2_ACCOUNT_ID=$R2_ACCOUNT_ID
+R2_BUCKET=$R2_BUCKET
 WEB_IMAGE=$1
 POSTGRES_PASSWORD=$(secret agri-postgres-password)
 OWNER_DB_PASSWORD=$(secret agri-owner-db-password)

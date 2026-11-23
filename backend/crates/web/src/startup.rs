@@ -44,7 +44,7 @@ use infrastructure::{
     catalogue_repository::CatalogueRepository,
     demo_data_repository::DemoDataRepository,
     email_service::{EmailTexts, LogEmailService, SmtpConfig, SmtpEmailService},
-    file_storage::ObjectFileStorage,
+    file_storage::{ObjectFileStorage, R2Config},
     image_processor::{ImageRules, RasterImageProcessor},
     jwt_token_service::JwtTokenService,
     repositories::{
@@ -375,18 +375,26 @@ pub struct Uploads {
     pub max_bytes: usize,
 }
 
-/// `GCS_BUCKET` (production) or else `UPLOAD_DIR`; `UPLOAD_MAX_BYTES`.
+/// `R2_ACCOUNT_ID` (with `R2_BUCKET`, `R2_ACCESS_KEY_ID`,
+/// `R2_SECRET_ACCESS_KEY`), else `GCS_BUCKET`, else `UPLOAD_DIR`;
+/// `UPLOAD_MAX_BYTES`.
 fn uploads() -> Result<Uploads, StartupError> {
-    let storage: Arc<dyn FileStorage> = match optional_env("GCS_BUCKET") {
-        Some(bucket) => {
-            info!(%bucket, "uploads are stored in Google Cloud Storage");
-            Arc::new(ObjectFileStorage::gcs(&bucket)?)
-        }
-        None => {
-            let dir = optional_env("UPLOAD_DIR").unwrap_or_else(|| DEFAULT_UPLOAD_DIR.to_owned());
-            warn!(%dir, "GCS_BUCKET not set; uploads are stored on local disk");
-            Arc::new(ObjectFileStorage::local(std::path::Path::new(&dir))?)
-        }
+    let storage: Arc<dyn FileStorage> = if let Some(account_id) = optional_env("R2_ACCOUNT_ID") {
+        let config = R2Config {
+            account_id,
+            bucket: required_env("R2_BUCKET")?,
+            access_key_id: required_env("R2_ACCESS_KEY_ID")?,
+            secret_access_key: required_env("R2_SECRET_ACCESS_KEY")?,
+        };
+        info!(bucket = %config.bucket, "uploads are stored in Cloudflare R2");
+        Arc::new(ObjectFileStorage::r2(&config)?)
+    } else if let Some(bucket) = optional_env("GCS_BUCKET") {
+        info!(%bucket, "uploads are stored in Google Cloud Storage");
+        Arc::new(ObjectFileStorage::gcs(&bucket)?)
+    } else {
+        let dir = optional_env("UPLOAD_DIR").unwrap_or_else(|| DEFAULT_UPLOAD_DIR.to_owned());
+        warn!(%dir, "no R2 or GCS bucket set; uploads are stored on local disk");
+        Arc::new(ObjectFileStorage::local(std::path::Path::new(&dir))?)
     };
     let max_bytes =
         match optional_env("UPLOAD_MAX_BYTES") {

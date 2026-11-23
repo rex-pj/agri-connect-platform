@@ -71,7 +71,7 @@ pub const IMAGE_FIELD: &str = "image";
 /// An id is never reused (a new image gets a new id), so a cached copy can
 /// never go stale.
 pub const FILE_CACHE_CONTROL: &str = "public, max-age=31536000, immutable";
-/// Used when GCS_BUCKET and UPLOAD_DIR are both unset.
+/// Used when no R2 or GCS bucket and no UPLOAD_DIR is set.
 pub const DEFAULT_UPLOAD_DIR: &str = "./data/uploads";
 
 // ── Home page ─────────────────────────────────────────────────────────────────

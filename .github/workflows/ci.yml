@@ -102,8 +102,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: shellcheck deploy/remote-deploy.sh deploy/backup/agri-backup.sh deploy/db-init/01-app-role.sh
       # Placeholder values only to make compose interpolate; nothing is started.
-      # The env file lives only on the VM; an empty one satisfies `config`.
-      - run: sudo install -D -m 600 /dev/null /etc/agri-connect/web.env
+      # The env file lives only on the VM; an empty one satisfies `config`. It
+      # is readable here (no secrets in it), since compose runs as the runner.
+      - run: sudo install -D -m 644 /dev/null /etc/agri-connect/web.env
       - run: docker compose -f deploy/compose.yaml config --quiet
         env:
           DOMAIN: example.vn
@@ -111,3 +112,5 @@ jobs:
           POSTGRES_PASSWORD: ci
           OWNER_DB_PASSWORD: ci
           APP_DB_PASSWORD: ci
+          R2_ACCOUNT_ID: ci
+          R2_BUCKET: ci

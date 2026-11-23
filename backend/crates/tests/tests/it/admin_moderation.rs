@@ -62,7 +62,9 @@ async fn a_product_is_hidden_and_deleted_behind_confirmations_on_its_list_page()
     let list = format!("/admin/supplies?provider_id={business}");
 
     let html = page(&e, &list, &admin).await;
-    assert!(html.contains("Vườn nongdan · 1 vật tư"));
+    // Narrowed to the provider; the count is the result bar's.
+    assert!(html.contains("Vườn nongdan"));
+    assert!(html.contains(r#"<strong class="admin-results__total">1</strong> kết quả"#));
     assert!(!html.contains(r#"id="xac-nhan""#), "no confirmation yet");
     let html = page(&e, &format!("{list}&hide={id}"), &admin).await;
     assert!(html.contains(r#"data-open="true""#));
@@ -287,7 +289,8 @@ async fn inquiry_status_and_review_visibility_are_set_from_their_lists() {
     // Narrowed to one provider: its rows only, and the forms keep the filter.
     let own = format!("/admin/inquiries?provider_id={business}");
     let html = page(&e, &own, &admin).await;
-    assert!(html.contains("Vườn nongdan · 1 yêu cầu"));
+    assert!(html.contains("Vườn nongdan"));
+    assert!(html.contains(r#"<strong class="admin-results__total">1</strong> kết quả"#));
     assert!(html.contains(&format!(r#"name="provider_id" value="{business}""#)));
     let other = business + 1000;
     for list in ["inquiries", "reviews"] {
@@ -295,13 +298,9 @@ async fn inquiry_status_and_review_visibility_are_set_from_their_lists() {
         assert!(!html.contains("Chú Tư"), "{list}: another provider's rows");
         assert!(html.contains("admin-toolbar__tag--link"));
     }
-    assert!(page(
-        &e,
-        &format!("/admin/reviews?provider_id={business}"),
-        &admin
-    )
-    .await
-    .contains("Vườn nongdan · 1 đánh giá"));
+    let reviews = page(&e, &format!("/admin/reviews?provider_id={business}"), &admin).await;
+    assert!(reviews.contains("Vườn nongdan"));
+    assert!(reviews.contains(r#"<strong class="admin-results__total">1</strong> kết quả"#));
 
     let res = send(
         &e.router,

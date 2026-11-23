@@ -7,6 +7,7 @@ use domain::Error;
 
 use crate::{
     app_state::AppState,
+    constants::HOME_PRICES_SHOWN,
     extract::{ApiJson, ApiPath, ApiQuery},
     middleware::auth::MaybeActor,
     requests::{
@@ -34,6 +35,28 @@ impl PriceHandler {
                 .usecases
                 .price
                 .board(q.location_id, sector.as_deref())
+                .await?,
+        ))
+    }
+
+    /// GET /api/explore/prices/latest — `location_id?`, `sector?`: the few
+    /// newest prices the website's home strip shows (each crop's newest
+    /// fresh one, the most recent first, `HOME_PRICES_SHOWN`), with the
+    /// board's day: the Zalo Mini App's home, so it picks nothing itself.
+    pub async fn latest(
+        State(state): State<AppState>,
+        ApiQuery(q): ApiQuery<PriceBoardQuery>,
+    ) -> Result<impl IntoResponse, Error> {
+        let sector = state
+            .usecases
+            .sector
+            .chosen(q.sector.as_deref().unwrap_or_default())
+            .await?;
+        Ok(Json(
+            state
+                .usecases
+                .price
+                .highlights(HOME_PRICES_SHOWN, q.location_id, sector.as_deref())
                 .await?,
         ))
     }

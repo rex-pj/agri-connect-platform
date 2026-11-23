@@ -22,6 +22,7 @@ use crate::{
         canonical_url,
         manage::{manage_link, Managed},
         moved_permanently, parse_id,
+        prices::commodity_href,
         provider::{
             area_of, rating_line, ContactLimits, ContactState, RatingLine, Visit, LIMITS,
             RETURN_TO_PRODUCT,
@@ -62,6 +63,8 @@ pub struct ProductPage {
     pub sent: bool,
     /// Where the owner or an admin edits it (`pages::manage`).
     pub manage: Option<Link>,
+    /// The price board of what it is for, when that has a fresh price.
+    pub prices_href: Option<String>,
 }
 
 async fn load(state: &AppState, raw_id: &str) -> Result<ProductDto, Error> {
@@ -90,6 +93,10 @@ pub(super) async fn render(
     }
     let area = area_of(state.locale(), provider.address.as_deref());
     let rating = rating_line(state, &provider).await?;
+    let prices_href = match product.commodity_id {
+        Some(id) if state.usecases.price.has_fresh_prices(id).await? => Some(commodity_href(id)?),
+        _ => None,
+    };
     let page = ProductPage {
         rating,
         provider_services: service_links(&provider.services, None)?,
@@ -122,6 +129,7 @@ pub(super) async fn render(
         return_to: RETURN_TO_PRODUCT,
         sent: visit.sent,
         manage: visit.manage,
+        prices_href,
     };
     render_page_status(state, shell, status, "pages/product.html", &page)
 }

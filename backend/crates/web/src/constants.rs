@@ -82,6 +82,20 @@ pub const HOME_PRODUCT_COUNT: usize = 6;
 pub const HOME_CATEGORY_TILES: usize = 4;
 /// How many crop prices the home page shows (each crop's newest).
 pub const HOME_PRICES_SHOWN: usize = 4;
+/// How many featured services the home page shows on a phone, where each
+/// card takes most of the screen; the rest show from 768 px.
+pub const HOME_SERVICES_ON_PHONE: usize = 3;
+/// How many of the home page's prices a phone shows (the rest from 768 px,
+/// where they sit in two columns).
+pub const HOME_PRICES_ON_PHONE: usize = 3;
+/// A price older than this many days is still on the board (its
+/// commodity's freshness window decides that) but drawn faded, so a farmer
+/// tells this week's price from an older one at a glance.
+pub const PRICE_STALE_DAYS: i64 = 3;
+/// From how many areas with a price the price page's area box takes typing
+/// (Tom Select, loaded only then): a shorter list is quicker to pick from
+/// plainly, and the farmer's phone is spared the library.
+pub const PRICE_AREA_SEARCH_MIN: usize = 8;
 
 // ── Admin dashboard ───────────────────────────────────────────────────────────
 /// Areas of the demand report listed as nearest to steady (most weeks at

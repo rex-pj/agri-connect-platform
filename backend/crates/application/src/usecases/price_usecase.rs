@@ -30,12 +30,14 @@ use crate::{
     catalogue::PERM_PRICE_MANAGE,
     constants::{
         ADMIN_PAGE_SIZE, CROP_NAME_MAX, CROP_UNIT_MAX, PRICE_FRESH_DAYS_DEFAULT,
-        PRICE_HISTORY_DAYS, PRICE_NOTE_MAX, PRICE_PER_UNIT_MAX,
+        PRICE_HISTORY_DAYS, PRICE_NOTE_MAX, PRICE_PER_UNIT_MAX, PRICE_TREND_DAYS,
+        PRICE_TREND_MIN_POINTS,
     },
     inputs::{CropInput, PriceInput},
     outputs::{
         AdminPagedResponse, CommodityDto, CropBoardDto, CropDto, CropPriceDto, NamedDto,
-        PriceBoardDto, PriceChoicesDto, PriceQuoteDto,
+        PriceBoardDto, PriceChoicesDto, PriceHighlightsDto, PriceQuoteDto, PriceTrendDto,
+        TrendPointDto,
     },
     pagination::{admin_total_pages, paginate_admin, total_or_count},
     ports::EventBus,
@@ -405,15 +407,82 @@ impl PriceUseCase {
         })
     }
 
-    /// The home page's few prices: each crop's newest fresh price (whatever
-    /// the area), the most recent first, at most `limit`.
+    /// Whether the board shows a price of `commodity` (a shown crop of it,
+    /// fresh, in a shown area): a supply for it then leads there.
+    pub async fn has_fresh_prices(&self, commodity: i32) -> Result<bool> {
+        Ok(self
+            .board(None, None)
+            .await?
+            .commodities
+            .iter()
+            .any(|g| g.id == commodity))
+    }
+
+    /// The home page's few prices (and the Zalo Mini App's): each crop's
+    /// newest fresh price in `area`
+    /// (`None`: whatever the area), the most recent first, at most `limit`,
+    /// with the board's day.
     pub async fn highlights(
         &self,
         limit: usize,
+        area: Option<i32>,
         sector: Option<&str>,
-    ) -> Result<Vec<PriceQuoteDto>> {
-        Ok(highlights_of(self.board(None, sector).await?.crops, limit))
+    ) -> Result<PriceHighlightsDto> {
+        let board = self.board(area, sector).await?;
+        Ok(PriceHighlightsDto {
+            today: board.today,
+            quotes: highlights_of(board.crops, limit),
+        })
     }
+
+    /// The price page's trends: each shown crop's prices in each shown area
+    /// (in `area` only, when one is given) over the last `PRICE_TREND_DAYS`,
+    /// those with at least `PRICE_TREND_MIN_POINTS`. The board's own query,
+    /// over a shorter window: at most one price a day, so it reads only the
+    /// points drawn.
+    pub async fn trends(&self, area: Option<i32>) -> Result<Vec<PriceTrendDto>> {
+        let today = vn_today(Utc::now())?;
+        let prices = self
+            .price_repo
+            .latest_public_prices(
+                today - Duration::days(PRICE_TREND_DAYS - 1),
+                PRICE_TREND_DAYS.unsigned_abs(),
+            )
+            .await?;
+        Ok(trends_of(&prices, area))
+    }
+}
+
+/// Each crop's prices per area, oldest first, from prices in any order;
+/// `area` keeps one area; fewer than `PRICE_TREND_MIN_POINTS` draw nothing.
+fn trends_of(prices: &[CropPrice], area: Option<i32>) -> Vec<PriceTrendDto> {
+    let mut pairs: HashMap<(i32, i32), Vec<TrendPointDto>> = HashMap::new();
+    for p in prices
+        .iter()
+        .filter(|p| area.is_none_or(|a| a == p.location_id))
+    {
+        pairs
+            .entry((p.crop_id, p.location_id))
+            .or_default()
+            .push(TrendPointDto {
+                day: p.observed_on,
+                middle: middle(p),
+            });
+    }
+    let mut trends: Vec<PriceTrendDto> = pairs
+        .into_iter()
+        .filter(|(_, points)| points.len() >= PRICE_TREND_MIN_POINTS)
+        .map(|((crop_id, location_id), mut points)| {
+            points.sort_by_key(|p| p.day);
+            PriceTrendDto {
+                crop_id,
+                location_id,
+                points,
+            }
+        })
+        .collect();
+    trends.sort_by_key(|t| (t.crop_id, t.location_id));
+    trends
 }
 
 /// How many prices of a crop in an area the board reads: the latest, and
@@ -487,6 +556,7 @@ fn build_board(
                 price_high: latest.price_high,
                 note: latest.note.clone(),
                 change: seen.get(1).map(|before| middle(latest) - middle(before)),
+                previous_on: seen.get(1).map(|before| before.observed_on),
             });
     }
     let board = commodities
@@ -777,5 +847,30 @@ mod tests {
             .map(|e| e.fields().iter().map(|f| f.field).collect())
             .unwrap_or_default();
         assert_eq!(fields, vec!["name", "commodity_id", "unit"]);
+    }
+
+    #[test]
+    fn a_trend_is_each_days_middle_oldest_first_and_needs_enough_points() {
+        // Crop 1 in area 1: three days, given newest first; in area 2 two.
+        let prices = vec![
+            price(1, 1, 1, 20, 6_200, 6_400),
+            price(2, 1, 2, 20, 7_000, 7_000),
+            price(3, 1, 1, 18, 6_000, 6_200),
+            price(4, 1, 2, 19, 7_100, 7_100),
+            price(5, 1, 1, 15, 5_900, 6_100),
+        ];
+        let trends = trends_of(&prices, None);
+        assert_eq!(trends.len(), 1, "two points draw nothing");
+        let pairs: Vec<(i32, i32)> = trends.iter().map(|t| (t.crop_id, t.location_id)).collect();
+        assert_eq!(pairs, vec![(1, 1)]);
+        let points: Vec<(NaiveDate, i64)> = trends
+            .iter()
+            .flat_map(|t| t.points.iter().map(|p| (p.day, p.middle)))
+            .collect();
+        assert_eq!(
+            points,
+            vec![(day(15), 6_000), (day(18), 6_100), (day(20), 6_300)]
+        );
+        assert!(trends_of(&prices, Some(2)).is_empty(), "one area only");
     }
 }

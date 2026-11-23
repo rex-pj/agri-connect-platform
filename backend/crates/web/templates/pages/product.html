@@ -41,7 +41,7 @@
           {% endif %}
         </div>
         <p class="detail-price__note">{{ t(key="product.price_note") }}</p>
-        {% if p.commodity %}<p class="detail-for">{{ atoms::icon(name="fa-leaf") }} {{ t(key="product.for_commodity") }} <a href="{{ url_for(name="products") ~ "?commodity=" ~ p.commodity_id }}">{{ p.commodity }}</a></p>{% endif %}
+        {% if p.commodity %}<p class="detail-for">{{ atoms::icon(name="fa-leaf") }} {{ t(key="product.for_commodity") }} <a href="{{ url_for(name="products") ~ "?commodity=" ~ p.commodity_id }}">{{ p.commodity }}</a>{% if page.prices_href %} · <a href="{{ page.prices_href }}">{{ atoms::icon(name="fa-chart-line") }} {{ t(key="product.commodity_prices", name=p.commodity) }}</a>{% endif %}</p>{% endif %}
         {{ vendor::vendor_summary(name=p.vendor_name, verified=page.provider.is_verified, area=page.area, rating=page.rating.rating, href=page.provider_href) }}
         <div class="provider-actions">
           {{ call::call_button(phone=p.vendor_phone, kind="product", id=p.id, class="btn btn-success btn-lg btn-call") }}

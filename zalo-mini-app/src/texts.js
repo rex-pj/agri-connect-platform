@@ -10,12 +10,13 @@ export const T = {
   postJob: "Đăng tin cần mướn",
   services: "Dịch vụ",
   seeAll: "Xem tất cả",
-  todayPrices: "Giá nông sản hôm nay",
+  latestPrices: "Giá nông sản mới nhất",
+  pricesIn: (area) => `Giá nông sản tại ${area}`,
   alertsLabel: "Cảnh báo cho bà con",
   alertUntil: (day) => `đến ${day}`,
-
   alertsMore: (n) => `Xem thêm ${n} cảnh báo`,
   alertsMoreShort: (n) => `+${n}`,
+
   usePosition: "Dùng vị trí của tôi",
   positionBusy: "Đang lấy vị trí…",
   positionSet: "Đã lấy vị trí của bạn.",
@@ -31,10 +32,13 @@ export const T = {
   verified: "Đã xác minh",
 
   allAreas: "Tất cả khu vực",
-  today: "Hôm nay",
+  sector: "Ngành",
+  allSectors: "Mọi ngành",
+  age: (days) => (days <= 0 ? "Hôm nay" : days === 1 ? "Hôm qua" : `${days} ngày trước`),
   up: "Tăng",
   down: "Giảm",
   same: "Không đổi",
+  since: (day) => `so với ${day}`,
   pricesEmpty: "Chưa có giá mới. Hãy quay lại sau.",
   pricesNote: "Giá tham khảo tại nơi sản xuất; giá mua thực tế tuỳ chất lượng và thời điểm.",
 

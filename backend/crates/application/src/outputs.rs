@@ -1304,7 +1304,8 @@ pub struct CropPriceDto {
 }
 
 /// The latest price of a crop in one area, and how its middle moved since
-/// the price before (`None` when there is none to compare with).
+/// the price before (`None` when there is none to compare with), and the
+/// day of that price before, so the move can say what it is measured from.
 #[derive(Debug, Clone, Serialize)]
 pub struct PriceQuoteDto {
     pub crop_id: i32,
@@ -1317,6 +1318,7 @@ pub struct PriceQuoteDto {
     pub price_high: i64,
     pub note: Option<String>,
     pub change: Option<i64>,
+    pub previous_on: Option<chrono::NaiveDate>,
 }
 
 /// One crop on the price page: its latest price in each area.
@@ -1327,6 +1329,32 @@ pub struct CropBoardDto {
     /// Its commodity (one of the board's `commodities`).
     pub commodity_id: i32,
     pub unit: String,
+    pub quotes: Vec<PriceQuoteDto>,
+}
+
+/// A crop's prices in one area over the last `PRICE_TREND_DAYS`, oldest
+/// first: each day's middle, what the price page draws as a line.
+#[derive(Debug, Clone, Serialize)]
+pub struct PriceTrendDto {
+    pub crop_id: i32,
+    pub location_id: i32,
+    pub points: Vec<TrendPointDto>,
+}
+
+/// One day of a trend: the middle of that day's range.
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct TrendPointDto {
+    pub day: chrono::NaiveDate,
+    pub middle: i64,
+}
+
+/// The few newest prices the home page and the Zalo Mini App's home show,
+/// and the day they were put together.
+#[derive(Debug, Clone, Serialize)]
+pub struct PriceHighlightsDto {
+    /// The board's day (Vietnam), for each price's age.
+    pub today: chrono::NaiveDate,
+    /// Each crop's newest fresh price, the most recent first.
     pub quotes: Vec<PriceQuoteDto>,
 }
 

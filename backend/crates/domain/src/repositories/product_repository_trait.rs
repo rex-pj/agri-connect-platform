@@ -41,6 +41,7 @@ pub trait ProductRepositoryTrait {
 
     async fn count_browse(&self, filter: &ProductFilter) -> Result<i64, Error>;
 
+    /// The newest shown supplies, those with a photo first.
     async fn featured(&self, limit: i64, sector: Option<&str>) -> Result<Vec<ProductView>, Error>;
 
     async fn find_by_id(&self, id: i32) -> Result<Option<ProductView>, Error>;

@@ -14,7 +14,7 @@
   <div class="app-nav__top">
     <a class="app-nav__brand" href="{{ url_for(name='home') }}">
       {{ brand::logo(class="app-nav__logo") }}
-      {{ site_name }}
+      <span class="app-nav__name">{{ site_name }}</span>
     </a>
     <div class="app-nav__actions">
       <a class="app-nav__icon-btn" href="{{ shell.search_url }}" role="button" aria-label="{{ t(key="common.search") }}" x-on:click.prevent="toggle" :class="buttonClass" :aria-expanded="expanded">

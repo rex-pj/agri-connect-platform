@@ -184,6 +184,13 @@ pub const PRICE_FRESH_DAYS_MAX: i16 = 60;
 /// How far back the price before the latest is looked for, to show the move.
 pub const PRICE_HISTORY_DAYS: i64 = 60;
 const _: () = assert!(PRICE_FRESH_DAYS_MAX as i64 <= PRICE_HISTORY_DAYS);
+/// How many days back the price page draws each crop's trend in an area
+/// (today included): at most one price a day, so as many points.
+pub const PRICE_TREND_DAYS: i64 = 14;
+/// Fewer prices than this in the window draw no trend: two points are a
+/// move, which the line already says.
+pub const PRICE_TREND_MIN_POINTS: usize = 3;
+const _: () = assert!(PRICE_TREND_DAYS <= PRICE_HISTORY_DAYS);
 
 // ── Reviews ───────────────────────────────────────────────────────────────────
 pub const RATING_MIN: i16 = 1;

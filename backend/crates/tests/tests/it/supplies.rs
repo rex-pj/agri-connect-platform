@@ -208,6 +208,44 @@ async fn a_supply_says_what_it_is_for_and_the_board_leads_to_it() {
     let board = body_text(send(&e.router, get_page("/prices", Some("sector=crop"))).await).await;
     assert!(board.contains(&format!("/supplies?commodity={rice}")));
     assert!(board.contains("Vật tư cho Lúa"));
+    // Its chips narrow it to one commodity, whatever the visitor's sector.
+    let rice_board = format!("/prices?commodity={rice}");
+    assert!(board.contains(&format!(r#"class="chip" href="{rice_board}""#)));
+    let only_rice =
+        body_text(send(&e.router, get_page(&rice_board, Some("sector=livestock"))).await).await;
+    assert!(only_rice.contains("Vật tư cho Lúa") && !only_rice.contains("Heo hơi"));
+    assert!(
+        only_rice.contains(&format!(r#"name="commodity" value="{rice}""#)),
+        "the area form keeps it"
+    );
+    // An id with no fresh price is passed over: the visitor's board.
+    let none = body_text(
+        send(
+            &e.router,
+            get_page("/prices?commodity=999999", Some("sector=livestock")),
+        )
+        .await,
+    )
+    .await;
+    assert!(none.contains("Heo hơi") && !none.contains("Vật tư cho Lúa"));
+
+    // A supply for rice leads to the price of rice; one for every crop does not.
+    let page_of = |name: &'static str| {
+        let e = &e;
+        async move {
+            let id = scalar(
+                e,
+                &format!("SELECT id::text AS v FROM products WHERE name = '{name}'"),
+            )
+            .await;
+            let at = moved_to(e, &format!("/supplies/{id}"), None).await;
+            body_text(send(&e.router, get_page(&at, None)).await).await
+        }
+    };
+    let seed = page_of("Lúa giống ST25 cấp xác nhận").await;
+    assert!(seed.contains(&rice_board) && seed.contains("Giá Lúa mới nhất"));
+    let npk = page_of("Phân NPK 16-16-8 Bình Điền").await;
+    assert!(!npk.contains("/prices?commodity="));
 
     // The admin's list says what it is for.
     let list = body_text(send(&e.router, get_page("/admin/supplies", Some(&cookie))).await).await;

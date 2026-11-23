@@ -25,11 +25,11 @@
 
 <section class="list-results">
   {% if page.services %}
-  <p class="small text-muted mb-2"><strong>{{ page.total }}</strong> {{ t(key="services.unit") }}{% if page.filters and page.filters.q %} {{ t(key="list.for_query", q=page.filters.q) }}{% endif %}</p>
+  <p class="list-count small text-muted"><strong>{{ page.total }}</strong> {{ t(key="services.unit") }}{% if page.filters and page.filters.q %} {{ t(key="list.for_query", q=page.filters.q) }}{% endif %}</p>
   {#- The near-me banner after the first three cards: the results come first,
       the other way to look comes before the rest. -#}
   {{ cards::service_grid(services=page.services | slice(end=3)) }}
-  <div class="my-3">{{ geo::geo_cta(href=page.near_href, title=t(key="geo.title_services"), sub=page.geo_sub) }}</div>
+  <div class="list-break">{{ geo::geo_cta(href=page.near_href, title=t(key="geo.title_services"), sub=page.geo_sub) }}</div>
   {% if page.services | length > 3 %}{{ cards::service_grid(services=page.services | slice(start=3)) }}{% endif %}
   {% if page.pagination %}{{ paging::pagination_nav(p=page.pagination) }}{% endif %}
   {% elif page.filtered %}

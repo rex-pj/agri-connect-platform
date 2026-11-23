@@ -5,13 +5,11 @@
 //!
 //! Always every sector's: the page has no sector switch (it is on the lists
 //! and the price board), so a sector chosen there never narrows it unseen.
+//! The price strip alone follows the area chosen on the price board
+//! (`prices::remembered_area`), and its title then names that area.
 
-use application::{
-    outputs::{CategoryDto, ProductDto},
-    usecases::demand_usecase::vn_today,
-};
-use axum::{extract::State, response::Response};
-use chrono::Utc;
+use application::outputs::{CategoryDto, ProductDto};
+use axum::{extract::State, http::HeaderMap, response::Response};
 use domain::{
     constants::{CATEGORY_TYPE_PRODUCT, CATEGORY_TYPE_SERVICE},
     Error,
@@ -20,11 +18,14 @@ use serde::Serialize;
 
 use crate::{
     app_state::AppState,
-    constants::{HOME_CATEGORY_TILES, HOME_PRICES_SHOWN, HOME_PRODUCT_COUNT},
+    constants::{
+        HOME_CATEGORY_TILES, HOME_PRICES_ON_PHONE, HOME_PRICES_SHOWN, HOME_PRODUCT_COUNT,
+        HOME_SERVICES_ON_PHONE,
+    },
     labels::{alert_reach, SECTOR_ICON_DEFAULT},
     pages::{
         cards::{rated_services, tile, CategoryTile, ServiceCard},
-        prices::PriceLine,
+        prices::{remembered_area, PriceLine},
     },
     routes,
     shell::{Link, ProviderCta, Shell},
@@ -42,8 +43,17 @@ pub struct HomePage {
     /// "Found no one? Post the job": the way to the job form; none while job
     /// posts are paused.
     pub job_cta: Option<ProviderCta>,
-    /// Today's few prices (each crop's newest), under the near-me banner.
+    /// The few newest prices (each crop's), under the near-me banner.
+    /// On a phone the only way to the price board, so above the services.
     pub prices: Vec<PriceLine>,
+    /// The area of those prices when they are the one the visitor chose on
+    /// the price board (`prices::remembered_area`): the strip's title names
+    /// it and its lines leave it out.
+    pub prices_area: Option<String>,
+    /// How many of those prices a phone shows (the rest from 768 px).
+    pub prices_on_phone: usize,
+    /// How many featured services a phone shows (the rest from 768 px).
+    pub services_on_phone: usize,
 }
 
 /// One row of category tiles and what it is for ("Thuê làm", "Mua vật tư").
@@ -109,16 +119,37 @@ fn category_tiles(
     Ok(tiles)
 }
 
-pub async fn show(shell: Shell, State(state): State<AppState>) -> Result<Response, Error> {
+pub async fn show(
+    shell: Shell,
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Response, Error> {
     let explore = &state.usecases.explore;
+    let area = remembered_area(&headers);
     let (featured, service_categories, product_categories, prices, alerts, sectors) = tokio::try_join!(
         explore.get_explore_data(None),
         explore.get_categories(Some(CATEGORY_TYPE_SERVICE)),
         explore.get_categories(Some(CATEGORY_TYPE_PRODUCT)),
-        state.usecases.price.highlights(HOME_PRICES_SHOWN, None),
+        state
+            .usecases
+            .price
+            .highlights(HOME_PRICES_SHOWN, area, None),
         state.usecases.alert.live(None),
         state.usecases.sector.named(),
     )?;
+    // The visitor's area, named by its prices; none fresh there: every area's.
+    let prices_area = area
+        .and_then(|_| prices.quotes.first())
+        .map(|q| q.location_label.clone());
+    let prices = if area.is_some() && prices.quotes.is_empty() {
+        state
+            .usecases
+            .price
+            .highlights(HOME_PRICES_SHOWN, None, None)
+            .await?
+    } else {
+        prices
+    };
 
     // Near-me needs no tile: it has a tab and the banner under the rows.
     let rows = [
@@ -176,13 +207,14 @@ pub async fn show(shell: Shell, State(state): State<AppState>) -> Result<Respons
             title: state.locale().text("job.cta_title"),
             sub: state.locale().text("job.cta_sub"),
         }),
-        prices: {
-            let today = vn_today(Utc::now())?;
-            prices
-                .into_iter()
-                .map(|q| PriceLine::new(q, today))
-                .collect()
-        },
+        prices: prices
+            .quotes
+            .into_iter()
+            .map(|q| PriceLine::new(q, prices.today))
+            .collect(),
+        prices_area,
+        prices_on_phone: HOME_PRICES_ON_PHONE,
+        services_on_phone: HOME_SERVICES_ON_PHONE,
         services: rated_services(&state, featured.featured_services).await?,
         products: featured
             .featured_products

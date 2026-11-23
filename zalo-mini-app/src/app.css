@@ -102,6 +102,36 @@ body {
   padding: 8px;
 }
 
+/* A row of choices (the price screen's sectors), scrolling sideways rather
+   than wrapping; the chosen one filled, as the website's switch. */
+.chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+.chip {
+  flex: none;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--ac-border);
+  border-radius: 100px;
+  background: #fff;
+  color: var(--ac-green);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.chip[aria-pressed="true"] {
+  background: var(--ac-green);
+  border-color: var(--ac-green);
+  color: #fff;
+}
+/* A board kept on screen while the next choice loads. */
+.is-loading {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 .field-label {
   display: block;
   font-weight: 600;
@@ -150,6 +180,30 @@ body {
 .price-line__value {
   text-align: end;
   flex-shrink: 0;
+}
+/* A narrow phone: the price under the name rather than cutting it short (as the website). */
+@media (max-width: 379.98px) {
+  .price-line {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+  }
+  .price-line__value {
+    text-align: start;
+  }
+}
+/* A price's move: in the text colour, not green / red, since a rise is
+   good news only for a farmer selling (as the website). */
+.price-move {
+  font-weight: 600;
+}
+/* "so với 18/11": quieter than the move it qualifies. */
+.price-line__since {
+  font-weight: 400;
+}
+/* A price some days old: its figure greyed, not hidden (as the website). */
+.price-line--stale .price-line__amount {
+  color: var(--ac-muted);
 }
 
 .service-card__row {

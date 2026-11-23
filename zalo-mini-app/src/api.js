@@ -45,7 +45,13 @@ const query = (params) => {
 export const api = {
   categories: () => request("/api/explore/categories?type=service"),
   areas: () => request("/api/explore/locations"),
-  prices: (locationId) => request(`/api/explore/prices${query({ location_id: locationId })}`),
+  prices: (locationId, sector) =>
+    request(`/api/explore/prices${query({ location_id: locationId, sector })}`),
+  // The few newest prices the website's home shows, picked by the server: `{ today, quotes }`.
+  latestPrices: (locationId) =>
+    request(`/api/explore/prices/latest${query({ location_id: locationId })}`),
+  // The shown sectors, in their order: what `sector=` takes.
+  sectors: () => request("/api/explore/sectors"),
   servicesNear: ({ lat, lng, categoryId }) =>
     request(`/api/explore/services${query({ lat, lng, category_id: categoryId })}`),
   // A tap on a call button, counted like the website's (no one's identity).

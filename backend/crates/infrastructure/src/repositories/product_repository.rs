@@ -373,6 +373,12 @@ impl ProductRepositoryTrait for ProductRepository {
         query
             .filter(product::Column::IsActive.eq(true))
             .filter(product::Column::DeletedAt.is_null())
+            // Those with a photo first, as the featured services: a home
+            // row of placeholders reads as an empty catalogue.
+            .order_by(
+                Expr::col((product::Entity, product::Column::ImageFileId)).is_not_null(),
+                Order::Desc,
+            )
             .order_by_desc(product::Column::CreatedOn)
             .order_by_desc(product::Column::Id)
             .limit(limit as u64)

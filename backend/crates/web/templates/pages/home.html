@@ -8,12 +8,14 @@
 {% import "molecules/empty_state.html" as empty %}
 {% import "molecules/provider_cta.html" as seller %}
 {% import "molecules/price_line.html" as price %}
-{#- Home: the category shortcuts in two labelled rows, one per errand
-    (hire: services; buy: supplies), each ending in an "all" tile,
-    the near-me banner, featured services (the farmer's main errand: one per
-    verified provider, the provider on each card), the "post a job" card,
-    today's few crop prices
-    (each crop's newest, linking to /prices), then featured products.
+{#- Home, in the order a farmer on a phone needs it: the alerts (one line
+    each, opened by a tap; the others folded; search is the top bar's), the
+    category shortcuts in two labelled rows, one per errand
+    (hire: services; buy: supplies), each ending in an "all" tile, the
+    near-me banner, the newest crop prices (each crop's, linking to /prices:
+    on a phone the only way there, so high on the page), featured services
+    (one per verified provider, `page.services_on_phone` of them on a phone),
+    the "post a job" card, then featured products.
     `page` is web::pages::home::HomePage. -#}
 {% block title %}{{ site.name }} — {{ t(key="home.title") }}{% endblock title %}
 {% block meta %}<meta name="description" content="{{ t(key="home.meta") }}">{% endblock meta %}
@@ -30,23 +32,24 @@
 
 <section class="home-section">{{ geo::geo_cta(href=url_for(name="explore"), sub=t(key="geo.sub_services", km=limits.near_me_km)) }}</section>
 
+{% if page.prices %}
+<section class="home-section">
+  {%- if page.prices_area %}{% set prices_title = t(key="prices.title_in", area=page.prices_area) %}{% else %}{% set prices_title = t(key="home.prices") %}{% endif %}
+  {{ section::section_header(title=prices_title, more_href=url_for(name="prices")) }}
+  <ul class="detail-card list-unstyled mb-0 price-strip">
+    {% for l in page.prices %}{{ price::price_line(l=l, show_area=not page.prices_area, compact=true, wide_only=loop.index > page.prices_on_phone) }}{% endfor %}
+  </ul>
+</section>
+{% endif %}
+
 {% if page.services %}
 <section class="home-section">
   {{ section::section_header(title=t(key="home.featured_services"), more_href=url_for(name="services")) }}
-  {{ services::service_grid(services=page.services) }}
+  {{ services::service_grid(services=page.services, phone_max=page.services_on_phone) }}
 </section>
 {% endif %}
 
 {% if page.job_cta %}<section class="home-section">{{ seller::provider_cta(cta=page.job_cta) }}</section>{% endif %}
-
-{% if page.prices %}
-<section class="home-section">
-  {{ section::section_header(title=t(key="home.prices"), more_href=url_for(name="prices")) }}
-  <ul class="detail-card list-unstyled mb-0 price-strip">
-    {% for l in page.prices %}{{ price::price_line(l=l, show_crop=true) }}{% endfor %}
-  </ul>
-</section>
-{% endif %}
 
 {% if page.products %}
 <section class="home-section">

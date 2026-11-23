@@ -189,6 +189,7 @@ impl AppRouting {
             .route("/api/explore/commodities", get(CommodityHandler::shown))
             .route("/api/explore/locations", get(ExploreHandler::get_locations))
             .route("/api/explore/prices", get(PriceHandler::board))
+            .route("/api/explore/prices/latest", get(PriceHandler::latest))
             .route(
                 "/api/explore/products/{id}",
                 get(ProductsHandler::get_product_by_id),

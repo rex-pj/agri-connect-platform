@@ -7,17 +7,20 @@
     `--2`), so one card never stretches its call button across a wide screen;
     their height is fixed by the photo. `services` are ServiceCard
     views (web::pages::cards); the category label is left out when the name
-    already says it. One macro, not a card macro called from the grid: Tera
-    resolves `self::` against the page rendering it, not this file. -#}
+    already says it. `phone_max` (0: no limit) shows only that many cards
+    below 768 px, the rest from there: a short list on a phone, where each
+    card takes most of the screen. One macro, not a card macro called from
+    the grid: Tera resolves `self::` against the page rendering it, not this
+    file. -#}
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/badge.html" as badge %}
 {% import "molecules/rating_line.html" as rating %}
 {% import "molecules/call_button.html" as call %}
-{% macro service_grid(services) -%}
+{% macro service_grid(services, phone_max=0) -%}
 {% set n = services | length %}
 <div class="row row-cols-1 row-cols-md-2 g-3{% if n == 1 %} service-grid--1{% elif n == 2 %} service-grid--2{% else %} row-cols-xl-3{% endif %}">
   {% for s in services %}
-  <div class="col">
+  <div class="col{% if phone_max > 0 and loop.index > phone_max %} d-none d-md-block{% endif %}">
     <article class="card h-100 product-card service-card hover-lift">
       <div class="card-body p-3 d-flex flex-column gap-3">
         <div class="d-flex gap-3 min-w-0">
@@ -27,7 +30,8 @@
           <div class="d-flex flex-column gap-1 min-w-0 flex-grow-1">
             <h3 class="card-title fs-6 fw-bold mb-0 product-card__name"><a class="text-decoration-none text-dark" href="{{ s.href }}">{{ s.name }}</a></h3>
             <span class="fw-bold product-card__price{% if not s.price_note %}-contact{% endif %}">{% if s.price_note %}{{ s.price_note | price_note }}{% else %}{{ t(key="price.ask") }}{% endif %}</span>
-            {% if s.show_category %}<span class="text-muted small text-truncate">{{ atoms::icon(name=s.category_icon | default(value="fa-tag"), class="me-1") }}{{ s.category }}</span>{% endif %}
+            {#- Without a photo the square already draws the category icon: the name alone here. -#}
+            {% if s.show_category %}<span class="text-muted small text-truncate">{% if s.image_file_id %}{{ atoms::icon(name=s.category_icon | default(value="fa-tag"), class="me-1") }}{% endif %}{{ s.category }}</span>{% endif %}
             <p class="small mb-0 d-flex align-items-center gap-1 min-w-0 service-card__provider">{{ atoms::icon(name="fa-shop", class="text-muted") }} <span class="text-truncate">{{ s.provider_name }}</span>{% if s.provider_verified %}{{ badge::badge(text=t(key="status.verified"), icon="fa-circle-check", class="flex-shrink-0", compact=true) }}{% endif %}</p>
             {% if s.rating %}<p class="small mb-0">{{ rating::rating_line(r=s.rating, compact=true) }}</p>{% endif %}
             {% if s.distance_m or s.locality %}

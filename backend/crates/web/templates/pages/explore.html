@@ -79,13 +79,13 @@
   <section data-panel="services"{% if page.tab != "services" %} hidden{% endif %} :hidden="panelHidden">
     {% if page.sponsored or page.services %}
     {% if page.sponsored %}
-    <div class="mb-3" aria-label="{{ t(key="partner_area.tag") }}">
-      <p class="small mb-2"><span class="badge rounded-pill border text-body-secondary bg-body">{{ t(key="partner_area.tag") }}</span></p>
+    <div class="list-break mt-0" aria-label="{{ t(key="partner_area.tag") }}">
+      <p class="list-count small"><span class="badge rounded-pill border text-body-secondary bg-body">{{ t(key="partner_area.tag") }}</span></p>
       {{ services::service_grid(services=page.sponsored) }}
     </div>
     {% endif %}
     {% if page.services %}
-    <p class="small text-muted mb-2"><strong>{{ page.service_total }}</strong> {{ t(key="explore.services_near") }}</p>
+    <p class="list-count small text-muted"><strong>{{ page.service_total }}</strong> {{ t(key="explore.services_near") }}</p>
     {{ services::service_grid(services=page.services) }}
     {% endif %}
     {% if page.service_pages %}{{ paging::pagination_nav(p=page.service_pages) }}{% endif %}
@@ -99,7 +99,7 @@
 
   <section data-panel="products"{% if page.tab != "products" %} hidden{% endif %} :hidden="panelHidden">
     {% if page.products %}
-    <p class="small text-muted mb-2"><strong>{{ page.product_total }}</strong> {{ t(key="explore.products_near") }}</p>
+    <p class="list-count small text-muted"><strong>{{ page.product_total }}</strong> {{ t(key="explore.products_near") }}</p>
     <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 row-cols-xl-6 g-2 g-md-3">
       {% for p in page.products %}<div class="col">{{ products::product_card(p=p) }}</div>{% endfor %}
     </div>
@@ -114,7 +114,7 @@
 
   <section data-panel="providers"{% if page.tab != "providers" %} hidden{% endif %} :hidden="panelHidden">
     {% if page.providers %}
-    <p class="small text-muted mb-2"><strong>{{ page.provider_total }}</strong> {{ t(key="explore.shops_near") }}</p>
+    <p class="list-count small text-muted"><strong>{{ page.provider_total }}</strong> {{ t(key="explore.shops_near") }}</p>
     <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
       {% for p in page.providers %}<div class="col">{{ providers::provider_card(p=p) }}</div>{% endfor %}
     </div>

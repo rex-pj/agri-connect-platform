@@ -137,17 +137,101 @@ async fn the_admin_enters_prices_and_farmers_see_the_fresh_ones() {
         ),
     )
     .await;
+    // Rice three days ago too: with yesterday's and today's, enough days
+    // for a trend.
+    exec(
+        &e,
+        &format!(
+            "INSERT INTO crop_prices (crop_id, location_id, observed_on, price_low, price_high) \
+             VALUES ({rice}, {cai_lay}, '{}', 5800, 6000)",
+            vn_day(&e, -3).await
+        ),
+    )
+    .await;
 
     // The public page: today's rice price, up 200 on yesterday's middle; no
     // stale jackfruit.
     let html = body_text(send(&e.router, get_page("/prices", None)).await).await;
     assert!(html.contains("Lúa OM 18"));
     assert!(html.contains("6.200 – 6.400 ₫"), "the range");
-    assert!(html.contains("Tăng 200 đồng"), "the move since yesterday");
+    let yesterday = vn_day(&e, -1).await;
+    let since = format!("so với {}/{}", &yesterday[8..10], &yesterday[5..7]);
+    assert!(
+        html.contains("Tăng</span> 200 ₫") && html.contains(&since),
+        "the move since yesterday, in đồng and from which day"
+    );
+    assert!(html.contains("Hôm nay"), "today's price says so");
+    // Each crop shares its prices in words, for a Zalo group.
+    assert!(
+        html.contains(
+            "data-text=\"Giá Lúa OM 18 tại nơi sản xuất: Đồng Tháp — Cai Lậy 6.200 – 6.400 ₫"
+        ) && html.contains("share__card-btn"),
+        "the share button says the price"
+    );
+    assert!(
+        html.contains("class=\"sparkline\"")
+            && html.contains("Giá 14 ngày qua: từ 5.900 ₫ đến 6.300 ₫"),
+        "the last days drawn and worded"
+    );
     assert!(!html.contains("Mít Thái"), "a stale price is not shown");
     // The home page leads there.
     let html = body_text(send(&e.router, get_page("/", None)).await).await;
-    assert!(html.contains("Giá nông sản hôm nay") && html.contains("Lúa OM 18"));
+    assert!(html.contains("Giá nông sản mới nhất") && html.contains("Lúa OM 18"));
+    // A sector with no fresh price says so and offers every sector.
+    let html =
+        body_text(send(&e.router, get_page("/prices", Some("sector=livestock"))).await).await;
+    assert!(
+        html.contains("Chưa có giá mới cho ngành"),
+        "the sector is named"
+    );
+    assert!(
+        html.contains(r#"class="btn btn-success" name="sector" value="""#),
+        "the way back to every sector"
+    );
+
+    // The area chosen is remembered: the board opens on it, the home strip
+    // names it; every area said outright forgets it.
+    let res = send(
+        &e.router,
+        get_page(&format!("/prices?area={cai_lay}"), None),
+    )
+    .await;
+    let kept = res.headers()[header::SET_COOKIE]
+        .to_str()
+        .unwrap()
+        .to_owned();
+    assert!(
+        kept.starts_with(&format!("price_area={cai_lay};")),
+        "{kept}"
+    );
+    let area_cookie = format!("price_area={cai_lay}");
+    let html = body_text(send(&e.router, get_page("/prices", Some(&area_cookie))).await).await;
+    assert!(
+        html.contains("<title>Giá nông sản tại Đồng Tháp — Cai Lậy"),
+        "opens on it"
+    );
+    let html = body_text(send(&e.router, get_page("/", Some(&area_cookie))).await).await;
+    assert!(
+        html.contains("Giá nông sản tại Đồng Tháp — Cai Lậy") && html.contains("Lúa OM 18"),
+        "the home strip names the area"
+    );
+    let res = send(&e.router, get_page("/prices?area=", Some(&area_cookie))).await;
+    let forgot = res.headers()[header::SET_COOKIE]
+        .to_str()
+        .unwrap()
+        .to_owned();
+    assert!(forgot.contains("Max-Age=0"), "{forgot}");
+    // An area with no fresh price left is passed over, and not remembered.
+    let html = body_text(send(&e.router, get_page("/", Some("price_area=999999"))).await).await;
+    assert!(html.contains("Giá nông sản mới nhất") && html.contains("Lúa OM 18"));
+    let res = send(&e.router, get_page("/prices", Some("price_area=999999"))).await;
+    assert!(
+        res.headers().get(header::SET_COOKIE).is_none(),
+        "nothing changed"
+    );
+    let html = body_text(res).await;
+    assert!(html.contains("Lúa OM 18"), "every area instead");
+
     // The JSON board, one area.
     let board = json_body(
         send(
@@ -160,7 +244,23 @@ async fn the_admin_enters_prices_and_farmers_see_the_fresh_ones() {
     )
     .await;
     assert_eq!(board["crops"][0]["quotes"][0]["change"], 200);
+    assert_eq!(board["crops"][0]["quotes"][0]["previous_on"], yesterday);
     assert_eq!(board["crops"][0]["quotes"][0]["price_high"], 6400);
+    // The few newest prices, picked by the server for the Mini App's home,
+    // as the website's home strip: rice's today, with the board's day.
+    let latest = json_body(
+        send(
+            &e.router,
+            Request::get(format!("/api/explore/prices/latest?location_id={cai_lay}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(latest["today"], today);
+    assert_eq!(latest["quotes"][0]["crop_name"], "Lúa OM 18");
+    assert_eq!(latest["quotes"][0]["observed_on"], today);
 
     // Only `price.manage` enters prices: a provider gets 403.
     let token = register_provider(&e.state, "vuonlua", "0907000111").await;

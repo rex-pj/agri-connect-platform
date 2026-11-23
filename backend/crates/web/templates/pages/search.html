@@ -46,9 +46,10 @@
   {{ sector::sector_links(sectors=page.sectors) }}
   <p class="list-tools small text-muted mb-0"><strong>{{ page.total }}</strong> {{ t(key="search.unit") }} {{ t(key="list.for_query", q=page.q) }}</p>
 
+  <div class="list-results">
   {% if page.services %}
-  <section class="list-results" data-panel="services"{% if page.tab != "all" and page.tab != "services" %} hidden{% endif %}>
-    <div class="section-header mb-2">
+  <section class="list-block" data-panel="services"{% if page.tab != "all" and page.tab != "services" %} hidden{% endif %}>
+    <div class="section-header list-head">
       <h2 class="section-title">{{ atoms::icon(name="fa-screwdriver-wrench", class="text-success me-1") }}{{ t(key="nav.services") }} <span class="text-muted fw-normal small">({{ page.service_total }})</span></h2>
       {% if page.services_more %}<a class="section-more" href="{{ page.services_more }}">{{ t(key="common.see_more") }} {{ atoms::icon(name="fa-chevron-right") }}</a>{% endif %}
     </div>
@@ -58,8 +59,8 @@
   {% endif %}
 
   {% if page.products %}
-  <section class="list-results" data-panel="products"{% if page.tab != "all" and page.tab != "products" %} hidden{% endif %}>
-    <div class="section-header mb-2">
+  <section class="list-block" data-panel="products"{% if page.tab != "all" and page.tab != "products" %} hidden{% endif %}>
+    <div class="section-header list-head">
       <h2 class="section-title">{{ atoms::icon(name="fa-bag-shopping", class="text-success me-1") }}{{ t(key="nav.products") }} <span class="text-muted fw-normal small">({{ page.product_total }})</span></h2>
       {% if page.products_more %}<a class="section-more" href="{{ page.products_more }}">{{ t(key="common.see_more") }} {{ atoms::icon(name="fa-chevron-right") }}</a>{% endif %}
     </div>
@@ -71,8 +72,8 @@
   {% endif %}
 
   {% if page.providers %}
-  <section class="list-results" data-panel="providers"{% if page.tab != "all" and page.tab != "providers" %} hidden{% endif %}>
-    <div class="section-header mb-2">
+  <section class="list-block" data-panel="providers"{% if page.tab != "all" and page.tab != "providers" %} hidden{% endif %}>
+    <div class="section-header list-head">
       <h2 class="section-title">{{ atoms::icon(name="fa-store", class="text-success me-1") }}{{ t(key="nav.shops") }} <span class="text-muted fw-normal small">({{ page.provider_total }})</span></h2>
       {% if page.providers_more %}<a class="section-more" href="{{ page.providers_more }}">{{ t(key="common.see_more") }} {{ atoms::icon(name="fa-chevron-right") }}</a>{% endif %}
     </div>
@@ -82,6 +83,7 @@
     {% if page.provider_pages %}{{ paging::pagination_nav(p=page.provider_pages) }}{% endif %}
   </section>
   {% endif %}
+  </div>
 </div>
 {% endif %}
 {% endblock main %}

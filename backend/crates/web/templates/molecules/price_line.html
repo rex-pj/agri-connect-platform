@@ -1,22 +1,38 @@
 {#- One price on the price page and the home strip: where (the area, or the
-    crop too on the home page), when (today, else the day), the range per
-    unit, and how it moved since the price before (up green, down red, the
-    same grey; nothing when there is no price before). `l` is
+    crop too on the home page), how old (today, yesterday, n days ago; the
+    day itself on hover), the range per unit, and how it moved since the
+    price before, in đồng and from which day (a solid ▲ or ▼ in the text colour:
+    a rise is not "good" for a farmer buying; the same grey; nothing when
+    there is no price before), then where the price was noted (its note). A price older than
+    `PRICE_STALE_DAYS` is drawn faded (`price-line--stale`). On a narrow
+    phone the price goes under the name (`app.css`). The direction
+    is said in words for screen readers, the arrow only drawn. `compact`
+    (the home strip): the crop, then its area and age on one small line, no
+    note, a smaller type, no trend; `wide_only` hides the line below 768 px.
+    The price page draws its last days under the price (`l.trend`). `l` is
     web::pages::prices::PriceLine. -#}
 {% import "atoms/icon.html" as atoms %}
-{% macro price_line(l, show_crop=false, show_area=true) -%}
+{% import "atoms/sparkline.html" as spark %}
+{% macro price_line(l, show_crop=false, show_area=true, compact=false, wide_only=false) -%}
 {% set q = l.quote %}
-<li class="price-line">
+<li class="price-line{% if compact %} price-line--compact{% endif %}{% if l.is_stale %} price-line--stale{% endif %}{% if wide_only %} d-none d-md-flex{% endif %}">
   <div class="price-line__where">
-    {% if show_crop %}<strong class="d-block text-truncate">{{ q.crop_name }}</strong>{% endif %}
-    {% if show_area %}<span class="d-block text-truncate{% if show_crop %} small text-muted{% else %} fw-semibold{% endif %}">{{ q.location_label }}</span>{% endif %}
-    <span class="small text-muted">{% if l.is_today %}{{ t(key="prices.today") }}{% else %}{{ q.observed_on | day_month }}{% endif %}{% if q.note %} · {{ q.note }}{% endif %}</span>
+    {% if show_crop or compact %}<strong class="d-block text-truncate">{{ q.crop_name }}</strong>{% endif %}
+    {% if show_area and not compact %}<span class="d-block text-truncate{% if show_crop %} small text-muted{% else %} fw-semibold{% endif %}">{{ q.location_label }}</span>{% endif %}
+    <span class="small text-muted{% if compact %} d-block text-truncate{% endif %}">{% if compact and show_area %}{{ q.location_label }} · {% endif %}<time datetime="{{ q.observed_on }}" title="{{ q.observed_on | full_date }}">{% if l.days_ago == 0 %}{{ t(key="prices.today") }}{% elif l.days_ago == 1 %}{{ t(key="prices.yesterday") }}{% else %}{{ t(key="prices.days_ago", count=l.days_ago) }}{% endif %}</time></span>
+    {% if q.note and not compact %}<span class="d-block small text-muted price-line__note">{{ q.note }}</span>{% endif %}
   </div>
   <div class="price-line__value">
-    <strong class="text-nowrap">{% if q.price_low == q.price_high %}{{ q.price_low | vnd }}{% else %}{{ q.price_low | number }} – {{ q.price_high | vnd }}{% endif %}</strong><span class="small text-muted">/{{ q.unit }}</span>
-    {% if l.direction == "up" %}<span class="price-move text-success" aria-label="{{ t(key="prices.up", amount=l.change_abs | number) }}">{{ atoms::icon(name="fa-arrow-trend-up") }} {{ l.change_abs | number }}</span>
-    {% elif l.direction == "down" %}<span class="price-move text-danger" aria-label="{{ t(key="prices.down", amount=l.change_abs | number) }}">{{ atoms::icon(name="fa-arrow-trend-down") }} {{ l.change_abs | number }}</span>
-    {% elif l.direction == "same" %}<span class="price-move text-muted" aria-label="{{ t(key="prices.same") }}">{{ atoms::icon(name="fa-minus") }}</span>{% endif %}
+    <span class="text-nowrap"><strong class="price-line__amount">{{ l.range }}</strong><span class="small text-muted">/{{ q.unit }}</span></span>
+    {% if l.direction %}
+    <span class="price-move{% if l.direction == "same" %} text-muted{% endif %}">
+      {%- if l.direction == "up" %}{{ atoms::icon(name="fa-caret-up") }}<span class="visually-hidden">{{ t(key="prices.up") }}</span> {{ l.change_abs | vnd }}
+      {%- elif l.direction == "down" %}{{ atoms::icon(name="fa-caret-down") }}<span class="visually-hidden">{{ t(key="prices.down") }}</span> {{ l.change_abs | vnd }}
+      {%- else %}{{ atoms::icon(name="fa-minus") }} {{ t(key="prices.same") }}{% endif %}
+      {%- if q.previous_on %} <span class="price-move__since">{{ t(key="prices.since", day=q.previous_on | day_month) }}</span>{% endif -%}
+    </span>
+    {% endif %}
+    {% if l.trend and not compact %}{{ spark::sparkline(s=l.trend) }}{% endif %}
   </div>
 </li>
 {%- endmacro price_line %}

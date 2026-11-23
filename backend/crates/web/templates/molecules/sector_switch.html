@@ -20,6 +20,19 @@
 {% endif %}
 {%- endmacro sector_switch %}
 
+{#- The way out of a sector that left a page empty: the switch's "every
+    sector" choice alone, as a main button (the same POST form, so it works
+    without JS). `sectors` as for the switch, whose first choice is every
+    sector (`shell::sector_choices`). -#}
+{% macro every_sector(sectors, back) -%}
+{% if sectors %}{% set all = sectors | first %}
+<form class="text-center" method="post" action="{{ url_for(name="sector") }}">
+  <input type="hidden" name="back" value="{{ back }}">
+  <button type="submit" class="btn btn-success" name="sector" value="{{ all.value }}">{{ atoms::icon(name=all.icon) }} {{ all.label }}</button>
+</form>
+{% endif %}
+{%- endmacro every_sector %}
+
 {#- The same buttons as links, for the search results: each narrows this one
     search to a sector (`sector=`) and nothing is remembered, so a typed
     search is never narrowed unseen. `sectors` are

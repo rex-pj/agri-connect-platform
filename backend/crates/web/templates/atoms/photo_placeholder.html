@@ -1,11 +1,14 @@
 {#- Where a product photo goes when the seller has not added one: the
     category icon, and a plain "no photo yet" so it never looks broken or
-    still loading. Fills its box; size: "" (card) or "lg" (detail page). -#}
+    still loading. Fills its box; size: "" (card) or "lg" (detail page).
+    `note=false` leaves the "no photo yet" out: in a list of cards the icon
+    and category already say it, and a row of the same note reads as an
+    empty catalogue. -#}
 {% import "atoms/icon.html" as atoms %}
-{% macro photo_placeholder(icon, category="", size="") -%}
+{% macro photo_placeholder(icon, category="", size="", note=true) -%}
 <div class="photo-placeholder{% if size %} photo-placeholder--{{ size }}{% endif %}">
   {{ atoms::icon(name=icon, class="photo-placeholder__icon") }}
   {% if category %}<span class="photo-placeholder__cat">{{ category }}</span>{% endif %}
-  <span class="photo-placeholder__note">{{ atoms::icon(name="fa-camera") }} {{ t(key="photo.none") }}</span>
+  {% if note %}<span class="photo-placeholder__note">{{ atoms::icon(name="fa-camera") }} {{ t(key="photo.none") }}</span>{% endif %}
 </div>
 {%- endmacro photo_placeholder %}

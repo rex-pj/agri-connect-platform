@@ -68,6 +68,82 @@
   --admin-badge: var(--fs-xs);
   /* Typed text never under 16 px: a phone zooms into a smaller box. */
   --admin-input: max(16px, var(--admin-text));
+
+  /* The one spacing scale, in px on a 4 px grid (not rem: the root is
+     17 px, which would put every step off the grid). Every margin, padding
+     and gap takes a step of it; 2 and 6 px only between an icon and its
+     word. Bootstrap's spacing utilities are pinned to it below. */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+
+  /* What the steps are for, the same on every page, so a page's parts sit
+     at the same distances wherever they appear:
+     the side margin of the page; the air between two modules of a page
+     (titled sections, the tools and the list under them); between cards of
+     one module; a grid of cards; a title and what it heads (its row is
+     already a 44 px tap target, so little more); inside a card; between
+     the boxes of a form. */
+  --gutter: var(--sp-4);
+  --gap-section: var(--sp-8);
+  --gap-stack: var(--sp-4);
+  --gap-grid: var(--sp-2);
+  --gap-head: var(--sp-2);
+  --pad-card: var(--sp-4);
+  --gap-form: var(--sp-4);
+}
+@media (min-width: 768px) {
+  :root {
+    --gutter: var(--sp-6);
+    --gap-section: var(--sp-10);
+    --gap-grid: var(--sp-4);
+    --pad-card: var(--sp-5);
+  }
+}
+@media (min-width: 992px) {
+  :root {
+    --gap-stack: var(--sp-6);
+  }
+}
+
+/* Bootstrap's spacing utilities are rem of its 16 px design, here a 17 px
+   root (mb-3 = 17 px, mb-4 = 25.5 px): pinned to the same scale. */
+.mt-0,.my-0{margin-top:0!important}.mb-0,.my-0{margin-bottom:0!important}
+.mt-1,.my-1{margin-top:var(--sp-1)!important}.mb-1,.my-1{margin-bottom:var(--sp-1)!important}
+.mt-2,.my-2{margin-top:var(--sp-2)!important}.mb-2,.my-2{margin-bottom:var(--sp-2)!important}
+.mt-3,.my-3{margin-top:var(--sp-4)!important}.mb-3,.my-3{margin-bottom:var(--sp-4)!important}
+.mt-4,.my-4{margin-top:var(--sp-6)!important}.mb-4,.my-4{margin-bottom:var(--sp-6)!important}
+.mt-5,.my-5{margin-top:var(--sp-12)!important}.mb-5,.my-5{margin-bottom:var(--sp-12)!important}
+.ms-1{margin-left:var(--sp-1)!important}.me-1{margin-right:var(--sp-1)!important}
+.ms-2{margin-left:var(--sp-2)!important}.me-2{margin-right:var(--sp-2)!important}
+.ms-3{margin-left:var(--sp-4)!important}.me-3{margin-right:var(--sp-4)!important}
+.p-1{padding:var(--sp-1)!important}.p-2{padding:var(--sp-2)!important}
+.p-3{padding:var(--sp-4)!important}.p-4{padding:var(--sp-6)!important}
+.pt-1,.py-1{padding-top:var(--sp-1)!important}.pb-1,.py-1{padding-bottom:var(--sp-1)!important}
+.pt-2,.py-2{padding-top:var(--sp-2)!important}.pb-2,.py-2{padding-bottom:var(--sp-2)!important}
+.pt-3,.py-3{padding-top:var(--sp-4)!important}.pb-3,.py-3{padding-bottom:var(--sp-4)!important}
+.pt-4,.py-4{padding-top:var(--sp-6)!important}.pb-4,.py-4{padding-bottom:var(--sp-6)!important}
+.ps-2{padding-left:var(--sp-2)!important}.ps-3{padding-left:var(--sp-4)!important}
+.gap-1{gap:var(--sp-1)!important}.gap-2{gap:var(--sp-2)!important}
+.gap-3{gap:var(--sp-4)!important}.gap-4{gap:var(--sp-6)!important}
+.column-gap-1{column-gap:var(--sp-1)!important}.column-gap-2{column-gap:var(--sp-2)!important}
+.g-1{--bs-gutter-x:var(--sp-1);--bs-gutter-y:var(--sp-1)}
+.g-2{--bs-gutter-x:var(--sp-2);--bs-gutter-y:var(--sp-2)}
+.g-3{--bs-gutter-x:var(--sp-4);--bs-gutter-y:var(--sp-4)}
+.g-4{--bs-gutter-x:var(--sp-6);--bs-gutter-y:var(--sp-6)}
+@media (min-width: 768px) {
+  .g-md-3{--bs-gutter-x:var(--sp-4);--bs-gutter-y:var(--sp-4)}
+  .g-md-4{--bs-gutter-x:var(--sp-6);--bs-gutter-y:var(--sp-6)}
+}
+@media (min-width: 992px) {
+  .g-lg-4{--bs-gutter-x:var(--sp-6);--bs-gutter-y:var(--sp-6)}
 }
 
 *,
@@ -166,7 +242,7 @@ body {
 .error-card {
   background: var(--surface);
   border-radius: 20px;
-  padding: 48px 36px;
+  padding: 48px 32px;
   max-width: 380px;
   width: 100%;
   text-align: center;
@@ -200,7 +276,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 14px 28px;
+  padding: 12px 24px;
   background: var(--p700);
   color: #fff;
   text-decoration: none;
@@ -243,7 +319,9 @@ body:has(.app-nav__search-row.open) .app-main {
   z-index: 1030;
   display: flex;
   flex-direction: column;
-  padding: 10px 16px;
+  /* Its 44 px buttons centred in --app-nav-h, the brand on the page's
+     gutter. */
+  padding: calc((var(--app-nav-h) - 44px) / 2) var(--gutter);
   background: linear-gradient(135deg, var(--p900) 0%, var(--p800) 55%, var(--p700) 100%);
   box-shadow: 0 2px 16px rgba(2, 44, 34, 0.35);
 }
@@ -331,6 +409,11 @@ body:has(.app-nav__search-row.open) .app-main {
   padding: 8px 16px;
   background: var(--p900);
   color: #fff;
+  /* Edge to edge like the top bar above it, though it sits in the page's
+     reading width: the colour reaches past both sides, clipped top and
+     bottom, and adds no sideways scroll. */
+  box-shadow: 0 0 0 100vmax var(--p900);
+  clip-path: inset(0 -100vmax);
 }
 .lang-offer__text {
   margin: 0;
@@ -350,7 +433,7 @@ body:has(.app-nav__search-row.open) .app-main {
   align-items: center;
   gap: 6px;
   min-height: 44px;
-  padding: 5px 12px;
+  padding: 4px 12px;
   border-radius: 22px;
   border: 1px solid rgba(255, 255, 255, 0.3);
   background: rgba(255, 255, 255, 0.1);
@@ -365,6 +448,51 @@ body:has(.app-nav__search-row.open) .app-main {
   background: rgba(255, 255, 255, 0.24);
   border-color: rgba(255, 255, 255, 0.45);
   color: #fff;
+}
+/* A narrow phone: the brand on one line, the sign-in / account button its
+   icon alone (the word stays for screen readers), so the bar keeps its
+   64 px and nothing passes the right edge. */
+@media (max-width: 479.98px) {
+  .app-nav__brand {
+    white-space: nowrap;
+  }
+  .app-nav__login {
+    position: relative;
+    width: 44px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 50%;
+  }
+  .app-nav__login > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+/* Below 400 px (360–390 px phones): tighter buttons, no chevron on the
+   language button. */
+@media (max-width: 399.98px) {
+  .app-nav__brand,
+  .app-nav__actions {
+    gap: var(--sp-1);
+  }
+  .app-nav .lang-menu__chevron {
+    display: none;
+  }
+}
+/* 320 px: the logo alone, its name kept for screen readers. */
+@media (max-width: 339.98px) {
+  .app-nav__name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 /* A long username stays one short line in the bar. */
 .app-nav__login-label {
@@ -394,7 +522,7 @@ body:has(.app-nav__search-row.open) .app-main {
 .app-nav__dropdown-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
   min-height: 48px;
   padding: 12px 16px;
@@ -450,9 +578,9 @@ body:has(.app-nav__search-row.open) .app-main {
 .app-nav__search {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-height: 38px;
-  padding: 0 4px 0 14px;
+  padding: 0 4px 0 16px;
   background: rgba(255, 255, 255, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 100px;
@@ -496,9 +624,9 @@ body:has(.app-nav__search-row.open) .app-main {
    the help buttons full width (thumb targets). Tablet (768px): brand beside
    help, the link columns under them. Wide (1200px): four columns in a row. */
 .app-footer {
-  margin-top: 16px;
+  margin-top: var(--gap-section);
   /* Below 1200px the fixed tab bar covers the last 64px: stay above it. */
-  padding: 28px 16px calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 16px);
+  padding: var(--sp-8) var(--gutter) calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 16px);
   background: linear-gradient(160deg, var(--p900) 0%, var(--p800) 100%);
   color: rgba(255, 255, 255, 0.82);
 }
@@ -537,7 +665,7 @@ body:has(.app-nav__search-row.open) .app-main {
   text-decoration: none;
 }
 .app-footer__promise {
-  margin: 10px 0 12px;
+  margin: 12px 0;
   max-width: 34ch;
   line-height: 1.5;
 }
@@ -701,7 +829,7 @@ body:has(.app-nav__search-row.open) .app-main {
 .lang-menu__item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
   min-height: 48px;
   padding: 12px 16px;
@@ -744,14 +872,14 @@ body:has(.app-nav__search-row.open) .app-main {
 }
 @media (min-width: 768px) {
   .app-footer {
-    padding-top: 36px;
+    padding-top: 32px;
   }
   .app-footer__inner {
     grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
     grid-template-areas:
       "brand help"
       "explore account";
-    gap: 28px 40px;
+    gap: 24px 40px;
   }
   .app-footer__col--help {
     padding-top: 0;
@@ -878,7 +1006,7 @@ body:has(.app-nav__search-row.open) .app-main {
     flex-direction: row;
     gap: 6px;
     min-height: 44px;
-    padding: 0 14px;
+    padding: 0 16px;
     border-radius: 100px;
     color: rgba(255, 255, 255, 0.78);
   }
@@ -1079,7 +1207,8 @@ body:has(.app-nav__search-row.open) .app-main {
   /* Two lines kept for every label, so a row's tiles line up. */
   min-height: 2.5em;
   width: 100%;
-  color: var(--muted);
+  /* Body-dark, not muted: read outdoors on a dim phone screen. */
+  color: var(--text);
   font-size: var(--fs-xs);
   font-weight: 600;
   line-height: 1.25;
@@ -1151,7 +1280,7 @@ body:has(.app-nav__search-row.open) .app-main {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
 }
 .geo-cta__pin {
   width: 52px;
@@ -1169,7 +1298,7 @@ body:has(.app-nav__search-row.open) .app-main {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 .geo-cta__title {
   color: #fff;
@@ -1187,7 +1316,7 @@ body:has(.app-nav__search-row.open) .app-main {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 10px 14px;
+  padding: 12px 16px;
   border-radius: 100px;
   background: var(--a500);
   color: #1c1917;
@@ -1199,8 +1328,8 @@ body:has(.app-nav__search-row.open) .app-main {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 48px 24px 64px;
+  gap: var(--sp-2);
+  padding: var(--sp-12) var(--sp-6) var(--sp-16);
   text-align: center;
 }
 .empty-state__icon {
@@ -1220,7 +1349,7 @@ body:has(.app-nav__search-row.open) .app-main {
   font-size: var(--fs-sm);
 }
 .empty-state__action {
-  margin-top: 12px;
+  margin-top: var(--sp-3);
 }
 
 /* ── Organisms: product and provider cards ───────────────────────────────── */
@@ -1271,7 +1400,7 @@ body:has(.app-nav__search-row.open) .app-main {
   font-size: var(--fs-2xs);
 }
 .photo-placeholder--lg {
-  gap: 10px;
+  gap: 12px;
 }
 .photo-placeholder--lg .photo-placeholder__icon {
   font-size: 3.5rem;
@@ -1312,7 +1441,7 @@ body:has(.app-nav__search-row.open) .app-main {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
   padding-inline: 12px;
   white-space: nowrap;
@@ -1362,30 +1491,33 @@ body:has(.app-nav__search-row.open) .app-main {
 
 /* ── Home (pages/home) ───────────────────────────────────────────────────── */
 .home-categories {
-  padding: 16px 12px;
+  /* The tiles centre in their cells: 4 px less than the gutter lines the
+     row titles (4 px in) up with the page's other titles. */
+  padding: var(--sp-4) calc(var(--gutter) - var(--sp-1));
 }
-/* The same air above the strip and below it, before the banner: 16 px plus
-   the tiles' own 8 px padding each way. */
+/* The same air above the strip and below it, before the banner: one stack
+   gap plus the tiles' own 8 px padding each way. */
 .home-categories--strip {
   padding-bottom: 0;
 }
-/* The name of a row of tiles: what it is for ("Thuê làm", "Mua vật tư"). */
+/* The name of a row of tiles: what it is for ("Thuê làm", "Mua vật tư"),
+   the page's two errands, so a heading, not a caption. */
 .home-categories__title {
-  font-size: var(--fs-sm);
-  font-weight: 700;
-  color: var(--muted);
+  font-size: var(--fs-base);
+  font-weight: 800;
+  color: var(--text);
   margin: 0 4px 4px;
 }
 /* Each errand a section of its own: stacked on a phone, side by side from
    992 px (half the page each), so the two rows take one band, not two. */
 .home-errand + .home-errand {
-  margin-top: 12px;
+  margin-top: var(--sp-3);
 }
 @media (min-width: 992px) {
   .home-categories--strip {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 0 32px;
+    gap: 0 var(--sp-8);
   }
   .home-errand + .home-errand {
     margin-top: 0;
@@ -1400,13 +1532,15 @@ body:has(.app-nav__search-row.open) .app-main {
   }
 }
 .home-categories--strip + .home-section {
-  padding-top: 16px;
+  padding-top: var(--gap-stack);
 }
+/* A module of the home page: its title close to what it heads, the air
+   between two modules much wider, so each title reads as its block's. */
 .home-section {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 24px 16px 16px;
+  gap: var(--gap-head);
+  padding: var(--gap-section) var(--gutter) 0;
 }
 
 /* ── Molecule: provider invitation (molecules/provider_cta) ──────────────── */
@@ -1431,30 +1565,34 @@ body:has(.app-nav__search-row.open) .app-main {
 .page-hero {
   position: relative;
   overflow: hidden;
-  padding: 20px 16px 28px;
+  padding: var(--sp-5) var(--gutter) var(--sp-6);
   border-radius: 0 0 20px 20px;
   background: linear-gradient(160deg, var(--p900) 0%, var(--p800) 55%, var(--p600) 100%);
   color: #fff;
 }
 .page-hero--detail {
-  padding-bottom: 36px;
+  padding-bottom: var(--sp-8);
 }
 /* A detail page's header (organisms/detail_hero): room below for the first
-   card, lifted onto it (.detail-layout). */
+   card, lifted onto it (.detail-layout, --hero-lift up), then the same air
+   under the title as between the page's cards. */
+:root {
+  --hero-lift: var(--sp-8);
+}
 .page-hero--lift {
-  padding-bottom: 48px;
+  padding-bottom: calc(var(--hero-lift) + var(--gap-stack));
 }
 @media (min-width: 768px) {
   .page-hero {
-    padding: 28px 24px 36px;
+    padding: var(--sp-6) var(--gutter) var(--sp-8);
     border-radius: 0 0 24px 24px;
   }
   .page-hero--lift {
-    padding-bottom: 56px;
+    padding-bottom: calc(var(--hero-lift) + var(--gap-stack));
   }
 }
 .page-hero__title {
-  margin: 0 0 10px;
+  margin: 0 0 var(--sp-2);
   font-size: var(--fs-lg);
   font-weight: 800;
   line-height: 1.3;
@@ -1464,7 +1602,7 @@ body:has(.app-nav__search-row.open) .app-main {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 14px;
+  padding: 4px 16px;
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.15);
   font-size: var(--fs-sm);
@@ -1505,16 +1643,16 @@ body:has(.app-nav__search-row.open) .app-main {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  margin-top: -32px;
-  padding: 0 16px 16px;
+  gap: var(--gap-stack);
+  margin-top: calc(-1 * var(--hero-lift));
+  padding: 0 var(--gutter) var(--sp-4);
 }
 .detail-layout__aside,
 .detail-layout__main {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--gap-stack);
 }
 /* The photo is a card like the others (or the "no photo yet" placeholder in
    one): its own shape whatever the image's, cropped to fill it. */
@@ -1542,9 +1680,6 @@ body:has(.app-nav__search-row.open) .app-main {
     max-width: 1160px;
     margin-inline: auto;
   }
-  .detail-page .page-hero {
-    padding-inline: 32px;
-  }
   /* The page's tools at the title's end: edit (for who may), share. */
 .detail-hero__tools {
   flex-shrink: 0;
@@ -1559,8 +1694,8 @@ body:has(.app-nav__search-row.open) .app-main {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
     align-items: start;
-    gap: 24px;
-    padding: 0 32px 24px;
+    gap: var(--gap-stack);
+    padding: 0 var(--gutter) var(--sp-6);
   }
   .detail-photo,
   .detail-layout__main {
@@ -1570,31 +1705,31 @@ body:has(.app-nav__search-row.open) .app-main {
     grid-column: 2;
     grid-row: 1 / span 2;
     position: sticky;
-    top: calc(var(--app-nav-h) + 16px);
+    top: calc(var(--app-nav-h) + var(--sp-4));
   }
 }
 .detail-body {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 16px;
+  gap: var(--gap-stack);
+  padding: var(--sp-4) var(--gutter);
 }
 .detail-card {
-  padding: 18px;
+  padding: var(--pad-card);
   border-radius: 16px;
   border: 1px solid var(--border);
   background: var(--surface);
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.07);
 }
 .detail-card__title {
-  margin-bottom: 12px;
+  margin-bottom: var(--sp-3);
   color: var(--text);
   font-size: var(--fs-base);
   font-weight: 800;
   line-height: 1.35;
 }
 .admin-section__title {
-  margin-bottom: 10px;
+  margin-bottom: var(--sp-3);
   color: var(--muted);
   font-size: var(--fs-xs);
   font-weight: 700;
@@ -1607,16 +1742,16 @@ body:has(.app-nav__search-row.open) .app-main {
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px 12px;
-  margin-bottom: 12px;
+  gap: var(--sp-1) var(--sp-3);
+  margin-bottom: var(--sp-3);
 }
 .detail-card__head .detail-card__title {
   margin-bottom: 0;
 }
 /* A second part inside a card ("other services" under the provider). */
 .detail-card__subtitle {
-  margin: 16px 0 4px;
-  padding-top: 14px;
+  margin: var(--sp-4) 0 var(--sp-1);
+  padding-top: var(--sp-4);
   border-top: 1px solid var(--hairline);
   color: var(--text2);
   font-size: var(--fs-base);
@@ -1631,7 +1766,7 @@ body:has(.app-nav__search-row.open) .app-main {
   white-space: pre-line;
 }
 .detail-card__empty {
-  margin: 0 0 12px;
+  margin: 0 0 var(--sp-3);
   color: var(--muted);
   font-size: var(--fs-base);
 }
@@ -1669,7 +1804,7 @@ body:has(.app-nav__search-row.open) .app-main {
 }
 /* What a supply is for ("Dùng cho: Lúa"), under its price. */
 .detail-for {
-  margin: 10px 0 0;
+  margin: var(--sp-3) 0 0;
   font-size: var(--fs-base);
 }
 .detail-for .fa-solid {
@@ -1681,7 +1816,7 @@ body:has(.app-nav__search-row.open) .app-main {
 }
 /* The buttons come after the price lines in the same card. */
 .detail-card .provider-actions:not(:first-child) {
-  margin-top: 16px;
+  margin-top: var(--sp-4);
 }
 /* "More in this category" at the end of a detail page: the same link as a
    section's "see more", a full tap target. */
@@ -1720,8 +1855,9 @@ body:has(.app-nav__search-row.open) .app-main {
   align-items: center;
   gap: 12px;
   min-height: 64px;
-  margin: 16px -18px 0;
-  padding: 12px 18px;
+  /* Edge to edge of its card. */
+  margin: var(--sp-4) calc(-1 * var(--pad-card)) 0;
+  padding: var(--sp-3) var(--pad-card);
   border-block: 1px solid var(--hairline);
   color: var(--text);
   text-decoration: none;
@@ -1747,7 +1883,7 @@ body:has(.app-nav__search-row.open) .app-main {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 .vendor-row__name {
   font-weight: 700;
@@ -1775,7 +1911,7 @@ body:has(.app-nav__search-row.open) .app-main {
 .offer-rows__link {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-height: 48px;
   color: var(--text);
   text-decoration: none;
@@ -1811,7 +1947,7 @@ body:has(.app-nav__search-row.open) .app-main {
 .detail-hero__row {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 12px;
 }
 .detail-hero__title {
   flex: 1;
@@ -1823,7 +1959,7 @@ body:has(.app-nav__search-row.open) .app-main {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 .detail-hero__address {
   margin: 8px 0 0;
@@ -1849,12 +1985,31 @@ body:has(.app-nav__search-row.open) .app-main {
   position: relative;
   display: inline-flex;
 }
+/* A card's share button (a crop on the price board): a quiet icon a thumb
+   can hit, in the corner beside the title. */
+.share__card-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: -10px -10px -10px 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--bs-secondary-color);
+}
+.share__card-btn:hover,
+.share__card-btn:focus-visible {
+  background: var(--bs-tertiary-bg);
+  color: var(--text);
+}
 .share__status:not(:empty) {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
   z-index: 5;
-  padding: 6px 10px;
+  padding: 6px 12px;
   border-radius: 8px;
   background: var(--p900);
   color: #fff;
@@ -1863,7 +2018,7 @@ body:has(.app-nav__search-row.open) .app-main {
 }
 .provider-actions {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 @media (min-width: 480px) {
   .provider-actions {
@@ -1934,7 +2089,7 @@ body:has(.app-nav__search-row.open) .app-main {
 .service-list {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1990,7 +2145,7 @@ body:has(.app-nav__search-row.open) .app-main {
 /* ── Contact sheet (organisms/contact_sheet) ─────────────────────────────── */
 /* Without JS: a card at the end of the page, reached by the anchor link. */
 .contact-sheet {
-  padding: 18px;
+  padding: var(--pad-card);
   border-radius: 16px;
   border: 1px solid var(--border);
   background: var(--surface);
@@ -2010,7 +2165,7 @@ body:has(.app-nav__search-row.open) .app-main {
   margin: 0 auto;
   max-width: 560px;
   border-radius: 20px 20px 0 0;
-  padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(var(--pad-card) + env(safe-area-inset-bottom, 0px));
   transform: translateY(105%);
   visibility: hidden;
 }
@@ -2101,19 +2256,19 @@ body:has(.app-nav__search-row.open) .app-main {
   color: var(--p800);
 }
 .contact-sheet__sub {
-  margin: 0 0 14px;
+  margin: 0 0 16px;
   color: var(--muted);
   font-size: var(--fs-sm);
 }
 .contact-sheet__form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 /* What a confirmation will do (organisms/confirm_sheet); red when it cannot
    be undone. */
 .confirm-note {
-  margin: 0 0 14px;
+  margin: 0 0 16px;
   color: var(--muted);
   font-size: var(--fs-base);
 }
@@ -2147,12 +2302,14 @@ body:has(.app-nav__search-row.open) .app-main {
 }
 
 /* ── List pages: search + filters (organisms/product_filters) ────────────── */
+/* A list page: its tools (search, filters, chips), then the list, every
+   row of them on the page's gutter. */
 .list-tools {
-  padding: 12px 8px 0;
+  padding: var(--sp-3) var(--gutter) 0;
 }
 @media (min-width: 768px) {
   .list-tools {
-    padding: 16px 16px 0;
+    padding-top: var(--sp-4);
   }
 }
 .list-search__row {
@@ -2165,9 +2322,9 @@ body:has(.app-nav__search-row.open) .app-main {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-height: 48px;
-  padding: 0 14px;
+  padding: 0 16px;
   border: 1px solid var(--border);
   border-radius: 100px;
   background: var(--surface);
@@ -2231,7 +2388,7 @@ body:has(.app-nav__search-row.open) .app-main {
 .filter-panel {
   display: grid;
   grid-template-rows: 1fr;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 .filter-panel.is-collapsible {
   grid-template-rows: 0fr;
@@ -2240,7 +2397,7 @@ body:has(.app-nav__search-row.open) .app-main {
 }
 .filter-panel.is-collapsible.open {
   grid-template-rows: 1fr;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 .filter-panel__inner {
   min-height: 0;
@@ -2251,7 +2408,7 @@ body:has(.app-nav__search-row.open) .app-main {
   margin-right: 2px;
 }
 .filter-section {
-  margin: 0 0 14px;
+  margin: 0 0 16px;
   padding: 0;
   border: none;
 }
@@ -2273,7 +2430,7 @@ body:has(.app-nav__search-row.open) .app-main {
   align-items: center;
   gap: 6px;
   min-height: 44px;
-  padding: 8px 14px;
+  padding: 8px 16px;
   border: 1px solid var(--border);
   border-radius: 100px;
   background: var(--surface);
@@ -2312,7 +2469,7 @@ a.chip {
 .filter-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 12px;
   padding-bottom: 4px;
 }
 /* The keypad comes from inputmode; spinners only add tiny targets. */
@@ -2337,17 +2494,33 @@ a.chip {
   }
   .filter-actions {
     grid-template-columns: auto auto;
-    margin-bottom: 14px;
+    margin-bottom: 16px;
     margin-left: auto;
   }
 }
 .list-results {
-  padding: 12px 8px;
+  padding: var(--sp-4) var(--gutter);
 }
-@media (min-width: 768px) {
-  .list-results {
-    padding: 16px;
-  }
+/* The modules of one list page (the search page's kinds, the price
+   board's commodities): a section apart, each title close to its cards.
+   A kind on another tab is hidden and takes no air. */
+.list-block:not([hidden]) ~ .list-block:not([hidden]) {
+  margin-top: var(--gap-section);
+}
+.list-head {
+  margin-bottom: var(--gap-head);
+}
+/* A banner between two runs of cards: a stack gap each side. */
+.list-break {
+  margin-block: var(--gap-stack);
+}
+/* The line counting a list ("5279 services"), just above it. */
+.list-count {
+  margin: 0 0 var(--sp-2);
+}
+/* A footnote under a whole list (the price board's disclaimer). */
+.list-note {
+  margin: var(--gap-section) 0 0;
 }
 
 /* ── Molecule: pagination (molecules/pagination_nav) ─────────────────────── */
@@ -2356,8 +2529,8 @@ a.chip {
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  margin-top: 20px;
+  gap: var(--sp-2);
+  margin-top: var(--sp-6);
 }
 .page-btn {
   min-width: 44px;
@@ -2365,7 +2538,7 @@ a.chip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0 10px;
+  padding: 0 12px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface);
@@ -2396,10 +2569,13 @@ a.chip {
 }
 
 /* ── Search page (pages/search) ──────────────────────────────────────────── */
-.sector-switch {
+/* The sector switch, and a row of chips that narrows a board (the price
+   board's commodities): one row scrolling sideways on a phone. */
+.sector-switch,
+.chip-strip {
   display: flex;
-  gap: 8px;
-  padding: 12px 8px 0;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--gutter) 0;
   overflow-x: auto;
 }
 /* Tabs (molecules/tab_nav, admin_tabs) change what the page lists, so they
@@ -2408,16 +2584,17 @@ a.chip {
    page with both never shows two rows of the same buttons. */
 .search-tabs {
   display: flex;
-  margin: 4px 8px 0;
+  margin: var(--sp-1) var(--gutter) 0;
   overflow-x: auto;
   box-shadow: inset 0 -1px 0 var(--border);
 }
 @media (min-width: 768px) {
-  .sector-switch {
-    padding: 16px 16px 0;
+  .sector-switch,
+  .chip-strip {
+    padding-top: var(--sp-4);
   }
   .search-tabs {
-    margin: 8px 16px 0;
+    margin-top: var(--sp-2);
   }
 }
 /* The current tab is marked by aria-current (set by the server, then by
@@ -2457,7 +2634,7 @@ a.chip {
    one under another, each whole and made small by its type and spacing; the
    newest shown, the others folded under it. */
 .home-alerts {
-  padding: 12px 16px 0;
+  padding: var(--sp-3) var(--gutter) 0;
 }
 /* The fold: the newest alert is itself the summary, the whole card the tap
    target; a small "+n" and a chevron at its right say more lie under it.
@@ -2472,7 +2649,7 @@ a.chip {
   display: none;
 }
 .home-alerts__fold > .home-alert {
-  margin-top: 8px;
+  margin-top: var(--sp-2);
 }
 .home-alert__more {
   display: inline-flex;
@@ -2540,7 +2717,8 @@ a.chip {
 }
 /* The sector switch (molecules/sector_switch.html) is a row of chips that
    scrolls sideways on a narrow phone rather than wrapping. */
-.sector-switch > .chip {
+.sector-switch > .chip,
+.chip-strip > .chip {
   flex: none;
   white-space: nowrap;
 }
@@ -2563,7 +2741,7 @@ ac-geolocate {
   display: block;
 }
 .loc-hero {
-  padding: 32px 16px 28px;
+  padding: var(--sp-8) var(--gutter);
   border-radius: 0 0 24px 24px;
   background: linear-gradient(160deg, var(--p900) 0%, var(--p800) 55%, var(--p600) 100%);
   color: #fff;
@@ -2575,7 +2753,7 @@ ac-geolocate {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: var(--sp-3);
 }
 .loc-ripple {
   position: relative;
@@ -2630,7 +2808,7 @@ ac-geolocate {
 }
 .loc-manual {
   width: 100%;
-  margin-top: 8px;
+  margin-top: var(--sp-2);
   text-align: left;
 }
 .loc-manual__label {
@@ -2651,7 +2829,7 @@ ac-geolocate {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--sp-3);
 }
 .explore-hero__row .page-hero__title {
   margin: 0;
@@ -2676,15 +2854,15 @@ ac-geolocate {
 }
 .explore-hero__row .geo-error {
   position: absolute;
-  right: 16px;
+  right: var(--gutter);
   max-width: 260px;
 }
 .radius-links {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  padding: 12px 12px 0;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--gutter) 0;
 }
 .radius-links__label {
   color: var(--muted);
@@ -2692,7 +2870,7 @@ ac-geolocate {
   font-weight: 600;
 }
 .cat-section-label {
-  margin: 0 0 8px 4px;
+  margin: 0 0 var(--sp-2) var(--sp-1);
   color: var(--muted);
   font-size: var(--fs-xs);
   font-weight: 700;
@@ -2727,14 +2905,14 @@ ac-geolocate {
 }
 @media (min-width: 480px) {
   .auth-card {
-    padding: 36px 32px;
+    padding: 32px;
   }
 }
 .auth-brand {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
   margin-bottom: 24px;
   text-decoration: none;
 }
@@ -2757,7 +2935,7 @@ ac-geolocate {
   text-align: center;
 }
 .auth-sub {
-  margin: 0 0 20px;
+  margin: 0 0 var(--sp-6);
   color: var(--muted);
   font-size: var(--fs-sm);
   text-align: center;
@@ -2766,7 +2944,7 @@ ac-geolocate {
 .form-stack {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--gap-form);
 }
 /* The category form's live slug note: what is wrong, then the free slug to
    take with one tap; wraps under it on a narrow screen. */
@@ -2781,7 +2959,7 @@ ac-geolocate {
 .auth-fieldset {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--sp-3);
   margin: 0;
   padding: 0;
   border: none;
@@ -2789,7 +2967,7 @@ ac-geolocate {
 /* A fieldset that only groups a whole form's boxes (to disable them at
    once) keeps the form's own gap. */
 .form-stack > .auth-fieldset {
-  gap: 14px;
+  gap: var(--gap-form);
 }
 .auth-legend {
   margin-bottom: 0;
@@ -2800,7 +2978,7 @@ ac-geolocate {
   text-transform: uppercase;
 }
 .auth-footer {
-  margin: 20px 0 0;
+  margin: var(--sp-6) 0 0;
   font-size: var(--fs-sm);
   text-align: center;
 }
@@ -2878,8 +3056,8 @@ ac-geolocate {
 .acct-header {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 24px 16px;
+  gap: var(--sp-3);
+  padding: var(--sp-6) var(--gutter);
   border-radius: 0 0 20px 20px;
   background: linear-gradient(160deg, var(--p900) 0%, var(--p800) 55%, var(--p600) 100%);
   color: #fff;
@@ -2908,8 +3086,8 @@ ac-geolocate {
 .acct-role {
   display: inline-flex;
   align-items: center;
-  margin-top: 6px;
-  padding: 3px 10px;
+  margin-top: var(--sp-2);
+  padding: var(--sp-1) var(--sp-3);
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.15);
   font-size: var(--fs-xs);
@@ -2922,7 +3100,7 @@ ac-geolocate {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 0;
+  padding: 12px 0;
   border-bottom: 1px solid #e7ede9;
 }
 .acct-row:last-child {
@@ -3079,7 +3257,7 @@ ac-geolocate {
   margin-top: 6px;
 }
 .ash-no-match {
-  margin: 8px 10px;
+  margin: 8px 12px;
   color: #6b7280;
   font-size: var(--admin-text-sm);
 }
@@ -3091,7 +3269,7 @@ ac-geolocate {
   gap: 8px;
   min-height: 44px;
   margin-top: 4px;
-  padding: 0 10px;
+  padding: 0 12px;
   border-radius: 8px;
   color: #6b7280;
   font-size: var(--admin-label);
@@ -3127,9 +3305,9 @@ ac-geolocate {
 .ash-link {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-height: 44px;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border-radius: 8px;
   color: #374151;
   font-size: var(--admin-text);
@@ -3146,7 +3324,7 @@ ac-geolocate {
   font-weight: 700;
 }
 .ash-link--sub {
-  padding-left: 18px;
+  padding-left: 16px;
 }
 .ash-icon {
   width: 18px;
@@ -3266,12 +3444,12 @@ ac-geolocate {
 .admin-body {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 16px;
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--gutter);
 }
 @media (min-width: 768px) {
   .admin-body {
-    padding: 16px 24px 32px;
+    padding-bottom: var(--sp-8);
   }
 }
 .admin-card,
@@ -3288,14 +3466,9 @@ ac-geolocate {
 .admin-section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
+  gap: var(--sp-3);
+  padding: var(--pad-card);
   scroll-margin-top: 72px;
-}
-@media (min-width: 768px) {
-  .admin-section {
-    padding: 20px;
-  }
 }
 .admin-section > * {
   margin: 0;
@@ -3416,7 +3589,7 @@ ac-geolocate {
   font-size: var(--admin-text-sm);
 }
 .admin-table > :not(caption) > * > * {
-  padding: 10px 8px;
+  padding: 12px 8px;
 }
 .admin-table > :not(caption) > * > :first-child {
   padding-left: 16px;
@@ -3503,7 +3676,7 @@ ac-geolocate {
   .admin-card > .table-responsive > .admin-table--cards > tbody {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
   }
   .admin-card > .table-responsive > .admin-table--cards > tbody > tr {
     border: 1px solid var(--hairline);
@@ -3542,7 +3715,7 @@ ac-geolocate {
     flex-wrap: wrap;
     align-items: flex-start;
     column-gap: 16px;
-    padding: 14px 16px;
+    padding: 16px;
     border-bottom: 1px solid var(--hairline);
   }
   .admin-table--cards > tbody > tr:last-child {
@@ -3616,7 +3789,7 @@ ac-geolocate {
   .admin-table.admin-table--cards > tbody > tr > td.cell-state {
     order: 1;
     flex: 0 0 auto;
-    margin-top: 10px;
+    margin-top: 12px;
   }
   .admin-table--cards > tbody > tr::after {
     content: "";
@@ -3645,7 +3818,7 @@ ac-geolocate {
   .admin-table.admin-table--cards > tbody > tr > td:last-child[data-label=""] {
     order: 4;
     flex-basis: 100%;
-    margin-top: 14px;
+    margin-top: 16px;
     padding-top: 12px;
     border-top: 1px solid var(--hairline);
   }
@@ -3808,7 +3981,7 @@ ac-geolocate {
 }
 .admin-toolbar__lead {
   flex: none;
-  padding-inline: 14px 4px;
+  padding-inline: 16px 4px;
   color: var(--muted);
 }
 .admin-toolbar__input {
@@ -3841,7 +4014,7 @@ ac-geolocate {
 .admin-toolbar__filters {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-  gap: 10px 12px;
+  gap: 12px;
   align-items: end;
 }
 .admin-toolbar__item {
@@ -3947,7 +4120,7 @@ ac-geolocate {
 .admin-toolbar__check {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-height: 44px;
   cursor: pointer;
 }
@@ -4173,7 +4346,7 @@ ac-geolocate {
 .grant-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-height: 44px;
   padding-left: 0;
   border-top: 1px solid #f0f2f1;
@@ -4231,7 +4404,7 @@ ac-geolocate {
   justify-content: center;
   gap: 6px;
   min-height: 88px;
-  padding: 10px 8px;
+  padding: 12px 8px;
   border: 2px solid var(--border);
   border-radius: 14px;
   background: var(--surface);
@@ -4400,6 +4573,80 @@ ac-geolocate {
   font-size: var(--fs-sm);
   font-weight: 600;
 }
+/* A price's last days (atoms/sparkline.html): small, under the move, in
+   the muted text colour; 80 × 20, the ratio of its 100 × 25 box. */
+.sparkline {
+  display: block;
+  width: 80px;
+  height: 20px;
+  margin: 4px 0 0 auto;
+  color: var(--bs-secondary-color);
+  overflow: visible;
+}
+.sparkline__line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.sparkline__dot {
+  fill: var(--text);
+}
+/* "since 18/11": what the move is measured from, quieter than the move. */
+.price-move__since {
+  color: var(--bs-secondary-color);
+  font-weight: 400;
+}
+/* The home strip's lines: a glance, not the board. Smaller type, two
+   short rows each; nothing here is tapped, so no 44 px minimum. */
+.price-line--compact {
+  min-height: 0;
+  padding: 6px 0;
+  font-size: var(--fs-sm);
+  line-height: 1.3;
+}
+.price-line--compact .small,
+.price-line--compact .price-move {
+  font-size: var(--fs-xs);
+}
+/* On a phone the last line shown is not the last in the list (the rest
+   are wide-only): no hairline under it either. */
+@media (max-width: 767.98px) {
+  .price-strip .price-line:has(+ .price-line.d-none) {
+    border-bottom: 0;
+  }
+}
+/* A narrow phone (a 360 px Android): the range and its move beside the
+   name would cut "Sầu riêng Ri6 loại 1" or "Đồng Tháp — Cai Lậy" short, so
+   the price goes under the name, on one line with its move. */
+@media (max-width: 379.98px) {
+  .price-line {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+  }
+  .price-line__where .text-truncate {
+    white-space: normal;
+  }
+  .price-line__value {
+    text-align: start;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 8px;
+  }
+  .price-move {
+    display: inline;
+  }
+}
+/* A price some days old: still on the board, but its figure no longer
+   stands out like this week's (grey text, not opacity, to keep contrast). */
+.price-line--stale .price-line__amount {
+  color: var(--bs-secondary-color);
+  font-weight: 600;
+}
 /* The home page's prices: one column on a phone, two from a tablet (the
    last row then has no hairline under either line). */
 @media (min-width: 768px) {
@@ -4542,7 +4789,7 @@ ac-geolocate {
 .icon-choice {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 .icon-choice__glyph {
   flex: 0 0 1.5em;
@@ -4661,7 +4908,7 @@ ac-geolocate {
 .area-progress__average {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-width: 170px;
 }
 .area-progress__bar {
@@ -4695,7 +4942,7 @@ ac-geolocate {
 }
 .area-progress__squares {
   display: inline-flex;
-  gap: 3px;
+  gap: 4px;
 }
 .area-progress__week {
   width: 12px;
@@ -4718,7 +4965,7 @@ ac-geolocate {
   align-items: center;
   gap: 6px;
   margin: 0;
-  padding: 10px 16px;
+  padding: 12px 16px;
   color: var(--muted);
   font-size: var(--admin-text-sm);
 }
@@ -4740,7 +4987,7 @@ ac-geolocate {
   align-items: center;
   gap: 4px 6px;
   margin: auto 0 0;
-  padding-top: 10px;
+  padding-top: 12px;
   color: var(--muted);
   font-size: var(--admin-label);
   line-height: 1.3;
@@ -4748,7 +4995,7 @@ ac-geolocate {
 .stat-card__delta {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   padding: 2px 8px;
   border-radius: 999px;
   background: var(--bg);
@@ -4828,7 +5075,7 @@ ac-geolocate {
 .record-menu__item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
   min-height: 48px;
   padding: 12px 16px;

@@ -298,7 +298,12 @@ async fn inquiry_status_and_review_visibility_are_set_from_their_lists() {
         assert!(!html.contains("Chú Tư"), "{list}: another provider's rows");
         assert!(html.contains("admin-toolbar__tag--link"));
     }
-    let reviews = page(&e, &format!("/admin/reviews?provider_id={business}"), &admin).await;
+    let reviews = page(
+        &e,
+        &format!("/admin/reviews?provider_id={business}"),
+        &admin,
+    )
+    .await;
     assert!(reviews.contains("Vườn nongdan"));
     assert!(reviews.contains(r#"<strong class="admin-results__total">1</strong> kết quả"#));
 

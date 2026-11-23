@@ -32,7 +32,10 @@ optional_secret() {
 sudo install -d -m 755 "$APP_DIR" "$APP_DIR/db-init" "$APP_DIR/caddy"
 sudo install -m 644 "$SRC_DIR/compose.yaml" "$APP_DIR/"
 sudo install -m 644 "$SRC_DIR/Caddyfile" "$APP_DIR/caddy/"
+# The script runs roles.psql: both, or the first start makes a data directory
+# without the app's roles (and never tries again).
 sudo install -m 755 "$SRC_DIR/db-init/01-app-role.sh" "$APP_DIR/db-init/"
+sudo install -m 644 "$SRC_DIR/db-init/roles.psql" "$APP_DIR/db-init/"
 sudo install -d -m 700 "$ETC_DIR"
 
 # Backups: installed every deploy so a changed script ships with the release.

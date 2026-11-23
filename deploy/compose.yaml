@@ -14,8 +14,12 @@ services:
     environment:
       DOMAIN: ${DOMAIN}
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data        # certificates: losing this re-requests them (rate-limited by Let's Encrypt)
+      # Directories, not single files: a file replaced on the host stays
+      # unseen behind a single-file bind mount (it pins the old inode).
+      - ./caddy:/etc/caddy:ro
+      # The Cloudflare Origin Certificate, from Secret Manager (remote-deploy.sh).
+      - /etc/agri-connect/certs:/certs:ro
+      - caddy_data:/data
       - caddy_config:/config
     depends_on:
       - web
@@ -36,7 +40,7 @@ services:
       # server; no key file.
       GCS_BUCKET: ${GCS_BUCKET}
       HTTPS_ENABLED: "true"
-      # Caddy is the one proxy in front; it appends the client address.
+      # Caddy sets the one address: the visitor's, from CF-Connecting-IP.
       TRUSTED_PROXY_HOPS: "1"
       LOG_FORMAT: json
       RUST_LOG: info,sea_orm=warn,sqlx=warn

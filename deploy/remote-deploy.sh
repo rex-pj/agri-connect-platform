@@ -28,8 +28,9 @@ optional_secret() {
 }
 
 # ── Files ─────────────────────────────────────────────────────────────────────
-sudo install -d -m 755 "$APP_DIR" "$APP_DIR/db-init"
-sudo install -m 644 "$SRC_DIR/compose.yaml" "$SRC_DIR/Caddyfile" "$APP_DIR/"
+sudo install -d -m 755 "$APP_DIR" "$APP_DIR/db-init" "$APP_DIR/caddy"
+sudo install -m 644 "$SRC_DIR/compose.yaml" "$APP_DIR/"
+sudo install -m 644 "$SRC_DIR/Caddyfile" "$APP_DIR/caddy/"
 sudo install -m 755 "$SRC_DIR/db-init/01-app-role.sh" "$APP_DIR/db-init/"
 sudo install -d -m 700 "$ETC_DIR"
 
@@ -66,6 +67,13 @@ tmp="$(mktemp)"
   fi
 } > "$tmp"
 sudo install -m 600 "$tmp" "$ETC_DIR/web.env"
+
+# The Cloudflare Origin Certificate Caddy serves (README, step 6).
+sudo install -d -m 700 "$ETC_DIR/certs"
+secret agri-origin-cert > "$tmp"
+sudo install -m 600 "$tmp" "$ETC_DIR/certs/origin.pem"
+secret agri-origin-key > "$tmp"
+sudo install -m 600 "$tmp" "$ETC_DIR/certs/origin.key"
 
 compose_env() {
   cat <<ENV
@@ -107,6 +115,10 @@ sudo gcloud auth configure-docker "$REGISTRY_HOST" --quiet >/dev/null
 compose pull --quiet
 # --remove-orphans also stops services a release dropped.
 compose up -d --remove-orphans
+# A running Caddy keeps its configuration until told: pick up a changed
+# Caddyfile or certificate (forced, since the certificate is not part of the
+# configuration it compares).
+compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --force
 
 if wait_ready; then
   echo "deployed $WEB_IMAGE"

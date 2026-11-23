@@ -1,6 +1,6 @@
 # Deploying Agri-Connect to Google Compute Engine
 
-One VM runs everything with docker compose: Caddy (TLS) → the Rust server, which serves every page and the API, and PostgreSQL + PostGIS. GitHub Actions builds the images, pushes them to Artifact Registry and rolls them out over IAP SSH. No service-account key file exists anywhere: GitHub authenticates with Workload Identity Federation, and the VM uses its attached service account.
+One VM runs everything with docker compose behind Cloudflare's proxy: Cloudflare → Caddy (TLS with a Cloudflare Origin Certificate) → the Rust server, which serves every page and the API, and PostgreSQL + PostGIS. GitHub Actions builds the images, pushes them to Artifact Registry and rolls them out over IAP SSH. No service-account key file exists anywhere: GitHub authenticates with Workload Identity Federation, and the VM uses its attached service account.
 
 Everything below is done once. Afterwards a merge to `master` deploys by itself once CI passes.
 
@@ -10,7 +10,7 @@ Replace these placeholders throughout:
 |---|---|---|
 | `PROJECT_ID` | `agri-connect-prod` | |
 | `REGION` / `ZONE` | `asia-southeast1` / `asia-southeast1-b` | Singapore, the nearest region to the Mekong Delta |
-| `DOMAIN` | `agriconnect.vn` | its A record must point at the VM's static IP before the first deploy |
+| `DOMAIN` | `agriconnect.vn` | a Cloudflare zone; its `@` and `www` A records point at the VM's static IP, **Proxied** (step 9) |
 | `BACKUP_BUCKET` | `agri-connect-prod-backups` | globally unique |
 
 ## 1. Project, APIs, registry
@@ -42,7 +42,7 @@ gcloud iam service-accounts add-iam-policy-binding "$VM_SA" --member="serviceAcc
 
 ## 3. Workload Identity Federation for GitHub
 
-Only workflows from this repository can impersonate `agri-deploy`.
+Only workflows from this repository can impersonate `agri-deploy`. In a project that already has a pool named `github` (another repository deploys from it), skip `pools create` and add only a provider with a name of its own (e.g. `agri-connect` in place of `github` in `providers create-oidc`, and in step 8): a deleted pool keeps its name for 30 days and cannot be created again.
 
 ```bash
 gcloud iam workload-identity-pools create github --location=global
@@ -61,7 +61,11 @@ gcloud iam service-accounts add-iam-policy-binding "$DEPLOY_SA" \
 
 ```bash
 gcloud compute addresses create agri-ip --region=REGION
-gcloud compute firewall-rules create agri-web --allow=tcp:80,tcp:443,udp:443 --target-tags=agri-web
+# The web ports only from Cloudflare: nobody reaches the origin around it.
+# When Cloudflare adds a range, run it again as `firewall-rules update` and add
+# the range to the Caddyfile too.
+gcloud compute firewall-rules create agri-web --allow=tcp:80,tcp:443 --target-tags=agri-web \
+  --source-ranges="$(curl -fsS https://www.cloudflare.com/ips-v4 | paste -sd, -)"
 # SSH only through IAP (Google's range), never from the internet.
 gcloud compute firewall-rules create agri-iap-ssh --allow=tcp:22 --source-ranges=35.235.240.0/20 --target-tags=agri-web
 
@@ -79,7 +83,7 @@ gcloud compute resource-policies create snapshot-schedule agri-weekly --region=R
 gcloud compute disks add-resource-policies agri-pgdata --zone=ZONE --resource-policies=agri-weekly
 ```
 
-Point `DOMAIN`'s A record at `gcloud compute addresses describe agri-ip --region=REGION --format='value(address)'`.
+The address the Cloudflare records point at (step 9): `gcloud compute addresses describe agri-ip --region=REGION --format='value(address)'`.
 
 ## 5. Prepare the VM
 
@@ -124,6 +128,11 @@ printf '587'             | gcloud secrets create agri-smtp-port --data-file=-
 printf 'user'            | gcloud secrets create agri-smtp-username --data-file=-
 printf 'pass'            | gcloud secrets create agri-smtp-password --data-file=-
 printf 'no-reply@DOMAIN' | gcloud secrets create agri-from-email --data-file=-
+# The Cloudflare Origin Certificate Caddy serves (dashboard: SSL/TLS → Origin
+# Server → Create certificate, for DOMAIN and *.DOMAIN, PEM). One the domain
+# already has can be reused. Deploys refuse to run without both.
+gcloud secrets create agri-origin-cert --data-file=origin.pem
+gcloud secrets create agri-origin-key --data-file=origin.key && rm origin.key
 ```
 
 The two database passwords take effect only when the data directory is first created (`db-init/01-app-role.sh`). To rotate one later, change it in Postgres (`ALTER ROLE ... PASSWORD`) and then add a new secret version.
@@ -184,6 +193,15 @@ Under *Settings → Environments → production*:
 | `UPLOAD_BUCKET` | `UPLOAD_BUCKET` (step 7, without `gs://`) |
 
 The first deploy: *Actions → Deploy → Run workflow*.
+
+## 9. Cloudflare
+
+- SSL/TLS mode **Full (strict)**: Cloudflare checks the Origin Certificate.
+- DNS: the `@` and `www` A records at the static IP (step 4), **Proxied**; `www` redirects to `DOMAIN`. Mail records (MX and the like) stay DNS only.
+- No cache rule for HTML: pages carry the session. After moving the domain from another site, *Caching → Configuration → Purge Everything*.
+- Renewing the Origin Certificate (before its expiry) is a new version of `agri-origin-cert` and `agri-origin-key`, then a deploy.
+
+Behind the proxy every connection comes from a Cloudflare edge. Caddy trusts `CF-Connecting-IP` only from Cloudflare's ranges (`Caddyfile`) and hands the server that one address (`TRUSTED_PROXY_HOPS=1`), so rate limits and sign-in lockouts are per visitor. A range missing there fails silently: its visitors share one bucket.
 
 ## Day-2 operations
 

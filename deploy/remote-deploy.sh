@@ -117,16 +117,28 @@ wait_ready() {
   return 1
 }
 
+# A running Caddy keeps its configuration until told: pick up a changed
+# Caddyfile or certificate (forced, since the certificate is not part of the
+# configuration it compares). A Caddy `up` has just started opens its admin
+# endpoint a moment later, so it is tried for a while; the last try shows why
+# it failed.
+reload_caddy() {
+  for _ in $(seq 1 15); do
+    if compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --force >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --force
+}
+
 # ── Roll out ──────────────────────────────────────────────────────────────────
 gcloud auth configure-docker "$REGISTRY_HOST" --quiet >/dev/null
 sudo gcloud auth configure-docker "$REGISTRY_HOST" --quiet >/dev/null
 compose pull --quiet
 # --remove-orphans also stops services a release dropped.
 compose up -d --remove-orphans
-# A running Caddy keeps its configuration until told: pick up a changed
-# Caddyfile or certificate (forced, since the certificate is not part of the
-# configuration it compares).
-compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --force
+reload_caddy
 
 if wait_ready; then
   echo "deployed $WEB_IMAGE"

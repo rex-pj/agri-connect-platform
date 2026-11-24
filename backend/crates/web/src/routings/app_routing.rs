@@ -42,7 +42,7 @@ use crate::{
         zalo_handler::ZaloHandler,
     },
     middleware::{
-        client_ip, language, origin,
+        client_ip, language, origin, page_settings,
         rate_limit::{self, Limiters, Scope},
         timeout,
     },
@@ -975,6 +975,12 @@ impl AppRouting {
                 origin::enforce(origins.clone(), req, next)
             }))
             .layer(error_renderer)
+            // Outside the renderer, so an error page carries the platform's
+            // name like every other page.
+            .layer(middleware::from_fn_with_state(
+                state.clone(),
+                page_settings::scope_request,
+            ))
             // Outermost of the page layers: every page and error body is worded
             // in the visitor's language.
             .layer(middleware::from_fn(language::scope_request))

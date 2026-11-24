@@ -68,7 +68,8 @@ async fn a_group_is_saved_refused_audited_and_put_back() {
 
     // The first tab by default; every group is a tab.
     let html = page(&e, "/admin/settings", Some(&admin)).await;
-    assert!(html.contains(r#"name="support.phone""#) && !html.contains("market.steady"));
+    assert!(html.contains(r#"name="brand.name""#) && !html.contains("market.steady"));
+    assert!(html.contains("Để trống: dùng «Agri-Connect»."));
     assert!(html.contains(r#"href="/admin/settings?tab=market""#));
     assert!(html.contains("Đang theo mặc định"));
     let html = page(&e, "/admin/settings?tab=market", Some(&admin)).await;
@@ -228,6 +229,59 @@ async fn the_json_api_takes_known_keys_and_admins_only() {
     )
     .await;
     assert_eq!(res.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn the_name_an_admin_chooses_reaches_every_frame() {
+    let e = env_with_origin().await;
+    let admin = install_admin(&e).await;
+    assert!(page(&e, "/", None).await.contains("<title>Agri-Connect"));
+
+    // One line, whatever was typed: a title and an email subject take no
+    // line break.
+    let res = save(
+        &e,
+        &admin,
+        &[
+            ("group", "brand"),
+            ("brand.name", " Nông\r\nKết Nối "),
+            ("brand.description", "Thuê làm, mua vật tư gần nhà."),
+        ],
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        scalar(
+            &e,
+            "SELECT value AS v FROM platform_settings WHERE key = 'brand.name'"
+        )
+        .await,
+        "Nông Kết Nối"
+    );
+
+    let home = page(&e, "/", None).await;
+    assert!(home.contains("<title>Nông Kết Nối — "), "the page title");
+    assert!(home.contains(r#"content="Thuê làm, mua vật tư gần nhà.""#));
+    assert!(!home.contains("Agri-Connect"), "no trace of the old name");
+    let login = page(&e, "/login", None).await;
+    assert!(login.contains(r#"<span class="auth-brand__name">Nông Kết Nối</span>"#));
+    let admin_page = page(&e, "/admin/settings", Some(&admin)).await;
+    assert!(admin_page.contains("Nông Kết Nối Admin"), "the admin bar");
+    let missing = send(&e.router, get_page("/no-such-page", None)).await;
+    assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+    assert!(body_text(missing).await.contains("Nông Kết Nối"));
+
+    // Too long: refused on its box, nothing stored.
+    let long = "x".repeat(application::constants::SITE_NAME_MAX + 1);
+    let res = save(&e, &admin, &[("group", "brand"), ("brand.name", &long)]).await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert!(body_text(res).await.contains("Tối đa 40 ký tự."));
+
+    // Back to defaults: the deployment's name again.
+    let res = save(&e, &admin, &[("group", "brand"), ("action", "reset")]).await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert!(page(&e, "/", None).await.contains("<title>Agri-Connect"));
 }
 
 #[tokio::test]

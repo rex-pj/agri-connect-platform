@@ -44,6 +44,8 @@
       {{ field::input(id=s.id, name=s.key, label=s.label, value=s.value, type="number", inputmode="numeric", min=s.min, max=s.max, error=s.error | default(value=""), hint=hint) }}
       {% elif s.kind == "phone" %}
       {{ field::input(id=s.id, name=s.key, label=s.label, value=s.value, type="tel", inputmode="tel", pattern=limits.phone_pattern, autocomplete="off", placeholder=t(key="form.phone_placeholder"), error=s.error | default(value=""), hint=hint) }}
+      {% elif s.kind == "text" %}
+      {{ field::input(id=s.id, name=s.key, label=s.label, value=s.value, autocomplete="off", maxlength=s.max, error=s.error | default(value=""), hint=hint) }}
       {% elif s.kind == "url" %}
       {{ field::input(id=s.id, name=s.key, label=s.label, value=s.value, type="url", inputmode="url", autocomplete="off", placeholder=t(key="settings.url_placeholder"), maxlength=limits.setting_value_max, error=s.error | default(value=""), hint=hint) }}
       {% else %}

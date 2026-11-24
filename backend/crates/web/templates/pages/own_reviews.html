@@ -48,7 +48,7 @@
   </section>
   {% else %}
   <section class="detail-card">
-    {{ empty::empty_state(icon="fa-star", title=t(key="review.none_own"), hint=t(key="review.none_own_hint")) }}
+    {{ empty::empty_state(icon="fa-star", title=t(key="review.none_own"), hint=t(key="review.none_own_hint", site=site.name)) }}
   </section>
   {% endfor %}
   {% if page.pagination %}{{ paging::pagination_nav(p=page.pagination) }}{% endif %}

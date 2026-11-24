@@ -96,7 +96,7 @@
         <p class="detail-card__empty">{{ t(key="review.none") }}</p>
         {% endif %}
         <a class="btn btn-outline-warning btn-lg w-100" href="#danh-gia" x-on:click.prevent="show">{{ atoms::icon(name="fa-star") }} {{ t(key="review.write") }}</a>
-        {{ review::review_sheet(provider=p, review=page.review, stars=page.stars, name_max=page.limits.name_max, comment_max=page.review_comment_max, phone_pattern=limits.phone_pattern) }}
+        {{ review::review_sheet(provider=p, review=page.review, stars=page.stars, name_max=page.limits.name_max, comment_max=page.review_comment_max, phone_pattern=limits.phone_pattern, site_name=site.name) }}
       </section>
 
       {{ sheet::contact_sheet(provider=p, contact=page.contact, limits=page.limits) }}

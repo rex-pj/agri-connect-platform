@@ -1,6 +1,7 @@
 //! The language switch through the real router: the cookie it sets, where it
 //! goes back to, and pages, error pages and the JSON API answering in the
-//! chosen language. None of it touches the database.
+//! chosen language. The database is down: pages are drawn on the default
+//! settings.
 
 use axum::{
     body::Body,
@@ -8,14 +9,14 @@ use axum::{
     Router,
 };
 use integration_tests::{
-    body_text, get_page, json_body, post_form, router_with, send, state, TEST_ORIGIN,
+    body_text, get_page, json_body, post_form, router_with, send, state, unreachable_db,
+    TEST_ORIGIN,
 };
-use sea_orm::DatabaseConnection;
 use web::routings::app_routing::RouterConfig;
 
 fn router() -> Router {
     router_with(
-        state(DatabaseConnection::default()),
+        state(unreachable_db()),
         RouterConfig {
             allowed_origins: vec![TEST_ORIGIN.to_owned()],
             ..RouterConfig::default()

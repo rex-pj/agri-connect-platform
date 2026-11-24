@@ -1,7 +1,8 @@
 {#- The "write a review" sheet on a provider's page, in its own `dialog`
     scope (the page puts it there). `provider` is the BusinessDetailDto,
     `review` web::pages::provider::ReviewState, `stars` the ratings offered
-    (5 down to 1), `name_max` / `comment_max` the use case's lengths. Only a
+    (5 down to 1), `name_max` / `comment_max` the use case's lengths,
+    `site_name` the platform's name (the macro sees no `site`). Only a
     farmer the provider answered through the platform can review it: the
     phone must be the one their contact request came from. The stars are
     radio buttons styled as large buttons: they work without JS. -#}
@@ -9,12 +10,12 @@
 {% import "atoms/alert.html" as alerts %}
 {% import "molecules/form_field.html" as field %}
 {% import "molecules/sheet_header.html" as sheet_head %}
-{% macro review_sheet(provider, review, stars, name_max, comment_max, phone_pattern) -%}
+{% macro review_sheet(provider, review, stars, name_max, comment_max, phone_pattern, site_name) -%}
 {% set e = review.errors.fields %}
 <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
 <section class="contact-sheet" id="danh-gia" aria-labelledby="danh-gia-title" :class="sheetClass">
   {{ sheet_head::sheet_header(id="danh-gia", title=t(key="review.write"), icon="fa-star") }}
-  <p class="contact-sheet__sub">{{ t(key="review.who") }}</p>
+  <p class="contact-sheet__sub">{{ t(key="review.who", site=site_name) }}</p>
   <form class="contact-sheet__form" method="post" action="{{ url_for(name="review_submit") }}" novalidate>
     <input type="hidden" name="business_id" value="{{ provider.id }}">
     {% if review.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=review.errors.message) }}{% endif %}

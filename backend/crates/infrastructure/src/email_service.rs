@@ -4,6 +4,7 @@
 use application::{
     constants::{EMAIL_VERIFICATION_EXPIRY_HOURS, PASSWORD_RESET_EXPIRY_HOURS},
     ports::{EmailService, InquiryNotice, JobNotice},
+    settings::SettingsReader,
 };
 use async_trait::async_trait;
 use domain::{Error, Result};
@@ -31,7 +32,8 @@ fn verify_url(app_url: &str, token: &str) -> String {
 /// `{name}` placeholders; `startup.rs` reads it there and passes it in.
 #[derive(Debug, Clone)]
 pub struct EmailTexts {
-    /// Signs every email and ends every subject.
+    /// Signs every email and ends every subject while the `brand.name`
+    /// setting is empty: the deployment's `SITE_NAME`.
     pub site_name: String,
     /// `{site}`.
     pub reset_subject: String,
@@ -66,7 +68,7 @@ fn fill(template: &str, params: &[(&str, &str)]) -> String {
 
 /// The provider's "new inquiry" email. Plain text: the farmer's name, topic
 /// and note are shown as typed, never interpreted.
-fn inquiry_body(texts: &EmailTexts, app_url: &str, n: &InquiryNotice) -> String {
+fn inquiry_body(texts: &EmailTexts, site: &str, app_url: &str, n: &InquiryNotice) -> String {
     let note = n
         .note
         .as_deref()
@@ -81,14 +83,14 @@ fn inquiry_body(texts: &EmailTexts, app_url: &str, n: &InquiryNotice) -> String 
             ("topic", &n.topic),
             ("note", &note),
             ("inbox", &site_url(app_url, &n.inbox_path)),
-            ("site", &texts.site_name),
+            ("site", site),
         ],
     )
 }
 
 /// The provider's "a job near you" email. Plain text: the farmer's name and
 /// description are shown as typed, never interpreted. No area: blank.
-fn job_body(texts: &EmailTexts, app_url: &str, n: &JobNotice) -> String {
+fn job_body(texts: &EmailTexts, site: &str, app_url: &str, n: &JobNotice) -> String {
     fill(
         &texts.job_body,
         &[
@@ -99,7 +101,7 @@ fn job_body(texts: &EmailTexts, app_url: &str, n: &JobNotice) -> String {
             ("name", &n.requester_name),
             ("phone", &n.requester_phone),
             ("jobs", &site_url(app_url, &n.jobs_path)),
-            ("site", &texts.site_name),
+            ("site", site),
         ],
     )
 }
@@ -112,6 +114,8 @@ pub struct SmtpConfig {
     pub from: String,
     pub app_url: String,
     pub texts: EmailTexts,
+    /// For the `brand.name` an admin chose, read as each email goes out.
+    pub settings: SettingsReader,
 }
 
 pub struct SmtpEmailService {
@@ -119,6 +123,7 @@ pub struct SmtpEmailService {
     from: Mailbox,
     app_url: String,
     texts: EmailTexts,
+    settings: SettingsReader,
 }
 
 impl SmtpEmailService {
@@ -138,7 +143,22 @@ impl SmtpEmailService {
             from,
             app_url: config.app_url,
             texts: config.texts,
+            settings: config.settings,
         })
+    }
+
+    /// The name that signs this email: the admin's (`brand.name`, one line
+    /// by its rule, so it cannot add a header to the subject), else the
+    /// deployment's. An unreadable setting never holds an email back.
+    async fn site_name(&self) -> String {
+        match self.settings.load().await {
+            Ok(settings) => settings.site_name().map(str::to_owned),
+            Err(e) => {
+                warn!(error = %e, "settings unreadable; the email is signed with SITE_NAME");
+                None
+            }
+        }
+        .unwrap_or_else(|| self.texts.site_name.clone())
     }
 
     async fn send(&self, to: &str, subject: &str, body: String) -> std::result::Result<(), String> {
@@ -162,7 +182,8 @@ impl SmtpEmailService {
 impl EmailService for SmtpEmailService {
     async fn send_password_reset(&self, to_email: &str, token: &str) {
         let url = reset_url(&self.app_url, token);
-        let site = self.texts.site_name.as_str();
+        let site = self.site_name().await;
+        let site = site.as_str();
         // Plain text with no user-supplied content: nothing here can be used to
         // inject markup into the message.
         let body = fill(
@@ -182,7 +203,8 @@ impl EmailService for SmtpEmailService {
 
     async fn send_email_verification(&self, to_email: &str, token: &str) {
         let url = verify_url(&self.app_url, token);
-        let site = self.texts.site_name.as_str();
+        let site = self.site_name().await;
+        let site = site.as_str();
         // Plain text with no user-supplied content, as the reset email.
         let body = fill(
             &self.texts.verify_body,
@@ -200,11 +222,9 @@ impl EmailService for SmtpEmailService {
     }
 
     async fn send_new_inquiry(&self, to_email: &str, notice: &InquiryNotice) {
-        let body = inquiry_body(&self.texts, &self.app_url, notice);
-        let subject = fill(
-            &self.texts.inquiry_subject,
-            &[("site", &self.texts.site_name)],
-        );
+        let site = self.site_name().await;
+        let body = inquiry_body(&self.texts, &site, &self.app_url, notice);
+        let subject = fill(&self.texts.inquiry_subject, &[("site", &site)]);
         match self.send(to_email, &subject, body).await {
             Ok(()) => info!(to = to_email, "new-inquiry email sent"),
             Err(e) => error!(to = to_email, error = %e, "new-inquiry email failed"),
@@ -212,8 +232,9 @@ impl EmailService for SmtpEmailService {
     }
 
     async fn send_new_job(&self, to_email: &str, notice: &JobNotice) {
-        let body = job_body(&self.texts, &self.app_url, notice);
-        let subject = fill(&self.texts.job_subject, &[("site", &self.texts.site_name)]);
+        let site = self.site_name().await;
+        let body = job_body(&self.texts, &site, &self.app_url, notice);
+        let subject = fill(&self.texts.job_subject, &[("site", &site)]);
         match self.send(to_email, &subject, body).await {
             Ok(()) => info!(to = to_email, "new-job email sent"),
             Err(e) => error!(to = to_email, error = %e, "new-job email failed"),
@@ -297,7 +318,7 @@ mod tests {
             requester_phone: "0912345678".into(),
             jobs_path: "/provider/jobs".into(),
         };
-        let body = job_body(&texts(), "https://agri.vn", &notice);
+        let body = job_body(&texts(), "Nông Kết Nối", "https://agri.vn", &notice);
         assert!(body.contains("Phun thuốc in : 3 công lúa"), "{body}");
         assert!(body.contains("0912345678") && body.contains("https://agri.vn/provider/jobs"));
         assert!(!body.contains('{'), "every placeholder filled: {body}");
@@ -316,14 +337,23 @@ mod tests {
 
     #[test]
     fn the_inquiry_email_has_who_to_call_and_the_inbox_link() {
-        let body = inquiry_body(&texts(), "https://agri.vn/", &notice(None));
+        let body = inquiry_body(&texts(), "Nông Kết Nối", "https://agri.vn/", &notice(None));
         assert!(body.contains("Nguyễn Văn A") && body.contains("0912345678"));
         assert!(body.contains("Needs: Múc bùn ao"));
         assert!(body.contains("https://agri.vn/provider/inquiries"));
         assert!(!body.contains("Note:"), "no empty note line");
+        assert!(
+            body.ends_with("\nNông Kết Nối"),
+            "signed with the name given: {body}"
+        );
         assert!(!body.contains('{'), "every placeholder filled: {body}");
 
-        let noted = inquiry_body(&texts(), "https://agri.vn", &notice(Some("2 công")));
+        let noted = inquiry_body(
+            &texts(),
+            "Nông Kết Nối",
+            "https://agri.vn",
+            &notice(Some("2 công")),
+        );
         assert!(noted.contains("Note: 2 công\n"));
     }
 

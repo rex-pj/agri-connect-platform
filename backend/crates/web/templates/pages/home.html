@@ -18,7 +18,7 @@
     the "post a job" card, then featured products.
     `page` is web::pages::home::HomePage. -#}
 {% block title %}{{ site.name }} — {{ t(key="home.title") }}{% endblock title %}
-{% block meta %}<meta name="description" content="{{ t(key="home.meta") }}">{% endblock meta %}
+{% block meta %}<meta name="description" content="{% if site.description %}{{ site.description }}{% else %}{{ t(key="home.meta") }}{% endif %}">{% endblock meta %}
 {% block main %}
 {{ banner::alert_banner(alerts=page.alerts) }}
 <div class="home-categories home-categories--strip">

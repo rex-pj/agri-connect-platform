@@ -206,6 +206,17 @@ pub fn max_chars_opt(value: &Option<String>, max: usize) -> Result<()> {
     value.as_deref().map_or(Ok(()), |v| max_chars(v, max))
 }
 
+/// `text` as one line: every run of whitespace (line breaks and tabs too)
+/// one space, other control characters dropped, trimmed. For text that goes
+/// where a line break would do harm: a page title, an email subject.
+pub fn one_line(text: &str) -> String {
+    text.split_whitespace()
+        .map(|word| word.chars().filter(|c| !c.is_control()).collect::<String>())
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 pub fn non_blank(value: Option<String>) -> Option<String> {
     value.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty())
 }
@@ -241,6 +252,17 @@ pub fn typed_state(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn one_line_keeps_no_line_break_nor_control_character() {
+        assert_eq!(one_line("  Nông\r\nKết\tNối  "), "Nông Kết Nối");
+        assert_eq!(one_line("A\u{0}B \u{7}"), "AB");
+        assert_eq!(
+            one_line("Bcc: x@y.vn\nSubject: hi"),
+            "Bcc: x@y.vn Subject: hi"
+        );
+        assert_eq!(one_line(" \n "), "");
+    }
 
     #[test]
     fn common_passwords_are_refused_whatever_their_case() {

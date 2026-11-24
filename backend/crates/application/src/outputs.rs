@@ -1449,7 +1449,7 @@ pub struct NamedCodeDto {
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct SettingDto {
     pub key: &'static str,
-    /// `number`, `switch`, `phone`, `url` or `email`.
+    /// `number`, `switch`, `phone`, `url`, `email` or `text` (one line).
     pub kind: &'static str,
     /// As text (a switch: `true` / `false`; text: empty when unset).
     pub value: String,

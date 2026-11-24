@@ -172,6 +172,8 @@ fn setting_dto(state: &SettingState) -> SettingDto {
         SettingKind::Text(TextRule::Phone) => ("phone", None, None),
         SettingKind::Text(TextRule::HttpsUrl) => ("url", None, None),
         SettingKind::Text(TextRule::Email) => ("email", None, None),
+        // `max`: the longest text, the box's `maxlength`.
+        SettingKind::Text(TextRule::Line { max }) => ("text", None, i64::try_from(max).ok()),
     };
     SettingDto {
         key: state.def.key,

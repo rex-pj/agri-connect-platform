@@ -39,7 +39,7 @@
     {% if q.note %}<p class="detail-card__text mb-1">{{ q.note }}</p>{% endif %}
     <p class="small text-muted mb-2"><time datetime="{{ q.created_on | utc_iso }}">{{ q.created_on | vn_datetime }}</time></p>
     <a class="btn btn-success btn-lg w-100 mb-2" href="tel:{{ q.requester_phone }}">{{ atoms::icon(name="fa-phone") }} {{ t(key="inbox.call", phone=q.requester_phone | phone) }}</a>
-    {% if r.review_href %}<div class="mb-2">{{ share::share_button(title=page.business_name, text=t(key="review.ask_text", name=page.business_name), url=r.review_href, label=t(key="review.ask")) }}</div>{% endif %}
+    {% if r.review_href %}<div class="mb-2">{{ share::share_button(title=page.business_name, text=t(key="review.ask_text", name=page.business_name, site=site.name), url=r.review_href, label=t(key="review.ask")) }}</div>{% endif %}
     {% set what = t(key="inbox.request_of", name=q.requester_name) %}
     <div class="row-actions row-actions--labelled">
       {% for s in r.steps %}

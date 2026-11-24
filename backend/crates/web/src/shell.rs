@@ -5,6 +5,8 @@
 //! The account links follow permissions, never role names: they only decide
 //! which links to show. Every page still checks access itself.
 
+use std::sync::Arc;
+
 use application::{
     authz::Actor,
     catalogue::{PERM_ADMIN_DASHBOARD_VIEW, PERM_OWN_LISTING_CREATE, PERM_PARTNER_REPORT_READ},
@@ -26,6 +28,7 @@ use crate::{
     middleware::{
         auth::Viewer,
         language::{preferred_language, LANG_COOKIE},
+        page_settings,
     },
     pages::sector::chosen_sector,
     routes,
@@ -495,10 +498,15 @@ impl FromRequestParts<AppState> for Shell {
             actor.as_ref(),
         );
         shell.language_offer = language_offer(&parts.headers, &state.locales);
-        let (sectors, settings) = tokio::try_join!(
-            state.usecases.sector.shown(),
-            state.usecases.settings.current()
-        )?;
+        // The settings this request read already (`page_settings`), else
+        // read now alongside the sectors.
+        let read = async {
+            match page_settings::current() {
+                Some(settings) => Ok(settings),
+                None => state.usecases.settings.current().await.map(Arc::new),
+            }
+        };
+        let (sectors, settings) = tokio::try_join!(state.usecases.sector.shown(), read)?;
         shell.apply_settings(&settings);
         shell.sector = chosen_sector(&parts.headers, &sectors);
         shell.sectors = sector_choices(state.locale(), &sectors, shell.sector.as_deref());

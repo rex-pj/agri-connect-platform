@@ -198,11 +198,28 @@ pub fn router_with(state: AppState, config: RouterConfig) -> Router {
     AppRouting::build(state, config)
 }
 
-/// A router whose database is disconnected: good for every path that must
-/// answer before touching the database (routing, auth, body parsing).
+/// A router whose database is down: good for every path that must answer
+/// before touching the database (routing, auth, body parsing) or without it
+/// (a page drawn on the default settings). A pool on a closed port, so a
+/// query fails as in an outage, at once.
 pub fn router_without_db() -> Router {
-    router(state(DatabaseConnection::default()))
+    router(state(unreachable_db()))
 }
+
+/// A connection to a database that is down. Never `DatabaseConnection::
+/// default()`: that one panics on the first query instead of failing it.
+pub fn unreachable_db() -> DatabaseConnection {
+    let pool = sea_orm::sqlx::postgres::PgPoolOptions::new()
+        .acquire_timeout(UNREACHABLE_DB_TIMEOUT)
+        .connect_lazy(UNREACHABLE_DB_URL)
+        .unwrap();
+    sea_orm::SqlxPostgresConnector::from_sqlx_postgres_pool(pool)
+}
+
+/// Nothing listens there (the discard port), so a connection is refused.
+const UNREACHABLE_DB_URL: &str = "postgres://nobody@127.0.0.1:9/none";
+/// How long a query waits for that refusal before giving up.
+const UNREACHABLE_DB_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Sends one request. Adds the peer address the rate limiter needs, which a
 /// real server would supply through `into_make_service_with_connect_info`.

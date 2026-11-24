@@ -63,7 +63,7 @@ fn bad_login_from(client: &str) -> Request<Body> {
 #[tokio::test]
 async fn behind_caddy_each_client_has_its_own_rate_limit() {
     let router = integration_tests::router_with(
-        integration_tests::state(sea_orm::DatabaseConnection::default()),
+        integration_tests::state(integration_tests::unreachable_db()),
         web::routings::app_routing::RouterConfig {
             trusted_proxy_hops: 1,
             ..Default::default()
@@ -85,7 +85,7 @@ async fn behind_caddy_each_client_has_its_own_rate_limit() {
 #[tokio::test]
 async fn a_forged_forwarded_for_does_not_buy_a_fresh_limit() {
     let router = integration_tests::router_with(
-        integration_tests::state(sea_orm::DatabaseConnection::default()),
+        integration_tests::state(integration_tests::unreachable_db()),
         web::routings::app_routing::RouterConfig {
             trusted_proxy_hops: 1,
             ..Default::default()

@@ -66,7 +66,7 @@ async fn error_responses_keep_security_headers() {
 
 #[tokio::test]
 async fn internal_error_detail_never_reaches_the_client() {
-    let state = integration_tests::state(sea_orm::DatabaseConnection::default());
+    let state = integration_tests::state(integration_tests::unreachable_db());
     let app = axum::Router::new()
         .route(
             "/boom",
@@ -93,7 +93,7 @@ async fn internal_error_detail_never_reaches_the_client() {
 /// A router that also lets the Zalo Mini App's host call the API.
 fn router_with_api_origin(api: &str) -> axum::Router {
     integration_tests::router_with(
-        integration_tests::state(sea_orm::DatabaseConnection::default()),
+        integration_tests::state(integration_tests::unreachable_db()),
         web::routings::app_routing::RouterConfig {
             allowed_origins: vec![integration_tests::TEST_ORIGIN.to_owned()],
             api_origins: vec![api.to_owned()],

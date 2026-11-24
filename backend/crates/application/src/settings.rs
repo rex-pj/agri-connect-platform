@@ -28,10 +28,10 @@ use crate::{
         JOB_POSTS_OPEN_PER_PHONE_DEFAULT, JOB_POSTS_PER_CLIENT_PER_DAY_DEFAULT,
         JOB_POST_DAYS_DEFAULT, JOB_POST_KEEP_DAYS, METRES_PER_KM, PRODUCTS_PER_BUSINESS_DEFAULT,
         PRODUCTS_PER_BUSINESS_MAX, RADIUS_MAX_M, REVIEW_SUSPECT_MINUTES_DEFAULT,
-        SERVICES_PER_BUSINESS_DEFAULT, SERVICES_PER_BUSINESS_MAX, SPONSORED_SHOWN_DEFAULT,
-        SPONSORED_SHOWN_MAX, STEADY_WEEKLY_LEADS_DEFAULT,
+        SERVICES_PER_BUSINESS_DEFAULT, SERVICES_PER_BUSINESS_MAX, SITE_DESCRIPTION_MAX,
+        SITE_NAME_MAX, SPONSORED_SHOWN_DEFAULT, SPONSORED_SHOWN_MAX, STEADY_WEEKLY_LEADS_DEFAULT,
     },
-    validation::{is_valid_vn_phone, validate_email},
+    validation::{is_valid_vn_phone, max_chars, one_line, validate_email},
 };
 
 /// What a key looks like (`chk_platform_settings_key`): dotted lower-case
@@ -47,6 +47,8 @@ const OFF: &str = "false";
 
 // ── Keys ──────────────────────────────────────────────────────────────────────
 
+pub const BRAND_NAME: &str = "brand.name";
+pub const BRAND_DESCRIPTION: &str = "brand.description";
 pub const SUPPORT_PHONE: &str = "support.phone";
 pub const SUPPORT_ZALO_URL: &str = "support.zalo_url";
 pub const SUPPORT_EMAIL: &str = "support.email";
@@ -66,6 +68,8 @@ pub const SPONSORED_SHOWN: &str = "market.sponsored_shown";
 /// The sections of the settings page, in its order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SettingGroup {
+    /// What the platform is called: every page's title and top bar, emails.
+    Brand,
     /// The platform's own help lines in the footer.
     Support,
     /// Who may come in: sign-ups, job posts.
@@ -79,7 +83,8 @@ pub enum SettingGroup {
 }
 
 impl SettingGroup {
-    pub const ALL: [SettingGroup; 5] = [
+    pub const ALL: [SettingGroup; 6] = [
+        SettingGroup::Brand,
         SettingGroup::Support,
         SettingGroup::Access,
         SettingGroup::Jobs,
@@ -91,6 +96,7 @@ impl SettingGroup {
     /// locale keys (`settings.group.<code>`).
     pub const fn code(self) -> &'static str {
         match self {
+            SettingGroup::Brand => "brand",
             SettingGroup::Support => "support",
             SettingGroup::Access => "access",
             SettingGroup::Jobs => "jobs",
@@ -112,6 +118,11 @@ pub enum TextRule {
     /// A link starting `https://`.
     HttpsUrl,
     Email,
+    /// Plain words on one line (`validation::one_line`), at most `max`
+    /// characters: it lands in page titles and email subjects.
+    Line {
+        max: usize,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -147,6 +158,19 @@ const fn number(
 
 /// Every setting, in the page's order within each group.
 pub static SETTINGS: &[SettingDef] = &[
+    // Empty: the deployment's own (`SITE_NAME`, `SITE_DESCRIPTION`).
+    SettingDef {
+        key: BRAND_NAME,
+        group: SettingGroup::Brand,
+        kind: SettingKind::Text(TextRule::Line { max: SITE_NAME_MAX }),
+    },
+    SettingDef {
+        key: BRAND_DESCRIPTION,
+        group: SettingGroup::Brand,
+        kind: SettingKind::Text(TextRule::Line {
+            max: SITE_DESCRIPTION_MAX,
+        }),
+    },
     SettingDef {
         key: SUPPORT_PHONE,
         group: SettingGroup::Support,
@@ -305,6 +329,11 @@ impl SettingDef {
                 _ => Err(refuse(ErrorCode::InvalidRequestBody)),
             },
             SettingKind::Text(_) if raw.is_empty() => Ok(SettingValue::Text(String::new())),
+            SettingKind::Text(TextRule::Line { max }) => {
+                let line = one_line(raw);
+                max_chars(&line, max)?;
+                Ok(SettingValue::Text(line))
+            }
             SettingKind::Text(TextRule::Phone) => {
                 let digits: String = raw
                     .chars()
@@ -432,6 +461,17 @@ impl Settings {
     }
 
     // ── What the use cases and pages read ─────────────────────────────────────
+
+    /// The platform's name an admin chose; `None`: the deployment's own.
+    pub fn site_name(&self) -> Option<&str> {
+        self.text(BRAND_NAME)
+    }
+
+    /// The platform's description an admin chose; `None`: the deployment's
+    /// own, else the locale's.
+    pub fn site_description(&self) -> Option<&str> {
+        self.text(BRAND_DESCRIPTION)
+    }
 
     pub fn support_phone(&self) -> Option<&str> {
         self.text(SUPPORT_PHONE)
@@ -651,5 +691,38 @@ mod tests {
             code(def(REGISTRATION_OPEN).parse("maybe")),
             Some(ErrorCode::InvalidRequestBody)
         );
+        // The name lands in titles and email subjects: one line, short.
+        assert_eq!(
+            def(BRAND_NAME).parse(" Nông\r\nBcc: x@y.vn ").ok(),
+            Some(SettingValue::Text("Nông Bcc: x@y.vn".into()))
+        );
+        assert_eq!(
+            code(def(BRAND_NAME).parse(&"a".repeat(SITE_NAME_MAX + 1))),
+            Some(ErrorCode::FieldTooLong)
+        );
+        assert_eq!(
+            def(BRAND_NAME).parse(&"ă".repeat(SITE_NAME_MAX)).ok(),
+            Some(SettingValue::Text("ă".repeat(SITE_NAME_MAX)))
+        );
+        assert_eq!(
+            code(def(BRAND_DESCRIPTION).parse(&"a".repeat(SITE_DESCRIPTION_MAX + 1))),
+            Some(ErrorCode::FieldTooLong)
+        );
+    }
+
+    #[test]
+    fn the_brand_falls_back_to_the_deployment_until_an_admin_names_it() {
+        assert_eq!(Settings::default().site_name(), None);
+        assert_eq!(Settings::default().site_description(), None);
+        let s = Settings::from_stored(&[
+            stored(BRAND_NAME, "Nông Kết Nối"),
+            stored(BRAND_DESCRIPTION, "Thuê làm, mua vật tư."),
+        ]);
+        assert_eq!(s.site_name(), Some("Nông Kết Nối"));
+        assert_eq!(s.site_description(), Some("Thuê làm, mua vật tư."));
+        // A row stored past its bound (by hand, or before a bound tightened):
+        // ignored.
+        let broken = Settings::from_stored(&[stored(BRAND_NAME, &"x".repeat(SITE_NAME_MAX + 1))]);
+        assert_eq!(broken.site_name(), None);
     }
 }

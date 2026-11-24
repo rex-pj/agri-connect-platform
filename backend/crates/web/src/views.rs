@@ -14,7 +14,7 @@ use application::constants::{
     USERNAME_MIN_LEN, VN_UTC_OFFSET_SECS,
 };
 use application::icons;
-use application::settings::SETTING_VALUE_MAX;
+use application::settings::{Settings, SETTING_VALUE_MAX};
 use application::validation::{is_valid_vn_phone, SLUG_PATTERN, VN_PHONE_PATTERN};
 use axum::{
     http::{header, HeaderMap, HeaderValue, StatusCode},
@@ -31,6 +31,7 @@ use crate::{
     constants::{km, EXPLORE_DEFAULT_RADIUS_M, ZALO_CHAT_URL},
     extract::ApiPath,
     locale::{fill, Lang, Locale, Locales},
+    middleware::page_settings,
     routes,
     shell::Shell,
     slug::slugify,
@@ -53,7 +54,8 @@ pub const PAGE_CSP: &str = "default-src 'self'; script-src 'self'; style-src 'se
      img-src 'self' blob:; font-src 'self'; connect-src 'self'; form-action 'self'; \
      frame-ancestors 'none'; base-uri 'none'; object-src 'none'";
 
-/// Site identity, from `SITE_NAME` / `SITE_DESCRIPTION` (unset: the locale's
+/// Site identity: the `brand.*` settings an admin chose, else the
+/// deployment's `SITE_NAME` / `SITE_DESCRIPTION` (unset: the locale's
 /// `site.description`). The footer's help lines are settings
 /// (`Shell::support`).
 #[derive(Debug, Clone, Serialize)]
@@ -67,6 +69,23 @@ impl Default for SiteConfig {
         Self {
             name: "Agri-Connect".to_owned(),
             description: None,
+        }
+    }
+}
+
+impl SiteConfig {
+    /// This identity under what `settings` name (the request's, `None`
+    /// outside one).
+    pub fn branded(&self, settings: Option<&Settings>) -> SiteConfig {
+        SiteConfig {
+            name: settings
+                .and_then(Settings::site_name)
+                .unwrap_or(&self.name)
+                .to_owned(),
+            description: settings
+                .and_then(Settings::site_description)
+                .map(str::to_owned)
+                .or_else(|| self.description.clone()),
         }
     }
 }
@@ -238,6 +257,12 @@ impl Views {
     /// The texts the templates were bound to.
     pub fn locales(&self) -> &Arc<Locales> {
         &self.locales
+    }
+
+    /// The deployment's own identity (`SITE_NAME`, `SITE_DESCRIPTION`): what
+    /// the pages show while the `brand.*` settings are empty.
+    pub fn site(&self) -> &SiteConfig {
+        &self.site
     }
 
     fn tera(&self, lang: Lang) -> &Tera {
@@ -438,8 +463,9 @@ impl Views {
                 current: l == lang,
             })
             .collect();
+        let site = self.site.branded(page_settings::current().as_deref());
         let context = tera::Context::from_serialize(PageContext {
-            site: &self.site,
+            site: &site,
             lang: lang.code(),
             languages,
             year: vn_year(Utc::now()),

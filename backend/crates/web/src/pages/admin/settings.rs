@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use application::{
     authz::Actor,
     outputs::{SettingDto, SettingGroupDto},
-    settings::{SettingGroup, SettingKind, SETTINGS},
+    settings::{SettingGroup, SettingKind, BRAND_DESCRIPTION, BRAND_NAME, SETTINGS},
 };
 use axum::{extract::State, http::StatusCode, response::Response};
 use chrono::{DateTime, Utc};
@@ -32,6 +32,7 @@ use crate::{
         listing::with_query,
         see_other,
     },
+    views::SiteConfig,
 };
 
 /// The form's own fields; every other field is a setting's key.
@@ -56,7 +57,7 @@ pub struct SettingView {
     pub key: &'static str,
     /// The key as an element id (`jobs-open_days`).
     pub id: String,
-    /// `number`, `switch`, `phone`, `url` or `email`.
+    /// `number`, `switch`, `phone`, `url`, `email` or `text`.
     pub kind: &'static str,
     pub label: String,
     pub hint: String,
@@ -106,6 +107,7 @@ pub struct SettingsPage {
 
 const fn group_icon(group: SettingGroup) -> &'static str {
     match group {
+        SettingGroup::Brand => "fa-id-badge",
         SettingGroup::Support => "fa-headset",
         SettingGroup::Access => "fa-door-open",
         SettingGroup::Jobs => "fa-bullhorn",
@@ -131,8 +133,23 @@ fn shown_value(locale: &Locale, kind: &str, value: &str) -> String {
     }
 }
 
+/// What the pages show while a `brand.*` setting is empty: the
+/// deployment's own name and description. `None` for any other key (empty:
+/// not shown).
+fn deployment_default(locale: &Locale, site: &SiteConfig, key: &str) -> Option<String> {
+    match key {
+        BRAND_NAME => Some(site.name.clone()),
+        BRAND_DESCRIPTION => Some(
+            site.description
+                .clone()
+                .unwrap_or_else(|| locale.text("site.description")),
+        ),
+        _ => None,
+    }
+}
+
 /// The words of a setting's default and bounds.
-fn default_line(locale: &Locale, s: &SettingDto) -> String {
+fn default_line(locale: &Locale, site: &SiteConfig, s: &SettingDto) -> String {
     match (s.kind, s.min, s.max) {
         ("number", Some(min), Some(max)) => locale.text_with(
             "settings.default_number",
@@ -142,7 +159,10 @@ fn default_line(locale: &Locale, s: &SettingDto) -> String {
             "settings.default_switch",
             &[("value", &switch_word(locale, &s.default))],
         ),
-        _ => locale.text("settings.default_empty"),
+        _ => match deployment_default(locale, site, s.key) {
+            Some(value) => locale.text_with("settings.default_deployment", &[("value", &value)]),
+            None => locale.text("settings.default_empty"),
+        },
     }
 }
 
@@ -154,6 +174,7 @@ fn label_of(locale: &Locale, key: &str) -> String {
 /// values and messages) shows its form as it was sent.
 fn group_view(
     locale: &Locale,
+    site: &SiteConfig,
     group: SettingGroup,
     stored: &SettingGroupDto,
     typed: Option<(&HashMap<String, String>, &FormErrors)>,
@@ -180,7 +201,7 @@ fn group_view(
                 value,
                 min: s.min,
                 max: s.max,
-                default_line: default_line(locale, s),
+                default_line: default_line(locale, site, s),
                 changed_on: s.changed_on,
                 error: typed.and_then(|(_, errors)| errors.fields.get(s.key).cloned()),
             }
@@ -193,7 +214,8 @@ fn group_view(
         .map(|s| ResetLine {
             label: label_of(locale, s.key),
             current: shown_value(locale, s.kind, &s.value),
-            default: shown_value(locale, s.kind, &s.default),
+            default: deployment_default(locale, site, s.key)
+                .unwrap_or_else(|| shown_value(locale, s.kind, &s.default)),
         })
         .collect();
     GroupView {
@@ -255,7 +277,7 @@ async fn page(state: &AppState, actor: &Actor, view: View<'_>) -> Result<Respons
     let action = url("admin_settings", &[])?;
     let body = SettingsPage {
         tabs: tabs(locale, &stored, view.group)?,
-        group: group_view(locale, view.group, current, view.typed),
+        group: group_view(locale, state.views.site(), view.group, current, view.typed),
         action: action.clone(),
         flash_text: view.flash.and_then(|f| match f {
             Flash::SettingsSaved => Some(locale.text("admin.saved")),
@@ -285,7 +307,7 @@ pub async fn show(
         return see_other(&url("login", &[])?);
     };
     let view = View {
-        group: SettingGroup::parse(&q.tab).unwrap_or(SettingGroup::Support),
+        group: SettingGroup::parse(&q.tab).unwrap_or(SettingGroup::ALL[0]),
         typed: None,
         flash: flash.0,
         status: StatusCode::OK,

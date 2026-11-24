@@ -22,7 +22,7 @@ account_locked                 = "Tài khoản tạm khoá do đăng nhập sai 
 account_deactivated            = "Tài khoản đã bị vô hiệu hoá. Vui lòng liên hệ hỗ trợ."
 account_has_no_role            = "Tài khoản chưa được cấp quyền truy cập."
 permission_denied              = "Bạn không có quyền thực hiện thao tác này."
-cross_origin_request           = "Yêu cầu bị từ chối vì không gửi từ trang của Agri-Connect."
+cross_origin_request           = "Yêu cầu bị từ chối vì không gửi từ trang của chúng tôi."
 cannot_change_own_account      = "Bạn không thể tự đổi vai trò hoặc khoá tài khoản của chính mình."
 cannot_revoke_own_access       = "Không thể bỏ quyền quản lý phân quyền khỏi vai trò của chính bạn."
 admin_already_exists           = "Đã có tài khoản quản trị. Vui lòng đăng nhập."
@@ -592,7 +592,7 @@ count = "{count} đánh giá"
 title               = "Đánh giá"
 stars               = "{count} trên 5 sao"
 write               = "Viết đánh giá"
-who                 = "Chỉ người đã gửi yêu cầu liên hệ qua Agri-Connect và được nhà cung cấp liên hệ lại mới đánh giá được."
+who                 = "Chỉ người đã gửi yêu cầu liên hệ qua {site} và được nhà cung cấp liên hệ lại mới đánh giá được."
 rating              = "Mấy sao?"
 phone               = "Số điện thoại đã gửi yêu cầu"
 phone_hint          = "Số không hiện ra công khai."
@@ -603,7 +603,7 @@ sent                = "Cảm ơn bạn! Đánh giá sẽ hiện ra sau khi đư�
 none                = "Chưa có đánh giá nào."
 after_contact       = "Sau khi nhà cung cấp gọi lại và làm xong việc, bạn có thể đánh giá họ bằng số điện thoại vừa gửi."
 ask                 = "Gửi link đánh giá"
-ask_text            = "Bà con đã mướn {name} qua Agri-Connect, mời bà con đánh giá giúp:"
+ask_text            = "Bà con đã mướn {name} qua {site}, mời bà con đánh giá giúp:"
 reply_from          = "{name} trả lời:"
 waiting             = "Chờ duyệt"
 waiting_count       = "{count} đánh giá chờ duyệt"
@@ -613,7 +613,7 @@ your_reply          = "Trả lời công khai"
 reply_placeholder   = "Cảm ơn bà con, lần sau…"
 save_reply          = "Lưu câu trả lời"
 none_own            = "Chưa có đánh giá"
-none_own_hint       = "Bà con đã liên hệ qua Agri-Connect có thể đánh giá bạn."
+none_own_hint       = "Bà con đã liên hệ qua {site} có thể đánh giá bạn."
 
 [text.demand]
 title         = "Nhu cầu theo loại và tuần"
@@ -745,7 +745,7 @@ sponsored_removed        = "Đã thôi tài trợ nhà cung cấp."
 
 [text.partner_area]
 title        = "Báo cáo nhu cầu"
-no_contracts = "Chưa có hợp đồng nào đang hiệu lực. Liên hệ Agri-Connect để gia hạn."
+no_contracts = "Chưa có hợp đồng nào đang hiệu lực. Liên hệ {site} để gia hạn."
 tag          = "Tài trợ"
 
 [text.search]
@@ -1584,6 +1584,7 @@ sub                = "Đổi là có hiệu lực ngay ở lần mở trang kế
 default_number     = "Mặc định {value}, từ {min} đến {max}."
 default_switch     = "Mặc định: {value}."
 default_empty      = "Để trống thì không hiện."
+default_deployment = "Để trống: dùng «{value}»."
 on                 = "bật"
 off                = "tắt"
 changed_count      = "{count} mục đã đổi"
@@ -1600,6 +1601,8 @@ url_placeholder    = "https://zalo.me/0912345678"
 email_placeholder  = "hotro@vidu.vn"
 
 [text.settings.group]
+brand        = "Nhận diện"
+brand_sub    = "Tên và lời giới thiệu của nền tảng: ở thanh trên cùng, tiêu đề mọi trang, kết quả tìm kiếm Google và email gửi đi."
 support      = "Liên hệ hỗ trợ"
 support_sub  = "Đường dây của nền tảng ở chân mọi trang (không phải của nhà cung cấp)."
 access       = "Đăng ký và nhận tin"
@@ -1610,6 +1613,12 @@ listings     = "Gian hàng và đánh giá"
 listings_sub = "Mỗi nhà cung cấp đăng được bao nhiêu; khi nào một đánh giá đáng ngờ."
 market       = "Thị trường và đối tác"
 market_sub   = "Những con số dùng để bán cho đối tác."
+
+[text.settings.key.brand]
+name             = "Tên ứng dụng"
+name_hint        = "Ngắn để vừa thanh trên cùng của điện thoại. Chỉ một dòng chữ."
+description      = "Lời giới thiệu"
+description_hint = "Một câu Google hiện dưới tên trang chủ."
 
 [text.settings.key.support]
 phone         = "Số điện thoại hỗ trợ"

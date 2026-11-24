@@ -46,7 +46,7 @@
       {% if c.sponsored %}<p class="small text-muted mb-0">{{ t(key="partner.sponsored") }}: {% for s in c.sponsored %}{{ s.name }}{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
     </div>
     {% else %}
-    <p class="small text-muted">{{ t(key="partner_area.no_contracts") }}</p>
+    <p class="small text-muted">{{ t(key="partner_area.no_contracts", site=site.name) }}</p>
     {% endfor %}
   </section>
 </div>

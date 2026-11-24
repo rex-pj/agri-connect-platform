@@ -71,6 +71,12 @@ pub const USERNAME_MAX_LEN: usize = 50;
 pub const FULL_NAME_MAX: usize = 200;
 /// `users.email` is VARCHAR(255).
 pub const EMAIL_MAX: usize = 255;
+/// The platform's name (`brand.name`): it sits beside the logo in a phone's
+/// top bar, so it stays short.
+pub const SITE_NAME_MAX: usize = 40;
+/// The platform's one-line description (`brand.description`): the meta
+/// description search engines show, which they cut near 160.
+pub const SITE_DESCRIPTION_MAX: usize = 160;
 /// Counted in characters, so a Vietnamese password is not penalised for its
 /// multi-byte letters.
 pub const PASSWORD_MIN_CHARS: usize = 8;

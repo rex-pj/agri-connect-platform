@@ -242,6 +242,7 @@ fn email_texts(locale: &Locale, site_name: &str) -> EmailTexts {
 fn email_service(
     app_url: String,
     texts: EmailTexts,
+    settings: SettingsReader,
 ) -> Result<Arc<dyn EmailService>, StartupError> {
     let Some(host) = optional_env("SMTP_HOST") else {
         if is_production() {
@@ -285,6 +286,7 @@ fn email_service(
         from,
         app_url,
         texts,
+        settings,
     })?))
 }
 
@@ -817,11 +819,14 @@ async fn prepared_state() -> Result<(AppState, String), StartupError> {
     let locales = Arc::new(Locales::load()?);
     // Emails go out in the default language: whom they reach has not chosen one.
     let texts = email_texts(locales.get(Lang::DEFAULT), &site.name);
+    // Emails are signed with the name an admin chose, read on the primary
+    // like every other setting.
+    let settings = SettingsReader::new(Arc::new(SettingRepository::new(Arc::clone(&dbs.primary))));
     let state = build_state(Wiring {
-        dbs,
         token_service,
         password_hasher: Arc::new(BcryptPasswordHasher::default()),
-        email: email_service(app_url.clone(), texts)?,
+        email: email_service(app_url.clone(), texts, settings)?,
+        dbs,
         views: views(site, locales)?,
         uploads: uploads()?,
         zalo: zalo_gateway()?,

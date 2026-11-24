@@ -3809,6 +3809,95 @@ ac-geolocate {
   margin-top: 0;
   margin-left: -2.25rem;
 }
+/* A feature's row on the settings' features tab: its name and what it is,
+   three choices side by side (each a tap target with its line under it,
+   the chosen one filled: on green, preview blue, off grey), then where it
+   shows. Rows are split by a hairline. */
+.feature-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0 0 16px;
+  border: 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.feature-row__title {
+  float: none;
+  margin: 0;
+  font-size: var(--fs-base);
+  font-weight: 700;
+}
+.feature-row__title .fa-solid {
+  width: 1.25em;
+  color: var(--p700);
+}
+.feature-row__what {
+  margin: 0;
+  color: var(--text2);
+}
+.feature-row__stages {
+  width: 100%;
+}
+.feature-row__stage {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 56px;
+  border: 1px solid var(--border);
+  color: var(--text);
+  line-height: 1.25;
+}
+.feature-row__stage-hint {
+  font-size: var(--fs-2xs);
+  font-weight: 400;
+  opacity: 0.85;
+}
+.btn-check:checked + .feature-row__stage--on {
+  border-color: var(--p700);
+  background: var(--p700);
+  color: #fff;
+}
+.btn-check:checked + .feature-row__stage--preview {
+  border-color: var(--bs-primary);
+  background: var(--bs-primary);
+  color: #fff;
+}
+.btn-check:checked + .feature-row__stage--off {
+  border-color: var(--bs-secondary);
+  background: var(--bs-secondary);
+  color: #fff;
+}
+/* Phones under 400 px: the choices' lines would wrap to four; the
+   choice's word is enough there. */
+@media (max-width: 399.98px) {
+  .feature-row__stage-hint {
+    display: none;
+  }
+}
+/* A page of a feature in preview, seen by an admin (layouts/app.html):
+   under the top bar, saying farmers do not see it yet. */
+.preview-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 12px;
+  padding: 8px 16px;
+  background: var(--bs-primary-bg-subtle);
+  color: var(--bs-primary-text-emphasis);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+.preview-strip a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: inherit;
+  font-weight: 600;
+}
 /* The one provider a list is narrowed to (molecules/admin_filter). */
 .admin-filter {
   display: flex;

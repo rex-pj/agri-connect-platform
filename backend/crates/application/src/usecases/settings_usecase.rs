@@ -311,6 +311,7 @@ fn setting_dto(state: &SettingState) -> SettingDto {
     let (kind, min, max) = match state.def.kind {
         SettingKind::Number { min, max, .. } => ("number", Some(min), Some(max)),
         SettingKind::Switch { .. } => ("switch", None, None),
+        SettingKind::Stage { .. } => ("stage", None, None),
         SettingKind::Text(TextRule::Phone) => ("phone", None, None),
         SettingKind::Text(TextRule::HttpsUrl) => ("url", None, None),
         SettingKind::Text(TextRule::Email) => ("email", None, None),

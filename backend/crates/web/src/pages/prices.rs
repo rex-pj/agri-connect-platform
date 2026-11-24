@@ -22,6 +22,7 @@ use std::collections::HashMap;
 
 use application::{
     constants::PRICE_TREND_DAYS,
+    features::Feature,
     outputs::{CommodityDto, CropBoardDto, NamedDto, PriceQuoteDto, PriceTrendDto},
 };
 use axum::{extract::State, http::HeaderMap, response::Response};
@@ -226,7 +227,8 @@ pub struct PriceSection {
     pub title: String,
     pub icon: String,
     pub crops: Vec<CropCard>,
-    pub supplies_href: String,
+    /// `None` while supplies are hidden from this visitor.
+    pub supplies_href: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -259,9 +261,11 @@ fn url(name: &str) -> Result<String, Error> {
     routes::url(name, &[]).map_err(|e| Error::internal(format!("price links: {e}")))
 }
 
-/// The produce of `group` as cards; `None` when there is none.
+/// The produce of `group` as cards; `None` when there is none. `supplies`:
+/// the visitor sees supplies (the way to those for it).
 fn section(
     state: &AppState,
+    supplies: bool,
     group: &CommodityDto,
     crops: &[CropBoardDto],
     trends: &Trends,
@@ -313,7 +317,13 @@ fn section(
         title: group.name.clone(),
         icon: group.icon.clone().unwrap_or_else(|| "fa-tag".to_owned()),
         crops: cards,
-        supplies_href: with_query(&url("products")?, &[("commodity", &group.id.to_string())]),
+        supplies_href: match supplies {
+            true => Some(with_query(
+                &url("products")?,
+                &[("commodity", &group.id.to_string())],
+            )),
+            false => None,
+        },
     }))
 }
 
@@ -411,7 +421,15 @@ pub async fn show(
         .iter()
         .filter(|g| commodity.is_none_or(|id| id == g.id))
     {
-        sections.extend(section(&state, g, &board.crops, &trends, board.today)?);
+        let supplies = shell.shows(Feature::Supplies);
+        sections.extend(section(
+            &state,
+            supplies,
+            g,
+            &board.crops,
+            &trends,
+            board.today,
+        )?);
     }
     let chips = commodity_chips(&state, &board.commodities, commodity)?;
     let sector_name = shell

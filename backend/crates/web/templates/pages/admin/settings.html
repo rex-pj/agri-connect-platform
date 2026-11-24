@@ -162,6 +162,25 @@
         <div class="form-text" id="{{ s.id }}-hint">{{ hint }}</div>
         {% if s.error %}<div class="invalid-feedback d-block" id="{{ s.id }}-error">{{ s.error }}</div>{% endif %}
       </div>
+      {% elif s.kind == "stage" %}
+      {#- A feature: what it is, where it shows, then three radio buttons
+          (Bootstrap `btn-check`, so without JS too), each with its line;
+          in preview, the way to try its page. -#}
+      {% set fv = s.feature %}
+      <fieldset class="feature-row" aria-describedby="{{ s.id }}-hint">
+        <legend class="feature-row__title">{{ atoms::icon(name=fv.icon) }} {{ s.label }}</legend>
+        <p class="feature-row__what">{{ s.hint }}</p>
+        <div class="btn-group feature-row__stages" role="group">
+          {% for o in fv.stages %}
+          <input type="radio" class="btn-check" name="{{ s.key }}" id="{{ s.id }}-{{ o.value }}" value="{{ o.value }}" autocomplete="off"{% if o.checked %} checked{% endif %}>
+          <label class="btn feature-row__stage feature-row__stage--{{ o.value }}" for="{{ s.id }}-{{ o.value }}"><span class="fw-semibold">{{ o.label }}</span><span class="feature-row__stage-hint">{{ o.hint }}</span></label>
+          {% endfor %}
+        </div>
+        <p class="form-text mb-0" id="{{ s.id }}-hint"><span class="fw-semibold">{{ t(key="settings.where") }}</span> {{ fv.where_line }}</p>
+        <p class="form-text mb-0">{{ s.default_line }}{% if s.changed_on %}{% set when = s.changed_on | vn_datetime %} {{ t(key="settings.changed_on", when=when) }}{% endif %}</p>
+        {% if s.error %}<div class="invalid-feedback d-block">{{ s.error }}</div>{% endif %}
+        {% if fv.preview_href %}<a class="btn btn-outline-secondary btn-sm align-self-start" href="{{ fv.preview_href }}" target="_blank" rel="noopener">{{ atoms::icon(name="fa-up-right-from-square") }} {{ t(key="settings.preview_open") }}</a>{% endif %}
+      </fieldset>
       {% elif s.kind == "number" %}
       {{ field::input(id=s.id, name=s.key, label=s.label, value=s.value, type="number", inputmode="numeric", min=s.min, max=s.max, error=s.error | default(value=""), hint=hint) }}
       {% elif s.kind == "phone" %}

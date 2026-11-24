@@ -50,7 +50,7 @@
   <div class="list-block">
   <div class="list-head d-flex flex-wrap align-items-center justify-content-between gap-2">
     <h2 class="section-title mb-0">{{ atoms::icon(name=s.icon, class="text-success me-1") }}{{ s.title }}</h2>
-    <a class="btn btn-outline-success btn-sm" href="{{ s.supplies_href }}">{{ atoms::icon(name="fa-bag-shopping", class="me-1") }}{{ t(key="prices.supplies_for", name=s.title) }}</a>
+    {% if s.supplies_href %}<a class="btn btn-outline-success btn-sm" href="{{ s.supplies_href }}">{{ atoms::icon(name="fa-bag-shopping", class="me-1") }}{{ t(key="prices.supplies_for", name=s.title) }}</a>{% endif %}
   </div>
   <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
     {% for c in s.crops %}

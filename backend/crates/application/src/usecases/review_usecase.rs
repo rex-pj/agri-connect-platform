@@ -29,6 +29,7 @@ use crate::{
         PAGE_SIZE, PUBLIC_REVIEWS_SHOWN, RATING_MAX, RATING_MIN, REQUESTER_NAME_MAX_LEN,
         REVIEW_COMMENT_MAX, REVIEW_REPLY_MAX,
     },
+    features::Feature,
     hashing::sha256_hex,
     inputs::ReviewInput,
     outputs::{
@@ -36,6 +37,7 @@ use crate::{
     },
     pagination::{paginate_public, total_or_count},
     ports::EventBus,
+    settings::SettingsReader,
     validation::{max_chars, max_chars_opt, non_blank, validate_phone},
 };
 
@@ -45,6 +47,8 @@ pub struct ReviewUseCase {
     inquiry_repo: Arc<dyn InquiryRepositoryTrait + Send + Sync>,
     business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
     events: Arc<dyn EventBus>,
+    /// Whether reviews are open (`features::Feature::Reviews`).
+    settings: SettingsReader,
 }
 
 /// Everything `ReviewUseCase` depends on, named so wiring cannot swap two
@@ -54,6 +58,7 @@ pub struct ReviewDeps {
     pub inquiry_repo: Arc<dyn InquiryRepositoryTrait + Send + Sync>,
     pub business_repo: Arc<dyn BusinessRepositoryTrait + Send + Sync>,
     pub events: Arc<dyn EventBus>,
+    pub settings: SettingsReader,
 }
 
 impl ReviewUseCase {
@@ -63,6 +68,7 @@ impl ReviewUseCase {
             inquiry_repo: d.inquiry_repo,
             business_repo: d.business_repo,
             events: d.events,
+            settings: d.settings,
         }
     }
 
@@ -82,6 +88,9 @@ impl ReviewUseCase {
     /// nobody typing a number learns whether it contacted this provider or
     /// reviewed it already. The page tells farmers the rule beforehand.
     pub async fn submit(&self, input: ReviewInput) -> Result<ReviewSentDto> {
+        if !self.settings.load().await?.is_open(Feature::Reviews) {
+            return Err(Error::new(ErrorCode::FeatureOff));
+        }
         let sent = ReviewSentDto { is_visible: false };
         let business_id = self.live_provider(input.business_id).await?;
         let reviewer_name = input.reviewer_name.trim().to_owned();

@@ -9,9 +9,13 @@ use std::sync::Arc;
 
 use application::{
     authz::Actor,
-    catalogue::{PERM_ADMIN_DASHBOARD_VIEW, PERM_OWN_LISTING_CREATE, PERM_PARTNER_REPORT_READ},
+    catalogue::{
+        PERM_ADMIN_DASHBOARD_VIEW, PERM_FEATURE_PREVIEW, PERM_OWN_LISTING_CREATE,
+        PERM_PARTNER_REPORT_READ,
+    },
+    features::{Feature, FeaturesShown, Stage},
     outputs::CodedDto,
-    settings::Settings,
+    settings::{SettingGroup, Settings},
 };
 use axum::{
     extract::FromRequestParts,
@@ -23,6 +27,7 @@ use serde::Serialize;
 use crate::{
     app_state::AppState,
     cookies::request_cookie,
+    features::feature_of,
     labels::sector_options,
     locale::{Lang, Locale, Locales},
     middleware::{
@@ -94,11 +99,19 @@ pub struct Shell {
     /// marked; none while no sector is shown.
     pub sectors: Vec<SectorChoice>,
     /// The platform's own help lines in the footer (the `support.*`
-    /// settings); empty on error pages, which do not read the settings.
+    /// settings); empty when the settings could not be read.
     pub support: SupportLines,
-    /// Farmers may post jobs (`access.job_posts_open`): the ways to the job
-    /// form show.
-    pub job_posts_open: bool,
+    /// The features this viewer sees (`application::features`): a way in
+    /// to a hidden one is not drawn. Templates read `shell.features.<code>`;
+    /// page code `Shell::shows` and `Shell::shows_href`.
+    pub features: FeaturesShown,
+    /// This page is a feature in preview, seen by an admin: the strip
+    /// under the top bar says farmers do not see it yet and links here,
+    /// the settings' features tab.
+    pub preview: Option<String>,
+    /// The viewer holds `feature.preview`.
+    #[serde(skip)]
+    may_preview: bool,
 }
 
 /// The footer's help lines; one not set is not shown.
@@ -341,6 +354,7 @@ fn section_of(route: &str, href: &str) -> String {
 impl Shell {
     pub fn new(locale: &Locale, path: &str, query: Option<&str>, actor: Option<&Actor>) -> Self {
         let mut shell = Self::without_session(locale, path, query);
+        shell.may_preview = actor.is_some_and(|a| a.can(PERM_FEATURE_PREVIEW));
         shell.tabs = tabs(locale, path, area_tab(actor));
         shell.provider_cta = provider_cta(locale, actor);
         shell.profile = Some(match actor {
@@ -369,11 +383,25 @@ impl Shell {
         shell
     }
 
-    /// What the settings change in the frame: the footer's help lines, and
-    /// no invitation to sign up while sign-ups are closed.
+    /// What the settings change in the frame: the footer's help lines, no
+    /// tab to a feature this viewer does not see (the footer's browse links
+    /// are the tabs), the preview strip, and no invitation to sign up while
+    /// sign-ups are closed.
     pub fn apply_settings(&mut self, settings: &Settings) {
         self.support = SupportLines::of(settings);
-        self.job_posts_open = settings.job_posts_open();
+        self.features = settings.features_shown(self.may_preview);
+        let features = self.features;
+        self.tabs.retain(|t| shown_href(features, &t.link.href));
+        let (path, query) = self.here.split_once('?').unwrap_or((&self.here, ""));
+        self.preview = feature_of(path, Some(query))
+            .is_some_and(|f| settings.stage(f) == Stage::Preview && features.has(f))
+            .then(|| {
+                format!(
+                    "{}?tab={}",
+                    url("admin_settings"),
+                    SettingGroup::Features.code()
+                )
+            });
         if !settings.registration_open() {
             let register = url("register");
             if let Some(menu) = self.profile.as_mut() {
@@ -387,6 +415,17 @@ impl Shell {
                 self.provider_cta = None;
             }
         }
+    }
+
+    /// This viewer sees `feature`.
+    pub fn shows(&self, feature: Feature) -> bool {
+        self.features.has(feature)
+    }
+
+    /// A link to `href` may be drawn for this viewer: it leads to no
+    /// feature it does not see.
+    pub fn shows_href(&self, href: &str) -> bool {
+        shown_href(self.features, href)
     }
 
     /// For error pages: the frame and the generic account tab, no menu.
@@ -409,7 +448,9 @@ impl Shell {
             sector: None,
             sectors: Vec::new(),
             support: SupportLines::default(),
-            job_posts_open: true,
+            features: FeaturesShown::ALL,
+            preview: None,
+            may_preview: false,
             tabs: tabs(locale, path, area_of(None)),
             profile: None,
             provider_cta: None,
@@ -417,6 +458,13 @@ impl Shell {
             search_url,
         }
     }
+}
+
+/// `href` (a path, maybe with its query) leads to no feature hidden from
+/// whoever sees `features`.
+fn shown_href(features: FeaturesShown, href: &str) -> bool {
+    let (path, query) = href.split_once('?').unwrap_or((href, ""));
+    feature_of(path, Some(query)).is_none_or(|f| features.has(f))
 }
 
 fn tabs(locale: &Locale, path: &str, area: Dest) -> Vec<Tab> {

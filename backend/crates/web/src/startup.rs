@@ -717,6 +717,7 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
             inquiry_repo: inquiry_repo.clone(),
             business_repo: business_repo.clone(),
             events: events.clone(),
+            settings: settings.clone(),
         }),
         provider_dashboard: ProviderDashboardUseCase::new(ProviderDashboardDeps {
             business_repo: business_repo.clone(),

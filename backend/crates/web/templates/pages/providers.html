@@ -27,7 +27,7 @@
   <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
     {% for p in page.providers | slice(end=3) %}<div class="col">{{ cards::provider_card(p=p) }}</div>{% endfor %}
   </div>
-  <div class="list-break">{{ geo::geo_cta(href=page.near_href, title=t(key="geo.title_shops"), sub=page.geo_sub) }}</div>
+  {% if shell.features.near_me %}<div class="list-break">{{ geo::geo_cta(href=page.near_href, title=t(key="geo.title_shops"), sub=page.geo_sub) }}</div>{% endif %}
   {% if page.providers | length > 3 %}
   <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
     {% for p in page.providers | slice(start=3) %}<div class="col">{{ cards::provider_card(p=p) }}</div>{% endfor %}

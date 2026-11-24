@@ -184,6 +184,10 @@ pub async fn render_errors(State(state): State<AppState>, req: Request, next: Ne
                         None => Shell::without_session(locale, &path, query.as_deref()),
                     };
                     shell.language_offer = language_offer;
+                    // The frame as on any page: no tab to a hidden feature.
+                    if let Some(settings) = crate::middleware::page_settings::current() {
+                        shell.apply_settings(&settings);
+                    }
                     views::render_page_status(&state, &shell, status, template, &page)
                 }
             })

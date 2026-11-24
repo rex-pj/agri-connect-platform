@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use application::{
     authz::Actor,
     constants::{ICON_MIN_SIDE, SITE_DESCRIPTION_ADVISED_MIN},
+    features::{Feature, Stage},
     outputs::{SettingDto, SettingGroupDto},
     settings::{
         SettingGroup, SettingKind, BRAND_DESCRIPTION, BRAND_ICON, BRAND_LOGO, BRAND_NAME, SETTINGS,
@@ -27,6 +28,7 @@ use crate::{
     app_state::AppState,
     cookies::{Flash, TakeFlash},
     extract::{ApiForm, ApiMultipart, ApiQuery},
+    features,
     locale::Locale,
     middleware::auth::Viewer,
     pages::{
@@ -48,6 +50,8 @@ const ACTION_RESET: &str = "reset";
 const PARAM_TAB: &str = "tab";
 /// `SettingDto.kind` of an uploaded image (the logo, the browser icon).
 const KIND_IMAGE: &str = "image";
+/// `SettingDto.kind` of a feature's stage.
+const KIND_STAGE: &str = "stage";
 const MEBIBYTE: usize = 1024 * 1024;
 
 /// The removal form's field: which image setting.
@@ -110,6 +114,29 @@ pub struct SettingView {
     pub default_line: String,
     pub changed_on: Option<DateTime<Utc>>,
     pub error: Option<String>,
+    /// A feature's stage (`kind` `stage`): its icon, where it shows, the
+    /// three choices and, while in preview, the way to try its page.
+    pub feature: Option<FeatureView>,
+}
+
+/// What a feature's row shows beside its three choices.
+#[derive(Debug, Serialize)]
+pub struct FeatureView {
+    pub icon: &'static str,
+    /// "Hiện ở: …": every way in that is hidden with it.
+    pub where_line: String,
+    pub stages: Vec<StageChoice>,
+    /// Its page, while it is in preview as stored: open it to try it.
+    pub preview_href: Option<String>,
+}
+
+/// One of a feature's three choices, a radio button.
+#[derive(Debug, Serialize)]
+pub struct StageChoice {
+    pub value: &'static str,
+    pub label: String,
+    pub hint: String,
+    pub checked: bool,
 }
 
 /// A line of the reset card: what goes back to what.
@@ -159,7 +186,7 @@ const fn group_icon(group: SettingGroup) -> &'static str {
     match group {
         SettingGroup::Brand => "fa-id-badge",
         SettingGroup::Support => "fa-headset",
-        SettingGroup::Access => "fa-door-open",
+        SettingGroup::Features => "fa-toggle-on",
         SettingGroup::Jobs => "fa-bullhorn",
         SettingGroup::Listings => "fa-store",
         SettingGroup::Market => "fa-chart-column",
@@ -174,10 +201,40 @@ fn switch_word(locale: &Locale, value: &str) -> String {
     })
 }
 
+/// A stage (`on`, `preview`, `off`) as the page words it.
+fn stage_word(locale: &Locale, value: &str) -> String {
+    locale.text(&format!("settings.stage.{value}"))
+}
+
+/// A feature's row on the features tab: `stored` its stage as saved,
+/// `value` as shown (typed, when the form came back).
+fn feature_view(locale: &Locale, key: &str, stored: &str, value: &str) -> Option<FeatureView> {
+    let feature = Feature::of_key(key)?;
+    let preview_href = (stored == Stage::Preview.code())
+        .then(|| features::page_route(feature))
+        .flatten()
+        .and_then(|route| url(route, &[]).ok());
+    Some(FeatureView {
+        icon: feature.icon(),
+        where_line: locale.text(&format!("settings.key.{key}_where")),
+        stages: Stage::ALL
+            .iter()
+            .map(|s| StageChoice {
+                value: s.code(),
+                label: stage_word(locale, s.code()),
+                hint: locale.text(&format!("settings.stage_hint.{}", s.code())),
+                checked: s.code() == value,
+            })
+            .collect(),
+        preview_href,
+    })
+}
+
 /// A value as the page words it: a switch on / off, an empty text "empty".
 fn shown_value(locale: &Locale, kind: &str, value: &str) -> String {
     match (kind, value) {
         ("switch", v) => switch_word(locale, v),
+        (KIND_STAGE, v) => stage_word(locale, v),
         (_, "") => locale.text("settings.empty"),
         (_, v) => v.to_owned(),
     }
@@ -208,6 +265,10 @@ fn default_line(locale: &Locale, site: &SiteConfig, s: &SettingDto) -> String {
         ("switch", _, _) => locale.text_with(
             "settings.default_switch",
             &[("value", &switch_word(locale, &s.default))],
+        ),
+        (KIND_STAGE, _, _) => locale.text_with(
+            "settings.default_stage",
+            &[("value", &stage_word(locale, &s.default))],
         ),
         _ => match deployment_default(locale, site, s.key) {
             Some(value) => locale.text_with("settings.default_deployment", &[("value", &value)]),
@@ -269,6 +330,7 @@ fn group_view(
                 None => None,
             });
             let value = typed_value.unwrap_or_else(|| s.value.clone());
+            let feature = feature_view(locale, s.key, &s.value, &value);
             SettingView {
                 key: s.key,
                 id: s.key.replace('.', "-"),
@@ -282,6 +344,7 @@ fn group_view(
                 default_line: default_line(locale, site, s),
                 changed_on: s.changed_on,
                 error: typed.and_then(|(_, errors)| errors.fields.get(s.key).cloned()),
+                feature,
             }
         })
         .collect();

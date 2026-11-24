@@ -16,6 +16,7 @@ use application::{
         PERM_OWN_SERVICE_DELETE, PERM_OWN_SERVICE_UPDATE,
     },
     constants::CALL_STATS_DAYS,
+    features::Feature,
     outputs::{
         CategoryDto, CommodityDto, ProviderProductDto, ProviderProfileDto, ProviderServiceDto,
     },
@@ -192,7 +193,9 @@ async fn dashboard_page(
     let products_max = settings.products_per_business();
     let full = service_rows.len() as u64 >= services_max;
     let products_full = rows.len() as u64 >= products_max;
-    let services_first = !service_rows.is_empty() || rows.is_empty();
+    // Supplies hidden from this provider: no section of them (`shell`).
+    let services_first =
+        !service_rows.is_empty() || rows.is_empty() || !shell.shows(Feature::Supplies);
     let services = ServicesSection {
         can_create: actor.can(PERM_OWN_SERVICE_CREATE) && !full,
         full,
@@ -222,7 +225,7 @@ async fn dashboard_page(
         _ => None,
     };
     let reviews = match &profile {
-        Some(_) => {
+        Some(_) if shell.shows(Feature::Reviews) => {
             let (total, waiting) = state.usecases.review.count_own_reviews(actor).await?;
             Some(ReviewsLink {
                 href: url("provider_reviews", &[])?,
@@ -230,10 +233,10 @@ async fn dashboard_page(
                 waiting,
             })
         }
-        None => None,
+        _ => None,
     };
     let jobs = match (&profile, actor.can(PERM_OWN_JOB_READ)) {
-        (Some(_), true) => Some(JobsLink {
+        (Some(_), true) if shell.shows(Feature::Jobs) => Some(JobsLink {
             href: url("provider_jobs", &[])?,
             open: state.usecases.job.count_own(actor).await?,
         }),

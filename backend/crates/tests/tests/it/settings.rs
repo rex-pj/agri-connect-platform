@@ -328,8 +328,14 @@ async fn closing_the_doors_refuses_sign_ups_and_job_posts() {
     let home = page(&e, "/", None).await;
     assert!(home.contains(r#"href="/register""#) && home.contains(r#"href="/jobs/new""#));
 
-    // Both switches unticked: the browser sends neither.
-    let res = save(&e, &admin, &[("group", "access")]).await;
+    // The sign-up switch unticked (the browser sends nothing), hire
+    // requests off.
+    let res = save(
+        &e,
+        &admin,
+        &[("group", "features"), ("access.job_posts_open", "off")],
+    )
+    .await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
 
     let home = page(&e, "/", None).await;
@@ -361,9 +367,9 @@ async fn closing_the_doors_refuses_sign_ups_and_job_posts() {
     assert_eq!(res.status(), StatusCode::FORBIDDEN);
     assert_eq!(json_body(res).await["code"], "registration_closed");
 
-    let jobs = page(&e, "/jobs/new", None).await;
-    assert!(jobs.contains("Tạm ngưng nhận tin cần mướn"));
-    assert!(!jobs.contains(r#"name="requester_phone""#));
+    // Off, the job pages answer like pages that do not exist.
+    let res = send(&e.router, get_page("/jobs/new", None)).await;
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
     let category = categories_of(&e, "service").await[0].0;
     let area = scalar(&e, "SELECT min(id)::text AS v FROM locations").await;
     let res = send(
@@ -378,17 +384,17 @@ async fn closing_the_doors_refuses_sign_ups_and_job_posts() {
             .unwrap(),
     )
     .await;
-    assert_eq!(res.status(), StatusCode::FORBIDDEN);
-    assert_eq!(json_body(res).await["code"], "job_posts_paused");
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+    assert_eq!(json_body(res).await["code"], "route_not_found");
 
     // Open again: both ways back.
     let res = save(
         &e,
         &admin,
         &[
-            ("group", "access"),
+            ("group", "features"),
             ("access.registration_open", "true"),
-            ("access.job_posts_open", "true"),
+            ("access.job_posts_open", "on"),
         ],
     )
     .await;

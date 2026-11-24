@@ -18,6 +18,7 @@
 
 use crate::{middleware::client_ip::ClientIp, pages::visitor};
 use application::{
+    features::Feature,
     inputs::{BrowseParams, SearchInput, SearchPlace},
     outputs::{BrowseResponse, ProductDto, ServiceBrowseResponse},
 };
@@ -151,6 +152,7 @@ struct Found {
 
 async fn find(
     state: &AppState,
+    shell: &Shell,
     q: &str,
     sector: Option<&str>,
     page_of: impl Fn(Tab) -> i64,
@@ -163,18 +165,34 @@ async fn find(
         sort: ProviderSort::default(),
         page,
     };
+    // A kind of a feature this visitor does not see is not searched: no
+    // result, so no tab, no section.
     let (services, products, providers) = tokio::try_join!(
         explore.browse_services(text(page_of(Tab::Services))),
-        state.usecases.product.browse_products(
-            ProductFilter {
+        async {
+            if !shell.shows(Feature::Supplies) {
+                return Ok(Default::default());
+            }
+            let filter = ProductFilter {
                 name: Some(q.to_owned()),
                 sector: sector.map(str::to_owned),
                 ..ProductFilter::default()
-            },
-            ProductSort::default(),
-            page_of(Tab::Products),
-        ),
-        explore.browse_providers(text(page_of(Tab::Providers))),
+            };
+            let page = page_of(Tab::Products);
+            (state.usecases.product)
+                .browse_products(filter, ProductSort::default(), page)
+                .await
+        },
+        async {
+            match shell.shows(Feature::Directory) {
+                true => {
+                    explore
+                        .browse_providers(text(page_of(Tab::Providers)))
+                        .await
+                }
+                false => Ok(Default::default()),
+            }
+        },
     )?;
     Ok(Found {
         services,
@@ -202,7 +220,7 @@ pub async fn show(
     let found = if q.is_empty() {
         None
     } else {
-        Some(find(&state, &q, sector, page_of).await?)
+        Some(find(&state, &shell, &q, sector, page_of).await?)
     };
     let service_total = found.as_ref().map_or(0, |f| f.services.total);
     let product_total = found.as_ref().map_or(0, |f| f.products.total);
@@ -336,6 +354,7 @@ pub async fn show(
             (
                 rated_services(
                     &state,
+                    &shell,
                     f.services
                         .items
                         .into_iter()
@@ -350,6 +369,7 @@ pub async fn show(
                     .collect(),
                 rated_providers(
                     &state,
+                    &shell,
                     f.providers
                         .items
                         .into_iter()

@@ -23,19 +23,24 @@
 {% block meta %}<meta name="description" content="{% if page.meta_description %}{{ page.meta_description }}{% else %}{{ t(key="provider.meta", name=page.provider.name, area=page.area) }}{% endif %}">{% endblock meta %}
 {% block main %}
 {% set p = page.provider %}
+{#- Each part of a feature this visitor does not see is left out: the
+    directory (back to the services instead), supplies, reviews. -#}
+{% set f = shell.features %}
+{% if f.directory %}{% set back_href = url_for(name="providers") %}{% set back_label = t(key="nav.shops") %}{% else %}{% set back_href = url_for(name="services") %}{% set back_label = t(key="nav.services") %}{% endif %}
+{% if f.reviews %}{% set review_href = "#" ~ page.reviews_anchor %}{% else %}{% set review_href = "" %}{% endif %}
 <div class="detail-page" x-data="dialog" data-open="{% if page.contact.open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
-  {{ hero::detail_hero(title=p.name, share_text=page.share_text, back_href=url_for(name="providers"), back_label=t(key="nav.shops"), manage=page.manage, verified=p.is_verified, address=p.address | default(value="")) }}
+  {{ hero::detail_hero(title=p.name, share_text=page.share_text, back_href=back_href, back_label=back_label, manage=page.manage, verified=p.is_verified, address=p.address | default(value="")) }}
   <div class="detail-layout">
     <div class="detail-layout__aside">
       <section class="detail-card decision-box">
-        {% if page.reviews.count > 0 %}<p class="decision-box__rating">{{ rating::rating_line(r=page.reviews, href="#" ~ page.reviews_anchor) }}</p>{% endif %}
+        {% if f.reviews and page.reviews.count > 0 %}<p class="decision-box__rating">{{ rating::rating_line(r=page.reviews, href=review_href) }}</p>{% endif %}
         <div class="provider-actions">
           {{ call::call_button(phone=p.phone, kind="provider", id=p.id, class="btn btn-success btn-lg btn-call") }}
           {{ zalo::zalo_button(phone=p.phone, kind="provider", id=p.id, class="btn btn-outline-primary btn-lg") }}
           <a class="btn btn-outline-success btn-lg" href="#lien-he" x-on:click.prevent="show">{{ atoms::icon(name="fa-comment-dots") }} {{ t(key="contact.send") }}</a>
         </div>
       </section>
-      {% if page.sent %}{{ sent::contact_sent(review_href="#" ~ page.reviews_anchor) }}{% endif %}
+      {% if page.sent %}{{ sent::contact_sent(review_href=review_href) }}{% endif %}
     </div>
 
     <div class="detail-layout__main">
@@ -58,7 +63,7 @@
       </section>
       {% endif %}
 
-      {% if page.products %}
+      {% if f.supplies and page.products %}
       <section class="detail-card">
         <h2 class="detail-card__title">{{ t(key="provider.products") }}</h2>
         <div class="row row-cols-2 row-cols-md-3 g-2 g-md-3">
@@ -74,6 +79,7 @@
       </section>
       {% endif %}
 
+      {% if f.reviews %}
       {% set r = page.reviews %}
       <section class="detail-card" id="{{ page.reviews_anchor }}" aria-labelledby="reviews-title" x-data="dialog" data-open="{% if page.review.open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
         <div class="detail-card__head">
@@ -98,6 +104,7 @@
         <a class="btn btn-outline-warning btn-lg w-100" href="#danh-gia" x-on:click.prevent="show">{{ atoms::icon(name="fa-star") }} {{ t(key="review.write") }}</a>
         {{ review::review_sheet(provider=p, review=page.review, stars=page.stars, name_max=page.limits.name_max, comment_max=page.review_comment_max, phone_pattern=limits.phone_pattern, site_name=site.name) }}
       </section>
+      {% endif %}
 
       {{ sheet::contact_sheet(provider=p, contact=page.contact, limits=page.limits) }}
     </div>

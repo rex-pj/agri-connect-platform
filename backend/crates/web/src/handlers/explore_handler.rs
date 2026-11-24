@@ -1,4 +1,5 @@
 use application::{
+    catalogue::PERM_FEATURE_PREVIEW,
     constants::RADIUS_DEFAULT_M,
     inputs::{
         BrowseParams, CallInput, ContactInput, GeoSearchParams, SearchInput, SearchPlace, Visitor,
@@ -202,6 +203,19 @@ impl ExploreHandler {
     ) -> Result<impl IntoResponse, Error> {
         let sector = state.usecases.sector.chosen(&q.sector).await?;
         Ok(Json(state.usecases.alert.live(sector.as_deref()).await?))
+    }
+
+    /// GET /api/explore/features — which parts of the platform the caller
+    /// sees (`{ "prices": true, … }` by `Feature::code`): the Zalo Mini App
+    /// shows a tab only for one that is on. A part in preview is shown
+    /// only to a caller with `feature.preview`.
+    pub async fn features(
+        Viewer(viewer): Viewer,
+        State(state): State<AppState>,
+    ) -> Result<impl IntoResponse, Error> {
+        let may_preview = viewer.is_some_and(|a| a.can(PERM_FEATURE_PREVIEW));
+        let settings = state.usecases.settings.current().await?;
+        Ok(Json(settings.features_shown(may_preview)))
     }
 
     /// GET /api/explore/categories?type=product|service

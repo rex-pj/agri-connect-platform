@@ -180,6 +180,7 @@ impl AppRouting {
                 get(ExploreHandler::get_explore_data),
             )
             .route("/api/explore/alerts", get(ExploreHandler::list_alerts))
+            .route("/api/explore/features", get(ExploreHandler::features))
             .route(
                 "/api/explore/categories",
                 get(ExploreHandler::get_categories),
@@ -977,6 +978,13 @@ impl AppRouting {
 
         let request_id = header::HeaderName::from_static(REQUEST_ID_HEADER);
         router
+            // Innermost of these: a feature turned off or in preview
+            // (`features::gate`) answers 404 before any handler, with a
+            // rendered body, after the session is renewed.
+            .layer(middleware::from_fn_with_state(
+                state.clone(),
+                crate::features::gate,
+            ))
             // Errors from every layer above (rate limiter, extractors, fallback)
             // get a rendered body; it sits inside the request span so its log
             // lines carry the request id.

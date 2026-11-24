@@ -41,6 +41,7 @@ pub const PERM_JOB_MODERATE: &str = "job.moderate";
 pub const PERM_ALERT_MANAGE: &str = "alert.manage";
 pub const PERM_SYSTEM_DEMO_MANAGE: &str = "system.demo.manage";
 pub const PERM_SETTING_MANAGE: &str = "setting.manage";
+pub const PERM_FEATURE_PREVIEW: &str = "feature.preview";
 pub const PERM_OWN_PROFILE_UPDATE: &str = "own.profile.update";
 pub const PERM_OWN_LISTING_CREATE: &str = "own.listing.create";
 pub const PERM_OWN_LISTING_UPDATE: &str = "own.listing.update";
@@ -187,6 +188,10 @@ pub static PERMISSIONS: &[PermissionSeed] = &[
     },
     PermissionSeed {
         key: PERM_SETTING_MANAGE,
+        default_roles: ADMIN,
+    },
+    PermissionSeed {
+        key: PERM_FEATURE_PREVIEW,
         default_roles: ADMIN,
     },
     PermissionSeed {

@@ -15,7 +15,8 @@
     near-me banner, the newest crop prices (each crop's, linking to /prices:
     on a phone the only way there, so high on the page), featured services
     (one per verified provider, `page.services_on_phone` of them on a phone),
-    the "post a job" card, then featured products.
+    the "post a job" card, then featured products. A part of a feature
+    this visitor does not see (`shell.features`) is left out.
     `page` is web::pages::home::HomePage. -#}
 {% block title %}{{ site.name }} — {{ t(key="home.title") }}{% endblock title %}
 {% block meta %}<meta name="description" content="{% if site.description %}{{ site.description }}{% else %}{{ t(key="home.meta") }}{% endif %}">{% endblock meta %}
@@ -30,7 +31,7 @@
   {% endfor %}
 </div>
 
-<section class="home-section">{{ geo::geo_cta(href=url_for(name="explore"), sub=t(key="geo.sub_services", km=limits.near_me_km)) }}</section>
+{% if shell.features.near_me %}<section class="home-section">{{ geo::geo_cta(href=url_for(name="explore"), sub=t(key="geo.sub_services", km=limits.near_me_km)) }}</section>{% endif %}
 
 {% if page.prices %}
 <section class="home-section">
@@ -65,6 +66,7 @@
 {% endif %}
 
 {% if not page.products and not page.services %}
-{{ empty::empty_state(icon="fa-seedling", title=t(key="home.empty"), hint=t(key="home.empty_hint"), action_href=url_for(name="explore"), action_icon="fa-location-dot", action_label=t(key="home.empty_action")) }}
+{% if shell.features.near_me %}{{ empty::empty_state(icon="fa-seedling", title=t(key="home.empty"), hint=t(key="home.empty_hint"), action_href=url_for(name="explore"), action_icon="fa-location-dot", action_label=t(key="home.empty_action")) }}
+{% else %}{{ empty::empty_state(icon="fa-seedling", title=t(key="home.empty"), action_href=url_for(name="services"), action_icon="fa-border-all", action_label=t(key="nav.services")) }}{% endif %}
 {% endif %}
 {% endblock main %}

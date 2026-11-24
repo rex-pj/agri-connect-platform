@@ -8,9 +8,13 @@ use std::collections::HashMap;
 
 use application::{
     authz::Actor,
-    catalogue::{PERM_PARTNER_MANAGE, PERM_REPORT_DEMAND_READ, PERM_SYSTEM_DEMO_MANAGE},
+    catalogue::{
+        PERM_PARTNER_MANAGE, PERM_REPORT_DEMAND_READ, PERM_SETTING_MANAGE, PERM_SYSTEM_DEMO_MANAGE,
+    },
     constants::{CALL_STATS_DAYS, NEW_BUSINESS_DAYS},
+    features::{Feature, Stage},
     outputs::{AdminStatsDto, DemandAreaDto, DemandReportDto, DemandWeekDto, Figure},
+    settings::SettingGroup,
 };
 use axum::{extract::State, http::StatusCode, response::Response};
 use domain::Error;
@@ -23,6 +27,7 @@ use crate::{
     middleware::auth::Viewer,
     pages::{
         admin::{demand::area_hrefs, menu_href, render_admin, url},
+        listing::with_query,
         see_other,
     },
 };
@@ -284,6 +289,15 @@ pub struct DashboardPage {
     pub report_href: Option<String>,
     /// Demo businesses still listed; only for those who may remove them.
     pub demo_count: Option<u64>,
+    /// The features not open to farmers (in preview or off), and the
+    /// settings tab that opens them; only for those who may change them.
+    pub features_closed: Option<FeaturesClosed>,
+}
+
+#[derive(Serialize)]
+pub struct FeaturesClosed {
+    pub count: usize,
+    pub href: String,
 }
 
 /// GET /admin
@@ -387,6 +401,21 @@ pub async fn show(
     } else {
         None
     };
+    // So a part left in preview or off is not forgotten.
+    let features_closed = if actor.can(PERM_SETTING_MANAGE) {
+        let settings = state.usecases.settings.current().await?;
+        let count = Feature::ALL
+            .iter()
+            .filter(|f| settings.stage(**f) != Stage::On)
+            .count();
+        let href = with_query(
+            &url("admin_settings", &[])?,
+            &[("tab", SettingGroup::Features.code())],
+        );
+        (count > 0).then_some(FeaturesClosed { count, href })
+    } else {
+        None
+    };
     render_admin(
         &state,
         &actor,
@@ -405,6 +434,7 @@ pub async fn show(
             min_count,
             report_href,
             demo_count,
+            features_closed,
         },
     )
 }

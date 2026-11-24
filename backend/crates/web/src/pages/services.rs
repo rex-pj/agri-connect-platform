@@ -313,7 +313,7 @@ pub async fn list(
             "services.search_placeholder",
         )),
         total: result.total,
-        services: rated_services(&state, result.items).await?,
+        services: rated_services(&state, &shell, result.items).await?,
         tabs: view_tabs(state.locale(), VIEW_SERVICES, &borrowed(&kept))?,
         near_href: near_me_href(VIEW_SERVICES, list.service_id)?,
     };
@@ -377,7 +377,7 @@ pub async fn category(
         filters: None,
         category: Some(category),
         total: result.total,
-        services: rated_services(&state, result.items).await?,
+        services: rated_services(&state, &shell, result.items).await?,
         tabs: view_tabs(
             state.locale(),
             VIEW_SERVICES,

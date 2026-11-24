@@ -8,7 +8,10 @@
 //! The price strip alone follows the area chosen on the price board
 //! (`prices::remembered_area`), and its title then names that area.
 
-use application::outputs::{CategoryDto, ProductDto};
+use application::{
+    features::Feature,
+    outputs::{CategoryDto, ProductDto},
+};
 use axum::{extract::State, http::HeaderMap, response::Response};
 use domain::{
     constants::{CATEGORY_TYPE_PRODUCT, CATEGORY_TYPE_SERVICE},
@@ -126,29 +129,40 @@ pub async fn show(
 ) -> Result<Response, Error> {
     let explore = &state.usecases.explore;
     let area = remembered_area(&headers);
+    // A hidden feature is not read at all: its part of the page is empty,
+    // and an empty part is not drawn.
+    let supplies = shell.shows(Feature::Supplies);
+    let price = &state.usecases.price;
+    let show_prices = shell.shows(Feature::Prices);
+    let highlights = move |area| async move {
+        match show_prices {
+            true => price
+                .highlights(HOME_PRICES_SHOWN, area, None)
+                .await
+                .map(Some),
+            false => Ok(None),
+        }
+    };
     let (featured, service_categories, product_categories, prices, alerts, sectors) = tokio::try_join!(
         explore.get_explore_data(None),
         explore.get_categories(Some(CATEGORY_TYPE_SERVICE)),
-        explore.get_categories(Some(CATEGORY_TYPE_PRODUCT)),
-        state
-            .usecases
-            .price
-            .highlights(HOME_PRICES_SHOWN, area, None),
+        async {
+            match supplies {
+                true => explore.get_categories(Some(CATEGORY_TYPE_PRODUCT)).await,
+                false => Ok(Vec::new()),
+            }
+        },
+        highlights(area),
         state.usecases.alert.live(None),
         state.usecases.sector.named(),
     )?;
     // The visitor's area, named by its prices; none fresh there: every area's.
     let prices_area = area
-        .and_then(|_| prices.quotes.first())
+        .and_then(|_| prices.as_ref()?.quotes.first())
         .map(|q| q.location_label.clone());
-    let prices = if area.is_some() && prices.quotes.is_empty() {
-        state
-            .usecases
-            .price
-            .highlights(HOME_PRICES_SHOWN, None, None)
-            .await?
-    } else {
-        prices
+    let prices = match prices {
+        Some(p) if area.is_some() && p.quotes.is_empty() => highlights(None).await?,
+        other => other,
     };
 
     // Near-me needs no tile: it has a tab and the banner under the rows.
@@ -197,8 +211,8 @@ pub async fn show(
             })
             .collect(),
         rows,
-        // Not offered while job posts are paused (`access.job_posts_open`).
-        job_cta: shell.job_posts_open.then_some(ProviderCta {
+        // Not offered while hire requests are hidden from this visitor.
+        job_cta: shell.shows(Feature::Jobs).then_some(ProviderCta {
             link: Link {
                 href: url("job_new", &[])?,
                 icon: "fa-bullhorn",
@@ -208,18 +222,21 @@ pub async fn show(
             sub: state.locale().text("job.cta_sub"),
         }),
         prices: prices
-            .quotes
-            .into_iter()
-            .map(|q| PriceLine::new(q, prices.today))
-            .collect(),
+            .map(|p| {
+                p.quotes
+                    .into_iter()
+                    .map(|q| PriceLine::new(q, p.today))
+                    .collect()
+            })
+            .unwrap_or_default(),
         prices_area,
         prices_on_phone: HOME_PRICES_ON_PHONE,
         services_on_phone: HOME_SERVICES_ON_PHONE,
-        services: rated_services(&state, featured.featured_services).await?,
+        services: rated_services(&state, &shell, featured.featured_services).await?,
         products: featured
             .featured_products
             .into_iter()
-            .take(HOME_PRODUCT_COUNT)
+            .take(if supplies { HOME_PRODUCT_COUNT } else { 0 })
             .collect(),
     };
     render_page(&state, &shell, "pages/home.html", &page)

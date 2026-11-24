@@ -22,6 +22,7 @@ mod database;
 mod demand;
 mod demo_data;
 mod explore_page;
+mod features;
 mod home;
 mod inbox;
 mod jobs;

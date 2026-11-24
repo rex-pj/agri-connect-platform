@@ -13,6 +13,7 @@ use application::{
         NOTE_MAX_LEN, RATING_MAX, RATING_MIN, REQUESTER_NAME_MAX_LEN, REVIEW_COMMENT_MAX,
         TOPIC_MAX_LEN,
     },
+    features::Feature,
     inputs::{ContactInput, ReviewInput},
     outputs::{BusinessDetailDto, ProductDto, ProviderReviewsDto, PublicServiceDto},
 };
@@ -537,10 +538,19 @@ pub struct RatingLine {
     pub href: String,
 }
 
+/// While reviews are hidden from this visitor, no rating and no way to
+/// them (`href` empty).
 pub(super) async fn rating_line(
     state: &AppState,
+    shell: &Shell,
     provider: &BusinessDetailDto,
 ) -> Result<RatingLine, Error> {
+    if !shell.shows(Feature::Reviews) {
+        return Ok(RatingLine {
+            rating: None,
+            href: String::new(),
+        });
+    }
     let rating = state
         .usecases
         .review

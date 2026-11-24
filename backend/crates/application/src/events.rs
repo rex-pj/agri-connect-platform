@@ -20,6 +20,7 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::{
+    features::{Feature, Stage},
     ports::{EmailService, EventBus, FileStorage, InquiryNotice, JobNotice},
     settings::SettingsReader,
     usecases::media_usecase::release_file,
@@ -308,6 +309,15 @@ impl EventSubscriber for JobNotificationSubscriber {
             return Ok(());
         }
         let settings = self.settings.load().await?;
+        // A post made while hire requests are in preview (an admin trying
+        // them) reaches no real provider.
+        if settings.stage(Feature::Jobs) != Stage::On {
+            info!(
+                job = event.entity_id,
+                "hire requests in preview; no provider told"
+            );
+            return Ok(());
+        }
         let Some(job) = self
             .jobs
             .find_for_notice(

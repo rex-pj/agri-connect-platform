@@ -23,6 +23,13 @@
     <a class="btn btn-sm btn-warning" href="{{ url_for(name="setup_seed") }}">{{ t(key="admin.manage_demo") }}</a>
   </div>
   {% endif %}
+  {% if b.features_closed %}
+  <div class="alert alert-info d-flex flex-wrap align-items-center gap-2" role="status">
+    {{ atoms::icon(name="fa-toggle-off") }}
+    <span class="flex-grow-1">{{ t(key="settings.features_closed", count=b.features_closed.count) }}</span>
+    <a class="btn btn-sm btn-outline-primary" href="{{ b.features_closed.href }}">{{ t(key="settings.features_closed_link") }}</a>
+  </div>
+  {% endif %}
   {% for g in b.groups %}
   <section class="mb-4" aria-labelledby="stats-{{ loop.index }}">
     <h2 class="admin-section__title" id="stats-{{ loop.index }}">{{ g.title }}</h2>

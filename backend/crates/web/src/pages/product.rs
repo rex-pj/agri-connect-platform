@@ -7,7 +7,10 @@
 //! the contact form, about this product; it posts to /contact with
 //! `return_to=product`, so the visitor lands back here.
 
-use application::outputs::{BusinessDetailDto, ProductDto};
+use application::{
+    features::Feature,
+    outputs::{BusinessDetailDto, ProductDto},
+};
 use axum::{extract::State, http::StatusCode, response::Response};
 use domain::{Error, ErrorCode};
 use serde::Serialize;
@@ -92,9 +95,14 @@ pub(super) async fn render(
         contact.values.topic = product.name.clone();
     }
     let area = area_of(state.locale(), provider.address.as_deref());
-    let rating = rating_line(state, &provider).await?;
+    let rating = rating_line(state, shell, &provider).await?;
     let prices_href = match product.commodity_id {
-        Some(id) if state.usecases.price.has_fresh_prices(id).await? => Some(commodity_href(id)?),
+        Some(id)
+            if shell.shows(Feature::Prices)
+                && state.usecases.price.has_fresh_prices(id).await? =>
+        {
+            Some(commodity_href(id)?)
+        }
         _ => None,
     };
     let page = ProductPage {

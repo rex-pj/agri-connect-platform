@@ -111,7 +111,7 @@ pub(super) async fn render(
     }
     let others = service_links(&provider.services, Some(service.id))?;
     let area = area_of(state.locale(), service.business_address.as_deref());
-    let rating = rating_line(state, &provider).await?;
+    let rating = rating_line(state, shell, &provider).await?;
     let page = ServicePage {
         rating,
         provider_href: canonical_url("provider", provider.id, &provider.name)?,

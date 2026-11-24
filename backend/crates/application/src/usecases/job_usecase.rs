@@ -7,7 +7,7 @@
 //! preset. A post is open to providers for the `jobs.open_days` setting; one
 //! phone has at most `jobs.open_per_phone` open at once, one client sends at
 //! most `jobs.posts_per_client_per_day` a day, and while the
-//! `access.job_posts_open` switch is off none is taken (`job_posts_paused`).
+//! hire-request feature (`features::Feature::Jobs`) is off none is taken (`feature_off`).
 //! The admin closes a post or marks it spam (`job.moderate`).
 
 use std::sync::Arc;
@@ -33,6 +33,7 @@ use crate::{
         ADMIN_PAGE_SIZE, JOB_DESCRIPTION_MAX, JOB_POST_CLIENT_WINDOW_SECS, JOB_POST_KEEP_DAYS,
         PAGE_SIZE, REQUESTER_NAME_MAX_LEN,
     },
+    features::Feature,
     hashing::sha256_hex,
     inputs::JobInput,
     outputs::{AdminPagedResponse, JobPostDto, NamedDto, PagedResponse},
@@ -84,11 +85,11 @@ impl JobUseCase {
     /// A farmer's post; its id. Every bad box is reported at once. One
     /// client posts at most the `jobs.posts_per_client_per_day` setting a
     /// day, whatever phones it types (`job_post_daily_limit`); none while
-    /// job posts are paused (`job_posts_paused`).
+    /// hire requests are off (`feature_off`).
     pub async fn post(&self, input: JobInput) -> Result<i32> {
         let settings = self.settings.load().await?;
-        if !settings.job_posts_open() {
-            return Err(Error::new(ErrorCode::JobPostsPaused));
+        if !settings.is_open(Feature::Jobs) {
+            return Err(Error::new(ErrorCode::FeatureOff));
         }
         let window = std::time::Duration::from_secs(JOB_POST_CLIENT_WINDOW_SECS);
         // Hashed: the counter never holds an address.

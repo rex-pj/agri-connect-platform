@@ -3,30 +3,23 @@
 {% import "atoms/alert.html" as alerts %}
 {% import "molecules/page_hero.html" as hero %}
 {% import "molecules/form_field.html" as field %}
-{% import "molecules/empty_state.html" as empty %}
 {#- A farmer posts a job: the service, where, what, a name and a phone.
     Where: the `ac-geolocate` island fills the two hidden position boxes
     (then the area may stay empty); without JS or without permission the
     area is the place. `page` is web::pages::jobs::JobPage; it comes back
     with the typed values and one message per box when a rule is broken.
-    While job posts are paused (`page.open` false) a notice and the ways to
-    find a provider replace the form. -#}
+    While hire requests are off the page is not reached
+    (`features::gate`). -#}
 {% block title %}{{ t(key="job.title") }} — {{ site.name }}{% endblock title %}
 {% block meta %}<meta name="description" content="{{ t(key="job.meta") }}">{% endblock meta %}
 {% block scripts %}<script defer src="{{ asset_url(path='js/islands.js') }}"></script>{% endblock scripts %}
 {% block main %}
 {% set f = page.form %}
 {% set e = page.errors.fields %}
-{% if page.open %}{% set sub = t(key="job.sub") %}{% else %}{% set sub = "" %}{% endif %}
-{{ hero::page_hero(title=t(key="job.title"), back_href=page.back_href, back_label=t(key="nav.home"), variant="", icon="fa-bullhorn", sub=sub) }}
+{{ hero::page_hero(title=t(key="job.title"), back_href=page.back_href, back_label=t(key="nav.home"), variant="", icon="fa-bullhorn", sub=t(key="job.sub")) }}
 
 <div class="detail-body">
   {% if page.flash == "job_posted" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="job.posted")) }}{% endif %}
-  {% if not page.open %}
-  <section class="detail-card">
-    {{ empty::empty_state(icon="fa-pause", title=t(key="job.paused_title"), hint=t(key="job.paused_hint"), action_href=url_for(name="explore"), action_icon="fa-location-dot", action_label=t(key="nav.near_me"), second_href=url_for(name="services"), second_icon="fa-border-all", second_label=t(key="nav.services")) }}
-  </section>
-  {% else %}
   <section class="detail-card">
     <form class="form-stack" method="post" action="{{ page.action }}" novalidate>
       {% if page.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=page.errors.message) }}{% endif %}
@@ -49,6 +42,5 @@
       <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-bullhorn") }} {{ t(key="job.submit") }}</button>
     </form>
   </section>
-  {% endif %}
 </div>
 {% endblock main %}

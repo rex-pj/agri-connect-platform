@@ -97,6 +97,7 @@
     {% endif %}
   </section>
 
+  {%- if shell.features.supplies %}
   <section data-panel="products"{% if page.tab != "products" %} hidden{% endif %} :hidden="panelHidden">
     {% if page.products %}
     <p class="list-count small text-muted"><strong>{{ page.product_total }}</strong> {{ t(key="explore.products_near") }}</p>
@@ -111,7 +112,9 @@
     {{ empty::empty_state(icon="fa-magnifying-glass", title=no_product_title, hint=t(key="explore.hint_products"), action_href=url_for(name="products"), action_icon="fa-bag-shopping", action_label=t(key="list.all_products")) }}
     {% endif %}
   </section>
+  {%- endif %}
 
+  {%- if shell.features.directory %}
   <section data-panel="providers"{% if page.tab != "providers" %} hidden{% endif %} :hidden="panelHidden">
     {% if page.providers %}
     <p class="list-count small text-muted"><strong>{{ page.provider_total }}</strong> {{ t(key="explore.shops_near") }}</p>
@@ -126,6 +129,7 @@
     {{ empty::empty_state(icon="fa-magnifying-glass", title=no_shop_title, hint=t(key="explore.hint_shops"), action_href=url_for(name="providers"), action_icon="fa-store", action_label=t(key="list.all_shops")) }}
     {% endif %}
   </section>
+  {%- endif %}
 </div>
 {% elif page.featured_services %}
 <section class="home-section">

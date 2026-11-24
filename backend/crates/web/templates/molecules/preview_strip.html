@@ -1,0 +1,10 @@
+{#- A page of a feature in preview (`shell.preview`), seen by an account
+    that may preview it: farmers do not see this page yet; the link opens
+    the settings' features tab, where it is opened to them. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro preview_strip(href) -%}
+<div class="preview-strip" role="status">
+  <span>{{ atoms::icon(name="fa-eye") }} {{ t(key="settings.preview_strip") }}</span>
+  <a href="{{ href }}">{{ t(key="settings.preview_strip_link") }}</a>
+</div>
+{%- endmacro preview_strip %}

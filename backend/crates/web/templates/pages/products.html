@@ -28,7 +28,7 @@
   </div>
   {#- The near-me banner, as on the services list; under the grid, which a
       banner would cut across mid-row. -#}
-  <div class="list-break">{{ geo::geo_cta(href=page.near_href, title=t(key="geo.title_products"), sub=page.geo_sub) }}</div>
+  {% if shell.features.near_me %}<div class="list-break">{{ geo::geo_cta(href=page.near_href, title=t(key="geo.title_products"), sub=page.geo_sub) }}</div>{% endif %}
   {% if page.pagination %}{{ paging::pagination_nav(p=page.pagination) }}{% endif %}
   {% elif page.filtered %}
   {{ empty::empty_state(icon="fa-bag-shopping", title=t(key="products.none_found"), hint=t(key="products.none_found_hint"), action_href=page.filters.reset_href, action_icon="fa-xmark", action_label=t(key="filters.reset")) }}

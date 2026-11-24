@@ -75,17 +75,24 @@ function Alerts({ alerts }) {
   );
 }
 
-/** The alerts in force, the three errands (near me, prices, a job), the service categories, the newest prices. */
+/**
+ * The alerts in force, the three errands (near me, prices, a job), the service
+ * categories, the newest prices; a part the server closed (GET
+ * /api/explore/features) is left out.
+ */
 export default function HomePage() {
   const navigate = useNavigate();
   const [categories, setCategories] = useState([]);
   const [latest, setLatest] = useState(null);
   const [alerts, setAlerts] = useState([]);
+  // Every part open until the server says otherwise; one it closed is not offered.
+  const [open, setOpen] = useState({ near_me: true, prices: true, jobs: true });
 
   useEffect(() => {
     api.categories().then(setCategories).catch(() => setCategories([]));
     latestPrices().then(setLatest).catch(() => setLatest(null));
     api.alerts().then(setAlerts).catch(() => setAlerts([]));
+    api.features().then(setOpen).catch(() => {});
   }, []);
 
   const quotes = latest?.quotes || [];
@@ -100,18 +107,24 @@ export default function HomePage() {
       <Alerts alerts={alerts} />
 
       <Box className="errands">
-        <Button size="large" fullWidth prefixIcon={<Icon icon="zi-location-solid" />} onClick={() => navigate("/near")}>
-          {T.nearMe}
-        </Button>
-        <Button size="large" variant="secondary" fullWidth prefixIcon={<Icon icon="zi-poll" />} onClick={() => navigate("/prices")}>
-          {T.prices}
-        </Button>
-        <Button size="large" variant="secondary" fullWidth prefixIcon={<Icon icon="zi-post" />} onClick={() => navigate("/job")}>
-          {T.postJob}
-        </Button>
+        {open.near_me && (
+          <Button size="large" fullWidth prefixIcon={<Icon icon="zi-location-solid" />} onClick={() => navigate("/near")}>
+            {T.nearMe}
+          </Button>
+        )}
+        {open.prices && (
+          <Button size="large" variant="secondary" fullWidth prefixIcon={<Icon icon="zi-poll" />} onClick={() => navigate("/prices")}>
+            {T.prices}
+          </Button>
+        )}
+        {open.jobs && (
+          <Button size="large" variant="secondary" fullWidth prefixIcon={<Icon icon="zi-post" />} onClick={() => navigate("/job")}>
+            {T.postJob}
+          </Button>
+        )}
       </Box>
 
-      {categories.length > 0 && (
+      {open.near_me && categories.length > 0 && (
         <Box className="section">
           <Text.Header>{T.services}</Text.Header>
           <div className="tiles">
@@ -124,7 +137,7 @@ export default function HomePage() {
         </Box>
       )}
 
-      {quotes.length > 0 && (
+      {open.prices && quotes.length > 0 && (
         <Box className="section">
           <div className="section__head">
             <Text.Header>{latest.area ? T.pricesIn(latest.area) : T.latestPrices}</Text.Header>

@@ -51,6 +51,7 @@ error_codes! {
     // ── Generic ──────────────────────────────────────────────────────────────
     Internal                  => (Internal,        "internal"),
     RouteNotFound             => (NotFound,        "route_not_found"),
+    FeatureOff                => (NotFound,        "feature_off"),
     ValidationFailed          => (BadRequest,      "validation_failed"),
     InvalidRequestBody        => (BadRequest,      "invalid_request_body"),
     InvalidPathParam          => (BadRequest,      "invalid_path_param"),
@@ -137,7 +138,6 @@ error_codes! {
     JobPlaceRequired          => (BadRequest,      "job_place_required"),
     JobPostLimit              => (BadRequest,      "job_post_limit"),
     JobPostDailyLimit         => (TooManyRequests, "job_post_daily_limit"),
-    JobPostsPaused            => (Forbidden,       "job_posts_paused"),
     RegistrationClosed        => (Forbidden,       "registration_closed"),
     SignupDailyLimit          => (TooManyRequests, "signup_daily_limit"),
     ContactDailyLimit         => (TooManyRequests, "contact_daily_limit"),

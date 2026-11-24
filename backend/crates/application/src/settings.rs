@@ -32,6 +32,7 @@ use crate::{
         SERVICES_PER_BUSINESS_DEFAULT, SERVICES_PER_BUSINESS_MAX, SITE_DESCRIPTION_MAX,
         SITE_NAME_MAX, SPONSORED_SHOWN_DEFAULT, SPONSORED_SHOWN_MAX, STEADY_WEEKLY_LEADS_DEFAULT,
     },
+    features::{Feature, FeaturesShown, Stage},
     validation::{is_valid_vn_phone, max_chars, one_line, validate_email},
 };
 
@@ -56,7 +57,6 @@ pub const SUPPORT_PHONE: &str = "support.phone";
 pub const SUPPORT_ZALO_URL: &str = "support.zalo_url";
 pub const SUPPORT_EMAIL: &str = "support.email";
 pub const REGISTRATION_OPEN: &str = "access.registration_open";
-pub const JOB_POSTS_OPEN: &str = "access.job_posts_open";
 pub const JOB_POSTS_PER_CLIENT_PER_DAY: &str = "jobs.posts_per_client_per_day";
 pub const JOB_POSTS_OPEN_PER_PHONE: &str = "jobs.open_per_phone";
 pub const JOB_POST_DAYS: &str = "jobs.open_days";
@@ -76,8 +76,9 @@ pub enum SettingGroup {
     Brand,
     /// The platform's own help lines in the footer.
     Support,
-    /// Who may come in: sign-ups, job posts.
-    Access,
+    /// What is open to the public: sign-ups and each feature's stage
+    /// (`features`).
+    Features,
     /// Job posts: how many, how long, who is told.
     Jobs,
     /// What a provider may list; how reviews are watched.
@@ -90,7 +91,7 @@ impl SettingGroup {
     pub const ALL: [SettingGroup; 6] = [
         SettingGroup::Brand,
         SettingGroup::Support,
-        SettingGroup::Access,
+        SettingGroup::Features,
         SettingGroup::Jobs,
         SettingGroup::Listings,
         SettingGroup::Market,
@@ -102,7 +103,7 @@ impl SettingGroup {
         match self {
             SettingGroup::Brand => "brand",
             SettingGroup::Support => "support",
-            SettingGroup::Access => "access",
+            SettingGroup::Features => "features",
             SettingGroup::Jobs => "jobs",
             SettingGroup::Listings => "listings",
             SettingGroup::Market => "market",
@@ -135,6 +136,8 @@ pub enum SettingKind {
     Number { default: i64, min: i64, max: i64 },
     /// On or off.
     Switch { default: bool },
+    /// Who sees a feature: on, preview, off (`features::Stage`).
+    Stage { default: Stage },
     /// Text, empty by default.
     Text(TextRule),
     /// An uploaded image (`files.id`), empty by default. Set only by an
@@ -160,6 +163,14 @@ const fn number(
         key,
         group,
         kind: SettingKind::Number { default, min, max },
+    }
+}
+
+const fn stage(feature: Feature) -> SettingDef {
+    SettingDef {
+        key: feature.setting_key(),
+        group: SettingGroup::Features,
+        kind: SettingKind::Stage { default: Stage::On },
     }
 }
 
@@ -206,14 +217,16 @@ pub static SETTINGS: &[SettingDef] = &[
     },
     SettingDef {
         key: REGISTRATION_OPEN,
-        group: SettingGroup::Access,
+        group: SettingGroup::Features,
         kind: SettingKind::Switch { default: true },
     },
-    SettingDef {
-        key: JOB_POSTS_OPEN,
-        group: SettingGroup::Access,
-        kind: SettingKind::Switch { default: true },
-    },
+    // Every feature open by default: the platform ran with all of them.
+    stage(Feature::Prices),
+    stage(Feature::NearMe),
+    stage(Feature::Supplies),
+    stage(Feature::Directory),
+    stage(Feature::Reviews),
+    stage(Feature::Jobs),
     number(
         JOB_POSTS_PER_CLIENT_PER_DAY,
         SettingGroup::Jobs,
@@ -301,6 +314,7 @@ pub fn definition(key: &str) -> Option<&'static SettingDef> {
 pub enum SettingValue {
     Number(i64),
     Switch(bool),
+    Stage(Stage),
     /// Empty: not set.
     Text(String),
 }
@@ -312,6 +326,7 @@ impl SettingValue {
             SettingValue::Number(n) => n.to_string(),
             SettingValue::Switch(true) => ON.to_owned(),
             SettingValue::Switch(false) => OFF.to_owned(),
+            SettingValue::Stage(stage) => stage.code().to_owned(),
             SettingValue::Text(t) => t.clone(),
         }
     }
@@ -322,6 +337,7 @@ impl SettingDef {
         match self.kind {
             SettingKind::Number { default, .. } => SettingValue::Number(default),
             SettingKind::Switch { default } => SettingValue::Switch(default),
+            SettingKind::Stage { default } => SettingValue::Stage(default),
             SettingKind::Text(_) | SettingKind::Image => SettingValue::Text(String::new()),
         }
     }
@@ -346,6 +362,9 @@ impl SettingDef {
                 OFF | "" => Ok(SettingValue::Switch(false)),
                 _ => Err(refuse(ErrorCode::InvalidRequestBody)),
             },
+            SettingKind::Stage { .. } => Stage::parse(raw)
+                .map(SettingValue::Stage)
+                .ok_or_else(|| refuse(ErrorCode::InvalidRequestBody)),
             SettingKind::Text(_) | SettingKind::Image if raw.is_empty() => {
                 Ok(SettingValue::Text(String::new()))
             }
@@ -530,9 +549,25 @@ impl Settings {
         self.switch(REGISTRATION_OPEN)
     }
 
-    /// Farmers may post jobs.
-    pub fn job_posts_open(&self) -> bool {
-        self.switch(JOB_POSTS_OPEN)
+    /// Who sees `feature`.
+    pub fn stage(&self, feature: Feature) -> Stage {
+        match self.value(feature.setting_key()) {
+            Some(SettingValue::Stage(stage)) => *stage,
+            _ => Stage::On,
+        }
+    }
+
+    /// Whether `feature` is open to anyone at all (on, or in preview): a
+    /// write of it is refused only while it is off, the gate keeping a
+    /// preview to the accounts that may see it.
+    pub fn is_open(&self, feature: Feature) -> bool {
+        self.stage(feature) != Stage::Off
+    }
+
+    /// The features a viewer sees; `may_preview`: it holds
+    /// `feature.preview`.
+    pub fn features_shown(&self, may_preview: bool) -> FeaturesShown {
+        FeaturesShown::new(|f| self.stage(f), may_preview)
     }
 
     /// Job posts one client address may send a day.
@@ -660,7 +695,10 @@ mod tests {
         assert_eq!(s.products_per_business(), PRODUCTS_PER_BUSINESS_DEFAULT);
         assert_eq!(s.job_post_days(), JOB_POST_DAYS_DEFAULT);
         assert_eq!(s.job_notify_radius_m(), 10_000.0);
-        assert!(s.registration_open() && s.job_posts_open());
+        assert!(s.registration_open());
+        for f in crate::features::Feature::ALL {
+            assert_eq!(s.stage(f), Stage::On, "{}", f.code());
+        }
         assert_eq!(s.support_phone(), None);
     }
 

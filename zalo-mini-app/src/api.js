@@ -62,6 +62,9 @@ export const api = {
     request("/api/zalo/location", { method: "POST", body: { access_token: accessToken, token } }),
   zaloPhone: (accessToken, token) =>
     request("/api/zalo/phone", { method: "POST", body: { access_token: accessToken, token } }),
+  // Which parts of the platform are open (`{ prices, near_me, jobs, … }`): a
+  // closed one gets no button here, as on the website.
+  features: () => request("/api/explore/features"),
   // The alerts in force today (disease, salt water, weather), every sector.
   alerts: () => request("/api/explore/alerts"),
   thumbUrl: (fileId) => `${BASE}/files/${fileId}/thumb`,

@@ -286,7 +286,7 @@ const MENU_KEYWORDS: &[(&str, &[&str])] = &[
         "admin_settings",
         &[
             "settings.group.support",
-            "settings.group.access",
+            "settings.group.features",
             "settings.group.jobs",
             "settings.group.listings",
             "settings.group.market",

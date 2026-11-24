@@ -27,6 +27,7 @@ use crate::{
         PERM_OWN_SERVICE_DELETE, PERM_OWN_SERVICE_UPDATE,
     },
     constants::{CALL_STATS_DAYS, PAGE_SIZE},
+    features::Feature,
     inputs::{CreateProductInput, ServiceInput, UpdateProductInput, UpdateProfileInput},
     outputs::{
         OwnInquiriesResponse, OwnInquiryDto, ProviderProductDto, ProviderProfileDto,
@@ -273,6 +274,11 @@ impl ProviderDashboardUseCase {
         image: Option<ProcessedImage>,
     ) -> Result<ProviderProductDto> {
         actor.require(PERM_OWN_LISTING_CREATE)?;
+        // A provider lists no supply while supplies are off; the admin still
+        // does, to prepare them.
+        if !self.settings.load().await?.is_open(Feature::Supplies) {
+            return Err(Error::new(ErrorCode::FeatureOff));
+        }
         let fields = validate_product(
             self.product_repo.as_ref(),
             input.category_id,

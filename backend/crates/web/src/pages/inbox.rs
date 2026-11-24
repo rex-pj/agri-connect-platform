@@ -8,7 +8,7 @@
 
 use std::collections::BTreeMap;
 
-use application::outputs::OwnInquiryDto;
+use application::{features::Feature, outputs::OwnInquiryDto};
 use axum::{extract::State, response::Response};
 use domain::{constants::INQUIRY_STATUSES_REVIEWABLE, Error, ErrorCode};
 use serde::{Deserialize, Serialize};
@@ -110,6 +110,10 @@ pub async fn list(
         canonical_url("provider", profile.id, &profile.name)?
     );
     let business_name = profile.name;
+    // Sent to a farmer: only while farmers see the reviews, not in preview.
+    let farmers_review = (state.usecases.settings.current().await?)
+        .features_shown(false)
+        .has(Feature::Reviews);
     let page_param = Some(inbox.page)
         .filter(|p| *p > 1)
         .map(|p| p.to_string())
@@ -131,9 +135,9 @@ pub async fn list(
             spam_href: with_query(&path, &[("page", &page_param), ("spam", &id)]),
             action,
             steps,
-            review_href: INQUIRY_STATUSES_REVIEWABLE
-                .contains(&inquiry.status.as_str())
-                .then(|| review_href.clone()),
+            review_href: (farmers_review
+                && INQUIRY_STATUSES_REVIEWABLE.contains(&inquiry.status.as_str()))
+            .then(|| review_href.clone()),
             inquiry,
         });
     }

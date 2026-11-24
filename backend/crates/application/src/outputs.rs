@@ -120,7 +120,8 @@ impl From<ProductView> for ProductDto {
     }
 }
 
-#[derive(Serialize)]
+/// `Default`: no result (a kind of search a visitor does not see).
+#[derive(Serialize, Default)]
 pub struct ProductBrowseResponse {
     pub items: Vec<ProductDto>,
     pub total: i64,
@@ -153,7 +154,8 @@ pub struct BusinessBrowseDto {
     pub created_on: DateTime<Utc>,
 }
 
-#[derive(Serialize)]
+/// `Default`: no result (a kind of search a visitor does not see).
+#[derive(Serialize, Default)]
 pub struct BrowseResponse {
     pub items: Vec<BusinessBrowseDto>,
     pub total: i64,
@@ -1449,7 +1451,8 @@ pub struct NamedCodeDto {
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct SettingDto {
     pub key: &'static str,
-    /// `number`, `switch`, `phone`, `url`, `email` or `text` (one line).
+    /// `number`, `switch`, `stage`, `phone`, `url`, `email`, `text` (one
+    /// line) or `image`.
     pub kind: &'static str,
     /// As text (a switch: `true` / `false`; text: empty when unset).
     pub value: String,

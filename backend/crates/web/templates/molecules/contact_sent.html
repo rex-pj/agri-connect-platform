@@ -1,10 +1,10 @@
 {#- After a contact request from a detail page: it was sent, and a review
     comes once the provider has called back (`review_href`: the provider's
-    reviews). One block, so the alert and its hint share the card's gap. -#}
+    reviews; empty while reviews are hidden: no hint). One block, so the alert and its hint share the card's gap. -#}
 {% import "atoms/alert.html" as alerts %}
 {% macro contact_sent(review_href) -%}
 <div class="contact-sent">
   {{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="contact.sent")) }}
-  <p class="contact-sent__hint">{{ t(key="review.after_contact") }} <a href="{{ review_href }}">{{ t(key="review.write") }}</a></p>
+  {% if review_href %}<p class="contact-sent__hint">{{ t(key="review.after_contact") }} <a href="{{ review_href }}">{{ t(key="review.write") }}</a></p>{% endif %}
 </div>
 {%- endmacro contact_sent %}

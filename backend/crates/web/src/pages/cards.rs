@@ -1,12 +1,15 @@
 //! View models shared by the list pages. Templates get display-ready values;
 //! the formatting rules live here, where they can be tested.
 
-use application::outputs::{BusinessBrowseDto, BusinessSearchDto, PublicServiceDto, RatingDto};
+use application::{
+    features::Feature,
+    outputs::{BusinessBrowseDto, BusinessSearchDto, PublicServiceDto, RatingDto},
+};
 use domain::Error;
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::{app_state::AppState, pages::canonical_url};
+use crate::{app_state::AppState, pages::canonical_url, shell::Shell};
 
 /// What `organisms/provider_card.html` shows.
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -114,9 +117,13 @@ impl ServiceCard {
 /// Service cards with their providers' ratings, read in one query.
 pub async fn rated_services(
     state: &AppState,
+    shell: &Shell,
     services: Vec<PublicServiceDto>,
 ) -> Result<Vec<ServiceCard>, Error> {
     let mut cards = ServiceCard::all(services)?;
+    if !shell.shows(Feature::Reviews) {
+        return Ok(cards);
+    }
     let ids: Vec<i32> = cards.iter().map(|c| c.business_id).collect();
     let ratings = state.usecases.review.ratings(&ids).await?;
     for card in &mut cards {
@@ -128,8 +135,12 @@ pub async fn rated_services(
 /// Provider cards with their ratings, read in one query.
 pub async fn rated_providers(
     state: &AppState,
+    shell: &Shell,
     mut cards: Vec<ProviderCard>,
 ) -> Result<Vec<ProviderCard>, Error> {
+    if !shell.shows(Feature::Reviews) {
+        return Ok(cards);
+    }
     let ids: Vec<i32> = cards.iter().map(|c| c.id).collect();
     let ratings = state.usecases.review.ratings(&ids).await?;
     for card in &mut cards {

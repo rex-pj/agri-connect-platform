@@ -76,9 +76,6 @@ pub struct JobPage {
     pub action: String,
     pub back_href: String,
     pub flash: Option<Flash>,
-    /// Farmers may post (`access.job_posts_open`); paused, a notice and
-    /// the way to look for a provider replace the form.
-    pub open: bool,
     /// The name box's `maxlength` (the contact form's cap).
     pub name_max: usize,
 }
@@ -92,10 +89,9 @@ async fn render(
     status: StatusCode,
 ) -> Result<Response, Error> {
     let explore = &state.usecases.explore;
-    let (categories, areas, settings) = tokio::try_join!(
+    let (categories, areas) = tokio::try_join!(
         explore.get_categories(Some(CATEGORY_TYPE_SERVICE)),
         explore.get_locations(),
-        state.usecases.settings.current(),
     )?;
     let page = JobPage {
         categories,
@@ -105,7 +101,6 @@ async fn render(
         action: url("job_post")?,
         back_href: url("home")?,
         flash,
-        open: settings.job_posts_open(),
         name_max: REQUESTER_NAME_MAX_LEN,
     };
     render_page_status(state, shell, status, "pages/job_new.html", &page)

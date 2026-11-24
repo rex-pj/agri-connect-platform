@@ -11,7 +11,8 @@
 //! request span records the path only.
 
 use crate::{middleware::client_ip::ClientIp, pages::visitor};
-use application::outputs::{CategoryDto, LocationDto, ProductDto};
+use application::features::Feature;
+use application::outputs::{CategoryDto, LocationDto, PagedResponse, ProductDto};
 use application::{
     constants::{LAT_MAX, LAT_MIN, LNG_MAX, LNG_MIN},
     inputs::{GeoSearchParams, SearchInput, SearchPlace},
@@ -194,8 +195,13 @@ pub async fn show(
     let service_id =
         parse_opt::<i32>(&q.service_id).filter(|id| service_categories.iter().any(|c| c.id == *id));
 
-    let tab = [TAB_PROVIDERS, TAB_PRODUCTS]
+    // The supplies and shops tabs only while their features are shown.
+    let supplies = shell.shows(Feature::Supplies);
+    let shops = shell.shows(Feature::Directory);
+    let tab = [(TAB_PROVIDERS, shops), (TAB_PRODUCTS, supplies)]
         .into_iter()
+        .filter(|(_, shown)| *shown)
+        .map(|(t, _)| t)
         .find(|t| *t == q.tab.trim())
         .unwrap_or(TAB_SERVICES);
 
@@ -236,6 +242,7 @@ pub async fn show(
         None => {
             rated_services(
                 &state,
+                &shell,
                 explore.get_explore_data(None).await?.featured_services,
             )
             .await?
@@ -250,8 +257,24 @@ pub async fn show(
             };
             let (services, providers, products) = tokio::try_join!(
                 explore.search_services_page(params(), tab_page(tab, TAB_SERVICES, page_no)),
-                explore.search_providers_page(params(), tab_page(tab, TAB_PROVIDERS, page_no)),
-                explore.search_products_page(params(), tab_page(tab, TAB_PRODUCTS, page_no)),
+                async {
+                    match shops {
+                        true => {
+                            let page = tab_page(tab, TAB_PROVIDERS, page_no);
+                            explore.search_providers_page(params(), page).await
+                        }
+                        false => Ok(PagedResponse::public(Vec::new(), 0, 1)),
+                    }
+                },
+                async {
+                    match supplies {
+                        true => {
+                            let page = tab_page(tab, TAB_PRODUCTS, page_no);
+                            explore.search_products_page(params(), page).await
+                        }
+                        false => Ok(PagedResponse::public(Vec::new(), 0, 1)),
+                    }
+                },
             )?;
             let chosen = match tab {
                 TAB_PROVIDERS => (providers.page, providers.total_pages),
@@ -294,12 +317,13 @@ pub async fn show(
                 (Vec::new(), services.items)
             };
             found = Found {
-                sponsored: rated_services(&state, sponsored).await?,
-                services: rated_services(&state, rest).await?,
+                sponsored: rated_services(&state, &shell, sponsored).await?,
+                services: rated_services(&state, &shell, rest).await?,
                 service_total: services.total,
                 service_pages: pages_of(TAB_SERVICES, services.page, services.total_pages),
                 providers: rated_providers(
                     &state,
+                    &shell,
                     providers
                         .items
                         .into_iter()
@@ -318,12 +342,13 @@ pub async fn show(
     };
     let tabs = [
         // The order of the bottom tabs and the search page's.
-        (TAB_SERVICES, "nav.services", found.service_total),
-        (TAB_PRODUCTS, "nav.products", found.product_total),
-        (TAB_PROVIDERS, "nav.shops", found.provider_total),
+        (TAB_SERVICES, "nav.services", found.service_total, true),
+        (TAB_PRODUCTS, "nav.products", found.product_total, supplies),
+        (TAB_PROVIDERS, "nav.shops", found.provider_total, shops),
     ]
     .into_iter()
-    .map(|(t, label, count)| TabLink {
+    .filter(|(_, _, _, shown)| *shown)
+    .map(|(t, label, count, _)| TabLink {
         tab: t,
         label: state.locale().text(label),
         href: link_to(radius, service_id, t),

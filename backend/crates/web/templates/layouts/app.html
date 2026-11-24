@@ -3,6 +3,7 @@
 {% import "organisms/bottom_nav.html" as bottom %}
 {% import "organisms/app_footer.html" as footer %}
 {% import "molecules/language_offer.html" as offer %}
+{% import "molecules/preview_strip.html" as preview %}
 {#- Public and signed-in app pages: top bar, content, footer, bottom tabs.
     Pages fill `main`; the frame comes from `shell` (web::shell). -#}
 {% block body %}
@@ -10,6 +11,8 @@
 <main class="app-main" id="main">
 {#- The one-time language offer: the first thing under the fixed top bar. -#}
 {% if shell.language_offer %}{{ offer::language_offer(o=shell.language_offer, back=shell.here) }}{% endif %}
+{#- A feature in preview, seen by an admin: farmers do not see it yet. -#}
+{% if shell.preview %}{{ preview::preview_strip(href=shell.preview) }}{% endif %}
 {% block main %}{% endblock main %}
 </main>
 {{ footer::app_footer(shell=shell, site=site, year=year) }}

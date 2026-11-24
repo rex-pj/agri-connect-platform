@@ -76,6 +76,7 @@ pub async fn list(
         total: result.total,
         providers: rated_providers(
             &state,
+            &shell,
             result.items.into_iter().map(ProviderCard::from).collect(),
         )
         .await?,

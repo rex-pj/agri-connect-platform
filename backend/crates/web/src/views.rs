@@ -17,6 +17,7 @@ use application::icons;
 use application::settings::{Settings, SETTING_VALUE_MAX};
 use application::validation::{is_valid_vn_phone, SLUG_PATTERN, VN_PHONE_PATTERN};
 use axum::{
+    extract::State,
     http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
 };
@@ -62,6 +63,12 @@ pub const PAGE_CSP: &str = "default-src 'self'; script-src 'self'; style-src 'se
 pub struct SiteConfig {
     pub name: String,
     pub description: Option<String>,
+    /// The logo an admin uploaded (`files.id`); `None`: the built-in mark
+    /// (`atoms/logo.html`). Never from the environment.
+    pub logo: Option<String>,
+    /// The browser and home-screen icon: the one uploaded for it, else the
+    /// logo; `None`: the built-in icons under `static/`.
+    pub icon: Option<String>,
 }
 
 impl Default for SiteConfig {
@@ -69,6 +76,8 @@ impl Default for SiteConfig {
         Self {
             name: "Agri-Connect".to_owned(),
             description: None,
+            logo: None,
+            icon: None,
         }
     }
 }
@@ -86,6 +95,8 @@ impl SiteConfig {
                 .and_then(Settings::site_description)
                 .map(str::to_owned)
                 .or_else(|| self.description.clone()),
+            logo: settings.and_then(Settings::logo).map(|id| id.to_string()),
+            icon: settings.and_then(Settings::icon).map(|id| id.to_string()),
         }
     }
 }
@@ -670,10 +681,40 @@ pub async fn static_file(
 }
 
 /// GET /favicon.ico: the address browsers and crawlers try without reading
-/// the page's `<link rel="icon">`. Unversioned, so cached briefly.
-pub async fn favicon() -> Result<Response, Error> {
-    serve_static(FAVICON, None)
+/// the page's `<link rel="icon">`. The icon an admin uploaded (else the
+/// logo) as a redirect to its file, else the built-in one. Unversioned, so
+/// cached briefly either way: a new icon shows within the hour.
+pub async fn favicon(State(state): State<AppState>) -> Result<Response, Error> {
+    // An asset path: the request read no settings (`page_settings`), and a
+    // failed read serves the built-in icon rather than an error.
+    let uploaded = state
+        .usecases
+        .settings
+        .current()
+        .await
+        .ok()
+        .and_then(|s| s.icon());
+    let Some(id) = uploaded else {
+        return serve_static(FAVICON, None);
+    };
+    let location = routes::url("file_thumb", &[("id", &id.to_string())])
+        .map_err(|e| Error::internal(format!("favicon link: {e}")))?;
+    let mut response = StatusCode::FOUND.into_response();
+    let headers = response.headers_mut();
+    headers.insert(
+        header::LOCATION,
+        HeaderValue::from_str(&location)
+            .map_err(|_| Error::internal("favicon link is not a header"))?,
+    );
+    headers.insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static(FAVICON_REDIRECT_CACHE),
+    );
+    Ok(response)
 }
+
+/// How long a browser keeps `/favicon.ico`'s redirect to an uploaded icon.
+const FAVICON_REDIRECT_CACHE: &str = "public, max-age=3600";
 
 /// The static file the root `/favicon.ico` serves.
 pub const FAVICON: &str = "favicon.ico";

@@ -9,11 +9,18 @@
   {% block meta %}<meta name="description" content="{% if site.description %}{{ site.description }}{% else %}{{ t(key="site.description") }}{% endif %}">{% endblock meta %}
   <meta name="theme-color" content="#064E3B">
   <meta name="format-detection" content="telephone=yes">
+  {%- if site.icon %}
+  {#- The icon an admin uploaded (else the logo): its 96 px PNG for the tab,
+      its 512 px one for home screens. -#}
+  <link rel="icon" href="{{ file_url(id=site.icon, variant='thumb') }}" type="image/png" sizes="96x96">
+  <link rel="apple-touch-icon" href="{{ file_url(id=site.icon) }}">
+  {%- else %}
   {#- SVG for current browsers, the .ico for the rest, a full-bleed PNG for
       iOS home screens (which round the corners themselves). -#}
   <link rel="icon" href="{{ asset_url(path='img/logo.svg') }}" type="image/svg+xml">
   <link rel="icon" href="{{ asset_url(path='favicon.ico') }}" sizes="32x32">
   <link rel="apple-touch-icon" href="{{ asset_url(path='img/apple-touch-icon.png') }}">
+  {%- endif %}
   <link rel="stylesheet" href="{{ asset_url(path='vendor/bootstrap-5.3.8/bootstrap.min.css') }}">
   <link rel="stylesheet" href="{{ asset_url(path='vendor/fontawesome-6.5.1/css/fontawesome.min.css') }}">
   <link rel="stylesheet" href="{{ asset_url(path='vendor/fontawesome-6.5.1/css/solid.min.css') }}">

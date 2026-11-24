@@ -1,5 +1,6 @@
 //! `ImageProcessor` with the `image` crate. Every upload is decoded and
-//! re-encoded as JPEG, so what we serve is always our own encoder's output:
+//! re-encoded (photos as JPEG, the platform's logo as PNG to keep its
+//! transparency), so what we serve is always our own encoder's output:
 //! no EXIF (phones embed the farm's GPS position there), no polyglot files,
 //! no type confusion.
 
@@ -9,8 +10,10 @@ use application::ports::{EncodedImage, ImageProcessor, ProcessedImage};
 use async_trait::async_trait;
 use domain::{Error, ErrorCode, Result};
 use image::{
-    codecs::jpeg::JpegEncoder, imageops::FilterType, DynamicImage, ImageDecoder, ImageFormat,
-    ImageReader, Limits, RgbImage,
+    codecs::{jpeg::JpegEncoder, png::PngEncoder},
+    imageops::{self, FilterType},
+    DynamicImage, ExtendedColorType, ImageDecoder, ImageEncoder, ImageFormat, ImageReader, Limits,
+    RgbImage, RgbaImage,
 };
 
 /// What we accept and what we produce; the values live in
@@ -21,6 +24,10 @@ pub struct ImageRules {
     pub main_max_side: u32,
     pub thumb_max_side: u32,
     pub jpeg_quality: u8,
+    /// A logo's shortest side at least; its two stored squares.
+    pub icon_min_side: u32,
+    pub icon_main_side: u32,
+    pub icon_thumb_side: u32,
 }
 
 pub struct RasterImageProcessor {
@@ -34,6 +41,7 @@ impl RasterImageProcessor {
 }
 
 const OUTPUT_CONTENT_TYPE: &str = "image/jpeg";
+const ICON_CONTENT_TYPE: &str = "image/png";
 
 /// Worst case per pixel while decoding: 16-bit RGBA.
 const MAX_BYTES_PER_PIXEL: u64 = 8;
@@ -48,6 +56,13 @@ impl ImageProcessor for RasterImageProcessor {
             .await
             .map_err(|e| Error::internal(format!("image task: {e}")))?
     }
+
+    async fn process_icon(&self, upload: Vec<u8>) -> Result<ProcessedImage> {
+        let rules = self.rules;
+        tokio::task::spawn_blocking(move || process_icon(&upload, rules))
+            .await
+            .map_err(|e| Error::internal(format!("icon task: {e}")))?
+    }
 }
 
 fn invalid(e: image::ImageError) -> Error {
@@ -55,6 +70,80 @@ fn invalid(e: image::ImageError) -> Error {
 }
 
 fn process(bytes: &[u8], rules: ImageRules) -> Result<ProcessedImage> {
+    let decoded = decode(bytes, rules)?;
+    let main = fit(&decoded, rules.main_max_side);
+    // From the already-reduced image: same result, a fraction of the work.
+    let thumb = fit(&main, rules.thumb_max_side);
+    Ok(ProcessedImage {
+        main: encode(main, rules.jpeg_quality)?,
+        thumb: encode(thumb, rules.jpeg_quality)?,
+        content_type: OUTPUT_CONTENT_TYPE,
+    })
+}
+
+/// A logo: transparency kept, so it is PNG; centred on a transparent
+/// square, so every place that shows it (a round tile, a browser tab, a
+/// phone's home screen) can take it as it is.
+fn process_icon(bytes: &[u8], rules: ImageRules) -> Result<ProcessedImage> {
+    let decoded = decode(bytes, rules)?;
+    if decoded.width().min(decoded.height()) < rules.icon_min_side {
+        return Err(Error::new(ErrorCode::ImageTooSmall).with_param("min", rules.icon_min_side));
+    }
+    let square = squared(decoded.into_rgba8());
+    let main = shrink_square(square, rules.icon_main_side);
+    let thumb = shrink_square(main.clone(), rules.icon_thumb_side);
+    Ok(ProcessedImage {
+        main: encode_png(&main)?,
+        thumb: encode_png(&thumb)?,
+        content_type: ICON_CONTENT_TYPE,
+    })
+}
+
+/// `img` in the middle of a transparent square as wide as its longest side.
+fn squared(img: RgbaImage) -> RgbaImage {
+    let (w, h) = img.dimensions();
+    if w == h {
+        return img;
+    }
+    let side = w.max(h);
+    let mut square = RgbaImage::new(side, side);
+    imageops::overlay(
+        &mut square,
+        &img,
+        i64::from((side - w) / 2),
+        i64::from((side - h) / 2),
+    );
+    square
+}
+
+/// A square at most `side` wide; never enlarged.
+fn shrink_square(img: RgbaImage, side: u32) -> RgbaImage {
+    if img.width() <= side {
+        img
+    } else {
+        imageops::resize(&img, side, side, FilterType::Lanczos3)
+    }
+}
+
+fn encode_png(img: &RgbaImage) -> Result<EncodedImage> {
+    let mut bytes = Vec::new();
+    PngEncoder::new(&mut bytes)
+        .write_image(
+            img.as_raw(),
+            img.width(),
+            img.height(),
+            ExtendedColorType::Rgba8,
+        )
+        .map_err(|e| Error::internal(format!("png encode: {e}")))?;
+    Ok(EncodedImage {
+        bytes,
+        width: img.width(),
+        height: img.height(),
+    })
+}
+
+/// The upload's pixels, upright, after every check that needs no decoding.
+fn decode(bytes: &[u8], rules: ImageRules) -> Result<DynamicImage> {
     // The magic bytes decide; the client's Content-Type and file name are
     // never consulted.
     let format = image::guess_format(bytes)
@@ -83,15 +172,7 @@ fn process(bytes: &[u8], rules: ImageRules) -> Result<ProcessedImage> {
     let orientation = decoder.orientation().map_err(invalid)?;
     let mut decoded = DynamicImage::from_decoder(decoder).map_err(invalid)?;
     decoded.apply_orientation(orientation);
-
-    let main = fit(&decoded, rules.main_max_side);
-    // From the already-reduced image: same result, a fraction of the work.
-    let thumb = fit(&main, rules.thumb_max_side);
-    Ok(ProcessedImage {
-        main: encode(main, rules.jpeg_quality)?,
-        thumb: encode(thumb, rules.jpeg_quality)?,
-        content_type: OUTPUT_CONTENT_TYPE,
-    })
+    Ok(decoded)
 }
 
 /// Scales down so the longest side is at most `max_side`; never scales up.
@@ -152,6 +233,9 @@ mod tests {
         main_max_side: 1600,
         thumb_max_side: 400,
         jpeg_quality: 80,
+        icon_min_side: 192,
+        icon_main_side: 512,
+        icon_thumb_side: 96,
     };
 
     fn jpeg(w: u32, h: u32) -> Vec<u8> {
@@ -246,6 +330,60 @@ mod tests {
             .unwrap()
             .into_rgb8();
         assert!(back.pixels().all(|p| p.0.iter().all(|&c| c > 240)));
+    }
+
+    #[test]
+    fn a_logo_keeps_its_transparency_on_a_square() {
+        // A wide mark: opaque green, nothing around it.
+        let mark = RgbaImage::from_pixel(300, 200, image::Rgba([6, 78, 59, 255]));
+        let out = process_icon(&png(&mark), RULES).unwrap();
+        assert_eq!(out.content_type, "image/png");
+        let main = image::load_from_memory(&out.main.bytes)
+            .unwrap()
+            .into_rgba8();
+        assert_eq!(main.dimensions(), (300, 300), "squared, never enlarged");
+        assert_eq!(
+            main.get_pixel(150, 0).0[3],
+            0,
+            "the band above is transparent"
+        );
+        assert_eq!(
+            main.get_pixel(150, 150).0,
+            [6, 78, 59, 255],
+            "the mark as it was"
+        );
+        assert_eq!((out.thumb.width, out.thumb.height), (96, 96));
+    }
+
+    #[test]
+    fn a_large_logo_is_reduced_and_a_small_one_refused() {
+        let big = RgbaImage::from_pixel(2000, 2000, image::Rgba([1, 2, 3, 255]));
+        let out = process_icon(&png(&big), RULES).unwrap();
+        assert_eq!((out.main.width, out.main.height), (512, 512));
+        let small = RgbaImage::from_pixel(400, 100, image::Rgba([1, 2, 3, 255]));
+        assert_eq!(
+            code(process_icon(&png(&small), RULES)),
+            Some(ErrorCode::ImageTooSmall)
+        );
+    }
+
+    #[test]
+    fn a_logo_is_never_svg_nor_anything_but_a_raster() {
+        let svg = br#"<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>"#;
+        assert_eq!(
+            code(process_icon(svg, RULES)),
+            Some(ErrorCode::UnsupportedImageType)
+        );
+        // A PNG with a script appended comes back as our own PNG only.
+        let mut polyglot = png(&RgbaImage::from_pixel(
+            200,
+            200,
+            image::Rgba([9, 9, 9, 255]),
+        ));
+        polyglot.extend_from_slice(b"<script>alert(1)</script>");
+        let out = process_icon(&polyglot, RULES).unwrap();
+        assert!(!contains(&out.main.bytes, b"<script>"));
+        assert!(!contains(&out.thumb.bytes, b"<script>"));
     }
 
     #[test]

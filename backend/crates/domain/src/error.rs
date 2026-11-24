@@ -143,6 +143,7 @@ error_codes! {
     ContactDailyLimit         => (TooManyRequests, "contact_daily_limit"),
     UnknownSetting            => (BadRequest,      "unknown_setting"),
     SettingOutOfRange         => (BadRequest,      "setting_out_of_range"),
+    SettingIsAnImage          => (BadRequest,      "setting_is_an_image"),
     InvalidUrl                => (BadRequest,      "invalid_url"),
     InvalidFreshDays          => (BadRequest,      "invalid_fresh_days"),
 
@@ -152,6 +153,7 @@ error_codes! {
     UnsupportedImageType      => (BadRequest,      "unsupported_image_type"),
     ImageTooManyPixels        => (BadRequest,      "image_too_many_pixels"),
     InvalidImage              => (BadRequest,      "invalid_image"),
+    ImageTooSmall             => (BadRequest,      "image_too_small"),
 
     // ── Conflicts ────────────────────────────────────────────────────────────
     UsernameTaken             => (Conflict,        "username_taken"),

@@ -71,8 +71,15 @@ pub fn file_too_large(max_upload_bytes: usize) -> Error {
 
 /// Keys are derived from the id, so two uploads can never collide and no
 /// user input reaches a storage path.
-fn object_keys(id: Uuid) -> (String, String) {
-    (format!("images/{id}.jpg"), format!("images/{id}-thumb.jpg"))
+fn object_keys(id: Uuid, content_type: &str) -> (String, String) {
+    let ext = match content_type {
+        "image/png" => "png",
+        _ => "jpg",
+    };
+    (
+        format!("images/{id}.{ext}"),
+        format!("images/{id}-thumb.{ext}"),
+    )
 }
 
 /// A photo uploaded for one listing but not yet shown on it: an edit form
@@ -167,13 +174,25 @@ impl MediaUseCase {
     /// instead of leaving a product half-saved. Callers check who is asking
     /// (and, for an existing product, that it is theirs) first.
     pub async fn prepare_image(&self, upload: Vec<u8>) -> Result<ProcessedImage> {
+        self.check_size(&upload)?;
+        self.images.process(upload).await
+    }
+
+    /// `prepare_image` for the platform's logo or browser icon: a PNG square
+    /// with its transparency (`ImageProcessor::process_icon`).
+    pub async fn prepare_icon(&self, upload: Vec<u8>) -> Result<ProcessedImage> {
+        self.check_size(&upload)?;
+        self.images.process_icon(upload).await
+    }
+
+    fn check_size(&self, upload: &[u8]) -> Result<()> {
         if upload.is_empty() {
             return Err(Error::new(ErrorCode::ImageRequired));
         }
         if upload.len() > self.max_upload_bytes {
             return Err(file_too_large(self.max_upload_bytes));
         }
-        self.images.process(upload).await
+        Ok(())
     }
 
     /// Stores a prepared image and makes it the image of one of the actor's
@@ -471,7 +490,7 @@ impl MediaUseCase {
     /// checks who is asking and calls `discard` if that save fails.
     pub(crate) async fn store(&self, actor: &Actor, image: ProcessedImage) -> Result<Uuid> {
         let id = Uuid::new_v4();
-        let (storage_key, thumb_key) = object_keys(id);
+        let (storage_key, thumb_key) = object_keys(id, image.content_type);
         let row = NewFile {
             id,
             storage_key: storage_key.clone(),
@@ -553,11 +572,15 @@ mod tests {
     fn keys_come_from_the_id_only() {
         let id = Uuid::nil();
         assert_eq!(
-            object_keys(id),
+            object_keys(id, "image/jpeg"),
             (
                 "images/00000000-0000-0000-0000-000000000000.jpg".to_owned(),
                 "images/00000000-0000-0000-0000-000000000000-thumb.jpg".to_owned()
             )
+        );
+        assert_eq!(
+            object_keys(id, "image/png").1,
+            "images/00000000-0000-0000-0000-000000000000-thumb.png"
         );
     }
 

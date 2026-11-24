@@ -6,8 +6,9 @@ use std::{net::SocketAddr, sync::Arc};
 use application::{
     catalogue::CATALOGUE,
     constants::{
-        DEFAULT_UPLOAD_MAX_BYTES, IMAGE_JPEG_QUALITY, IMAGE_MAIN_MAX_SIDE, IMAGE_MAX_PIXELS,
-        IMAGE_THUMB_MAX_SIDE, REFRESH_TOKEN_DEFAULT_DAYS, SETUP_TOKEN_MIN_CHARS,
+        DEFAULT_UPLOAD_MAX_BYTES, ICON_MAIN_SIDE, ICON_MIN_SIDE, ICON_THUMB_SIDE,
+        IMAGE_JPEG_QUALITY, IMAGE_MAIN_MAX_SIDE, IMAGE_MAX_PIXELS, IMAGE_THUMB_MAX_SIDE,
+        REFRESH_TOKEN_DEFAULT_DAYS, SETUP_TOKEN_MIN_CHARS,
     },
     events::{
         AuditLogSubscriber, FileCleanupSubscriber, InProcessEventBus,
@@ -351,6 +352,7 @@ fn site_config() -> SiteConfig {
     SiteConfig {
         name: optional_env("SITE_NAME").unwrap_or(defaults.name),
         description: optional_env("SITE_DESCRIPTION"),
+        ..defaults
     }
 }
 
@@ -595,6 +597,9 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
         main_max_side: IMAGE_MAIN_MAX_SIDE,
         thumb_max_side: IMAGE_THUMB_MAX_SIDE,
         jpeg_quality: IMAGE_JPEG_QUALITY,
+        icon_min_side: ICON_MIN_SIDE,
+        icon_main_side: ICON_MAIN_SIDE,
+        icon_thumb_side: ICON_THUMB_SIDE,
     }));
 
     let media = MediaUseCase::new(MediaDeps {
@@ -730,9 +735,9 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
             business_repo.clone(),
             user_repo.clone(),
             password_hasher,
-            media,
+            media.clone(),
         ),
-        settings: SettingsUseCase::new(setting_repo, events),
+        settings: SettingsUseCase::new(setting_repo, events, media),
         stats: StatsUseCase::new(StatsDeps {
             business_repo,
             product_repo,

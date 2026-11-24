@@ -273,6 +273,11 @@ impl AppRouting {
             // The admin's edit forms of a service and a supply carry a photo too.
             .route("/admin/services/{id}", post(pages::admin::services::update))
             .route("/admin/supplies/{id}", post(pages::admin::products::update))
+            // The logo and browser icon of the settings page.
+            .route(
+                "/admin/settings/image",
+                post(pages::admin::settings::upload_image),
+            )
             .layer(DefaultBodyLimit::max(
                 state.usecases.media.max_upload_bytes() + MULTIPART_OVERHEAD_BYTES,
             ))
@@ -533,6 +538,10 @@ impl AppRouting {
             .route(
                 "/admin/settings",
                 get(pages::admin::settings::show).post(pages::admin::settings::update),
+            )
+            .route(
+                "/admin/settings/image/delete",
+                post(pages::admin::settings::remove_image),
             )
             .route("/admin/demand", get(pages::admin::demand::show))
             .route("/admin/demand.csv", get(pages::admin::demand::csv))

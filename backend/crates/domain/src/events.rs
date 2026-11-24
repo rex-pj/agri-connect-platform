@@ -108,6 +108,9 @@ pub enum Change {
     /// Settings changed, each as "key: before → after".
     SettingsChanged {
         changes: Vec<String>,
+        /// Uploaded files the change stopped using (a replaced logo), for
+        /// the file cleanup.
+        released: Vec<Uuid>,
     },
     /// Something about signing in to an account; the actor is the account.
     Auth(AuthEvent),

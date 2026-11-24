@@ -4,6 +4,9 @@
 {% import "molecules/admin_header.html" as header %}
 {% import "molecules/admin_tabs.html" as tabs %}
 {% import "molecules/form_field.html" as field %}
+{% import "molecules/photo_picker.html" as photo %}
+{% import "organisms/confirm_sheet.html" as confirm %}
+{% import "atoms/logo.html" as brand %}
 {#- The platform settings, laid out like the other admin pages: one tab per
     group (each counting its settings off their defaults), the group as one
     `admin-section` card (title, status line, `form-stack`, one
@@ -11,7 +14,10 @@
     defaults" as its own card at the end, saying what goes back to what.
     Every box says its default and bounds; a switch is a plain checkbox
     (unticked, the browser sends nothing: off). `page.body` is
-    web::pages::admin::settings::SettingsPage. -#}
+    web::pages::admin::settings::SettingsPage. The identity tab adds a card
+    of its images (logo, browser icon): a preview where the mark shows, then
+    one multipart form each (`photo_picker`), and "use the default" behind a
+    confirmation while one is uploaded. -#}
 {% block title %}{{ t(key="admin_menu.settings") }} — {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
@@ -56,6 +62,40 @@
       <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button></div>
     </form>
   </section>
+
+  {% if g.images %}
+  <section class="admin-section" aria-labelledby="images-title">
+    <h2 class="admin-section__title" id="images-title">{{ t(key="settings.images_title") }}</h2>
+    <p class="admin-status">{{ t(key="settings.images_sub", min=b.icon_min) }}</p>
+    {#- Where the mark shows: the green top bar, a white card, a browser tab. -#}
+    <div class="brand-preview" aria-label="{{ t(key="settings.preview_label") }}">
+      <div class="brand-preview__bar">{{ brand::logo(class="app-nav__logo", file=site.logo) }} <span class="app-nav__name">{{ site.name }}</span></div>
+      <div class="brand-preview__card">{{ brand::logo(class="auth-brand__icon", file=site.logo) }} <span class="auth-brand__name">{{ site.name }}</span></div>
+      <div class="brand-preview__tab">
+        {% if site.icon %}<img class="brand-preview__favicon" src="{{ file_url(id=site.icon, variant="thumb") }}" alt="" width="16" height="16">{% else %}<img class="brand-preview__favicon" src="{{ asset_url(path='img/logo.svg') }}" alt="" width="16" height="16">{% endif %}
+        <span class="text-truncate">{{ site.name }}</span>
+      </div>
+    </div>
+    {% for i in g.images %}
+    <div x-data="dialog" data-open="false" x-on:keydown.escape.window="hide">
+      <form class="form-stack" method="post" action="{{ b.image_action }}" enctype="multipart/form-data">
+        <input type="hidden" name="key" value="{{ i.key }}">
+        {% set hint = i.hint %}
+        {% if i.changed_on %}{% set when = i.changed_on | vn_datetime %}{% set hint = hint ~ " " ~ t(key="settings.changed_on", when=when) %}{% endif %}
+        {{ photo::photo_picker(id=i.id, label=i.label, max_mb=b.max_mb, hint=hint, current=i.current | default(value=""), error=i.error | default(value="")) }}
+        {{ field::input(id=i.id ~ "-reason", name="reason", label=t(key="settings.reason"), placeholder=t(key="settings.reason_placeholder"), maxlength=limits.audit_reason_max) }}
+        <div class="admin-actions">
+          <button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-upload") }} {{ t(key="settings.image_upload") }}</button>
+          {% if i.current %}<a class="btn btn-outline-secondary" href="#remove-{{ i.id }}" x-on:click.prevent="show">{{ atoms::icon(name="fa-rotate-left") }} {{ t(key="settings.image_builtin_button") }}</a>{% endif %}
+        </div>
+      </form>
+      {% if i.current %}
+      {{ confirm::confirm_sheet(id="remove-" ~ i.id, title=t(key="settings.image_remove_title", what=i.label), icon="fa-rotate-left", action=b.image_remove_action, button=t(key="settings.image_builtin_button"), reason_max=limits.audit_reason_max, note=t(key="settings.image_remove_note"), hidden_name="key", hidden_value=i.key, button_class="btn-warning") }}
+      {% endif %}
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
 
   {% if g.resets %}
   <section class="admin-section" aria-labelledby="reset-title">

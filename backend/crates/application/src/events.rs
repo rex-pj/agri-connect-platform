@@ -17,6 +17,7 @@ use domain::{
     Result,
 };
 use tracing::{info, warn};
+use uuid::Uuid;
 
 use crate::{
     ports::{EmailService, EventBus, FileStorage, InquiryNotice, JobNotice},
@@ -114,7 +115,7 @@ impl EventSubscriber for AuditLogSubscriber {
             (Change::Contract { about, .. }, Some(r)) => Some(format!("{about}: {r}")),
             (Change::Contract { about, .. }, None) => Some(about.clone()),
             // "key: before → after; …: reason".
-            (Change::SettingsChanged { changes }, r) => {
+            (Change::SettingsChanged { changes, .. }, r) => {
                 let diff = changes.join("; ");
                 Some(match r {
                     Some(r) => format!("{diff}: {r}"),
@@ -182,18 +183,30 @@ impl EventSubscriber for FileCleanupSubscriber {
     }
 
     async fn handle(&self, event: &DomainEvent) -> Result<()> {
-        let unreferenced = match (&event.change, event.entity) {
-            (Change::ImageReplaced { previous }, _) => *previous,
-            (Change::ImageRemoved { previous }, _) => Some(*previous),
+        let unreferenced: Vec<Uuid> = match (&event.change, event.entity) {
+            (Change::ImageReplaced { previous }, _) => previous.iter().copied().collect(),
+            (Change::ImageRemoved { previous }, _) => vec![*previous],
+            // A replaced or removed logo, browser icon.
+            (Change::SettingsChanged { released, .. }, _) => released.clone(),
             // Both are soft-deleted, so the row still names its image.
-            (Change::Deleted, Entity::Product) => self.products.image_of(event.entity_id).await?,
-            (Change::Deleted, Entity::Service) => self.services.image_of(event.entity_id).await?,
-            _ => None,
+            (Change::Deleted, Entity::Product) => self
+                .products
+                .image_of(event.entity_id)
+                .await?
+                .into_iter()
+                .collect(),
+            (Change::Deleted, Entity::Service) => self
+                .services
+                .image_of(event.entity_id)
+                .await?
+                .into_iter()
+                .collect(),
+            _ => Vec::new(),
         };
-        match unreferenced {
-            Some(id) => release_file(self.files.as_ref(), self.storage.as_ref(), id).await,
-            None => Ok(()),
+        for id in unreferenced {
+            release_file(self.files.as_ref(), self.storage.as_ref(), id).await?;
         }
+        Ok(())
     }
 }
 

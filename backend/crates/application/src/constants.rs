@@ -217,6 +217,13 @@ pub const IMAGE_MAIN_MAX_SIDE: u32 = 1600;
 /// Longest side of the list/card thumbnail.
 pub const IMAGE_THUMB_MAX_SIDE: u32 = 400;
 pub const IMAGE_JPEG_QUALITY: u8 = 80;
+/// The platform's logo and browser icon (`brand.logo`, `brand.icon`): a square
+/// at least this wide, so the phone home-screen icon (180 px) stays sharp.
+pub const ICON_MIN_SIDE: u32 = 192;
+/// Its stored size: the home-screen icon and the settings page preview.
+pub const ICON_MAIN_SIDE: u32 = 512;
+/// Its small copy: the browser tab and the top bars, at twice their size.
+pub const ICON_THUMB_SIDE: u32 = 96;
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
 /// Used when REFRESH_TOKEN_DAYS is unset: a farmer opening the app weekly

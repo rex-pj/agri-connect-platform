@@ -9,9 +9,10 @@ use axum::{
     body::Body,
     http::{header, Request, StatusCode},
 };
+use image::ImageEncoder;
 use integration_tests::{
     body_text, categories_of, env_with_origin, get_page, install_admin, json_body, post_form,
-    register_provider, send, Env, TEST_ORIGIN,
+    post_multipart_form, register_provider, send, Env, TEST_ORIGIN,
 };
 use sea_orm::{ConnectionTrait, Statement};
 
@@ -472,4 +473,164 @@ async fn a_commodity_keeps_its_own_price_freshness() {
     let res = send(&e.router, edit("61")).await;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     assert!(body_text(res).await.contains("Nhập số ngày từ 1 đến 60."));
+}
+
+/// A mark on a transparent background, `w` × `h`.
+fn logo_png(w: u32, h: u32) -> Vec<u8> {
+    let img = image::RgbaImage::from_fn(w, h, |x, y| {
+        let inside = x > w / 4 && x < 3 * w / 4 && y > h / 4 && y < 3 * h / 4;
+        image::Rgba(if inside {
+            [6, 78, 59, 255]
+        } else {
+            [0, 0, 0, 0]
+        })
+    });
+    let mut out = Vec::new();
+    image::codecs::png::PngEncoder::new(&mut out)
+        .write_image(&img, w, h, image::ExtendedColorType::Rgba8)
+        .unwrap();
+    out
+}
+
+async fn upload(e: &Env, admin: &str, key: &str, bytes: &[u8]) -> axum::http::Response<Body> {
+    send(
+        &e.router,
+        post_multipart_form(
+            "/admin/settings/image",
+            &[("key", key), ("reason", "logo mới")],
+            Some(bytes),
+            admin,
+        ),
+    )
+    .await
+}
+
+async fn stored_image(e: &Env, key: &str) -> String {
+    scalar(
+        e,
+        &format!("SELECT coalesce(max(value), '') AS v FROM platform_settings WHERE key = '{key}'"),
+    )
+    .await
+}
+
+async fn file_count(e: &Env) -> String {
+    scalar(e, "SELECT count(*)::text AS v FROM files").await
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn an_uploaded_logo_and_icon_reach_every_frame_and_the_old_ones_are_released() {
+    let e = env_with_origin().await;
+    let admin = install_admin(&e).await;
+    let html = page(&e, "/admin/settings", Some(&admin)).await;
+    assert!(
+        html.contains("Logo và biểu tượng") && html.contains(r#"name="key" value="brand.logo""#)
+    );
+    assert!(!html.contains(r#"name="brand.logo""#), "never a text box");
+
+    // Refused: no SVG (a script served from our origin), nothing too small.
+    let svg = br#"<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>"#;
+    let res = upload(&e, &admin, "brand.logo", svg).await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert!(body_text(res)
+        .await
+        .contains("Chỉ nhận ảnh JPEG, PNG hoặc WebP."));
+    let res = upload(&e, &admin, "brand.logo", &logo_png(100, 100)).await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert!(body_text(res).await.contains("Ảnh quá nhỏ."));
+    // Only an image setting takes an upload.
+    let res = upload(&e, &admin, "brand.name", &logo_png(256, 256)).await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(file_count(&e).await, "0", "nothing stored");
+
+    // A typed file id is refused: it could point at any upload.
+    let token = bearer(&e, "quantri", "matkhau123").await;
+    let req = Request::patch("/api/admin/settings")
+        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .header(header::CONTENT_TYPE, "application/json")
+        .header(header::ORIGIN, TEST_ORIGIN)
+        .body(Body::from(
+            r#"{"values":{"brand.logo":"00000000-0000-0000-0000-000000000001"}}"#,
+        ))
+        .unwrap();
+    let res = send(&e.router, req).await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    let body = json_body(res).await;
+    assert!(
+        body["field_errors"]["brand.logo"][0]
+            .as_str()
+            .is_some_and(|m| m.contains("tải ảnh lên")),
+        "{body}"
+    );
+
+    // A logo: a PNG on every frame, the browser icon too.
+    let res = upload(&e, &admin, "brand.logo", &logo_png(300, 240)).await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res.headers()[header::LOCATION], "/admin/settings?tab=brand");
+    let logo = stored_image(&e, "brand.logo").await;
+    let thumb = format!("/files/{logo}/thumb");
+    let home = page(&e, "/", None).await;
+    assert!(home.contains(&format!(
+        r#"class="brand-logo brand-logo--upload app-nav__logo" src="{thumb}""#
+    )));
+    assert!(home.contains(&format!(
+        r#"<link rel="icon" href="{thumb}" type="image/png""#
+    )));
+    assert!(page(&e, "/login", None).await.contains(&thumb));
+    assert!(page(&e, "/admin/settings", Some(&admin))
+        .await
+        .contains(&thumb));
+    let res = send(&e.router, get_page(&format!("/files/{logo}"), None)).await;
+    assert_eq!(res.headers()[header::CONTENT_TYPE], "image/png");
+    let res = send(&e.router, get_page("/favicon.ico", None)).await;
+    assert_eq!(res.status(), StatusCode::FOUND);
+    assert_eq!(res.headers()[header::LOCATION], thumb.as_str());
+
+    // A browser icon of its own; a new logo releases the old one.
+    let res = upload(&e, &admin, "brand.icon", &logo_png(192, 192)).await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let icon = stored_image(&e, "brand.icon").await;
+    let res = upload(&e, &admin, "brand.logo", &logo_png(512, 512)).await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let new_logo = stored_image(&e, "brand.logo").await;
+    assert_ne!(new_logo, logo);
+    assert_eq!(file_count(&e).await, "2", "the first logo is gone");
+    let res = send(&e.router, get_page(&thumb, None)).await;
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+    let home = page(&e, "/", None).await;
+    assert!(home.contains(&format!(r#"<link rel="icon" href="/files/{icon}/thumb""#)));
+    assert!(home.contains(&format!("/files/{new_logo}/thumb")));
+
+    // Back on the built-in logo: the icon stays, the logo's file goes.
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/settings/image/delete",
+            &[("key", "brand.logo"), ("reason", "sai màu")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(stored_image(&e, "brand.logo").await, "");
+    assert_eq!(file_count(&e).await, "1");
+    let home = page(&e, "/", None).await;
+    assert!(!home.contains("brand-logo--upload"), "the built-in mark");
+    assert!(home.contains(&format!("/files/{icon}/thumb")));
+
+    // Back to defaults: every image released, the built-in favicon again.
+    let res = save(&e, &admin, &[("group", "brand"), ("action", "reset")]).await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(file_count(&e).await, "0");
+    let res = send(&e.router, get_page("/favicon.ico", None)).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    assert!(
+        scalar(
+            &e,
+            "SELECT string_agg(reason, ' | ') AS v FROM audit_logs WHERE action = 'change_settings'"
+        )
+        .await
+        .contains("brand.logo: - → "),
+        "each upload audited"
+    );
 }

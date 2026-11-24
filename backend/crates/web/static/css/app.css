@@ -356,6 +356,55 @@ body:has(.app-nav__search-row.open) .app-main {
 .brand-logo__sun {
   fill: var(--a500);
 }
+/* The settings page's preview of the mark where it shows: the green top
+   bar, a white card, a browser tab. */
+.brand-preview {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.brand-preview__bar,
+.brand-preview__card,
+.brand-preview__tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  border-radius: 8px;
+  font-weight: 700;
+}
+.brand-preview__bar {
+  padding: 8px 12px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--p900) 0%, var(--p800) 55%, var(--p700) 100%);
+}
+.brand-preview__card {
+  padding: 12px;
+  border: 1px solid var(--bs-border-color);
+  background: #fff;
+}
+.brand-preview__tab {
+  max-width: 240px;
+  padding: 6px 10px;
+  border-radius: 8px 8px 0 0;
+  background: var(--bs-tertiary-bg);
+  font-weight: 400;
+  font-size: 0.875rem;
+}
+.brand-preview__favicon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+/* An uploaded logo cannot take the text colour: it sits on a white rounded
+   tile, so any mark reads on the green bars and on a white card. */
+.brand-logo--upload {
+  background: #fff;
+  border-radius: 22%;
+  padding: 3px;
+  object-fit: contain;
+  box-shadow: 0 0 0 1px rgba(6, 78, 59, 0.12);
+}
 .app-nav__logo,
 .app-footer__mark {
   width: 34px;

@@ -6,7 +6,7 @@
 {#- Public and signed-in app pages: top bar, content, footer, bottom tabs.
     Pages fill `main`; the frame comes from `shell` (web::shell). -#}
 {% block body %}
-{{ nav::app_nav(shell=shell, site_name=site.name, languages=languages) }}
+{{ nav::app_nav(shell=shell, site_name=site.name, languages=languages, logo=site.logo) }}
 <main class="app-main" id="main">
 {#- The one-time language offer: the first thing under the fixed top bar. -#}
 {% if shell.language_offer %}{{ offer::language_offer(o=shell.language_offer, back=shell.here) }}{% endif %}

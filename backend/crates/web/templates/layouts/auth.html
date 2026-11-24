@@ -12,7 +12,7 @@
 <main class="auth-shell">
   <div class="auth-card">
     <a class="auth-brand" href="{{ url_for(name="home") }}">
-      {{ brand::logo(class="auth-brand__icon") }}
+      {{ brand::logo(class="auth-brand__icon", file=site.logo) }}
       <span class="auth-brand__name">{{ site.name }}</span>
     </a>
     {% block card %}{% endblock card %}

@@ -20,7 +20,7 @@
   <header class="ash-header">
     <div class="d-flex align-items-center gap-2">
       <button type="button" class="ash-menu-btn d-md-none" aria-label="{{ t(key="admin_layout.menu") }}" aria-controls="admin-menu" x-cloak x-on:click="toggle" :class="buttonClass" :aria-expanded="expanded">{{ atoms::icon(name="fa-bars") }}</button>
-      <a class="ash-logo" href="{{ url_for(name="admin_dashboard") }}" aria-label="{{ site.name }} Admin">{{ brand::logo(class="ash-logo__icon") }} <span class="d-none d-sm-inline">{{ site.name }} Admin</span></a>
+      <a class="ash-logo" href="{{ url_for(name="admin_dashboard") }}" aria-label="{{ site.name }} Admin">{{ brand::logo(class="ash-logo__icon", file=site.logo) }} <span class="d-none d-sm-inline">{{ site.name }} Admin</span></a>
     </div>
     <div class="d-flex align-items-center gap-2">
       <a class="app-nav__login" href="{{ url_for(name="home") }}" aria-label="{{ t(key="admin_layout.public_site") }}" title="{{ t(key="admin_layout.public_site") }}">{{ atoms::icon(name="fa-house") }}<span class="d-none d-md-inline">{{ t(key="admin_layout.public_site") }}</span></a>

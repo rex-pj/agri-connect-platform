@@ -21,6 +21,7 @@ use domain::{
     Error, ErrorCode, Result,
 };
 use tracing::warn;
+use uuid::Uuid;
 
 use crate::{
     constants::{
@@ -49,6 +50,8 @@ const OFF: &str = "false";
 
 pub const BRAND_NAME: &str = "brand.name";
 pub const BRAND_DESCRIPTION: &str = "brand.description";
+pub const BRAND_LOGO: &str = "brand.logo";
+pub const BRAND_ICON: &str = "brand.icon";
 pub const SUPPORT_PHONE: &str = "support.phone";
 pub const SUPPORT_ZALO_URL: &str = "support.zalo_url";
 pub const SUPPORT_EMAIL: &str = "support.email";
@@ -68,7 +71,8 @@ pub const SPONSORED_SHOWN: &str = "market.sponsored_shown";
 /// The sections of the settings page, in its order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SettingGroup {
-    /// What the platform is called: every page's title and top bar, emails.
+    /// What the platform is called and looks like: every page's title, top
+    /// bar, logo and browser icon; emails.
     Brand,
     /// The platform's own help lines in the footer.
     Support,
@@ -133,6 +137,9 @@ pub enum SettingKind {
     Switch { default: bool },
     /// Text, empty by default.
     Text(TextRule),
+    /// An uploaded image (`files.id`), empty by default. Set only by an
+    /// upload (`SettingsUseCase::set_image`), never typed.
+    Image,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -170,6 +177,17 @@ pub static SETTINGS: &[SettingDef] = &[
         kind: SettingKind::Text(TextRule::Line {
             max: SITE_DESCRIPTION_MAX,
         }),
+    },
+    // Empty: the built-in mark and icons.
+    SettingDef {
+        key: BRAND_LOGO,
+        group: SettingGroup::Brand,
+        kind: SettingKind::Image,
+    },
+    SettingDef {
+        key: BRAND_ICON,
+        group: SettingGroup::Brand,
+        kind: SettingKind::Image,
     },
     SettingDef {
         key: SUPPORT_PHONE,
@@ -304,7 +322,7 @@ impl SettingDef {
         match self.kind {
             SettingKind::Number { default, .. } => SettingValue::Number(default),
             SettingKind::Switch { default } => SettingValue::Switch(default),
-            SettingKind::Text(_) => SettingValue::Text(String::new()),
+            SettingKind::Text(_) | SettingKind::Image => SettingValue::Text(String::new()),
         }
     }
 
@@ -328,7 +346,13 @@ impl SettingDef {
                 OFF | "" => Ok(SettingValue::Switch(false)),
                 _ => Err(refuse(ErrorCode::InvalidRequestBody)),
             },
-            SettingKind::Text(_) if raw.is_empty() => Ok(SettingValue::Text(String::new())),
+            SettingKind::Text(_) | SettingKind::Image if raw.is_empty() => {
+                Ok(SettingValue::Text(String::new()))
+            }
+            // Read back from storage only: an upload writes it.
+            SettingKind::Image => Uuid::parse_str(raw)
+                .map(|id| SettingValue::Text(id.to_string()))
+                .map_err(|_| refuse(ErrorCode::InvalidRequestBody)),
             SettingKind::Text(TextRule::Line { max }) => {
                 let line = one_line(raw);
                 max_chars(&line, max)?;
@@ -471,6 +495,22 @@ impl Settings {
     /// own, else the locale's.
     pub fn site_description(&self) -> Option<&str> {
         self.text(BRAND_DESCRIPTION)
+    }
+
+    /// An uploaded image setting's file.
+    pub fn image(&self, key: &str) -> Option<Uuid> {
+        self.text(key).and_then(|t| Uuid::parse_str(t).ok())
+    }
+
+    /// The platform's logo an admin uploaded; `None`: the built-in mark.
+    pub fn logo(&self) -> Option<Uuid> {
+        self.image(BRAND_LOGO)
+    }
+
+    /// The browser and home-screen icon: the one uploaded for it, else the
+    /// logo; `None`: the built-in icons.
+    pub fn icon(&self) -> Option<Uuid> {
+        self.image(BRAND_ICON).or_else(|| self.logo())
     }
 
     pub fn support_phone(&self) -> Option<&str> {

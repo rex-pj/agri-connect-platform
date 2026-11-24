@@ -9,11 +9,11 @@
 {% import "atoms/logo.html" as brand %}
 {% import "molecules/language_switch.html" as lang %}
 {% import "molecules/account_menu.html" as account %}
-{% macro app_nav(shell, site_name, languages) -%}
+{% macro app_nav(shell, site_name, languages, logo="") -%}
 <nav class="app-nav" aria-label="{{ t(key="nav_bar.label") }}" x-data="navSearch" x-on:profile-menu-opened="close" x-on:language-menu-opened="close" data-open="{% if shell.search_query %}true{% else %}false{% endif %}">
   <div class="app-nav__top">
     <a class="app-nav__brand" href="{{ url_for(name='home') }}">
-      {{ brand::logo(class="app-nav__logo") }}
+      {{ brand::logo(class="app-nav__logo", file=logo) }}
       <span class="app-nav__name">{{ site_name }}</span>
     </a>
     <div class="app-nav__actions">

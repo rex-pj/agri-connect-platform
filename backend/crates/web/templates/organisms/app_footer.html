@@ -16,7 +16,7 @@
   <div class="app-footer__inner">
     <div class="app-footer__brand">
       <a class="app-footer__logo" href="{{ url_for(name='home') }}">
-        {{ brand::logo(class="app-footer__mark") }}
+        {{ brand::logo(class="app-footer__mark", file=site.logo) }}
         {{ site.name }}
       </a>
       <p class="app-footer__promise">{{ t(key="footer.promise") }}</p>

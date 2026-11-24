@@ -12,7 +12,7 @@ use axum::{
 use image::ImageEncoder;
 use integration_tests::{
     body_text, categories_of, env_with_origin, get_page, install_admin, json_body, post_form,
-    post_multipart_form, register_provider, send, Env, TEST_ORIGIN,
+    post_multipart_files, register_provider, send, Env, TEST_ORIGIN,
 };
 use sea_orm::{ConnectionTrait, Statement};
 
@@ -70,7 +70,13 @@ async fn a_group_is_saved_refused_audited_and_put_back() {
     // The first tab by default; every group is a tab.
     let html = page(&e, "/admin/settings", Some(&admin)).await;
     assert!(html.contains(r#"name="brand.name""#) && !html.contains("market.steady"));
-    assert!(html.contains("Để trống: dùng «Agri-Connect»."));
+    // An empty box shows the default it falls back on, greyed inside it,
+    // and counts its characters.
+    assert!(
+        html.contains(r#"value="" placeholder="Agri-Connect""#),
+        "{html}"
+    );
+    assert!(html.contains(r#"x-data="charCount" data-for="brand-name""#));
     assert!(html.contains(r#"href="/admin/settings?tab=market""#));
     assert!(html.contains("Đang theo mặc định"));
     let html = page(&e, "/admin/settings?tab=market", Some(&admin)).await;
@@ -492,15 +498,21 @@ fn logo_png(w: u32, h: u32) -> Vec<u8> {
     out
 }
 
-async fn upload(e: &Env, admin: &str, key: &str, bytes: &[u8]) -> axum::http::Response<Body> {
+/// The identity tab's one form: its words and the files chosen, each a
+/// (setting key, bytes) box; the boxes not given are sent empty.
+async fn save_brand(
+    e: &Env,
+    admin: &str,
+    fields: &[(&str, &str)],
+    files: &[(&str, &[u8])],
+) -> axum::http::Response<Body> {
+    let boxes: Vec<(&str, Option<&[u8]>)> = ["brand.logo", "brand.icon"]
+        .into_iter()
+        .map(|key| (key, files.iter().find(|(k, _)| *k == key).map(|(_, b)| *b)))
+        .collect();
     send(
         &e.router,
-        post_multipart_form(
-            "/admin/settings/image",
-            &[("key", key), ("reason", "logo mới")],
-            Some(bytes),
-            admin,
-        ),
+        post_multipart_files("/admin/settings/brand", fields, &boxes, admin),
     )
     .await
 }
@@ -517,31 +529,67 @@ async fn file_count(e: &Env) -> String {
     scalar(e, "SELECT count(*)::text AS v FROM files").await
 }
 
+async fn audit_count(e: &Env) -> String {
+    scalar(
+        e,
+        "SELECT count(*)::text AS v FROM audit_logs WHERE action = 'change_settings'",
+    )
+    .await
+}
+
 #[tokio::test]
 #[ignore = "needs TEST_DATABASE_URL"]
-async fn an_uploaded_logo_and_icon_reach_every_frame_and_the_old_ones_are_released() {
+async fn the_identity_form_saves_words_and_images_at_once_or_nothing() {
     let e = env_with_origin().await;
     let admin = install_admin(&e).await;
     let html = page(&e, "/admin/settings", Some(&admin)).await;
+    assert!(html.contains(r#"action="/admin/settings/brand" enctype="multipart/form-data""#));
     assert!(
-        html.contains("Logo và biểu tượng") && html.contains(r#"name="key" value="brand.logo""#)
+        html.contains(r#"name="brand.logo" type="file""#)
+            && html.contains(r#"name="brand.icon" type="file""#)
     );
-    assert!(!html.contains(r#"name="brand.logo""#), "never a text box");
+    assert!(html.contains(r#"x-data="brandPreview""#) && html.contains("Kết quả tìm kiếm Google"));
 
-    // Refused: no SVG (a script served from our origin), nothing too small.
+    // Every broken box at once, words and images; nothing stored.
     let svg = br#"<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>"#;
-    let res = upload(&e, &admin, "brand.logo", svg).await;
+    let long = "x".repeat(application::constants::SITE_NAME_MAX + 1);
+    let res = save_brand(
+        &e,
+        &admin,
+        &[("brand.name", &long), ("brand.description", "")],
+        &[("brand.logo", svg), ("brand.icon", &logo_png(100, 100))],
+    )
+    .await;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
-    assert!(body_text(res)
-        .await
-        .contains("Chỉ nhận ảnh JPEG, PNG hoặc WebP."));
-    let res = upload(&e, &admin, "brand.logo", &logo_png(100, 100)).await;
-    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
-    assert!(body_text(res).await.contains("Ảnh quá nhỏ."));
-    // Only an image setting takes an upload.
-    let res = upload(&e, &admin, "brand.name", &logo_png(256, 256)).await;
-    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
-    assert_eq!(file_count(&e).await, "0", "nothing stored");
+    let html = body_text(res).await;
+    assert!(html.contains("Tối đa 40 ký tự."), "the name");
+    assert!(
+        html.contains("Chỉ nhận ảnh JPEG, PNG hoặc WebP."),
+        "the logo"
+    );
+    assert!(html.contains("Ảnh quá nhỏ."), "the icon");
+    assert!(
+        html.contains(&format!(r#"value="{long}""#)),
+        "the name as typed"
+    );
+    assert_eq!(file_count(&e).await, "0");
+    assert_eq!(stored_image(&e, "brand.name").await, "");
+
+    // The same box twice would store a file nothing shows.
+    let twice = post_multipart_files(
+        "/admin/settings/brand",
+        &[],
+        &[
+            ("brand.logo", Some(&logo_png(256, 256)[..])),
+            ("brand.logo", Some(&logo_png(256, 256)[..])),
+        ],
+        &admin,
+    );
+    assert_eq!(
+        send(&e.router, twice).await.status(),
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(file_count(&e).await, "0");
 
     // A typed file id is refused: it could point at any upload.
     let token = bearer(&e, "quantri", "matkhau123").await;
@@ -563,10 +611,25 @@ async fn an_uploaded_logo_and_icon_reach_every_frame_and_the_old_ones_are_releas
         "{body}"
     );
 
-    // A logo: a PNG on every frame, the browser icon too.
-    let res = upload(&e, &admin, "brand.logo", &logo_png(300, 240)).await;
+    // One save: the name and the logo, one audit row, on every frame.
+    let audits = audit_count(&e).await;
+    let res = save_brand(
+        &e,
+        &admin,
+        &[
+            ("brand.name", "Nông Kết Nối"),
+            ("brand.description", ""),
+            ("reason", "nhận diện mới"),
+        ],
+        &[("brand.logo", &logo_png(300, 240))],
+    )
+    .await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
     assert_eq!(res.headers()[header::LOCATION], "/admin/settings?tab=brand");
+    assert_eq!(
+        audit_count(&e).await,
+        (audits.parse::<i64>().unwrap() + 1).to_string()
+    );
     let logo = stored_image(&e, "brand.logo").await;
     let thumb = format!("/files/{logo}/thumb");
     let home = page(&e, "/", None).await;
@@ -576,22 +639,30 @@ async fn an_uploaded_logo_and_icon_reach_every_frame_and_the_old_ones_are_releas
     assert!(home.contains(&format!(
         r#"<link rel="icon" href="{thumb}" type="image/png""#
     )));
+    assert!(
+        home.contains(r#"<span class="app-nav__name" title="Nông Kết Nối">Nông Kết Nối</span>"#)
+    );
     assert!(page(&e, "/login", None).await.contains(&thumb));
-    assert!(page(&e, "/admin/settings", Some(&admin))
-        .await
-        .contains(&thumb));
     let res = send(&e.router, get_page(&format!("/files/{logo}"), None)).await;
     assert_eq!(res.headers()[header::CONTENT_TYPE], "image/png");
     let res = send(&e.router, get_page("/favicon.ico", None)).await;
     assert_eq!(res.status(), StatusCode::FOUND);
     assert_eq!(res.headers()[header::LOCATION], thumb.as_str());
 
-    // A browser icon of its own; a new logo releases the old one.
-    let res = upload(&e, &admin, "brand.icon", &logo_png(192, 192)).await;
+    // A browser icon of its own; a new logo releases the old one. The words
+    // sent again unchanged change nothing.
+    let res = save_brand(
+        &e,
+        &admin,
+        &[("brand.name", "Nông Kết Nối"), ("brand.description", "")],
+        &[
+            ("brand.icon", &logo_png(192, 192)),
+            ("brand.logo", &logo_png(512, 512)),
+        ],
+    )
+    .await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
     let icon = stored_image(&e, "brand.icon").await;
-    let res = upload(&e, &admin, "brand.logo", &logo_png(512, 512)).await;
-    assert_eq!(res.status(), StatusCode::SEE_OTHER);
     let new_logo = stored_image(&e, "brand.logo").await;
     assert_ne!(new_logo, logo);
     assert_eq!(file_count(&e).await, "2", "the first logo is gone");
@@ -601,36 +672,31 @@ async fn an_uploaded_logo_and_icon_reach_every_frame_and_the_old_ones_are_releas
     assert!(home.contains(&format!(r#"<link rel="icon" href="/files/{icon}/thumb""#)));
     assert!(home.contains(&format!("/files/{new_logo}/thumb")));
 
-    // Back on the built-in logo: the icon stays, the logo's file goes.
-    let res = send(
-        &e.router,
-        post_form(
-            "/admin/settings/image/delete",
-            &[("key", "brand.logo"), ("reason", "sai màu")],
-            Some(&admin),
-        ),
-    )
-    .await;
-    assert_eq!(res.status(), StatusCode::SEE_OTHER);
-    assert_eq!(stored_image(&e, "brand.logo").await, "");
-    assert_eq!(file_count(&e).await, "1");
-    let home = page(&e, "/", None).await;
-    assert!(!home.contains("brand-logo--upload"), "the built-in mark");
-    assert!(home.contains(&format!("/files/{icon}/thumb")));
-
-    // Back to defaults: every image released, the built-in favicon again.
+    // Back to defaults: the words only; an upload is never deleted with a
+    // whole group.
+    let html = page(&e, "/admin/settings", Some(&admin)).await;
+    assert!(html.contains("Logo và biểu tượng đã tải lên giữ nguyên"));
     let res = save(&e, &admin, &[("group", "brand"), ("action", "reset")]).await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(stored_image(&e, "brand.name").await, "");
+    assert_eq!(file_count(&e).await, "2");
+
+    // Each image back on its default, behind its own confirmation.
+    for key in ["brand.logo", "brand.icon"] {
+        let res = send(
+            &e.router,
+            post_form(
+                "/admin/settings/image/delete",
+                &[("key", key), ("reason", "sai màu")],
+                Some(&admin),
+            ),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    }
     assert_eq!(file_count(&e).await, "0");
+    let home = page(&e, "/", None).await;
+    assert!(!home.contains("brand-logo--upload"), "the built-in mark");
     let res = send(&e.router, get_page("/favicon.ico", None)).await;
     assert_eq!(res.status(), StatusCode::OK);
-    assert!(
-        scalar(
-            &e,
-            "SELECT string_agg(reason, ' | ') AS v FROM audit_logs WHERE action = 'change_settings'"
-        )
-        .await
-        .contains("brand.logo: - → "),
-        "each upload audited"
-    );
 }

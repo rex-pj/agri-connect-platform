@@ -12,7 +12,7 @@
   <div class="app-nav__top">
     <a class="app-nav__brand" href="{{ url_for(name="partner_report") }}">
       {{ brand::logo(class="app-nav__logo", file=site.logo) }}
-      {{ site.name }}
+      <span class="app-nav__name" title="{{ site.name }}">{{ site.name }}</span>
     </a>
     <div class="app-nav__actions">
       {{ lang::language_switch(languages=languages, back=shell.here) }}

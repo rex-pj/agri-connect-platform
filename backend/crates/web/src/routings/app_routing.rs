@@ -19,7 +19,7 @@ use tower_http::{
 
 use crate::{
     app_state::AppState,
-    constants::{MULTIPART_OVERHEAD_BYTES, REQUEST_ID_MAX_LEN},
+    constants::{BRAND_FORM_FILES, MULTIPART_OVERHEAD_BYTES, REQUEST_ID_MAX_LEN},
     error_response::render_errors,
     handlers::{
         admin_handler::AdminHandler,
@@ -273,14 +273,22 @@ impl AppRouting {
             // The admin's edit forms of a service and a supply carry a photo too.
             .route("/admin/services/{id}", post(pages::admin::services::update))
             .route("/admin/supplies/{id}", post(pages::admin::products::update))
-            // The logo and browser icon of the settings page.
-            .route(
-                "/admin/settings/image",
-                post(pages::admin::settings::upload_image),
-            )
             .layer(DefaultBodyLimit::max(
                 state.usecases.media.max_upload_bytes() + MULTIPART_OVERHEAD_BYTES,
             ))
+            // The settings page's identity tab: its words, the logo and the
+            // browser icon in one form, so room for two files.
+            .merge(
+                Router::new()
+                    .route(
+                        "/admin/settings/brand",
+                        post(pages::admin::settings::save_brand),
+                    )
+                    .layer(DefaultBodyLimit::max(
+                        BRAND_FORM_FILES * state.usecases.media.max_upload_bytes()
+                            + MULTIPART_OVERHEAD_BYTES,
+                    )),
+            )
             .layer(limiter(&config.limiters.upload, Scope::AllRequests));
 
         // ── AUTH routes (no token required, rate-limited) ────────────────────

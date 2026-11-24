@@ -12,9 +12,11 @@ use std::collections::HashMap;
 
 use application::{
     authz::Actor,
-    constants::ICON_MIN_SIDE,
+    constants::{ICON_MIN_SIDE, SITE_DESCRIPTION_ADVISED_MIN},
     outputs::{SettingDto, SettingGroupDto},
-    settings::{SettingGroup, SettingKind, BRAND_DESCRIPTION, BRAND_NAME, SETTINGS},
+    settings::{
+        SettingGroup, SettingKind, BRAND_DESCRIPTION, BRAND_ICON, BRAND_LOGO, BRAND_NAME, SETTINGS,
+    },
 };
 use axum::{extract::State, http::StatusCode, response::Response};
 use chrono::{DateTime, Utc};
@@ -23,7 +25,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     app_state::AppState,
-    constants::IMAGE_FIELD,
     cookies::{Flash, TakeFlash},
     extract::{ApiForm, ApiMultipart, ApiQuery},
     locale::Locale,
@@ -49,16 +50,12 @@ const PARAM_TAB: &str = "tab";
 const KIND_IMAGE: &str = "image";
 const MEBIBYTE: usize = 1024 * 1024;
 
-/// The upload and removal forms of an image setting: which one.
-#[derive(Debug, Default, Deserialize)]
-#[serde(default)]
-pub struct ImageForm {
-    pub key: String,
-    pub reason: String,
-}
+/// The removal form's field: which image setting.
+const FIELD_KEY: &str = "key";
 
-/// An image setting as its card shows it: the upload box, and "back to the
-/// built-in one" behind a confirmation while one is uploaded.
+/// An image setting as the identity tab shows it: a small tile, what it is
+/// now, a file box named after the setting, and "use the default" behind a
+/// confirmation while one is uploaded.
 #[derive(Debug, Serialize)]
 pub struct ImageView {
     pub key: &'static str,
@@ -67,11 +64,23 @@ pub struct ImageView {
     pub id: String,
     pub label: String,
     pub hint: String,
-    /// The file uploaded; `None`: the built-in one.
+    /// The file uploaded; `None`: the default.
     pub current: Option<String>,
+    /// `uploaded`, `logo` (the browser icon falling back on an uploaded
+    /// logo) or `builtin`: the line under its label.
+    pub state: &'static str,
     pub changed_on: Option<DateTime<Utc>>,
     /// A refused upload's message, under its box.
     pub error: Option<String>,
+}
+
+/// What the identity tab's preview falls back on while a box is empty.
+#[derive(Debug, Serialize)]
+pub struct BrandDefaults {
+    /// `SITE_NAME`.
+    pub name: String,
+    /// `SITE_DESCRIPTION`, else the home page's own.
+    pub description: String,
 }
 
 /// `?tab=`: the group shown; anything else is the first one.
@@ -132,11 +141,13 @@ pub struct SettingsPage {
     pub tabs: Vec<AdminTab>,
     pub group: GroupView,
     pub action: String,
-    /// Where an image card uploads (multipart) and removes.
-    pub image_action: String,
+    /// Where the identity tab saves (multipart) and removes an image.
+    pub brand_action: String,
     pub image_remove_action: String,
-    /// The smallest logo side, for the card's line.
-    pub icon_min: u32,
+    /// What its preview falls back on.
+    pub defaults: BrandDefaults,
+    /// The introduction's advised shortest length, for its counter.
+    pub description_advised: usize,
     /// The largest upload, in MB, for the photo box's line.
     pub max_mb: usize,
     pub flash_text: Option<String>,
@@ -163,13 +174,10 @@ fn switch_word(locale: &Locale, value: &str) -> String {
     })
 }
 
-/// A value as the page words it: a switch on / off, an image uploaded or
-/// the built-in one, an empty text "empty".
+/// A value as the page words it: a switch on / off, an empty text "empty".
 fn shown_value(locale: &Locale, kind: &str, value: &str) -> String {
     match (kind, value) {
         ("switch", v) => switch_word(locale, v),
-        (KIND_IMAGE, "") => locale.text("settings.image_builtin"),
-        (KIND_IMAGE, _) => locale.text("settings.image_uploaded"),
         (_, "") => locale.text("settings.empty"),
         (_, v) => v.to_owned(),
     }
@@ -213,16 +221,19 @@ fn label_of(locale: &Locale, key: &str) -> String {
 }
 
 /// The tab of `group` from the stored settings; `typed` (a refused save's
-/// values and messages) shows its form as it was sent, `image_error` a
-/// refused upload's message under its box.
+/// values and messages) shows its form as it was sent, a refused image's
+/// message under its box.
 fn group_view(
     locale: &Locale,
     site: &SiteConfig,
     group: SettingGroup,
     stored: &SettingGroupDto,
     typed: Option<(&HashMap<String, String>, &FormErrors)>,
-    image_error: Option<&(String, String)>,
 ) -> GroupView {
+    let logo_uploaded = stored
+        .settings
+        .iter()
+        .any(|s| s.key == BRAND_LOGO && !s.value.is_empty());
     let images = stored
         .settings
         .iter()
@@ -231,12 +242,18 @@ fn group_view(
             key: s.key,
             id: s.key.replace('.', "-"),
             label: label_of(locale, s.key),
-            hint: locale.text(&format!("settings.key.{}_hint", s.key)),
+            hint: locale.text_with(
+                &format!("settings.key.{}_hint", s.key),
+                &[("min", &ICON_MIN_SIDE)],
+            ),
             current: Some(s.value.clone()).filter(|v| !v.is_empty()),
+            state: match (s.value.is_empty(), s.key) {
+                (false, _) => "uploaded",
+                (true, BRAND_ICON) if logo_uploaded => "logo",
+                (true, _) => "builtin",
+            },
             changed_on: s.changed_on,
-            error: image_error
-                .filter(|(key, _)| key == s.key)
-                .map(|(_, message)| message.clone()),
+            error: typed.and_then(|(_, errors)| errors.fields.get(s.key).cloned()),
         })
         .collect();
     let settings = stored
@@ -268,10 +285,11 @@ fn group_view(
             }
         })
         .collect();
+    // Back to defaults never deletes an upload (`SettingsUseCase::reset`).
     let resets = stored
         .settings
         .iter()
-        .filter(|s| s.changed_on.is_some())
+        .filter(|s| s.changed_on.is_some() && s.kind != KIND_IMAGE)
         .map(|s| ResetLine {
             label: label_of(locale, s.key),
             current: shown_value(locale, s.kind, &s.value),
@@ -324,9 +342,8 @@ fn tabs(
 
 struct View<'a> {
     group: SettingGroup,
+    /// A refused save: the form as sent and what was wrong with it.
     typed: Option<(&'a HashMap<String, String>, &'a FormErrors)>,
-    /// A refused upload: its setting's key and the message.
-    image_error: Option<(String, String)>,
     flash: Option<Flash>,
     status: StatusCode,
 }
@@ -339,21 +356,22 @@ async fn page(state: &AppState, actor: &Actor, view: View<'_>) -> Result<Respons
         .find(|g| g.code == view.group.code())
         .ok_or_else(|| Error::internal("settings group missing from the page"))?;
     let action = url("admin_settings", &[])?;
+    let site = state.views.site();
     let body = SettingsPage {
         tabs: tabs(locale, &stored, view.group)?,
-        group: group_view(
-            locale,
-            state.views.site(),
-            view.group,
-            current,
-            view.typed,
-            view.image_error.as_ref(),
-        ),
+        group: group_view(locale, site, view.group, current, view.typed),
         action: action.clone(),
-        image_action: url("admin_settings_image", &[])?,
+        brand_action: url("admin_settings_brand", &[])?,
         image_remove_action: url("admin_settings_image_delete", &[])?,
-        icon_min: ICON_MIN_SIDE,
+        description_advised: SITE_DESCRIPTION_ADVISED_MIN,
         max_mb: state.usecases.media.max_upload_bytes().div_ceil(MEBIBYTE),
+        defaults: BrandDefaults {
+            name: site.name.clone(),
+            description: site
+                .description
+                .clone()
+                .unwrap_or_else(|| locale.text("home.meta")),
+        },
         flash_text: view.flash.and_then(|f| match f {
             Flash::SettingsSaved => Some(locale.text("admin.saved")),
             Flash::SettingsReset => Some(locale.text("settings.reset_done")),
@@ -385,7 +403,6 @@ pub async fn show(
     let view = View {
         group: SettingGroup::parse(&q.tab).unwrap_or(SettingGroup::ALL[0]),
         typed: None,
-        image_error: None,
         flash: flash.0,
         status: StatusCode::OK,
     };
@@ -408,6 +425,14 @@ fn group_values(group: SettingGroup, form: &HashMap<String, String>) -> Vec<(Str
         .collect()
 }
 
+fn reason_of(form: &HashMap<String, String>) -> Option<String> {
+    reason(
+        form.get(FIELD_REASON)
+            .map(String::as_str)
+            .unwrap_or_default(),
+    )
+}
+
 /// POST /admin/settings: save a group's values, or put them back on their
 /// defaults (`action=reset`).
 pub async fn update(
@@ -421,52 +446,29 @@ pub async fn update(
     let code = form.get(FIELD_GROUP).cloned().unwrap_or_default();
     let group = SettingGroup::parse(&code)
         .ok_or_else(|| Error::new(ErrorCode::UnknownSetting).with_param("key", &code))?;
-    let why = reason(
-        form.get(FIELD_REASON)
-            .map(String::as_str)
-            .unwrap_or_default(),
-    );
     let resetting = form.get(FIELD_ACTION).is_some_and(|a| a == ACTION_RESET);
     let settings = &state.usecases.settings;
     let result = if resetting {
-        settings.reset(&actor, group.code(), why).await
+        settings.reset(&actor, group.code(), reason_of(&form)).await
     } else {
         // Only this group's keys: a stray field never reaches the use case.
         settings
-            .update(&actor, &group_values(group, &form), why)
+            .update(&actor, &group_values(group, &form), reason_of(&form))
             .await
     };
-    match result {
-        Ok(()) => {
-            let flash = if resetting {
-                Flash::SettingsReset
-            } else {
-                Flash::SettingsSaved
-            };
-            let mut response = see_other(&tab_href(group)?)?;
-            flash.set_on(&mut response);
-            Ok(response)
-        }
-        Err(err) if is_refusal(&err) => {
-            let errors = FormErrors::from_error(&state, &err);
-            let view = View {
-                group,
-                typed: Some((&form, &errors)),
-                image_error: None,
-                flash: None,
-                status: err.kind().status(),
-            };
-            page(&state, &actor, view).await
-        }
-        Err(err) => Err(err),
-    }
+    let flash = if resetting {
+        Flash::SettingsReset
+    } else {
+        Flash::SettingsSaved
+    };
+    finish(&state, &actor, group, &form, result, flash).await
 }
 
-/// POST /admin/settings/image (multipart: `key`, the photo box, `reason`):
-/// the logo or the browser icon. Who is asking is checked before the body
-/// is read; a refused upload re-shows the tab with its message under the
-/// box.
-pub async fn upload_image(
+/// POST /admin/settings/brand (multipart): the identity tab's one save, its
+/// words and the logo and browser icon chosen (`brand.logo`, `brand.icon`:
+/// the file boxes are named after their settings). Who is asking is
+/// checked before the body is read.
+pub async fn save_brand(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
     upload: ApiMultipart,
@@ -477,46 +479,55 @@ pub async fn upload_image(
     let settings = &state.usecases.settings;
     settings.may_manage(&actor)?;
     let max = state.usecases.media.max_upload_bytes();
-    let (form, file): (ImageForm, _) = upload.into_form(IMAGE_FIELD, max).await?;
-    let result = match file {
-        Some(bytes) => {
-            settings
-                .set_image(&actor, &form.key, bytes, reason(&form.reason))
-                .await
-        }
-        None => Err(Error::new(ErrorCode::ImageRequired)),
-    };
-    image_done(&state, &actor, form.key, result, Flash::SettingsSaved).await
+    let (form, files): (HashMap<String, String>, _) = upload
+        .into_form_files(&[BRAND_LOGO, BRAND_ICON], max)
+        .await?;
+    let group = SettingGroup::Brand;
+    let result = settings
+        .save_brand(&actor, &group_values(group, &form), files, reason_of(&form))
+        .await;
+    finish(&state, &actor, group, &form, result, Flash::SettingsSaved).await
 }
 
 /// POST /admin/settings/image/delete (`key`, `reason`): back on the built-in
-/// logo or icon.
+/// logo or icon, behind its own confirmation.
 pub async fn remove_image(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
-    ApiForm(form): ApiForm<ImageForm>,
+    ApiForm(form): ApiForm<HashMap<String, String>>,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
+    let key = form.get(FIELD_KEY).cloned().unwrap_or_default();
     let result = state
         .usecases
         .settings
-        .remove_image(&actor, &form.key, reason(&form.reason))
+        .remove_image(&actor, &key, reason_of(&form))
         .await;
-    image_done(&state, &actor, form.key, result, Flash::ImageRemoved).await
+    // The tab as stored, not the removal form's two fields as typed boxes.
+    let shown = HashMap::new();
+    finish(
+        &state,
+        &actor,
+        SettingGroup::Brand,
+        &shown,
+        result,
+        Flash::ImageRemoved,
+    )
+    .await
 }
 
-/// Back on the identity tab with `flash`, or the tab again with the refusal
-/// under the image's box.
-async fn image_done(
+/// Back on `group`'s tab with `flash`, or the tab again with the form as
+/// sent and a message under each broken box.
+async fn finish(
     state: &AppState,
     actor: &Actor,
-    key: String,
+    group: SettingGroup,
+    form: &HashMap<String, String>,
     result: Result<(), Error>,
     flash: Flash,
 ) -> Result<Response, Error> {
-    let group = SettingGroup::Brand;
     match result {
         Ok(()) => {
             let mut response = see_other(&tab_href(group)?)?;
@@ -524,13 +535,10 @@ async fn image_done(
             Ok(response)
         }
         Err(err) if is_refusal(&err) => {
-            let message = FormErrors::from_error(state, &err)
-                .message
-                .unwrap_or_default();
+            let errors = FormErrors::from_error(state, &err);
             let view = View {
                 group,
-                typed: None,
-                image_error: Some((key, message)),
+                typed: Some((form, &errors)),
                 flash: None,
                 status: err.kind().status(),
             };

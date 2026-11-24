@@ -77,6 +77,9 @@ pub const SITE_NAME_MAX: usize = 40;
 /// The platform's one-line description (`brand.description`): the meta
 /// description search engines show, which they cut near 160.
 pub const SITE_DESCRIPTION_MAX: usize = 160;
+/// Shorter than this, search engines often show another bit of the page
+/// instead: the settings page says so (a nudge, never a refusal).
+pub const SITE_DESCRIPTION_ADVISED_MIN: usize = 50;
 /// Counted in characters, so a Vietnamese password is not penalised for its
 /// multi-byte letters.
 pub const PASSWORD_MIN_CHARS: usize = 8;
@@ -220,7 +223,8 @@ pub const IMAGE_JPEG_QUALITY: u8 = 80;
 /// The platform's logo and browser icon (`brand.logo`, `brand.icon`): a square
 /// at least this wide, so the phone home-screen icon (180 px) stays sharp.
 pub const ICON_MIN_SIDE: u32 = 192;
-/// Its stored size: the home-screen icon and the settings page preview.
+/// Its large copy: the phone home-screen icon, on white (iOS paints a
+/// transparent background black).
 pub const ICON_MAIN_SIDE: u32 = 512;
 /// Its small copy: the browser tab and the top bars, at twice their size.
 pub const ICON_THUMB_SIDE: u32 = 96;

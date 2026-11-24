@@ -164,6 +164,124 @@ document.addEventListener("alpine:init", () => {
     },
   }));
 
+  // The settings page's identity tab: its preview follows the form as it is
+  // typed or a file chosen, before anything is saved. The root's data-*
+  // carry what is saved and the defaults; a chosen file shows from a blob:
+  // URL (img-src allows blob:). Without JS the preview is what is saved.
+  Alpine.data("brandPreview", () => ({
+    withoutScript: false,
+    name: "",
+    description: "",
+    nameFits: true,
+    logoChosen: "",
+    iconChosen: "",
+
+    init() {
+      this.saved = { ...this.$el.dataset };
+      this.read();
+    },
+    // The boxes as they stand; then whether the name fits the phone bar.
+    read() {
+      const boxes = this.$el.querySelector("form").elements;
+      this.name = boxes.namedItem("brand.name")?.value ?? "";
+      this.description = boxes.namedItem("brand.description")?.value ?? "";
+      this.$nextTick(() => {
+        const bar = this.$refs.barName;
+        this.nameFits = !bar || bar.scrollWidth <= bar.clientWidth;
+      });
+    },
+    update(event) {
+      const box = event.target;
+      if (box.type === "file") {
+        const file = box.files?.[0];
+        const url = file ? URL.createObjectURL(file) : "";
+        if (box.name === "brand.logo") {
+          if (this.logoChosen) URL.revokeObjectURL(this.logoChosen);
+          this.logoChosen = url;
+        } else if (box.name === "brand.icon") {
+          if (this.iconChosen) URL.revokeObjectURL(this.iconChosen);
+          this.iconChosen = url;
+        }
+      }
+      this.read();
+    },
+    get inputClass() {
+      return "visually-hidden";
+    },
+    get shownName() {
+      return this.name.trim() || this.saved.defaultName;
+    },
+    get googleTitle() {
+      return `${this.shownName} — ${this.saved.homeTitle}`;
+    },
+    get googleDescription() {
+      return this.description.trim() || this.saved.defaultDescription;
+    },
+    // The logo shown: the file chosen, else the one saved; "" the built-in.
+    get logoUrl() {
+      return this.logoChosen || this.saved.logo;
+    },
+    get logoCustom() {
+      return Boolean(this.logoUrl);
+    },
+    get logoBuiltin() {
+      return !this.logoCustom;
+    },
+    get logoTile() {
+      return this.logoUrl || this.saved.builtinIcon;
+    },
+    get logoSaved() {
+      return !this.logoChosen;
+    },
+    // The browser icon: its own, else the logo, else the built-in one.
+    get iconUrl() {
+      return this.iconChosen || this.saved.icon || this.logoUrl || this.saved.builtinIcon;
+    },
+    get iconSaved() {
+      return !this.iconChosen;
+    },
+    // The home-screen icon: the large copies the phone is given.
+    get homeUrl() {
+      return (
+        this.iconChosen ||
+        this.saved.iconHome ||
+        this.logoChosen ||
+        this.saved.logoHome ||
+        this.saved.builtinHome
+      );
+    },
+  }));
+
+  // A box's characters against its maxlength (`field::input` `counter`):
+  // amber, with a short note, while under its advised length.
+  Alpine.data("charCount", () => ({
+    count: 0,
+    max: 0,
+    advised: 0,
+
+    init() {
+      const box = document.getElementById(this.$el.dataset.for);
+      if (!box) return;
+      this.max = box.maxLength;
+      this.advised = Number(this.$el.dataset.advised || 0);
+      const read = () => {
+        this.count = [...box.value].length;
+      };
+      read();
+      box.addEventListener("input", read);
+    },
+    get tooShort() {
+      return this.advised > 0 && this.count > 0 && this.count < this.advised;
+    },
+    get label() {
+      const count = `${this.count}/${this.max}`;
+      return this.tooShort ? `${count} · ${this.$el.dataset.short}` : count;
+    },
+    get tone() {
+      return this.tooShort ? "text-warning-emphasis" : "";
+    },
+  }));
+
   // A select that saves its form as soon as it changes. Without JS the
   // form's own submit button does the same.
   // On a form: any change saves it. Its save button (x-show="withoutScript")

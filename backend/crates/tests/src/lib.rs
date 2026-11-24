@@ -873,6 +873,17 @@ pub fn post_multipart_form(
     image: Option<&[u8]>,
     cookie: &str,
 ) -> Request<Body> {
+    post_multipart_files(path, fields, &[("image", image)], cookie)
+}
+
+/// `post_multipart_form` with several file boxes: each (its name, its file,
+/// `None` for one left empty).
+pub fn post_multipart_files(
+    path: &str,
+    fields: &[(&str, &str)],
+    files: &[(&str, Option<&[u8]>)],
+    cookie: &str,
+) -> Request<Body> {
     let b = MULTIPART_BOUNDARY;
     let mut body = Vec::new();
     for (name, value) in fields {
@@ -881,19 +892,22 @@ pub fn post_multipart_form(
                 .as_bytes(),
         );
     }
-    let (filename, bytes) = match image {
-        Some(bytes) => ("anh.jpg", bytes),
-        None => ("", &[][..]),
-    };
-    body.extend_from_slice(
-        format!(
-            "--{b}\r\nContent-Disposition: form-data; name=\"image\"; filename=\"{filename}\"\r\n\
-             Content-Type: application/octet-stream\r\n\r\n"
-        )
-        .as_bytes(),
-    );
-    body.extend_from_slice(bytes);
-    body.extend_from_slice(format!("\r\n--{b}--\r\n").as_bytes());
+    for (name, file) in files {
+        let (filename, bytes) = match file {
+            Some(bytes) => ("anh.jpg", *bytes),
+            None => ("", &[][..]),
+        };
+        body.extend_from_slice(
+            format!(
+                "--{b}\r\nContent-Disposition: form-data; name=\"{name}\"; filename=\"{filename}\"\r\n\
+                 Content-Type: application/octet-stream\r\n\r\n"
+            )
+            .as_bytes(),
+        );
+        body.extend_from_slice(bytes);
+        body.extend_from_slice(b"\r\n");
+    }
+    body.extend_from_slice(format!("--{b}--\r\n").as_bytes());
     Request::post(path)
         .header(header::ACCEPT, "text/html")
         .header(header::ORIGIN, TEST_ORIGIN)

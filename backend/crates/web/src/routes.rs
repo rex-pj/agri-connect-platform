@@ -173,7 +173,7 @@ pub const ROUTES: &[(&str, &str)] = &[
         "/admin/services/{id}/image/delete",
     ),
     ("admin_settings", "/admin/settings"),
-    ("admin_settings_image", "/admin/settings/image"),
+    ("admin_settings_brand", "/admin/settings/brand"),
     (
         "admin_settings_image_delete",
         "/admin/settings/image/delete",

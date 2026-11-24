@@ -1,7 +1,8 @@
 //! The settings page (`setting.manage`): every setting with its value,
 //! default and bounds; saving a group's values; putting a group back on its
-//! defaults; uploading or removing an image setting (the logo, the browser
-//! icon). Each change is audited as "key: before → after", and an image a
+//! defaults; the identity tab's one save of words and images (the logo, the
+//! browser icon) and removing an image, never with a whole group. Each
+//! change is audited as "key: before → after", and an image a
 //! change stopped using is released by the file cleanup. Other use cases
 //! read the settings through `SettingsReader`, never through here.
 
@@ -11,7 +12,7 @@ use domain::{
     events::{Change, DomainEvent, Entity},
     models::setting::SettingWrite,
     repositories::setting_repository_trait::SettingRepositoryTrait,
-    Error, ErrorCode, Result, Validation,
+    Error, ErrorCode, ErrorKind, Result, Validation,
 };
 use uuid::Uuid;
 
@@ -56,40 +57,6 @@ impl SettingsUseCase {
             events,
             media,
         }
-    }
-
-    /// Makes `upload` the image of the setting `key` (the logo, the browser
-    /// icon): checked and re-encoded as a PNG square, stored, then the
-    /// setting pointed at it. The image it replaces is released by the file
-    /// cleanup; a refused write discards the new one.
-    pub async fn set_image(
-        &self,
-        actor: &Actor,
-        key: &str,
-        upload: Vec<u8>,
-        reason: Option<String>,
-    ) -> Result<()> {
-        actor.require(PERM_SETTING_MANAGE)?;
-        let def = image_definition(key)?;
-        // The CPU work only once the actor and the key are known good.
-        let image = self.media.prepare_icon(upload).await?;
-        let file = self.media.store(actor, image).await?;
-        let after = SettingValue::Text(file.to_string());
-        let written = match self.current().await {
-            Ok(current) => {
-                let before = current
-                    .value(def.key)
-                    .cloned()
-                    .unwrap_or(def.default_value());
-                let change = (def.key, before, after.clone(), Some(after.as_text()));
-                self.store(actor, vec![change], reason).await
-            }
-            Err(e) => Err(e),
-        };
-        if written.is_err() {
-            self.media.discard(file).await;
-        }
-        written
     }
 
     /// Puts the image setting `key` back on the built-in one; its upload is
@@ -142,49 +109,81 @@ impl SettingsUseCase {
         actor.require(PERM_SETTING_MANAGE)?;
         let current = self.current().await?;
         let mut check = Validation::new();
-        let mut parsed = Vec::new();
-        for (key, raw) in values {
-            let def = definition(key)
-                .ok_or_else(|| Error::new(ErrorCode::UnknownSetting).with_param("key", key))?;
-            // An image is uploaded (`set_image`): a typed file id could point
-            // the logo at any upload, a provider's photo included.
-            if def.kind == SettingKind::Image {
-                check.rule(
-                    def.key,
-                    Err(Error::new(ErrorCode::SettingIsAnImage).with_param("key", def.key)),
-                );
-                continue;
+        let parsed = typed_values(values, &mut check)?;
+        check.finish()?;
+        self.store(actor, changes_to(&current, parsed), reason)
+            .await
+    }
+
+    /// The identity tab's one save: its words (`values`, as `update`) and
+    /// the images chosen (`uploads`: an image setting's key and its bytes).
+    /// Every broken box, words and images alike, is reported at once; then
+    /// the images are stored, and everything is written as one audited
+    /// change. The images it replaces are released by the file cleanup; a
+    /// refused or failed write discards the new ones.
+    pub async fn save_brand(
+        &self,
+        actor: &Actor,
+        values: &[(String, String)],
+        uploads: Vec<(String, Vec<u8>)>,
+        reason: Option<String>,
+    ) -> Result<()> {
+        actor.require(PERM_SETTING_MANAGE)?;
+        let current = self.current().await?;
+        let mut check = Validation::new();
+        let mut parsed = typed_values(values, &mut check)?;
+        let mut prepared = Vec::new();
+        let mut seen = Vec::new();
+        for (key, upload) in uploads {
+            let def = image_definition(&key)?;
+            // One file per box: a second would be stored and never shown.
+            if seen.contains(&def.key) {
+                return Err(Error::new(ErrorCode::InvalidRequestBody)
+                    .with_detail(format!("{key} sent twice")));
             }
-            match def.parse(raw) {
-                Ok(value) => parsed.push((def, value)),
-                Err(e) => {
+            seen.push(def.key);
+            match self.media.prepare_icon(upload).await {
+                Ok(image) => prepared.push((def, image)),
+                // A photo the form can be told about: under its box.
+                Err(e) if e.kind() == ErrorKind::BadRequest => {
                     check.rule(def.key, Err(e));
                 }
+                Err(e) => return Err(e),
             }
         }
         check.finish()?;
-        let writes = parsed
-            .into_iter()
-            .filter_map(|(def, value)| {
-                let before = current.value(def.key)?;
-                (before != &value).then(|| (def, before.clone(), value))
-            })
-            .collect::<Vec<_>>();
-        self.store(
-            actor,
-            writes
-                .into_iter()
-                .map(|(def, before, after)| {
-                    let stored = (after != def.default_value()).then(|| after.as_text());
-                    (def.key, before, after, stored)
-                })
-                .collect(),
-            reason,
-        )
-        .await
+
+        let mut stored = Vec::new();
+        for (def, image) in prepared {
+            match self.media.store(actor, image).await {
+                Ok(file) => {
+                    stored.push(file);
+                    parsed.push((def, SettingValue::Text(file.to_string())));
+                }
+                Err(e) => {
+                    self.discard_all(&stored).await;
+                    return Err(e);
+                }
+            }
+        }
+        let written = self
+            .store(actor, changes_to(&current, parsed), reason)
+            .await;
+        if written.is_err() {
+            self.discard_all(&stored).await;
+        }
+        written
     }
 
-    /// Puts every setting of `group` back on its default.
+    async fn discard_all(&self, files: &[Uuid]) {
+        for file in files {
+            self.media.discard(*file).await;
+        }
+    }
+
+    /// Puts every setting of `group` back on its default, except an
+    /// uploaded image: deleting a file takes its own confirmation
+    /// (`remove_image`), never a whole group at once.
     pub async fn reset(&self, actor: &Actor, group: &str, reason: Option<String>) -> Result<()> {
         actor.require(PERM_SETTING_MANAGE)?;
         let group = SettingGroup::parse(group)
@@ -194,6 +193,7 @@ impl SettingsUseCase {
             .states()
             .iter()
             .filter(|s| s.def.group == group && s.changed_on.is_some())
+            .filter(|s| s.def.kind != SettingKind::Image)
             .map(|s| (s.def.key, s.value.clone(), s.def.default_value(), None))
             .collect();
         self.store(actor, changes, reason).await
@@ -243,6 +243,53 @@ impl SettingsUseCase {
             .await;
         Ok(())
     }
+}
+
+/// The typed `values` checked by their kinds, each broken one filed in
+/// `check` under its key; an unknown key refuses the whole form.
+fn typed_values(
+    values: &[(String, String)],
+    check: &mut Validation,
+) -> Result<Vec<(&'static SettingDef, SettingValue)>> {
+    let mut parsed = Vec::new();
+    for (key, raw) in values {
+        let def = definition(key)
+            .ok_or_else(|| Error::new(ErrorCode::UnknownSetting).with_param("key", key))?;
+        // An image is uploaded: a typed file id could point the logo at any
+        // upload, a provider's photo included.
+        if def.kind == SettingKind::Image {
+            check.rule(
+                def.key,
+                Err(Error::new(ErrorCode::SettingIsAnImage).with_param("key", def.key)),
+            );
+            continue;
+        }
+        match def.parse(raw) {
+            Ok(value) => parsed.push((def, value)),
+            Err(e) => {
+                check.rule(def.key, Err(e));
+            }
+        }
+    }
+    Ok(parsed)
+}
+
+/// What `parsed` changes in `current`; a value back on its default drops
+/// its row.
+fn changes_to(
+    current: &Settings,
+    parsed: Vec<(&'static SettingDef, SettingValue)>,
+) -> Vec<SettingChange> {
+    parsed
+        .into_iter()
+        .filter_map(|(def, after)| {
+            let before = current.value(def.key)?;
+            (before != &after).then(|| {
+                let stored = (after != def.default_value()).then(|| after.as_text());
+                (def.key, before.clone(), after, stored)
+            })
+        })
+        .collect()
 }
 
 /// The image setting `key`; any other key is not one to upload.

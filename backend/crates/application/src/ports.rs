@@ -142,8 +142,10 @@ pub trait ImageProcessor: Send + Sync {
     async fn process(&self, upload: Vec<u8>) -> Result<ProcessedImage>;
 
     /// The same checks for the platform's logo or browser icon, re-encoded
-    /// as PNG with its transparency kept: centred on a transparent square,
-    /// `ICON_MAIN_SIDE` and `ICON_THUMB_SIDE` wide. Never SVG (a script in
+    /// as PNG squares (centred): the small one (`ICON_THUMB_SIDE`, the bars
+    /// and the tab) with its transparency kept, the large one
+    /// (`ICON_MAIN_SIDE`, the phone home screen) on white with a margin, as
+    /// iOS paints transparency black. Never SVG (a script in
     /// an image served from our origin). Also `image_too_small` under
     /// `ICON_MIN_SIDE` on its shorter side.
     async fn process_icon(&self, upload: Vec<u8>) -> Result<ProcessedImage>;

@@ -66,6 +66,9 @@ pub const UPLOAD_RATE_LIMIT_PER_MIN: NonZeroU32 = per_minute(20);
 /// Multipart boundaries and part headers on top of the file itself. Without
 /// it, a file of exactly UPLOAD_MAX_BYTES is cut off by the body limit.
 pub const MULTIPART_OVERHEAD_BYTES: usize = 64 * 1024;
+/// The files the settings page's identity form may carry at once: the logo
+/// and the browser icon.
+pub const BRAND_FORM_FILES: usize = 2;
 /// The multipart field the image arrives in.
 pub const IMAGE_FIELD: &str = "image";
 /// An id is never reused (a new image gets a new id), so a cached copy can

@@ -1,0 +1,31 @@
+{#- One image of the settings page's identity form (the logo, the browser
+    icon): a 64 px tile on a checkerboard, so a transparent background shows
+    as one, the line saying what is in use now, a "choose" button and, while
+    one is uploaded, "use the default" (a link to its confirmation, `remove`).
+    Without JS the native file box shows and works as usual; with JS it is
+    hidden behind the button. Inside the form's Alpine `brandPreview` scope:
+    `kind` (`logo` or `icon`) picks its members there, the tile's picture
+    (the file just chosen, else the one in use) and whether a chosen file is
+    still unsaved. `src` is the tile's picture without JS. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro brand_image_field(id, name, kind, label, hint, state, src, max_mb, remove="", error="") -%}
+<div class="form-field brand-image">
+  <span class="form-label fw-semibold d-block">{{ label }}</span>
+  <div class="brand-image__row">
+    <span class="brand-image__tile">{% if kind == "logo" %}<img src="{{ src }}" :src="logoTile" alt="" width="64" height="64">{% else %}<img src="{{ src }}" :src="iconUrl" alt="" width="64" height="64">{% endif %}</span>
+    <div class="brand-image__body">
+      <span class="brand-image__state">{{ state }} <span class="badge text-bg-warning" hidden{% if kind == "logo" %} :hidden="logoSaved"{% else %} :hidden="iconSaved"{% endif %}>{{ t(key="settings.image_pending") }}</span></span>
+      <span class="brand-image__actions">
+        <label class="btn btn-outline-success" for="{{ id }}" hidden :hidden="withoutScript">{{ atoms::icon(name="fa-image") }} {{ t(key="settings.image_choose") }}</label>
+        {% if remove %}<a class="btn btn-link text-body-secondary" href="{{ remove }}">{{ atoms::icon(name="fa-rotate-left") }} {{ t(key="settings.image_builtin_button") }}</a>{% endif %}
+      </span>
+    </div>
+  </div>
+  <input class="form-control brand-image__input{% if error %} is-invalid{% endif %}" id="{{ id }}" name="{{ name }}" type="file" accept="image/png,image/webp,image/jpeg" :class="inputClass" aria-describedby="{{ id }}-hint{% if error %} {{ id }}-error{% endif %}"{% if error %} aria-invalid="true"{% endif %}>
+  <div class="form-text" id="{{ id }}-hint">
+    <span class="d-block">{{ hint }}</span>
+    <span class="d-block">{{ t(key="settings.image_formats", max_mb=max_mb) }}</span>
+  </div>
+  {% if error %}<div class="invalid-feedback d-block" id="{{ id }}-error">{{ error }}</div>{% endif %}
+</div>
+{%- endmacro brand_image_field %}

@@ -334,6 +334,7 @@ body:has(.app-nav__search-row.open) .app-main {
 .app-nav__brand:hover,
 .app-nav__brand:active {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 8px;
   color: #fff;
@@ -341,6 +342,14 @@ body:has(.app-nav__search-row.open) .app-main {
   font-size: var(--fs-md);
   font-weight: 700;
   letter-spacing: -0.02em;
+}
+/* A name longer than the bar leaves is cut with an ellipsis, never pushed
+   past the right edge (the admin's preview, settings, shows where). */
+.app-nav__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .app-nav__brand:focus-visible {
   outline: 2px solid rgba(255, 255, 255, 0.6);
@@ -356,45 +365,269 @@ body:has(.app-nav__search-row.open) .app-main {
 .brand-logo__sun {
   fill: var(--a500);
 }
-/* The settings page's preview of the mark where it shows: the green top
-   bar, a white card, a browser tab. */
-.brand-preview {
+/* The settings page's identity tab: the form, then its preview; side by
+   side from 992 px, the preview staying in view while the form scrolls. */
+.brand-editor {
   display: grid;
-  gap: 8px;
-  margin-bottom: 16px;
+  gap: 16px;
+  align-items: start;
 }
-.brand-preview__bar,
-.brand-preview__card,
+@media (min-width: 992px) {
+  .brand-editor {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 412px);
+  }
+  .brand-editor__preview {
+    position: sticky;
+    top: calc(var(--ash-header-h) + 16px);
+  }
+}
+.brand-editor__note {
+  margin-top: -8px;
+}
+/* The folded browser icon: a row that reads as one to open (a chevron
+   turning down, what is in use now beside it). */
+.brand-editor__more > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  list-style: none;
+  cursor: pointer;
+}
+.brand-editor__more > summary::-webkit-details-marker {
+  display: none;
+}
+.brand-editor__chevron {
+  transition: transform 0.15s;
+}
+.brand-editor__more[open] .brand-editor__chevron {
+  transform: rotate(90deg);
+}
+.brand-editor__more-label {
+  font-weight: 600;
+}
+.brand-editor__more-state {
+  color: var(--bs-secondary-color);
+  font-size: 0.875rem;
+}
+.brand-editor__more[open] .brand-editor__more-state {
+  display: none;
+}
+/* A hint with a character count at its right (`field::input` `counter`). */
+.form-hint-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.form-count {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+/* One image of the form: a tile, what is in use, its buttons. */
+.brand-image__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.brand-image__tile {
+  flex: none;
+  display: flex;
+  width: 72px;
+  height: 72px;
+  padding: 4px;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 12px;
+  /* A checkerboard: a transparent background shows as one. */
+  background: repeating-conic-gradient(#e9ecef 0% 25%, #fff 0% 50%) 0 0 / 12px 12px;
+}
+.brand-image__tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.brand-image__body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.brand-image__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.brand-image__actions .btn {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.brand-image__input {
+  margin-top: 8px;
+}
+/* The preview frames: where the mark and the words show. */
+.brand-preview__frame {
+  margin: 0 0 16px;
+}
+.brand-preview__frame:last-child {
+  margin-bottom: 0;
+}
+.brand-preview__frame > figcaption {
+  margin-bottom: 6px;
+  color: var(--bs-secondary-color);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+/* A 360 px phone's top bar at the real bar's sizes under 400 px (64 px
+   tall, a 16 px gutter, 44 px buttons 4 px apart): a name too long for it
+   is cut here where it is cut there. Never wider than its column. */
+.brand-preview__phone {
+  width: 360px;
+  max-width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.brand-preview__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  height: 64px;
+  padding: 0 16px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--p900) 0%, var(--p800) 55%, var(--p700) 100%);
+}
+.brand-preview__brand {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: var(--fs-md);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.brand-preview__actions {
+  flex: none;
+  display: flex;
+  gap: 4px;
+}
+.brand-preview__button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  font-size: 1.125rem;
+}
+.brand-preview__button--language {
+  padding: 0 8px;
+  border-radius: 22px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.brand-preview__card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 12px;
+  background: #fff;
+  font-size: var(--fs-md);
+  font-weight: 700;
+}
+/* A browser's tab strip, the tab on it. */
+.brand-preview__browser {
+  display: flex;
+  padding: 8px 8px 0;
+  border-radius: 12px 12px 0 0;
+  background: #dee2e6;
+}
 .brand-preview__tab {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  border-radius: 8px;
-  font-weight: 700;
-}
-.brand-preview__bar {
-  padding: 8px 12px;
-  color: #fff;
-  background: linear-gradient(135deg, var(--p900) 0%, var(--p800) 55%, var(--p700) 100%);
-}
-.brand-preview__card {
-  padding: 12px;
-  border: 1px solid var(--bs-border-color);
-  background: #fff;
-}
-.brand-preview__tab {
   max-width: 240px;
-  padding: 6px 10px;
+  padding: 8px 12px;
   border-radius: 8px 8px 0 0;
-  background: var(--bs-tertiary-bg);
-  font-weight: 400;
-  font-size: 0.875rem;
+  background: #fff;
+  font-size: 0.8125rem;
 }
 .brand-preview__favicon {
   flex: none;
   width: 16px;
   height: 16px;
+}
+/* A phone home screen: a dark wallpaper, the icon rounded as phones round
+   it, its name in white. */
+.brand-preview__wallpaper {
+  display: flex;
+  justify-content: center;
+  padding: 20px 16px 16px;
+  border-radius: 12px;
+  background: linear-gradient(160deg, #1f2a44 0%, #0b3b2e 100%);
+}
+.brand-preview__home {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  width: 84px;
+  color: #fff;
+  font-size: 0.75rem;
+}
+.brand-preview__home img {
+  width: 60px;
+  height: 60px;
+  border-radius: 14px;
+  object-fit: contain;
+}
+.brand-preview__home span {
+  max-width: 100%;
+}
+/* A search result: the site, the title, the description Google cuts. */
+.brand-preview__google {
+  display: grid;
+  gap: 2px;
+  padding: 12px;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 12px;
+  background: #fff;
+}
+.brand-preview__site {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8125rem;
+}
+/* Google shows a site's icon in a small circle. */
+.brand-preview__site-icon {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 4px;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 50%;
+  background: #fff;
+  object-fit: contain;
+}
+.brand-preview__title {
+  color: #1a0dab;
+  font-size: 1.125rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.brand-preview__snippet {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--bs-secondary-color);
+  font-size: 0.875rem;
 }
 /* An uploaded logo cannot take the text colour: it sits on a white rounded
    tile, so any mark reads on the green bars and on a white card. */
@@ -412,6 +645,7 @@ body:has(.app-nav__search-row.open) .app-main {
 }
 .app-nav__actions {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 8px;
 }

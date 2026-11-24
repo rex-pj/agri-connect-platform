@@ -4,7 +4,7 @@
 {% import "molecules/admin_header.html" as header %}
 {% import "molecules/admin_tabs.html" as tabs %}
 {% import "molecules/form_field.html" as field %}
-{% import "molecules/photo_picker.html" as photo %}
+{% import "molecules/brand_image_field.html" as image %}
 {% import "organisms/confirm_sheet.html" as confirm %}
 {% import "atoms/logo.html" as brand %}
 {#- The platform settings, laid out like the other admin pages: one tab per
@@ -14,10 +14,9 @@
     defaults" as its own card at the end, saying what goes back to what.
     Every box says its default and bounds; a switch is a plain checkbox
     (unticked, the browser sends nothing: off). `page.body` is
-    web::pages::admin::settings::SettingsPage. The identity tab adds a card
-    of its images (logo, browser icon): a preview where the mark shows, then
-    one multipart form each (`photo_picker`), and "use the default" behind a
-    confirmation while one is uploaded. -#}
+    web::pages::admin::settings::SettingsPage. The identity tab is its own
+    layout (below): one multipart form beside a live preview; its "back to
+    defaults" card never takes an uploaded image along. -#}
 {% block title %}{{ t(key="admin_menu.settings") }} — {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
@@ -28,6 +27,123 @@
   {% if b.flash_text %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=b.flash_text) }}{% endif %}
   {% if b.error %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.error) }}{% endif %}
 
+  {% if g.code == "brand" %}
+  {#- The identity tab: one form (the logo, the name, the introduction and,
+      folded, the browser icon) beside a preview of where they show, which
+      Alpine `brandPreview` keeps in step with what is typed or chosen; without
+      JS it shows what is saved. -#}
+  {% set name_box = g.settings | filter(attribute="key", value="brand.name") | first %}
+  {% set desc_box = g.settings | filter(attribute="key", value="brand.description") | first %}
+  {% set logo = g.images | filter(attribute="key", value="brand.logo") | first %}
+  {% set icon = g.images | filter(attribute="key", value="brand.icon") | first %}
+  {% set builtin_icon = asset_url(path="img/logo.svg") %}
+  {% set builtin_home = asset_url(path="img/apple-touch-icon.png") %}
+  {% if logo.current %}{% set logo_src = file_url(id=logo.current, variant="thumb") %}{% else %}{% set logo_src = "" %}{% endif %}
+  {% if icon.current %}{% set icon_src = file_url(id=icon.current, variant="thumb") %}{% else %}{% set icon_src = "" %}{% endif %}
+  {% if name_box.value %}{% set shown_name = name_box.value %}{% else %}{% set shown_name = b.defaults.name %}{% endif %}
+  {% if desc_box.value %}{% set shown_desc = desc_box.value %}{% else %}{% set shown_desc = b.defaults.description %}{% endif %}
+  {% if icon_src %}{% set tab_src = icon_src %}{% elif logo_src %}{% set tab_src = logo_src %}{% else %}{% set tab_src = builtin_icon %}{% endif %}
+  {#- The home screen gets the large copy, on white (`process_icon`). -#}
+  {% if logo.current %}{% set logo_home = file_url(id=logo.current) %}{% else %}{% set logo_home = "" %}{% endif %}
+  {% if icon.current %}{% set icon_home = file_url(id=icon.current) %}{% else %}{% set icon_home = "" %}{% endif %}
+  {% if icon_home %}{% set home_src = icon_home %}{% elif logo_home %}{% set home_src = logo_home %}{% else %}{% set home_src = builtin_home %}{% endif %}
+  {% if logo_src %}{% set logo_tile = logo_src %}{% else %}{% set logo_tile = builtin_icon %}{% endif %}
+  {% if logo.state == "uploaded" %}{% set when = logo.changed_on | vn_datetime %}{% set logo_state = t(key="settings.image_state.uploaded", when=when) %}{% else %}{% set logo_state = t(key="settings.image_state.builtin") %}{% endif %}
+  {% if icon.state == "uploaded" %}{% set when = icon.changed_on | vn_datetime %}{% set icon_state = t(key="settings.image_state.uploaded", when=when) %}{% elif icon.state == "logo" %}{% set icon_state = t(key="settings.image_state.logo") %}{% else %}{% set icon_state = t(key="settings.image_state.builtin") %}{% endif %}
+  {% set google_title = shown_name ~ " — " ~ t(key="home.title") %}
+  <div class="brand-editor" x-data="brandPreview" data-default-name="{{ b.defaults.name }}" data-default-description="{{ b.defaults.description }}" data-home-title="{{ t(key="home.title") }}" data-logo="{{ logo_src }}" data-icon="{{ icon_src }}" data-logo-home="{{ logo_home }}" data-icon-home="{{ icon_home }}" data-builtin-icon="{{ builtin_icon }}" data-builtin-home="{{ builtin_home }}">
+    <section class="admin-section brand-editor__form" aria-labelledby="settings-title">
+      <h2 class="admin-section__title" id="settings-title">{{ g.title }}</h2>
+      <p class="admin-status">
+        {% if g.changed %}<span class="badge text-bg-info">{{ t(key="settings.changed_count", count=g.changed) }}</span>{% else %}<span class="badge text-bg-secondary">{{ t(key="settings.all_default") }}</span>{% endif %}
+        <span>{{ g.sub }}</span>
+      </p>
+      <form class="form-stack" method="post" action="{{ b.brand_action }}" enctype="multipart/form-data" novalidate x-on:input="update" x-on:change="update">
+        {% if logo.current %}{% set remove = "#remove-" ~ logo.id %}{% else %}{% set remove = "" %}{% endif %}
+        {{ image::brand_image_field(id=logo.id, name=logo.key, kind="logo", label=logo.label, hint=logo.hint, state=logo_state, src=logo_tile, max_mb=b.max_mb, remove=remove, error=logo.error | default(value="")) }}
+
+        {#- Left empty, a box uses the default it shows greyed inside it. -#}
+        {{ field::input(id=name_box.id, name=name_box.key, label=name_box.label, value=name_box.value, autocomplete="off", maxlength=name_box.max, placeholder=b.defaults.name, error=name_box.error | default(value=""), hint=name_box.hint ~ " " ~ t(key="settings.brand_empty"), counter=true) }}
+        <p class="brand-editor__note form-text text-warning-emphasis" hidden :hidden="nameFits">{{ atoms::icon(name="fa-triangle-exclamation") }} {{ t(key="settings.name_cut") }}</p>
+
+        {{ field::input(id=desc_box.id, name=desc_box.key, label=desc_box.label, value=desc_box.value, autocomplete="off", maxlength=desc_box.max, placeholder=b.defaults.description, error=desc_box.error | default(value=""), hint=desc_box.hint ~ " " ~ t(key="settings.brand_empty"), counter=true, advised=b.description_advised) }}
+
+        <details class="brand-editor__more"{% if icon.current or icon.error %} open{% endif %}>
+          <summary>{{ atoms::icon(name="fa-chevron-right", class="brand-editor__chevron") }} <span class="brand-editor__more-label">{{ t(key="settings.brand_more") }}</span> <span class="brand-editor__more-state">{{ icon_state }}</span></summary>
+          {% if icon.current %}{% set remove = "#remove-" ~ icon.id %}{% else %}{% set remove = "" %}{% endif %}
+          {{ image::brand_image_field(id=icon.id, name=icon.key, kind="icon", label=icon.label, hint=icon.hint, state=icon_state, src=tab_src, max_mb=b.max_mb, remove=remove, error=icon.error | default(value="")) }}
+        </details>
+
+        {{ field::input(id="settings-reason", name="reason", label=t(key="settings.reason"), placeholder=t(key="settings.reason_placeholder"), maxlength=limits.audit_reason_max) }}
+        <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button></div>
+      </form>
+      {% for i in g.images %}{% if i.current %}
+      <div x-data="dialog" data-open="false" x-on:keydown.escape.window="hide">
+        {{ confirm::confirm_sheet(id="remove-" ~ i.id, title=t(key="settings.image_remove_title", what=i.label), icon="fa-rotate-left", action=b.image_remove_action, button=t(key="settings.image_builtin_button"), reason_max=limits.audit_reason_max, note=t(key="settings.image_remove_note"), hidden_name="key", hidden_value=i.key, button_class="btn-warning") }}
+      </div>
+      {% endif %}{% endfor %}
+    </section>
+
+    <aside class="admin-section brand-editor__preview" aria-labelledby="preview-title">
+      <h2 class="admin-section__title" id="preview-title">{{ t(key="settings.preview_title") }}</h2>
+      <p class="admin-status">{{ t(key="settings.preview_sub") }}</p>
+      <figure class="brand-preview__frame">
+        <figcaption>{{ t(key="settings.preview_bar") }}</figcaption>
+        <div class="brand-preview__phone">
+          <div class="brand-preview__bar">
+            <span class="brand-preview__brand">
+              <span class="brand-preview__mark"{% if logo_src %} hidden{% endif %} :hidden="logoCustom">{{ brand::logo(class="app-nav__logo") }}</span>
+              <img class="brand-logo brand-logo--upload app-nav__logo"{% if logo_src %} src="{{ logo_src }}"{% else %} hidden{% endif %} :src="logoUrl" :hidden="logoBuiltin" alt="" width="96" height="96">
+              <span class="app-nav__name" x-ref="barName" x-text="shownName">{{ shown_name }}</span>
+            </span>
+            {#- The bar's own buttons on a phone under 400 px: search, the
+                language (its code, no chevron), the account (its icon). -#}
+            <span class="brand-preview__actions" aria-hidden="true">
+              <span class="brand-preview__button">{{ atoms::icon(name="fa-magnifying-glass") }}</span>
+              <span class="brand-preview__button brand-preview__button--language">{{ atoms::icon(name="fa-language") }} VI</span>
+              <span class="brand-preview__button">{{ atoms::icon(name="fa-circle-user") }}</span>
+            </span>
+          </div>
+        </div>
+      </figure>
+      <figure class="brand-preview__frame">
+        <figcaption>{{ t(key="settings.preview_card") }}</figcaption>
+        <div class="brand-preview__card">
+          <span class="brand-preview__mark"{% if logo_src %} hidden{% endif %} :hidden="logoCustom">{{ brand::logo(class="auth-brand__icon") }}</span>
+          <img class="brand-logo brand-logo--upload auth-brand__icon"{% if logo_src %} src="{{ logo_src }}"{% else %} hidden{% endif %} :src="logoUrl" :hidden="logoBuiltin" alt="" width="96" height="96">
+          <span class="auth-brand__name" x-text="shownName">{{ shown_name }}</span>
+        </div>
+      </figure>
+      <figure class="brand-preview__frame">
+        <figcaption>{{ t(key="settings.preview_tab") }}</figcaption>
+        <div class="brand-preview__browser">
+          <div class="brand-preview__tab">
+            <img class="brand-preview__favicon" src="{{ tab_src }}" :src="iconUrl" alt="" width="16" height="16">
+            <span class="text-truncate" x-text="googleTitle">{{ google_title }}</span>
+          </div>
+        </div>
+      </figure>
+      <figure class="brand-preview__frame">
+        <figcaption>{{ t(key="settings.preview_home") }}</figcaption>
+        {#- On a dark wallpaper, as a phone shows it. -#}
+        <div class="brand-preview__wallpaper">
+          <div class="brand-preview__home">
+            <img src="{{ home_src }}" :src="homeUrl" alt="" width="60" height="60">
+            <span class="text-truncate" x-text="shownName">{{ shown_name }}</span>
+          </div>
+        </div>
+      </figure>
+      <figure class="brand-preview__frame">
+        <figcaption>{{ t(key="settings.preview_google") }}</figcaption>
+        <div class="brand-preview__google">
+          <span class="brand-preview__site"><img class="brand-preview__site-icon" src="{{ tab_src }}" :src="iconUrl" alt="" width="26" height="26"> <span x-text="shownName">{{ shown_name }}</span></span>
+          <span class="brand-preview__title" x-text="googleTitle">{{ google_title }}</span>
+          <span class="brand-preview__snippet" x-text="googleDescription">{{ shown_desc }}</span>
+        </div>
+      </figure>
+    </aside>
+  </div>
+  {% else %}
   <section class="admin-section" aria-labelledby="settings-title">
     <h2 class="admin-section__title" id="settings-title">{{ g.title }}</h2>
     <p class="admin-status">
@@ -62,45 +178,13 @@
       <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button></div>
     </form>
   </section>
-
-  {% if g.images %}
-  <section class="admin-section" aria-labelledby="images-title">
-    <h2 class="admin-section__title" id="images-title">{{ t(key="settings.images_title") }}</h2>
-    <p class="admin-status">{{ t(key="settings.images_sub", min=b.icon_min) }}</p>
-    {#- Where the mark shows: the green top bar, a white card, a browser tab. -#}
-    <div class="brand-preview" aria-label="{{ t(key="settings.preview_label") }}">
-      <div class="brand-preview__bar">{{ brand::logo(class="app-nav__logo", file=site.logo) }} <span class="app-nav__name">{{ site.name }}</span></div>
-      <div class="brand-preview__card">{{ brand::logo(class="auth-brand__icon", file=site.logo) }} <span class="auth-brand__name">{{ site.name }}</span></div>
-      <div class="brand-preview__tab">
-        {% if site.icon %}<img class="brand-preview__favicon" src="{{ file_url(id=site.icon, variant="thumb") }}" alt="" width="16" height="16">{% else %}<img class="brand-preview__favicon" src="{{ asset_url(path='img/logo.svg') }}" alt="" width="16" height="16">{% endif %}
-        <span class="text-truncate">{{ site.name }}</span>
-      </div>
-    </div>
-    {% for i in g.images %}
-    <div x-data="dialog" data-open="false" x-on:keydown.escape.window="hide">
-      <form class="form-stack" method="post" action="{{ b.image_action }}" enctype="multipart/form-data">
-        <input type="hidden" name="key" value="{{ i.key }}">
-        {% set hint = i.hint %}
-        {% if i.changed_on %}{% set when = i.changed_on | vn_datetime %}{% set hint = hint ~ " " ~ t(key="settings.changed_on", when=when) %}{% endif %}
-        {{ photo::photo_picker(id=i.id, label=i.label, max_mb=b.max_mb, hint=hint, current=i.current | default(value=""), error=i.error | default(value="")) }}
-        {{ field::input(id=i.id ~ "-reason", name="reason", label=t(key="settings.reason"), placeholder=t(key="settings.reason_placeholder"), maxlength=limits.audit_reason_max) }}
-        <div class="admin-actions">
-          <button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-upload") }} {{ t(key="settings.image_upload") }}</button>
-          {% if i.current %}<a class="btn btn-outline-secondary" href="#remove-{{ i.id }}" x-on:click.prevent="show">{{ atoms::icon(name="fa-rotate-left") }} {{ t(key="settings.image_builtin_button") }}</a>{% endif %}
-        </div>
-      </form>
-      {% if i.current %}
-      {{ confirm::confirm_sheet(id="remove-" ~ i.id, title=t(key="settings.image_remove_title", what=i.label), icon="fa-rotate-left", action=b.image_remove_action, button=t(key="settings.image_builtin_button"), reason_max=limits.audit_reason_max, note=t(key="settings.image_remove_note"), hidden_name="key", hidden_value=i.key, button_class="btn-warning") }}
-      {% endif %}
-    </div>
-    {% endfor %}
-  </section>
   {% endif %}
+
 
   {% if g.resets %}
   <section class="admin-section" aria-labelledby="reset-title">
     <h2 class="admin-section__title" id="reset-title">{{ t(key="settings.reset_title") }}</h2>
-    <p class="admin-status">{{ t(key="settings.reset_sub") }}</p>
+    <p class="admin-status">{{ t(key="settings.reset_sub") }}{% if g.images %} {{ t(key="settings.reset_keeps_images") }}{% endif %}</p>
     <ul class="mb-0 ps-3 d-grid gap-1">
       {% for r in g.resets %}<li><span class="fw-semibold">{{ r.label }}</span> <span class="text-body-secondary">{{ r.current }} → {{ r.default }}</span></li>{% endfor %}
     </ul>

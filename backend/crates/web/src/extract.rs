@@ -127,9 +127,21 @@ impl ApiMultipart {
         file_field: &str,
         max: usize,
     ) -> Result<(T, Option<Vec<u8>>), Error> {
+        let (fields, mut files) = self.into_form_files(&[file_field], max).await?;
+        Ok((fields, files.pop().map(|(_, bytes)| bytes)))
+    }
+
+    /// `into_form` with several file boxes (`file_fields`): each file chosen
+    /// as (its box's name, its bytes), in the order sent; a box left empty
+    /// is left out.
+    pub async fn into_form_files<T: DeserializeOwned>(
+        self,
+        file_fields: &[&str],
+        max: usize,
+    ) -> Result<(T, Vec<(String, Vec<u8>)>), Error> {
         let mut form = self.0;
         let mut text = serde_json::Map::new();
-        let mut file = None;
+        let mut files = Vec::new();
         while let Some(field) = form
             .next_field()
             .await
@@ -138,9 +150,11 @@ impl ApiMultipart {
             let Some(name) = field.name().map(str::to_owned) else {
                 continue;
             };
-            if name == file_field {
+            if file_fields.contains(&name.as_str()) {
                 let bytes = field.bytes().await.map_err(|e| multipart_error(e, max))?;
-                file = (!bytes.is_empty()).then(|| bytes.to_vec());
+                if !bytes.is_empty() {
+                    files.push((name, bytes.to_vec()));
+                }
             } else {
                 let value = field.text().await.map_err(|e| multipart_error(e, max))?;
                 text.insert(name, serde_json::Value::String(value));
@@ -148,7 +162,7 @@ impl ApiMultipart {
         }
         let fields = serde_json::from_value(serde_json::Value::Object(text))
             .map_err(|e| Error::new(ErrorCode::InvalidRequestBody).with_detail(e.to_string()))?;
-        Ok((fields, file))
+        Ok((fields, files))
     }
 }
 

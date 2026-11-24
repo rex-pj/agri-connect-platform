@@ -89,14 +89,37 @@ fn process_icon(bytes: &[u8], rules: ImageRules) -> Result<ProcessedImage> {
     if decoded.width().min(decoded.height()) < rules.icon_min_side {
         return Err(Error::new(ErrorCode::ImageTooSmall).with_param("min", rules.icon_min_side));
     }
-    let square = squared(decoded.into_rgba8());
-    let main = shrink_square(square, rules.icon_main_side);
-    let thumb = shrink_square(main.clone(), rules.icon_thumb_side);
+    let square = shrink_square(squared(decoded.into_rgba8()), rules.icon_main_side);
+    // The small copy keeps its transparency: the top bars put it on their
+    // own white tile, a browser tab on its own colour.
+    let thumb = shrink_square(square.clone(), rules.icon_thumb_side);
+    // The large one is the phone's home-screen icon, and iOS paints a
+    // transparent background black: on white, with a margin as app icons
+    // have.
+    let main = on_white(&square);
     Ok(ProcessedImage {
         main: encode_png(&main)?,
         thumb: encode_png(&thumb)?,
         content_type: ICON_CONTENT_TYPE,
     })
+}
+
+/// Of each side of a home-screen icon, the share left white around the mark.
+const HOME_ICON_MARGIN_PERCENT: u32 = 8;
+
+/// `square` shrunk into the middle of an opaque white square as wide.
+fn on_white(square: &RgbaImage) -> RgbaImage {
+    let side = square.width();
+    let margin = side * HOME_ICON_MARGIN_PERCENT / 100;
+    let inner = imageops::resize(
+        square,
+        side - 2 * margin,
+        side - 2 * margin,
+        FilterType::Lanczos3,
+    );
+    let mut white = RgbaImage::from_pixel(side, side, image::Rgba([255, 255, 255, 255]));
+    imageops::overlay(&mut white, &inner, i64::from(margin), i64::from(margin));
+    white
 }
 
 /// `img` in the middle of a transparent square as wide as its longest side.
@@ -338,21 +361,32 @@ mod tests {
         let mark = RgbaImage::from_pixel(300, 200, image::Rgba([6, 78, 59, 255]));
         let out = process_icon(&png(&mark), RULES).unwrap();
         assert_eq!(out.content_type, "image/png");
-        let main = image::load_from_memory(&out.main.bytes)
+        let thumb = image::load_from_memory(&out.thumb.bytes)
             .unwrap()
             .into_rgba8();
-        assert_eq!(main.dimensions(), (300, 300), "squared, never enlarged");
+        assert_eq!(thumb.dimensions(), (96, 96));
         assert_eq!(
-            main.get_pixel(150, 0).0[3],
+            thumb.get_pixel(48, 0).0[3],
             0,
             "the band above is transparent"
         );
         assert_eq!(
-            main.get_pixel(150, 150).0,
+            thumb.get_pixel(48, 48).0,
             [6, 78, 59, 255],
             "the mark as it was"
         );
-        assert_eq!((out.thumb.width, out.thumb.height), (96, 96));
+        // The home-screen icon: iOS would paint transparency black.
+        let main = image::load_from_memory(&out.main.bytes)
+            .unwrap()
+            .into_rgba8();
+        assert_eq!(main.dimensions(), (300, 300), "squared, never enlarged");
+        assert!(main.pixels().all(|p| p.0[3] == 255), "opaque throughout");
+        assert_eq!(
+            main.get_pixel(0, 0).0,
+            [255, 255, 255, 255],
+            "a white margin"
+        );
+        assert_eq!(main.get_pixel(150, 150).0, [6, 78, 59, 255]);
     }
 
     #[test]

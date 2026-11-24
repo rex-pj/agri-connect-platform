@@ -93,7 +93,8 @@ jobs:
           context: backend
           push: false
           cache-from: type=gha,scope=web
-          cache-to: type=gha,mode=max,scope=web
+          # A cache service outage (503) must not fail a build that succeeded.
+          cache-to: type=gha,mode=max,scope=web,ignore-error=true
 
   deploy-scripts:
     name: Deploy scripts (shellcheck, compose config)

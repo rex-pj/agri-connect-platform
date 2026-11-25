@@ -17,6 +17,7 @@ mod m20261124_000005_username_no_at;
 mod m20261125_000006_user_demo;
 mod m20261126_000007_inquiry_answered_on;
 mod m20261127_000008_account_email;
+mod m20261128_000009_user_reference_indexes;
 pub mod schema;
 pub mod search;
 
@@ -34,6 +35,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20261125_000006_user_demo::Migration),
             Box::new(m20261126_000007_inquiry_answered_on::Migration),
             Box::new(m20261127_000008_account_email::Migration),
+            Box::new(m20261128_000009_user_reference_indexes::Migration),
         ]
     }
 }

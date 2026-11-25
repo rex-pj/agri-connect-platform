@@ -284,7 +284,11 @@ impl EmailService for SmtpEmailService {
             .unwrap_or_default();
         let body = fill(
             &self.texts.changed_body,
-            &[("email", masked_email), ("support", &support), ("site", &site)],
+            &[
+                ("email", masked_email),
+                ("support", &support),
+                ("site", &site),
+            ],
         );
         let subject = fill(&self.texts.changed_subject, &[("site", &site)]);
         match self.send(to_email, &subject, body).await {
@@ -342,7 +346,11 @@ impl EmailService for LogEmailService {
     }
 
     async fn send_email_changed(&self, to_email: &str, masked_email: &str) {
-        warn!(to = to_email, now = masked_email, "SMTP not configured; email-changed notice not sent");
+        warn!(
+            to = to_email,
+            now = masked_email,
+            "SMTP not configured; email-changed notice not sent"
+        );
     }
 
     async fn send_new_inquiry(&self, to_email: &str, notice: &InquiryNotice) {

@@ -27,7 +27,7 @@ use crate::{
         business, inquiry,
         review::{self, Entity as Review},
     },
-    sql::{businesses_of, null, account_name_of, PgType, QueryAs},
+    sql::{account_name_of, businesses_of, null, PgType, QueryAs},
 };
 
 pub struct ReviewRepository {

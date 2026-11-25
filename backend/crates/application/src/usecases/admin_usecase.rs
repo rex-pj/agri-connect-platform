@@ -60,9 +60,8 @@ use crate::{
         AdminProductItemDto, AdminProviderDetailDto, AdminProviderDto, AdminReviewDto,
         AdminServiceDto, AdminServiceItemDto, AdminUserDetailDto, AdminUserDto, AreaGroupDto,
         AssignUserDto, AuditEntryDto, BulkLocationsDto, BulkWardDto, BulkWardsDto, IconMatchesDto,
-        InquiryCountsDto, ListingActivityDto,
-        ProviderActivityDto, ProviderStatusDto, ReviewCountsDto, RoleDto, SlugSuggestionDto,
-        VerificationDto,
+        InquiryCountsDto, ListingActivityDto, ProviderActivityDto, ProviderStatusDto,
+        ReviewCountsDto, RoleDto, SlugSuggestionDto, VerificationDto,
     },
     pagination::{
         admin_page_of, admin_total_pages, order_admin_list, paginate_admin, total_or_count,
@@ -591,10 +590,7 @@ impl AdminUseCase {
         )
         .await;
 
-        Ok(AssignUserDto {
-            business_id,
-            email,
-        })
+        Ok(AssignUserDto { business_id, email })
     }
 
     /// The business no longer has a managing account (one that left, or was

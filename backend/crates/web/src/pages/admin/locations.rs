@@ -22,8 +22,8 @@ use application::{
     outputs::{AdminLocationDto, AreaGroupDto},
     usecases::admin_usecase::HistoryOf,
 };
-use domain::models::admin_list::AdminSort;
 use axum::{extract::State, http::StatusCode, response::Response};
+use domain::models::admin_list::AdminSort;
 use domain::{models::admin_list::LISTING_LIST_STATES, Error, ErrorCode};
 use serde::{Deserialize, Serialize};
 

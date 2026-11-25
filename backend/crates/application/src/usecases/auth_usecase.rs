@@ -8,8 +8,8 @@ use domain::{
         role::UserRole,
         session::NewRefreshToken,
         user::{
-            display_name, mask_email, NewEmailVerification, NewResetToken, NewUser, UserAdminDetail,
-            UserByEmail,
+            display_name, mask_email, NewEmailVerification, NewResetToken, NewUser,
+            UserAdminDetail, UserByEmail,
         },
     },
     repositories::{
@@ -270,12 +270,7 @@ impl AuthUseCase {
     /// The answer to a login, sign-up or first-admin setup: a new session,
     /// whose access token is the API's `token`. No token is ever minted
     /// outside a session, so every one can be ended before it expires.
-    async fn signed_in(
-        &self,
-        user_id: i32,
-        email: String,
-        role: String,
-    ) -> Result<LoginResponse> {
+    async fn signed_in(&self, user_id: i32, email: String, role: String) -> Result<LoginResponse> {
         let session = self.start_session(user_id).await?;
         Ok(LoginResponse {
             user_id,
@@ -797,13 +792,7 @@ impl AuthUseCase {
             .ok_or_else(|| Error::new(ErrorCode::UserNotFound))
     }
 
-    async fn audit_by(
-        &self,
-        actor: &Actor,
-        user_id: i32,
-        what: AuthEvent,
-        reason: Option<String>,
-    ) {
+    async fn audit_by(&self, actor: &Actor, user_id: i32, what: AuthEvent, reason: Option<String>) {
         self.events
             .publish(DomainEvent {
                 actor_id: Some(actor.user_id),

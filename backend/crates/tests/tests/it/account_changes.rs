@@ -64,7 +64,11 @@ async fn the_name_is_saved_cleared_and_bounded() {
 
     let res = send(
         &e.router,
-        post_form("/account/profile", &[("full_name", "  Út Hiền ")], Some(&me)),
+        post_form(
+            "/account/profile",
+            &[("full_name", "  Út Hiền ")],
+            Some(&me),
+        ),
     )
     .await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
@@ -74,7 +78,11 @@ async fn the_name_is_saved_cleared_and_bounded() {
     assert!(page.contains("Đã lưu họ tên."));
     assert!(page.contains(r#"<h1 class="acct-name">Út Hiền</h1>"#));
     assert_eq!(
-        text(&e, "SELECT full_name AS v FROM users WHERE email = 'nongdan@example.vn'").await,
+        text(
+            &e,
+            "SELECT full_name AS v FROM users WHERE email = 'nongdan@example.vn'"
+        )
+        .await,
         Some("Út Hiền".into())
     );
 
@@ -94,7 +102,11 @@ async fn the_name_is_saved_cleared_and_bounded() {
     )
     .await;
     assert_eq!(
-        text(&e, "SELECT full_name AS v FROM users WHERE email = 'nongdan@example.vn'").await,
+        text(
+            &e,
+            "SELECT full_name AS v FROM users WHERE email = 'nongdan@example.vn'"
+        )
+        .await,
         None
     );
     let page = body_text(send(&e.router, get_page("/account", Some(&me))).await).await;
@@ -125,7 +137,10 @@ async fn the_email_moves_only_once_the_link_sent_to_the_new_one_is_opened() {
         &e.router,
         post_form(
             "/account/email",
-            &[("new_email", "tu.moi@example.vn"), ("current_password", "sai")],
+            &[
+                ("new_email", "tu.moi@example.vn"),
+                ("current_password", "sai"),
+            ],
             Some(&me),
         ),
     )
@@ -148,7 +163,9 @@ async fn the_email_moves_only_once_the_link_sent_to_the_new_one_is_opened() {
     )
     .await;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
-    assert!(body_text(res).await.contains("Đây đã là email của tài khoản."));
+    assert!(body_text(res)
+        .await
+        .contains("Đây đã là email của tài khoản."));
 
     let res = send(
         &e.router,
@@ -174,7 +191,10 @@ async fn the_email_moves_only_once_the_link_sent_to_the_new_one_is_opened() {
     assert!(page.contains("Đang chờ xác nhận:"));
     assert!(page.contains("tu.moi@example.vn"));
     assert_eq!(email_of_account(&e).await, "nongdan@example.vn");
-    assert_eq!(sign_in_fails(&e, "nongdan@example.vn", "matkhau123").await, None);
+    assert_eq!(
+        sign_in_fails(&e, "nongdan@example.vn", "matkhau123").await,
+        None
+    );
 
     // The link moves it, once, confirmed.
     let form = [("token", token.as_str())];
@@ -185,16 +205,22 @@ async fn the_email_moves_only_once_the_link_sent_to_the_new_one_is_opened() {
     assert!(page.contains("tu.moi@example.vn"));
     assert_eq!(email_of_account(&e).await, "tu.moi@example.vn");
     assert!(
-        text(&e, "SELECT email_verified_at::text AS v FROM users WHERE email = 'tu.moi@example.vn'")
-            .await
-            .is_some(),
+        text(
+            &e,
+            "SELECT email_verified_at::text AS v FROM users WHERE email = 'tu.moi@example.vn'"
+        )
+        .await
+        .is_some(),
         "the new address is confirmed"
     );
     let res = send(&e.router, post_form("/verify-email", &form, None)).await;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST, "spent");
 
     // Signed in by the new address only; the old one was told, masked.
-    assert_eq!(sign_in_fails(&e, "tu.moi@example.vn", "matkhau123").await, None);
+    assert_eq!(
+        sign_in_fails(&e, "tu.moi@example.vn", "matkhau123").await,
+        None
+    );
     assert_eq!(
         sign_in_fails(&e, "nongdan@example.vn", "matkhau123").await,
         Some(ErrorCode::InvalidCredentials)
@@ -202,7 +228,10 @@ async fn the_email_moves_only_once_the_link_sent_to_the_new_one_is_opened() {
     let told = e.mail.email_changed(1).await;
     assert_eq!(
         told,
-        [("nongdan@example.vn".to_owned(), "t*****@example.vn".to_owned())]
+        [(
+            "nongdan@example.vn".to_owned(),
+            "t*****@example.vn".to_owned()
+        )]
     );
     // The reset link sent to the old address no longer works.
     assert_eq!(
@@ -273,8 +302,13 @@ async fn an_address_another_account_has_is_never_said_nor_taken() {
     )
     .await;
     assert_eq!(res.status(), StatusCode::CONFLICT);
-    assert!(body_text(res).await.contains("Email này đã có tài khoản khác"));
-    assert_eq!(sign_in_fails(&e, "nongdan@example.vn", "matkhau123").await, None);
+    assert!(body_text(res)
+        .await
+        .contains("Email này đã có tài khoản khác"));
+    assert_eq!(
+        sign_in_fails(&e, "nongdan@example.vn", "matkhau123").await,
+        None
+    );
     e.cleanup().await;
 }
 
@@ -346,12 +380,18 @@ async fn an_admin_corrects_an_account_without_ever_holding_its_sign_in() {
     let e = env_with_origin().await;
     let admin = install_admin(&e).await;
     register_provider(&e.state, "nongdan", "0901234567").await;
-    let id = text(&e, "SELECT id::text AS v FROM users WHERE email = 'nongdan@example.vn'")
-        .await
-        .unwrap();
-    let me = text(&e, "SELECT id::text AS v FROM users WHERE email = 'quantri@example.vn'")
-        .await
-        .unwrap();
+    let id = text(
+        &e,
+        "SELECT id::text AS v FROM users WHERE email = 'nongdan@example.vn'",
+    )
+    .await
+    .unwrap();
+    let me = text(
+        &e,
+        "SELECT id::text AS v FROM users WHERE email = 'quantri@example.vn'",
+    )
+    .await
+    .unwrap();
     let page = format!("/admin/users/{id}");
     let profile = format!("{page}/profile");
 
@@ -368,7 +408,11 @@ async fn an_admin_corrects_an_account_without_ever_holding_its_sign_in() {
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     assert!(body_text(res).await.contains(r#"id="eu_email-error""#));
     assert_eq!(
-        text(&e, "SELECT full_name AS v FROM users WHERE email = 'nongdan@example.vn'").await,
+        text(
+            &e,
+            "SELECT full_name AS v FROM users WHERE email = 'nongdan@example.vn'"
+        )
+        .await,
         None
     );
 
@@ -417,7 +461,11 @@ async fn an_admin_corrects_an_account_without_ever_holding_its_sign_in() {
     // Never on the admin's own account (the account page asks the
     // password), and never for an account without the permission.
     let own = body_text(
-        send(&e.router, get_page(&format!("/admin/users/{me}"), Some(&admin))).await,
+        send(
+            &e.router,
+            get_page(&format!("/admin/users/{me}"), Some(&admin)),
+        )
+        .await,
     )
     .await;
     assert!(!own.contains(r#"id="sua-tai-khoan""#));

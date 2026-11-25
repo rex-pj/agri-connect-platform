@@ -10,18 +10,8 @@ async fn two_setup_forms_at_once_make_one_admin() {
     let e = Env::new().await;
     let auth = &e.state.usecases.auth;
     let (a, b) = tokio::join!(
-        auth.create_first_admin(
-            "a@example.vn".into(),
-            "matkhau123".into(),
-            None,
-            None
-        ),
-        auth.create_first_admin(
-            "b@example.vn".into(),
-            "matkhau123".into(),
-            None,
-            None
-        ),
+        auth.create_first_admin("a@example.vn".into(), "matkhau123".into(), None, None),
+        auth.create_first_admin("b@example.vn".into(), "matkhau123".into(), None, None),
     );
     let codes: Vec<_> = [&a, &b]
         .iter()

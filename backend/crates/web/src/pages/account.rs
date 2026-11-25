@@ -220,9 +220,7 @@ pub async fn save_profile(
         .await
     {
         Ok(()) => done("account", Flash::ProfileSaved),
-        Err(err) => {
-            reshow(&state, &shell, &actor, err, |e| Refused::Profile(form, e)).await
-        }
+        Err(err) => reshow(&state, &shell, &actor, err, |e| Refused::Profile(form, e)).await,
     }
 }
 

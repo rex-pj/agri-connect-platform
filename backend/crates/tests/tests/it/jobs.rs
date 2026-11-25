@@ -29,14 +29,7 @@ async fn scalar(e: &Env, sql: &str) -> String {
 
 /// A provider with one service in `category`, placed at (lng, lat); its
 /// session token.
-async fn provider_at(
-    e: &Env,
-    who: &str,
-    phone: &str,
-    category: i32,
-    lng: f64,
-    lat: f64,
-) -> String {
+async fn provider_at(e: &Env, who: &str, phone: &str, category: i32, lng: f64, lat: f64) -> String {
     let token = register_provider(&e.state, who, phone).await;
     let req = Request::post("/api/provider/services")
         .header(header::AUTHORIZATION, format!("Bearer {token}"))

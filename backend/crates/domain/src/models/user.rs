@@ -159,7 +159,10 @@ mod tests {
 
     #[test]
     fn an_account_is_shown_by_its_name_else_its_email() {
-        assert_eq!(display_name(Some("Nguyen Van Tu"), "tu@gmail.com"), "Nguyen Van Tu");
+        assert_eq!(
+            display_name(Some("Nguyen Van Tu"), "tu@gmail.com"),
+            "Nguyen Van Tu"
+        );
         assert_eq!(display_name(Some("  "), "tu@gmail.com"), "tu@gmail.com");
         assert_eq!(display_name(None, "tu@gmail.com"), "tu@gmail.com");
     }

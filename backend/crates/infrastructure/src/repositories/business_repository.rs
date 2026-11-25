@@ -41,8 +41,8 @@ use crate::{
         service_type as category, supply_type, user, ward,
     },
     sql::{
-        business_lat, business_lng, business_location, category_in_sector, distance,
-        geography_from_text, null, output, account_name_of, within, Geo, QueryAs,
+        account_name_of, business_lat, business_lng, business_location, category_in_sector,
+        distance, geography_from_text, null, output, within, Geo, QueryAs,
     },
 };
 

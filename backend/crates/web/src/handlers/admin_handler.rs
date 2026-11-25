@@ -18,10 +18,9 @@ use crate::{
         AdminCreateProductRequest, AdminCreateServiceRequest, AdminListQuery,
         AdminUpdateProductRequest, AdminUpdateServiceRequest, AssignUserRequest,
         CreateCategoryRequest, DeleteWithReasonBody, IconSearchQuery, LocationRequest,
-        LocationsFromWardsRequest,
-        SetVerificationRequest, SlugSuggestionQuery, ToggleActiveRequest, ToggleVisibleRequest,
-        UpdateCategoryRequest, UpdateInquiryStatusRequest, UpdateProfileRequest,
-        UpdateUserRequest, UpdateUserRoleRequest,
+        LocationsFromWardsRequest, SetVerificationRequest, SlugSuggestionQuery,
+        ToggleActiveRequest, ToggleVisibleRequest, UpdateCategoryRequest,
+        UpdateInquiryStatusRequest, UpdateProfileRequest, UpdateUserRequest, UpdateUserRoleRequest,
     },
 };
 

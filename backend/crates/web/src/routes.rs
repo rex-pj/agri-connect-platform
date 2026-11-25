@@ -95,7 +95,10 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("admin_user_role", "/admin/users/{id}/role"),
     ("admin_user_status", "/admin/users/{id}/status"),
     ("admin_user_profile", "/admin/users/{id}/profile"),
-    ("admin_user_password_reset", "/admin/users/{id}/password-reset"),
+    (
+        "admin_user_password_reset",
+        "/admin/users/{id}/password-reset",
+    ),
     ("admin_roles", "/admin/roles"),
     ("admin_role", "/admin/roles/{id}"),
     ("admin_role_permissions", "/admin/roles/{id}/permissions"),

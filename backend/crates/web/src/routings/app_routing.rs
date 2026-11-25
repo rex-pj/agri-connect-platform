@@ -665,7 +665,10 @@ impl AppRouting {
                 post(pages::account::send_email_verification),
             )
             .route("/account/profile", post(pages::account::save_profile))
-            .route("/account/sessions", post(pages::account::end_other_sessions));
+            .route(
+                "/account/sessions",
+                post(pages::account::end_other_sessions),
+            );
 
         // ── USER routes (authenticated, signed-in budget) ───────────────────
         // Changing the password is under the auth budget (`auth_routes`,

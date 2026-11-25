@@ -529,12 +529,7 @@ pub async fn first_admin(state: &AppState) -> application::authz::Actor {
     let login = state
         .usecases
         .auth
-        .create_first_admin(
-            "quantri@example.vn".into(),
-            "matkhau123".into(),
-            None,
-            None,
-        )
+        .create_first_admin("quantri@example.vn".into(), "matkhau123".into(), None, None)
         .await
         .unwrap_or_else(|e| panic!("create_first_admin: {e}"));
     let claims = token_service().verify(&login.token).unwrap();

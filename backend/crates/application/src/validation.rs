@@ -1,10 +1,7 @@
 //! Field rules shared by use cases. Each returns a coded `Error`; callers that
 //! validate a whole form feed them into `domain::Validation`.
 
-use domain::{
-    models::coded::CodedEntry,
-    Error, ErrorCode, Result,
-};
+use domain::{models::coded::CodedEntry, Error, ErrorCode, Result};
 
 use crate::icons;
 

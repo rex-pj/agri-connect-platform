@@ -158,7 +158,10 @@ async fn login_lands_by_permission_and_locks_after_repeated_failures() {
         &e.router,
         post_form(
             "/login",
-            &[("email", "nongdan@example.vn"), ("password", "sai-mat-khau")],
+            &[
+                ("email", "nongdan@example.vn"),
+                ("password", "sai-mat-khau"),
+            ],
             None,
         ),
     )
@@ -173,10 +176,7 @@ async fn login_lands_by_permission_and_locks_after_repeated_failures() {
         &e.router,
         post_form(
             "/login",
-            &[
-                ("email", "NongDan@example.vn"),
-                ("password", "matkhau123"),
-            ],
+            &[("email", "NongDan@example.vn"), ("password", "matkhau123")],
             None,
         ),
     )

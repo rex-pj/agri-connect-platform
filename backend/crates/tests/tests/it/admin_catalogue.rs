@@ -831,13 +831,20 @@ async fn several_locations_are_added_from_the_wards_ticked() {
     // Nothing ticked: the sheet comes back open, saying so.
     let res = send(
         &e.router,
-        post_form("/admin/locations/bulk", &[("province", "p82")], Some(&admin)),
+        post_form(
+            "/admin/locations/bulk",
+            &[("province", "p82")],
+            Some(&admin),
+        ),
     )
     .await;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     let html = body_text(res).await;
     assert!(html.contains("Chọn ít nhất một xã, phường."));
-    assert!(html.contains(r#"name="ward.w28378""#), "the province's wards again");
+    assert!(
+        html.contains(r#"name="ward.w28378""#),
+        "the province's wards again"
+    );
 
     // One unknown ward refuses them all, the ticks kept.
     let res = send(

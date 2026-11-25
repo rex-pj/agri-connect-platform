@@ -234,9 +234,7 @@ async fn a_business_goes_only_to_an_account_whose_email_was_confirmed() {
     // A sign-up's own business is taken away, so only the email can refuse.
     register_provider(&e.state, "uthien", "0901234567").await;
     e.t.db
-        .execute_unprepared(
-            "UPDATE businesses SET owner_id = NULL WHERE name = 'Vườn uthien'",
-        )
+        .execute_unprepared("UPDATE businesses SET owner_id = NULL WHERE name = 'Vườn uthien'")
         .await
         .unwrap();
     let res = send(
@@ -255,7 +253,11 @@ async fn a_business_goes_only_to_an_account_whose_email_was_confirmed() {
         post_form(&action, &[("email", "uthien@example.vn")], Some(&admin)),
     )
     .await;
-    assert_eq!(res.status(), StatusCode::SEE_OTHER, "confirmed, it is linked");
+    assert_eq!(
+        res.status(),
+        StatusCode::SEE_OTHER,
+        "confirmed, it is linked"
+    );
     e.cleanup().await;
 }
 

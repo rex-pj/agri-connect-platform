@@ -1265,12 +1265,10 @@ impl Generator<'_> {
             let name = Self::unique_name(&names, named, &k.to_string());
             names.insert(name.clone());
             let contact = self.person();
-            let account = self.rng.chance(0.8).then(|| {
-                DemoAccount {
-                    email: format!("doitac{k}@{}", self.vocab.email_domain),
-                    full_name: contact.full.clone(),
-                    verified: true,
-                }
+            let account = self.rng.chance(0.8).then(|| DemoAccount {
+                email: format!("doitac{k}@{}", self.vocab.email_domain),
+                full_name: contact.full.clone(),
+                verified: true,
             });
             let mut contracts = Vec::new();
             for _ in 0..self.rng.between(1, 4) {

@@ -31,7 +31,7 @@ use crate::{
         service, user,
     },
     search::admin_inquiry_search,
-    sql::{businesses_of, live_owner_on, notice_email, account_name_of, QueryAs},
+    sql::{account_name_of, businesses_of, live_owner_on, notice_email, QueryAs},
 };
 
 pub struct InquiryRepository {

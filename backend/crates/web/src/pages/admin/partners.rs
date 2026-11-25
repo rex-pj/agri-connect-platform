@@ -893,12 +893,7 @@ pub async fn assign_account(
     let result = state
         .usecases
         .partner
-        .assign_partner_account(
-            &actor,
-            id,
-            form.email.clone(),
-            form.password.clone(),
-        )
+        .assign_partner_account(&actor, id, form.email.clone(), form.password.clone())
         .await
         .map(|_| ());
     after(

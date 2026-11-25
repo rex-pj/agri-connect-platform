@@ -162,7 +162,9 @@ async fn guesses_from_many_clients_lock_the_account_itself() {
     for c in 0..clients {
         let client = format!("198.51.100.{c}");
         for _ in 0..per_client {
-            let _ = auth.login("nongdan@example.vn".into(), "sai".into(), &client).await;
+            let _ = auth
+                .login("nongdan@example.vn".into(), "sai".into(), &client)
+                .await;
         }
     }
     assert_eq!(
@@ -414,12 +416,8 @@ async fn sign_up_probes_sent_at_once_never_pass_the_cap() {
     for _ in 0..SIGNUP_ATTEMPTS_PER_CLIENT * 3 {
         let state = e.state.clone();
         runs.spawn(async move {
-            let mut input = integration_tests::signup(
-                "nongdan@example.vn",
-                "matkhau123",
-                "Vườn",
-                "0907654321",
-            );
+            let mut input =
+                integration_tests::signup("nongdan@example.vn", "matkhau123", "Vườn", "0907654321");
             input.client = "203.0.113.7".to_owned();
             state
                 .usecases

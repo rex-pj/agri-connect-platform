@@ -837,12 +837,7 @@ pub async fn assign_account(
     let result = state
         .usecases
         .admin
-        .assign_provider_user(
-            &actor,
-            id,
-            form.email.clone(),
-            form.password.clone(),
-        )
+        .assign_provider_user(&actor, id, form.email.clone(), form.password.clone())
         .await;
     match result {
         Ok(_) => redirect_to(id, Flash::ProviderAccountAssigned),

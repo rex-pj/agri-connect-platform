@@ -344,7 +344,10 @@ async fn user_page(
     let edit = if actor.can(PERM_USER_UPDATE) && actor.user_id != id {
         let (full_name, new_email) = match typed {
             Some(form) => (form.full_name, form.new_email),
-            None => (user.full_name.clone().unwrap_or_default(), user.email.clone()),
+            None => (
+                user.full_name.clone().unwrap_or_default(),
+                user.email.clone(),
+            ),
         };
         Some(UserEdit {
             action: url("admin_user_profile", &[("id", &id_text)])?,
@@ -421,15 +424,7 @@ async fn after<T>(
         }
         Err(err) if is_refusal(&err) => {
             let errors = FormErrors::from_error(state, &err);
-            user_page(
-                state,
-                actor,
-                id,
-                refused(errors),
-                None,
-                err.kind().status(),
-            )
-            .await
+            user_page(state, actor, id, refused(errors), None, err.kind().status()).await
         }
         Err(err) => Err(err),
     }
@@ -536,7 +531,15 @@ pub async fn change_role(
         .admin
         .update_user_role(&actor, id, form.role_code)
         .await;
-    after(&state, &actor, id, result, Flash::UserRoleChanged, on_page(false)).await
+    after(
+        &state,
+        &actor,
+        id,
+        result,
+        Flash::UserRoleChanged,
+        on_page(false),
+    )
+    .await
 }
 
 #[derive(Debug, Default, Deserialize)]

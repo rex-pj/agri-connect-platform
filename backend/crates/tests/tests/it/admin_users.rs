@@ -4,8 +4,8 @@
 
 use axum::http::{header, StatusCode};
 use integration_tests::{
-    body_text, email_of, env_with_origin, get_page, install_admin, post_form, register_provider, send,
-    sign_in, Env,
+    body_text, email_of, env_with_origin, get_page, install_admin, post_form, register_provider,
+    send, sign_in, Env,
 };
 use sea_orm::{ConnectionTrait, Statement};
 

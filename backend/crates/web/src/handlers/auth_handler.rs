@@ -49,12 +49,7 @@ impl AuthHandler {
         let result = state
             .usecases
             .auth
-            .create_first_admin(
-                req.email,
-                req.password,
-                req.full_name,
-                req.setup_token,
-            )
+            .create_first_admin(req.email, req.password, req.full_name, req.setup_token)
             .await?;
 
         Ok(Json(result))
@@ -132,7 +127,11 @@ impl AuthHandler {
         State(state): State<AppState>,
     ) -> Result<impl IntoResponse, Error> {
         let actor = require_actor(actor)?;
-        state.usecases.auth.end_other_sessions(actor.user_id).await?;
+        state
+            .usecases
+            .auth
+            .end_other_sessions(actor.user_id)
+            .await?;
         Ok(StatusCode::NO_CONTENT)
     }
 

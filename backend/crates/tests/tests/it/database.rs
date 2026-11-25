@@ -308,12 +308,7 @@ async fn registration_reports_every_bad_field_at_once() {
     let result = integration_tests::state(t.db.clone())
         .usecases
         .auth
-        .register(integration_tests::signup(
-            "x",
-            "short",
-            " ",
-            "123",
-        ))
+        .register(integration_tests::signup("x", "short", " ", "123"))
         .await;
     // LoginResponse carries a session token, so it deliberately has no Debug.
     let Err(err) = result else {
@@ -550,7 +545,10 @@ async fn the_schema_refuses_rows_that_contradict_each_other() {
     .await
     .unwrap();
     for (new_email, constraint) in [
-        ("Moi@example.vn", "chk_email_verification_tokens_new_email_lower"),
+        (
+            "Moi@example.vn",
+            "chk_email_verification_tokens_new_email_lower",
+        ),
         (" ", "chk_email_verification_tokens_new_email_not_blank"),
     ] {
         refused(

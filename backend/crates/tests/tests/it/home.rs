@@ -116,13 +116,13 @@ async fn the_frame_follows_the_session() {
     assert!(provider.contains("Đăng xuất"));
     assert!(!provider.contains(r#"href="/admin/dashboard""#));
 
-    let admin = first_admin(&e.state).await;
+    first_admin(&e.state).await;
     let token = e
         .state
         .usecases
         .auth
         .login(
-            admin.username,
+            "quantri@example.vn".into(),
             "matkhau123".into(),
             integration_tests::CLIENT,
         )

@@ -19,6 +19,9 @@ pub const PERM_ADMIN_DASHBOARD_VIEW: &str = "admin.dashboard.view";
 pub const PERM_USER_READ: &str = "user.read";
 pub const PERM_USER_ROLE_UPDATE: &str = "user.role.update";
 pub const PERM_USER_STATUS_UPDATE: &str = "user.status.update";
+/// An account's name and email (through the link sent to the new one), and
+/// the password-reset link sent for it: never the password itself.
+pub const PERM_USER_UPDATE: &str = "user.update";
 pub const PERM_ROLE_READ: &str = "role.read";
 pub const PERM_ROLE_PERMISSION_MANAGE: &str = "role.permission.manage";
 pub const PERM_CATEGORY_MANAGE: &str = "category.manage";
@@ -100,6 +103,10 @@ pub static PERMISSIONS: &[PermissionSeed] = &[
     },
     PermissionSeed {
         key: PERM_USER_STATUS_UPDATE,
+        default_roles: ADMIN,
+    },
+    PermissionSeed {
+        key: PERM_USER_UPDATE,
         default_roles: ADMIN,
     },
     PermissionSeed {

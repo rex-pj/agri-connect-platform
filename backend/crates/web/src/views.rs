@@ -10,8 +10,8 @@ use application::constants::{
     BUSINESS_DESCRIPTION_MAX, BUSINESS_NAME_MAX, CODED_NAME_MAX, COMMODITY_NAME_MAX, CROP_NAME_MAX,
     CROP_UNIT_MAX, FULL_NAME_MAX, JOB_DESCRIPTION_MAX, PASSWORD_MIN_CHARS,
     PASSWORD_RESET_EXPIRY_HOURS, PRICE_FRESH_DAYS_MAX, PRICE_NOTE_MAX, PRODUCT_DESCRIPTION_MAX,
-    PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX, SEARCH_QUERY_MAX, SEARCH_QUERY_MIN, USERNAME_MAX_LEN,
-    USERNAME_MIN_LEN, VN_UTC_OFFSET_SECS,
+    PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX, SEARCH_QUERY_MAX, SEARCH_QUERY_MIN,
+    VN_UTC_OFFSET_SECS,
 };
 use application::constants::{
     GEOLOCATE_ACCURACY_MAX_M, MAP_POINT_ZOOM, MAP_START_LAT, MAP_START_LNG, MAP_START_ZOOM,
@@ -128,8 +128,6 @@ struct LanguageOption {
 #[derive(Clone, Copy, Serialize)]
 struct FieldLimits {
     password_min_chars: usize,
-    username_min_len: usize,
-    username_max_len: usize,
     full_name_max: usize,
     reset_link_hours: i64,
     business_name_max: usize,
@@ -187,8 +185,6 @@ const FIELD_LIMITS: FieldLimits = FieldLimits {
     phone_pattern: VN_PHONE_PATTERN,
     slug_pattern: SLUG_PATTERN,
     password_min_chars: PASSWORD_MIN_CHARS,
-    username_min_len: USERNAME_MIN_LEN,
-    username_max_len: USERNAME_MAX_LEN,
     full_name_max: FULL_NAME_MAX,
     reset_link_hours: PASSWORD_RESET_EXPIRY_HOURS,
     business_name_max: BUSINESS_NAME_MAX,

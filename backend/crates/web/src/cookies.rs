@@ -112,10 +112,14 @@ pub enum Flash {
     JobStatusSaved,
     SettingsSaved,
     SettingsReset,
+    EmailChangeSent,
+    OtherSessionsEnded,
+    UserSaved,
+    PasswordResetSent,
 }
 
 impl Flash {
-    const ALL: [Flash; 80] = [
+    const ALL: [Flash; 84] = [
         Flash::ContactSent,
         Flash::PasswordReset,
         Flash::DemoLoaded,
@@ -196,6 +200,10 @@ impl Flash {
         Flash::JobStatusSaved,
         Flash::SettingsSaved,
         Flash::SettingsReset,
+        Flash::EmailChangeSent,
+        Flash::OtherSessionsEnded,
+        Flash::UserSaved,
+        Flash::PasswordResetSent,
     ];
 
     pub const fn as_str(self) -> &'static str {
@@ -280,6 +288,10 @@ impl Flash {
             Flash::JobStatusSaved => "job_status_saved",
             Flash::SettingsSaved => "settings_saved",
             Flash::SettingsReset => "settings_reset",
+            Flash::EmailChangeSent => "email_change_sent",
+            Flash::OtherSessionsEnded => "other_sessions_ended",
+            Flash::UserSaved => "user_saved",
+            Flash::PasswordResetSent => "password_reset_sent",
         }
     }
 

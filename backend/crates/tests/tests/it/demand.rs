@@ -39,11 +39,11 @@ async fn exec(e: &Env, sql: &str) {
     e.t.db.execute_unprepared(sql).await.unwrap();
 }
 
-/// The provider `username`'s business, placed by Cai Lậy, with one service
+/// The provider `who`'s business, placed by Cai Lậy, with one service
 /// in the first service category; returns (business id, service id, its
 /// category name).
-async fn provider_at_cai_lay(e: &Env, username: &str, phone: &str) -> (i32, i32, String) {
-    let token = register_provider(&e.state, username, phone).await;
+async fn provider_at_cai_lay(e: &Env, who: &str, phone: &str) -> (i32, i32, String) {
+    let token = register_provider(&e.state, who, phone).await;
     let (category, _) = categories_of(e, "service").await.remove(0);
     let name = scalar(
         e,
@@ -61,7 +61,7 @@ async fn provider_at_cai_lay(e: &Env, username: &str, phone: &str) -> (i32, i32,
         .unwrap() as i32;
     let business: i32 = scalar(
         e,
-        &format!("SELECT id::text AS v FROM businesses WHERE name = 'Vườn {username}'"),
+        &format!("SELECT id::text AS v FROM businesses WHERE name = 'Vườn {who}'"),
     )
     .await
     .parse()
@@ -127,7 +127,7 @@ async fn the_report_counts_real_leads_by_area_and_hides_small_figures() {
         .usecases
         .auth
         .login(
-            "quantri".into(),
+            "quantri@example.vn".into(),
             "matkhau123".into(),
             integration_tests::CLIENT,
         )

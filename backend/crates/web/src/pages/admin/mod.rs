@@ -85,7 +85,8 @@ pub struct NavGroup {
 /// The admin frame: who is signed in and the menu they may use.
 #[derive(Debug, Clone, Serialize)]
 pub struct AdminNav {
-    pub username: String,
+    /// Who is signed in: the full name, else the email.
+    pub name: String,
     /// The bar's account menu (the same molecule as the app's): the profile,
     /// then logout back to the login page.
     pub account: ProfileMenu,
@@ -416,7 +417,7 @@ impl AdminNav {
             logout: routes::url("admin_logout", &[]).ok(),
         };
         Self {
-            username: actor.username.clone(),
+            name: actor.name.clone(),
             account,
             groups,
         }
@@ -2044,7 +2045,7 @@ mod tests {
     fn actor(permissions: &[&str]) -> Actor {
         Actor::from_record(ActorRecord {
             user_id: 1,
-            username: "quantri".into(),
+            name: "quantri".into(),
             role_code: "any".into(),
             is_active: true,
             permissions: permissions.iter().map(|p| (*p).to_owned()).collect(),

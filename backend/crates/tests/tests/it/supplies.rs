@@ -304,7 +304,7 @@ async fn the_json_api_lists_and_keeps_the_commodities() {
         .usecases
         .auth
         .login(
-            "quantri".into(),
+            "quantri@example.vn".into(),
             "matkhau123".into(),
             integration_tests::CLIENT,
         )

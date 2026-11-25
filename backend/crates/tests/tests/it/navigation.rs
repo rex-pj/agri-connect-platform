@@ -43,7 +43,7 @@ async fn seeded(e: &Env) -> (i32, i32, i32, i32) {
         .unwrap()
         .id;
     let account = user::Entity::find()
-        .filter(user::Column::Username.eq("nongdan"))
+        .filter(user::Column::Email.eq("nongdan@example.vn"))
         .one(&e.t.db)
         .await
         .unwrap()
@@ -151,11 +151,13 @@ async fn admin_pages_link_a_record_and_its_account_both_ways() {
     let e = env_with_origin().await;
     let admin = install_admin(&e).await;
     let (business, account, product, service) = seeded(&e).await;
+    // Only an account whose email was confirmed is handed a business.
+    integration_tests::confirm_email(&e, "nongdan").await;
     let res = send(
         &e.router,
         integration_tests::post_form(
             &format!("/admin/providers/{business}/account"),
-            &[("username", "nongdan")],
+            &[("email", "nongdan@example.vn")],
             Some(&admin),
         ),
     )

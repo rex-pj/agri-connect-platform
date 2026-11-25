@@ -14,7 +14,7 @@ pub struct Partner {
     pub is_demo: bool,
     /// The partner account that signs in to read its report.
     pub account_id: Option<i32>,
-    pub account_username: Option<String>,
+    pub account_email: Option<String>,
     pub created_on: DateTime<Utc>,
 }
 

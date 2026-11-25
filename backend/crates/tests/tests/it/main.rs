@@ -4,6 +4,7 @@
 //! templates and the template database again. Add a new test file here as a
 //! module, never directly under `tests/`.
 
+mod account_changes;
 mod account_page;
 mod admin_catalogue;
 mod admin_layout;

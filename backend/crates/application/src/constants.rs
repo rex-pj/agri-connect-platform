@@ -33,7 +33,7 @@ pub const EMAIL_VERIFICATION_EXPIRY_HOURS: i64 = 24;
 pub const EMAIL_VERIFICATION_LINKS_MAX: u64 = 3;
 /// Wrong passwords from one client (address, an IPv6 /64) for one account
 /// before that client is kept out of that account for `LOGIN_LOCK_MINUTES`.
-/// Per client, so a stranger who knows a username cannot lock its owner out.
+/// Per client, so a stranger who knows an address cannot lock its owner out.
 pub const LOGIN_FAIL_MAX_ATTEMPTS: u32 = 5;
 /// Wrong passwords for one account from every client together before the
 /// account itself is locked: the backstop against guessing spread over many
@@ -47,8 +47,8 @@ pub const JOB_POSTS_PER_CLIENT_PER_DAY_DEFAULT: i64 = 5;
 /// The day the cap above counts over.
 pub const JOB_POST_CLIENT_WINDOW_SECS: u64 = 24 * 3600;
 /// Sign-ups one client (address) may try within `SIGNUP_CLIENT_WINDOW_SECS`,
-/// counted once the form is valid: each such try tells whether the username
-/// or email has an account, so the cap bounds how fast anyone can probe
+/// counted once the form is valid: each such try tells whether the email has
+/// an account, so the cap bounds how fast anyone can probe
 /// addresses. A security limit, never a setting. Mobile carriers share one
 /// address among many phones (CGNAT); sign-ups are rare enough for this.
 pub const SIGNUP_ATTEMPTS_PER_CLIENT: u32 = 10;
@@ -64,9 +64,6 @@ pub const CONTACT_REQUESTS_PER_CLIENT_AND_PROVIDER: u32 = 3;
 pub const CONTACT_CLIENT_WINDOW_SECS: u64 = 24 * 3600;
 
 // ── Validation ─────────────────────────────────────────────────────────────────
-pub const USERNAME_MIN_LEN: usize = 3;
-/// Long enough for any real login name; the column holds 100.
-pub const USERNAME_MAX_LEN: usize = 50;
 /// The `users.full_name` column.
 pub const FULL_NAME_MAX: usize = 200;
 /// `users.email` is VARCHAR(255).

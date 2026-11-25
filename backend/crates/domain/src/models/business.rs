@@ -56,7 +56,7 @@ pub struct BusinessAdminView {
     pub product_count: i64,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
-    pub linked_username: Option<String>,
+    pub linked_email: Option<String>,
     pub created_by_name: Option<String>,
     pub updated_by_name: Option<String>,
 }
@@ -120,7 +120,7 @@ pub struct BusinessAdminDetail {
     pub created_on: DateTime<Utc>,
     /// The managing account, for the link to it.
     pub linked_user_id: Option<i32>,
-    pub linked_username: Option<String>,
+    pub linked_email: Option<String>,
     /// Whether that account confirmed its email address: notices (contact
     /// requests, job posts) reach it only then.
     pub email_verified: bool,

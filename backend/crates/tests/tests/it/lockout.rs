@@ -6,14 +6,15 @@ use application::constants::{
     LOGIN_FAIL_ACCOUNT_MAX_ATTEMPTS, LOGIN_FAIL_MAX_ATTEMPTS, PASSWORD_RESET_LINKS_MAX,
 };
 use domain::ErrorCode;
-use integration_tests::{register_provider, Env};
+use integration_tests::{email_of, register_provider, Env};
 use sea_orm::{ConnectionTrait, Statement};
 
-async fn try_login_as(e: &Env, username: &str, password: &str) -> Result<(), ErrorCode> {
+/// Signs in as `name` (`email_of`).
+async fn try_login_as(e: &Env, name: &str, password: &str) -> Result<(), ErrorCode> {
     e.state
         .usecases
         .auth
-        .login(username.into(), password.into(), integration_tests::CLIENT)
+        .login(email_of(name), password.into(), integration_tests::CLIENT)
         .await
         .map(|_| ())
         .map_err(|err| err.code())
@@ -112,7 +113,7 @@ async fn a_stranger_guessing_locks_out_only_themselves() {
     let from = |client: &'static str, password: &'static str| {
         let auth = e.state.usecases.auth.clone();
         async move {
-            auth.login("nongdan".into(), password.into(), client)
+            auth.login("nongdan@example.vn".into(), password.into(), client)
                 .await
                 .map(|_| ())
                 .map_err(|err| err.code())
@@ -161,7 +162,7 @@ async fn guesses_from_many_clients_lock_the_account_itself() {
     for c in 0..clients {
         let client = format!("198.51.100.{c}");
         for _ in 0..per_client {
-            let _ = auth.login("nongdan".into(), "sai".into(), &client).await;
+            let _ = auth.login("nongdan@example.vn".into(), "sai".into(), &client).await;
         }
     }
     assert_eq!(
@@ -197,7 +198,7 @@ async fn sign_ins_and_password_changes_are_audited() {
     );
     let login = auth
         .login(
-            "nongdan".into(),
+            "nongdan@example.vn".into(),
             "matkhau123".into(),
             integration_tests::CLIENT,
         )
@@ -242,7 +243,7 @@ async fn sign_ins_and_password_changes_are_audited() {
 }
 
 /// One client tries at most `SIGNUP_ATTEMPTS_PER_CLIENT` valid sign-ups a
-/// day: each tells whether a username or email is taken, so nobody can
+/// day: each tells whether an email is taken, so nobody can
 /// sweep a list of addresses through the form. A form refused for its own
 /// mistakes tells nothing and is not counted; another client is not held.
 #[tokio::test]
@@ -252,43 +253,31 @@ async fn one_client_cannot_probe_emails_through_sign_up() {
     let e = Env::new().await;
     register_provider(&e.state, "nongdan", "0901234567").await;
     let auth = &e.state.usecases.auth;
-    let try_from = |client: &str, username: &str, email: &str, password: &str| {
-        let mut input = integration_tests::signup(username, email, password, "Vườn", "0907654321");
+    let try_from = |client: &str, email: &str, password: &str| {
+        let mut input = integration_tests::signup(email, password, "Vườn", "0907654321");
         input.client = client.to_owned();
         async move { auth.register(input).await.map(|_| ()).map_err(|e| e.code()) }
     };
 
     let probe = "203.0.113.7";
     assert_eq!(
-        try_from(probe, "ab", "a@example.vn", "short").await,
+        try_from(probe, "a@example.vn", "short").await,
         Err(ErrorCode::ValidationFailed),
         "a broken form is not a probe"
     );
-    for i in 0..SIGNUP_ATTEMPTS_PER_CLIENT {
+    for _ in 0..SIGNUP_ATTEMPTS_PER_CLIENT {
         assert_eq!(
-            try_from(
-                probe,
-                &format!("khach{i}"),
-                "nongdan@example.vn",
-                "matkhau123"
-            )
-            .await,
+            try_from(probe, "nongdan@example.vn", "matkhau123").await,
             Err(ErrorCode::EmailTaken)
         );
     }
     assert_eq!(
-        try_from(probe, "khachmoi", "khachmoi@example.vn", "matkhau123").await,
+        try_from(probe, "khachmoi@example.vn", "matkhau123").await,
         Err(ErrorCode::SignupDailyLimit),
         "even a sign-up that would succeed waits for tomorrow"
     );
     assert_eq!(
-        try_from(
-            "198.51.100.9",
-            "khachmoi",
-            "khachmoi@example.vn",
-            "matkhau123"
-        )
-        .await,
+        try_from("198.51.100.9", "khachmoi@example.vn", "matkhau123").await,
         Ok(())
     );
     e.cleanup().await;
@@ -296,12 +285,12 @@ async fn one_client_cannot_probe_emails_through_sign_up() {
 
 #[tokio::test]
 #[ignore = "needs TEST_DATABASE_URL"]
-async fn the_email_signs_in_as_the_username_does() {
+async fn the_email_names_the_account_and_nothing_else_does() {
     let e = Env::new().await;
     register_provider(&e.state, "nongdan", "0901234567").await;
     let auth = &e.state.usecases.auth;
 
-    // Folded like the username; the session answers with the stored username.
+    // Folded as stored; the session answers with the stored address.
     let session = auth
         .login(
             "  NongDan@Example.VN ".into(),
@@ -310,65 +299,38 @@ async fn the_email_signs_in_as_the_username_does() {
         )
         .await
         .unwrap();
-    assert_eq!(session.username, "nongdan");
+    assert_eq!(session.email, "nongdan@example.vn");
     assert_eq!(
         try_login_as(&e, "khongco@example.vn", "matkhau123").await,
         Err(ErrorCode::InvalidCredentials),
-        "an unknown email answers as an unknown username"
+        "an unknown email answers as a wrong password"
     );
 
-    // One account, one count: wrong passwords by either name add up.
-    for i in 0..LOGIN_FAIL_MAX_ATTEMPTS {
-        let name = if i % 2 == 0 {
-            "nongdan"
-        } else {
-            "nongdan@example.vn"
-        };
-        assert_eq!(
-            try_login_as(&e, name, "sai").await,
-            Err(ErrorCode::InvalidCredentials)
+    // What is not an address names no account: refused before anything is
+    // looked up, and never counted against the one it might have meant.
+    for _ in 0..LOGIN_FAIL_MAX_ATTEMPTS {
+        let err = auth
+            .login("nongdan".into(), "sai".into(), integration_tests::CLIENT)
+            .await
+            .err()
+            .expect("refused");
+        assert!(
+            err.fields()
+                .iter()
+                .any(|f| f.field == "email" && f.code == ErrorCode::InvalidEmail),
+            "{err:?}"
         );
     }
-    assert_eq!(
-        try_login_as(&e, "nongdan@example.vn", "matkhau123").await,
-        Err(ErrorCode::AccountLocked)
-    );
+    assert_eq!(try_login(&e, "matkhau123").await, Ok(()));
 
-    // A deactivated account is told so by the email too.
+    // A deactivated account is told nothing on a wrong password.
     e.t.db
         .execute_unprepared("UPDATE users SET is_active = false")
         .await
         .unwrap();
     assert_eq!(
-        try_login_as(&e, "nongdan@example.vn", "sai").await,
+        try_login(&e, "sai").await,
         Err(ErrorCode::InvalidCredentials)
-    );
-    e.cleanup().await;
-}
-
-#[tokio::test]
-#[ignore = "needs TEST_DATABASE_URL"]
-async fn a_username_with_an_at_is_refused() {
-    let e = Env::new().await;
-    let err = e
-        .state
-        .usecases
-        .auth
-        .register(integration_tests::signup(
-            "ba@gmail.com",
-            "ba@gmail.com",
-            "matkhau123",
-            "Vườn Ba",
-            "0901234567",
-        ))
-        .await
-        .err()
-        .expect("refused");
-    assert!(
-        err.fields()
-            .iter()
-            .any(|f| f.field == "username" && f.code == ErrorCode::UsernameHasAt),
-        "{err:?}"
     );
     e.cleanup().await;
 }
@@ -381,7 +343,7 @@ async fn a_session_cannot_guess_its_own_current_password() {
     let auth = &e.state.usecases.auth;
     let user_id = auth
         .login(
-            "nongdan".into(),
+            "nongdan@example.vn".into(),
             "matkhau123".into(),
             integration_tests::CLIENT,
         )
@@ -415,7 +377,7 @@ async fn a_right_current_password_forgets_the_wrong_ones() {
     let auth = &e.state.usecases.auth;
     let user_id = auth
         .login(
-            "nongdan".into(),
+            "nongdan@example.vn".into(),
             "matkhau123".into(),
             integration_tests::CLIENT,
         )
@@ -449,11 +411,10 @@ async fn sign_up_probes_sent_at_once_never_pass_the_cap() {
     let e = Env::new().await;
     register_provider(&e.state, "nongdan", "0901234567").await;
     let mut runs = tokio::task::JoinSet::new();
-    for i in 0..SIGNUP_ATTEMPTS_PER_CLIENT * 3 {
+    for _ in 0..SIGNUP_ATTEMPTS_PER_CLIENT * 3 {
         let state = e.state.clone();
         runs.spawn(async move {
             let mut input = integration_tests::signup(
-                &format!("khach{i}"),
                 "nongdan@example.vn",
                 "matkhau123",
                 "Vườn",

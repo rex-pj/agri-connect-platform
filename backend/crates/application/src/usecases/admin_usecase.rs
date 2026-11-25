@@ -16,6 +16,7 @@ use domain::{
         product::{AdminProductFilter, NewProduct, UpdateProductAdmin},
         role::UserRole,
         service::{NewService, UpdateService},
+        user::display_name,
     },
     repositories::{
         admin_unit_repository_trait::AdminUnitRepositoryTrait,
@@ -307,7 +308,7 @@ impl AdminUseCase {
             products_max: settings.products_per_business(),
             created_on: b.created_on,
             linked_user_id: b.linked_user_id,
-            linked_username: b.linked_username,
+            linked_email: b.linked_email,
             email_verified: b.email_verified,
             lat: b.lat,
             lng: b.lng,
@@ -424,7 +425,7 @@ impl AdminUseCase {
                     product_count: b.product_count,
                     created_on: b.created_on,
                     updated_on: b.updated_on,
-                    linked_username: b.linked_username,
+                    linked_email: b.linked_email,
                     created_by_name: b.created_by_name,
                     updated_by_name: b.updated_by_name,
                 })
@@ -545,7 +546,6 @@ impl AdminUseCase {
         &self,
         actor: &Actor,
         business_id: i32,
-        username: String,
         email: String,
         password: String,
     ) -> Result<AssignUserDto> {
@@ -561,18 +561,17 @@ impl AdminUseCase {
         // its account owns. A new account owns none.
         if let Some(u) = self
             .user_repo
-            .find_by_username(&username.trim().to_lowercase())
+            .find_account_by_email(&email.trim().to_lowercase())
             .await?
         {
             let owned = self.business_repo.get_profile_by_user(u.id).await?;
             if u.role == ROLE_PROVIDER && owned.is_some_and(|b| b.id != business_id) {
-                return Err(Error::field("username", ErrorCode::ProviderAccountInUse));
+                return Err(Error::field("email", ErrorCode::ProviderAccountInUse));
             }
         }
-        let (user_id, username) = account_for_role(
+        let (user_id, email) = account_for_role(
             self.user_repo.as_ref(),
             self.password_hasher.as_ref(),
-            &username,
             &email,
             &password,
             ROLE_PROVIDER,
@@ -585,7 +584,7 @@ impl AdminUseCase {
             Entity::Provider,
             business_id,
             Change::AccountAssigned {
-                username: username.clone(),
+                email: email.clone(),
             },
             None,
         )
@@ -593,7 +592,7 @@ impl AdminUseCase {
 
         Ok(AssignUserDto {
             business_id,
-            username,
+            email,
         })
     }
 
@@ -638,17 +637,19 @@ impl AdminUseCase {
         Ok(AdminUserDetailDto {
             business_id,
             id: u.id,
-            username: u.username,
+            name: display_name(u.full_name.as_deref(), &u.email),
             email: u.email,
             full_name: u.full_name,
             role_code: u.role_code,
             role_name: u.role_name,
             is_active: u.is_active,
             created_on: u.created_on,
+            email_verified: u.email_verified,
+            pending_email: u.pending_email,
         })
     }
 
-    /// `filter`: the username, name or email, `SWITCH_LIST_STATES`, an order.
+    /// `filter`: the name or email, `SWITCH_LIST_STATES`, an order.
     pub async fn list_users(
         &self,
         actor: &Actor,
@@ -671,7 +672,7 @@ impl AdminUseCase {
                 .into_iter()
                 .map(|u| AdminUserDto {
                     id: u.id,
-                    username: u.username,
+                    name: display_name(u.full_name.as_deref(), &u.email),
                     email: u.email,
                     full_name: u.full_name,
                     role_code: u.role_code,

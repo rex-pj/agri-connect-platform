@@ -27,7 +27,7 @@ use crate::{
         business, inquiry,
         review::{self, Entity as Review},
     },
-    sql::{businesses_of, null, username_of, PgType, QueryAs},
+    sql::{businesses_of, null, account_name_of, PgType, QueryAs},
 };
 
 pub struct ReviewRepository {
@@ -128,7 +128,7 @@ fn admin_select() -> Select<Review> {
         .column(review::Column::CreatedOn)
         .column(review::Column::UpdatedOn)
         .expr_as(
-            username_of((review::Entity, review::Column::UpdatedBy)),
+            account_name_of((review::Entity, review::Column::UpdatedBy)),
             QueryAs::UpdatedByName,
         )
         .column_as(inquiry::Column::CreatedOn, QueryAs::RequestSentOn)

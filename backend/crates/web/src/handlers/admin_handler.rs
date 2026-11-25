@@ -20,7 +20,7 @@ use crate::{
         CreateCategoryRequest, DeleteWithReasonBody, IconSearchQuery, LocationRequest,
         SetVerificationRequest, SlugSuggestionQuery, ToggleActiveRequest, ToggleVisibleRequest,
         UpdateCategoryRequest, UpdateInquiryStatusRequest, UpdateProfileRequest,
-        UpdateUserRoleRequest,
+        UpdateUserRequest, UpdateUserRoleRequest,
     },
 };
 
@@ -128,7 +128,7 @@ impl AdminHandler {
         let result = state
             .usecases
             .admin
-            .assign_provider_user(&actor, id, req.username, req.email, req.password)
+            .assign_provider_user(&actor, id, req.email, req.password)
             .await?;
         Ok((StatusCode::CREATED, Json(result)))
     }
@@ -193,6 +193,46 @@ impl AdminHandler {
             .toggle_user_active(&actor, id, req.is_active, req.reason)
             .await?;
         Ok(Json(result))
+    }
+
+    /// PUT /api/admin/users/{id} — `{full_name?, email?, reason?}`: the name,
+    /// and the move to `email` when it is another address (202: a link was
+    /// sent there; 204: nothing to confirm).
+    pub async fn update_user(
+        MaybeActor(actor): MaybeActor,
+        State(state): State<AppState>,
+        ApiPath(id): ApiPath<i32>,
+        ApiJson(req): ApiJson<UpdateUserRequest>,
+    ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
+        let moved = state
+            .usecases
+            .auth
+            .admin_update_user(&actor, id, req.full_name, req.email, req.reason)
+            .await?;
+        Ok(if moved {
+            StatusCode::ACCEPTED
+        } else {
+            StatusCode::NO_CONTENT
+        })
+    }
+
+    /// POST /api/admin/users/{id}/password-resets — `{reason?}`: a reset link
+    /// to the account's address; 204.
+    pub async fn send_user_password_reset(
+        MaybeActor(actor): MaybeActor,
+        State(state): State<AppState>,
+        ApiPath(id): ApiPath<i32>,
+        body: Option<ApiJson<DeleteWithReasonBody>>,
+    ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
+        let reason = body.and_then(|ApiJson(b)| b.reason);
+        state
+            .usecases
+            .auth
+            .admin_send_password_reset(&actor, id, reason)
+            .await?;
+        Ok(StatusCode::NO_CONTENT)
     }
 
     /// GET /api/admin/categories/{id}

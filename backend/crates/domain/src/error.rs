@@ -84,9 +84,6 @@ error_codes! {
     EmailVerificationInvalid  => (BadRequest,      "email_verification_invalid"),
 
     // ── Field rules ──────────────────────────────────────────────────────────
-    UsernameTooShort          => (BadRequest,      "username_too_short"),
-    UsernameHasSpaces         => (BadRequest,      "username_has_spaces"),
-    UsernameHasAt             => (BadRequest,      "username_has_at"),
     InvalidEmail              => (BadRequest,      "invalid_email"),
     PasswordTooShort          => (BadRequest,      "password_too_short"),
     PasswordTooLong           => (BadRequest,      "password_too_long"),
@@ -159,9 +156,10 @@ error_codes! {
     ImageTooSmall             => (BadRequest,      "image_too_small"),
 
     // ── Conflicts ────────────────────────────────────────────────────────────
-    UsernameTaken             => (Conflict,        "username_taken"),
-    UsernameTakenByOtherRole  => (Conflict,        "username_taken_by_other_role"),
     EmailTaken                => (Conflict,        "email_taken"),
+    EmailTakenByOtherRole     => (Conflict,        "email_taken_by_other_role"),
+    AccountEmailUnconfirmed   => (Conflict,        "account_email_unconfirmed"),
+    EmailUnchanged            => (BadRequest,      "email_unchanged"),
     ProviderAccountInUse      => (Conflict,        "provider_account_in_use"),
     SlugTaken                 => (Conflict,        "slug_taken"),
     LocationLabelTaken        => (Conflict,        "location_label_taken"),
@@ -200,7 +198,7 @@ error_codes! {
 }
 
 /// One field that failed validation. Parameters belong to the field: two rules
-/// can both use `{min}` with different values (username 3, password 8).
+/// can both use `{min}` with different values (search 2, password 8).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldError {
     pub field: &'static str,
@@ -485,12 +483,12 @@ mod tests {
 
     #[test]
     fn each_field_keeps_its_own_params() {
-        // Username and password both use `{min}`; merging them made the
-        // password message say "at least 3".
+        // The search and the password both use `{min}`; merging them made
+        // the password message say "at least 3".
         let err = Validation::new()
             .rule(
-                "username",
-                Err(Error::new(ErrorCode::UsernameTooShort).with_param("min", 3)),
+                "q",
+                Err(Error::new(ErrorCode::SearchTooShort).with_param("min", 3)),
             )
             .rule(
                 "password",

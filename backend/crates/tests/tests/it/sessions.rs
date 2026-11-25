@@ -33,7 +33,7 @@ async fn login(e: &Env) -> (i32, SessionTokens) {
         .usecases
         .auth
         .login(
-            "nongdan".into(),
+            "nongdan@example.vn".into(),
             "matkhau123".into(),
             integration_tests::CLIENT,
         )
@@ -278,7 +278,7 @@ async fn logout_ends_the_session_and_clears_both_cookies() {
                 .usecases
                 .auth
                 .login(
-                    "nongdan".into(),
+                    "nongdan@example.vn".into(),
                     "matkhau123".into(),
                     integration_tests::CLIENT,
                 )
@@ -353,7 +353,7 @@ async fn an_account_turned_off_and_on_again_logs_in_again() {
     // The password still works: a new session is a new log-in.
     assert!(auth
         .login(
-            "nongdan".into(),
+            "nongdan@example.vn".into(),
             "matkhau123".into(),
             integration_tests::CLIENT
         )
@@ -395,7 +395,7 @@ async fn deactivation_and_password_resets_end_sessions() {
     // A deactivated account cannot renew either.
     let login = auth
         .login(
-            "nongdan".into(),
+            "nongdan@example.vn".into(),
             "matkhaumoi123".into(),
             integration_tests::CLIENT,
         )
@@ -479,7 +479,7 @@ async fn the_json_api_logs_out_at_once() {
     let req = Request::post("/api/auth/tokens")
         .header(header::CONTENT_TYPE, "application/json")
         .body(Body::from(
-            r#"{"username":"nongdan","password":"matkhau123"}"#,
+            r#"{"email":"nongdan@example.vn","password":"matkhau123"}"#,
         ))
         .unwrap();
     let res = send(&e.router, req).await;

@@ -263,7 +263,6 @@ async fn a_registered_provider_holds_exactly_the_provider_permissions() {
         .usecases
         .auth
         .register(integration_tests::signup(
-            "nongdan01",
             "nongdan01@example.vn",
             "mậtkhẩuư",
             "Vườn Thử",
@@ -310,8 +309,7 @@ async fn registration_reports_every_bad_field_at_once() {
         .usecases
         .auth
         .register(integration_tests::signup(
-            "ab",
-            "x@example.vn",
+            "x",
             "short",
             " ",
             "123",
@@ -325,15 +323,11 @@ async fn registration_reports_every_bad_field_at_once() {
     let fields: Vec<_> = err.fields().iter().map(|f| f.field).collect();
     assert_eq!(
         fields,
-        ["username", "password", "business_name", "business_phone"]
+        ["email", "password", "business_name", "business_phone"]
     );
 
     // Each message carries its own limit, not one borrowed from another field.
     let body = web::error_response::error_body(&integration_tests::state(t.db.clone()), &err);
-    assert_eq!(
-        body.field_errors["username"],
-        ["Tên đăng nhập phải có ít nhất 3 ký tự."]
-    );
     assert_eq!(
         body.field_errors["password"],
         ["Mật khẩu phải có ít nhất 8 ký tự."]
@@ -430,8 +424,8 @@ async fn the_schema_refuses_rows_that_contradict_each_other() {
         (
             "WITH r AS (INSERT INTO roles (code, name) VALUES ('provider', 'provider')
                         RETURNING id),
-                  u AS (INSERT INTO users (username, email, password_hash, role_id)
-                        SELECT 'nongdan', 'nongdan@example.vn', 'x', id FROM r RETURNING id)
+                  u AS (INSERT INTO users (email, password_hash, role_id)
+                        SELECT 'nongdan@example.vn', 'x', id FROM r RETURNING id)
              INSERT INTO email_verification_tokens (user_id, token_hash, expires_at)
                SELECT id, 'lien-ket', now() FROM u",
             "chk_email_verification_tokens_hash",
@@ -539,21 +533,37 @@ async fn the_schema_refuses_rows_that_contradict_each_other() {
         .apply(&CATALOGUE)
         .await
         .unwrap();
+    // An account is named by its email, folded so its UNIQUE ignores case.
     refused(
         db,
-        "INSERT INTO users (username, email, password_hash, role_id)
-           SELECT 'NongDan', 'nongdan@example.vn', 'x', id FROM roles WHERE code = 'provider'",
-        "chk_users_username_lower",
+        "INSERT INTO users (email, password_hash, role_id)
+           SELECT 'NongDan@example.vn', 'x', id FROM roles WHERE code = 'provider'",
+        "chk_users_email_lower",
     )
     .await;
-    // The sign-in box reads a name with `@` as an email.
-    refused(
-        db,
-        "INSERT INTO users (username, email, password_hash, role_id)
-           SELECT 'ba@gmail.com', 'nongdan@example.vn', 'x', id FROM roles WHERE code = 'provider'",
-        "chk_users_username_no_at",
+    // The address a link moves an account to is folded like the one it
+    // becomes, and never blank.
+    db.execute_unprepared(
+        "INSERT INTO users (email, password_hash, role_id)
+           SELECT 'nongdan@example.vn', 'x', id FROM roles WHERE code = 'provider'",
     )
-    .await;
+    .await
+    .unwrap();
+    for (new_email, constraint) in [
+        ("Moi@example.vn", "chk_email_verification_tokens_new_email_lower"),
+        (" ", "chk_email_verification_tokens_new_email_not_blank"),
+    ] {
+        refused(
+            db,
+            &format!(
+                "INSERT INTO email_verification_tokens (user_id, token_hash, expires_at, new_email)
+                   SELECT id, repeat('a', 64), now(), '{new_email}' FROM users
+                    WHERE email = 'nongdan@example.vn'"
+            ),
+            constraint,
+        )
+        .await;
+    }
 
     // A new review waits for an admin; deleting a service keeps the request.
     db.execute_unprepared(

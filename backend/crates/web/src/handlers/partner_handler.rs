@@ -101,7 +101,7 @@ impl PartnerHandler {
         Ok(StatusCode::NO_CONTENT)
     }
 
-    /// POST /api/admin/partners/{id}/account — `{partner_id, username}`.
+    /// POST /api/admin/partners/{id}/account — `{partner_id, email}`.
     pub async fn assign_account(
         MaybeActor(actor): MaybeActor,
         State(state): State<AppState>,
@@ -112,7 +112,7 @@ impl PartnerHandler {
         let account = state
             .usecases
             .partner
-            .assign_partner_account(&actor, id, req.username, req.email, req.password)
+            .assign_partner_account(&actor, id, req.email, req.password)
             .await?;
         Ok(Json(account))
     }

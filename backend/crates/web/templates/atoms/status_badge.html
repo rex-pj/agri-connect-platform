@@ -31,3 +31,8 @@
 {% macro managed(on) -%}
 <span class="badge text-bg-light border"><i class="fa-solid {% if on %}fa-user{% else %}fa-user-slash{% endif %}" aria-hidden="true"></i> {% if on %}{{ t(key="status.managed") }}{% else %}{{ t(key="status.unmanaged") }}{% endif %}</span>
 {%- endmacro managed %}
+
+{#- Whether an account's address was proved by opening the link sent to it. -#}
+{% macro email(verified) -%}
+{% if verified %}<span class="badge text-bg-success"><i class="fa-solid fa-envelope-circle-check" aria-hidden="true"></i> {{ t(key="status.email_verified") }}</span>{% else %}<span class="badge text-bg-secondary">{{ t(key="status.email_unverified") }}</span>{% endif %}
+{%- endmacro email %}

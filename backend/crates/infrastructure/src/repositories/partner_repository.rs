@@ -107,7 +107,7 @@ impl PartnerRepository {
         }
     }
 
-    /// Partners as the domain has them, with their account's username.
+    /// Partners as the domain has them, with their account's email.
     async fn with_accounts(&self, rows: Vec<partner::Model>) -> Result<Vec<Partner>, Error> {
         let ids: Vec<i32> = rows.iter().filter_map(|p| p.account_id).collect();
         let names: HashMap<i32, String> = if ids.is_empty() {
@@ -119,13 +119,13 @@ impl PartnerRepository {
                 .await
                 .map_err(Self::fail("accounts"))?
                 .into_iter()
-                .map(|u| (u.id, u.username))
+                .map(|u| (u.id, u.email))
                 .collect()
         };
         Ok(rows
             .into_iter()
             .map(|p| Partner {
-                account_username: p.account_id.and_then(|id| names.get(&id).cloned()),
+                account_email: p.account_id.and_then(|id| names.get(&id).cloned()),
                 account_id: p.account_id,
                 id: p.id,
                 name: p.name,

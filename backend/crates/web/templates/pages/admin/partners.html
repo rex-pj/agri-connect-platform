@@ -71,7 +71,7 @@
           <tr{% if not p.is_active %} class="table-light text-body-secondary"{% endif %}>
             <td data-label=""><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ p.name }}</a>{% if p.is_demo %} {{ status::demo() }}{% endif %}</td>
             <td data-label="{{ t(key="partner.kind") }}">{{ r.kind_label }}</td>
-            <td data-label="{{ t(key="nav.account") }}">{% if p.account_username %}<span class="badge text-bg-light border">{{ p.account_username }}</span>{% else %}<span class="small text-muted">{{ t(key="admin.none") }}</span>{% endif %}</td>
+            <td data-label="{{ t(key="nav.account") }}">{% if p.account_email %}<span class="badge text-bg-light border">{{ p.account_email }}</span>{% else %}<span class="small text-muted">{{ t(key="admin.none") }}</span>{% endif %}</td>
             <td data-label="{{ t(key="partner.in_force") }}" class="text-center">{{ p.contracts_in_force }}</td>
             <td data-label="{{ t(key="partner.monthly_revenue") }}" class="text-end text-nowrap">{{ p.monthly_revenue | vnd }}</td>
             <td data-label="{{ t(key="admin.col_status") }}" class="text-center cell-state">{{ status::account(on=p.is_active) }}</td>

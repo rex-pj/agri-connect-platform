@@ -379,7 +379,6 @@ impl PartnerUseCase {
         &self,
         actor: &Actor,
         id: i32,
-        username: String,
         email: String,
         password: String,
     ) -> Result<PartnerAccountDto> {
@@ -389,18 +388,17 @@ impl PartnerUseCase {
         }
         if let Some(u) = self
             .user_repo
-            .find_by_username(&username.trim().to_lowercase())
+            .find_account_by_email(&email.trim().to_lowercase())
             .await?
         {
             let linked = self.partner_repo.find_by_account(u.id).await?;
             if u.role == ROLE_PARTNER && linked.is_some_and(|p| p != id) {
-                return Err(Error::field("username", ErrorCode::PartnerAccountInUse));
+                return Err(Error::field("email", ErrorCode::PartnerAccountInUse));
             }
         }
-        let (user_id, username) = account_for_role(
+        let (user_id, email) = account_for_role(
             self.user_repo.as_ref(),
             self.password_hasher.as_ref(),
-            &username,
             &email,
             &password,
             ROLE_PARTNER,
@@ -412,14 +410,14 @@ impl PartnerUseCase {
             Entity::Partner,
             id,
             Change::AccountAssigned {
-                username: username.clone(),
+                email: email.clone(),
             },
             None,
         )
         .await;
         Ok(PartnerAccountDto {
             partner_id: id,
-            username,
+            email,
         })
     }
 
@@ -863,7 +861,7 @@ fn partner_dto(p: Partner, in_force: &[ContractFee]) -> PartnerDto {
         is_active: p.is_active,
         is_demo: p.is_demo,
         account_id: p.account_id,
-        account_username: p.account_username,
+        account_email: p.account_email,
         created_on: p.created_on,
     }
 }

@@ -6,17 +6,17 @@ use crate::{
         admin_list::AdminFilter,
         role::UserRole,
         user::{
-            ExistingUser, LoginName, NewResetToken, NewUser, UserAdmin, UserAdminDetail,
-            UserByEmail, UserCredentials, UserMe,
+            ClaimedEmail, ExistingUser, NewEmailVerification, NewResetToken, NewUser, UserAdmin,
+            UserAdminDetail, UserByEmail, UserCredentials, UserMe,
         },
     },
 };
 
 #[async_trait]
 pub trait UserRepositoryTrait {
-    /// The account a sign-in name names (its username or its email), active
-    /// or not: the use case says why a deactivated one is refused.
-    async fn find_credentials(&self, login: &LoginName) -> Result<Option<UserCredentials>, Error>;
+    /// The account an email names (folded as stored), active or not: the use
+    /// case says why a deactivated one is refused.
+    async fn find_credentials(&self, email: &str) -> Result<Option<UserCredentials>, Error>;
 
     async fn find_credentials_by_id(&self, id: i32) -> Result<Option<UserCredentials>, Error>;
 
@@ -40,13 +40,18 @@ pub trait UserRepositoryTrait {
         business_phone: &str,
     ) -> Result<i32, Error>;
 
-    async fn find_by_username(&self, username: &str) -> Result<Option<ExistingUser>, Error>;
+    /// The account an email names, active or not, for the "assign an
+    /// account" forms.
+    async fn find_account_by_email(&self, email: &str) -> Result<Option<ExistingUser>, Error>;
 
     async fn find_by_email(&self, email: &str) -> Result<Option<UserByEmail>, Error>;
 
     async fn email_exists(&self, email: &str) -> Result<bool, Error>;
 
     async fn update_password(&self, user_id: i32, password_hash: &str) -> Result<(), Error>;
+
+    /// The name the account is shown by; none clears it.
+    async fn update_full_name(&self, user_id: i32, full_name: Option<&str>) -> Result<(), Error>;
 
     /// Session tokens of `user_id` issued before now stop working.
     async fn end_sessions(&self, user_id: i32) -> Result<(), Error>;
@@ -84,8 +89,13 @@ pub trait UserRepositoryTrait {
         before: chrono::DateTime<chrono::Utc>,
     ) -> Result<u64, Error>;
 
-    /// Stores a link that confirms the account's email address.
-    async fn create_email_verification(&self, token: NewResetToken) -> Result<(), Error>;
+    /// Stores a link that confirms an address: the account's own, or the one
+    /// `new_email` moves it to.
+    async fn create_email_verification(&self, token: NewEmailVerification) -> Result<(), Error>;
+
+    /// Spends every unused link of `user_id` that would move it to another
+    /// address: a new request replaces the one before.
+    async fn retire_email_changes(&self, user_id: i32) -> Result<(), Error>;
 
     /// The confirmation links of `user_id` that have not run out at `now`,
     /// used or not.
@@ -95,15 +105,21 @@ pub trait UserRepositoryTrait {
         now: chrono::DateTime<chrono::Utc>,
     ) -> Result<u64, Error>;
 
-    /// Marks the unexpired, unused confirmation link with this hash as used
-    /// and its account's address as verified, together; the account's id, or
-    /// none for a link that is unknown, spent or run out.
-    async fn claim_email_verification(&self, token_hash: &str) -> Result<Option<i32>, Error>;
+    /// Opens the unexpired, unused confirmation link with this hash, all or
+    /// nothing: the link is spent and the address it names stamped verified;
+    /// a link with a `new_email` also moves the account to it and spends
+    /// every other link of the account (confirmations and password resets,
+    /// all sent to the old address). None for a link that is unknown, spent
+    /// or run out; `email_taken` when another account took the address since.
+    async fn claim_email_verification(
+        &self,
+        token_hash: &str,
+    ) -> Result<Option<ClaimedEmail>, Error>;
 
     async fn count_all(&self) -> Result<i64, Error>;
 
-    /// The admin list; `search` narrows it to accounts whose username, name
-    /// or email contains it (accents and case ignored); `state`: `on` /
+    /// The admin list; `search` narrows it to accounts whose name or email
+    /// contains it (accents and case ignored); `state`: `on` /
     /// `off`.
     async fn list_for_admin(
         &self,

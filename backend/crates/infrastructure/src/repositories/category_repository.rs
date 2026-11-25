@@ -44,7 +44,7 @@ macro_rules! type_table {
 
             use crate::db_types::DateTimeWithTimeZone;
             use crate::entities::$table::{ActiveModel, Column, Entity, Model};
-            use crate::sql::{username_of, QueryAs};
+            use crate::sql::{account_name_of, QueryAs};
 
             pub(super) const KIND: &str = $kind;
 
@@ -170,11 +170,11 @@ macro_rules! type_table {
                     .column(Column::CreatedOn)
                     .column(Column::UpdatedOn)
                     .expr_as(
-                        username_of((Entity, Column::CreatedBy)),
+                        account_name_of((Entity, Column::CreatedBy)),
                         QueryAs::CreatedByName,
                     )
                     .expr_as(
-                        username_of((Entity, Column::UpdatedBy)),
+                        account_name_of((Entity, Column::UpdatedBy)),
                         QueryAs::UpdatedByName,
                     )
                     .order_by_asc(Column::DisplayOrder)

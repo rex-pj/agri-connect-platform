@@ -19,7 +19,7 @@ use crate::{
         audit_log::{self, Entity as AuditLog},
         user,
     },
-    sql::QueryAs,
+    sql::{account_name, QueryAs},
 };
 
 pub struct AuditLogRepository {
@@ -36,7 +36,7 @@ impl AuditLogRepository {
 struct AuditEntryRow {
     action: String,
     reason: Option<String>,
-    username: Option<String>,
+    account_name: Option<String>,
     created_on: DateTimeWithTimeZone,
 }
 
@@ -79,7 +79,7 @@ impl AuditLogRepositoryTrait for AuditLogRepository {
             .select_only()
             .column(audit_log::Column::Action)
             .column(audit_log::Column::Reason)
-            .column_as(user::Column::Username, QueryAs::Username)
+            .expr_as(account_name(user::Entity), QueryAs::AccountName)
             .column(audit_log::Column::CreatedOn)
             .join(JoinType::LeftJoin, audit_log::Relation::Admin.def())
             .filter(audit_log::Column::EntityType.eq(entity_type))
@@ -94,7 +94,7 @@ impl AuditLogRepositoryTrait for AuditLogRepository {
                     .map(|r| AuditEntry {
                         action: r.action,
                         reason: r.reason,
-                        actor: r.username,
+                        actor: r.account_name,
                         created_on: r.created_on.with_timezone(&Utc),
                     })
                     .collect()

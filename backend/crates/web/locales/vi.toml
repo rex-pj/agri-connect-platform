@@ -17,7 +17,7 @@ database_unavailable           = "Hệ thống tạm thời gián đoạn. Vui l
 
 authentication_required        = "Vui lòng đăng nhập."
 invalid_token                  = "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."
-invalid_credentials            = "Sai email/tên đăng nhập hoặc mật khẩu."
+invalid_credentials            = "Sai email hoặc mật khẩu."
 current_password_incorrect     = "Mật khẩu hiện tại không đúng."
 account_locked                 = "Tài khoản tạm khoá do đăng nhập sai nhiều lần. Vui lòng thử lại sau."
 account_deactivated            = "Tài khoản đã bị vô hiệu hoá. Vui lòng liên hệ hỗ trợ."
@@ -31,9 +31,6 @@ setup_token_invalid            = "Mã thiết lập không đúng."
 reset_token_invalid            = "Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn."
 email_verification_invalid     = "Liên kết xác nhận email không hợp lệ hoặc đã hết hạn."
 
-username_too_short             = "Tên đăng nhập phải có ít nhất {min} ký tự."
-username_has_spaces            = "Tên đăng nhập không được có khoảng trắng."
-username_has_at                = "Tên đăng nhập không được có ký tự @ (để dành cho email)."
 invalid_email                  = "Email không hợp lệ (ví dụ: ten@gmail.com)."
 password_too_short             = "Mật khẩu phải có ít nhất {min} ký tự."
 password_too_long              = "Mật khẩu quá dài (tối đa {max} byte)."
@@ -113,9 +110,10 @@ image_too_many_pixels          = "Ảnh quá lớn. Tối đa {max_megapixels} t
 invalid_image                  = "Không đọc được ảnh. Vui lòng chọn ảnh khác."
 image_too_small                = "Ảnh quá nhỏ. Cần ít nhất {min} × {min} điểm ảnh."
 
-username_taken                 = "Tên đăng nhập đã được sử dụng."
-username_taken_by_other_role   = "Tên đăng nhập đã thuộc về tài khoản không phải nhà cung cấp."
 email_taken                    = "Email đã được sử dụng."
+email_taken_by_other_role      = "Email này thuộc một tài khoản có vai trò khác."
+account_email_unconfirmed      = "Tài khoản này chưa xác nhận email. Nhờ chủ tài khoản mở liên kết xác nhận trước, rồi gán lại."
+email_unchanged                = "Đây đã là email của tài khoản."
 provider_account_in_use        = "Tài khoản này đang quản lý một nhà cung cấp khác."
 slug_taken                     = "Đường dẫn này đã được dùng cho loại khác."
 location_label_taken           = "Đã có khu vực với tên này."
@@ -237,6 +235,7 @@ partner  = "Đại lý, hãng, hợp tác xã xem báo cáo nhu cầu của vùn
 "user.read"               = "Xem người dùng"
 "user.role.update"        = "Đổi vai trò người dùng"
 "user.status.update"      = "Khoá / mở khoá người dùng"
+"user.update"             = "Sửa họ tên, email của người dùng; gửi liên kết đặt lại mật khẩu"
 "role.read"               = "Xem vai trò"
 "role.permission.manage"  = "Phân quyền cho vai trò"
 "category.manage"         = "Quản lý cây trồng, vật nuôi, loại dịch vụ và loại vật tư"
@@ -281,6 +280,8 @@ unverified = "Chưa xác minh"
 demo       = "Mẫu"
 managed    = "Có tài khoản"
 unmanaged  = "Chưa có tài khoản"
+email_verified   = "Đã xác nhận"
+email_unverified = "Chưa xác nhận"
 
 [text.inquiry_status]
 new       = "Mới"
@@ -314,9 +315,7 @@ name               = "Tên"
 description        = "Mô tả"
 display_order      = "Thứ tự"
 full_name          = "Họ và tên"
-username           = "Tên đăng nhập"
-username_hint      = "Không có dấu cách, không có @."
-login_name         = "Email hoặc tên đăng nhập"
+email_login_hint   = "Dùng email này để đăng nhập và lấy lại mật khẩu."
 password           = "Mật khẩu"
 password_again     = "Nhập lại mật khẩu"
 current_password   = "Mật khẩu hiện tại"
@@ -354,7 +353,7 @@ results_unit = "kết quả"
 remove    = "Bỏ tiêu chí này"
 from_chip = "Từ {date}"
 to_chip   = "Đến {date}"
-users     = "Tên đăng nhập, họ tên hoặc email"
+users     = "Họ tên hoặc email"
 providers = "Tên hoặc số điện thoại nhà cung cấp"
 products  = "Tên vật tư hoặc nhà cung cấp"
 services  = "Tên dịch vụ hoặc nhà cung cấp"
@@ -858,6 +857,21 @@ logout_note      = "Kết thúc phiên đăng nhập trên thiết bị này."
 email_unverified = "Email chưa được xác nhận. Xác nhận xong, hệ thống mới gửi email báo khi bà con cần bạn gọi lại."
 send_verification = "Gửi email xác nhận"
 verification_sent = "Đã gửi email xác nhận. Hãy mở liên kết trong email."
+profile_saved     = "Đã lưu họ tên."
+name_hint         = "Tên hiện cho quản trị viên và trên trang tài khoản. Để trống thì hiện email."
+save_name         = "Lưu họ tên"
+email_title       = "Email đăng nhập"
+email_note        = "Dùng để đăng nhập, lấy lại mật khẩu và nhận email báo khi bà con cần bạn gọi lại."
+change_email      = "Đổi email"
+new_email         = "Email mới"
+change_email_note = "Chúng tôi gửi liên kết xác nhận đến email mới. Email cũ vẫn dùng được cho đến khi bạn mở liên kết đó."
+send_change_link  = "Gửi liên kết xác nhận"
+email_change_sent = "Nếu email mới dùng được, liên kết xác nhận đã được gửi tới đó. Hãy mở liên kết trong email đó."
+email_pending     = "Đang chờ xác nhận:"
+email_pending_note = "Email cũ vẫn dùng được cho đến khi bạn mở liên kết gửi tới địa chỉ này."
+sessions_note     = "Nghi có người khác dùng tài khoản? Đăng xuất mọi điện thoại, máy tính khác mà không cần đổi mật khẩu."
+end_sessions      = "Đăng xuất các thiết bị khác"
+sessions_ended    = "Đã đăng xuất mọi thiết bị khác."
 
 [text.verify_email]
 title       = "Xác nhận email"
@@ -868,6 +882,11 @@ done_sub    = "Từ nay hệ thống gửi email báo cho bạn qua địa chỉ
 continue    = "Tiếp tục"
 invalid_sub = "Liên kết này không đúng, đã dùng rồi hoặc đã hết hạn. Đăng nhập rồi gửi lại email xác nhận ở trang tài khoản."
 to_account  = "Về trang tài khoản"
+moved       = "Đã đổi email"
+moved_sub_before = "Từ nay bạn đăng nhập và nhận email báo bằng"
+moved_sub_after  = "."
+taken       = "Email này đã có tài khoản khác"
+taken_sub   = "Không đổi được sang email này. Tài khoản của bạn vẫn giữ email cũ."
 
 [text.auth]
 login_sub        = "Dành cho nhà cung cấp, đối tác và quản trị viên."
@@ -1060,6 +1079,29 @@ Mở liên kết sau để xác nhận đây là email của tài khoản bạn 
 Nếu bạn không đăng ký tài khoản, hãy bỏ qua email này.
 
 {site}"""
+change_subject  = "Xác nhận email mới - {site}"
+change_body     = """
+Xin chào,
+
+Có yêu cầu đổi email đăng nhập của một tài khoản trên {site} sang địa chỉ này.
+Mở liên kết sau để xác nhận (hiệu lực {hours} giờ):
+
+{url}
+
+Nếu không phải bạn, hãy bỏ qua email này: địa chỉ này sẽ không được dùng.
+
+{site}"""
+changed_subject = "Email đăng nhập đã được đổi - {site}"
+changed_body    = """
+Xin chào,
+
+Email đăng nhập của tài khoản bạn trên {site} vừa được đổi sang {email}.
+Từ nay hệ thống không gửi email cho tài khoản này qua địa chỉ này nữa.
+
+Nếu không phải bạn làm, tài khoản có thể đã bị người khác dùng.
+{support}
+{site}"""
+changed_support = "Hãy liên hệ ngay: {contact}\n"
 inquiry_subject = "Có bà con cần bạn gọi lại - {site}"
 inquiry_body    = """
 Xin chào {business},
@@ -1341,7 +1383,7 @@ open_partner              = "Mở đối tác"
 linked_before             = "Đang gán:"
 linked_after              = ". Gán tài khoản khác sẽ thay thế."
 no_account                = "Chưa có tài khoản. Nhà cung cấp cần tài khoản để tự cập nhật dịch vụ và vật tư."
-assign_hint               = "Nếu tài khoản nhà cung cấp này đã có, chỉ cần tên đăng nhập. Tạo mới thì nhập thêm email và mật khẩu:"
+assign_hint               = "Nếu email này đã có tài khoản nhà cung cấp (đã xác nhận email), chỉ cần email. Tạo mới thì nhập thêm mật khẩu."
 assign                    = "Gán tài khoản"
 manage_services           = "Quản lý dịch vụ"
 manage_products           = "Quản lý vật tư"
@@ -1365,6 +1407,14 @@ no_reviews        = "Chưa có đánh giá nào."
 role_changed           = "Đã đổi vai trò. Quyền mới có hiệu lực ngay."
 user_activated         = "Đã bật lại tài khoản."
 user_deactivated       = "Đã tắt tài khoản. Người dùng đã bị đăng xuất."
+user_saved             = "Đã lưu thông tin tài khoản."
+user_email_change_sent = "Đã lưu. Nếu email mới dùng được, liên kết xác nhận đã gửi tới đó; tài khoản giữ email cũ cho đến khi chủ tài khoản mở liên kết."
+password_reset_sent    = "Đã gửi liên kết đặt lại mật khẩu tới email của tài khoản."
+edit_user              = "Họ tên và email"
+edit_user_email_hint   = "Đổi email: hệ thống gửi liên kết xác nhận tới email mới, tài khoản chỉ chuyển sang khi chủ tài khoản mở liên kết đó."
+send_reset_link        = "Gửi liên kết đặt lại mật khẩu"
+send_reset_link_title  = "Gửi liên kết đặt lại mật khẩu tới {email}?"
+send_reset_link_note   = "Chủ tài khoản tự đặt mật khẩu mới qua liên kết trong email. Quản trị viên không bao giờ biết mật khẩu."
 change_role            = "Đổi vai trò"
 save_role              = "Lưu vai trò"
 account_status         = "Trạng thái tài khoản"
@@ -1828,6 +1878,11 @@ change_password       = "Đổi mật khẩu"
 reset_password        = "Đặt lại mật khẩu"
 refresh_token_reused  = "Phiên đăng nhập bị dùng lại: đã đăng xuất mọi nơi"
 verify_email          = "Xác nhận email"
+change_email          = "Đổi email đăng nhập"
+request_email_change  = "Yêu cầu đổi email"
+update_profile        = "Sửa họ tên"
+end_other_sessions    = "Đăng xuất các thiết bị khác"
+send_password_reset   = "Gửi liên kết đặt lại mật khẩu"
 
 [text.admin_pick]
 area          = "Khu vực"

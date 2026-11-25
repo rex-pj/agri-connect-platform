@@ -7,8 +7,8 @@ use crate::{
     extract::{ApiJson, ApiPath},
     middleware::auth::{CallerSession, MaybeActor},
     requests::{
-        ChangePasswordRequest, CreateAdminRequest, ForgotPasswordRequest, LoginRequest,
-        RegisterRequest, ResetPasswordRequest,
+        ChangeEmailRequest, ChangePasswordRequest, CreateAdminRequest, ForgotPasswordRequest,
+        LoginRequest, RegisterRequest, ResetPasswordRequest, UpdateMeRequest,
     },
 };
 
@@ -25,7 +25,7 @@ impl AuthHandler {
         let result = state
             .usecases
             .auth
-            .login(req.username, req.password, &client)
+            .login(req.email, req.password, &client)
             .await?;
 
         Ok(Json(result))
@@ -50,7 +50,6 @@ impl AuthHandler {
             .usecases
             .auth
             .create_first_admin(
-                req.username,
                 req.email,
                 req.password,
                 req.full_name,
@@ -71,7 +70,6 @@ impl AuthHandler {
             .usecases
             .auth
             .register(RegisterInput {
-                username: req.username,
                 email: req.email,
                 password: req.password,
                 full_name: req.full_name,
@@ -93,6 +91,49 @@ impl AuthHandler {
         let result = state.usecases.auth.me(actor.user_id).await?;
 
         Ok(Json(result))
+    }
+
+    /// PATCH /api/users/me — the name the account is shown by (`full_name`,
+    /// blank or absent clears it); 204.
+    pub async fn update_me(
+        MaybeActor(actor): MaybeActor,
+        State(state): State<AppState>,
+        ApiJson(req): ApiJson<UpdateMeRequest>,
+    ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
+        state
+            .usecases
+            .auth
+            .update_profile(actor.user_id, req.full_name)
+            .await?;
+        Ok(StatusCode::NO_CONTENT)
+    }
+
+    /// POST /api/users/me/email — move to `new_email` (`current_password`);
+    /// 202: nothing changes until the link sent there is opened.
+    pub async fn change_email(
+        MaybeActor(actor): MaybeActor,
+        State(state): State<AppState>,
+        ApiJson(req): ApiJson<ChangeEmailRequest>,
+    ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
+        state
+            .usecases
+            .auth
+            .request_email_change(actor.user_id, req.current_password, req.new_email)
+            .await?;
+        Ok(StatusCode::ACCEPTED)
+    }
+
+    /// DELETE /api/users/me/sessions — every session of the account ends,
+    /// the caller's too; 204.
+    pub async fn end_sessions(
+        MaybeActor(actor): MaybeActor,
+        State(state): State<AppState>,
+    ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
+        state.usecases.auth.end_other_sessions(actor.user_id).await?;
+        Ok(StatusCode::NO_CONTENT)
     }
 
     /// PATCH /api/users/me/password  — change password (authenticated)

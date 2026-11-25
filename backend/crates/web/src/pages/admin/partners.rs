@@ -383,7 +383,6 @@ pub async fn create(
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(default)]
 pub struct AccountForm {
-    pub username: String,
     pub email: String,
     #[serde(skip_serializing)]
     pub password: String,
@@ -482,7 +481,7 @@ fn partner_controls(
     }
     .split();
     let mut actions = Vec::new();
-    let account_label = if p.account_username.is_some() {
+    let account_label = if p.account_email.is_some() {
         "admin.change_account"
     } else {
         "admin.assign"
@@ -508,7 +507,7 @@ fn partner_controls(
     );
     let mut badges = vec![
         Badge::new("account", p.is_active),
-        Badge::new("managed", p.account_username.is_some()),
+        Badge::new("managed", p.account_email.is_some()),
     ];
     if p.is_demo {
         badges.push(Badge::new("demo", true));
@@ -708,7 +707,7 @@ async fn partner_page(
     let tabs = record_tabs(state, &path, &PARTNER_TABS, tab, |code| {
         (code == TAB_CONTRACTS).then_some(contract_count)
     });
-    let account_label = state.locale().text(if partner.account_username.is_some() {
+    let account_label = state.locale().text(if partner.account_email.is_some() {
         "admin.change_account"
     } else {
         "admin.assign"
@@ -727,7 +726,7 @@ async fn partner_page(
         errors: refused(!refused_form),
         profile: profile.unwrap_or_else(|| PartnerForm::from_dto(&partner)),
         account: account.unwrap_or_else(|| AccountForm {
-            username: partner.account_username.clone().unwrap_or_default(),
+            email: partner.account_email.clone().unwrap_or_default(),
             ..AccountForm::default()
         }),
         contract: contract.unwrap_or_default(),
@@ -897,7 +896,6 @@ pub async fn assign_account(
         .assign_partner_account(
             &actor,
             id,
-            form.username.clone(),
             form.email.clone(),
             form.password.clone(),
         )

@@ -86,6 +86,7 @@ pub enum TableAlias {
 /// `FromQueryResult` row that reads it.
 #[derive(Copy, Clone, Debug, EnumIter, DeriveColumn)]
 pub enum QueryAs {
+    AccountName,
     Area,
     Average,
     BusinessActive,
@@ -109,9 +110,10 @@ pub enum QueryAs {
     FromBusinessPhone,
     Lat,
     LinkedUserId,
-    LinkedUsername,
+    LinkedEmail,
     Lng,
     Oldest,
+    PendingEmail,
     ProviderTurn,
     RecipientEmail,
     RequestSentOn,
@@ -127,7 +129,6 @@ pub enum QueryAs {
     Turn,
     Unmet,
     UpdatedByName,
-    Username,
     VendorName,
     VendorPhone,
     VendorVerified,
@@ -300,14 +301,26 @@ pub fn advisory_xact_lock(key: i64) -> SelectStatement {
         .to_owned()
 }
 
-/// `(SELECT author.username FROM users author WHERE author.id = user_id)`:
-/// the username behind an audit column (`created_by`, `updated_by`).
-pub fn username_of<C: IntoColumnRef>(user_id: C) -> SimpleExpr {
+/// `COALESCE(t.full_name, t.email)` of the users row `t` (a table or an
+/// alias): what pages call an account, `domain::models::user::display_name`
+/// in SQL.
+pub fn account_name<T: IntoIden + Clone + 'static>(table: T) -> SimpleExpr {
+    Func::coalesce([
+        Expr::col((table.clone(), user::Column::FullName)).into(),
+        Expr::col((table, user::Column::Email)).into(),
+    ])
+    .into()
+}
+
+/// `(SELECT COALESCE(author.full_name, author.email) FROM users author WHERE
+/// author.id = user_id)`: who is behind an audit column (`created_by`,
+/// `updated_by`).
+pub fn account_name_of<C: IntoColumnRef>(user_id: C) -> SimpleExpr {
     SimpleExpr::SubQuery(
         None,
         Box::new(SubQueryStatement::SelectStatement(
             Query::select()
-                .column((TableAlias::Author, user::Column::Username))
+                .expr(account_name(TableAlias::Author))
                 .from_as(user::Entity, TableAlias::Author)
                 .and_where(Expr::col((TableAlias::Author, user::Column::Id)).equals(user_id))
                 .to_owned(),

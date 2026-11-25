@@ -564,9 +564,8 @@ where
 
 /// Inserts the demo accounts the businesses and partners name (role
 /// provider and partner), every one flagged `is_demo`, all with
-/// `password_hash`; an account whose username or email is taken already is
-/// left out (its business or partner then has none). Their ids by
-/// username, and how many were inserted.
+/// `password_hash`; an account whose email is taken already is left out (its
+/// business or partner then has none). Their ids by email, and how many were inserted.
 async fn insert_accounts(
     txn: &DatabaseTransaction,
     data: &DemoData,
@@ -596,7 +595,6 @@ async fn insert_accounts(
     let rows: Vec<user::ActiveModel> = accounts
         .filter_map(|(a, role)| {
             Some(user::ActiveModel {
-                username: Set(a.username.to_lowercase()),
                 email: Set(a.email.to_lowercase()),
                 password_hash: Set(password_hash.to_owned()),
                 full_name: Set(Some(a.full_name.clone())),
@@ -620,7 +618,7 @@ async fn insert_accounts(
     }
     let ids = user::Entity::find()
         .select_only()
-        .column(user::Column::Username)
+        .column(user::Column::Email)
         .column(user::Column::Id)
         .filter(user::Column::IsDemo.eq(true))
         .into_tuple::<(String, i32)>()
@@ -668,7 +666,7 @@ async fn insert_businesses(
             let owner = b
                 .account
                 .as_ref()
-                .and_then(|a| accounts.get(&a.username.to_lowercase()).copied());
+                .and_then(|a| accounts.get(&a.email.to_lowercase()).copied());
             insert
                 .values([
                     Expr::val(b.name.clone()).into(),

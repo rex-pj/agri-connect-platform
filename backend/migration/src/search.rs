@@ -53,8 +53,10 @@ impl FoldIndex {
     }
 }
 
-/// Every folded search index: listings (name, description) and the admin's
-/// account search (username, name, email).
+/// The folded search indexes the baseline creates: listings (name,
+/// description) and the admin's account search (then username, name,
+/// email). Frozen with the baseline: `ix_users_username_fold` went with its
+/// column (`m20261127_000008_account_email`), see `all_fold_indexes`.
 pub fn search_indexes() -> Vec<FoldIndex> {
     vec![
         FoldIndex::new(
@@ -85,7 +87,14 @@ pub fn search_indexes() -> Vec<FoldIndex> {
     ]
 }
 
-/// Every folded index, for the check that each searched column has one.
+/// The index of the column `m20261127_000008_account_email` dropped.
+const DROPPED: &[&str] = &["ix_users_username_fold"];
+
+/// Every folded index the schema has now, for the check that each searched
+/// column has one.
 pub fn all_fold_indexes() -> Vec<FoldIndex> {
     search_indexes()
+        .into_iter()
+        .filter(|i| !DROPPED.contains(&i.name))
+        .collect()
 }

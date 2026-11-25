@@ -27,8 +27,8 @@ async fn unclaimed_business(e: &Env) -> i32 {
     e.t.db
         .query_one(Statement::from_string(
             e.t.db.get_database_backend(),
-            "INSERT INTO businesses (name, phone) VALUES ('Máy cày Út Hiền', '0912345678') \
-             RETURNING id"
+            "INSERT INTO businesses (name, phone, email) \
+             VALUES ('Máy cày Út Hiền', '0912345678', 'uthien@example.vn') RETURNING id"
                 .to_owned(),
         ))
         .await
@@ -165,7 +165,7 @@ async fn a_new_account_needs_a_valid_email_and_password_and_can_then_sign_in() {
     let id = unclaimed_business(&e).await;
     let action = format!("/admin/providers/{id}/account");
 
-    // The form starts with the business phone as the username.
+    // The form starts with the business's own address.
     let page = body_text(
         send(
             &e.router,
@@ -174,54 +174,37 @@ async fn a_new_account_needs_a_valid_email_and_password_and_can_then_sign_in() {
         .await,
     )
     .await;
-    assert!(page.contains(r#"value="0912345678""#));
+    assert!(page.contains(r#"value="uthien@example.vn""#));
 
+    // The email is checked first; a new account then needs its password.
+    let res = send(
+        &e.router,
+        post_form(&action, &[("email", "uthien")], Some(&admin)),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    let html = body_text(res).await;
+    assert!(html.contains("Email không hợp lệ"));
+    assert!(html.contains(r#"value="uthien""#), "typed email kept");
     let res = send(
         &e.router,
         post_form(
             &action,
-            &[
-                ("username", "0912345678"),
-                ("email", "uthien"),
-                ("password", "ngan"),
-            ],
+            &[("email", "uthien@example.vn"), ("password", "ngan")],
             Some(&admin),
         ),
     )
     .await;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     let html = body_text(res).await;
-    assert!(html.contains("Email không hợp lệ"));
     assert!(html.contains("Mật khẩu phải có ít nhất"));
-    assert!(html.contains(r#"value="uthien""#), "typed email kept");
     assert!(!html.contains(r#"value="ngan""#), "password never echoed");
 
-    // An email another account uses is refused on its field, not a 500.
     let res = send(
         &e.router,
         post_form(
             &action,
-            &[
-                ("username", "0912345678"),
-                ("email", "admin@example.vn"),
-                ("password", "matkhau123"),
-            ],
-            Some(&admin),
-        ),
-    )
-    .await;
-    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
-    assert!(body_text(res).await.contains(r#"id="acc-email-error""#));
-
-    let res = send(
-        &e.router,
-        post_form(
-            &action,
-            &[
-                ("username", "0912345678"),
-                ("email", "uthien@example.vn"),
-                ("password", "matkhau123"),
-            ],
+            &[("email", "UThien@example.vn"), ("password", "matkhau123")],
             Some(&admin),
         ),
     )
@@ -234,8 +217,45 @@ async fn a_new_account_needs_a_valid_email_and_password_and_can_then_sign_in() {
         "line",
     )
     .await;
-    assert_eq!(line, "assign_provider_account: 0912345678");
-    sign_in(&e, "0912345678", "matkhau123").await;
+    assert_eq!(line, "assign_provider_account: uthien@example.vn");
+    sign_in(&e, "uthien", "matkhau123").await;
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_business_goes_only_to_an_account_whose_email_was_confirmed() {
+    // Anyone may sign up with a stranger's address: until its owner opened
+    // the link, a business typed with that address must not go to it.
+    let e = env_with_origin().await;
+    let admin = install_admin(&e).await;
+    let id = unclaimed_business(&e).await;
+    let action = format!("/admin/providers/{id}/account");
+    // A sign-up's own business is taken away, so only the email can refuse.
+    register_provider(&e.state, "uthien", "0901234567").await;
+    e.t.db
+        .execute_unprepared(
+            "UPDATE businesses SET owner_id = NULL WHERE name = 'Vườn uthien'",
+        )
+        .await
+        .unwrap();
+    let res = send(
+        &e.router,
+        post_form(&action, &[("email", "uthien@example.vn")], Some(&admin)),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert!(body_text(res)
+        .await
+        .contains("Tài khoản này chưa xác nhận email."));
+
+    integration_tests::confirm_email(&e, "uthien").await;
+    let res = send(
+        &e.router,
+        post_form(&action, &[("email", "uthien@example.vn")], Some(&admin)),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER, "confirmed, it is linked");
     e.cleanup().await;
 }
 
@@ -251,7 +271,7 @@ async fn an_account_manages_one_business_and_admins_cannot_be_linked() {
     // "nongdan" already manages the business it registered.
     let res = send(
         &e.router,
-        post_form(&action, &[("username", "nongdan")], Some(&admin)),
+        post_form(&action, &[("email", "nongdan@example.vn")], Some(&admin)),
     )
     .await;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
@@ -264,7 +284,7 @@ async fn an_account_manages_one_business_and_admins_cannot_be_linked() {
 
     let res = send(
         &e.router,
-        post_form(&action, &[("username", "quantri")], Some(&admin)),
+        post_form(&action, &[("email", "quantri@example.vn")], Some(&admin)),
     )
     .await;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
@@ -290,7 +310,7 @@ async fn the_json_api_sets_verification_explicitly() {
         .usecases
         .auth
         .login(
-            "quantri".into(),
+            "quantri@example.vn".into(),
             "matkhau123".into(),
             integration_tests::CLIENT,
         )

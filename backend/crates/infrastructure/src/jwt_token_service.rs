@@ -19,7 +19,6 @@ pub const MIN_SECRET_BYTES: usize = 32;
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
     sub: i32,
-    username: String,
     exp: i64,
     #[serde(default)]
     iat: i64,
@@ -48,11 +47,10 @@ impl JwtTokenService {
 }
 
 impl TokenService for JwtTokenService {
-    fn mint(&self, user_id: i32, username: &str, session: Uuid) -> Result<String> {
+    fn mint(&self, user_id: i32, session: Uuid) -> Result<String> {
         let now = Utc::now();
         let claims = Claims {
             sub: user_id,
-            username: username.to_owned(),
             exp: (now + Duration::hours(JWT_EXPIRY_HOURS)).timestamp(),
             iat: now.timestamp(),
             sid: session.to_string(),
@@ -76,7 +74,6 @@ impl TokenService for JwtTokenService {
             .map_err(|e| Error::new(ErrorCode::InvalidToken).with_detail(e.to_string()))?;
         Ok(SessionClaims {
             user_id: data.claims.sub,
-            username: data.claims.username,
             expires_at: data.claims.exp,
             issued_at: data.claims.iat,
             session,
@@ -99,15 +96,15 @@ mod tests {
     fn minted_token_round_trips() -> Result<()> {
         let svc = JwtTokenService::new(SECRET)?;
         let session = Uuid::new_v4();
-        let claims = svc.verify(&svc.mint(7, "an", session)?)?;
-        assert_eq!((claims.user_id, claims.username.as_str()), (7, "an"));
+        let claims = svc.verify(&svc.mint(7, session)?)?;
+        assert_eq!(claims.user_id, 7);
         assert_eq!(claims.session, session);
         Ok(())
     }
 
     #[test]
     fn token_signed_with_another_key_is_invalid() -> Result<()> {
-        let token = JwtTokenService::new(SECRET)?.mint(1, "x", Uuid::new_v4())?;
+        let token = JwtTokenService::new(SECRET)?.mint(1, Uuid::new_v4())?;
         let other = JwtTokenService::new("another-secret-that-is-also-32-bytes-long")?;
         assert_eq!(
             other.verify(&token).err().map(|e| e.code()),
@@ -121,9 +118,8 @@ mod tests {
     #[test]
     fn a_token_without_a_session_is_invalid() -> Result<()> {
         #[derive(Serialize)]
-        struct Sessionless<'a> {
+        struct Sessionless {
             sub: i32,
-            username: &'a str,
             exp: i64,
             iat: i64,
         }
@@ -131,7 +127,6 @@ mod tests {
         let now = Utc::now().timestamp();
         let claims = Sessionless {
             sub: 3,
-            username: "quantri",
             exp: now + 60,
             iat: now,
         };
@@ -149,7 +144,6 @@ mod tests {
         let svc = JwtTokenService::new(SECRET)?;
         let claims = Claims {
             sub: 1,
-            username: "x".into(),
             exp: Utc::now().timestamp() - 1,
             iat: Utc::now().timestamp() - 3601,
             sid: Uuid::new_v4().to_string(),

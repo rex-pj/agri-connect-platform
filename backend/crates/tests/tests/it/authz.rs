@@ -30,12 +30,12 @@ async fn provider_token(state: &AppState) -> String {
 }
 
 async fn admin_token(state: &AppState) -> String {
-    let admin = first_admin(state).await;
+    first_admin(state).await;
     state
         .usecases
         .auth
         .login(
-            admin.username.clone(),
+            "quantri@example.vn".into(),
             "matkhau123".into(),
             integration_tests::CLIENT,
         )
@@ -115,7 +115,7 @@ async fn a_deactivated_account_loses_its_session_at_once() {
     );
 
     e.t.db
-        .execute_unprepared("UPDATE users SET is_active = FALSE WHERE username = 'nongdan'")
+        .execute_unprepared("UPDATE users SET is_active = FALSE WHERE email = 'nongdan@example.vn'")
         .await
         .unwrap();
     let res = send(&e.router, get("/api/users/me", &token)).await;
@@ -135,7 +135,7 @@ async fn the_session_cookie_works_like_a_bearer_token() {
         .unwrap();
     let res = send(&e.router, req).await;
     assert_eq!(res.status(), StatusCode::OK);
-    assert_eq!(json_body(res).await["username"], "nongdan");
+    assert_eq!(json_body(res).await["email"], "nongdan@example.vn");
     e.t.cleanup().await;
 }
 
@@ -149,7 +149,7 @@ async fn an_admin_cannot_lock_themselves_out() {
         .usecases
         .auth
         .login(
-            admin.username.clone(),
+            "quantri@example.vn".into(),
             "matkhau123".into(),
             integration_tests::CLIENT,
         )

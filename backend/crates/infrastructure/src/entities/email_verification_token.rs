@@ -10,6 +10,9 @@ pub struct Model {
     pub expires_at: DateTimeWithTimeZone,
     pub used_at: Option<DateTimeWithTimeZone>,
     pub created_on: DateTimeWithTimeZone,
+    /// The address this link moves the account to; none: it confirms the
+    /// account's current one.
+    pub new_email: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

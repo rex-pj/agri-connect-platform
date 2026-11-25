@@ -49,8 +49,8 @@
     <p class="small mb-0">{{ atoms::icon(name="fa-store", class="text-muted") }} {% if p.is_active %}{{ t(key="admin.provider_on") }}{% else %}{{ t(key="admin.provider_off") }}{% endif %}</p>
     {% if not p.is_active %}{% set off = b.history | filter(attribute="action", value="deactivate_provider") | first %}{% if off %}{{ history::last_change(row=off) }}{% endif %}{% endif %}
     {% if p.is_verified %}{% set granted = b.history | filter(attribute="action", value="verify_provider") | first %}{% if granted %}{{ history::last_change(row=granted) }}{% endif %}{% endif %}
-    <p class="small mb-0">{{ atoms::icon(name="fa-user", class="text-muted") }} {% if p.linked_username %}{{ t(key="admin.linked_before") }} {% if b.linked_user_href %}<a class="fw-bold" href="{{ b.linked_user_href }}">{{ p.linked_username }}</a>{% else %}<strong>{{ p.linked_username }}</strong>{% endif %}{{ t(key="admin.linked_after") }}{% else %}{{ t(key="admin.no_account") }}{% endif %}</p>
-    {% if p.linked_username and not p.email_verified %}<p class="small text-warning-emphasis mb-0">{{ atoms::icon(name="fa-envelope-circle-check") }} {{ t(key="admin.email_unconfirmed") }}</p>{% endif %}
+    <p class="small mb-0">{{ atoms::icon(name="fa-user", class="text-muted") }} {% if p.linked_email %}{{ t(key="admin.linked_before") }} {% if b.linked_user_href %}<a class="fw-bold" href="{{ b.linked_user_href }}">{{ p.linked_email }}</a>{% else %}<strong>{{ p.linked_email }}</strong>{% endif %}{{ t(key="admin.linked_after") }}{% else %}{{ t(key="admin.no_account") }}{% endif %}</p>
+    {% if p.linked_email and not p.email_verified %}<p class="small text-warning-emphasis mb-0">{{ atoms::icon(name="fa-envelope-circle-check") }} {{ t(key="admin.email_unconfirmed") }}</p>{% endif %}
   </section>
 
   {{ tabs::admin_tabs(tabs=b.tabs, label=t(key="admin.provider_tabs")) }}
@@ -156,9 +156,8 @@
       {{ sheet_head::sheet_header(id="gan-tai-khoan", title=b.account_label, icon="fa-user-plus") }}
       <form class="contact-sheet__form" method="post" action="{{ b.account_action }}" novalidate>
         {% if account_failed and b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
-        {{ field::input(id="acc-username", name="username", label=t(key="form.username"), value=b.form.username, error=e.username | default(value=""), required=true, autocomplete="off", minlength=limits.username_min_len, hint=t(key="form.username_hint"), first=true) }}
+        {{ field::input(id="acc-email", name="email", label=t(key="form.email"), type="email", value=b.form.email, error=e.email | default(value=""), required=true, autocomplete="off", inputmode="email", first=true) }}
         <p class="small text-muted mb-0">{{ t(key="admin.assign_hint") }}</p>
-        {{ field::input(id="acc-email", name="email", label=t(key="form.email"), type="email", value=b.form.email, error=e.email | default(value=""), autocomplete="off", inputmode="email") }}
         {{ field::input(id="acc-password", name="password", label=t(key="form.password"), type="password", error=e.password | default(value=""), autocomplete="new-password", minlength=limits.password_min_chars) }}
         <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-user-plus") }} {{ b.account_label }}</button>
       </form>

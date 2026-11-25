@@ -48,13 +48,15 @@ pub struct LoginResponse {
     #[serde(skip_serializing)]
     pub session: crate::usecases::auth_usecase::SessionTokens,
     pub token: String,
-    pub username: String,
+    /// The account's address, as stored.
+    pub email: String,
     pub role: String,
 }
 
 #[derive(Serialize)]
 pub struct MeResponse {
-    pub username: String,
+    /// What pages call the account: its full name, else its email.
+    pub name: String,
     pub email: String,
     pub full_name: Option<String>,
     /// The caller's role code, e.g. `"admin"` or `"provider"`.
@@ -64,6 +66,18 @@ pub struct MeResponse {
     /// The link sent to `email` was opened; until then nothing but that
     /// link and a password reset is emailed to it.
     pub email_verified: bool,
+    /// The address a link sent lately would move the account to; `email`
+    /// stays its own until that link is opened.
+    pub pending_email: Option<String>,
+}
+
+/// A confirmation link just opened (`AuthUseCase::verify_email`).
+#[derive(Serialize)]
+pub struct EmailConfirmedDto {
+    /// The account's address now.
+    pub email: String,
+    /// The link moved the account to it.
+    pub moved: bool,
 }
 
 // ── Products (shared between public and provider views) ───────────────────────
@@ -415,7 +429,7 @@ pub struct AdminProviderDto {
     pub product_count: i64,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
-    pub linked_username: Option<String>,
+    pub linked_email: Option<String>,
     pub created_by_name: Option<String>,
     pub updated_by_name: Option<String>,
 }
@@ -460,7 +474,7 @@ pub struct AdminProviderDetailDto {
     pub activity: ProviderActivityDto,
     pub created_on: DateTime<Utc>,
     pub linked_user_id: Option<i32>,
-    pub linked_username: Option<String>,
+    pub linked_email: Option<String>,
     /// Whether that account confirmed its email address: notices reach it
     /// only then.
     pub email_verified: bool,
@@ -479,7 +493,8 @@ pub struct AdminProviderDetailDto {
 #[derive(Serialize)]
 pub struct AdminUserDto {
     pub id: i32,
-    pub username: String,
+    /// Its full name, else its email.
+    pub name: String,
     pub email: String,
     pub full_name: Option<String>,
     pub role_code: String,
@@ -495,13 +510,17 @@ pub struct AdminUserDto {
 #[derive(Serialize)]
 pub struct AdminUserDetailDto {
     pub id: i32,
-    pub username: String,
+    /// Its full name, else its email.
+    pub name: String,
     pub email: String,
     pub full_name: Option<String>,
     pub role_code: String,
     pub role_name: String,
     pub is_active: bool,
     pub created_on: DateTime<Utc>,
+    pub email_verified: bool,
+    /// The address a link sent lately would move it to.
+    pub pending_email: Option<String>,
     /// The business this account manages, if any.
     pub business_id: Option<i32>,
 }
@@ -524,7 +543,7 @@ pub struct ProviderStatusDto {
 #[derive(Serialize)]
 pub struct AssignUserDto {
     pub business_id: i32,
-    pub username: String,
+    pub email: String,
 }
 
 #[derive(Serialize)]
@@ -1101,7 +1120,7 @@ pub struct PartnerDto {
     pub is_active: bool,
     pub is_demo: bool,
     pub account_id: Option<i32>,
-    pub account_username: Option<String>,
+    pub account_email: Option<String>,
     pub created_on: DateTime<Utc>,
     /// Contracts in force today, and what they bring in a month.
     pub contracts_in_force: usize,
@@ -1236,7 +1255,7 @@ pub struct PlaceFormDto {
 #[derive(Debug, Clone, Serialize)]
 pub struct PartnerAccountDto {
     pub partner_id: i32,
-    pub username: String,
+    pub email: String,
 }
 
 /// A shop a contract may sponsor: enough to tell two of the same name apart.

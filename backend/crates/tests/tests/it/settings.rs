@@ -47,12 +47,13 @@ async fn save(
     send(&e.router, post_form("/admin/settings", pairs, Some(admin))).await
 }
 
-async fn bearer(e: &Env, username: &str, password: &str) -> String {
+async fn bearer(e: &Env, name: &str, password: &str) -> String {
+    let email = integration_tests::email_of(name);
     let req = Request::post("/api/auth/tokens")
         .header(header::CONTENT_TYPE, "application/json")
         .header(header::ORIGIN, TEST_ORIGIN)
         .body(Body::from(format!(
-            r#"{{"username":"{username}","password":"{password}"}}"#
+            r#"{{"email":"{email}","password":"{password}"}}"#
         )))
         .unwrap();
     json_body(send(&e.router, req).await).await["token"]
@@ -358,7 +359,7 @@ async fn closing_the_doors_refuses_sign_ups_and_job_posts() {
             .header(header::CONTENT_TYPE, "application/json")
             .header(header::ORIGIN, TEST_ORIGIN)
             .body(Body::from(
-                r#"{"username":"vuonmoi","email":"moi@example.vn","password":"matkhau123",
+                r#"{"email":"moi@example.vn","password":"matkhau123",
                     "business_name":"Vườn Mới","business_phone":"0912000222"}"#,
             ))
             .unwrap(),

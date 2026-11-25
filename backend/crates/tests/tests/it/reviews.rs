@@ -29,10 +29,10 @@ async fn scalar(e: &Env, sql: &str) -> String {
         .unwrap()
 }
 
-async fn business_of(e: &Env, username: &str) -> i32 {
+async fn business_of(e: &Env, who: &str) -> i32 {
     scalar(
         e,
-        &format!("SELECT id::text AS v FROM businesses WHERE name = 'Vườn {username}'"),
+        &format!("SELECT id::text AS v FROM businesses WHERE name = 'Vườn {who}'"),
     )
     .await
     .parse()
@@ -325,7 +325,7 @@ async fn the_json_api_creates_providers_and_carries_reviews() {
         .usecases
         .auth
         .login(
-            "quantri".into(),
+            "quantri@example.vn".into(),
             "matkhau123".into(),
             integration_tests::CLIENT,
         )
@@ -363,7 +363,7 @@ async fn the_json_api_creates_providers_and_carries_reviews() {
     let created = json_body(res).await;
     let id = created["id"].as_i64().unwrap();
     assert_eq!(created["lat"], 10.4048);
-    assert_eq!(created["linked_username"], serde_json::Value::Null);
+    assert_eq!(created["linked_email"], serde_json::Value::Null);
 
     let res = send(
         &e.router,

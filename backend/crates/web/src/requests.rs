@@ -9,15 +9,13 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct LoginRequest {
-    /// The username or the email (with an `@`); the field keeps its name so
-    /// existing clients go on working.
-    pub username: String,
+    /// The account's email.
+    pub email: String,
     pub password: String,
 }
 
 #[derive(Deserialize)]
 pub struct CreateAdminRequest {
-    pub username: String,
     pub email: String,
     pub password: String,
     pub full_name: Option<String>,
@@ -27,7 +25,6 @@ pub struct CreateAdminRequest {
 
 #[derive(Deserialize)]
 pub struct RegisterRequest {
-    pub username: String,
     pub email: String,
     pub password: String,
     pub full_name: Option<String>,
@@ -39,6 +36,17 @@ pub struct RegisterRequest {
 pub struct ChangePasswordRequest {
     pub current_password: String,
     pub new_password: String,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateMeRequest {
+    pub full_name: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct ChangeEmailRequest {
+    pub new_email: String,
+    pub current_password: String,
 }
 
 #[derive(Deserialize)]
@@ -68,9 +76,20 @@ pub struct PageQuery {
 
 #[derive(Deserialize)]
 pub struct AssignUserRequest {
-    pub username: String,
+    /// The account's email: an existing account of the role is linked, else
+    /// one is created with `password`.
     pub email: String,
+    #[serde(default)]
     pub password: String,
+}
+
+/// An admin's correction of an account (`PUT /api/admin/users/{id}`).
+#[derive(Deserialize)]
+pub struct UpdateUserRequest {
+    pub full_name: Option<String>,
+    /// Another address moves the account there once the link is opened.
+    pub email: Option<String>,
+    pub reason: Option<String>,
 }
 
 #[derive(Deserialize)]

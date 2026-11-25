@@ -42,7 +42,7 @@ use crate::{
     },
     sql::{
         business_lat, business_lng, business_location, category_in_sector, distance,
-        geography_from_text, null, output, username_of, within, Geo, QueryAs,
+        geography_from_text, null, output, account_name_of, within, Geo, QueryAs,
     },
 };
 
@@ -171,7 +171,7 @@ struct BusinessAdminRow {
     is_active: bool,
     created_on: DateTimeWithTimeZone,
     updated_on: DateTimeWithTimeZone,
-    linked_username: Option<String>,
+    linked_email: Option<String>,
     created_by_name: Option<String>,
     updated_by_name: Option<String>,
 }
@@ -196,7 +196,7 @@ struct BusinessAdminDetailRow {
     ward_code: Option<String>,
     created_on: DateTimeWithTimeZone,
     linked_user_id: Option<i32>,
-    linked_username: Option<String>,
+    linked_email: Option<String>,
     email_verified: bool,
     lat: Option<f64>,
     lng: Option<f64>,
@@ -542,13 +542,13 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .column(business::Column::IsActive)
             .column(business::Column::CreatedOn)
             .column(business::Column::UpdatedOn)
-            .column_as(user::Column::Username, QueryAs::LinkedUsername)
+            .column_as(user::Column::Email, QueryAs::LinkedEmail)
             .expr_as(
-                username_of((business::Entity, business::Column::CreatedBy)),
+                account_name_of((business::Entity, business::Column::CreatedBy)),
                 QueryAs::CreatedByName,
             )
             .expr_as(
-                username_of((business::Entity, business::Column::UpdatedBy)),
+                account_name_of((business::Entity, business::Column::UpdatedBy)),
                 QueryAs::UpdatedByName,
             )
             .join(JoinType::LeftJoin, business::Relation::Owner.def())
@@ -633,7 +633,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
                 product_count: *prod_map.get(&b.id).unwrap_or(&0),
                 created_on: b.created_on.with_timezone(&Utc),
                 updated_on: b.updated_on.with_timezone(&Utc),
-                linked_username: b.linked_username,
+                linked_email: b.linked_email,
                 created_by_name: b.created_by_name,
                 updated_by_name: b.updated_by_name,
             })
@@ -657,7 +657,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .column(business::Column::WardCode)
             .column(business::Column::CreatedOn)
             .column_as(user::Column::Id, QueryAs::LinkedUserId)
-            .column_as(user::Column::Username, QueryAs::LinkedUsername)
+            .column_as(user::Column::Email, QueryAs::LinkedEmail)
             .expr_as(
                 Expr::col((user::Entity, user::Column::EmailVerifiedAt)).is_not_null(),
                 QueryAs::EmailVerified,
@@ -751,7 +751,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             province_name: province_row.map(|p| p.name),
             created_on: core.created_on.with_timezone(&Utc),
             linked_user_id: core.linked_user_id,
-            linked_username: core.linked_username,
+            linked_email: core.linked_email,
             email_verified: core.email_verified,
             lat: core.lat,
             lng: core.lng,
@@ -810,7 +810,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .map_err(|e| {
                 unique_or_internal(
                     e,
-                    "username",
+                    "email",
                     ErrorCode::ProviderAccountInUse,
                     "business assign_user",
                 )

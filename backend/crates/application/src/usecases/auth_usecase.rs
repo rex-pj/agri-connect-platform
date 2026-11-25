@@ -7,7 +7,10 @@ use domain::{
     models::{
         role::UserRole,
         session::NewRefreshToken,
-        user::{LoginName, NewResetToken, NewUser},
+        user::{
+            display_name, mask_email, NewEmailVerification, NewResetToken, NewUser, UserAdminDetail,
+            UserByEmail,
+        },
     },
     repositories::{
         permission_repository_trait::PermissionRepositoryTrait,
@@ -21,6 +24,7 @@ use uuid::Uuid;
 
 use crate::{
     authz::Actor,
+    catalogue::PERM_USER_UPDATE,
     constants::{
         BUSINESS_NAME_MAX, EMAIL_VERIFICATION_EXPIRY_HOURS, EMAIL_VERIFICATION_LINKS_MAX,
         FULL_NAME_MAX, LOGIN_FAIL_ACCOUNT_MAX_ATTEMPTS, LOGIN_FAIL_MAX_ATTEMPTS,
@@ -29,13 +33,13 @@ use crate::{
     },
     hashing::sha256_hex,
     inputs::RegisterInput,
-    outputs::{LoginResponse, MeResponse},
+    outputs::{EmailConfirmedDto, LoginResponse, MeResponse},
     ports::{EmailService, EventBus, PasswordHasher, SessionClaims, TokenService},
     repeats::WindowCounter,
     settings::SettingsReader,
     validation::{
-        max_chars, max_chars_opt, non_blank, validate_email, validate_password, validate_phone,
-        validate_username,
+        audit_reason, max_chars, max_chars_opt, non_blank, validate_email, validate_password,
+        validate_phone,
     },
 };
 
@@ -55,10 +59,11 @@ pub struct AuthUseCase {
     /// Whether providers may sign themselves up (`access.registration_open`).
     settings: SettingsReader,
     /// A hash no password matches, made once with the real hasher: a login
-    /// for an unknown username verifies against it, so it takes as long as
-    /// one for a known username.
+    /// for an unknown email verifies against it, so it takes as long as one
+    /// for a known email.
     decoy_hash: Arc<tokio::sync::OnceCell<String>>,
-    /// Wrong passwords per account and client, in memory only.
+    /// Wrong passwords per account and client, and wrong current passwords
+    /// per signed-in account (`reauth_key`), in memory only.
     failed_logins: WindowCounter,
     /// Sign-up tries per client (hashed address), in memory only.
     signups_by_client: WindowCounter,
@@ -172,12 +177,12 @@ impl AuthUseCase {
         Ok(Actor::from_record(record))
     }
 
-    /// `login` is the account's username or its email (`LoginName`: with an
-    /// `@` an email); either names the same account, so the failure counts
-    /// and locks below are shared.
+    /// `email` names the account. One that is not an address at all is
+    /// `invalid_email` before anything is looked up: it names no account, so
+    /// the answer says nothing about one, and no try is counted.
     ///
     /// Whoever does not know the password learns nothing about the account:
-    /// an unknown name, a deactivated account and a locked one all answer
+    /// an unknown email, a deactivated account and a locked one all answer
     /// `invalid_credentials`, after the same password check. Only the right
     /// password is told that the account is deactivated or locked.
     ///
@@ -188,15 +193,15 @@ impl AuthUseCase {
     /// after `LOGIN_FAIL_ACCOUNT_MAX_ATTEMPTS` from every client together.
     pub async fn login(
         &self,
-        login: String,
+        email: String,
         password: String,
         client: &str,
     ) -> Result<LoginResponse> {
-        let Some(credentials) = self
-            .user_repo
-            .find_credentials(&LoginName::parse(&login))
-            .await?
-        else {
+        let email = email.trim().to_lowercase();
+        Validation::new()
+            .rule("email", validate_email(&email))
+            .finish()?;
+        let Some(credentials) = self.user_repo.find_credentials(&email).await? else {
             let decoy = self
                 .decoy_hash
                 .get_or_try_init(|| async { self.password_hasher.hash(&generate_token()).await })
@@ -256,7 +261,7 @@ impl AuthUseCase {
         }
 
         let response = self
-            .signed_in(credentials.id, credentials.username, credentials.role)
+            .signed_in(credentials.id, credentials.email, credentials.role)
             .await?;
         self.audit(credentials.id, AuthEvent::LoggedIn).await;
         Ok(response)
@@ -268,7 +273,7 @@ impl AuthUseCase {
     async fn signed_in(
         &self,
         user_id: i32,
-        username: String,
+        email: String,
         role: String,
     ) -> Result<LoginResponse> {
         let session = self.start_session(user_id).await?;
@@ -276,7 +281,7 @@ impl AuthUseCase {
             user_id,
             token: session.access.clone(),
             session,
-            username,
+            email,
             role,
         })
     }
@@ -369,7 +374,7 @@ impl AuthUseCase {
         if UserRole::from_code(&actor.role_code).is_none() {
             return Ok(None);
         }
-        let access = self.token_svc.mint(user_id, &actor.username, family_id)?;
+        let access = self.token_svc.mint(user_id, family_id)?;
         let refresh = generate_token();
         let refresh_expires_at = Utc::now() + Duration::days(self.refresh_days);
         self.refresh_repo
@@ -407,7 +412,6 @@ impl AuthUseCase {
     /// not to the first visitor.
     pub async fn create_first_admin(
         &self,
-        username: String,
         email: String,
         password: String,
         full_name: Option<String>,
@@ -424,11 +428,9 @@ impl AuthUseCase {
             }
         }
 
-        let username = username.trim().to_lowercase();
         let email = email.trim().to_lowercase();
         let full_name = non_blank(full_name);
         Validation::new()
-            .rule("username", validate_username(&username))
             .rule("email", validate_email(&email))
             .rule("password", validate_password(&password))
             .rule("full_name", max_chars_opt(&full_name, FULL_NAME_MAX))
@@ -440,26 +442,25 @@ impl AuthUseCase {
         let user_id = self
             .user_repo
             .create_first_admin(NewUser {
-                username: username.clone(),
-                email,
+                email: email.clone(),
                 password_hash,
                 role: ROLE_ADMIN.into(),
                 // None when not given, like any account: pages show the
-                // username then (no word in code, CLAUDE.md).
+                // email then (no word in code, CLAUDE.md).
                 full_name,
                 email_verified: true,
             })
             .await?
             .ok_or_else(|| Error::new(ErrorCode::AdminAlreadyExists))?;
 
-        self.signed_in(user_id, username, ROLE_ADMIN.into()).await
+        self.signed_in(user_id, email, ROLE_ADMIN.into()).await
     }
 
     // ── Provider self-registration ────────────────────────────────────────────
 
-    /// A provider's own account and business. Whether the username or the
-    /// email is taken is told (the form must say which box to change), so
-    /// one client may try at most `SIGNUP_ATTEMPTS_PER_CLIENT` valid
+    /// A provider's own account and business. Whether the email is taken is
+    /// told (the form must say which box to change), so one client may try
+    /// at most `SIGNUP_ATTEMPTS_PER_CLIENT` valid
     /// sign-ups a day (`signup_daily_limit`): nobody can sweep a list of
     /// addresses through it.
     pub async fn register(&self, input: RegisterInput) -> Result<LoginResponse> {
@@ -475,7 +476,6 @@ impl AuthUseCase {
         {
             return Err(Error::new(ErrorCode::SignupDailyLimit));
         }
-        let username = input.username.trim().to_lowercase();
         let email = input.email.trim().to_lowercase();
         let business_name = input.business_name.trim().to_owned();
         let business_phone = input.business_phone.trim().to_owned();
@@ -483,7 +483,6 @@ impl AuthUseCase {
         let password = input.password;
 
         Validation::new()
-            .rule("username", validate_username(&username))
             .rule("email", validate_email(&email))
             .rule("password", validate_password(&password))
             .rule("full_name", max_chars_opt(&full_name, FULL_NAME_MAX))
@@ -499,8 +498,8 @@ impl AuthUseCase {
             .rule("business_phone", validate_phone(&business_phone))
             .finish()?;
 
-        // From here on a try learns whether the username or email is taken,
-        // so it takes one of the day's tries (checked and counted in one
+        // From here on a try learns whether the email is taken, so it takes
+        // one of the day's tries (checked and counted in one
         // step: sign-ups sent at once cannot all pass the check above). A
         // try counts whatever it learns, so none is given back.
         if let Some(key) = &client_key {
@@ -511,21 +510,17 @@ impl AuthUseCase {
                 return Err(Error::new(ErrorCode::SignupDailyLimit));
             }
         }
-        if self.user_repo.find_by_username(&username).await?.is_some() {
-            return Err(Error::new(ErrorCode::UsernameTaken));
-        }
         if self.user_repo.email_exists(&email).await? {
             return Err(Error::new(ErrorCode::EmailTaken));
         }
 
         let password_hash = self.password_hasher.hash(&password).await?;
         // The account and its business in one transaction: never an account
-        // that can log in but has nothing to manage (and keeps its username).
+        // that can log in but has nothing to manage (and keeps its email).
         let user_id = self
             .user_repo
             .create_with_business(
                 NewUser {
-                    username: username.clone(),
                     email: email.clone(),
                     password_hash,
                     role: ROLE_PROVIDER.into(),
@@ -538,12 +533,11 @@ impl AuthUseCase {
             .await?;
         // The account exists either way; a link that could not be made is
         // asked for again from the account page.
-        if let Err(e) = self.send_email_verification(user_id, email).await {
+        if let Err(e) = self.send_email_verification(user_id, email.clone()).await {
             tracing::warn!(user_id, error = %e, "could not send the email confirmation link");
         }
 
-        self.signed_in(user_id, username, ROLE_PROVIDER.into())
-            .await
+        self.signed_in(user_id, email, ROLE_PROVIDER.into()).await
     }
 
     // ── Me ────────────────────────────────────────────────────────────────────
@@ -556,21 +550,48 @@ impl AuthUseCase {
             .ok_or_else(|| Error::new(ErrorCode::AccountNotFound))?;
 
         Ok(MeResponse {
-            username: user.username,
+            name: display_name(user.full_name.as_deref(), &user.email),
             email: user.email,
             full_name: user.full_name,
             role: user.role,
             created_on: user.created_on.to_rfc3339(),
             email_verified: user.email_verified,
+            pending_email: user.pending_email,
         })
+    }
+
+    /// The signed-in account's own name: trimmed, blank as none, at most
+    /// `FULL_NAME_MAX` characters. Display only, so no password is asked.
+    pub async fn update_profile(&self, user_id: i32, full_name: Option<String>) -> Result<()> {
+        let full_name = non_blank(full_name);
+        Validation::new()
+            .rule("full_name", max_chars_opt(&full_name, FULL_NAME_MAX))
+            .finish()?;
+        self.user_repo
+            .update_full_name(user_id, full_name.as_deref())
+            .await?;
+        self.audit(user_id, AuthEvent::ProfileUpdated).await;
+        Ok(())
+    }
+
+    /// Signs out every device of the account but the one asking: its own
+    /// browser gets a new session from the caller (web::pages::account), as
+    /// after a password change.
+    pub async fn end_other_sessions(&self, user_id: i32) -> Result<()> {
+        self.user_repo.end_sessions(user_id).await?;
+        self.refresh_repo.revoke_user(user_id).await?;
+        self.audit(user_id, AuthEvent::OtherSessionsEnded).await;
+        Ok(())
     }
 
     // ── Email confirmation ────────────────────────────────────────────────────
 
-    /// Emails `to` a link that confirms it is the account's address, unless
-    /// `EMAIL_VERIFICATION_LINKS_MAX` links are still valid: the form must
-    /// not fill a stranger's inbox. Sent in the background.
-    async fn send_email_verification(&self, user_id: i32, to: String) -> Result<()> {
+    /// Emails `to` a link that proves it, unless `EMAIL_VERIFICATION_LINKS_MAX`
+    /// links of the account are still valid: no form may fill a stranger's
+    /// inbox. `new_email`: the link moves the account to `to` (an email
+    /// change); none: it confirms the account's own address. Sent in the
+    /// background.
+    async fn send_email_link(&self, user_id: i32, to: String, change: bool) -> Result<()> {
         let now = Utc::now();
         if self
             .user_repo
@@ -586,14 +607,108 @@ impl AuthUseCase {
         }
         let token = generate_token();
         self.user_repo
-            .create_email_verification(NewResetToken {
+            .create_email_verification(NewEmailVerification {
                 user_id,
                 token_hash: hash_token(&token),
                 expires_at: now + Duration::hours(EMAIL_VERIFICATION_EXPIRY_HOURS),
+                new_email: change.then(|| to.clone()),
             })
             .await?;
         let email = Arc::clone(&self.email);
-        tokio::spawn(async move { email.send_email_verification(&to, &token).await });
+        tokio::spawn(async move {
+            if change {
+                email.send_email_change(&to, &token).await;
+            } else {
+                email.send_email_verification(&to, &token).await;
+            }
+        });
+        Ok(())
+    }
+
+    async fn send_email_verification(&self, user_id: i32, to: String) -> Result<()> {
+        self.send_email_link(user_id, to, false).await
+    }
+
+    /// The signed-in account asks to move to `new_email`. The current
+    /// password is asked (a session left open must not hand the account's
+    /// sign-in and recovery address to someone else), counted with the
+    /// password change's (`reauth_key`).
+    ///
+    /// Nothing changes until the link sent to `new_email` is opened: the
+    /// account keeps its address, its notices and its sign-in. A new request
+    /// replaces the one before. Whether `new_email` belongs to another
+    /// account is never said: the answer is the same and nothing is sent, so
+    /// the form cannot be used to find out who has an account.
+    pub async fn request_email_change(
+        &self,
+        user_id: i32,
+        current_password: String,
+        new_email: String,
+    ) -> Result<()> {
+        let new_email = new_email.trim().to_lowercase();
+        Validation::new()
+            .rule("new_email", validate_email(&new_email))
+            .finish()?;
+        let me = self
+            .user_repo
+            .find_me(user_id)
+            .await?
+            .ok_or_else(|| Error::new(ErrorCode::AccountNotFound))?;
+        if me.email == new_email {
+            return Err(Error::field("new_email", ErrorCode::EmailUnchanged));
+        }
+        self.check_current_password(user_id, &current_password)
+            .await?;
+        self.move_email(user_id, new_email).await?;
+        self.audit(user_id, AuthEvent::EmailChangeRequested).await;
+        Ok(())
+    }
+
+    /// Sends the link that moves `user_id` to `new_email`, replacing any
+    /// sent before; nothing for an address another account has.
+    pub(crate) async fn move_email(&self, user_id: i32, new_email: String) -> Result<()> {
+        self.user_repo.retire_email_changes(user_id).await?;
+        if self.user_repo.email_exists(&new_email).await? {
+            tracing::info!(user_id, "email change not sent: the address has an account");
+            return Ok(());
+        }
+        self.send_email_link(user_id, new_email, true).await
+    }
+
+    /// The key that counts wrong current passwords of a signed-in account,
+    /// every form that asks for it together: a session in other hands gets
+    /// `LOGIN_FAIL_MAX_ATTEMPTS` guesses in all, not that many per form.
+    fn reauth_key(user_id: i32) -> String {
+        sha256_hex(format!("{user_id}|reauth"))
+    }
+
+    /// The signed-in account's current password, for a change that needs
+    /// it: `LOGIN_FAIL_MAX_ATTEMPTS` wrong ones stop the checks for
+    /// `LOGIN_LOCK_MINUTES` (before bcrypt, so guesses cost us nothing); a
+    /// right one clears the count.
+    async fn check_current_password(&self, user_id: i32, password: &str) -> Result<()> {
+        let credentials = self
+            .user_repo
+            .find_credentials_by_id(user_id)
+            .await?
+            .ok_or_else(|| Error::new(ErrorCode::AccountNotFound))?;
+        if !credentials.is_active {
+            return Err(Error::new(ErrorCode::AccountDeactivated));
+        }
+        let key = Self::reauth_key(user_id);
+        let lock_window = std::time::Duration::from_secs(LOGIN_LOCK_MINUTES as u64 * 60);
+        if self.failed_logins.count(&key, lock_window) >= LOGIN_FAIL_MAX_ATTEMPTS {
+            return Err(Error::new(ErrorCode::TooManyRequests));
+        }
+        if !self
+            .password_hasher
+            .verify(password, &credentials.password_hash)
+            .await?
+        {
+            self.failed_logins.hit(key, lock_window);
+            return Err(Error::new(ErrorCode::CurrentPasswordIncorrect));
+        }
+        self.failed_logins.clear(&key);
         Ok(())
     }
 
@@ -611,17 +726,32 @@ impl AuthUseCase {
         self.send_email_verification(user_id, user.email).await
     }
 
-    /// Opens a confirmation link: its account's address is verified from now
-    /// on. A link that is unknown, already used or run out is
-    /// `email_verification_invalid`.
-    pub async fn verify_email(&self, token: &str) -> Result<()> {
-        let user_id = self
+    /// Opens a confirmation link: the address it names is the account's,
+    /// verified, from now on. A link that moves the account (an email
+    /// change) also ends every other link of it, and the former address, if
+    /// it was confirmed, is told where the account went. A link that is
+    /// unknown, already used or run out is `email_verification_invalid`;
+    /// `email_taken` when another account took the address since.
+    pub async fn verify_email(&self, token: &str) -> Result<EmailConfirmedDto> {
+        let claimed = self
             .user_repo
             .claim_email_verification(&hash_token(token.trim()))
             .await?
             .ok_or_else(|| Error::new(ErrorCode::EmailVerificationInvalid))?;
-        self.audit(user_id, AuthEvent::EmailVerified).await;
-        Ok(())
+        if claimed.moved {
+            self.audit(claimed.user_id, AuthEvent::EmailChanged).await;
+        } else {
+            self.audit(claimed.user_id, AuthEvent::EmailVerified).await;
+        }
+        if let Some(previous) = claimed.confirmed_previous {
+            let masked = mask_email(&claimed.email);
+            let email = Arc::clone(&self.email);
+            tokio::spawn(async move { email.send_email_changed(&previous, &masked).await });
+        }
+        Ok(EmailConfirmedDto {
+            email: claimed.email,
+            moved: claimed.moved,
+        })
     }
 
     // ── Change password ───────────────────────────────────────────────────────
@@ -635,34 +765,10 @@ impl AuthUseCase {
         Validation::new()
             .rule("new_password", validate_password(&new_password))
             .finish()?;
-
-        let credentials = self
-            .user_repo
-            .find_credentials_by_id(user_id)
-            .await?
-            .ok_or_else(|| Error::new(ErrorCode::AccountNotFound))?;
-
-        if !credentials.is_active {
-            return Err(Error::new(ErrorCode::AccountDeactivated));
-        }
-
         // A session in other hands must not guess the password it does not
-        // know: `LOGIN_FAIL_MAX_ATTEMPTS` wrong ones stop the checks for
-        // `LOGIN_LOCK_MINUTES` (before bcrypt, so guesses cost us nothing).
-        let attempts_key = sha256_hex(format!("{user_id}|change_password"));
-        let lock_window = std::time::Duration::from_secs(LOGIN_LOCK_MINUTES as u64 * 60);
-        if self.failed_logins.count(&attempts_key, lock_window) >= LOGIN_FAIL_MAX_ATTEMPTS {
-            return Err(Error::new(ErrorCode::TooManyRequests));
-        }
-        if !self
-            .password_hasher
-            .verify(&current_password, &credentials.password_hash)
-            .await?
-        {
-            self.failed_logins.hit(attempts_key, lock_window);
-            return Err(Error::new(ErrorCode::CurrentPasswordIncorrect));
-        }
-        self.failed_logins.clear(&attempts_key);
+        // know (`check_current_password`).
+        self.check_current_password(user_id, &current_password)
+            .await?;
 
         let new_hash = self.password_hasher.hash(&new_password).await?;
         self.user_repo.update_password(user_id, &new_hash).await?;
@@ -676,6 +782,107 @@ impl AuthUseCase {
         Ok(())
     }
 
+    // ── Another account, by an admin (`user.update`) ─────────────────────────
+
+    /// The account `user_id`, for an admin changing it: never their own (the
+    /// account page asks for the password; the admin page does not), and
+    /// only one that exists. Audited as the admin, with `reason`.
+    async fn admin_target(&self, actor: &Actor, user_id: i32) -> Result<UserAdminDetail> {
+        if actor.user_id == user_id {
+            return Err(Error::new(ErrorCode::CannotChangeOwnAccount));
+        }
+        self.user_repo
+            .find_by_id_for_admin(user_id)
+            .await?
+            .ok_or_else(|| Error::new(ErrorCode::UserNotFound))
+    }
+
+    async fn audit_by(
+        &self,
+        actor: &Actor,
+        user_id: i32,
+        what: AuthEvent,
+        reason: Option<String>,
+    ) {
+        self.events
+            .publish(DomainEvent {
+                actor_id: Some(actor.user_id),
+                entity: Entity::User,
+                entity_id: user_id,
+                change: Change::Auth(what),
+                reason: audit_reason(reason),
+            })
+            .await;
+    }
+
+    /// An admin corrects an account: the name it is shown by (the account's
+    /// own rule: `update_profile`), and, when `new_email` is another address
+    /// (one typed wrong at the field visit), the move to it. As when the
+    /// owner asks, nothing moves until the link sent there is opened, and the
+    /// former address, if confirmed, is told: an admin account in the wrong
+    /// hands cannot take an account's sign-in by itself. Both boxes are
+    /// checked before either is saved. Whether a link was sent.
+    pub async fn admin_update_user(
+        &self,
+        actor: &Actor,
+        user_id: i32,
+        full_name: Option<String>,
+        new_email: Option<String>,
+        reason: Option<String>,
+    ) -> Result<bool> {
+        actor.require(PERM_USER_UPDATE)?;
+        let user = self.admin_target(actor, user_id).await?;
+        let full_name = non_blank(full_name);
+        let new_email = new_email
+            .map(|e| e.trim().to_lowercase())
+            .filter(|e| !e.is_empty() && *e != user.email);
+        let mut rules = Validation::new();
+        rules.rule("full_name", max_chars_opt(&full_name, FULL_NAME_MAX));
+        if let Some(email) = &new_email {
+            rules.rule("new_email", validate_email(email));
+        }
+        rules.finish()?;
+
+        if full_name != user.full_name {
+            self.user_repo
+                .update_full_name(user_id, full_name.as_deref())
+                .await?;
+            self.audit_by(actor, user_id, AuthEvent::ProfileUpdated, reason.clone())
+                .await;
+        }
+        let Some(email) = new_email else {
+            return Ok(false);
+        };
+        self.move_email(user_id, email).await?;
+        self.audit_by(actor, user_id, AuthEvent::EmailChangeRequested, reason)
+            .await;
+        Ok(true)
+    }
+
+    /// An admin has a password-reset link sent to the account's address
+    /// (the owner forgot it and cannot use the form): the admin never sets,
+    /// nor learns, the password.
+    pub async fn admin_send_password_reset(
+        &self,
+        actor: &Actor,
+        user_id: i32,
+        reason: Option<String>,
+    ) -> Result<()> {
+        actor.require(PERM_USER_UPDATE)?;
+        let user = self.admin_target(actor, user_id).await?;
+        if !user.is_active {
+            return Err(Error::new(ErrorCode::AccountDeactivated));
+        }
+        self.send_reset_link(UserByEmail {
+            id: user.id,
+            email: user.email,
+        })
+        .await?;
+        self.audit_by(actor, user_id, AuthEvent::PasswordResetSent, reason)
+            .await;
+        Ok(())
+    }
+
     // ── Forgot password ───────────────────────────────────────────────────────
 
     /// Always succeeds for a well-formed request: answering differently for
@@ -686,7 +893,12 @@ impl AuthUseCase {
         let Some(user) = self.user_repo.find_by_email(&email).await? else {
             return Ok(());
         };
+        self.send_reset_link(user).await
+    }
 
+    /// Emails `user` a password-reset link, unless `PASSWORD_RESET_LINKS_MAX`
+    /// are still valid. Sent in the background.
+    async fn send_reset_link(&self, user: UserByEmail) -> Result<()> {
         // Nobody needs more links than this at once, and without a cap the
         // form would fill a stranger's inbox.
         let now = Utc::now();

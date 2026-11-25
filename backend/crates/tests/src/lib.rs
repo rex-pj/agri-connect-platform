@@ -48,79 +48,95 @@ pub fn email_service() -> Arc<dyn EmailService> {
     Arc::new(LogEmailService::new("http://localhost:5173".into()))
 }
 
-/// An `EmailService` that keeps the "new inquiry" emails it was asked to send,
-/// so a test can read them. Reset emails are only logged, as in development.
+/// An `EmailService` that keeps the emails it was asked to send, so a test
+/// can read them. They are sent in the background, so each reader waits
+/// (up to 2 s) until `at_least` arrived.
 #[derive(Default)]
 pub struct RecordingEmail {
     inquiries: std::sync::Mutex<Vec<(String, InquiryNotice)>>,
     jobs: std::sync::Mutex<Vec<(String, JobNotice)>>,
     verifications: std::sync::Mutex<Vec<(String, String)>>,
+    email_changes: std::sync::Mutex<Vec<(String, String)>>,
+    email_changed: std::sync::Mutex<Vec<(String, String)>>,
+    resets: std::sync::Mutex<Vec<(String, String)>>,
+}
+
+/// What `sent` holds once it has `at_least` items, or after 2 s.
+async fn arrived<T: Clone>(sent: &std::sync::Mutex<Vec<T>>, at_least: usize) -> Vec<T> {
+    for _ in 0..100 {
+        let now = sent.lock().unwrap().clone();
+        if now.len() >= at_least {
+            return now;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    sent.lock().unwrap().clone()
+}
+
+fn record<T>(sent: &std::sync::Mutex<Vec<T>>, item: T) {
+    sent.lock().unwrap().push(item);
 }
 
 impl RecordingEmail {
-    /// (recipient, token) of every "confirm your address" email so far,
-    /// waiting (up to 2 s) until `at_least` arrived.
+    /// (recipient, token) of every "confirm your address" email so far.
     pub async fn verifications(&self, at_least: usize) -> Vec<(String, String)> {
-        for _ in 0..100 {
-            let sent = self.verifications.lock().unwrap().clone();
-            if sent.len() >= at_least {
-                return sent;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-        }
-        self.verifications.lock().unwrap().clone()
+        arrived(&self.verifications, at_least).await
     }
 
-    /// (recipient, notice) of every "new inquiry" email so far. They are sent
-    /// in the background, so this waits (up to 2 s) until `at_least` arrived.
+    /// (recipient, token) of every "move your account here" email so far.
+    pub async fn email_changes(&self, at_least: usize) -> Vec<(String, String)> {
+        arrived(&self.email_changes, at_least).await
+    }
+
+    /// (former address, masked new one) of every "your email was changed"
+    /// notice so far.
+    pub async fn email_changed(&self, at_least: usize) -> Vec<(String, String)> {
+        arrived(&self.email_changed, at_least).await
+    }
+
+    /// (recipient, token) of every password-reset email so far.
+    pub async fn resets(&self, at_least: usize) -> Vec<(String, String)> {
+        arrived(&self.resets, at_least).await
+    }
+
+    /// (recipient, notice) of every "new inquiry" email so far.
     pub async fn inquiries(&self, at_least: usize) -> Vec<(String, InquiryNotice)> {
-        for _ in 0..100 {
-            let sent = self.inquiries.lock().unwrap().clone();
-            if sent.len() >= at_least {
-                return sent;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-        }
-        self.inquiries.lock().unwrap().clone()
+        arrived(&self.inquiries, at_least).await
     }
 
-    /// (recipient, notice) of every "a job near you" email so far, waiting
-    /// (up to 2 s) until `at_least` arrived.
+    /// (recipient, notice) of every "a job near you" email so far.
     pub async fn jobs(&self, at_least: usize) -> Vec<(String, JobNotice)> {
-        for _ in 0..100 {
-            let sent = self.jobs.lock().unwrap().clone();
-            if sent.len() >= at_least {
-                return sent;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-        }
-        self.jobs.lock().unwrap().clone()
+        arrived(&self.jobs, at_least).await
     }
 }
 
 #[async_trait::async_trait]
 impl EmailService for RecordingEmail {
-    async fn send_password_reset(&self, _to_email: &str, _token: &str) {}
+    async fn send_password_reset(&self, to_email: &str, token: &str) {
+        record(&self.resets, (to_email.to_owned(), token.to_owned()));
+    }
 
     async fn send_email_verification(&self, to_email: &str, token: &str) {
-        self.verifications
-            .lock()
-            .unwrap()
-            .push((to_email.to_owned(), token.to_owned()));
+        record(&self.verifications, (to_email.to_owned(), token.to_owned()));
+    }
+
+    async fn send_email_change(&self, to_email: &str, token: &str) {
+        record(&self.email_changes, (to_email.to_owned(), token.to_owned()));
+    }
+
+    async fn send_email_changed(&self, to_email: &str, masked_email: &str) {
+        record(
+            &self.email_changed,
+            (to_email.to_owned(), masked_email.to_owned()),
+        );
     }
 
     async fn send_new_inquiry(&self, to_email: &str, notice: &InquiryNotice) {
-        self.inquiries
-            .lock()
-            .unwrap()
-            .push((to_email.to_owned(), notice.clone()));
+        record(&self.inquiries, (to_email.to_owned(), notice.clone()));
     }
 
     async fn send_new_job(&self, to_email: &str, notice: &JobNotice) {
-        self.jobs
-            .lock()
-            .unwrap()
-            .push((to_email.to_owned(), notice.clone()));
+        record(&self.jobs, (to_email.to_owned(), notice.clone()));
     }
 }
 
@@ -514,7 +530,6 @@ pub async fn first_admin(state: &AppState) -> application::authz::Actor {
         .usecases
         .auth
         .create_first_admin(
-            "quantri".into(),
             "quantri@example.vn".into(),
             "matkhau123".into(),
             None,
@@ -576,17 +591,26 @@ impl Env {
     }
 }
 
+/// The address tests give the account they call `name`: `name` itself when
+/// it is one, else `{name}@example.vn`. Accounts are named by their email
+/// alone; tests keep short names for them.
+pub fn email_of(name: &str) -> String {
+    if name.contains('@') {
+        name.to_owned()
+    } else {
+        format!("{name}@example.vn")
+    }
+}
+
 /// A sign-up with no client known, so the per-client cap does not apply
 /// (a test that checks the cap sets `client`).
 pub fn signup(
-    username: &str,
     email: &str,
     password: &str,
     business_name: &str,
     phone: &str,
 ) -> application::inputs::RegisterInput {
     application::inputs::RegisterInput {
-        username: username.into(),
         email: email.into(),
         password: password.into(),
         full_name: None,
@@ -596,17 +620,16 @@ pub fn signup(
     }
 }
 
-/// Registers a provider through the real flow (business "Vườn {username}")
-/// and returns their session token.
-pub async fn register_provider(state: &AppState, username: &str, phone: &str) -> String {
+/// Registers a provider through the real flow (business "Vườn {name}",
+/// email `email_of(name)`) and returns their session token.
+pub async fn register_provider(state: &AppState, name: &str, phone: &str) -> String {
     state
         .usecases
         .auth
         .register(signup(
-            username,
-            &format!("{username}@example.vn"),
+            &email_of(name),
             "matkhau123",
-            &format!("Vườn {username}"),
+            &format!("Vườn {name}"),
             phone,
         ))
         .await
@@ -829,7 +852,7 @@ pub fn cookies_from(res: &Response<Body>) -> String {
         .join("; ")
 }
 
-/// The first admin ("quantri" / "matkhau123") created through the setup
+/// The first admin ("quantri", `email_of`, / "matkhau123") created through the setup
 /// page; returns that browser's session cookies.
 pub async fn install_admin(env: &Env) -> String {
     let res = send(
@@ -837,8 +860,7 @@ pub async fn install_admin(env: &Env) -> String {
         post_form(
             "/setup",
             &[
-                ("email", "admin@example.vn"),
-                ("username", "quantri"),
+                ("email", "quantri@example.vn"),
                 ("password", "matkhau123"),
                 ("password2", "matkhau123"),
             ],
@@ -851,17 +873,17 @@ pub async fn install_admin(env: &Env) -> String {
 }
 
 /// Signs in through the login page; returns the session cookies.
-pub async fn sign_in(env: &Env, username: &str, password: &str) -> String {
+pub async fn sign_in(env: &Env, name: &str, password: &str) -> String {
     let res = send(
         &env.router,
         post_form(
             "/login",
-            &[("username", username), ("password", password)],
+            &[("email", &email_of(name)), ("password", password)],
             None,
         ),
     )
     .await;
-    assert_eq!(res.status(), StatusCode::SEE_OTHER, "login as {username}");
+    assert_eq!(res.status(), StatusCode::SEE_OTHER, "login as {name}");
     cookies_from(&res)
 }
 
@@ -921,15 +943,15 @@ pub fn post_multipart_files(
         .unwrap()
 }
 
-/// Marks `username`'s email address as confirmed, as opening the link sent
+/// Marks `name`'s email address (`email_of`) as confirmed, as opening the link sent
 /// to it does: for tests about what a confirmed account is emailed.
-pub async fn confirm_email(env: &Env, username: &str) {
+pub async fn confirm_email(env: &Env, name: &str) {
     env.t
         .db
         .execute(sea_orm::Statement::from_sql_and_values(
             env.t.db.get_database_backend(),
-            "UPDATE users SET email_verified_at = now() WHERE username = $1",
-            [username.into()],
+            "UPDATE users SET email_verified_at = now() WHERE email = $1",
+            [email_of(name).into()],
         ))
         .await
         .unwrap();

@@ -9,7 +9,7 @@
 use application::{
     catalogue::{
         PERM_PARTNER_MANAGE, PERM_PROVIDER_READ, PERM_ROLE_READ, PERM_USER_ROLE_UPDATE,
-        PERM_USER_STATUS_UPDATE,
+        PERM_USER_STATUS_UPDATE, PERM_USER_UPDATE,
     },
     outputs::{AdminPagedResponse, AdminUserDetailDto, AdminUserDto, PermissionDto, RoleDto},
     usecases::admin_usecase::HistoryOf,
@@ -139,9 +139,45 @@ pub struct UserPage {
     /// The user's role grid, when the visitor may read roles.
     pub role_href: Option<String>,
     pub role_action: String,
+    /// The name and email form, when the visitor may change them (never on
+    /// their own account: the account page asks for the password).
+    pub edit: Option<UserEdit>,
     pub errors: FormErrors,
     pub flash: Option<Flash>,
 }
+
+/// The account's name and email as the form shows them: stored, or as typed
+/// after a refusal with its messages.
+#[derive(Serialize)]
+pub struct UserEdit {
+    pub action: String,
+    pub full_name: String,
+    pub new_email: String,
+    pub errors: FormErrors,
+}
+
+/// POST /admin/users/{id}/profile: the name, and an address to move the
+/// account to (its current one: no move), with an optional reason.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct EditForm {
+    pub full_name: String,
+    pub new_email: String,
+    pub reason: String,
+}
+
+/// What a refused form brings back to the page.
+#[derive(Default)]
+struct Refused {
+    errors: FormErrors,
+    /// A confirmation to show open again.
+    confirm_open: bool,
+    /// The name and email as typed: the messages are that form's.
+    edit: Option<EditForm>,
+}
+
+/// The confirmation that sends the account a password-reset link.
+const RESET_SHEET: &str = "gui-dat-lai-mat-khau";
 
 /// The account's header: turning it back on is a button, switching it off
 /// (it signs out at once) waits in the menu; the business or partner it
@@ -168,7 +204,7 @@ fn user_controls(
             off_icon: "fa-user-slash",
             on_label: locale.text("admin.turn_on_account"),
             on_icon: "fa-user-check",
-            title: locale.text_with("admin.turn_off_account_title", &[("name", &user.username)]),
+            title: locale.text_with("admin.turn_off_account_title", &[("name", &user.name)]),
             button: locale.text("admin.confirm_off"),
             says: Says::Note(locale.text("admin.turn_off_account_note")),
         }
@@ -180,6 +216,30 @@ fn user_controls(
             }
             None => actions.push(toggle),
         }
+    }
+    if actor.can(PERM_USER_UPDATE) && actor.user_id != user.id && user.is_active {
+        menu.push(RecordAction::sheet(
+            locale.text("admin.send_reset_link"),
+            "fa-key",
+            RESET_SHEET,
+            "secondary",
+        ));
+        confirms.push(
+            Confirm {
+                button_class: "btn-success",
+                hidden_name: "",
+                hidden_value: "",
+                ..Confirm::off(
+                    RESET_SHEET,
+                    locale.text_with("admin.send_reset_link_title", &[("email", &user.email)]),
+                    "fa-key",
+                    url("admin_user_password_reset", &[("id", &user.id.to_string())])?,
+                    locale.text("admin.send_reset_link"),
+                    "",
+                )
+            }
+            .noting(locale.text("admin.send_reset_link_note")),
+        );
     }
     if let Some(href) = business_href {
         actions.push(RecordAction::link(
@@ -196,7 +256,7 @@ fn user_controls(
         ));
     }
     let header = RecordHeader {
-        title: user.username.clone(),
+        title: user.name.clone(),
         icon: "fa-user".to_owned(),
         sub: Some(user.email.clone()),
         back_href: url("admin_users", &[])?,
@@ -212,11 +272,15 @@ async fn user_page(
     state: &AppState,
     actor: &application::authz::Actor,
     id: i32,
-    errors: FormErrors,
-    confirm_open: bool,
+    refused: Refused,
     flash: Option<Flash>,
     status: StatusCode,
 ) -> Result<Response, Error> {
+    let Refused {
+        errors,
+        confirm_open,
+        edit: typed,
+    } = refused;
     let admin = &state.usecases.admin;
     let user = admin
         .get_user_detail(actor, id)
@@ -272,7 +336,27 @@ async fn user_page(
         partner_href,
         confirm_open,
     )?;
+    // The refusal's messages belong to the form that was sent.
+    let (edit_errors, errors) = match typed {
+        Some(_) => (errors, FormErrors::default()),
+        None => (FormErrors::default(), errors),
+    };
+    let edit = if actor.can(PERM_USER_UPDATE) && actor.user_id != id {
+        let (full_name, new_email) = match typed {
+            Some(form) => (form.full_name, form.new_email),
+            None => (user.full_name.clone().unwrap_or_default(), user.email.clone()),
+        };
+        Some(UserEdit {
+            action: url("admin_user_profile", &[("id", &id_text)])?,
+            full_name,
+            new_email,
+            errors: edit_errors,
+        })
+    } else {
+        None
+    };
     let body = UserPage {
+        edit,
         header,
         confirms,
         history: history_rows(state, actor, HistoryOf::User(id)).await?,
@@ -309,8 +393,7 @@ pub async fn show(
         &state,
         &actor,
         id,
-        FormErrors::default(),
-        false,
+        Refused::default(),
         flash.0,
         StatusCode::OK,
     )
@@ -320,14 +403,15 @@ pub async fn show(
 }
 
 /// After a change: back to the user with a flash, or the page re-shown with
-/// the refusal (own account, invalid role).
-async fn after(
+/// the refusal (own account, invalid role, a broken box), `refused` saying
+/// which form it goes with.
+async fn after<T>(
     state: &AppState,
     actor: &application::authz::Actor,
     id: i32,
-    result: Result<AdminUserDetailDto, Error>,
+    result: Result<T, Error>,
     flash: Flash,
-    confirm_open: bool,
+    refused: impl FnOnce(FormErrors) -> Refused,
 ) -> Result<Response, Error> {
     match result {
         Ok(_) => {
@@ -341,8 +425,7 @@ async fn after(
                 state,
                 actor,
                 id,
-                errors,
-                confirm_open,
+                refused(errors),
                 None,
                 err.kind().status(),
             )
@@ -350,6 +433,85 @@ async fn after(
         }
         Err(err) => Err(err),
     }
+}
+
+/// A refusal shown above the page, with confirmation `open` again.
+fn on_page(open: bool) -> impl FnOnce(FormErrors) -> Refused {
+    move |errors| Refused {
+        errors,
+        confirm_open: open,
+        edit: None,
+    }
+}
+
+/// POST /admin/users/{id}/profile — the account's name, and the address to
+/// move it to when the box holds another one (a link is sent there: the
+/// account keeps its address until it is opened).
+pub async fn save_profile(
+    Viewer(viewer): Viewer,
+    State(state): State<AppState>,
+    ApiPath(raw_id): ApiPath<String>,
+    ApiForm(form): ApiForm<EditForm>,
+) -> Result<Response, Error> {
+    let Some(actor) = viewer else {
+        return see_other(&url("login", &[])?);
+    };
+    let id = parse_id(&raw_id, ErrorCode::UserNotFound)?;
+    let result = state
+        .usecases
+        .auth
+        .admin_update_user(
+            &actor,
+            id,
+            Some(form.full_name.clone()),
+            Some(form.new_email.clone()),
+            reason(&form.reason),
+        )
+        .await;
+    let flash = match result {
+        Ok(true) => Flash::EmailChangeSent,
+        _ => Flash::UserSaved,
+    };
+    after(&state, &actor, id, result, flash, |errors| Refused {
+        errors,
+        confirm_open: false,
+        edit: Some(form),
+    })
+    .await
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct ReasonForm {
+    pub reason: String,
+}
+
+/// POST /admin/users/{id}/password-reset — a reset link to the account's
+/// address (behind its confirmation).
+pub async fn send_password_reset(
+    Viewer(viewer): Viewer,
+    State(state): State<AppState>,
+    ApiPath(raw_id): ApiPath<String>,
+    ApiForm(form): ApiForm<ReasonForm>,
+) -> Result<Response, Error> {
+    let Some(actor) = viewer else {
+        return see_other(&url("login", &[])?);
+    };
+    let id = parse_id(&raw_id, ErrorCode::UserNotFound)?;
+    let result = state
+        .usecases
+        .auth
+        .admin_send_password_reset(&actor, id, reason(&form.reason))
+        .await;
+    after(
+        &state,
+        &actor,
+        id,
+        result,
+        Flash::PasswordResetSent,
+        on_page(true),
+    )
+    .await
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -374,7 +536,7 @@ pub async fn change_role(
         .admin
         .update_user_role(&actor, id, form.role_code)
         .await;
-    after(&state, &actor, id, result, Flash::UserRoleChanged, false).await
+    after(&state, &actor, id, result, Flash::UserRoleChanged, on_page(false)).await
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -408,5 +570,5 @@ pub async fn change_status(
     } else {
         Flash::UserDeactivated
     };
-    after(&state, &actor, id, result, flash, !activate).await
+    after(&state, &actor, id, result, flash, on_page(!activate)).await
 }

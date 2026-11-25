@@ -10,7 +10,7 @@
 //! Withdrawing the badge asks for confirmation and a reason (a dialog with
 //! JS, the same form on the page without); granting it is one button. Both
 //! set an explicit state, so a form sent twice changes nothing. The account
-//! form links an existing provider account by username, or creates one.
+//! form links an existing provider account by its email, or creates one.
 //! Turning a provider off (gone from every public page with its listings)
 //! also asks for confirmation and a reason; turning it on is one button.
 
@@ -275,7 +275,6 @@ pub async fn create(
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(default)]
 pub struct AccountForm {
-    pub username: String,
     pub email: String,
     #[serde(skip_serializing)]
     pub password: String,
@@ -473,7 +472,7 @@ fn provider_controls(
     let mut menu = Vec::new();
     let mut confirms = Vec::new();
     if can_assign {
-        let label = if p.linked_username.is_some() {
+        let label = if p.linked_email.is_some() {
             "admin.change_account"
         } else {
             "admin.assign"
@@ -484,7 +483,7 @@ fn provider_controls(
             ACCOUNT_SHEET,
             "success",
         ));
-        if let Some(username) = &p.linked_username {
+        if let Some(email) = &p.linked_email {
             menu.push(RecordAction::sheet(
                 text("admin.unlink_account"),
                 "fa-user-minus",
@@ -495,7 +494,7 @@ fn provider_controls(
                 button_class: "btn-warning",
                 ..Confirm::delete(
                     UNLINK_SHEET,
-                    named("admin.unlink_account_title", username),
+                    named("admin.unlink_account_title", email),
                     "fa-user-minus",
                     url("admin_provider_account_delete", &[("id", &id)])?,
                     text("admin.unlink_account"),
@@ -546,7 +545,7 @@ fn provider_controls(
     let mut badges = vec![
         Badge::new("account", p.is_active),
         Badge::new("verified", p.is_verified),
-        Badge::new("managed", p.linked_username.is_some()),
+        Badge::new("managed", p.linked_email.is_some()),
     ];
     if p.is_demo {
         badges.push(Badge::new("demo", true));
@@ -587,13 +586,14 @@ async fn provider_page(
         (_, TAB_PROFILE) if !can_edit => TAB_OVERVIEW,
         (_, tab) => tab,
     };
-    // A business without an account is usually set up with its phone number
-    // as the username, which is what the owner remembers.
+    // The account it has, else the business's own address: usually the
+    // owner's.
     let form = typed_account.unwrap_or_else(|| AccountForm {
-        username: provider
-            .linked_username
+        email: provider
+            .linked_email
             .clone()
-            .unwrap_or_else(|| provider.phone.clone()),
+            .or_else(|| provider.email.clone())
+            .unwrap_or_default(),
         ..AccountForm::default()
     });
     let (profile, profile_errors, errors) = match typed_profile {
@@ -632,7 +632,7 @@ async fn provider_page(
         (code == TAB_OFFERS).then_some(offers)
     });
     let (header, confirms) = provider_controls(state, actor, &provider)?;
-    let account_label = state.locale().text(if provider.linked_username.is_some() {
+    let account_label = state.locale().text(if provider.linked_email.is_some() {
         "admin.change_account"
     } else {
         "admin.assign"
@@ -840,7 +840,6 @@ pub async fn assign_account(
         .assign_provider_user(
             &actor,
             id,
-            form.username.clone(),
             form.email.clone(),
             form.password.clone(),
         )

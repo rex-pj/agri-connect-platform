@@ -10,7 +10,8 @@ use domain::{models::user::ActorRecord, Error, ErrorCode, Result};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Actor {
     pub user_id: i32,
-    pub username: String,
+    /// What pages call the account: its full name, else its email.
+    pub name: String,
     /// For display only (e.g. a badge). Access is never decided on it.
     pub role_code: String,
     permissions: BTreeSet<String>,
@@ -37,7 +38,7 @@ impl Actor {
     pub fn from_record(record: ActorRecord) -> Option<Self> {
         record.is_active.then(|| Self {
             user_id: record.user_id,
-            username: record.username,
+            name: record.name,
             role_code: record.role_code,
             permissions: record.permissions.into_iter().collect(),
         })
@@ -74,7 +75,7 @@ mod tests {
     fn actor(perms: &[&str], active: bool) -> Option<Actor> {
         Actor::from_record(ActorRecord {
             user_id: 1,
-            username: "u".into(),
+            name: "u".into(),
             role_code: "admin".into(),
             is_active: active,
             permissions: perms.iter().map(|p| (*p).to_owned()).collect(),

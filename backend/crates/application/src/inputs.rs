@@ -214,7 +214,6 @@ pub struct PriceInput {
 
 /// A provider's sign-up (`AuthUseCase::register`).
 pub struct RegisterInput {
-    pub username: String,
     pub email: String,
     pub password: String,
     pub full_name: Option<String>,

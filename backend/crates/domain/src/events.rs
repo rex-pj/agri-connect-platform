@@ -84,9 +84,9 @@ pub enum Change {
         added: Vec<String>,
         removed: Vec<String>,
     },
-    /// A business is now managed by the provider account `username`.
+    /// A business (or partner) is now managed by the account `email`.
     AccountAssigned {
-        username: String,
+        email: String,
     },
     /// A business no longer has a managing account (the account stays).
     AccountUnlinked,
@@ -130,6 +130,16 @@ pub enum AuthEvent {
     /// and the session was ended.
     SessionReused,
     EmailVerified,
+    /// A link sent to another address was opened: the account moved to it.
+    EmailChanged,
+    /// The account asked to move to another address (the link is sent).
+    EmailChangeRequested,
+    /// The account changed the name it is shown by.
+    ProfileUpdated,
+    /// The account signed out every other device.
+    OtherSessionsEnded,
+    /// An admin had a password-reset link sent to the account.
+    PasswordResetSent,
 }
 
 impl AuthEvent {
@@ -142,6 +152,11 @@ impl AuthEvent {
             AuthEvent::PasswordReset => "reset_password",
             AuthEvent::SessionReused => "refresh_token_reused",
             AuthEvent::EmailVerified => "verify_email",
+            AuthEvent::EmailChanged => "change_email",
+            AuthEvent::EmailChangeRequested => "request_email_change",
+            AuthEvent::ProfileUpdated => "update_profile",
+            AuthEvent::OtherSessionsEnded => "end_other_sessions",
+            AuthEvent::PasswordResetSent => "send_password_reset",
         }
     }
 }

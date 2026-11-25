@@ -24,7 +24,6 @@ pub enum SearchColumn {
     ServiceDescription,
     ProductName,
     ProductDescription,
-    UserUsername,
     UserFullName,
     UserEmail,
     InquiryRequesterName,
@@ -57,7 +56,6 @@ impl SearchColumn {
             Self::ProductDescription => {
                 (product::Entity, product::Column::Description).into_column_ref()
             }
-            Self::UserUsername => (user::Entity, user::Column::Username).into_column_ref(),
             Self::UserFullName => (user::Entity, user::Column::FullName).into_column_ref(),
             Self::UserEmail => (user::Entity, user::Column::Email).into_column_ref(),
             Self::InquiryRequesterName => {
@@ -106,7 +104,7 @@ pub const PRODUCT_SEARCH_COLUMNS: &[SearchColumn] = &[ProductName, ProductDescri
 /// `admin_product_search`).
 const PRODUCT_NAME_SEARCH_COLUMNS: &[SearchColumn] = &[ProductName];
 const SERVICE_NAME_SEARCH_COLUMNS: &[SearchColumn] = &[ServiceName];
-pub const ADMIN_USER_SEARCH_COLUMNS: &[SearchColumn] = &[UserUsername, UserFullName, UserEmail];
+pub const ADMIN_USER_SEARCH_COLUMNS: &[SearchColumn] = &[UserFullName, UserEmail];
 /// The admin queues' searches: who sent it and what it says (a contact
 /// request or a review also by its provider's name, `own_or_business_matches`).
 const ADMIN_INQUIRY_SEARCH_COLUMNS: &[SearchColumn] = &[InquiryRequesterName];

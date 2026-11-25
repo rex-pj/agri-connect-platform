@@ -321,11 +321,12 @@ impl AppRouting {
             )
             // /setup replaces the old /initialize verb
             .route("/api/admin/setup", post(AuthHandler::create_first_admin))
-            // A signed-in write, but each try checks the current password.
+            // Signed-in writes, but each try checks the current password.
             .route(
                 "/api/users/me/password",
                 patch(AuthHandler::change_password),
             )
+            .route("/api/users/me/email", post(AuthHandler::change_email))
             .layer(limiter(&config.limiters.auth, Scope::AllRequests));
 
         // ── AUTH pages: the same budget as the auth API, on the writes only ──
@@ -355,8 +356,9 @@ impl AppRouting {
                 "/setup",
                 get(pages::setup::setup_page).post(pages::setup::setup),
             )
-            // As the API twin: each try checks the current password.
+            // As the API twins: each try checks the current password.
             .route("/account/password", post(pages::account::change_password))
+            .route("/account/email", post(pages::account::change_email))
             .layer(limiter(&config.limiters.auth, Scope::WritesOnly));
 
         // The demo data page: an admin action, on the signed-in budget.
@@ -384,6 +386,14 @@ impl AppRouting {
             .route(
                 "/admin/users/{id}/status",
                 post(pages::admin::users::change_status),
+            )
+            .route(
+                "/admin/users/{id}/profile",
+                post(pages::admin::users::save_profile),
+            )
+            .route(
+                "/admin/users/{id}/password-reset",
+                post(pages::admin::users::send_password_reset),
             )
             .route(
                 "/admin/categories",
@@ -649,12 +659,19 @@ impl AppRouting {
             .route(
                 "/account/email-verification",
                 post(pages::account::send_email_verification),
-            );
+            )
+            .route("/account/profile", post(pages::account::save_profile))
+            .route("/account/sessions", post(pages::account::end_other_sessions));
 
         // ── USER routes (authenticated, signed-in budget) ───────────────────
         // Changing the password is under the auth budget (`auth_routes`,
         // `auth_pages`): each try checks a password.
-        let user_routes = Router::new().route("/api/users/me", get(AuthHandler::me));
+        let user_routes = Router::new()
+            .route(
+                "/api/users/me",
+                get(AuthHandler::me).patch(AuthHandler::update_me),
+            )
+            .route("/api/users/me/sessions", delete(AuthHandler::end_sessions));
 
         // ── ADMIN routes ─────────────────────────────────────────────────────
         let admin_routes = Router::new()
@@ -690,7 +707,14 @@ impl AppRouting {
             .route("/api/admin/roles/{id}", get(RoleHandler::get_by_id))
             // Users
             .route("/api/admin/users", get(AdminHandler::list_users))
-            .route("/api/admin/users/{id}", get(AdminHandler::get_user_detail))
+            .route(
+                "/api/admin/users/{id}",
+                get(AdminHandler::get_user_detail).put(AdminHandler::update_user),
+            )
+            .route(
+                "/api/admin/users/{id}/password-resets",
+                post(AdminHandler::send_user_password_reset),
+            )
             .route(
                 "/api/admin/users/{id}/role",
                 patch(AdminHandler::update_user_role),

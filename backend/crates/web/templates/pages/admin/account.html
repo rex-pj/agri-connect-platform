@@ -7,7 +7,7 @@
 {% block title %}{{ t(key="nav.account") }} | {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
-{{ header::admin_header(title=b.me.full_name | default(value=b.me.username), icon="fa-circle-user", sub=b.role_name) }}
+{{ header::admin_header(title=b.me.name, icon="fa-circle-user", sub=b.role_name) }}
 <div class="admin-body">
   {{ account::account_sections(p=b, limits=limits, logout=url_for(name="admin_logout"), card="admin-section", title_class="admin-section__title") }}
 </div>

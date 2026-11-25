@@ -5,7 +5,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    sea_query::{Expr, SimpleExpr},
+    sea_query::{Expr, Order, Query, SimpleExpr},
     ColumnTrait, ConnectionTrait, DatabaseConnection, DbErr, EntityTrait, FromQueryResult,
     JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set, SqlErr,
     TransactionTrait,
@@ -17,8 +17,8 @@ use domain::{
         admin_list::AdminFilter,
         role::UserRole,
         user::{
-            ExistingUser, LoginName, NewResetToken, NewUser, UserAdmin, UserAdminDetail,
-            UserByEmail, UserCredentials, UserMe,
+            ClaimedEmail, ExistingUser, NewEmailVerification, NewResetToken, NewUser, UserAdmin,
+            UserAdminDetail, UserByEmail, UserCredentials, UserMe,
         },
     },
     repositories::user_repository_trait::UserRepositoryTrait,
@@ -29,7 +29,7 @@ use domain::{Error, ErrorCode};
 use crate::admin_list::{admin_order, switch_state, OrderColumns};
 use crate::repositories::{business_repository::insert_registration_business, unique_or_internal};
 use crate::search::{search_condition, ADMIN_USER_SEARCH_COLUMNS};
-use crate::sql::{advisory_xact_lock, null, username_of, PgType, QueryAs};
+use crate::sql::{account_name_of, advisory_xact_lock, null, scalar, PgType, QueryAs};
 use crate::{
     db_types::DateTimeWithTimeZone,
     entities::{
@@ -53,7 +53,7 @@ impl UserRepository {
 #[derive(FromQueryResult)]
 struct CredentialsRow {
     id: i32,
-    username: String,
+    email: String,
     password_hash: String,
     role: String,
     /// Fetched explicitly so the application layer can enforce the
@@ -64,24 +64,24 @@ struct CredentialsRow {
 
 #[derive(FromQueryResult)]
 struct UserMeRow {
-    username: String,
     email: String,
     full_name: Option<String>,
     role_code: String,
     created_on: DateTimeWithTimeZone,
     email_verified: bool,
+    pending_email: Option<String>,
 }
 
 #[derive(FromQueryResult)]
-struct UserByUsernameRow {
+struct AccountByEmailRow {
     id: i32,
     role: String,
+    email_verified: bool,
 }
 
 #[derive(FromQueryResult)]
 struct UserAdminRow {
     id: i32,
-    username: String,
     email: String,
     full_name: Option<String>,
     role_code: String,
@@ -97,13 +97,14 @@ struct UserAdminRow {
 #[derive(FromQueryResult)]
 struct UserAdminDetailRow {
     id: i32,
-    username: String,
     email: String,
     full_name: Option<String>,
     role_code: String,
     role_name: String,
     is_active: bool,
     created_on: DateTimeWithTimeZone,
+    email_verified: bool,
+    pending_email: Option<String>,
 }
 
 /// Key of the advisory lock that serialises first-admin creation.
@@ -137,7 +138,6 @@ pub(crate) async fn insert_user<C: ConnectionTrait>(db: &C, user: NewUser) -> Re
         .ok_or_else(|| Error::new(ErrorCode::RoleNotFound))?;
 
     let new_user = user::ActiveModel {
-        username: Set(user.username),
         email: Set(user.email),
         password_hash: Set(user.password_hash),
         role_id: Set(role_model.id),
@@ -151,19 +151,8 @@ pub(crate) async fn insert_user<C: ConnectionTrait>(db: &C, user: NewUser) -> Re
         .exec(db)
         .await
         .map(|r| r.last_insert_id)
-        .map_err(|e| {
-            // Both columns are UNIQUE; the constraint name says which one a
-            // concurrent sign-up took first.
-            let email_taken = match e.sql_err() {
-                Some(SqlErr::UniqueConstraintViolation(m)) => m.contains("email"),
-                _ => false,
-            };
-            if email_taken {
-                Error::field("email", ErrorCode::EmailTaken)
-            } else {
-                unique_or_internal(e, "username", ErrorCode::UsernameTaken, "user create")
-            }
-        })
+        // A concurrent sign-up took the address first.
+        .map_err(|e| unique_or_internal(e, "email", ErrorCode::EmailTaken, "user create"))
 }
 
 impl UserRepository {
@@ -178,7 +167,7 @@ impl UserRepository {
         UserEntity::find()
             .select_only()
             .column(user::Column::Id)
-            .column(user::Column::Username)
+            .column(user::Column::Email)
             .column(user::Column::PasswordHash)
             .column(user::Column::IsActive)
             .column(user::Column::LockedUntil)
@@ -192,7 +181,7 @@ impl UserRepository {
             .map(|opt| {
                 opt.map(|r| UserCredentials {
                     id: r.id,
-                    username: r.username,
+                    email: r.email,
                     password_hash: r.password_hash,
                     role: r.role,
                     is_active: r.is_active,
@@ -208,12 +197,9 @@ impl UserRepository {
 
 #[async_trait]
 impl UserRepositoryTrait for UserRepository {
-    async fn find_credentials(&self, login: &LoginName) -> Result<Option<UserCredentials>, Error> {
-        let condition = match login {
-            LoginName::Username(username) => user::Column::Username.eq(username.as_str()),
-            LoginName::Email(email) => user::Column::Email.eq(email.as_str()),
-        };
-        self.credentials_where(condition, "find_credentials").await
+    async fn find_credentials(&self, email: &str) -> Result<Option<UserCredentials>, Error> {
+        self.credentials_where(user::Column::Email.eq(email), "find_credentials")
+            .await
     }
 
     async fn count_by_role(&self, role: &str) -> Result<i64, Error> {
@@ -264,25 +250,27 @@ impl UserRepositoryTrait for UserRepository {
         Ok(id)
     }
 
-    async fn find_by_username(&self, username: &str) -> Result<Option<ExistingUser>, Error> {
+    async fn find_account_by_email(&self, email: &str) -> Result<Option<ExistingUser>, Error> {
         UserEntity::find()
             .select_only()
             .column(user::Column::Id)
             .column_as(role::Column::Code, QueryAs::Role)
+            .expr_as(email_verified(), QueryAs::EmailVerified)
             .join(JoinType::InnerJoin, user::Relation::Role.def())
-            .filter(user::Column::Username.eq(username))
+            .filter(user::Column::Email.eq(email))
             .filter(user::Column::DeletedAt.is_null())
-            .into_model::<UserByUsernameRow>()
+            .into_model::<AccountByEmailRow>()
             .one(self.db.as_ref())
             .await
             .map(|opt| {
                 opt.map(|r| ExistingUser {
                     id: r.id,
                     role: r.role,
+                    email_verified: r.email_verified,
                 })
             })
             .map_err(|e| {
-                error!("user find_by_username error: {e}");
+                error!("user find_account_by_email error: {e}");
                 Error::internal("Database error.")
             })
     }
@@ -321,7 +309,6 @@ impl UserRepositoryTrait for UserRepository {
         let query = UserEntity::find()
             .select_only()
             .column(user::Column::Id)
-            .column(user::Column::Username)
             .column(user::Column::Email)
             .column(user::Column::FullName)
             .column_as(role::Column::Code, QueryAs::RoleCode)
@@ -331,11 +318,11 @@ impl UserRepositoryTrait for UserRepository {
             .column(user::Column::CreatedOn)
             .column(user::Column::UpdatedOn)
             .expr_as(
-                username_of((user::Entity, user::Column::CreatedBy)),
+                account_name_of((user::Entity, user::Column::CreatedBy)),
                 QueryAs::CreatedByName,
             )
             .expr_as(
-                username_of((user::Entity, user::Column::UpdatedBy)),
+                account_name_of((user::Entity, user::Column::UpdatedBy)),
                 QueryAs::UpdatedByName,
             )
             .join(JoinType::LeftJoin, user::Relation::Role.def())
@@ -346,7 +333,7 @@ impl UserRepositoryTrait for UserRepository {
             filter.sort,
             OrderColumns {
                 created: user::Column::CreatedOn,
-                name: user::Column::Username,
+                name: user::Column::Email,
                 id: user::Column::Id,
             },
             |q| q.order_by_asc(user::Column::Id),
@@ -360,7 +347,6 @@ impl UserRepositoryTrait for UserRepository {
             rows.into_iter()
                 .map(|r| UserAdmin {
                     id: r.id,
-                    username: r.username,
                     email: r.email,
                     full_name: r.full_name,
                     role_code: r.role_code,
@@ -384,13 +370,14 @@ impl UserRepositoryTrait for UserRepository {
         UserEntity::find()
             .select_only()
             .column(user::Column::Id)
-            .column(user::Column::Username)
             .column(user::Column::Email)
             .column(user::Column::FullName)
             .column_as(role::Column::Code, QueryAs::RoleCode)
             .column_as(role::Column::Name, QueryAs::RoleName)
             .column(user::Column::IsActive)
             .column(user::Column::CreatedOn)
+            .expr_as(email_verified(), QueryAs::EmailVerified)
+            .expr_as(pending_email(), QueryAs::PendingEmail)
             .join(JoinType::InnerJoin, user::Relation::Role.def())
             .filter(user::Column::Id.eq(id))
             .filter(user::Column::DeletedAt.is_null())
@@ -400,13 +387,14 @@ impl UserRepositoryTrait for UserRepository {
             .map(|opt| {
                 opt.map(|r| UserAdminDetail {
                     id: r.id,
-                    username: r.username,
                     email: r.email,
                     full_name: r.full_name,
                     role_code: r.role_code,
                     role_name: r.role_name,
                     is_active: r.is_active,
                     created_on: r.created_on.with_timezone(&Utc),
+                    email_verified: r.email_verified,
+                    pending_email: r.pending_email,
                 })
             })
             .map_err(|e| {
@@ -466,15 +454,12 @@ impl UserRepositoryTrait for UserRepository {
     async fn find_me(&self, user_id: i32) -> Result<Option<UserMe>, Error> {
         UserEntity::find()
             .select_only()
-            .column(user::Column::Username)
             .column(user::Column::Email)
             .column(user::Column::FullName)
             .column(user::Column::CreatedOn)
             .column_as(role::Column::Code, QueryAs::RoleCode)
-            .expr_as(
-                Expr::col((user::Entity, user::Column::EmailVerifiedAt)).is_not_null(),
-                QueryAs::EmailVerified,
-            )
+            .expr_as(email_verified(), QueryAs::EmailVerified)
+            .expr_as(pending_email(), QueryAs::PendingEmail)
             .join(JoinType::InnerJoin, user::Relation::Role.def())
             .filter(user::Column::Id.eq(user_id))
             .filter(user::Column::IsActive.eq(true))
@@ -484,12 +469,12 @@ impl UserRepositoryTrait for UserRepository {
             .await
             .map(|opt| {
                 opt.map(|r| UserMe {
-                    username: r.username,
                     email: r.email,
                     full_name: r.full_name,
                     role: r.role_code,
                     created_on: r.created_on.with_timezone(&Utc),
                     email_verified: r.email_verified,
+                    pending_email: r.pending_email,
                 })
             })
             .map_err(|e| {
@@ -569,6 +554,26 @@ impl UserRepositoryTrait for UserRepository {
                 Error::internal("Failed to update password.")
             })?;
 
+        if result.rows_affected == 0 {
+            return Err(Error::new(ErrorCode::UserNotFound));
+        }
+        Ok(())
+    }
+
+    async fn update_full_name(&self, user_id: i32, full_name: Option<&str>) -> Result<(), Error> {
+        let result = UserEntity::update_many()
+            .col_expr(
+                user::Column::FullName,
+                Expr::value(full_name.map(str::to_owned)),
+            )
+            .filter(user::Column::Id.eq(user_id))
+            .filter(user::Column::DeletedAt.is_null())
+            .exec(self.db.as_ref())
+            .await
+            .map_err(|e| {
+                error!("user update_full_name error: {e}");
+                Error::internal("Failed to update the name.")
+            })?;
         if result.rows_affected == 0 {
             return Err(Error::new(ErrorCode::UserNotFound));
         }
@@ -704,11 +709,12 @@ impl UserRepositoryTrait for UserRepository {
         Ok(resets.rows_affected + confirmations.rows_affected)
     }
 
-    async fn create_email_verification(&self, t: NewResetToken) -> Result<(), Error> {
+    async fn create_email_verification(&self, t: NewEmailVerification) -> Result<(), Error> {
         EmailVerificationToken::insert(email_verification_token::ActiveModel {
             user_id: Set(t.user_id),
             token_hash: Set(t.token_hash),
             expires_at: Set(t.expires_at.fixed_offset()),
+            new_email: Set(t.new_email),
             ..Default::default()
         })
         .exec(self.db.as_ref())
@@ -736,12 +742,34 @@ impl UserRepositoryTrait for UserRepository {
             })
     }
 
-    async fn claim_email_verification(&self, token_hash: &str) -> Result<Option<i32>, Error> {
+    async fn retire_email_changes(&self, user_id: i32) -> Result<(), Error> {
+        EmailVerificationToken::update_many()
+            .col_expr(
+                email_verification_token::Column::UsedAt,
+                Expr::current_timestamp().into(),
+            )
+            .filter(email_verification_token::Column::UserId.eq(user_id))
+            .filter(email_verification_token::Column::UsedAt.is_null())
+            .filter(email_verification_token::Column::NewEmail.is_not_null())
+            .exec(self.db.as_ref())
+            .await
+            .map(|_| ())
+            .map_err(|e| {
+                error!("retire_email_changes error: {e}");
+                Error::internal("System error.")
+            })
+    }
+
+    async fn claim_email_verification(
+        &self,
+        token_hash: &str,
+    ) -> Result<Option<ClaimedEmail>, Error> {
         let fail = |e: DbErr| {
             error!("claim_email_verification error: {e}");
             Error::internal("System error.")
         };
-        // The link is spent and the address stamped together, or neither.
+        // The link is spent and the address stamped (and moved to) together,
+        // or nothing happens: a failure leaves the link to be opened again.
         let txn = self.db.begin().await.map_err(fail)?;
         let claimed = EmailVerificationToken::update_many()
             .col_expr(
@@ -763,17 +791,69 @@ impl UserRepositoryTrait for UserRepository {
         let Some(token) = claimed.into_iter().next() else {
             return Ok(None);
         };
-        UserEntity::update_many()
+        // The account as it is now, held until the commit: two links opened
+        // at once move it one after the other.
+        let Some(account) = UserEntity::find_by_id(token.user_id)
+            .filter(user::Column::DeletedAt.is_null())
+            .lock_exclusive()
+            .one(&txn)
+            .await
+            .map_err(fail)?
+        else {
+            return Ok(None);
+        };
+        let moved_to = token.new_email.filter(|to| *to != account.email);
+        let mut update = UserEntity::update_many()
             .col_expr(
                 user::Column::EmailVerifiedAt,
                 Expr::current_timestamp().into(),
             )
-            .filter(user::Column::Id.eq(token.user_id))
-            .exec(&txn)
-            .await
-            .map_err(fail)?;
+            .filter(user::Column::Id.eq(account.id));
+        if let Some(to) = &moved_to {
+            update = update.col_expr(user::Column::Email, Expr::value(to.clone()));
+        }
+        // Another account took the address since the link was sent: no form
+        // field to put it on, the link's page says it.
+        update.exec(&txn).await.map_err(|e| {
+            if matches!(e.sql_err(), Some(SqlErr::UniqueConstraintViolation(_))) {
+                Error::new(ErrorCode::EmailTaken)
+            } else {
+                fail(e)
+            }
+        })?;
+        if moved_to.is_some() {
+            // Every other link went to the old address or names another one:
+            // none of them may act on the account now.
+            EmailVerificationToken::update_many()
+                .col_expr(
+                    email_verification_token::Column::UsedAt,
+                    Expr::current_timestamp().into(),
+                )
+                .filter(email_verification_token::Column::UserId.eq(account.id))
+                .filter(email_verification_token::Column::UsedAt.is_null())
+                .exec(&txn)
+                .await
+                .map_err(fail)?;
+            PasswordResetToken::update_many()
+                .col_expr(
+                    password_reset_token::Column::UsedAt,
+                    Expr::current_timestamp().into(),
+                )
+                .filter(password_reset_token::Column::UserId.eq(account.id))
+                .filter(password_reset_token::Column::UsedAt.is_null())
+                .exec(&txn)
+                .await
+                .map_err(fail)?;
+        }
         txn.commit().await.map_err(fail)?;
-        Ok(Some(token.user_id))
+        let moved = moved_to.is_some();
+        Ok(Some(ClaimedEmail {
+            user_id: account.id,
+            confirmed_previous: (moved && account.email_verified_at.is_some())
+                .then(|| account.email.clone()),
+            email: moved_to.unwrap_or(account.email),
+            moved,
+        }))
     }
 
     async fn record_failed_login(
@@ -839,7 +919,7 @@ impl UserRepositoryTrait for UserRepository {
     }
 }
 
-/// The admin list's criteria: the words in the username, name or email,
+/// The admin list's criteria: the words in the name or email,
 /// and the on / off chip.
 fn admin_condition(filter: &AdminFilter) -> sea_orm::Condition {
     admin_condition_base(filter).add(crate::admin_list::created_between(
@@ -862,4 +942,35 @@ fn admin_condition_base(filter: &AdminFilter) -> sea_orm::Condition {
         Some(id) => cond.add(user::Column::RoleId.eq(id)),
         None => cond,
     }
+}
+
+/// `users.email_verified_at IS NOT NULL`.
+fn email_verified() -> SimpleExpr {
+    Expr::col((user::Entity, user::Column::EmailVerifiedAt)).is_not_null()
+}
+
+/// The address the account's newest live link would move it to (unused, not
+/// run out, with a `new_email`), as a subquery on the `users` row.
+fn pending_email() -> SimpleExpr {
+    scalar(
+        Query::select()
+            .column(email_verification_token::Column::NewEmail)
+            .from(EmailVerificationToken)
+            .and_where(
+                Expr::col((
+                    EmailVerificationToken,
+                    email_verification_token::Column::UserId,
+                ))
+                .equals((user::Entity, user::Column::Id)),
+            )
+            .and_where(Expr::col(email_verification_token::Column::UsedAt).is_null())
+            .and_where(Expr::col(email_verification_token::Column::NewEmail).is_not_null())
+            .and_where(
+                Expr::col(email_verification_token::Column::ExpiresAt)
+                    .gt(Expr::current_timestamp()),
+            )
+            .order_by(email_verification_token::Column::Id, Order::Desc)
+            .limit(1)
+            .to_owned(),
+    )
 }

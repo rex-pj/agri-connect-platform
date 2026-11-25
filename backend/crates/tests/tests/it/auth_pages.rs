@@ -25,8 +25,7 @@ async fn count(e: &Env, sql: &str) -> i64 {
 
 const ADMIN: &[(&str, &str)] = &[
     ("full_name", "Quản Trị"),
-    ("email", "admin@example.vn"),
-    ("username", "quantri"),
+    ("email", "quantri@example.vn"),
     ("password", "matkhau123"),
     ("password2", "matkhau123"),
 ];
@@ -138,7 +137,7 @@ async fn setup_can_load_the_demo_data_and_rejects_a_mistyped_password() {
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     let page = body_text(res).await;
     assert!(page.contains("Mật khẩu xác nhận không khớp."));
-    assert!(page.contains(r#"value="quantri""#), "username kept");
+    assert!(page.contains(r#"value="quantri@example.vn""#), "email kept");
     assert!(!page.contains("matkhau"), "passwords are never echoed");
     assert_eq!(count(&e, "SELECT count(*) AS n FROM users").await, 0);
 
@@ -159,23 +158,23 @@ async fn login_lands_by_permission_and_locks_after_repeated_failures() {
         &e.router,
         post_form(
             "/login",
-            &[("username", "nongdan"), ("password", "sai-mat-khau")],
+            &[("email", "nongdan@example.vn"), ("password", "sai-mat-khau")],
             None,
         ),
     )
     .await;
     assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
     let page = body_text(res).await;
-    assert!(page.contains("tên đăng nhập hoặc mật khẩu."));
-    assert!(page.contains(r#"value="nongdan""#));
+    assert!(page.contains("Sai email hoặc mật khẩu."));
+    assert!(page.contains(r#"value="nongdan@example.vn""#));
 
-    // The box takes the email too.
+    // Folded as stored.
     let res = send(
         &e.router,
         post_form(
             "/login",
             &[
-                ("username", "NongDan@example.vn"),
+                ("email", "NongDan@example.vn"),
                 ("password", "matkhau123"),
             ],
             None,
@@ -189,7 +188,7 @@ async fn login_lands_by_permission_and_locks_after_repeated_failures() {
         &e.router,
         post_form(
             "/login",
-            &[("username", "nongdan"), ("password", "matkhau123")],
+            &[("email", "nongdan@example.vn"), ("password", "matkhau123")],
             None,
         ),
     )
@@ -207,7 +206,7 @@ async fn login_lands_by_permission_and_locks_after_repeated_failures() {
             &e.router,
             post_form(
                 "/login",
-                &[("username", "nongdan"), ("password", "sai")],
+                &[("email", "nongdan@example.vn"), ("password", "sai")],
                 None,
             ),
         )
@@ -217,7 +216,7 @@ async fn login_lands_by_permission_and_locks_after_repeated_failures() {
         &e.router,
         post_form(
             "/login",
-            &[("username", "nongdan"), ("password", "matkhau123")],
+            &[("email", "nongdan@example.vn"), ("password", "matkhau123")],
             None,
         ),
     )
@@ -238,7 +237,6 @@ async fn registration_signs_the_provider_in_or_says_what_to_fix() {
         ("business_phone", "0901234567"),
         ("full_name", "Út Hiền"),
         ("email", "uthien@example.vn"),
-        ("username", "uthien"),
         ("password", "matkhau123"),
         ("password2", "matkhau123"),
     ];
@@ -264,21 +262,15 @@ async fn registration_signs_the_provider_in_or_says_what_to_fix() {
     // Too long for the columns: field messages, not a server error.
     let long_business = "V".repeat(201);
     let long_name = "Ú".repeat(201);
-    let long_user = "u".repeat(51);
     let mut long = good.to_vec();
     long[0] = ("business_name", &long_business);
     long[2] = ("full_name", &long_name);
-    long[4] = ("username", &long_user);
     let res = send(&e.router, post_form("/register", &long, None)).await;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     let page = body_text(res).await;
-    for field in ["r_biz_name", "r_fullname", "r_user"] {
+    for field in ["r_biz_name", "r_fullname"] {
         assert!(page.contains(&format!(r#"id="{field}-error""#)), "{field}");
     }
-    let mut spaced = good.to_vec();
-    spaced[4] = ("username", "ut hien");
-    let page = body_text(send(&e.router, post_form("/register", &spaced, None)).await).await;
-    assert!(page.contains("Tên đăng nhập không được có khoảng trắng."));
     assert_eq!(count(&e, "SELECT count(*) AS n FROM users").await, 0);
 
     let res = send(&e.router, post_form("/register", &good, None)).await;
@@ -291,7 +283,7 @@ async fn registration_signs_the_provider_in_or_says_what_to_fix() {
         count(
             &e,
             "SELECT count(*) AS n FROM businesses b JOIN users u ON u.id = b.owner_id \
-             WHERE u.username = 'uthien'"
+             WHERE u.email = 'uthien@example.vn'"
         )
         .await,
         1
@@ -376,7 +368,7 @@ async fn the_demo_data_page_is_for_admins_and_removal_needs_a_tick() {
             &e.router,
             post_form(
                 "/login",
-                &[("username", "nongdan"), ("password", "matkhau123")],
+                &[("email", "nongdan@example.vn"), ("password", "matkhau123")],
                 None,
             ),
         )
@@ -427,7 +419,7 @@ async fn a_login_form_posted_from_another_site_is_refused() {
     set_up(&e, &[]).await;
     let mut req = post_form(
         "/login",
-        &[("username", "quantri"), ("password", "matkhau123")],
+        &[("email", "quantri@example.vn"), ("password", "matkhau123")],
         None,
     );
     req.headers_mut()
@@ -461,7 +453,7 @@ async fn a_sign_up_confirms_its_address_with_the_emailed_link() {
     )
     .await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
-    assert_eq!(location(&res), "/account");
+    assert_eq!(location(&res), "/account#email");
     assert_eq!(e.mail.verifications(2).await.len(), 2);
 
     // Opening the link (a mail scanner does too) confirms nothing.

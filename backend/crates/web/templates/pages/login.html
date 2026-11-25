@@ -20,7 +20,7 @@
 {% else %}
 <form class="auth-form" method="post" action="{{ url_for(name="login") }}">
   {% if page.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=page.errors.message) }}{% endif %}
-  {{ field::input(id="lg_user", name="username", label=t(key="form.login_name"), value=page.username, required=true, autocomplete="username") }}
+  {{ field::input(id="lg_email", name="email", label=t(key="form.email"), type="email", value=page.email, error=page.errors.fields.email | default(value=""), required=true, autocomplete="username", inputmode="email") }}
   {{ field::input(id="lg_pw", name="password", label=t(key="form.password"), type="password", required=true, autocomplete="current-password") }}
   <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-right-to-bracket") }} {{ t(key="account_menu.login") }}</button>
   <p class="text-center mb-0"><a class="text-muted small" href="{{ url_for(name="forgot_password") }}">{{ t(key="auth.forgot_link") }}</a></p>

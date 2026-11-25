@@ -62,6 +62,7 @@ pub enum EmailVerificationTokens {
     ExpiresAt,
     UsedAt,
     CreatedOn,
+    NewEmail,
 }
 
 #[derive(DeriveIden, Clone, Copy)]

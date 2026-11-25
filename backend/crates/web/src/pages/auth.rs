@@ -84,14 +84,13 @@ fn reshow<T: Serialize>(
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct LoginForm {
-    /// The username or the email (`LoginName`).
-    pub username: String,
+    pub email: String,
     pub password: String,
 }
 
 #[derive(Serialize)]
 pub struct LoginPage {
-    pub username: String,
+    pub email: String,
     pub errors: FormErrors,
     /// Too many wrong passwords: the lockout panel replaces the form.
     pub locked: bool,
@@ -114,7 +113,7 @@ pub async fn login_page(
     }
     let registration_open = state.usecases.settings.current().await?.registration_open();
     let page = LoginPage {
-        username: String::new(),
+        email: String::new(),
         errors: FormErrors::default(),
         locked: false,
         reset: flash.0 == Some(Flash::PasswordReset),
@@ -140,7 +139,7 @@ pub async fn login(
     match state
         .usecases
         .auth
-        .login(form.username.clone(), form.password, &client)
+        .login(form.email.clone(), form.password, &client)
         .await
     {
         Ok(login) => signed_in(&state, policy, login, None).await,
@@ -149,7 +148,7 @@ pub async fn login(
             let registration_open = state.usecases.settings.current().await?.registration_open();
             reshow(&state, &url("login")?, err, "pages/login.html", |errors| {
                 LoginPage {
-                    username: form.username,
+                    email: form.email,
                     errors,
                     locked,
                     reset: false,
@@ -169,7 +168,6 @@ pub struct RegisterForm {
     pub business_phone: String,
     pub full_name: String,
     pub email: String,
-    pub username: String,
     #[serde(skip_serializing)]
     pub password: String,
     #[serde(skip_serializing)]
@@ -222,7 +220,6 @@ pub async fn register(
                 .usecases
                 .auth
                 .register(application::inputs::RegisterInput {
-                    username: form.username.clone(),
                     email: form.email.clone(),
                     password: form.password.clone(),
                     full_name,
@@ -340,13 +337,17 @@ pub struct VerifyEmailForm {
     pub token: String,
 }
 
-#[derive(Serialize)]
+#[derive(Default, Serialize)]
 pub struct VerifyEmailPage {
     pub token: String,
     /// No token, or one that is unknown, already used or run out.
     pub invalid: bool,
     /// The address was just confirmed.
     pub done: bool,
+    /// The link moved the account to this address.
+    pub moved_to: Option<String>,
+    /// Another account took the address since the link was sent.
+    pub taken: bool,
 }
 
 fn verify_email_view(
@@ -373,7 +374,7 @@ pub async fn verify_email_page(
     let page = VerifyEmailPage {
         invalid: token.is_empty(),
         token,
-        done: false,
+        ..VerifyEmailPage::default()
     };
     verify_email_view(&state, axum::http::StatusCode::OK, &page)
 }
@@ -384,22 +385,30 @@ pub async fn verify_email(
     ApiForm(form): ApiForm<VerifyEmailForm>,
 ) -> Result<Response, Error> {
     match state.usecases.auth.verify_email(&form.token).await {
-        Ok(()) => verify_email_view(
+        Ok(confirmed) => verify_email_view(
             &state,
             axum::http::StatusCode::OK,
             &VerifyEmailPage {
-                token: String::new(),
-                invalid: false,
                 done: true,
+                moved_to: confirmed.moved.then_some(confirmed.email),
+                ..VerifyEmailPage::default()
             },
         ),
         Err(err) if err.code() == ErrorCode::EmailVerificationInvalid => verify_email_view(
             &state,
             err.kind().status(),
             &VerifyEmailPage {
-                token: String::new(),
                 invalid: true,
-                done: false,
+                ..VerifyEmailPage::default()
+            },
+        ),
+        // The link stays unspent; the account keeps its address.
+        Err(err) if err.code() == ErrorCode::EmailTaken => verify_email_view(
+            &state,
+            err.kind().status(),
+            &VerifyEmailPage {
+                taken: true,
+                ..VerifyEmailPage::default()
             },
         ),
         Err(err) => Err(err),

@@ -563,7 +563,7 @@ async fn admin_lists_find_records_by_name_without_diacritics() {
     assert!(page(&e, "/admin/supplies?q=khong-co", &admin)
         .await
         .contains("Không có kết quả cho “khong-co”"));
-    // Accounts by username, shops by name.
+    // Accounts by name or email, shops by name.
     let users = page(&e, "/admin/users?q=NONGDAN", &admin).await;
     assert!(users.contains("nongdan"));
     assert!(page(&e, "/admin/providers?q=vuon", &admin)

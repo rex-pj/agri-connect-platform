@@ -154,7 +154,6 @@ pub(crate) struct DemoPartner {
 /// account signs in with the one password given.
 #[derive(Deserialize, Clone)]
 pub(crate) struct DemoAccount {
-    pub(crate) username: String,
     pub(crate) email: String,
     pub(crate) full_name: String,
     /// Whether its email address is confirmed.
@@ -191,7 +190,7 @@ pub(crate) struct Refs {
     pub(crate) service_types: HashMap<String, i32>,
     /// Supply types by slug.
     pub(crate) supply_types: HashMap<String, i32>,
-    /// Demo accounts by username.
+    /// Demo accounts by email.
     pub(crate) accounts: HashMap<String, i32>,
 }
 
@@ -565,7 +564,7 @@ pub(crate) async fn insert(
             account_id: Set(p
                 .account
                 .as_ref()
-                .and_then(|a| refs.accounts.get(&a.username).copied())),
+                .and_then(|a| refs.accounts.get(&a.email).copied())),
             is_demo: Set(true),
             ..Default::default()
         })

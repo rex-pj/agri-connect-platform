@@ -38,7 +38,7 @@
     <h2 class="visually-hidden" id="status-title">{{ t(key="admin.status_now") }}</h2>
     <p class="small mb-0">{{ atoms::icon(name="fa-handshake", class="text-muted") }} {% if p.is_active %}{{ t(key="partner.on") }}{% else %}{{ t(key="partner.off") }}{% endif %}</p>
     {% if not p.is_active %}{% set off = b.history | filter(attribute="action", value="hide_partner") | first %}{% if off %}{{ history::last_change(row=off) }}{% endif %}{% endif %}
-    <p class="small mb-0">{{ atoms::icon(name="fa-user", class="text-muted") }} {% if p.account_username %}{{ t(key="admin.linked_before") }} {% if b.account_href %}<a class="fw-bold" href="{{ b.account_href }}">{{ p.account_username }}</a>{% else %}<strong>{{ p.account_username }}</strong>{% endif %}{{ t(key="partner.linked_after") }}{% else %}{{ t(key="partner.no_account") }}{% endif %}</p>
+    <p class="small mb-0">{{ atoms::icon(name="fa-user", class="text-muted") }} {% if p.account_email %}{{ t(key="admin.linked_before") }} {% if b.account_href %}<a class="fw-bold" href="{{ b.account_href }}">{{ p.account_email }}</a>{% else %}<strong>{{ p.account_email }}</strong>{% endif %}{{ t(key="partner.linked_after") }}{% else %}{{ t(key="partner.no_account") }}{% endif %}</p>
     <p class="small mb-0">{{ atoms::icon(name="fa-file-signature", class="text-muted") }} {{ t(key="partner.in_force_line", count=p.contracts_in_force) }} · <strong>{{ p.monthly_revenue | vnd }}</strong> {{ t(key="partner.per_month") }}</p>
   </section>
 
@@ -107,9 +107,8 @@
       {% set e = b.account_errors.fields %}
       <form class="contact-sheet__form" method="post" action="{{ b.account_action }}" novalidate>
         {% if b.account_errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.account_errors.message) }}{% endif %}
-        {{ field::input(id="pa-username", name="username", label=t(key="form.username"), value=b.account.username, error=e.username | default(value=""), required=true, autocomplete="off", minlength=limits.username_min_len, hint=t(key="form.username_hint"), first=true) }}
+        {{ field::input(id="pa-email", name="email", label=t(key="form.email"), type="email", value=b.account.email, error=e.email | default(value=""), required=true, autocomplete="off", inputmode="email", first=true) }}
         <p class="small text-muted mb-0">{{ t(key="admin.assign_hint") }}</p>
-        {{ field::input(id="pa-email", name="email", label=t(key="form.email"), type="email", value=b.account.email, error=e.email | default(value=""), autocomplete="off", inputmode="email") }}
         {{ field::input(id="pa-password", name="password", label=t(key="form.password"), type="password", error=e.password | default(value=""), autocomplete="new-password", minlength=limits.password_min_chars) }}
         <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-user-plus") }} {{ b.account_label }}</button>
       </form>

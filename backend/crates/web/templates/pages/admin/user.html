@@ -1,16 +1,21 @@
 {% extends "layouts/admin.html" %}
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/alert.html" as alerts %}
+{% import "atoms/status_badge.html" as status %}
+{% import "molecules/form_field.html" as field %}
 {% import "molecules/history_list.html" as history %}
 {% import "organisms/record_header.html" as record %}
 {% import "organisms/confirm_sheet.html" as confirm %}
 {#- One account, as a record page: the header (turning it back on and what
     it manages as buttons; switching it off in its menu: `b.header`,
     `users::user_controls`), one status strip (on or off, who switched it
-    off and why), then its role and effective permissions, and beside them
-    on a wide screen its details and history (its sign-ins among them).
+    off and why), then its name and email (`b.edit`: an address typed there
+    is only moved to once the link sent to it is opened), its role and
+    effective permissions, and beside them on a wide screen its details and
+    history (its sign-ins among them). The password-reset link waits in the
+    header's menu.
     `page.body` is web::pages::admin::users::UserPage. -#}
-{% block title %}{{ page.body.user.username }} | {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ page.body.user.name }} | {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
 {% set u = b.user %}
@@ -19,6 +24,9 @@
   {% if b.flash == "user_role_changed" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.role_changed")) }}{% endif %}
   {% if b.flash == "user_activated" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.user_activated")) }}{% endif %}
   {% if b.flash == "user_deactivated" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.user_deactivated")) }}{% endif %}
+  {% if b.flash == "user_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.user_saved")) }}{% endif %}
+  {% if b.flash == "email_change_sent" %}{{ alerts::alert(kind="success", icon="fa-paper-plane", text=t(key="admin.user_email_change_sent")) }}{% endif %}
+  {% if b.flash == "password_reset_sent" %}{{ alerts::alert(kind="success", icon="fa-key", text=t(key="admin.password_reset_sent")) }}{% endif %}
   {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
 
   <section class="admin-section record-strip" aria-labelledby="status-title">
@@ -29,6 +37,18 @@
 
   <div class="row g-3 g-lg-4">
     <div class="col-lg-8 d-flex flex-column gap-3">
+      {% if b.edit %}{% set ed = b.edit %}{% set ee = ed.errors.fields %}
+      <section class="admin-section" id="sua-tai-khoan" aria-labelledby="edit-title">
+        <h2 class="admin-section__title" id="edit-title">{{ t(key="admin.edit_user") }}</h2>
+        <form class="form-stack" method="post" action="{{ ed.action }}">
+          {% if ed.errors.message and not ee %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=ed.errors.message) }}{% endif %}
+          {{ field::input(id="eu_name", name="full_name", label=t(key="form.full_name"), value=ed.full_name, error=ee.full_name | default(value=""), autocomplete="off", maxlength=limits.full_name_max) }}
+          {{ field::input(id="eu_email", name="new_email", label=t(key="form.email"), type="email", value=ed.new_email, error=ee.new_email | default(value=""), required=true, autocomplete="off", inputmode="email", hint=t(key="admin.edit_user_email_hint")) }}
+          {{ field::input(id="eu_reason", name="reason", label=t(key="confirm.reason_label"), autocomplete="off", maxlength=limits.audit_reason_max) }}
+          <button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="common.save") }}</button>
+        </form>
+      </section>
+      {% endif %}
       {% if b.roles %}
       <section class="admin-section" aria-labelledby="role-title">
         <h2 class="admin-section__title" id="role-title">{{ t(key="admin.change_role") }}</h2>
@@ -55,6 +75,7 @@
         <h2 class="admin-section__title" id="details-title">{{ t(key="admin.details") }}</h2>
         <dl class="acct-rows mb-0">
           {% if u.full_name %}<div class="acct-row"><dt>{{ t(key="form.full_name") }}</dt><dd>{{ u.full_name }}</dd></div>{% endif %}
+          <div class="acct-row"><dt>{{ t(key="form.email") }}</dt><dd class="text-break">{{ u.email }} {{ status::email(verified=u.email_verified) }}{% if u.pending_email %}<span class="d-block small text-muted">{{ t(key="account.email_pending") }} {{ u.pending_email }}</span>{% endif %}</dd></div>
           <div class="acct-row"><dt>{{ t(key="account.role") }}</dt><dd>{% if b.role_href %}<a href="{{ b.role_href }}">{{ u.role_name }}</a>{% else %}{{ u.role_name }}{% endif %}</dd></div>
           <div class="acct-row"><dt>{{ t(key="admin.created") }}</dt><dd><time datetime="{{ u.created_on | utc_iso }}">{{ u.created_on | vn_datetime }}</time></dd></div>
         </dl>

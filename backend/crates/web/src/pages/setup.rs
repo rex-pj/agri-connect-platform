@@ -35,7 +35,6 @@ fn url(name: &str) -> Result<String, Error> {
 pub struct SetupForm {
     pub full_name: String,
     pub email: String,
-    pub username: String,
     #[serde(skip_serializing)]
     pub password: String,
     #[serde(skip_serializing)]
@@ -83,7 +82,6 @@ pub async fn setup(
         Ok(()) => {
             let full_name = Some(form.full_name.trim().to_owned()).filter(|n| !n.is_empty());
             auth.create_first_admin(
-                form.username.clone(),
                 form.email.clone(),
                 form.password.clone(),
                 full_name,

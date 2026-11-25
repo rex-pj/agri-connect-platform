@@ -24,7 +24,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use application::{
     admin_units::preset_label,
-    constants::{DEMAND_WEEKS, PRICE_PER_UNIT_MAX, USERNAME_MAX_LEN},
+    constants::{DEMAND_WEEKS, PRICE_PER_UNIT_MAX},
     slug::slugify,
 };
 use domain::{models::catalogue::DemoVolume, Error, Result};
@@ -45,6 +45,9 @@ const VOCABULARY: &str = include_str!("demo/vocabulary.json");
 
 /// Partners per provider: one for every this many.
 const PROVIDERS_PER_PARTNER: usize = 25;
+/// The part of a demo account's email before the `@`, at most (an address
+/// allows 64).
+const EMAIL_LOCAL_MAX: usize = 50;
 /// Contact requests per provider; about half are answered, most of those
 /// reviewed, which gives about one review per provider.
 const INQUIRIES_PER_PROVIDER: usize = 2;
@@ -756,13 +759,12 @@ impl Generator<'_> {
                 (None, None)
             };
             let account = self.rng.chance(0.96).then(|| {
-                let mut username: String = slugify(&owner.full).replace('-', "");
+                let mut local: String = slugify(&owner.full).replace('-', "");
                 let suffix = (i + 1).to_string();
-                username.truncate(USERNAME_MAX_LEN.saturating_sub(suffix.len()));
-                username.push_str(&suffix);
+                local.truncate(EMAIL_LOCAL_MAX.saturating_sub(suffix.len()));
+                local.push_str(&suffix);
                 DemoAccount {
-                    email: format!("{username}@{}", self.vocab.email_domain),
-                    username,
+                    email: format!("{local}@{}", self.vocab.email_domain),
                     full_name: owner.full.clone(),
                     verified: self.rng.chance(0.95),
                 }
@@ -1264,10 +1266,8 @@ impl Generator<'_> {
             names.insert(name.clone());
             let contact = self.person();
             let account = self.rng.chance(0.8).then(|| {
-                let username = format!("doitac{k}");
                 DemoAccount {
-                    email: format!("{username}@{}", self.vocab.email_domain),
-                    username,
+                    email: format!("doitac{k}@{}", self.vocab.email_domain),
                     full_name: contact.full.clone(),
                     verified: true,
                 }
@@ -1468,8 +1468,8 @@ pub(crate) mod tests {
         assert!(grown(d.activity.partners.len(), base.activity.partners.len()) >= 16);
         let prices: usize = d.activity.prices.iter().map(|p| p.points.len()).sum();
         assert!(prices >= 2_000, "{prices} prices");
-        // Usernames and emails are unique, and never hold `@` before the domain.
-        let mut usernames = HashSet::new();
+        // Emails are unique and valid, as an account stores them.
+        let mut emails = HashSet::new();
         let accounts = d
             .businesses
             .iter()
@@ -1481,10 +1481,9 @@ pub(crate) mod tests {
                     .filter_map(|p| p.account.as_ref()),
             );
         for a in accounts {
-            assert!(usernames.insert(a.username.clone()), "{}", a.username);
-            assert!(!a.username.contains('@'));
-            assert_eq!(a.username, a.username.to_lowercase());
-            application::validation::validate_username(&a.username)?;
+            assert!(emails.insert(a.email.clone()), "{}", a.email);
+            assert_eq!(a.email, a.email.to_lowercase());
+            application::validation::validate_email(&a.email)?;
         }
         Ok(())
     }

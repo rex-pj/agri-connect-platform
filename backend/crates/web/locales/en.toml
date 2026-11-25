@@ -15,7 +15,7 @@ database_unavailable           = "The service is temporarily unavailable. Please
 
 authentication_required        = "Please log in."
 invalid_token                  = "Your session has expired. Please log in again."
-invalid_credentials            = "Wrong email/username or password."
+invalid_credentials            = "Wrong email or password."
 current_password_incorrect     = "The current password is not correct."
 account_locked                 = "Account locked after too many failed log-ins. Please try again later."
 account_deactivated            = "This account has been deactivated. Please contact support."
@@ -29,9 +29,6 @@ setup_token_invalid            = "The setup token is not right."
 reset_token_invalid            = "This password reset link is not valid or has expired."
 email_verification_invalid     = "This email confirmation link is not valid or has expired."
 
-username_too_short             = "The username needs at least {min} characters."
-username_has_spaces            = "The username cannot contain spaces."
-username_has_at                = "The username cannot contain @ (that is for emails)."
 invalid_email                  = "Email is not valid (for example: name@gmail.com)."
 password_too_short             = "The password needs at least {min} characters."
 password_too_long              = "The password is too long (at most {max} bytes)."
@@ -111,9 +108,10 @@ image_too_many_pixels          = "The photo is too large. At most {max_megapixel
 invalid_image                  = "This photo cannot be read. Please choose another one."
 image_too_small                = "The image is too small. It needs at least {min} × {min} pixels."
 
-username_taken                 = "This username is already taken."
-username_taken_by_other_role   = "This username belongs to an account that is not a provider."
 email_taken                    = "This email is already in use."
+email_taken_by_other_role      = "This email belongs to an account with another role."
+account_email_unconfirmed      = "This account has not confirmed its email. Ask its owner to open the confirmation link first, then assign it again."
+email_unchanged                = "This is already the account's email."
 provider_account_in_use        = "This account already manages another provider."
 slug_taken                     = "This slug is already used by another category."
 location_label_taken           = "An area with this name already exists."
@@ -226,6 +224,7 @@ partner  = "Dealer, brand or cooperative reading the demand report of the areas 
 "user.read"               = "View users"
 "user.role.update"        = "Change user roles"
 "user.status.update"      = "Lock / unlock users"
+"user.update"             = "Edit users' name and email; send a password-reset link"
 "role.read"               = "View roles"
 "role.permission.manage"  = "Grant permissions to roles"
 "category.manage"         = "Manage categories"
@@ -270,6 +269,8 @@ unverified = "Not verified"
 demo       = "Demo"
 managed    = "Has an account"
 unmanaged  = "No account"
+email_verified   = "Confirmed"
+email_unverified = "Not confirmed"
 
 [text.inquiry_status]
 new       = "New"
@@ -303,9 +304,7 @@ name               = "Name"
 description        = "Description"
 display_order      = "Order"
 full_name          = "Full name"
-username           = "Username"
-username_hint      = "No spaces, no @."
-login_name         = "Email or username"
+email_login_hint   = "You sign in and recover your password with this email."
 password           = "Password"
 password_again     = "Repeat password"
 current_password   = "Current password"
@@ -343,7 +342,7 @@ results_unit = "results"
 remove    = "Remove this filter"
 from_chip = "From {date}"
 to_chip   = "To {date}"
-users     = "Username, name or email"
+users     = "Name or email"
 providers = "Provider name or phone"
 products  = "Supply or provider name"
 services  = "Service or provider name"
@@ -847,6 +846,21 @@ logout_note      = "End the session on this device."
 email_unverified = "Your email is not confirmed yet. Once it is, we email you when a farmer wants a call back."
 send_verification = "Send the confirmation email"
 verification_sent = "Confirmation email sent. Open the link in it."
+profile_saved     = "Name saved."
+name_hint         = "Shown to admins and on your account page. Left empty, your email is shown."
+save_name         = "Save name"
+email_title       = "Sign-in email"
+email_note        = "You sign in, recover your password and hear when a farmer wants a call back with it."
+change_email      = "Change email"
+new_email         = "New email"
+change_email_note = "We send a confirmation link to the new email. The old one keeps working until you open that link."
+send_change_link  = "Send the confirmation link"
+email_change_sent = "If the new email can be used, a confirmation link was sent to it. Open the link in that email."
+email_pending     = "Waiting for confirmation:"
+email_pending_note = "The old email keeps working until you open the link sent to this address."
+sessions_note     = "Think someone else uses your account? Log out every other phone and computer without changing the password."
+end_sessions      = "Log out other devices"
+sessions_ended    = "Every other device has been logged out."
 
 [text.verify_email]
 title       = "Confirm your email"
@@ -857,6 +871,11 @@ done_sub    = "From now on we email you at this address."
 continue    = "Continue"
 invalid_sub = "This link is wrong, was already used or has expired. Log in and send the confirmation email again from your account page."
 to_account  = "Go to the account page"
+moved       = "Email changed"
+moved_sub_before = "From now on you sign in and get our emails with"
+moved_sub_after  = "."
+taken       = "This email has another account"
+taken_sub   = "The account could not move to this email. It keeps its old one."
 
 [text.auth]
 login_sub        = "For providers, partners and administrators."
@@ -1049,6 +1068,29 @@ Open this link to confirm this is the email of your account (valid for {hours} h
 If you did not sign up, you can ignore this email.
 
 {site}"""
+change_subject  = "Confirm your new email - {site}"
+change_body     = """
+Hello,
+
+Someone asked to move an account on {site} to this address.
+Open this link to confirm (valid for {hours} hours):
+
+{url}
+
+If it was not you, ignore this email: this address will not be used.
+
+{site}"""
+changed_subject = "Your sign-in email was changed - {site}"
+changed_body    = """
+Hello,
+
+The sign-in email of your account on {site} was just changed to {email}.
+We no longer write to this address about that account.
+
+If you did not do it, someone else may be using the account.
+{support}
+{site}"""
+changed_support = "Contact us now: {contact}\n"
 inquiry_subject = "A farmer wants you to call back - {site}"
 inquiry_body    = """
 Hello {business},
@@ -1330,7 +1372,7 @@ open_partner              = "Open the partner"
 linked_before             = "Assigned:"
 linked_after              = ". Assigning another account replaces it."
 no_account                = "No account yet. The owner needs one to update their supplies."
-assign_hint               = "If this provider's account already exists, the username is enough. For a new one, also enter an email and password:"
+assign_hint               = "If this email already has a provider account (with its email confirmed), the email is enough. For a new one, also enter a password."
 assign                    = "Assign account"
 manage_services           = "Manage services"
 manage_products           = "Manage supplies"
@@ -1354,6 +1396,14 @@ no_reviews        = "No reviews yet."
 role_changed           = "Role changed. The new permissions apply at once."
 user_activated         = "Account turned on again."
 user_deactivated       = "Account turned off. The user has been logged out."
+user_saved             = "Account details saved."
+user_email_change_sent = "Saved. If the new email can be used, a confirmation link was sent there; the account keeps its old email until its owner opens it."
+password_reset_sent    = "A password-reset link was sent to the account's email."
+edit_user              = "Name and email"
+edit_user_email_hint   = "A new email is sent a confirmation link; the account moves to it only once its owner opens that link."
+send_reset_link        = "Send a password-reset link"
+send_reset_link_title  = "Send a password-reset link to {email}?"
+send_reset_link_note   = "The owner sets a new password through the link in the email. Admins never learn the password."
 change_role            = "Change role"
 save_role              = "Save role"
 account_status         = "Account status"
@@ -1817,6 +1867,11 @@ change_password       = "Password changed"
 reset_password        = "Password reset"
 refresh_token_reused  = "Session reused: signed out everywhere"
 verify_email          = "Email confirmed"
+change_email          = "Sign-in email changed"
+request_email_change  = "Email change asked"
+update_profile        = "Name changed"
+end_other_sessions    = "Other devices logged out"
+send_password_reset   = "Password-reset link sent"
 
 [text.admin_pick]
 area          = "Area"

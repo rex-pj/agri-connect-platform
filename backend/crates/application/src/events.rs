@@ -110,7 +110,7 @@ impl EventSubscriber for AuditLogSubscriber {
         let reason = match (&event.change, &event.reason) {
             (Change::RoleChanged { role }, Some(r)) => Some(format!("{role}: {r}")),
             (Change::RoleChanged { role }, None) => Some(role.clone()),
-            (Change::AccountAssigned { username }, _) => Some(username.clone()),
+            (Change::AccountAssigned { email }, _) => Some(email.clone()),
             (Change::StatusChanged { status }, Some(r)) => Some(format!("{status}: {r}")),
             (Change::StatusChanged { status }, None) => Some(status.clone()),
             (Change::Contract { about, .. }, Some(r)) => Some(format!("{about}: {r}")),

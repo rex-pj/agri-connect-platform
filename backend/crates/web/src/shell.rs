@@ -576,7 +576,7 @@ mod tests {
     fn actor(permissions: &[&str]) -> Option<Actor> {
         Actor::from_record(ActorRecord {
             user_id: 1,
-            username: "u".into(),
+            name: "u".into(),
             role_code: "whatever".into(),
             is_active: true,
             permissions: permissions.iter().map(|p| (*p).to_owned()).collect(),

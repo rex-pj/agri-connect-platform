@@ -8,11 +8,11 @@ use integration_tests::{
 };
 use sea_orm::{ConnectionTrait, Statement};
 
-async fn business_of(e: &Env, username: &str) -> i32 {
+async fn business_of(e: &Env, who: &str) -> i32 {
     e.t.db
         .query_one(Statement::from_string(
             e.t.db.get_database_backend(),
-            format!("SELECT id FROM businesses WHERE name = 'Vườn {username}'"),
+            format!("SELECT id FROM businesses WHERE name = 'Vườn {who}'"),
         ))
         .await
         .unwrap()

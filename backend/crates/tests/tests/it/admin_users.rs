@@ -4,16 +4,16 @@
 
 use axum::http::{header, StatusCode};
 use integration_tests::{
-    body_text, env_with_origin, get_page, install_admin, post_form, register_provider, send,
+    body_text, email_of, env_with_origin, get_page, install_admin, post_form, register_provider, send,
     sign_in, Env,
 };
 use sea_orm::{ConnectionTrait, Statement};
 
-async fn user_id(e: &Env, username: &str) -> i32 {
+async fn user_id(e: &Env, name: &str) -> i32 {
     e.t.db
         .query_one(Statement::from_string(
             e.t.db.get_database_backend(),
-            format!("SELECT id FROM users WHERE username = '{username}'"),
+            format!("SELECT id FROM users WHERE email = '{}'", email_of(name)),
         ))
         .await
         .unwrap()

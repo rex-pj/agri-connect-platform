@@ -44,6 +44,16 @@ pub struct EmailTexts {
     /// `{url}`, `{hours}`, `{site}`.
     pub verify_body: String,
     /// `{site}`.
+    pub change_subject: String,
+    /// `{url}`, `{hours}`, `{site}`: the link that moves an account here.
+    pub change_body: String,
+    /// `{site}`.
+    pub changed_subject: String,
+    /// `{email}` (masked), `{support}`, `{site}`: told to the former address.
+    pub changed_body: String,
+    /// `{contact}`: the line `{support}` becomes when a help line is set.
+    pub changed_support: String,
+    /// `{site}`.
     pub inquiry_subject: String,
     /// `{business}`, `{name}`, `{phone}`, `{topic}`, `{note}`, `{inbox}`,
     /// `{site}`.
@@ -161,6 +171,52 @@ impl SmtpEmailService {
         .unwrap_or_else(|| self.texts.site_name.clone())
     }
 
+    /// The signing name and the help lines an admin set (`support.phone`,
+    /// `support.email`), joined, for a notice that tells its reader whom to
+    /// call; none when neither is set, or the settings are unreadable.
+    async fn site_and_support(&self) -> (String, Option<String>) {
+        let site = self.site_name().await;
+        let contact = match self.settings.load().await {
+            Ok(s) => {
+                let lines: Vec<&str> = [s.support_phone(), s.support_email()]
+                    .into_iter()
+                    .flatten()
+                    .collect();
+                (!lines.is_empty()).then(|| lines.join(", "))
+            }
+            Err(_) => None,
+        };
+        (site, contact)
+    }
+
+    /// An email whose one link proves an address (`/verify-email`): the
+    /// account's own, or the one it moves to. Plain text with no
+    /// user-supplied content, as the reset email.
+    async fn send_verify_link(
+        &self,
+        to_email: &str,
+        token: &str,
+        (subject, body): (&str, &str),
+        what: &str,
+    ) {
+        let url = verify_url(&self.app_url, token);
+        let site = self.site_name().await;
+        let site = site.as_str();
+        let body = fill(
+            body,
+            &[
+                ("url", &url),
+                ("hours", &EMAIL_VERIFICATION_EXPIRY_HOURS.to_string()),
+                ("site", site),
+            ],
+        );
+        let subject = fill(subject, &[("site", site)]);
+        match self.send(to_email, &subject, body).await {
+            Ok(()) => info!(to = to_email, what, "link email sent"),
+            Err(e) => error!(to = to_email, what, error = %e, "link email failed"),
+        }
+    }
+
     async fn send(&self, to: &str, subject: &str, body: String) -> std::result::Result<(), String> {
         let to: Mailbox = to.parse().map_err(|e| format!("bad recipient: {e}"))?;
         let message = Message::builder()
@@ -202,22 +258,38 @@ impl EmailService for SmtpEmailService {
     }
 
     async fn send_email_verification(&self, to_email: &str, token: &str) {
-        let url = verify_url(&self.app_url, token);
-        let site = self.site_name().await;
-        let site = site.as_str();
-        // Plain text with no user-supplied content, as the reset email.
+        self.send_verify_link(
+            to_email,
+            token,
+            (&self.texts.verify_subject, &self.texts.verify_body),
+            "email-confirmation",
+        )
+        .await;
+    }
+
+    async fn send_email_change(&self, to_email: &str, token: &str) {
+        self.send_verify_link(
+            to_email,
+            token,
+            (&self.texts.change_subject, &self.texts.change_body),
+            "email-change",
+        )
+        .await;
+    }
+
+    async fn send_email_changed(&self, to_email: &str, masked_email: &str) {
+        let (site, contact) = self.site_and_support().await;
+        let support = contact
+            .map(|c| fill(&self.texts.changed_support, &[("contact", &c)]))
+            .unwrap_or_default();
         let body = fill(
-            &self.texts.verify_body,
-            &[
-                ("url", &url),
-                ("hours", &EMAIL_VERIFICATION_EXPIRY_HOURS.to_string()),
-                ("site", site),
-            ],
+            &self.texts.changed_body,
+            &[("email", masked_email), ("support", &support), ("site", &site)],
         );
-        let subject = fill(&self.texts.verify_subject, &[("site", site)]);
+        let subject = fill(&self.texts.changed_subject, &[("site", &site)]);
         match self.send(to_email, &subject, body).await {
-            Ok(()) => info!(to = to_email, "email-confirmation email sent"),
-            Err(e) => error!(to = to_email, error = %e, "email-confirmation email failed"),
+            Ok(()) => info!(to = to_email, "email-changed notice sent"),
+            Err(e) => error!(to = to_email, error = %e, "email-changed notice failed"),
         }
     }
 
@@ -265,6 +337,14 @@ impl EmailService for LogEmailService {
         warn!(to = to_email, url = %verify_url(&self.app_url, token), "SMTP not configured; email-confirmation link logged instead of sent");
     }
 
+    async fn send_email_change(&self, to_email: &str, token: &str) {
+        warn!(to = to_email, url = %verify_url(&self.app_url, token), "SMTP not configured; email-change link logged instead of sent");
+    }
+
+    async fn send_email_changed(&self, to_email: &str, masked_email: &str) {
+        warn!(to = to_email, now = masked_email, "SMTP not configured; email-changed notice not sent");
+    }
+
     async fn send_new_inquiry(&self, to_email: &str, notice: &InquiryNotice) {
         // The farmer's phone number stays out of the log.
         warn!(
@@ -295,6 +375,11 @@ mod tests {
             reset_body: "{url} ({hours} h) {site}".into(),
             verify_subject: "Confirm - {site}".into(),
             verify_body: "{url} ({hours} h) {site}".into(),
+            change_subject: "Move - {site}".into(),
+            change_body: "{url} ({hours} h) {site}".into(),
+            changed_subject: "Moved - {site}".into(),
+            changed_body: "Now {email}. {support}{site}".into(),
+            changed_support: "Call {contact}. ".into(),
             inquiry_subject: "Call back - {site}".into(),
             inquiry_body:
                 "Hi {business}\nName: {name}\nPhone: {phone}\nNeeds: {topic}\n{note}{inbox}\n{site}"

@@ -1,6 +1,7 @@
 {% extends "layouts/auth.html" %}
 {% import "atoms/icon.html" as atoms %}
-{#- The link from the "confirm your address" email. `page` is
+{#- The link from the "confirm your address" email, or from the one that
+    moves an account to a new address. `page` is
     web::pages::auth::VerifyEmailPage. Opening the link only shows the button:
     the address is confirmed by the form, never by a GET. -#}
 {% block title %}{{ t(key="verify_email.title") }} | {{ site.name }}{% endblock title %}
@@ -8,9 +9,21 @@
 {% if page.done %}
 <div class="text-center">
   <span class="auth-state-icon">{{ atoms::icon(name="fa-circle-check") }}</span>
+  {% if page.moved_to %}
+  <h1 class="auth-title">{{ t(key="verify_email.moved") }}</h1>
+  <p class="auth-sub">{{ t(key="verify_email.moved_sub_before") }} <strong class="text-break">{{ page.moved_to }}</strong>{{ t(key="verify_email.moved_sub_after") }}</p>
+  {% else %}
   <h1 class="auth-title">{{ t(key="verify_email.done") }}</h1>
   <p class="auth-sub">{{ t(key="verify_email.done_sub") }}</p>
+  {% endif %}
   <a class="btn btn-success btn-lg w-100" href="{{ url_for(name="login") }}">{{ atoms::icon(name="fa-arrow-right") }} {{ t(key="verify_email.continue") }}</a>
+</div>
+{% elif page.taken %}
+<div class="text-center">
+  <span class="auth-state-icon auth-state-icon--warn">{{ atoms::icon(name="fa-user-xmark") }}</span>
+  <h1 class="auth-title">{{ t(key="verify_email.taken") }}</h1>
+  <p class="auth-sub">{{ t(key="verify_email.taken_sub") }}</p>
+  <a class="btn btn-success btn-lg w-100" href="{{ url_for(name="account") }}">{{ atoms::icon(name="fa-user") }} {{ t(key="verify_email.to_account") }}</a>
 </div>
 {% elif page.invalid %}
 <div class="text-center">

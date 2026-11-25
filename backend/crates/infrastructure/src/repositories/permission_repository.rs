@@ -19,7 +19,7 @@ use crate::{
         permission::{self, Entity as Permission},
         role, role_permission, user,
     },
-    sql::QueryAs,
+    sql::{account_name, QueryAs},
 };
 
 pub struct PermissionRepository {
@@ -50,7 +50,7 @@ impl PermissionRepository {
 #[derive(FromQueryResult)]
 struct ActorRow {
     id: i32,
-    username: String,
+    account_name: String,
     role_code: String,
     is_active: bool,
     sessions_valid_after: Option<DateTimeWithTimeZone>,
@@ -136,7 +136,7 @@ impl PermissionRepositoryTrait for PermissionRepository {
         let Some(user) = user::Entity::find_by_id(user_id)
             .select_only()
             .column(user::Column::Id)
-            .column(user::Column::Username)
+            .expr_as(account_name(user::Entity), QueryAs::AccountName)
             .column_as(role::Column::Code, QueryAs::RoleCode)
             // A deleted account is an inactive one.
             .expr_as(
@@ -163,7 +163,7 @@ impl PermissionRepositoryTrait for PermissionRepository {
             .collect();
         Ok(Some(ActorRecord {
             user_id: user.id,
-            username: user.username,
+            name: user.account_name,
             role_code: user.role_code,
             is_active: user.is_active,
             permissions,

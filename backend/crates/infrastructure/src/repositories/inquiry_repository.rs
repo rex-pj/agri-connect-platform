@@ -31,7 +31,7 @@ use crate::{
         service, user,
     },
     search::admin_inquiry_search,
-    sql::{businesses_of, live_owner_on, notice_email, username_of, QueryAs},
+    sql::{businesses_of, live_owner_on, notice_email, account_name_of, QueryAs},
 };
 
 pub struct InquiryRepository {
@@ -148,7 +148,7 @@ impl InquiryRepositoryTrait for InquiryRepository {
             .column(inquiry::Column::CreatedOn)
             .column(inquiry::Column::UpdatedOn)
             .expr_as(
-                username_of((inquiry::Entity, inquiry::Column::UpdatedBy)),
+                account_name_of((inquiry::Entity, inquiry::Column::UpdatedBy)),
                 QueryAs::UpdatedByName,
             )
             .join(JoinType::InnerJoin, inquiry::Relation::Business.def());
@@ -197,7 +197,7 @@ impl InquiryRepositoryTrait for InquiryRepository {
             .column(inquiry::Column::CreatedOn)
             .column(inquiry::Column::UpdatedOn)
             .expr_as(
-                username_of((inquiry::Entity, inquiry::Column::UpdatedBy)),
+                account_name_of((inquiry::Entity, inquiry::Column::UpdatedBy)),
                 QueryAs::UpdatedByName,
             )
             .join(JoinType::InnerJoin, inquiry::Relation::Business.def())

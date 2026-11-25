@@ -2,7 +2,7 @@
 //! validate a whole form feed them into `domain::Validation`.
 
 use domain::{
-    models::{coded::CodedEntry, user::EMAIL_MARK},
+    models::coded::CodedEntry,
     Error, ErrorCode, Result,
 };
 
@@ -10,7 +10,7 @@ use crate::icons;
 
 use crate::constants::{
     AUDIT_REASON_MAX, EMAIL_MAX, LAT_MAX, LAT_MIN, LNG_MAX, LNG_MIN, PASSWORD_MAX_BYTES,
-    PASSWORD_MIN_CHARS, SEARCH_QUERY_MIN, USERNAME_MAX_LEN, USERNAME_MIN_LEN,
+    PASSWORD_MIN_CHARS, SEARCH_QUERY_MIN,
 };
 
 /// The optional "why" an admin gives for a change, as the audit log keeps it:
@@ -81,27 +81,6 @@ pub fn validate_phone(phone: &str) -> Result<()> {
     } else {
         Err(Error::new(ErrorCode::InvalidPhone))
     }
-}
-
-/// A login name: at least `USERNAME_MIN_LEN` and at most `USERNAME_MAX_LEN`
-/// characters, no spaces and no `@` (the sign-in box reads a name with one
-/// as an email: `LoginName`); callers pass it trimmed and lowercased.
-/// Letters with Vietnamese marks are fine.
-pub fn validate_username(username: &str) -> Result<()> {
-    let length = username.chars().count();
-    if length < USERNAME_MIN_LEN {
-        return Err(Error::new(ErrorCode::UsernameTooShort).with_param("min", USERNAME_MIN_LEN));
-    }
-    if username
-        .chars()
-        .any(|c| c.is_whitespace() || c.is_control())
-    {
-        return Err(Error::new(ErrorCode::UsernameHasSpaces));
-    }
-    if username.contains(EMAIL_MARK) {
-        return Err(Error::new(ErrorCode::UsernameHasAt));
-    }
-    max_chars(username, USERNAME_MAX_LEN)
 }
 
 /// An address mail can be sent to: `local@domain.tld`, no spaces, one `@`,
@@ -309,19 +288,6 @@ mod tests {
         }
         let long = format!("{}@x.vn", "a".repeat(EMAIL_MAX));
         assert!(validate_email(&long).is_err());
-    }
-
-    #[test]
-    fn usernames_are_bounded_and_have_no_spaces_nor_at() {
-        assert!(validate_username("nông_dân.7").is_ok());
-        let code = |u: &str| validate_username(u).err().map(|e| e.code());
-        assert_eq!(code("ab"), Some(ErrorCode::UsernameTooShort));
-        assert_eq!(code("nong dan"), Some(ErrorCode::UsernameHasSpaces));
-        assert_eq!(code("ba@gmail.com"), Some(ErrorCode::UsernameHasAt));
-        assert_eq!(
-            code(&"a".repeat(USERNAME_MAX_LEN + 1)),
-            Some(ErrorCode::FieldTooLong)
-        );
     }
 
     #[test]

@@ -14,6 +14,14 @@ pub trait EmailService: Send + Sync {
     /// The link that confirms `to_email` is its account's address.
     async fn send_email_verification(&self, to_email: &str, token: &str);
 
+    /// The link that moves an account to `to_email`, the address it asked
+    /// for: nothing changes until it is opened.
+    async fn send_email_change(&self, to_email: &str, token: &str);
+
+    /// Tells the account's former address that it moved to `masked_email`
+    /// (`mask_email`: enough for the owner to recognise, not to write to).
+    async fn send_email_changed(&self, to_email: &str, masked_email: &str);
+
     /// Tells a provider a farmer asked to be called back.
     async fn send_new_inquiry(&self, to_email: &str, notice: &InquiryNotice);
 
@@ -56,7 +64,6 @@ pub struct JobNotice {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionClaims {
     pub user_id: i32,
-    pub username: String,
     /// Expiry as a Unix timestamp in seconds.
     pub expires_at: i64,
     /// When it was minted, Unix seconds; 0 for tokens minted before the
@@ -71,7 +78,7 @@ pub struct SessionClaims {
 /// Mint and verify signed session tokens.
 pub trait TokenService: Send + Sync {
     /// `session`: the session (refresh-token family) the token is part of.
-    fn mint(&self, user_id: i32, username: &str, session: uuid::Uuid) -> Result<String>;
+    fn mint(&self, user_id: i32, session: uuid::Uuid) -> Result<String>;
 
     /// Fails with `invalid_token` for a bad signature, a malformed token or an
     /// expired one; callers cannot tell those apart, by design.

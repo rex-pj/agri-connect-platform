@@ -29,21 +29,21 @@ async fn scalar(e: &Env, sql: &str) -> String {
 
 /// A provider with one service in the first service category, placed at
 /// (lng, lat); returns its business id and the category id.
-async fn provider_at(e: &Env, username: &str, phone: &str, lng: f64, lat: f64) -> (i32, i32) {
-    let token = register_provider(&e.state, username, phone).await;
+async fn provider_at(e: &Env, who: &str, phone: &str, lng: f64, lat: f64) -> (i32, i32) {
+    let token = register_provider(&e.state, who, phone).await;
     let category = categories_of(e, "service").await[0].0;
     let req = Request::post("/api/provider/services")
         .header(header::AUTHORIZATION, format!("Bearer {token}"))
         .header(header::CONTENT_TYPE, "application/json")
         .header(header::ORIGIN, TEST_ORIGIN)
         .body(Body::from(format!(
-            r#"{{"category_id":{category},"name":"Phun drone {username}"}}"#
+            r#"{{"category_id":{category},"name":"Phun drone {who}"}}"#
         )))
         .unwrap();
     assert_eq!(send(&e.router, req).await.status(), StatusCode::CREATED);
     let business: i32 = scalar(
         e,
-        &format!("SELECT id::text AS v FROM businesses WHERE name = 'Vườn {username}'"),
+        &format!("SELECT id::text AS v FROM businesses WHERE name = 'Vườn {who}'"),
     )
     .await
     .parse()
@@ -257,8 +257,7 @@ async fn a_partner_pays_for_an_area_reads_its_report_and_sponsors_a_shop() {
         post_form(
             &format!("{page}/account"),
             &[
-                ("username", "dailydrone"),
-                ("email", "daily@example.vn"),
+                ("email", "dailydrone@example.vn"),
                 ("password", "matkhau123"),
             ],
             Some(&admin),
@@ -403,7 +402,7 @@ async fn the_json_api_manages_partners_and_reports_their_revenue() {
         .usecases
         .auth
         .login(
-            "quantri".into(),
+            "quantri@example.vn".into(),
             "matkhau123".into(),
             integration_tests::CLIENT,
         )

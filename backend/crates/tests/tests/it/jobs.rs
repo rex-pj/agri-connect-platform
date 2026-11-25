@@ -31,13 +31,13 @@ async fn scalar(e: &Env, sql: &str) -> String {
 /// session token.
 async fn provider_at(
     e: &Env,
-    username: &str,
+    who: &str,
     phone: &str,
     category: i32,
     lng: f64,
     lat: f64,
 ) -> String {
-    let token = register_provider(&e.state, username, phone).await;
+    let token = register_provider(&e.state, who, phone).await;
     let req = Request::post("/api/provider/services")
         .header(header::AUTHORIZATION, format!("Bearer {token}"))
         .header(header::CONTENT_TYPE, "application/json")
@@ -48,7 +48,7 @@ async fn provider_at(
     e.t.db
         .execute_unprepared(&format!(
             "UPDATE businesses SET location = \
-             ST_GeographyFromText('SRID=4326;POINT({lng} {lat})') WHERE name = 'Vườn {username}'"
+             ST_GeographyFromText('SRID=4326;POINT({lng} {lat})') WHERE name = 'Vườn {who}'"
         ))
         .await
         .unwrap();

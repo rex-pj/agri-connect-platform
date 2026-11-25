@@ -10,7 +10,7 @@
     with the typed values and one message per box when a rule is broken.
     While hire requests are off the page is not reached
     (`features::gate`). -#}
-{% block title %}{{ t(key="job.title") }} — {{ site.name }}{% endblock title %}
+{% block title %}{{ t(key="job.title") }} | {{ site.name }}{% endblock title %}
 {% block meta %}<meta name="description" content="{{ t(key="job.meta") }}">{% endblock meta %}
 {% block scripts %}<script defer src="{{ asset_url(path='js/islands.js') }}"></script>{% endblock scripts %}
 {% block main %}

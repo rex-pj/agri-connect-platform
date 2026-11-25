@@ -95,7 +95,7 @@ async fn a_job_reaches_the_providers_nearby_that_offer_it() {
     .await;
     let cai_lay = scalar(
         &e,
-        "SELECT id::text AS v FROM locations WHERE label = 'Đồng Tháp — Cai Lậy'",
+        "SELECT id::text AS v FROM locations WHERE label = 'Cai Lậy, Đồng Tháp'",
     )
     .await;
 

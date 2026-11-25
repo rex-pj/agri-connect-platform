@@ -155,7 +155,7 @@ fn range_text(low: i64, high: i64) -> String {
     if low == high {
         format_vnd(low)
     } else {
-        format!("{} – {}", format_number(low), format_vnd(high))
+        format!("{} - {}", format_number(low), format_vnd(high))
     }
 }
 

@@ -10,7 +10,7 @@
     off and why), then its role and effective permissions, and beside them
     on a wide screen its details and history (its sign-ins among them).
     `page.body` is web::pages::admin::users::UserPage. -#}
-{% block title %}{{ page.body.user.username }} — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ page.body.user.username }} | {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
 {% set u = b.user %}

@@ -91,7 +91,7 @@ async fn the_price_board_is_one_entry_with_its_produce_on_a_tab() {
 
     // A crop's page: its prices, the price sheet with it chosen, its commodity.
     let crop = page(&e, &format!("/admin/crops/{st25}"), &admin).await;
-    assert!(crop.contains("Đồng Tháp — Cai Lậy"));
+    assert!(crop.contains("Cai Lậy, Đồng Tháp"));
     assert!(crop.contains(&format!("/admin/prices?crop_id={st25}#nhap-gia")));
     assert!(crop.contains("Thuộc Lúa"));
     let sheet = page(&e, &format!("/admin/prices?crop_id={st25}"), &admin).await;

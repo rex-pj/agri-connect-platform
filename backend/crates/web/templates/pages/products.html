@@ -9,7 +9,7 @@
 {% import "organisms/list_filters.html" as filters %}
 {#- All products (with the filter form) or one category's. `page` is
     web::pages::products::ProductsPage. -#}
-{% block title %}{% if page.category %}{{ page.category.name }}{% else %}{{ t(key="products.title") }}{% endif %} — {{ site.name }}{% endblock title %}
+{% block title %}{% if page.category %}{{ page.category.name }}{% else %}{{ t(key="products.title") }}{% endif %} | {{ site.name }}{% endblock title %}
 {% block meta %}{% if page.category %}<meta name="description" content="{{ t(key="products.meta_category", category=page.category.name) }}">{% else %}<meta name="description" content="{{ t(key="products.meta") }}">{% endif %}{% endblock meta %}
 {% block main %}
 {{ hero::page_hero(title=page.title, back_href=page.back_href, back_label=page.back_label, variant="", icon=page.icon, sub=page.sub) }}

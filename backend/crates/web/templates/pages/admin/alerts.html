@@ -15,7 +15,7 @@
     by the header's "add" (an anchored section without JS), which comes back
     open with its messages when a rule is broken. "Tắt" reloads the list with
     that row's confirmation open (`b.confirm`, in its own `dialog` scope). -#}
-{% block title %}{{ t(key="admin_menu.alerts") }} — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ t(key="admin_menu.alerts") }} | {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
 <div x-data="dialog" data-open="{% if b.errors.message or b.errors.fields %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
@@ -40,7 +40,7 @@
             <td data-label=""><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ a.title }}</a>{% if a.is_demo %} {{ status::demo() }}{% endif %}</td>
             <td data-label="{{ t(key="alert.kind") }}">{{ r.kind_label }}</td>
             <td data-label="{{ t(key="admin.col_reach") }}" class="small"><div class="cell-short">{{ r.reach }}</div></td>
-            <td data-label="{{ t(key="alert.dates") }}" class="small text-nowrap"><time datetime="{{ a.starts_on }}">{{ a.starts_on | full_date }}</time> – <time datetime="{{ a.ends_on }}">{{ a.ends_on | full_date }}</time></td>
+            <td data-label="{{ t(key="alert.dates") }}" class="small text-nowrap"><time datetime="{{ a.starts_on }}">{{ a.starts_on | full_date }}</time> - <time datetime="{{ a.ends_on }}">{{ a.ends_on | full_date }}</time></td>
             <td data-label="{{ t(key="admin.col_status") }}" class="text-center cell-state">{{ status::alert(state=a.state) }}</td>
             <td data-label="" class="text-end">
               <div class="row-actions">

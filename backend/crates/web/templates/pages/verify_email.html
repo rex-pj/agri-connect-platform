@@ -3,7 +3,7 @@
 {#- The link from the "confirm your address" email. `page` is
     web::pages::auth::VerifyEmailPage. Opening the link only shows the button:
     the address is confirmed by the form, never by a GET. -#}
-{% block title %}{{ t(key="verify_email.title") }} — {{ site.name }}{% endblock title %}
+{% block title %}{{ t(key="verify_email.title") }} | {{ site.name }}{% endblock title %}
 {% block card %}
 {% if page.done %}
 <div class="text-center">

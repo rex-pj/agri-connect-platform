@@ -16,7 +16,7 @@
     works without JS; the first `b.shown` by name, each added by one button
     that keeps the search), or its terms form (the area stays). `page.body`
     is web::pages::admin::contracts::ContractPage. -#}
-{% block title %}{{ page.body.contract.area_label }} · {{ page.body.partner.name }} — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ page.body.contract.area_label }} · {{ page.body.partner.name }} | {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
 {% set c = b.contract %}
@@ -27,7 +27,7 @@
 
   <section class="admin-section record-strip" aria-labelledby="status-title">
     <h2 class="visually-hidden" id="status-title">{{ t(key="admin.status_now") }}</h2>
-    <p class="small mb-0">{{ atoms::icon(name="fa-file-signature", class="text-muted") }} {{ status::contract(state=c.state) }} <time datetime="{{ c.starts_on }}">{{ c.starts_on | full_date }}</time> – <time datetime="{{ c.ends_on }}">{{ c.ends_on | full_date }}</time> · <strong>{{ c.monthly_fee | vnd }}</strong> {{ t(key="partner.per_month") }}</p>
+    <p class="small mb-0">{{ atoms::icon(name="fa-file-signature", class="text-muted") }} {{ status::contract(state=c.state) }} <time datetime="{{ c.starts_on }}">{{ c.starts_on | full_date }}</time> - <time datetime="{{ c.ends_on }}">{{ c.ends_on | full_date }}</time> · <strong>{{ c.monthly_fee | vnd }}</strong> {{ t(key="partner.per_month") }}</p>
     <p class="small mb-0">{{ atoms::icon(name="fa-tags", class="text-muted") }} {% for cat in c.categories %}<span class="ac-tag">{{ cat.name }}</span> {% endfor %}</p>
     {% if c.note %}<p class="small text-muted mb-0">{{ atoms::icon(name="fa-note-sticky") }} {{ c.note }}</p>{% endif %}
   </section>

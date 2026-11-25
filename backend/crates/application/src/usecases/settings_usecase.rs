@@ -233,7 +233,7 @@ impl SettingsUseCase {
                     changes: changes
                         .iter()
                         .map(|(key, before, after, _)| {
-                            format!("{key}: {} → {}", shown(before), shown(after))
+                            format!("{key}: {} -> {}", shown(before), shown(after))
                         })
                         .collect(),
                     released,

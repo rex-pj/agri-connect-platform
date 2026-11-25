@@ -21,8 +21,8 @@
     The owner's or admin's way to edit it is an icon in the header. The
     contact form with this service chosen is a bottom sheet with JS, a plain
     section without. -#}
-{% block title %}{{ page.service.name }} — {{ page.service.business_name }} — {{ site.name }}{% endblock title %}
-{% block meta %}<meta name="description" content="{% if page.meta_description %}{{ page.meta_description }}{% else %}{{ t(key="service.meta", name=page.service.name, provider=page.service.business_name, area=page.area) }}{% endif %}">{% endblock meta %}
+{% block title %}{{ page.service.name }} | {{ page.service.business_name }} | {{ site.name }}{% endblock title %}
+{% block meta %}<meta name="description" content="{% if page.meta_description %}{{ t(key="service.meta_lead", name=page.service.name, provider=page.service.business_name, area=page.area) }} {{ page.meta_description }}{% else %}{{ t(key="service.meta", name=page.service.name, provider=page.service.business_name, area=page.area) }}{% endif %}">{% endblock meta %}
 {% block main %}
 {% set s = page.service %}
 {% set icon = s.category_icon | default(value="fa-tag") %}

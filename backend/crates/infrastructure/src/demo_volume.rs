@@ -23,6 +23,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use application::{
+    admin_units::preset_label,
     constants::{DEMAND_WEEKS, PRICE_PER_UNIT_MAX, USERNAME_MAX_LEN},
     slug::slugify,
 };
@@ -471,8 +472,8 @@ impl Generator<'_> {
         self.busy.get(ward).copied().unwrap_or(0.0)
     }
 
-    /// The busiest wards of each province as area presets ("Đồng Tháp —
-    /// Bình Phú"), as the admin's ward picker names them.
+    /// The busiest wards of each province as area presets ("Bình Phú, Đồng Tháp"),
+    /// as the admin's ward picker names them.
     fn area_presets(&mut self) {
         let mut order = self
             .data
@@ -493,7 +494,7 @@ impl Generator<'_> {
                 let Some(place) = self.wards.get(ward) else {
                     continue;
                 };
-                let label = format!("{} — {}", place.province, place.name);
+                let label = preset_label(&place.province, &place.name);
                 if !self.data.locations.iter().any(|l| l.label == label) {
                     order += 1;
                     self.data.locations.push(DemoLocation {

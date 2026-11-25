@@ -1011,7 +1011,7 @@ fn scope_of(partner: &Partner) -> DemoScope {
 fn area_about(units: &AdminUnits, area: &ContractArea, shop: Option<&str>) -> String {
     let label = units.label(&AreaKey::of_contract(area)).unwrap_or_default();
     match shop {
-        Some(shop) => format!("{label} — {shop}"),
+        Some(shop) => format!("{label} · {shop}"),
         None => label,
     }
 }

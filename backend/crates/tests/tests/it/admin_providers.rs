@@ -441,7 +441,7 @@ async fn a_provider_page_opens_with_its_summary_area_and_activity() {
     let area = scalar(
         &e,
         &format!(
-            "SELECT p.name || ' — ' || w.full_name AS area FROM wards w \
+            "SELECT w.full_name || ', ' || p.name AS area FROM wards w \
              JOIN provinces p ON p.code = w.province_code WHERE w.code = '{ward}'"
         ),
         "area",

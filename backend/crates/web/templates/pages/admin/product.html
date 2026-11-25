@@ -17,7 +17,7 @@
     confirmations (`b.confirms`) close the page, each in its own `dialog`
     scope, opened by the URL hash. `page.body` is
     web::pages::admin::products::ProductPage. -#}
-{% block title %}{{ page.body.product.name }} — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ page.body.product.name }} | {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
 {% set p = b.product %}

@@ -212,7 +212,7 @@ document.addEventListener("alpine:init", () => {
       return this.name.trim() || this.saved.defaultName;
     },
     get googleTitle() {
-      return `${this.shownName} — ${this.saved.homeTitle}`;
+      return `${this.shownName} | ${this.saved.homeTitle}`;
     },
     get googleDescription() {
       return this.description.trim() || this.saved.defaultDescription;

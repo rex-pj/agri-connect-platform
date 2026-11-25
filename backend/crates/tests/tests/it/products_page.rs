@@ -66,7 +66,7 @@ async fn the_list_filters_by_text_category_and_price_and_sorts() {
     let [(cat_a, _), _] = seeded(&e).await;
 
     let all = html(&e, "/supplies").await;
-    assert!(all.contains("<title>Vật tư nông nghiệp — Agri-Connect</title>"));
+    assert!(all.contains("<title>Vật tư nông nghiệp | Agri-Connect</title>"));
     assert!(all.contains("<strong>4</strong> vật tư"));
     assert!(all.contains(r#"<form class="list-search" method="get" action="/supplies""#));
 

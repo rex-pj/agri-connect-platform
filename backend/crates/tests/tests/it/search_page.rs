@@ -49,7 +49,7 @@ async fn one_search_finds_services_products_and_shops_with_tab_links() {
     seeded(&e, 2, 3).await;
 
     let page = html(&e, "/search?q=phan+bon").await;
-    assert!(page.contains("<title>Tìm kiếm “phan bon” — Agri-Connect</title>"));
+    assert!(page.contains("<title>Tìm kiếm “phan bon” | Agri-Connect</title>"));
     assert!(page.contains(r#"<meta name="robots" content="noindex">"#));
     // The shops' services match through the shop's name.
     assert!(page.contains("Dịch vụ <span class=\"text-muted fw-normal small\">(2)</span>"));
@@ -170,7 +170,7 @@ async fn no_query_asks_for_one_and_nothing_found_says_so_once() {
     let e = Env::new().await;
     let empty = html(&e, "/search").await;
     assert!(empty.contains("Nhập từ khoá để tìm kiếm"));
-    assert!(empty.contains("<title>Tìm kiếm — Agri-Connect</title>"));
+    assert!(empty.contains("<title>Tìm kiếm | Agri-Connect</title>"));
 
     // One message, and the ways forward: post the job, look near me.
     let none = html(&e, "/search?q=xyz&tab=bogus").await;

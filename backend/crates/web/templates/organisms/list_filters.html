@@ -35,7 +35,7 @@
         <legend class="filter-label">{{ t(key="filters.price") }}</legend>
         <div class="price-row">
           <input class="form-control" type="number" name="min_price" min="0" inputmode="numeric" placeholder="{{ t(key="filters.price_from") }}" aria-label="{{ t(key="filters.price_min") }}" value="{{ f.price.min }}">
-          <span class="price-row__sep" aria-hidden="true">—</span>
+          <span class="price-row__sep" aria-hidden="true">-</span>
           <input class="form-control" type="number" name="max_price" min="0" inputmode="numeric" placeholder="{{ t(key="filters.price_to") }}" aria-label="{{ t(key="filters.price_max") }}" value="{{ f.price.max }}">
         </div>
       </fieldset>

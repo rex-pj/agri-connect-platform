@@ -21,9 +21,9 @@
       </a>
       <p class="app-footer__promise">{{ t(key="footer.promise") }}</p>
       <ul class="app-footer__values" aria-label="{{ t(key="footer.values_label") }}">
-        <li>{{ atoms::icon(name="fa-location-dot") }} {{ t(key="footer.value_local") }}</li>
-        <li>{{ atoms::icon(name="fa-eye") }} {{ t(key="footer.value_transparent") }}</li>
-        <li>{{ atoms::icon(name="fa-bolt") }} {{ t(key="footer.value_timely") }}</li>
+        <li>{{ atoms::icon(name="fa-location-dot") }} {{ t(key="footer.value_near") }}</li>
+        <li>{{ atoms::icon(name="fa-phone") }} {{ t(key="footer.value_direct") }}</li>
+        <li>{{ atoms::icon(name="fa-hand-holding-heart") }} {{ t(key="footer.value_free") }}</li>
       </ul>
     </div>
 
@@ -60,7 +60,7 @@
   </div>
   <div class="app-footer__legal">
     <span>© {{ year }} {{ site.name }}</span>
-    <span>{{ atoms::icon(name="fa-location-dot") }} {{ t(key="site.region") }}</span>
+    <span>{{ atoms::icon(name="fa-location-dot") }} {{ t(key="site.region_line") }}</span>
   </div>
 </footer>
 {%- endmacro app_footer %}

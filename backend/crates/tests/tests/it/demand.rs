@@ -20,7 +20,7 @@ const LAST_WEEK: &str = "((date_trunc('week', now() AT TIME ZONE 'Asia/Ho_Chi_Mi
 /// The commune the shops of these tests lie in (by Cai Lậy, Đồng Tháp), and
 /// what the report calls it.
 const BINH_PHU: &str = "28471";
-const BINH_PHU_LABEL: &str = "Đồng Tháp — Xã Bình Phú";
+const BINH_PHU_LABEL: &str = "Xã Bình Phú, Đồng Tháp";
 
 async fn scalar(e: &Env, sql: &str) -> String {
     e.t.db
@@ -219,7 +219,7 @@ async fn the_report_counts_real_leads_by_area_and_hides_small_figures() {
     );
     assert!(dashboard.contains("admin-table admin-table--matrix area-progress"));
     // As on the report: the province a top row, its commune under it by its
-    // own name, the last of its group, never the full "province — ward".
+    // own name, the last of its group, never the full "ward, province".
     let top = dashboard
         .find(r#"class="area-progress__top""#)
         .expect("the province");
@@ -227,7 +227,7 @@ async fn the_report_counts_real_leads_by_area_and_hides_small_figures() {
         .find(r#"class="area-progress__ward area-progress__ward--last""#)
         .expect("its commune");
     assert!(top < ward, "the commune follows its province");
-    assert!(!dashboard.contains("Đồng Tháp — "));
+    assert!(!dashboard.contains(BINH_PHU_LABEL));
     // The cards say how they moved: one provider listed this week, 8 taps
     // against none in the 30 days before.
     // The figure (an arrow and the sign) apart from its words.
@@ -303,7 +303,7 @@ async fn searches_are_recorded_without_who_and_unmet_ones_are_listed() {
     send(&e.router, get_page("/search?q=", None)).await;
     let cai_lay = scalar(
         &e,
-        "SELECT id::text AS v FROM locations WHERE label = 'Đồng Tháp — Cai Lậy'",
+        "SELECT id::text AS v FROM locations WHERE label = 'Cai Lậy, Đồng Tháp'",
     )
     .await;
     send(

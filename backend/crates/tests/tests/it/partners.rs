@@ -71,7 +71,7 @@ async fn a_partner_pays_for_an_area_reads_its_report_and_sponsors_a_shop() {
     let (plain, category) = provider_at(&e, "thuong", "0901111111", 106.090, 10.420).await;
     let (sponsored, _) = provider_at(&e, "taitro", "0902222222", 106.085, 10.415).await;
     let (far, _) = provider_at(&e, "longxuyen", "0903333333", 105.446, 10.374).await;
-    let cai_lay = location(&e, "Đồng Tháp — Cai Lậy").await;
+    let cai_lay = location(&e, "Cai Lậy, Đồng Tháp").await;
     // The contract covers the commune the preset's point lies in.
     let binh_phu = "w28471";
 
@@ -168,7 +168,7 @@ async fn a_partner_pays_for_an_area_reads_its_report_and_sponsors_a_shop() {
     // The revenue: one paying partner, 2 000 000 a month in Xã Bình Phú.
     let list = body_text(send(&e.router, get_page("/admin/partners", Some(&admin))).await).await;
     assert!(list.contains("Dai ly Drone"));
-    assert!(list.contains("Đồng Tháp — Xã Bình Phú"));
+    assert!(list.contains("Xã Bình Phú, Đồng Tháp"));
     assert!(list.contains("2.000.000"));
     let dashboard =
         body_text(send(&e.router, get_page("/admin/dashboard", Some(&admin))).await).await;
@@ -272,7 +272,7 @@ async fn a_partner_pays_for_an_area_reads_its_report_and_sponsors_a_shop() {
     let own = body_text(send(&e.router, get_page("/partner", Some(&partner))).await).await;
     assert!(own.contains("Dai ly Drone"));
     assert!(!own.contains("bottom-nav"), "its own frame: no farmer tabs");
-    assert!(own.contains("Đồng Tháp — Xã Bình Phú"));
+    assert!(own.contains("Xã Bình Phú, Đồng Tháp"));
     assert!(
         own.contains(r#"href="/account""#),
         "the account menu leads to the password change"

@@ -10,7 +10,7 @@
     The category is a set of large cards; the photo box takes the gallery or
     the camera (no `capture`, so an existing photo can be chosen). Alpine
     `imagePreview` shows the chosen photo before it is sent. -#}
-{% block title %}{% if page.service %}{{ t(key="common.edit_label", name=page.service.name) }}{% else %}{{ t(key="dashboard.add_service") }}{% endif %} — {{ site.name }}{% endblock title %}
+{% block title %}{% if page.service %}{{ t(key="common.edit_label", name=page.service.name) }}{% else %}{{ t(key="dashboard.add_service") }}{% endif %} | {{ site.name }}{% endblock title %}
 {% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
 {% block main %}
 {% set x = page.service %}

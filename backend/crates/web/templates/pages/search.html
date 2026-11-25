@@ -17,7 +17,7 @@
     paged on its own: the "all" tab previews each kind with "see more" to its
     tab, and a kind's tab (or the one kind found) is its whole list with its
     own page links; tabs load, never switch in place. -#}
-{% block title %}{% if page.q %}{{ t(key="search.title_query", q=page.q) }}{% else %}{{ t(key="common.search") }}{% endif %} — {{ site.name }}{% endblock title %}
+{% block title %}{% if page.q %}{{ t(key="search.title_query", q=page.q) }}{% else %}{{ t(key="common.search") }}{% endif %} | {{ site.name }}{% endblock title %}
 {% block meta %}<meta name="robots" content="noindex">{% endblock meta %}
 {% block main %}
 <div class="list-tools">{{ bar::search_bar(action=url_for(name="search"), q=page.q, placeholder=t(key="search.placeholder")) }}</div>

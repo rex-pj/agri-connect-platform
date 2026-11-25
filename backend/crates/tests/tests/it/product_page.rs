@@ -74,9 +74,10 @@ async fn the_detail_page_shows_price_description_and_a_call_button() {
     assert_eq!(res.status(), StatusCode::OK);
     assert_eq!(res.headers()[header::CONTENT_SECURITY_POLICY], PAGE_CSP);
     let html = text(res).await;
-    assert!(html.contains(&format!("<title>{NAME} — Agri-Connect</title>")));
+    assert!(html.contains(&format!("<title>{NAME} | Agri-Connect</title>")));
     // The description on one line for search snippets...
-    assert!(html.contains(r#"<meta name="description" content="Gạo thơm dẻo. Đóng bao 5 kg.">"#));
+    assert!(html.contains(&format!(r#"<meta name="description" content="{NAME} của "#)));
+    assert!(html.contains(r#". Gạo thơm dẻo. Đóng bao 5 kg.">"#));
     // ...and with the seller's line break on the page.
     assert!(html.contains("Gạo thơm dẻo.\nĐóng bao 5 kg."));
     assert!(html.contains("28.000 ₫") && html.contains("/kg"));
@@ -218,7 +219,7 @@ async fn the_contact_form_asks_about_this_product_and_lands_back_on_it() {
     let res = send(&e.router, form("")).await;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     let refused = text(res).await;
-    assert!(refused.contains(&format!("<title>{NAME} — Agri-Connect</title>")));
+    assert!(refused.contains(&format!("<title>{NAME} | Agri-Connect</title>")));
     assert!(
         refused.contains(r#"value="0912345678""#),
         "typed phone kept"

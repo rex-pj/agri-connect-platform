@@ -33,10 +33,11 @@ type SortKey = (Vec<u32>, Vec<u8>);
 /// Official codes are two (province) or five (ward) digits.
 const CODE_MAX: usize = 5;
 
-/// A location preset's name for a ward: "Đồng Tháp — Bình Phú", like the
-/// seeded ones (the province, then the ward's own name without "Xã").
+/// A location preset's name for a ward: "Bình Phú, Đồng Tháp", like the
+/// seeded ones (the ward's own name without "Xã", then its province, as an
+/// address is written).
 pub fn preset_label(province_name: &str, ward_name: &str) -> String {
-    format!("{province_name} — {ward_name}")
+    format!("{ward_name}, {province_name}")
 }
 
 /// Where a lead counts.
@@ -185,7 +186,7 @@ impl AdminUnits {
                 self.wards
                     .get(code)
                     .map(|w| match self.provinces.get(&w.province_code) {
-                        Some(p) => format!("{} — {}", p.name, w.full_name),
+                        Some(p) => format!("{}, {}", w.full_name, p.name),
                         None => w.full_name.clone(),
                     })
             }
@@ -325,7 +326,7 @@ pub(crate) mod tests {
         let u = units();
         assert_eq!(
             u.label(&AreaKey::Ward("28439".into())).as_deref(),
-            Some("Đồng Tháp — Phường Cai Lậy")
+            Some("Phường Cai Lậy, Đồng Tháp")
         );
         assert_eq!(
             u.label(&AreaKey::Province("82".into())).as_deref(),
@@ -359,12 +360,9 @@ pub(crate) mod tests {
         let first = choices.first().and_then(|g| g.wards.first());
         assert_eq!(
             first.map(|w| w.preset.as_str()),
-            Some("An Giang — Long Xuyên")
+            Some("Long Xuyên, An Giang")
         );
-        assert_eq!(
-            preset_label("Đồng Tháp", "Bình Phú"),
-            "Đồng Tháp — Bình Phú"
-        );
+        assert_eq!(preset_label("Đồng Tháp", "Bình Phú"), "Bình Phú, Đồng Tháp");
     }
 
     #[test]

@@ -15,7 +15,7 @@
     every week did. It lists every province and only the wards of the one
     in focus (`grouped_areas`; each province says how many wards it holds
     and opens them through its link). -#}
-{% block title %}{{ t(key="admin_menu.demand") }} — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ t(key="admin_menu.demand") }} | {{ site.name }} Admin{% endblock title %}
 {% block vendor %}{{ field::searchable_select_assets() }}{% endblock vendor %}
 {% block content %}
 {% set b = page.body %}

@@ -10,7 +10,7 @@
     dates or off; who turned it off and why), then its edit form, and beside
     it on a wide screen its history. An alert is never deleted. `page.body`
     is web::pages::admin::alerts::AlertPage. -#}
-{% block title %}{{ page.body.alert.title }} — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ page.body.alert.title }} | {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
 {% set a = b.alert %}

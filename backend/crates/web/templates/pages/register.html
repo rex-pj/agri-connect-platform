@@ -5,7 +5,7 @@
 {#- `page` is web::pages::auth::RegisterPage. While sign-ups are closed
     (`page.open` false) a notice and the platform's help lines replace the
     form. -#}
-{% block title %}{{ t(key="account_menu.register_provider") }} — {{ site.name }}{% endblock title %}
+{% block title %}{{ t(key="account_menu.register_provider") }} | {{ site.name }}{% endblock title %}
 {% block card %}
 {% set v = page.values %}
 {% set e = page.errors.fields %}

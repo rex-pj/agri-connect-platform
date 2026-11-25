@@ -11,7 +11,7 @@
     not, who hid it and why), then its edit form, and beside it on a wide
     screen its latest prices and history. A crop is never deleted: its
     prices would go with it. `page.body` is web::pages::admin::crops::CropPage. -#}
-{% block title %}{{ page.body.crop.name }} — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ page.body.crop.name }} | {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
 {% set c = b.crop %}
@@ -44,7 +44,7 @@
         <h2 class="admin-section__title" id="gia-title">{{ t(key="admin_crops.recent_prices") }}</h2>
         {% if b.prices %}
         <ul class="list-unstyled mb-0">
-          {% for p in b.prices %}<li class="d-flex flex-wrap justify-content-between gap-2 py-2 border-bottom"><span>{{ p.location_label }} · <span class="text-muted">{{ p.observed_on | full_date }}</span></span><span class="fw-semibold text-nowrap">{% if p.price_low == p.price_high %}{{ p.price_low | vnd }}{% else %}{{ p.price_low | number }} – {{ p.price_high | vnd }}{% endif %}<span class="small text-muted">/{{ p.unit }}</span></span></li>{% endfor %}
+          {% for p in b.prices %}<li class="d-flex flex-wrap justify-content-between gap-2 py-2 border-bottom"><span>{{ p.location_label }} · <span class="text-muted">{{ p.observed_on | full_date }}</span></span><span class="fw-semibold text-nowrap">{% if p.price_low == p.price_high %}{{ p.price_low | vnd }}{% else %}{{ p.price_low | number }} - {{ p.price_high | vnd }}{% endif %}<span class="small text-muted">/{{ p.unit }}</span></span></li>{% endfor %}
         </ul>
         {% if b.prices_total > b.prices | length %}<a class="admin-section__link" href="{{ b.prices_href }}">{{ t(key="admin_crops.all_prices", count=b.prices_total) }}</a>{% endif %}
         {% else %}

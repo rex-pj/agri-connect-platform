@@ -999,7 +999,7 @@ mod tests {
         assert_eq!(partner.areas.first().map(|a| a.nested), Some(false));
         assert_eq!(
             partner.areas.first().and_then(|a| a.label.as_deref()),
-            Some("Đồng Tháp — Xã Tân Phước")
+            Some("Xã Tân Phước, Đồng Tháp")
         );
         let rows: Vec<_> = partner.rows.iter().map(|r| r.category_id).collect();
         assert_eq!(rows, vec![Some(8)], "its category, even with no leads");

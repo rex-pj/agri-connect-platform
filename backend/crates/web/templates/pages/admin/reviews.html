@@ -13,7 +13,7 @@
     list position (page, `provider_id`) back so the redirect lands here
     again; `b.filter` is set when the list is one provider's. A farmer's new
     review arrives hidden ("waiting"): showing it is the approval. -#}
-{% block title %}{{ t(key="admin_menu.reviews") }} — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ t(key="admin_menu.reviews") }} | {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
 {% set sub = t(key="admin.reviews_sub") %}

@@ -13,7 +13,7 @@
     (`b.create`), the header's "add" opens the create sheet (an anchored
     section without JS), which comes back open with its messages when a rule
     is broken: a listing set up in the field, from the owner's phone. -#}
-{% block title %}{{ t(key="admin_menu.providers") }} — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ t(key="admin_menu.providers") }} | {{ site.name }} Admin{% endblock title %}
 {% block scripts %}{% if page.body.create %}<script defer src="{{ asset_url(path='js/islands.js') }}"></script>{% endif %}{% endblock scripts %}
 {% block content %}
 {% set b = page.body %}
@@ -38,7 +38,7 @@
           {% set p = r.provider %}
           <tr{% if not p.is_active %} class="table-light text-body-secondary"{% endif %}>
             <td data-label=""><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ p.name }}</a><a class="d-block small text-muted text-decoration-none" href="tel:{{ p.phone }}">{{ p.phone | phone }}</a></td>
-            <td data-label="{{ t(key="admin.col_address") }}" class="small d-none d-lg-table-cell"><div class="cell-short">{% if p.address %}{{ p.address }}{% else %}<span class="text-muted">—</span>{% endif %}</div></td>
+            <td data-label="{{ t(key="admin.col_address") }}" class="small d-none d-lg-table-cell"><div class="cell-short">{% if p.address %}{{ p.address }}{% else %}<span class="text-muted">-</span>{% endif %}</div></td>
             <td data-label="{{ t(key="admin_menu.services") }}" class="text-center">{{ p.service_count }}</td>
             <td data-label="{{ t(key="admin_menu.products") }}" class="text-center">{{ p.product_count }}</td>
             <td data-label="{{ t(key="nav.account") }}">{% if p.linked_username %}<span class="badge text-bg-light border">{{ p.linked_username }}</span>{% else %}<span class="small text-muted">{{ t(key="admin.none") }}</span>{% endif %}</td>

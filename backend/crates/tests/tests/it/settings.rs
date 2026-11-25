@@ -117,7 +117,7 @@ async fn a_group_is_saved_refused_audited_and_put_back() {
             "SELECT reason AS v FROM audit_logs WHERE action = 'change_settings'"
         )
         .await,
-        "market.steady_weekly_leads: 20 → 8: vùng thưa"
+        "market.steady_weekly_leads: 20 -> 8: vùng thưa"
     );
     let html = page(&e, "/admin/settings?tab=market", Some(&admin)).await;
     assert!(
@@ -129,7 +129,7 @@ async fn a_group_is_saved_refused_audited_and_put_back() {
         "so does the tab"
     );
     assert!(
-        html.contains("Đưa về mặc định") && html.contains("8 → 20"),
+        html.contains("Đưa về mặc định") && html.contains("đang là 8, mặc định 20"),
         "the reset card"
     );
 
@@ -268,7 +268,7 @@ async fn the_name_an_admin_chooses_reaches_every_frame() {
     );
 
     let home = page(&e, "/", None).await;
-    assert!(home.contains("<title>Nông Kết Nối — "), "the page title");
+    assert!(home.contains("<title>Nông Kết Nối | "), "the page title");
     assert!(home.contains(r#"content="Thuê làm, mua vật tư gần nhà.""#));
     assert!(!home.contains("Agri-Connect"), "no trace of the old name");
     let login = page(&e, "/login", None).await;

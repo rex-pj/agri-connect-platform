@@ -11,7 +11,7 @@
     name, price) with the provider offering it; tabs switch the same search
     to the shops (`/providers`). `page` is
     web::pages::services::ServicesPage. -#}
-{% block title %}{% if page.category %}{{ page.category.name }}{% else %}{{ t(key="services.title") }}{% endif %} — {{ site.name }}{% endblock title %}
+{% block title %}{% if page.category %}{{ page.category.name }}{% else %}{{ t(key="services.title") }}{% endif %} | {{ site.name }}{% endblock title %}
 {% block meta %}<meta name="description" content="{% if page.category %}{{ t(key="services.meta_category", category=page.category.name) }}{% else %}{{ t(key="services.meta") }}{% endif %}">{% endblock meta %}
 {% block main %}
 {{ hero::page_hero(title=page.title, back_href=page.back_href, back_label=page.back_label, variant="", icon=page.icon, sub=page.sub) }}

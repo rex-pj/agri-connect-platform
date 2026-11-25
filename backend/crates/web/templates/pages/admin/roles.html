@@ -4,7 +4,7 @@
 {% import "molecules/admin_tabs.html" as tabs %}
 {% import "molecules/row_action.html" as row %}
 {#- `page.body` is web::pages::admin::roles::RolesPage. -#}
-{% block title %}{{ t(key="admin_menu.roles") }} — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ t(key="admin_menu.roles") }} | {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {{ header::admin_header(title=t(key="admin_menu.roles"), icon="fa-shield-halved", sub=t(key="admin.roles_sub")) }}
 <div class="admin-body">

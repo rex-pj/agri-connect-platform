@@ -19,7 +19,7 @@
     row's confirmation open (`b.confirm`, in its own `dialog` scope); row
     actions send `back=list` and the list position (`b.keep`) so they land
     here again. -#}
-{% block title %}{{ t(key="admin_menu.services") }} — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ t(key="admin_menu.services") }} | {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
 {% set sub = t(key="admin.services_sub") %}
@@ -59,7 +59,7 @@
             </td>
             <td data-label="{{ t(key="common.provider") }}"><a class="text-decoration-none" href="{{ r.provider_href }}">{{ s.business_name }}</a>{% if s.added_by_owner %}<span class="d-block small text-muted">{{ t(key="admin.added_by_owner") }}</span>{% endif %}</td>
             <td data-label="{{ t(key="admin.col_classification") }}" class="small"><span class="d-block"><span class="text-muted">{{ t(key="admin.label_type") }}:</span> <a class="fw-semibold text-decoration-none" href="{{ r.category_href }}">{{ s.category }}</a></span><span class="d-block"><span class="text-muted">{{ t(key="admin.label_sector") }}:</span> {% if r.sector_href %}<a class="text-decoration-none" href="{{ r.sector_href }}">{{ r.sector_label }}</a>{% else %}{{ r.sector_label }}{% endif %}</span></td>
-            <td data-label="{{ t(key="service_form.price") }}">{% if s.price_note %}{{ s.price_note }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+            <td data-label="{{ t(key="service_form.price") }}">{% if s.price_note %}{{ s.price_note }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
             <td data-label="{{ t(key="admin.col_status") }}" class="text-center cell-state">{{ status::visibility(on=s.is_active) }}</td>
             <td data-label="" class="text-end">
               <div class="row-actions">

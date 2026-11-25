@@ -16,7 +16,7 @@
     a wide screen its details and history. The header's confirmations
     (`b.confirms`) close the page, each in its own `dialog` scope, opened by
     the URL hash. `page.body` is web::pages::admin::services::ServicePage. -#}
-{% block title %}{{ page.body.service.name }} — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ page.body.service.name }} | {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
 {% set s = b.service %}

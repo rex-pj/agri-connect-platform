@@ -148,8 +148,10 @@ async fn the_listing_shows_services_with_their_provider_and_filters_them() {
     let seed = seeded(&e).await;
 
     let all = html(&e, "/services").await;
-    assert!(all.contains("<title>Dịch vụ nông nghiệp — Agri-Connect</title>"));
-    assert!(all.contains(r#"<meta name="description" content="Dịch vụ nông nghiệp tại"#));
+    assert!(all.contains("<title>Dịch vụ nông nghiệp | Agri-Connect</title>"));
+    assert!(
+        all.contains(r#"<meta name="description" content="Thuê múc bùn, phun thuốc bằng drone"#)
+    );
     assert!(all.contains("<strong>4</strong> dịch vụ"));
     // Default order: the verified provider's first, then the newest.
     assert_eq!(
@@ -327,7 +329,7 @@ async fn a_service_has_its_own_page_with_the_contact_form_ready() {
     assert_eq!(res.status(), StatusCode::NOT_FOUND);
 
     let html = html(&e, &canonical).await;
-    assert!(html.contains("<title>Sửa máy cày — Cơ khí Bảy Tốt — Agri-Connect</title>"));
+    assert!(html.contains("<title>Sửa máy cày | Cơ khí Bảy Tốt | Agri-Connect</title>"));
     assert!(html.contains(r#"<meta name="description" content="Sửa máy cày của Cơ khí Bảy Tốt"#));
     assert!(html.contains("300.000 ₫"));
     assert!(html.contains(r#"href="tel:0901000001""#));
@@ -365,7 +367,7 @@ async fn a_service_has_its_own_page_with_the_contact_form_ready() {
     let res = send(&e.router, form("")).await;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     let refused = body_text(res).await;
-    assert!(refused.contains("<title>Sửa máy cày — Cơ khí Bảy Tốt"));
+    assert!(refused.contains("<title>Sửa máy cày | Cơ khí Bảy Tốt"));
     assert!(
         refused.contains(r#"value="0912345678""#),
         "typed phone kept"
@@ -387,7 +389,7 @@ async fn the_directory_lists_every_provider_and_finds_them_by_their_services() {
     let seed = seeded(&e).await;
 
     let all = html(&e, "/providers").await;
-    assert!(all.contains("<title>Nhà cung cấp — Agri-Connect</title>"));
+    assert!(all.contains("<title>Nhà cung cấp | Agri-Connect</title>"));
     assert!(
         all.contains("<strong>4</strong> nhà cung cấp"),
         "a new sign-up without services is listed too"

@@ -17,7 +17,7 @@
     {% if p.distance_m or p.locality %}
     <p class="text-muted small mb-0 d-flex align-items-center gap-1 provider-card__loc">
       {{ atoms::icon(name="fa-location-dot") }}
-      {% if p.distance_m %}<span>{{ t(key="distance.away") }} <strong>{{ p.distance_m | distance }}</strong></span>{% if p.locality %} <span class="provider-card__sep" aria-hidden="true">—</span>{% endif %}{% endif %}
+      {% if p.distance_m %}<span>{{ t(key="distance.away") }} <strong>{{ p.distance_m | distance }}</strong></span>{% if p.locality %} <span class="provider-card__sep" aria-hidden="true">-</span>{% endif %}{% endif %}
       {% if p.locality %}<span class="text-truncate">{{ p.locality }}</span>{% endif %}
     </p>
     {% endif %}

@@ -4,7 +4,7 @@
     without an area of their own). Partners see the same in their frame
     (`pages/partner_account.html`), admins in the panel
     (`pages/admin/account.html`). `page` is web::pages::account::AccountPage. -#}
-{% block title %}{{ t(key="nav.account") }} — {{ site.name }}{% endblock title %}
+{% block title %}{{ t(key="nav.account") }} | {{ site.name }}{% endblock title %}
 {% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
 {% block main %}
 {{ account::account_header(p=page) }}

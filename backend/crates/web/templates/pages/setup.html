@@ -4,7 +4,7 @@
 {% import "molecules/form_field.html" as field %}
 {#- First run: the first admin account. `page` is web::pages::setup::SetupPage.
     Demo data is opt-in: the box starts unticked. -#}
-{% block title %}{{ t(key="setup.title") }} — {{ site.name }}{% endblock title %}
+{% block title %}{{ t(key="setup.title") }} | {{ site.name }}{% endblock title %}
 {% block card %}
 {% set v = page.values %}
 {% set e = page.errors.fields %}

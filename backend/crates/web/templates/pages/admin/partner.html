@@ -24,7 +24,7 @@
     refused form comes back on its part with its messages; the account form
     is a sheet, open again after a refusal. `page.body` is
     web::pages::admin::partners::PartnerPage. -#}
-{% block title %}{{ page.body.partner.name }} — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ page.body.partner.name }} | {{ site.name }} Admin{% endblock title %}
 {% block vendor %}{{ field::searchable_select_assets() }}{% endblock vendor %}
 {% block content %}
 {% set b = page.body %}
@@ -65,7 +65,7 @@
     <article class="d-flex align-items-center gap-2 py-2 border-bottom" id="hd-{{ c.id }}" aria-labelledby="hd-{{ c.id }}-title">
       <div class="flex-grow-1">
         <h3 class="fs-6 fw-bold mb-1" id="hd-{{ c.id }}-title"><a class="link-body-emphasis text-decoration-none" href="{{ r.href }}">{{ c.area_label }}</a> {{ status::contract(state=c.state) }}</h3>
-        <p class="small mb-0"><time datetime="{{ c.starts_on }}">{{ c.starts_on | full_date }}</time> – <time datetime="{{ c.ends_on }}">{{ c.ends_on | full_date }}</time> · <strong>{{ c.monthly_fee | vnd }}</strong> {{ t(key="partner.per_month") }}</p>
+        <p class="small mb-0"><time datetime="{{ c.starts_on }}">{{ c.starts_on | full_date }}</time> - <time datetime="{{ c.ends_on }}">{{ c.ends_on | full_date }}</time> · <strong>{{ c.monthly_fee | vnd }}</strong> {{ t(key="partner.per_month") }}</p>
         <p class="small text-muted mb-0">{{ t(key="partner.categories_count", count=c.categories | length) }} · {{ t(key="partner.sponsored_count", count=c.sponsored | length) }}</p>
       </div>
       <div class="row-actions">{{ row::open(href=r.href, name=c.area_label) }}</div>

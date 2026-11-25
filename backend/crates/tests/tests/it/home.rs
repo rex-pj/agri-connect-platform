@@ -67,8 +67,9 @@ async fn the_home_page_features_services_then_products_with_working_links() {
         .all(|s| s.business_verified));
 
     let html = html(&e.router, page(None)).await;
-    assert!(html.contains("<title>Agri-Connect — Nền tảng nông nghiệp"));
-    assert!(html.contains(r#"<meta name="description" content="Tìm dịch vụ và vật tư"#));
+    assert!(html.contains("<title>Agri-Connect | Thuê làm, mua vật tư"));
+    assert!(html
+        .contains(r#"<meta name="description" content="Thuê múc bùn, phun thuốc, thú y tận nhà"#));
     assert!(html.contains("Dịch vụ nổi bật"));
     // Four verified providers with services in the demo (every sector): no
     // narrowing modifier.
@@ -86,7 +87,7 @@ async fn the_home_page_features_services_then_products_with_working_links() {
     let product_tile = html.find("/supplies/category/").expect("product tiles");
     assert!(service_tile < product_tile, "services lead");
     assert!(html.contains(r#"href="/explore""#) && html.contains(r#"href="/providers""#));
-    assert!(!html.contains("Nền tảng đang khởi động"));
+    assert!(!html.contains("Chưa có nhà cung cấp nào"));
     e.t.cleanup().await;
 }
 
@@ -95,7 +96,7 @@ async fn the_home_page_features_services_then_products_with_working_links() {
 async fn an_empty_platform_shows_a_way_forward() {
     let e = Env::new().await;
     let html = html(&e.router, page(None)).await;
-    assert!(html.contains("Nền tảng đang khởi động"));
+    assert!(html.contains("Chưa có nhà cung cấp nào"));
     assert!(html.contains("Tìm nhà cung cấp gần tôi"));
     e.t.cleanup().await;
 }

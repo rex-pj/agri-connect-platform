@@ -3,7 +3,7 @@
 {% import "atoms/alert.html" as alerts %}
 {% import "molecules/form_field.html" as field %}
 {#- `page` is web::pages::auth::LoginPage. -#}
-{% block title %}{{ t(key="account_menu.login") }} — {{ site.name }}{% endblock title %}
+{% block title %}{{ t(key="account_menu.login") }} | {{ site.name }}{% endblock title %}
 {% block card %}
 {% if page.reset %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="auth.reset_done")) }}{% endif %}
 <h1 class="auth-title">{{ t(key="account_menu.login") }}</h1>

@@ -18,7 +18,7 @@
     with its messages when a rule is broken. "Ẩn" reloads the list with that
     row's confirmation open (`b.confirm`, in its own `dialog` scope); row
     actions send `back=list` and the page (`b.keep`) so they land here again. -#}
-{% block title %}{{ t(key="admin_menu.catalogue") }} — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ t(key="admin_menu.catalogue") }} | {{ site.name }} Admin{% endblock title %}
 {% block vendor %}{{ field::searchable_select_assets() }}{% endblock vendor %}
 {% block content %}
 {% set b = page.body %}

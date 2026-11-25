@@ -8,7 +8,7 @@
     change; services lead unless only products are listed), then the
     business profile. `page` is web::pages::dashboard::DashboardPage. The
     location boxes can be typed or filled by the `ac-geolocate` island. -#}
-{% block title %}{{ t(key="dashboard.title") }} — {{ site.name }}{% endblock title %}
+{% block title %}{{ t(key="dashboard.title") }} | {{ site.name }}{% endblock title %}
 {% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
 {% block scripts %}<script defer src="{{ asset_url(path='js/islands.js') }}"></script>{% endblock scripts %}
 {% block main %}

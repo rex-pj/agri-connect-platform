@@ -23,7 +23,7 @@
     confirmations close the page, each in its own `dialog` scope, opened by
     the URL hash; the account form comes back open with its messages after a
     refusal. `page.body` is web::pages::admin::providers::ProviderPage. -#}
-{% block title %}{{ page.body.provider.name }} — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ page.body.provider.name }} | {{ site.name }} Admin{% endblock title %}
 {% block scripts %}{% if page.body.can_edit and page.body.tab == "profile" %}<script defer src="{{ asset_url(path='js/islands.js') }}"></script>{% endif %}{% endblock scripts %}
 {% block content %}
 {% set b = page.body %}

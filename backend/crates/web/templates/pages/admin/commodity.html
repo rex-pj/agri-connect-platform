@@ -12,7 +12,7 @@
     web::pages::admin::commodities::CommodityPage. Hiding goes through a confirmation
     with a reason (in its section's `dialog` scope); showing again is one
     button. A commodity is never deleted: crops and supplies point to it. -#}
-{% block title %}{{ page.body.commodity.name }} — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ page.body.commodity.name }} | {{ site.name }} Admin{% endblock title %}
 {% block vendor %}{{ field::searchable_select_assets() }}{% endblock vendor %}
 {% block content %}
 {% set b = page.body %}

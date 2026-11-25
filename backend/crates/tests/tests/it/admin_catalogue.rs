@@ -499,7 +499,7 @@ async fn a_location_is_filled_from_the_ward_chosen() {
 
     // The create sheet offers the wards, each with its preset name and point.
     let list = page(&e, "/admin/locations", &admin).await;
-    assert!(list.contains(r#"<option value="w28471" data-preset="Đồng Tháp — Bình Phú""#));
+    assert!(list.contains(r#"<option value="w28471" data-preset="Bình Phú, Đồng Tháp""#));
     assert!(list.contains(r#"x-data="wardFill""#));
 
     // Without JS: the blank boxes take the ward's name and point.
@@ -515,10 +515,10 @@ async fn a_location_is_filled_from_the_ward_chosen() {
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
     let preset = location_of(&res);
     let detail = page(&e, &preset, &admin).await;
-    assert!(detail.contains("Đồng Tháp — Bình Phú"));
+    assert!(detail.contains("Bình Phú, Đồng Tháp"));
 
     // The edit form has the same picker, and the same rule.
-    assert!(detail.contains(r#"<option value="w28378" data-preset="Đồng Tháp — Mỹ Thiện""#));
+    assert!(detail.contains(r#"<option value="w28378" data-preset="Mỹ Thiện, Đồng Tháp""#));
     assert!(detail.contains(r#"x-data="wardFill""#));
     let res = send(
         &e.router,
@@ -532,7 +532,7 @@ async fn a_location_is_filled_from_the_ward_chosen() {
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
     let detail = page(&e, &preset, &admin).await;
     assert!(
-        detail.contains("<title>Đồng Tháp — Mỹ Thiện"),
+        detail.contains("<title>Mỹ Thiện, Đồng Tháp"),
         "renamed and moved to Mỹ Thiện"
     );
 

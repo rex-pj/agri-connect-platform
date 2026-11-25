@@ -107,8 +107,9 @@ async fn the_provider_page_has_its_services_a_call_button_and_the_form() {
     let res = send(&e.router, get_page(&canonical, None)).await;
     assert_eq!(res.status(), StatusCode::OK);
     let html = body_text(res).await;
-    assert!(html.contains("<title>Vườn nongdan — Agri-Connect</title>"));
-    assert!(html.contains(r#"content="Múc bùn, nạo vét kênh mương.""#));
+    assert!(html.contains("<title>Vườn nongdan | Agri-Connect</title>"));
+    assert!(html.contains(r#"<meta name="description" content="Vườn nongdan ở "#));
+    assert!(html.contains(r#". Múc bùn, nạo vét kênh mương.""#));
     assert!(html.contains("Khu phố 3, phường Cai Lậy, Đồng Tháp"));
     assert!(html.contains("Múc bùn ao") && html.contains("300.000 ₫/giờ"));
     assert!(html.contains(r#"href="tel:0901234567""#));

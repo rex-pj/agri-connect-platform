@@ -150,8 +150,9 @@ file_not_found                 = "Không tìm thấy ảnh."
 # {name} placeholders are filled from those arguments.
 
 [text.site]
-description = "Tìm nhà cung cấp gần bạn cho trồng trọt, chăn nuôi, thuỷ hải sản: gọi thẳng, không qua trung gian."
-region      = "Đồng bằng sông Cửu Long"
+description = "Thuê làm, mua phân, giống, cám gần nhà: gọi thẳng cho người làm, miễn phí cho bà con."
+region      = "các tỉnh phía Nam"
+region_line = "Các tỉnh phía Nam"
 
 [text.language]
 # Each language is named in itself, the same in every file.
@@ -206,11 +207,11 @@ provider_title = "Trang quản lý của bạn"
 provider_sub   = "Cập nhật vật tư, ảnh và số điện thoại"
 
 [text.footer]
-promise           = "Bà con gọi thẳng nhà cung cấp gần nhà — không qua trung gian."
-values_label      = "Giá trị"
-value_local       = "Gần"
-value_transparent = "Minh bạch"
-value_timely      = "Kịp thời"
+promise           = "Bà con tìm người làm, chỗ mua vật tư gần nhà và gọi thẳng cho họ."
+values_label      = "Cam kết"
+value_free        = "Miễn phí"
+value_direct      = "Gọi thẳng"
+value_near        = "Gần nhà"
 explore           = "Khám phá"
 providers         = "Nhà cung cấp"
 help_title        = "Cần giúp đỡ?"
@@ -369,7 +370,7 @@ partners  = "Tên, người liên hệ, điện thoại hoặc email"
 [text.admin_sort]
 newest     = "Mới nhất"
 oldest     = "Cũ nhất"
-name       = "Tên A → Z"
+name       = "Tên từ A đến Z"
 first_made = "Theo ngày tạo"
 verified   = "Đã xác minh trước"
 on_first   = "Đang bật trước, theo tên"
@@ -389,13 +390,13 @@ label      = "Lọc theo trạng thái"
 [text.geo]
 title          = "Tìm nhà cung cấp gần bạn"
 button         = "Bật định vị"
-sub_services   = "Dịch vụ, vật tư quanh bạn — trong {km} km"
-sub_category   = "Trong {km} km — bật định vị để lọc theo khoảng cách"
-sub_shops      = "Nhà cung cấp quanh bạn — trong {km} km"
+sub_services   = "Dịch vụ, vật tư trong vòng {km} km quanh bạn"
+sub_category   = "Trong vòng {km} km. Bật định vị để lọc theo khoảng cách"
+sub_shops      = "Nhà cung cấp trong vòng {km} km quanh bạn"
 title_services = "Tìm dịch vụ gần bạn"
 title_shops    = "Tìm nhà cung cấp gần bạn"
 title_products = "Tìm vật tư gần bạn"
-sub_products   = "Vật tư, giống, thức ăn quanh bạn — trong {km} km"
+sub_products   = "Vật tư, giống, thức ăn trong vòng {km} km quanh bạn"
 
 [text.geolocate]
 fill             = "Lấy vị trí hiện tại"
@@ -474,7 +475,7 @@ title            = "Yêu cầu liên hệ"
 sub_before       = "Gửi yêu cầu tới"
 sub_after        = ". Họ sẽ gọi lại cho bạn."
 service          = "Dịch vụ cần"
-choose_service   = "— Chọn dịch vụ —"
+choose_service   = "Chọn dịch vụ"
 topic            = "Bạn cần gì?"
 name_placeholder = "Nguyễn Văn A"
 note             = "Ghi chú (không bắt buộc)"
@@ -506,14 +507,14 @@ newest         = "Mới nhất"
 price_asc      = "Giá tăng dần"
 price_desc     = "Giá giảm dần"
 verified_first = "Ưu tiên xác minh"
-name_asc       = "A → Z"
+name_asc       = "Từ A đến Z"
 
 [text.location_form]
 ward             = "Lấy từ xã, phường"
 ward_placeholder = "Chọn để tự điền tên và toạ độ"
 ward_hint        = "Tên và toạ độ điền theo xã, phường đã chọn; vẫn sửa được."
 label             = "Tên khu vực"
-label_placeholder = "Đồng Tháp — Cai Lậy"
+label_placeholder = "Cai Lậy, Đồng Tháp"
 coordinates       = "Toạ độ"
 
 [text.service_form]
@@ -533,7 +534,7 @@ metres   = "{metres} m"
 km_ride  = "{km} km (~{minutes} phút xe máy)"
 
 [text.card]
-new_provider = "Mới tham gia — chưa cập nhật dịch vụ"
+new_provider = "Mới tham gia, chưa đăng dịch vụ"
 details      = "Xem chi tiết"
 
 [text.list]
@@ -547,12 +548,12 @@ view_by      = "Xem theo"
 [text.products]
 title                 = "Vật tư nông nghiệp"
 for_commodity         = "Dùng cho {name}"
-sub                   = "{categories} — từ các nhà cung cấp uy tín"
+sub                   = "{categories} của cửa hàng, đại lý trong vùng"
 search_placeholder    = "Tìm vật tư..."
 count                 = "{count} vật tư"
 unit                  = "vật tư"
-meta                  = "Vật tư nông nghiệp từ nhà cung cấp uy tín tại Đồng bằng sông Cửu Long: phân bón, thuốc bảo vệ thực vật, giống cây trồng, thức ăn chăn nuôi, thuốc thú y, giống thuỷ sản, nông cụ và máy móc."
-meta_category         = "Xem các vật tư nông nghiệp loại {category} từ các nhà cung cấp uy tín tại Đồng bằng sông Cửu Long."
+meta                  = "Mua phân bón, thuốc bảo vệ thực vật, lúa giống, cây giống, cám, thuốc thú y, tôm cá giống: xem giá, gọi hỏi hàng ở cửa hàng gần nhà."
+meta_category         = "{category} bán gần bạn: so giá các nơi bán, gọi hỏi còn hàng trước khi đi mua."
 none_found            = "Không tìm thấy vật tư nào"
 none_found_hint       = "Thử từ khoá khác hoặc xoá bộ lọc để xem tất cả vật tư."
 none_in_category      = "Chưa có vật tư nào thuộc loại này"
@@ -561,12 +562,12 @@ none_yet              = "Chưa có vật tư nào"
 
 [text.services]
 title                 = "Dịch vụ nông nghiệp"
-sub                   = "Dịch vụ quanh vùng — gọi thẳng, không qua trung gian"
+sub                   = "Người làm quanh vùng, gọi thẳng cho họ"
 search_placeholder    = "Tìm dịch vụ..."
 count                 = "{count} dịch vụ"
 unit                  = "dịch vụ"
-meta                  = "Dịch vụ nông nghiệp tại Đồng bằng sông Cửu Long: xem ảnh, giá tham khảo và gọi thẳng cho người làm, không qua trung gian."
-meta_category         = "Dịch vụ {category} tại Đồng bằng sông Cửu Long: xem ảnh, giá tham khảo và gọi thẳng cho người làm, không qua trung gian."
+meta                  = "Thuê múc bùn, phun thuốc bằng drone, sửa máy, thú y tận nhà gần bạn. Xem ảnh việc đã làm, giá tham khảo và số điện thoại người làm."
+meta_category         = "Thuê {category} gần bạn: so giá, xem ảnh, gọi người làm gần ruộng, vườn, ao nhà mình."
 none_found            = "Không tìm thấy dịch vụ nào"
 none_found_hint       = "Thử từ khoá khác, xoá bộ lọc, hoặc tìm trong nhà cung cấp."
 search_shops          = "Tìm trong nhà cung cấp"
@@ -577,8 +578,8 @@ none_yet              = "Chưa có dịch vụ nào"
 
 [text.directory]
 title              = "Nhà cung cấp"
-meta               = "Danh bạ nhà cung cấp dịch vụ và vật tư cho trồng trọt, chăn nuôi, thuỷ hải sản tại Đồng bằng sông Cửu Long. Kết nối trực tiếp, không qua trung gian."
-sub                = "Tất cả nhà cung cấp — tìm theo tên hoặc dịch vụ"
+meta               = "Danh bạ thợ, đại lý, thú y, trại giống cho trồng trọt, chăn nuôi, thuỷ sản, có số điện thoại và địa chỉ từng nơi."
+sub                = "Tất cả nhà cung cấp, tìm theo tên hoặc dịch vụ"
 search_placeholder = "Tìm nhà cung cấp, dịch vụ..."
 unit               = "nhà cung cấp"
 none_found         = "Không tìm thấy nhà cung cấp nào"
@@ -770,28 +771,28 @@ every_sector     = "Tìm ở mọi ngành"
 post_job         = "Đăng tin cần mướn"
 
 [text.home]
-title             = "Nền tảng nông nghiệp Đồng bằng sông Cửu Long"
-meta              = "Tìm dịch vụ và vật tư cho trồng trọt, chăn nuôi, thuỷ hải sản (múc bùn, thú y, giống, thức ăn) tại Đồng bằng sông Cửu Long: xem ảnh, giá tham khảo, gọi thẳng không qua trung gian."
+title             = "Thuê làm, mua vật tư nông nghiệp gần nhà"
+meta              = "Thuê múc bùn, phun thuốc, thú y tận nhà; mua phân, giống, cám gần nhà. Xem ảnh, giá tham khảo và gọi thẳng cho người làm."
 all_categories    = "Tất cả"
 row_services      = "Thuê làm"
 row_supplies      = "Mua vật tư"
 featured_services = "Dịch vụ nổi bật"
 featured_products = "Vật tư nổi bật"
 prices            = "Giá nông sản mới nhất"
-empty             = "Nền tảng đang khởi động"
+empty             = "Chưa có nhà cung cấp nào"
 empty_hint        = "Chưa có dữ liệu. Hãy thử tìm dịch vụ gần bạn."
 empty_action      = "Tìm nhà cung cấp gần tôi"
 
 [text.explore]
 title               = "Tìm dịch vụ gần bạn"
-meta                = "Tìm nhà cung cấp gần bạn nhất: cơ giới, phân bón, thú y, giống, thức ăn chăn nuôi, thuỷ sản và nhiều hơn nữa. Bật định vị để lọc theo khoảng cách."
+meta                = "Thợ múc bùn, đội phun thuốc, thú y, đại lý phân, cám gần chỗ bạn nhất, xếp theo khoảng cách. Bật định vị hoặc chọn khu vực."
 locate_title        = "Tìm nhà cung cấp gần bạn"
 locate_sub_before   = "Cho phép xác định vị trí để tìm nhà cung cấp trong bán kính"
 locate_sub_after    = "từ bạn"
 km                  = "{km} km"
 privacy             = "Vị trí chỉ dùng để tìm nhà cung cấp, không được lưu lại"
 pick_area           = "Hoặc chọn khu vực"
-choose_area         = "— Chọn khu vực —"
+choose_area         = "Chọn khu vực"
 search_area         = "Tìm theo khu vực"
 near_title          = "Tìm dịch vụ gần tôi"
 located             = "Đã xác định vị trí"
@@ -928,33 +929,36 @@ empty         = "Chưa có yêu cầu nào"
 empty_hint    = "Khi bà con gửi yêu cầu từ trang của bạn, yêu cầu sẽ hiện ở đây."
 
 [text.product]
+meta_lead    = "{name} của {vendor} ở {area}."
 for_commodity = "Dùng cho:"
 commodity_prices = "Giá {name} mới nhất"
 meta         = "Mua {name} từ {vendor} trên {site}. Liên hệ nhà cung cấp để biết giá chính xác."
-price_note   = "Giá tham khảo — liên hệ nhà cung cấp để biết giá chính xác"
+price_note   = "Giá tham khảo, liên hệ nhà cung cấp để biết giá chính xác"
 description  = "Mô tả vật tư"
 shop_also    = "Dịch vụ của {provider}"
 more_in_category = "Xem thêm vật tư {category}"
-share_text   = "{name} – {vendor} tại {area}"
+share_text   = "{name} của {vendor} ở {area}"
 
 [text.shop]
 heading = "Nhà cung cấp"
 see     = "Xem nhà cung cấp"
 
 [text.provider]
-meta       = "Liên hệ {name} để biết thêm về dịch vụ nông nghiệp tại {area}."
+meta_lead  = "{name} ở {area}."
+meta       = "{name} ở {area}: dịch vụ, vật tư nông nghiệp và số điện thoại để gọi thẳng."
 verify     = "Xác minh"
 services   = "Dịch vụ cung cấp"
 products   = "Vật tư đang bán"
-share_text = "{name} – dịch vụ nông nghiệp tại {area}"
+share_text = "{name}, dịch vụ nông nghiệp ở {area}"
 
 [text.service]
-meta             = "{name} của {provider} tại {area}. Xem giá tham khảo và gọi thẳng, không qua trung gian."
-price_note       = "Giá tham khảo — gọi để hỏi giá theo diện tích, thời gian"
+meta_lead        = "{name} của {provider} ở {area}."
+meta             = "{name} của {provider} ở {area}: giá tham khảo, ảnh và số điện thoại."
+price_note       = "Giá tham khảo: gọi để hỏi giá theo diện tích, thời gian"
 description      = "Mô tả dịch vụ"
 others           = "Dịch vụ khác của {provider}"
 more_in_category = "Xem thêm dịch vụ {category}"
-share_text       = "{name} – {provider} tại {area}"
+share_text       = "{name} của {provider} ở {area}"
 
 [text.setup]
 title     = "Thiết lập hệ thống"
@@ -1003,7 +1007,7 @@ wards            = "Phường, xã, đặc khu"
 units_note       = "Tỉnh và xã lấy từ danh mục hành chính chính thức (từ 1/7/2025), tự cập nhật khi khởi động: là gốc để chọn khu vực hỗ trợ."
 
 [text.email]
-reset_subject   = "Đặt lại mật khẩu – {site}"
+reset_subject   = "Đặt lại mật khẩu - {site}"
 reset_body      = """
 Xin chào,
 
@@ -1015,7 +1019,7 @@ Mở liên kết sau để đặt mật khẩu mới (hiệu lực {hours} giờ
 Nếu bạn không yêu cầu, hãy bỏ qua email này.
 
 {site}"""
-verify_subject  = "Xác nhận email – {site}"
+verify_subject  = "Xác nhận email - {site}"
 verify_body     = """
 Xin chào,
 
@@ -1026,7 +1030,7 @@ Mở liên kết sau để xác nhận đây là email của tài khoản bạn 
 Nếu bạn không đăng ký tài khoản, hãy bỏ qua email này.
 
 {site}"""
-inquiry_subject = "Có bà con cần bạn gọi lại – {site}"
+inquiry_subject = "Có bà con cần bạn gọi lại - {site}"
 inquiry_body    = """
 Xin chào {business},
 
@@ -1041,7 +1045,7 @@ Hãy gọi lại sớm. Xem và đánh dấu đã gọi tại:
 
 {site}"""
 inquiry_note    = "Ghi chú: {note}\n"
-job_subject     = "Có tin cần mướn gần bạn – {site}"
+job_subject     = "Có tin cần mướn gần bạn - {site}"
 job_body        = """
 Xin chào {business},
 
@@ -1355,9 +1359,9 @@ read_only              = "Bạn chỉ có quyền xem."
 supplies_for = "Vật tư cho {name}"
 title      = "Giá nông sản"
 title_in   = "Giá nông sản tại {area}"
-meta       = "Giá nông sản tại nơi sản xuất ở Đồng bằng sông Cửu Long, cập nhật theo ngày: lúa, trái cây, heo hơi, gà, tôm, cá tra."
+meta       = "Giá nông sản tại nơi sản xuất, cập nhật theo ngày: lúa, trái cây, heo hơi, gà, tôm, cá."
 meta_in    = "Giá nông sản tại nơi sản xuất ở {area}, cập nhật theo ngày."
-sub        = "Giá tham khảo tại nơi sản xuất, ghi nhận từ thương lái và hợp tác xã"
+sub        = "Giá thu mua tại nơi sản xuất, ghi lại theo ngày"
 commodities = "Cây trồng, vật nuôi"
 area       = "Khu vực"
 all_areas  = "Tất cả khu vực"
@@ -1377,7 +1381,7 @@ none       = "Chưa có giá mới"
 none_in    = "Chưa có giá mới ở {area}"
 none_sector = "Chưa có giá mới cho ngành {sector}"
 none_hint  = "Giá được cập nhật theo ngày. Hãy quay lại sau."
-disclaimer = "Giá tham khảo do nền tảng ghi nhận từ thương lái và hợp tác xã; giá mua thực tế tuỳ chất lượng và thời điểm."
+disclaimer = "Giá tham khảo; thương lái trả thực tế tuỳ hàng và ngày bán."
 
 [text.price_form]
 low_placeholder = "6200"
@@ -1408,7 +1412,7 @@ what         = "giá này"
 name             = "Tên nông sản"
 name_placeholder = "Ví dụ: Sầu riêng Ri6, Heo hơi, Tôm thẻ 100 con/kg"
 commodity        = "Cây trồng, vật nuôi"
-commodity_choose = "— Chọn cây trồng, vật nuôi —"
+commodity_choose = "Chọn cây trồng, vật nuôi"
 commodities_link = "Sửa danh sách cây trồng, vật nuôi"
 unit             = "Đơn vị"
 unit_default     = "kg"
@@ -1452,7 +1456,7 @@ off         = "Đang ẩn: không chọn được khi đăng cảnh báo mới, 
 [text.commodity_form]
 name             = "Tên cây trồng, vật nuôi"
 name_placeholder = "Ví dụ: Lúa, Sầu riêng, Heo, Tôm thẻ"
-sector_choose    = "— Chọn ngành —"
+sector_choose    = "Chọn ngành"
 icon             = "Biểu tượng"
 fresh_days       = "Giá hiện trong (ngày)"
 fresh_days_col   = "Giá hiện trong"
@@ -1503,17 +1507,17 @@ off        = "Đang ẩn: không hiện trên trang giá, giá cũ vẫn đượ
 
 [text.job]
 title                   = "Đăng tin cần mướn"
-meta                    = "Đăng tin cần mướn (phun thuốc, múc bùn, thú y, sên vét ao): nhà cung cấp gần bạn sẽ gọi lại, không qua trung gian."
+meta                    = "Đăng việc cần mướn miễn phí (phun thuốc, múc bùn, tiêm heo, sên ao); người làm gần bạn sẽ gọi lại."
 sub                     = "Ghi việc cần mướn, nhà cung cấp gần bạn có dịch vụ đó sẽ gọi lại."
 posted                  = "Đã đăng tin! Nhà cung cấp gần bạn có dịch vụ này sẽ gọi lại cho bạn."
 category                = "Dịch vụ cần"
-choose_category         = "— Chọn dịch vụ —"
+choose_category         = "Chọn dịch vụ"
 where                   = "Ở đâu?"
 use_position            = "Dùng vị trí của tôi"
 position_done           = "Đã lấy vị trí của bạn."
 position_denied         = "Không lấy được vị trí. Hãy chọn khu vực bên dưới."
 or_area                 = "Hoặc chọn khu vực"
-choose_area             = "— Chọn khu vực —"
+choose_area             = "Chọn khu vực"
 description             = "Việc cần mướn"
 description_placeholder = "Ví dụ: phun thuốc 3 công lúa, tiêm phòng 20 con heo, cần trong tuần này"
 phone_hint              = "Chỉ nhà cung cấp có dịch vụ này ở gần bạn mới thấy số này."
@@ -1620,7 +1624,8 @@ changed_on         = "Đổi lúc {when}."
 reset              = "Về mặc định"
 reset_done         = "Đã đưa nhóm này về mặc định."
 reset_title        = "Đưa về mặc định"
-reset_sub          = "Những mục đã đổi dưới đây sẽ trở lại giá trị mặc định (hiện tại → mặc định):"
+reset_sub          = "Những mục đã đổi dưới đây sẽ trở lại giá trị mặc định:"
+reset_line         = "đang là {current}, mặc định {default}"
 all_default        = "Đang theo mặc định"
 empty              = "(để trống)"
 reason             = "Lý do (không bắt buộc)"

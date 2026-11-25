@@ -40,7 +40,7 @@
   {%- set mid = x + step / 2 %}
   {%- set label_y = y - 4 %}
   <g>
-    <title>{{ w.starts_on | day_month }} – {{ w.ends_on | day_month }}: {{ said }}</title>
+    <title>{{ w.starts_on | day_month }} - {{ w.ends_on | day_month }}: {{ said }}</title>
     <rect class="week-columns__bar week-columns__bar--{{ kind }}" x="{{ x + 6 }}" y="{{ y | round(precision=1) }}" width="{{ step - 12 }}" height="{{ height | round(precision=1) }}"/>
     <text class="week-columns__value" x="{{ mid }}" y="{{ label_y | round(precision=1) }}" text-anchor="middle">{{ said }}</text>
     <text class="week-columns__week" x="{{ mid }}" y="{{ base + foot - 4 }}" text-anchor="middle">{{ w.starts_on | day_month }}</text>

@@ -16,7 +16,7 @@
     with its messages when a rule is broken. "Xoá" reloads the list with that
     row's confirmation open (`b.confirm`, in its own `dialog` scope); its
     form sends the page back (`b.keep`). -#}
-{% block title %}{{ t(key="admin_menu.price_board") }} — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ t(key="admin_menu.price_board") }} | {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
 <div x-data="dialog" data-open="{% if b.errors.message or b.errors.fields %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
@@ -42,8 +42,8 @@
             <td data-label=""><a class="fw-bold text-decoration-none" href="{{ r.crop_href }}">{{ p.crop_name }}</a></td>
             <td data-label="{{ t(key="prices.area") }}"><a class="text-decoration-none" href="{{ r.area_href }}">{{ p.location_label }}</a></td>
             <td data-label="{{ t(key="price_form.day") }}" class="text-nowrap">{{ p.observed_on | full_date }}</td>
-            <td data-label="{{ t(key="admin_prices.col_price") }}" class="text-end text-nowrap">{% if p.price_low == p.price_high %}{{ p.price_low | vnd }}{% else %}{{ p.price_low | number }} – {{ p.price_high | vnd }}{% endif %}<span class="small text-muted">/{{ p.unit }}</span></td>
-            <td data-label="{{ t(key="price_form.note") }}" class="small text-muted d-none d-md-table-cell"><div class="cell-short">{% if p.note %}{{ p.note }}{% else %}—{% endif %}</div></td>
+            <td data-label="{{ t(key="admin_prices.col_price") }}" class="text-end text-nowrap">{% if p.price_low == p.price_high %}{{ p.price_low | vnd }}{% else %}{{ p.price_low | number }} - {{ p.price_high | vnd }}{% endif %}<span class="small text-muted">/{{ p.unit }}</span></td>
+            <td data-label="{{ t(key="price_form.note") }}" class="small text-muted d-none d-md-table-cell"><div class="cell-short">{% if p.note %}{{ p.note }}{% else %}-{% endif %}</div></td>
             <td data-label="" class="text-end"><div class="row-actions">{{ row::delete(href=r.delete_href ~ "#xac-nhan", name=p.crop_name) }}</div></td>
           </tr>
           {% else %}

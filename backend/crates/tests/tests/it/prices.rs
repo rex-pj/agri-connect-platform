@@ -58,7 +58,7 @@ async fn the_admin_enters_prices_and_farmers_see_the_fresh_ones() {
     let admin = install_admin(&e).await;
     let rice = id_of(&e, "crops", "name", "Lúa OM 18").await;
     let jackfruit = id_of(&e, "crops", "name", "Mít Thái").await;
-    let cai_lay = id_of(&e, "locations", "label", "Đồng Tháp — Cai Lậy").await;
+    let cai_lay = id_of(&e, "locations", "label", "Cai Lậy, Đồng Tháp").await;
     let today = vn_day(&e, 0).await;
     let tomorrow = vn_day(&e, 1).await;
 
@@ -153,7 +153,7 @@ async fn the_admin_enters_prices_and_farmers_see_the_fresh_ones() {
     // stale jackfruit.
     let html = body_text(send(&e.router, get_page("/prices", None)).await).await;
     assert!(html.contains("Lúa OM 18"));
-    assert!(html.contains("6.200 – 6.400 ₫"), "the range");
+    assert!(html.contains("6.200 - 6.400 ₫"), "the range");
     let yesterday = vn_day(&e, -1).await;
     let since = format!("so với {}/{}", &yesterday[8..10], &yesterday[5..7]);
     assert!(
@@ -164,7 +164,7 @@ async fn the_admin_enters_prices_and_farmers_see_the_fresh_ones() {
     // Each crop shares its prices in words, for a Zalo group.
     assert!(
         html.contains(
-            "data-text=\"Giá Lúa OM 18 tại nơi sản xuất: Đồng Tháp — Cai Lậy 6.200 – 6.400 ₫"
+            "data-text=\"Giá Lúa OM 18 tại nơi sản xuất: Cai Lậy, Đồng Tháp 6.200 - 6.400 ₫"
         ) && html.contains("share__card-btn"),
         "the share button says the price"
     );
@@ -207,12 +207,12 @@ async fn the_admin_enters_prices_and_farmers_see_the_fresh_ones() {
     let area_cookie = format!("price_area={cai_lay}");
     let html = body_text(send(&e.router, get_page("/prices", Some(&area_cookie))).await).await;
     assert!(
-        html.contains("<title>Giá nông sản tại Đồng Tháp — Cai Lậy"),
+        html.contains("<title>Giá nông sản tại Cai Lậy, Đồng Tháp"),
         "opens on it"
     );
     let html = body_text(send(&e.router, get_page("/", Some(&area_cookie))).await).await;
     assert!(
-        html.contains("Giá nông sản tại Đồng Tháp — Cai Lậy") && html.contains("Lúa OM 18"),
+        html.contains("Giá nông sản tại Cai Lậy, Đồng Tháp") && html.contains("Lúa OM 18"),
         "the home strip names the area"
     );
     let res = send(&e.router, get_page("/prices?area=", Some(&area_cookie))).await;

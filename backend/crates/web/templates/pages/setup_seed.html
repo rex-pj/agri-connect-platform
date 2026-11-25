@@ -9,7 +9,7 @@
     load / remove forms; removing needs a ticked confirmation, so it is safe
     without JS too. The second card is the platform data (roles, provinces,
     wards): kept whatever happens here. Real rows are never touched. -#}
-{% block title %}{{ t(key="admin_menu.demo_data") }} — {{ site.name }}{% endblock title %}
+{% block title %}{{ t(key="admin_menu.demo_data") }} | {{ site.name }}{% endblock title %}
 {% block content %}
 {% set page = page.body %}
 {% set demo = page.status.demo %}

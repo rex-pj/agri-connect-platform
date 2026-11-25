@@ -10,7 +10,7 @@ use axum::{
 use integration_tests::{categories_of, json_body, register_provider, send, Env};
 use sea_orm::{ConnectionTrait, Statement};
 
-/// The "Cần Thơ — Ninh Kiều" location preset from the catalogue.
+/// The "Ninh Kiều, Cần Thơ" location preset from the catalogue.
 const CAN_THO: (f64, f64) = (10.0330, 105.7830);
 /// About one kilometre of latitude.
 const KM_LAT: f64 = 0.009;
@@ -40,7 +40,7 @@ async fn can_tho_id(e: &Env) -> i32 {
     e.t.db
         .query_one(Statement::from_string(
             e.t.db.get_database_backend(),
-            "SELECT id FROM locations WHERE label = 'Cần Thơ — Ninh Kiều'",
+            "SELECT id FROM locations WHERE label = 'Ninh Kiều, Cần Thơ'",
         ))
         .await
         .unwrap()
@@ -77,7 +77,7 @@ async fn seeded(e: &Env) -> i32 {
 async fn without_a_position_the_page_offers_gps_and_a_preset_form() {
     let e = Env::new().await;
     let page = html(&e, "/explore").await;
-    assert!(page.contains("<title>Tìm dịch vụ gần bạn — Agri-Connect</title>"));
+    assert!(page.contains("<title>Tìm dịch vụ gần bạn | Agri-Connect</title>"));
     assert!(
         page.contains(r#"<ac-geolocate href="/explore""#),
         "the GPS island"
@@ -88,7 +88,7 @@ async fn without_a_position_the_page_offers_gps_and_a_preset_form() {
     );
     // The form that works without JS.
     assert!(page.contains(r#"<form class="loc-manual" method="get" action="/explore">"#));
-    assert!(page.contains(">Cần Thơ — Ninh Kiều</option>"));
+    assert!(page.contains(">Ninh Kiều, Cần Thơ</option>"));
     // Service tiles lead to the service pages until there is a position.
     assert!(page.contains(r#"href="/services/category/"#));
     e.cleanup().await;
@@ -108,7 +108,7 @@ async fn a_preset_finds_providers_by_distance_and_the_links_keep_it() {
     assert!(page.contains("Cách bạn <strong>995 m</strong>"));
     assert!(page.contains("Cách bạn <strong>8.0 km (~16 phút xe máy)</strong>"));
     assert!(
-        page.contains("Cần Thơ — Ninh Kiều</p>"),
+        page.contains("Ninh Kiều, Cần Thơ</p>"),
         "the preset's name in the hero"
     );
     // Radius and service links keep the position.

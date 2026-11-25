@@ -186,17 +186,17 @@
   ],
   "service_offers": {
     "muc-bun": [
-      { "name": "Múc bùn mương vườn", "description": "Máy múc bánh xích vào vườn, múc bùn lên liếp, làm gọn bờ.", "price_note": "700.000–900.000 ₫/ca" },
+      { "name": "Múc bùn mương vườn", "description": "Máy múc bánh xích vào vườn, múc bùn lên liếp, làm gọn bờ.", "price_note": "700.000-900.000 ₫/ca" },
       { "name": "Nạo vét kênh nội đồng", "description": "Nạo vét kênh, khơi thông dòng chảy trước mùa nước.", "price_note": "Theo mét kênh, khảo sát miễn phí" },
       { "name": "Sên vét ao nuôi", "description": "Hút bùn đáy ao bằng máy bơm bùn, dọn ao giữa hai vụ.", "price_note": "1.500.000 ₫/ao 1.000 m²" }
     ],
     "phun-thuoc": [
-      { "name": "Phun thuốc lúa bằng drone", "description": "Drone 30 lít, phun đều, đúng liều, có bản đồ bay.", "price_note": "30.000–40.000 ₫/công" },
+      { "name": "Phun thuốc lúa bằng drone", "description": "Drone 30 lít, phun đều, đúng liều, có bản đồ bay.", "price_note": "30.000-40.000 ₫/công" },
       { "name": "Phun thuốc vườn cây ăn trái", "description": "Phun bằng máy phun áp lực, ống dài vào sâu trong vườn.", "price_note": "Theo công, thương lượng" },
       { "name": "Phun thuốc bình đeo vai", "description": "Tổ 4 người phun bình máy, nhận ruộng nhỏ, vườn rau.", "price_note": "250.000 ₫/người/ngày" }
     ],
     "sua-may-no": [
-      { "name": "Sửa máy bơm, máy nổ", "description": "Sửa tại chỗ máy bơm nước, máy nổ, thay bạc, xú páp.", "price_note": "100.000–400.000 ₫ tuỳ lỗi" },
+      { "name": "Sửa máy bơm, máy nổ", "description": "Sửa tại chỗ máy bơm nước, máy nổ, thay bạc, xú páp.", "price_note": "100.000-400.000 ₫ tuỳ lỗi" },
       { "name": "Bảo dưỡng máy cày", "description": "Thay nhớt, lọc, chỉnh nhông xích máy cày, máy xới.", "price_note": "Từ 300.000 ₫" },
       { "name": "Sửa máy gặt đập liên hợp", "description": "Thợ đi ruộng sửa máy gặt mùa thu hoạch, có phụ tùng sẵn.", "price_note": "Báo giá tại chỗ" }
     ],
@@ -215,12 +215,12 @@
       { "name": "Xét nghiệm bệnh tôm", "description": "PCR bệnh đốm trắng, EHP, gan tụy trên mẫu tôm.", "price_note": "300.000 ₫/chỉ tiêu" }
     ],
     "cay-xoi": [
-      { "name": "Cày ải ruộng lúa", "description": "Máy cày Kubota, cày sâu, phơi ải giữa vụ.", "price_note": "180.000–220.000 ₫/công" },
+      { "name": "Cày ải ruộng lúa", "description": "Máy cày Kubota, cày sâu, phơi ải giữa vụ.", "price_note": "180.000-220.000 ₫/công" },
       { "name": "Xới đất trồng màu", "description": "Máy xới mini lên liếp trồng rau, bắp, khoai.", "price_note": "Theo công" },
       { "name": "Trục, san phẳng ruộng", "description": "Trục bùn, san phẳng mặt ruộng trước khi sạ.", "price_note": "150.000 ₫/công" }
     ],
     "gat-lua": [
-      { "name": "Gặt lúa máy gặt đập", "description": "Máy gặt đập liên hợp, đóng bao tại ruộng.", "price_note": "250.000–300.000 ₫/công" },
+      { "name": "Gặt lúa máy gặt đập", "description": "Máy gặt đập liên hợp, đóng bao tại ruộng.", "price_note": "250.000-300.000 ₫/công" },
       { "name": "Gặt lúa ruộng lầy", "description": "Máy gặt bánh xích rộng, chạy được ruộng ngập lầy.", "price_note": "Thương lượng theo ruộng" }
     ],
     "say-lua": [
@@ -236,7 +236,7 @@
       { "name": "Lắp tưới nhỏ giọt cho vườn", "description": "Thiết kế, lắp đặt tưới nhỏ giọt, tưới phun cho sầu riêng, bưởi.", "price_note": "Khảo sát, báo giá miễn phí" }
     ],
     "khoan-gieng": [
-      { "name": "Khoan giếng nước ngầm", "description": "Khoan giếng 60–120 m, lắp ống, thử lưu lượng.", "price_note": "Theo mét sâu" },
+      { "name": "Khoan giếng nước ngầm", "description": "Khoan giếng 60-120 m, lắp ống, thử lưu lượng.", "price_note": "Theo mét sâu" },
       { "name": "Lắp bồn lọc nước phèn", "description": "Lọc phèn, lọc mặn cho nước tưới và nước ao.", "price_note": "Từ 3.500.000 ₫" }
     ],
     "cat-tia": [
@@ -295,7 +295,7 @@
       { "name": "Điện mặt trời trang trại", "description": "Lắp điện áp mái chuồng trại, nối lưới.", "price_note": "Khảo sát miễn phí" }
     ],
     "van-chuyen": [
-      { "name": "Xe tải chở nông sản", "description": "Xe 2,5–8 tấn chở lúa, trái cây đi chợ đầu mối.", "price_note": "Theo chuyến" },
+      { "name": "Xe tải chở nông sản", "description": "Xe 2,5-8 tấn chở lúa, trái cây đi chợ đầu mối.", "price_note": "Theo chuyến" },
       { "name": "Ghe chở lúa", "description": "Ghe 30 tấn chở lúa từ ruộng về nhà máy.", "price_note": "Theo tấn" },
       { "name": "Chở heo, bò", "description": "Xe chuyên chở gia súc, có lồng, đi tỉnh.", "price_note": "Theo chuyến" }
     ],
@@ -304,7 +304,7 @@
       { "name": "Sơ chế rau củ", "description": "Rửa, cắt, đóng túi rau giao siêu thị.", "price_note": "Theo đơn" }
     ],
     "kho-lanh": [
-      { "name": "Thuê kho lạnh trái cây", "description": "Kho 2–8 °C giữ trái cây tươi chờ giá.", "price_note": "Theo tấn/ngày" },
+      { "name": "Thuê kho lạnh trái cây", "description": "Kho 2-8 °C giữ trái cây tươi chờ giá.", "price_note": "Theo tấn/ngày" },
       { "name": "Cấp đông thuỷ sản", "description": "Cấp đông tôm cá, bảo quản âm 18 °C.", "price_note": "Theo tấn" }
     ],
     "chung-nhan-vietgap": [

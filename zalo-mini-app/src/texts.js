@@ -1,10 +1,10 @@
 // Every word the Mini App shows, in one place (Vietnamese: Zalo users here
-// are farmers in the Mekong Delta). Error messages come from the backend,
+// are farmers in the south of Vietnam). Error messages come from the backend,
 // already in Vietnamese; these are the app's own words.
 
 export const T = {
   homeTitle: "Tìm nhà cung cấp, xem giá, đăng tin cần mướn",
-  homeSub: "Trồng trọt, chăn nuôi, thuỷ hải sản gần bạn ở Đồng bằng sông Cửu Long",
+  homeSub: "Người làm, vật tư cho trồng trọt, chăn nuôi, thuỷ sản gần nhà",
   nearMe: "Tìm nhà cung cấp gần tôi",
   prices: "Giá nông sản",
   postJob: "Đăng tin cần mướn",
@@ -21,7 +21,7 @@ export const T = {
   positionBusy: "Đang lấy vị trí…",
   positionSet: "Đã lấy vị trí của bạn.",
   orArea: "Hoặc chọn khu vực",
-  chooseArea: "— Chọn khu vực —",
+  chooseArea: "Chọn khu vực",
   allCategories: "Tất cả dịch vụ",
   nearTitle: "Nhà cung cấp gần bạn",
   nearEmpty: "Chưa có nhà cung cấp nào gần đây cho dịch vụ này.",
@@ -45,7 +45,7 @@ export const T = {
   jobTitle: "Đăng tin cần mướn",
   jobSub: "Ghi việc cần mướn, nhà cung cấp gần bạn có dịch vụ đó sẽ gọi lại.",
   jobCategory: "Dịch vụ cần",
-  chooseCategory: "— Chọn dịch vụ —",
+  chooseCategory: "Chọn dịch vụ",
   jobWhere: "Ở đâu?",
   jobDescription: "Việc cần mướn",
   jobDescriptionPlaceholder: "Ví dụ: phun thuốc 3 công lúa, tiêm phòng 20 con heo, cần trong tuần này",

@@ -3,5 +3,5 @@
 {#- An error inside the admin panel (a record that is gone, a page this
     role may not open), in the panel's frame with its menu, the way back
     leading to the dashboard. `page.body` is web::error_response::ErrorPage. -#}
-{% block title %}{{ page.body.status }} – {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ page.body.status }} | {{ site.name }} Admin{% endblock title %}
 {% block content %}{{ organisms::error_card(status=page.body.status, message=page.body.message, back=page.body.back, request_id=page.body.request_id) }}{% endblock content %}

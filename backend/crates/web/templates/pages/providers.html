@@ -10,7 +10,7 @@
 {#- The provider directory: every live business, new ones without a service
     included; tabs switch the same search to the services (`/services`).
     `page` is web::pages::directory::DirectoryPage. -#}
-{% block title %}{{ t(key="directory.title") }} — {{ site.name }}{% endblock title %}
+{% block title %}{{ t(key="directory.title") }} | {{ site.name }}{% endblock title %}
 {% block meta %}<meta name="description" content="{{ t(key="directory.meta") }}">{% endblock meta %}
 {% block main %}
 {{ hero::page_hero(title=t(key="directory.title"), back_href=page.back_href, back_label=t(key="nav.home"), variant="", icon="fa-store", sub=t(key="directory.sub")) }}

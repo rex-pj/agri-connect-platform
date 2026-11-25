@@ -11,7 +11,7 @@
     searches, the same figures as the demand report: two column charts on
     one week axis (never one chart with two scales), their table folded
     under them. -#}
-{% block title %}Dashboard — {{ site.name }} Admin{% endblock title %}
+{% block title %}Dashboard | {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
 {{ header::admin_header(title=t(key="admin_menu.dashboard"), icon="fa-gauge", sub=t(key="admin.dashboard_sub")) }}
@@ -80,7 +80,7 @@
         </thead>
         <tbody>
           {% for w in b.weeks %}
-          <tr><td><time datetime="{{ w.starts_on }}">{{ w.starts_on | day_month }}</time> – <time datetime="{{ w.ends_on }}">{{ w.ends_on | day_month }}</time></td><td class="text-end fw-bold">{{ fig::figure(f=w.leads, min=b.min_count) }}</td><td class="text-end">{{ fig::figure(f=w.searches, min=b.min_count) }}</td></tr>
+          <tr><td><time datetime="{{ w.starts_on }}">{{ w.starts_on | day_month }}</time> - <time datetime="{{ w.ends_on }}">{{ w.ends_on | day_month }}</time></td><td class="text-end fw-bold">{{ fig::figure(f=w.leads, min=b.min_count) }}</td><td class="text-end">{{ fig::figure(f=w.searches, min=b.min_count) }}</td></tr>
           {% endfor %}
         </tbody>
       </table>

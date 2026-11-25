@@ -13,7 +13,7 @@
     that row's confirmation open (`b.confirm`). The chips narrow the list to
     one status. Every form sends the list position (page, `provider_id`,
     `state`) back; `b.filter` is set when the list is one provider's. -#}
-{% block title %}{{ t(key="contact.title") }} — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ t(key="contact.title") }} | {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
 {% set sub = t(key="admin.inquiries_sub") %}

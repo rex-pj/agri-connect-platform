@@ -203,121 +203,121 @@
   ],
   "locations": [
     {
-      "label": "Đồng Tháp — Cai Lậy",
+      "label": "Cai Lậy, Đồng Tháp",
       "lat": 10.417,
       "lng": 106.083,
       "display_order": 1
     },
     {
-      "label": "Đồng Tháp — Cái Bè",
+      "label": "Cái Bè, Đồng Tháp",
       "lat": 10.333,
       "lng": 106.033,
       "display_order": 2
     },
     {
-      "label": "Đồng Tháp — Mỹ Tho",
+      "label": "Mỹ Tho, Đồng Tháp",
       "lat": 10.3581,
       "lng": 106.3642,
       "display_order": 3
     },
     {
-      "label": "Đồng Tháp — Gò Công",
+      "label": "Gò Công, Đồng Tháp",
       "lat": 10.367,
       "lng": 106.667,
       "display_order": 4
     },
     {
-      "label": "Đồng Tháp — Cao Lãnh",
+      "label": "Cao Lãnh, Đồng Tháp",
       "lat": 10.4672,
       "lng": 105.6303,
       "display_order": 5
     },
     {
-      "label": "Đồng Tháp — Sa Đéc",
+      "label": "Sa Đéc, Đồng Tháp",
       "lat": 10.3,
       "lng": 105.7667,
       "display_order": 6
     },
     {
-      "label": "Đồng Tháp — Hồng Ngự",
+      "label": "Hồng Ngự, Đồng Tháp",
       "lat": 10.833,
       "lng": 105.283,
       "display_order": 7
     },
     {
-      "label": "An Giang — Long Xuyên",
+      "label": "Long Xuyên, An Giang",
       "lat": 10.3736,
       "lng": 105.4458,
       "display_order": 8
     },
     {
-      "label": "An Giang — Châu Đốc",
+      "label": "Châu Đốc, An Giang",
       "lat": 10.7,
       "lng": 105.133,
       "display_order": 9
     },
     {
-      "label": "An Giang — Rạch Giá",
+      "label": "Rạch Giá, An Giang",
       "lat": 9.9847,
       "lng": 105.0992,
       "display_order": 10
     },
     {
-      "label": "An Giang — Hà Tiên",
+      "label": "Hà Tiên, An Giang",
       "lat": 10.3858,
       "lng": 104.4898,
       "display_order": 11
     },
     {
-      "label": "Cần Thơ — Ninh Kiều",
+      "label": "Ninh Kiều, Cần Thơ",
       "lat": 10.033,
       "lng": 105.783,
       "display_order": 12
     },
     {
-      "label": "Cần Thơ — Vị Thanh",
+      "label": "Vị Thanh, Cần Thơ",
       "lat": 9.783,
       "lng": 105.467,
       "display_order": 13
     },
     {
-      "label": "Cần Thơ — Sóc Trăng",
+      "label": "Sóc Trăng, Cần Thơ",
       "lat": 9.6028,
       "lng": 105.9736,
       "display_order": 14
     },
     {
-      "label": "Vĩnh Long — Bến Tre",
+      "label": "Bến Tre, Vĩnh Long",
       "lat": 10.2308,
       "lng": 106.3253,
       "display_order": 15
     },
     {
-      "label": "Vĩnh Long — Trà Vinh",
+      "label": "Trà Vinh, Vĩnh Long",
       "lat": 9.933,
       "lng": 106.35,
       "display_order": 16
     },
     {
-      "label": "Tây Ninh — Tân An",
+      "label": "Tân An, Tây Ninh",
       "lat": 10.5333,
       "lng": 106.4167,
       "display_order": 17
     },
     {
-      "label": "Cà Mau — An Xuyên",
+      "label": "An Xuyên, Cà Mau",
       "lat": 9.2239,
       "lng": 105.1756,
       "display_order": 18
     },
     {
-      "label": "Cà Mau — Bạc Liêu",
+      "label": "Bạc Liêu, Cà Mau",
       "lat": 9.283,
       "lng": 105.717,
       "display_order": 19
     },
     {
-      "label": "TP. Hồ Chí Minh — Sài Gòn",
+      "label": "Sài Gòn, TP. Hồ Chí Minh",
       "lat": 10.7756,
       "lng": 106.7019,
       "display_order": 20
@@ -544,7 +544,7 @@
       "category_slug": "sua-may-no",
       "name": "Sửa máy nổ, máy bơm",
       "description": "Sửa chữa, bảo dưỡng máy bơm nước, máy gặt, động cơ nổ.",
-      "price_note": "100.000–300.000 ₫ tuỳ lỗi"
+      "price_note": "100.000-300.000 ₫ tuỳ lỗi"
     },
     {
       "business": "Dịch vụ Trần Thị Bình",
@@ -572,7 +572,7 @@
       "category_slug": "sua-may-no",
       "name": "Sửa máy nông nghiệp",
       "description": "Bảo dưỡng định kỳ và sửa chữa các loại máy nông nghiệp.",
-      "price_note": "150.000–500.000 ₫"
+      "price_note": "150.000-500.000 ₫"
     },
     {
       "business": "Trung tâm Dịch vụ Nông nghiệp Mỹ Phước Tây",
@@ -625,7 +625,7 @@
       "category_slug": "giong",
       "commodity": "Sầu riêng",
       "name": "Cây giống sầu riêng Ri6",
-      "description": "Cây ghép mắt cao 60–80 cm, gốc khoẻ, sạch bệnh, giao tận vườn vùng Cai Lậy.",
+      "description": "Cây ghép mắt cao 60-80 cm, gốc khoẻ, sạch bệnh, giao tận vườn vùng Cai Lậy.",
       "price": 70000,
       "unit": "cây"
     },
@@ -634,7 +634,7 @@
       "category_slug": "giong",
       "commodity": "Xoài",
       "name": "Cây giống xoài cát Hòa Lộc",
-      "description": "Cây ghép đúng giống xoài cát Hòa Lộc, cao 50–70 cm, bầu đất lớn.",
+      "description": "Cây ghép đúng giống xoài cát Hòa Lộc, cao 50-70 cm, bầu đất lớn.",
       "price": 35000,
       "unit": "cây"
     },
@@ -1099,7 +1099,7 @@
     {
       "query": "phun thuoc drone",
       "category_slug": "phun-thuoc",
-      "location": "Đồng Tháp — Cai Lậy",
+      "location": "Cai Lậy, Đồng Tháp",
       "results": 2,
       "weekly": [
         3,
@@ -1115,7 +1115,7 @@
     {
       "query": "muc bun",
       "category_slug": "muc-bun",
-      "location": "Đồng Tháp — Cai Lậy",
+      "location": "Cai Lậy, Đồng Tháp",
       "results": 2,
       "weekly": [
         2,
@@ -1130,7 +1130,7 @@
     },
     {
       "query": "may cay",
-      "location": "Đồng Tháp — Cai Lậy",
+      "location": "Cai Lậy, Đồng Tháp",
       "results": 0,
       "weekly": [
         1,
@@ -1145,7 +1145,7 @@
     },
     {
       "query": "thue may gat",
-      "location": "Đồng Tháp — Cái Bè",
+      "location": "Cái Bè, Đồng Tháp",
       "results": 0,
       "weekly": [
         0,
@@ -1161,7 +1161,7 @@
     {
       "query": "ma so vung trong",
       "category_slug": "giay-to-xuat-khau",
-      "location": "Đồng Tháp — Cai Lậy",
+      "location": "Cai Lậy, Đồng Tháp",
       "results": 1,
       "weekly": [
         1,
@@ -1177,7 +1177,7 @@
     {
       "query": "phan bon",
       "category_slug": "phan-bon",
-      "location": "An Giang — Long Xuyên",
+      "location": "Long Xuyên, An Giang",
       "results": 1,
       "weekly": [
         2,
@@ -1193,7 +1193,7 @@
     {
       "query": "thu y heo",
       "category_slug": "thu-y",
-      "location": "Đồng Tháp — Cái Bè",
+      "location": "Cái Bè, Đồng Tháp",
       "results": 1,
       "weekly": [
         2,
@@ -1209,7 +1209,7 @@
     {
       "query": "ca tra giong",
       "category_slug": null,
-      "location": "An Giang — Long Xuyên",
+      "location": "Long Xuyên, An Giang",
       "results": 0,
       "weekly": [
         1,
@@ -1226,7 +1226,7 @@
   "prices": [
     {
       "crop": "Lúa OM 18",
-      "location": "Đồng Tháp — Cai Lậy",
+      "location": "Cai Lậy, Đồng Tháp",
       "points": [
         [
           1,
@@ -1247,7 +1247,7 @@
     },
     {
       "crop": "Lúa ST25",
-      "location": "Đồng Tháp — Cai Lậy",
+      "location": "Cai Lậy, Đồng Tháp",
       "points": [
         [
           2,
@@ -1263,7 +1263,7 @@
     },
     {
       "crop": "Lúa IR 50404",
-      "location": "An Giang — Long Xuyên",
+      "location": "Long Xuyên, An Giang",
       "points": [
         [
           1,
@@ -1279,7 +1279,7 @@
     },
     {
       "crop": "Lúa OM 5451",
-      "location": "An Giang — Châu Đốc",
+      "location": "Châu Đốc, An Giang",
       "points": [
         [
           3,
@@ -1290,7 +1290,7 @@
     },
     {
       "crop": "Sầu riêng Ri6",
-      "location": "Đồng Tháp — Cai Lậy",
+      "location": "Cai Lậy, Đồng Tháp",
       "points": [
         [
           1,
@@ -1311,7 +1311,7 @@
     },
     {
       "crop": "Sầu riêng Monthong",
-      "location": "Đồng Tháp — Cái Bè",
+      "location": "Cái Bè, Đồng Tháp",
       "points": [
         [
           2,
@@ -1327,7 +1327,7 @@
     },
     {
       "crop": "Xoài cát Hòa Lộc",
-      "location": "Đồng Tháp — Cao Lãnh",
+      "location": "Cao Lãnh, Đồng Tháp",
       "points": [
         [
           4,
@@ -1338,7 +1338,7 @@
     },
     {
       "crop": "Bưởi da xanh",
-      "location": "Vĩnh Long — Bến Tre",
+      "location": "Bến Tre, Vĩnh Long",
       "points": [
         [
           5,
@@ -1354,7 +1354,7 @@
     },
     {
       "crop": "Thanh long ruột đỏ",
-      "location": "Đồng Tháp — Mỹ Tho",
+      "location": "Mỹ Tho, Đồng Tháp",
       "points": [
         [
           20,
@@ -1365,7 +1365,7 @@
     },
     {
       "crop": "Rau muống",
-      "location": "Cần Thơ — Ninh Kiều",
+      "location": "Ninh Kiều, Cần Thơ",
       "points": [
         [
           1,
@@ -1381,7 +1381,7 @@
     },
     {
       "crop": "Heo hơi",
-      "location": "Đồng Tháp — Cao Lãnh",
+      "location": "Cao Lãnh, Đồng Tháp",
       "points": [
         [
           1,
@@ -1402,7 +1402,7 @@
     },
     {
       "crop": "Bò hơi",
-      "location": "An Giang — Châu Đốc",
+      "location": "Châu Đốc, An Giang",
       "points": [
         [
           2,
@@ -1418,7 +1418,7 @@
     },
     {
       "crop": "Gà ta",
-      "location": "Đồng Tháp — Cai Lậy",
+      "location": "Cai Lậy, Đồng Tháp",
       "points": [
         [
           1,
@@ -1434,7 +1434,7 @@
     },
     {
       "crop": "Trứng gà",
-      "location": "Cần Thơ — Ninh Kiều",
+      "location": "Ninh Kiều, Cần Thơ",
       "points": [
         [
           1,
@@ -1450,7 +1450,7 @@
     },
     {
       "crop": "Tôm thẻ 100 con/kg",
-      "location": "Cà Mau — Bạc Liêu",
+      "location": "Bạc Liêu, Cà Mau",
       "points": [
         [
           1,
@@ -1466,7 +1466,7 @@
     },
     {
       "crop": "Cá tra",
-      "location": "An Giang — Long Xuyên",
+      "location": "Long Xuyên, An Giang",
       "points": [
         [
           1,
@@ -1484,7 +1484,7 @@
   "jobs": [
     {
       "category_slug": "phun-thuoc",
-      "location": "Đồng Tháp — Cai Lậy",
+      "location": "Cai Lậy, Đồng Tháp",
       "days_ago": 1,
       "description": "Phun thuốc rầy 4 công lúa, cần làm trong tuần.",
       "name": "Sáu Phước",
@@ -1493,7 +1493,7 @@
     },
     {
       "category_slug": "muc-bun",
-      "location": "Đồng Tháp — Cai Lậy",
+      "location": "Cai Lậy, Đồng Tháp",
       "days_ago": 3,
       "description": "Nạo vét mương vườn sầu riêng khoảng 150 m.",
       "name": "Tám Hòa",
@@ -1502,7 +1502,7 @@
     },
     {
       "category_slug": "sua-may-no",
-      "location": "Đồng Tháp — Cái Bè",
+      "location": "Cái Bè, Đồng Tháp",
       "days_ago": 2,
       "description": "Máy nổ D8 khó nổ, cần thợ tới vườn.",
       "name": "Chín Hên",
@@ -1511,7 +1511,7 @@
     },
     {
       "category_slug": "phun-thuoc",
-      "location": "Đồng Tháp — Cai Lậy",
+      "location": "Cai Lậy, Đồng Tháp",
       "days_ago": 12,
       "description": "Phun dưỡng bông sầu riêng 2 ha.",
       "name": "Hai Đức",
@@ -1520,7 +1520,7 @@
     },
     {
       "category_slug": "muc-bun",
-      "location": "An Giang — Long Xuyên",
+      "location": "Long Xuyên, An Giang",
       "days_ago": 4,
       "description": "Bán sim số đẹp liên hệ ngay.",
       "name": "Quảng cáo",
@@ -1529,7 +1529,7 @@
     },
     {
       "category_slug": "thu-y",
-      "location": "Đồng Tháp — Cái Bè",
+      "location": "Cái Bè, Đồng Tháp",
       "days_ago": 1,
       "description": "Tiêm phòng tai xanh 30 con heo thịt, cần trong tuần.",
       "name": "Hai Thành",
@@ -1538,7 +1538,7 @@
     },
     {
       "category_slug": "muc-bun",
-      "location": "Cà Mau — Bạc Liêu",
+      "location": "Bạc Liêu, Cà Mau",
       "days_ago": 2,
       "description": "Sên vét 2 ao tôm 3.000 m², chuẩn bị thả vụ mới.",
       "name": "Ba Hùng",

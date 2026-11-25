@@ -13,7 +13,7 @@
     `sector=` and the rows pointing to it keep it) and history. An entry is
     never deleted: other rows name it. `page.body` is
     web::pages::admin::coded::CodedEntryPage. -#}
-{% block title %}{{ page.body.entry.name }} — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ page.body.entry.name }} | {{ site.name }} Admin{% endblock title %}
 {% block vendor %}{{ field::searchable_select_assets() }}{% endblock vendor %}
 {% block content %}
 {% set b = page.body %}

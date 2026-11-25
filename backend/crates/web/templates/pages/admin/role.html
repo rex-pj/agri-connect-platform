@@ -8,7 +8,7 @@
     screen who changed its grants, when and why. Each box is named
     `perm.<key>`; the form works without JS. Read-only for visitors who may
     not manage grants. `page.body` is web::pages::admin::roles::RolePage. -#}
-{% block title %}{{ page.body.role.name }} — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ page.body.role.name }} | {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
 {{ record::record_header(h=b.header) }}

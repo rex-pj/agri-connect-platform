@@ -206,7 +206,7 @@ async fn demo_data_loads_once_and_removal_keeps_what_real_data_uses() {
            WHERE NOT b.is_demo AND c.slug = 'muc-bun';
          INSERT INTO crop_prices (crop_id, location_id, observed_on, price_low, price_high)
            SELECT cr.id, l.id, CURRENT_DATE, 7000, 7200 FROM crops cr, locations l
-           WHERE cr.name = 'Lúa ST25' AND l.label = 'Đồng Tháp — Cai Lậy'",
+           WHERE cr.name = 'Lúa ST25' AND l.label = 'Cai Lậy, Đồng Tháp'",
     )
     .await
     .unwrap();

@@ -10,7 +10,7 @@
     web::pages::admin::categories::CategoryPage. Hiding goes through a
     confirmation with a reason (it takes the category's listings off the
     public pages); showing again is one button. -#}
-{% block title %}{{ page.body.category.name }} — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ page.body.category.name }} | {{ site.name }} Admin{% endblock title %}
 {% block vendor %}{{ field::searchable_select_assets() }}{% endblock vendor %}
 {% block content %}
 {% set b = page.body %}
@@ -32,7 +32,7 @@
       {{ fields::category_fields(form=b.form, errors=b.errors, limits=b.limits, sectors=b.sectors, prefix="edit", category_id=b.category.id) }}
       <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button></div>
     </form>
-    <p class="small text-muted">{{ t(key="admin.created_label") }} <time datetime="{{ c.created_on | utc_iso }}">{{ c.created_on | vn_datetime }}</time>{% if c.created_by_name %} · {{ c.created_by_name }}{% endif %} — {{ t(key="admin.col_updated") }} <time datetime="{{ c.updated_on | utc_iso }}">{{ c.updated_on | vn_datetime }}</time>{% if c.updated_by_name %} · {{ c.updated_by_name }}{% endif %}</p>
+    <p class="small text-muted">{{ t(key="admin.created_label") }} <time datetime="{{ c.created_on | utc_iso }}">{{ c.created_on | vn_datetime }}</time>{% if c.created_by_name %} · {{ c.created_by_name }}{% endif %} · {{ t(key="admin.col_updated") }} <time datetime="{{ c.updated_on | utc_iso }}">{{ c.updated_on | vn_datetime }}</time>{% if c.updated_by_name %} · {{ c.updated_by_name }}{% endif %}</p>
   </section>
 
   <section class="admin-section" aria-labelledby="status-title">

@@ -17,7 +17,7 @@
     web::pages::admin::settings::SettingsPage. The identity tab is its own
     layout (below): one multipart form beside a live preview; its "back to
     defaults" card never takes an uploaded image along. -#}
-{% block title %}{{ t(key="admin_menu.settings") }} — {{ site.name }} Admin{% endblock title %}
+{% block title %}{{ t(key="admin_menu.settings") }} | {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
 {% set g = b.group %}
@@ -50,7 +50,7 @@
   {% if logo_src %}{% set logo_tile = logo_src %}{% else %}{% set logo_tile = builtin_icon %}{% endif %}
   {% if logo.state == "uploaded" %}{% set when = logo.changed_on | vn_datetime %}{% set logo_state = t(key="settings.image_state.uploaded", when=when) %}{% else %}{% set logo_state = t(key="settings.image_state.builtin") %}{% endif %}
   {% if icon.state == "uploaded" %}{% set when = icon.changed_on | vn_datetime %}{% set icon_state = t(key="settings.image_state.uploaded", when=when) %}{% elif icon.state == "logo" %}{% set icon_state = t(key="settings.image_state.logo") %}{% else %}{% set icon_state = t(key="settings.image_state.builtin") %}{% endif %}
-  {% set google_title = shown_name ~ " — " ~ t(key="home.title") %}
+  {% set google_title = shown_name ~ " | " ~ t(key="home.title") %}
   <div class="brand-editor" x-data="brandPreview" data-default-name="{{ b.defaults.name }}" data-default-description="{{ b.defaults.description }}" data-home-title="{{ t(key="home.title") }}" data-logo="{{ logo_src }}" data-icon="{{ icon_src }}" data-logo-home="{{ logo_home }}" data-icon-home="{{ icon_home }}" data-builtin-icon="{{ builtin_icon }}" data-builtin-home="{{ builtin_home }}">
     <section class="admin-section brand-editor__form" aria-labelledby="settings-title">
       <h2 class="admin-section__title" id="settings-title">{{ g.title }}</h2>
@@ -205,7 +205,7 @@
     <h2 class="admin-section__title" id="reset-title">{{ t(key="settings.reset_title") }}</h2>
     <p class="admin-status">{{ t(key="settings.reset_sub") }}{% if g.images %} {{ t(key="settings.reset_keeps_images") }}{% endif %}</p>
     <ul class="mb-0 ps-3 d-grid gap-1">
-      {% for r in g.resets %}<li><span class="fw-semibold">{{ r.label }}</span> <span class="text-body-secondary">{{ r.current }} → {{ r.default }}</span></li>{% endfor %}
+      {% for r in g.resets %}<li><span class="fw-semibold">{{ r.label }}</span> <span class="text-body-secondary">{{ t(key="settings.reset_line", current=r.current, default=r.default) }}</span></li>{% endfor %}
     </ul>
     <form class="form-stack" method="post" action="{{ b.action }}">
       <input type="hidden" name="group" value="{{ g.code }}">

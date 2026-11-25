@@ -19,8 +19,8 @@
     (what a farmer came for), who they are, and the reviews of farmers who
     reached them here (shown once an admin approved them),
     with the "write a review" sheet in its own `dialog` scope. -#}
-{% block title %}{{ page.provider.name }} — {{ site.name }}{% endblock title %}
-{% block meta %}<meta name="description" content="{% if page.meta_description %}{{ page.meta_description }}{% else %}{{ t(key="provider.meta", name=page.provider.name, area=page.area) }}{% endif %}">{% endblock meta %}
+{% block title %}{{ page.provider.name }} | {{ site.name }}{% endblock title %}
+{% block meta %}<meta name="description" content="{% if page.meta_description %}{{ t(key="provider.meta_lead", name=page.provider.name, area=page.area) }} {{ page.meta_description }}{% else %}{{ t(key="provider.meta", name=page.provider.name, area=page.area) }}{% endif %}">{% endblock meta %}
 {% block main %}
 {% set p = page.provider %}
 {#- Each part of a feature this visitor does not see is left out: the

@@ -15,7 +15,7 @@
     `?commodity=` narrows the board to it, whatever the sector). `page` is
     web::pages::prices::PricesPage. -#}
 {% block vendor %}{% if page.area_search %}{{ field::searchable_select_assets() }}{% endif %}{% endblock vendor %}
-{% block title %}{% if page.area_name %}{{ t(key="prices.title_in", area=page.area_name) }}{% else %}{{ t(key="prices.title") }}{% endif %} — {{ site.name }}{% endblock title %}
+{% block title %}{% if page.area_name %}{{ t(key="prices.title_in", area=page.area_name) }}{% else %}{{ t(key="prices.title") }}{% endif %} | {{ site.name }}{% endblock title %}
 {% block meta %}<meta name="description" content="{% if page.area_name %}{{ t(key="prices.meta_in", area=page.area_name) }}{% else %}{{ t(key="prices.meta") }}{% endif %}">{% endblock meta %}
 {% block main %}
 {{ hero::page_hero(title=t(key="prices.title"), back_href=page.back_href, back_label=t(key="nav.home"), variant="", icon="fa-chart-line", sub=t(key="prices.sub")) }}

@@ -17,7 +17,7 @@ export function PriceLine({ quote, today, showCrop = false, showArea = true }) {
   const range =
     quote.price_low === quote.price_high
       ? `${dong(quote.price_low)} đ`
-      : `${dong(quote.price_low)} – ${dong(quote.price_high)} đ`;
+      : `${dong(quote.price_low)} - ${dong(quote.price_high)} đ`;
   const change = quote.change;
   const days = daysBetween(quote.observed_on, today);
   const since = quote.previous_on && (

@@ -3311,8 +3311,9 @@ ac-geolocate {
   font-size: var(--fs-sm);
 }
 /* Bootstrap squares the box's right side only when an error message follows
-   (has-validation counts it), and our .form-control rounds every corner. */
-.password-group--joined > .form-control {
+   (has-validation counts it), and our .form-control rounds every corner (the
+   admin frame's `.ash-content .form-control` too, hence the third class). */
+.input-group.password-group--joined > .form-control {
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
 }
@@ -3338,15 +3339,14 @@ ac-geolocate {
 /* ── Account (pages/account) ─────────────────────────────────────────────── */
 .acct-header {
   display: flex;
-  align-items: center;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--sp-3);
   padding: var(--sp-6) var(--gutter);
   border-radius: 0 0 20px 20px;
   background: linear-gradient(160deg, var(--p900) 0%, var(--p800) 55%, var(--p600) 100%);
   color: #fff;
 }
-.acct-avatar {
 .acct-header__text {
   flex: 1 1 0;
   min-width: 0;
@@ -3375,6 +3375,7 @@ ac-geolocate {
   }
 }
 /* The name's first letter: who this is at a glance. */
+.acct-avatar {
   width: 56px;
   height: 56px;
   flex-shrink: 0;
@@ -3853,6 +3854,10 @@ summary.acct-item__row:focus-visible {
   font-size: var(--admin-input);
   border-radius: 10px;
 }
+/* The password box's eye button keeps the box's corners. */
+.ash-content .password-toggle {
+  border-radius: 0 10px 10px 0 !important;
+}
 .ash-content textarea.form-control {
   min-height: 96px;
 }
@@ -3998,11 +4003,6 @@ summary.acct-item__row:focus-visible {
   justify-content: center;
   gap: 8px;
 }
-/* A setting that is on or off (pages/admin/settings): a box big enough to
-   tap, its label beside it and its hint under the label. */
-.settings-switch {
-  min-height: 44px;
-  padding-left: 2.25rem;
 /* Two header actions side by side ("add several", "add"), wrapping under
    the title on a phone. */
 .admin-header__actions {
@@ -4047,6 +4047,11 @@ summary.acct-item__row:focus-visible {
   cursor: default;
   color: var(--bs-secondary-color);
 }
+/* A setting that is on or off (pages/admin/settings): a box big enough to
+   tap, its label beside it and its hint under the label. */
+.settings-switch {
+  min-height: 44px;
+  padding-left: 2.25rem;
 }
 .settings-switch .form-check-input {
   width: 1.5rem;
@@ -5307,15 +5312,15 @@ summary.acct-item__row:focus-visible {
 .form-check-input:checked[type="checkbox"] {
   background-image: url("../img/forms/check.svg");
 }
+/* A box standing for several, some of them ticked ("tick every one shown"). */
+.form-check-input[type="checkbox"]:indeterminate {
+  background-image: url("../img/forms/dash.svg");
+}
 .form-control.is-invalid {
   background-image: url("../img/forms/invalid.svg");
 }
 .form-select.is-invalid:not([multiple]):not([size]),
 .form-select.is-invalid:not([multiple])[size="1"] {
-/* A box standing for several, some of them ticked ("tick every one shown"). */
-.form-check-input[type="checkbox"]:indeterminate {
-  background-image: url("../img/forms/dash.svg");
-}
   background-image: url("../img/forms/chevron.svg"), url("../img/forms/invalid.svg");
 }
 .form-field .ts-wrapper.is-invalid:not(.single) {

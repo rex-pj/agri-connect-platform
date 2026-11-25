@@ -480,6 +480,10 @@ impl AppRouting {
                 get(pages::admin::locations::list).post(pages::admin::locations::create),
             )
             .route(
+                "/admin/locations/bulk",
+                post(pages::admin::locations::create_from_wards),
+            )
+            .route(
                 "/admin/locations/{id}",
                 get(pages::admin::locations::show).post(pages::admin::locations::update),
             )
@@ -866,6 +870,10 @@ impl AppRouting {
             // Locations
             .route("/api/admin/locations", get(AdminHandler::list_locations))
             .route("/api/admin/locations", post(AdminHandler::create_location))
+            .route(
+                "/api/admin/locations/bulk",
+                post(AdminHandler::create_locations_from_wards),
+            )
             .route("/api/admin/locations/{id}", get(AdminHandler::get_location))
             .route(
                 "/api/admin/locations/{id}",

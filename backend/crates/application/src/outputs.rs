@@ -35,6 +35,35 @@ pub struct AdminLocationDto {
     pub is_demo: bool,
 }
 
+/// Presets added from several wards at once: those added, in their order,
+/// and the names passed over because a preset already had them.
+#[derive(Serialize)]
+pub struct BulkLocationsDto {
+    pub created: Vec<AdminLocationDto>,
+    pub skipped: Vec<String>,
+}
+
+/// One province's wards as the "add several" sheet offers them, by name.
+#[derive(Serialize)]
+pub struct BulkWardsDto {
+    /// `p82`.
+    pub value: String,
+    pub label: String,
+    pub wards: Vec<BulkWardDto>,
+}
+
+#[derive(Serialize)]
+pub struct BulkWardDto {
+    /// `w28439`.
+    pub value: String,
+    /// Its full name ("Phường Cai Lậy").
+    pub label: String,
+    /// The preset name it makes ("Cai Lậy, Đồng Tháp").
+    pub preset: String,
+    /// A preset already has that name: nothing to add.
+    pub taken: bool,
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 #[derive(Serialize)]

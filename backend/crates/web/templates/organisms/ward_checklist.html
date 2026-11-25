@@ -1,0 +1,34 @@
+{#- One province's wards as boxes to tick, for the "add several areas"
+    sheet: `wards` the BulkWardRow list (web::pages::admin::locations), each
+    box named `ward.w28439`; one a preset already names is said so and not
+    offered. With JS (Alpine `wardChecklist` on the enclosing form) a box
+    above narrows the list as a name is typed (accents ignored), one box
+    ticks every free ward shown, and the count follows; without JS every
+    ward shows and is ticked one by one. `error`: the list's message. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro ward_checklist(wards, title, free, error="") -%}
+<fieldset class="form-field">
+  <legend class="form-label fw-semibold fs-6">{{ title }}</legend>
+  <div class="ward-checklist__tools" x-cloak>
+    <label class="form-label small" for="bulk-filter">{{ t(key="location_bulk.filter") }}</label>
+    <input class="form-control" id="bulk-filter" type="search" autocomplete="off" placeholder="{{ t(key="location_bulk.filter_hint") }}" x-on:input="narrow">
+    {% if free > 0 %}
+    <label class="ward-checklist__item ward-checklist__item--all">
+      <input class="form-check-input m-0" type="checkbox" x-ref="all" x-on:change="tickShown">
+      <span>{{ t(key="location_bulk.tick_shown") }}</span>
+    </label>
+    {% endif %}
+  </div>
+  <div class="ward-checklist{% if error %} is-invalid{% endif %}" x-on:change="count"{% if error %} aria-describedby="bulk-wards-error"{% endif %}>
+    {% for w in wards %}
+    <label class="ward-checklist__item{% if w.taken %} ward-checklist__item--taken{% endif %}" data-ward="{{ w.label }} {{ w.preset }}">
+      <input class="form-check-input m-0" type="checkbox" name="{{ w.field }}" id="bulk-{{ w.value }}"{% if w.ticked %} checked{% endif %}{% if w.taken %} disabled{% endif %}>
+      <span class="flex-grow-1">{{ w.label }}</span>
+      {% if w.taken %}<span class="badge text-bg-light">{{ atoms::icon(name="fa-check") }} {{ t(key="location_bulk.taken") }}</span>{% endif %}
+    </label>
+    {% endfor %}
+    <p class="text-muted small m-0 p-3" x-show="noMatch" x-cloak>{{ t(key="location_bulk.no_match") }}</p>
+  </div>
+  {% if error %}<div class="invalid-feedback d-block" id="bulk-wards-error">{{ error }}</div>{% endif %}
+</fieldset>
+{%- endmacro ward_checklist %}

@@ -4003,6 +4003,50 @@ summary.acct-item__row:focus-visible {
 .settings-switch {
   min-height: 44px;
   padding-left: 2.25rem;
+/* Two header actions side by side ("add several", "add"), wrapping under
+   the title on a phone. */
+.admin-header__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+/* The wards of one province to tick ("add several areas" sheet,
+   organisms/ward_checklist): a scrolling box of rows tall enough to tap; a
+   ward already there greyed. */
+.ward-checklist {
+  max-height: 50vh;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.ward-checklist.is-invalid {
+  border-color: var(--bs-form-invalid-border-color);
+}
+.ward-checklist__tools {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.ward-checklist__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.ward-checklist__item + .ward-checklist__item {
+  border-top: 1px solid var(--border);
+}
+.ward-checklist__item--all {
+  padding-left: 13px;
+  font-weight: 600;
+}
+.ward-checklist__item--taken {
+  cursor: default;
+  color: var(--bs-secondary-color);
+}
 }
 .settings-switch .form-check-input {
   width: 1.5rem;
@@ -5268,6 +5312,10 @@ summary.acct-item__row:focus-visible {
 }
 .form-select.is-invalid:not([multiple]):not([size]),
 .form-select.is-invalid:not([multiple])[size="1"] {
+/* A box standing for several, some of them ticked ("tick every one shown"). */
+.form-check-input[type="checkbox"]:indeterminate {
+  background-image: url("../img/forms/dash.svg");
+}
   background-image: url("../img/forms/chevron.svg"), url("../img/forms/invalid.svg");
 }
 .form-field .ts-wrapper.is-invalid:not(.single) {

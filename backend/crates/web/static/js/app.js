@@ -650,6 +650,64 @@ document.addEventListener("alpine:init", () => {
     },
   }));
 
+  // The "add several areas" sheet (organisms/ward_checklist.html): typing
+  // keeps the wards whose name holds every word, accents ignored; "tick
+  // every one shown" ticks (or clears) the free wards still shown; the
+  // button says how many are ticked and waits for one. Without it every ward
+  // shows and the button always sends.
+  Alpine.data("wardChecklist", () => ({
+    ticked: 0,
+    shown: 0,
+
+    init() {
+      this.count();
+    },
+    rows() {
+      return [...this.$root.querySelectorAll("[data-ward]")];
+    },
+    free(row) {
+      const box = row.querySelector("input");
+      return box && !box.disabled ? box : null;
+    },
+    narrow(event) {
+      const words = fold(event.target.value).split(/\s+/).filter(Boolean);
+      for (const row of this.rows()) {
+        const text = fold(row.dataset.ward);
+        row.hidden = !words.every((word) => text.includes(word));
+      }
+      this.count();
+    },
+    tickShown(event) {
+      for (const row of this.rows()) {
+        const box = this.free(row);
+        if (box && !row.hidden) box.checked = event.target.checked;
+      }
+      this.count();
+    },
+    count() {
+      const rows = this.rows();
+      const visible = rows.filter((row) => !row.hidden);
+      this.shown = visible.length;
+      this.ticked = rows.filter((row) => this.free(row)?.checked).length;
+      const all = this.$refs.all;
+      if (all) {
+        const free = visible.map((row) => this.free(row)).filter(Boolean);
+        all.checked = free.length > 0 && free.every((box) => box.checked);
+        all.indeterminate = !all.checked && free.some((box) => box.checked);
+      }
+    },
+    get noMatch() {
+      return this.shown === 0;
+    },
+    get nothing() {
+      return this.ticked === 0;
+    },
+    get submitText() {
+      const data = this.$root.dataset;
+      return this.ticked ? data.submitCount.replace("{n}", String(this.ticked)) : data.submit;
+    },
+  }));
+
   // Leaflet (static/vendor/leaflet-*), loaded once, the first time a map is
   // opened: a page that never shows one never downloads it.
   let leaflet = null;

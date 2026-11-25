@@ -279,6 +279,9 @@ pub const CATEGORY_DESCRIPTION_MAX: usize = 300;
 /// looking for a free one.
 pub const SLUG_CANDIDATES_PER_QUERY: u32 = 10;
 pub const LOCATION_LABEL_MAX: usize = 150;
+/// Wards one "add several" sheet may turn into presets at once: more than
+/// the wards of the largest province, so one province is always one go.
+pub const LOCATION_BULK_MAX: usize = 200;
 pub const SERVICE_NAME_MAX: usize = 300;
 pub const SERVICE_PRICE_NOTE_MAX: usize = 300;
 /// `services.description` is TEXT; this keeps a listing readable on a phone.

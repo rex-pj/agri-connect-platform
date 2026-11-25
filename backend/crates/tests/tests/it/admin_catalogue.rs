@@ -771,3 +771,150 @@ async fn the_catalogue_lists_are_paged_and_a_row_lands_back_on_its_page() {
     assert_eq!(location_of(&res), "/admin/locations?page=2");
     e.cleanup().await;
 }
+
+/// A JSON POST from our own origin, signed in by cookie.
+fn post_json(path: &str, json: &str, cookie: &str) -> Request<Body> {
+    Request::post(path)
+        .header(header::ORIGIN, integration_tests::TEST_ORIGIN)
+        .header(header::CONTENT_TYPE, "application/json")
+        .header(header::COOKIE, cookie)
+        .body(Body::from(json.to_owned()))
+        .unwrap()
+}
+
+async fn location_count(e: &Env, label: &str) -> i64 {
+    e.t.db
+        .query_one(Statement::from_sql_and_values(
+            e.t.db.get_database_backend(),
+            "SELECT count(*) AS n FROM locations WHERE label = $1",
+            [label.into()],
+        ))
+        .await
+        .unwrap()
+        .unwrap()
+        .try_get("", "n")
+        .unwrap()
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn several_locations_are_added_from_the_wards_ticked() {
+    let e = env_with_origin().await;
+    integration_tests::load_admin_units(&e).await;
+    let admin = install_admin(&e).await;
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/locations",
+            &[("ward", "w28471"), ("label", ""), ("lat", ""), ("lng", "")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+
+    // The list leads to the sheet; with no province, it asks for one.
+    let list = page(&e, "/admin/locations", &admin).await;
+    assert!(list.contains(r##"href="#them-nhieu-khu-vuc""##));
+    assert!(list.contains("Chọn một tỉnh để thấy các xã, phường"));
+    assert!(!list.contains(r#"name="ward.w28471""#));
+
+    // A province chosen: its wards as boxes, the sheet open, the one already
+    // there said so and not offered.
+    let sheet = page(&e, "/admin/locations?bulk=p82", &admin).await;
+    assert!(sheet.contains(r#"x-data="wardChecklist""#));
+    assert!(sheet.contains(r#"<option value="p82" selected>"#));
+    assert!(sheet.contains(r#"name="ward.w28378" id="bulk-w28378">"#));
+    assert!(sheet.contains(r#"name="ward.w28471" id="bulk-w28471" disabled>"#));
+    assert!(sheet.contains("Đã có"));
+
+    // Nothing ticked: the sheet comes back open, saying so.
+    let res = send(
+        &e.router,
+        post_form("/admin/locations/bulk", &[("province", "p82")], Some(&admin)),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    let html = body_text(res).await;
+    assert!(html.contains("Chọn ít nhất một xã, phường."));
+    assert!(html.contains(r#"name="ward.w28378""#), "the province's wards again");
+
+    // One unknown ward refuses them all, the ticks kept.
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/locations/bulk",
+            &[
+                ("province", "p82"),
+                ("ward.w28378", "on"),
+                ("ward.w99999", "on"),
+            ],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert!(res.status().is_client_error());
+    let html = body_text(res).await;
+    assert!(html.contains("Không tìm thấy khu vực."));
+    assert!(html.contains(r#"name="ward.w28378" id="bulk-w28378" checked>"#));
+    assert_eq!(location_count(&e, "Mỹ Thiện, Đồng Tháp").await, 0);
+
+    // Added: the new one stored, the one already there left alone, the list
+    // newest first with the notice.
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/locations/bulk",
+            &[
+                ("province", "p82"),
+                ("ward.w28378", "on"),
+                ("ward.w28471", "on"),
+            ],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let back = location_of(&res);
+    assert_eq!(back, "/admin/locations?sort=newest");
+    let flash = integration_tests::cookies_from(&res);
+    let list = page(&e, &back, &format!("{admin}; {flash}")).await;
+    assert!(list.contains("khu vực nào đã có thì giữ nguyên"));
+    assert_eq!(location_count(&e, "Mỹ Thiện, Đồng Tháp").await, 1);
+    assert_eq!(location_count(&e, "Bình Phú, Đồng Tháp").await, 1);
+    assert_eq!(last_audit(&e, "location").await, "create_location: ");
+
+    // The JSON API: what was added and what was passed over.
+    let res = send(
+        &e.router,
+        post_json(
+            "/api/admin/locations/bulk",
+            r#"{"wards": ["w28439", "w28270", "w28471", "w28270"]}"#,
+            &admin,
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::CREATED);
+    let body = json_body(res).await;
+    assert_eq!(body["created"].as_array().unwrap().len(), 1);
+    assert_eq!(body["created"][0]["label"], "Thới Sơn, Đồng Tháp");
+    // Cai Lậy is one of the demo catalogue's presets.
+    assert_eq!(
+        body["skipped"],
+        serde_json::json!(["Bình Phú, Đồng Tháp", "Cai Lậy, Đồng Tháp"])
+    );
+
+    // Only with the permission.
+    let provider = register_provider(&e.state, "dongthap_bulk", "0912000111").await;
+    let res = send(
+        &e.router,
+        Request::post("/api/admin/locations/bulk")
+            .header(header::AUTHORIZATION, format!("Bearer {provider}"))
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(r#"{"wards": ["w28471"]}"#))
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    e.cleanup().await;
+}

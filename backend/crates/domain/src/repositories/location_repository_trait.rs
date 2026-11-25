@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use async_trait::async_trait;
 
 use crate::{error::Error, models::location::Location};
@@ -21,6 +23,12 @@ pub trait LocationRepositoryTrait {
         lng: f64,
         display_order: i32,
     ) -> Result<i32, Error>;
+    /// Adds the presets `(label, lat, lng)` in the order given, after the
+    /// last display order, in one statement; one whose label is taken
+    /// (already, or by a concurrent write) is passed over. The presets added.
+    async fn create_many(&self, presets: Vec<(String, f64, f64)>) -> Result<Vec<Location>, Error>;
+    /// Which of `labels` a preset already has.
+    async fn existing_labels(&self, labels: &[String]) -> Result<HashSet<String>, Error>;
     async fn update(
         &self,
         id: i32,

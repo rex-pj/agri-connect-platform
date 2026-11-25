@@ -190,6 +190,12 @@ impl From<LocationRequest> for application::inputs::LocationInput {
     }
 }
 
+/// POST /api/admin/locations/bulk: a preset for each ward (`w28439`).
+#[derive(Deserialize)]
+pub struct LocationsFromWardsRequest {
+    pub wards: Vec<String>,
+}
+
 #[derive(Deserialize)]
 pub struct ToggleVisibleRequest {
     pub is_visible: bool,

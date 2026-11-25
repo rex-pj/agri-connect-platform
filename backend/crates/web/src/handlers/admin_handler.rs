@@ -18,6 +18,7 @@ use crate::{
         AdminCreateProductRequest, AdminCreateServiceRequest, AdminListQuery,
         AdminUpdateProductRequest, AdminUpdateServiceRequest, AssignUserRequest,
         CreateCategoryRequest, DeleteWithReasonBody, IconSearchQuery, LocationRequest,
+        LocationsFromWardsRequest,
         SetVerificationRequest, SlugSuggestionQuery, ToggleActiveRequest, ToggleVisibleRequest,
         UpdateCategoryRequest, UpdateInquiryStatusRequest, UpdateProfileRequest,
         UpdateUserRequest, UpdateUserRoleRequest,
@@ -443,6 +444,21 @@ impl AdminHandler {
             .usecases
             .admin
             .create_location(&actor, req.into())
+            .await?;
+        Ok((StatusCode::CREATED, Json(result)))
+    }
+
+    /// POST /api/admin/locations/bulk
+    pub async fn create_locations_from_wards(
+        MaybeActor(actor): MaybeActor,
+        State(state): State<AppState>,
+        ApiJson(req): ApiJson<LocationsFromWardsRequest>,
+    ) -> Result<impl IntoResponse, Error> {
+        let actor = require_actor(actor)?;
+        let result = state
+            .usecases
+            .admin
+            .create_locations_from_wards(&actor, &req.wards)
             .await?;
         Ok((StatusCode::CREATED, Json(result)))
     }

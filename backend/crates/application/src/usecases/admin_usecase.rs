@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use chrono::{Duration, Utc};
 
@@ -49,7 +49,7 @@ use crate::{
     constants::{
         ADMIN_PAGE_SIZE, CALL_STATS_DAYS, CATEGORY_COLOR_MAX, CATEGORY_DESCRIPTION_MAX,
         CATEGORY_NAME_MAX, CATEGORY_SLUG_MAX, HISTORY_SHOWN, ICON_SEARCH_RESULTS,
-        LOCATION_LABEL_MAX, SLUG_CANDIDATES_PER_QUERY,
+        LOCATION_BULK_MAX, LOCATION_LABEL_MAX, SLUG_CANDIDATES_PER_QUERY,
     },
     icons,
     inputs::{
@@ -59,7 +59,8 @@ use crate::{
         AdminCategoryDto, AdminInquiryDto, AdminLocationDto, AdminPagedResponse, AdminProductDto,
         AdminProductItemDto, AdminProviderDetailDto, AdminProviderDto, AdminReviewDto,
         AdminServiceDto, AdminServiceItemDto, AdminUserDetailDto, AdminUserDto, AreaGroupDto,
-        AssignUserDto, AuditEntryDto, IconMatchesDto, InquiryCountsDto, ListingActivityDto,
+        AssignUserDto, AuditEntryDto, BulkLocationsDto, BulkWardDto, BulkWardsDto, IconMatchesDto,
+        InquiryCountsDto, ListingActivityDto,
         ProviderActivityDto, ProviderStatusDto, ReviewCountsDto, RoleDto, SlugSuggestionDto,
         VerificationDto,
     },
@@ -68,7 +69,7 @@ use crate::{
     },
     ports::{EventBus, PasswordHasher},
     settings::SettingsReader,
-    slug::{matches_search, numbered, slugify},
+    slug::{matches_search, numbered, slugify, sort_key},
     usecases::{
         account_rules::account_for_role,
         business_rules::validate_profile,
@@ -1275,25 +1276,103 @@ impl AdminUseCase {
         } = input;
         if let Some(ward) = ward.as_deref().map(str::trim).filter(|w| !w.is_empty()) {
             let units = AdminUnits::load(self.admin_unit_repo.as_ref()).await?;
-            let found = match AreaKey::parse(ward) {
-                Some(AreaKey::Ward(code)) => units
-                    .ward(&code)
-                    .filter(|w| w.is_active)
-                    .and_then(|w| units.province(&w.province_code).map(|p| (p, w))),
-                _ => None,
-            };
-            let Some((province, ward)) = found else {
-                return Err(Error::field("ward", ErrorCode::LocationNotFound));
-            };
+            let (preset, ward_lat, ward_lng) = ward_preset(&units, ward, "ward")?;
             if label.trim().is_empty() {
-                label = preset_label(&province.name, &ward.name);
+                label = preset;
             }
             if !lat.is_finite() || !lng.is_finite() {
-                (lat, lng) = (ward.lat, ward.lng);
+                (lat, lng) = (ward_lat, ward_lng);
             }
         }
         let label = validate_location(&label, lat, lng)?;
         Ok((label, lat, lng, display_order))
+    }
+
+    /// The wards of province `province` (`p82`) the "add several" sheet
+    /// offers, by name, each said taken when a preset already has the name
+    /// it makes. None for an unknown or turned-off province.
+    pub async fn location_bulk_choices(
+        &self,
+        actor: &Actor,
+        province: &str,
+    ) -> Result<Option<BulkWardsDto>> {
+        actor.require(PERM_LOCATION_MANAGE)?;
+        let units = AdminUnits::load(self.admin_unit_repo.as_ref()).await?;
+        let Some(group) = units
+            .choices()
+            .into_iter()
+            .find(|g| g.value == province.trim())
+        else {
+            return Ok(None);
+        };
+        let presets: Vec<String> = group.wards.iter().map(|w| w.preset.clone()).collect();
+        let taken = self.location_repo.existing_labels(&presets).await?;
+        Ok(Some(BulkWardsDto {
+            value: group.value,
+            label: group.label,
+            wards: group
+                .wards
+                .into_iter()
+                .map(|w| BulkWardDto {
+                    taken: taken.contains(&w.preset),
+                    value: w.value,
+                    label: w.label,
+                    preset: w.preset,
+                })
+                .collect(),
+        }))
+    }
+
+    /// A preset for each of `wards` (`w28439`), named and placed as the
+    /// one-ward form does, added by name after the last display order; a
+    /// name a preset already has is passed over. One unknown or turned-off
+    /// ward refuses them all, before anything is stored.
+    pub async fn create_locations_from_wards(
+        &self,
+        actor: &Actor,
+        wards: &[String],
+    ) -> Result<BulkLocationsDto> {
+        actor.require(PERM_LOCATION_MANAGE)?;
+        let mut seen = HashSet::new();
+        let keys: Vec<&str> = wards
+            .iter()
+            .map(|w| w.trim())
+            .filter(|w| !w.is_empty() && seen.insert(*w))
+            .collect();
+        Validation::new()
+            .check(keys.is_empty(), "wards", ErrorCode::LocationWardsRequired)
+            .check_with(
+                keys.len() > LOCATION_BULK_MAX,
+                "wards",
+                ErrorCode::LocationWardsTooMany,
+                ("max", LOCATION_BULK_MAX),
+            )
+            .finish()?;
+        let units = AdminUnits::load(self.admin_unit_repo.as_ref()).await?;
+        let mut presets = keys
+            .iter()
+            .map(|key| {
+                let (label, lat, lng) = ward_preset(&units, key, "wards")?;
+                Ok((validate_location(&label, lat, lng)?, lat, lng))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        presets.sort_by_cached_key(|(label, _, _)| sort_key(label));
+        presets.dedup_by(|a, b| a.0 == b.0);
+        let wanted: Vec<String> = presets.iter().map(|(label, _, _)| label.clone()).collect();
+        let added = self.location_repo.create_many(presets).await?;
+        for location in &added {
+            self.publish(actor, Entity::Location, location.id, Change::Created, None)
+                .await;
+        }
+        let added_labels: HashSet<&str> = added.iter().map(|l| l.label.as_str()).collect();
+        let skipped = wanted
+            .into_iter()
+            .filter(|label| !added_labels.contains(label.as_str()))
+            .collect();
+        Ok(BulkLocationsDto {
+            created: added.into_iter().map(to_location_dto).collect(),
+            skipped,
+        })
     }
 
     pub async fn create_location(
@@ -1812,6 +1891,22 @@ fn to_category_dto(c: CategoryAdmin) -> AdminCategoryDto {
 }
 
 /// The trimmed label of a valid location preset; every bad field reported.
+/// The preset a ward makes: its name ("Bình Phú, Đồng Tháp") and point. An
+/// unknown or turned-off ward, or a key that names no ward, is a
+/// `LocationNotFound` on `field`. The one rule of the preset forms, one ward
+/// or several.
+fn ward_preset(units: &AdminUnits, key: &str, field: &'static str) -> Result<(String, f64, f64)> {
+    let found = match AreaKey::parse(key) {
+        Some(AreaKey::Ward(code)) => units
+            .ward(&code)
+            .filter(|w| w.is_active)
+            .and_then(|w| units.province(&w.province_code).map(|p| (p, w))),
+        _ => None,
+    };
+    let (province, ward) = found.ok_or_else(|| Error::field(field, ErrorCode::LocationNotFound))?;
+    Ok((preset_label(&province.name, &ward.name), ward.lat, ward.lng))
+}
+
 fn validate_location(label: &str, lat: f64, lng: f64) -> Result<String> {
     let label = label.trim().to_owned();
     Validation::new()

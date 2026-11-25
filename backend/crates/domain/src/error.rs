@@ -100,6 +100,8 @@ error_codes! {
     InvalidSlug               => (BadRequest,      "invalid_slug"),
     FieldTooLong              => (BadRequest,      "field_too_long"),
     LabelRequired             => (BadRequest,      "label_required"),
+    LocationWardsRequired     => (BadRequest,      "location_wards_required"),
+    LocationWardsTooMany      => (BadRequest,      "location_wards_too_many"),
     BusinessNameRequired      => (BadRequest,      "business_name_required"),
     RequesterNameRequired     => (BadRequest,      "requester_name_required"),
     RequesterNameTooLong      => (BadRequest,      "requester_name_too_long"),

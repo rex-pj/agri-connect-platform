@@ -10,6 +10,7 @@
 {% import "molecules/form_field.html" as field %}
 {% import "organisms/location_fields.html" as fields %}
 {% import "organisms/confirm_sheet.html" as confirm %}
+{% import "organisms/ward_checklist.html" as checklist %}
 {#- `page.body` is web::pages::admin::locations::LocationsPage: a page of
     every location preset (hidden ones too, `b.pagination` under it) and the
     create form, a sheet opened by the header's "add" (an anchored section without JS), which comes back
@@ -17,19 +18,25 @@
     `organisms/location_fields.html`, as on the edit page. "Ẩn" and "Xoá" reload the
     list with that row's confirmation open (`b.confirm`, in its own `dialog`
     scope). Row actions send `back=list` and the page (`b.keep`) so they
-    land here again. -#}
+    land here again. "Thêm nhiều" leads to a second sheet (`b.bulk`, its own
+    `dialog` scope): a province chosen by a GET form (`?bulk=p82`, sent on
+    change with JS), then its wards ticked (`organisms/ward_checklist.html`)
+    and posted to `b.bulk.action`; open on load once a province is chosen or
+    the post was refused. -#}
 {% block title %}{{ t(key="admin_menu.locations") }} | {{ site.name }} Admin{% endblock title %}
 {% block vendor %}{{ field::searchable_select_assets() }}{% endblock vendor %}
 {% block content %}
 {% set b = page.body %}
 <div x-data="dialog" data-open="{% if b.errors.message or b.errors.fields %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
-{{ header::admin_header(title=t(key="admin_menu.locations"), icon="fa-map-location-dot", sub=t(key="admin.locations_sub"), action_href="#them-khu-vuc", action_icon="fa-plus", action_label=t(key="admin.add_location"), action_opens=true) }}
+{{ header::admin_header(title=t(key="admin_menu.locations"), icon="fa-map-location-dot", sub=t(key="admin.locations_sub"), action_href="#them-khu-vuc", action_icon="fa-plus", action_label=t(key="admin.add_location"), action_opens=true, also_href="#them-nhieu-khu-vuc", also_icon="fa-layer-group", also_label=t(key="location_bulk.open")) }}
 <div class="admin-body">
   {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.locations"), chips=b.states, chips_label=t(key="admin_state.label")) }}
   {{ search::admin_results(s=b.search, total=b.total) }}
   {% if b.flash == "location_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.location_hidden")) }}{% endif %}
   {% if b.flash == "location_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.location_shown")) }}{% endif %}
   {% if b.flash == "location_deleted" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.location_deleted")) }}{% endif %}
+  {% if b.flash == "locations_created" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.locations_created")) }}{% endif %}
+  {% if b.flash == "locations_created_some_existed" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.locations_created_some_existed")) }}{% endif %}
 
   <div class="admin-card">
     <div class="table-responsive">
@@ -86,6 +93,42 @@
       <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-plus") }} {{ t(key="admin.add_location") }}</button>
     </form>
   </section>
+
+  {% set bk = b.bulk %}
+  <div x-data="dialog" data-open="{% if bk.open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+    <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
+    <section class="contact-sheet" id="them-nhieu-khu-vuc" aria-labelledby="them-nhieu-khu-vuc-title" :class="sheetClass">
+      {{ sheet_head::sheet_header(id="them-nhieu-khu-vuc", title=t(key="location_bulk.title"), icon="fa-layer-group") }}
+      <form class="contact-sheet__form" method="get" action="{{ bk.choose_action }}#them-nhieu-khu-vuc" x-data="autoSubmit" x-on:change="submit">
+        <div class="form-field">
+          <label class="form-label fw-semibold" for="bulk-province">{{ t(key="location_bulk.province") }}</label>
+          <select class="form-select" id="bulk-province" name="bulk">
+            <option value="">{{ t(key="location_bulk.choose") }}</option>
+            {% for g in b.wards %}<option value="{{ g.value }}"{% if g.value == bk.province %} selected{% endif %}>{{ g.label }}</option>{% endfor %}
+          </select>
+        </div>
+        <button type="submit" class="btn btn-outline-success btn-lg" x-show="withoutScript">{{ atoms::icon(name="fa-list-check") }} {{ t(key="location_bulk.show_wards") }}</button>
+      </form>
+      {% if not bk.province %}
+      <p class="text-muted mt-3 mb-0">{{ t(key="location_bulk.choose_first") }}</p>
+      {% else %}
+      <form class="contact-sheet__form mt-3" method="post" action="{{ bk.action }}" novalidate x-data="wardChecklist" data-submit="{{ t(key="location_bulk.submit") }}" data-submit-count="{{ t(key="location_bulk.submit_count", n="{n}") }}">
+        <input type="hidden" name="province" value="{{ bk.province }}">
+        {% if bk.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=bk.errors.message) }}{% endif %}
+        {% if bk.free == 0 %}
+        {{ alerts::alert(kind="info", icon="fa-circle-check", text=t(key="location_bulk.all_taken", name=bk.province_name)) }}
+        {% else %}
+        <p class="form-text m-0">{{ t(key="location_bulk.advice") }}</p>
+        {% endif %}
+        {{ checklist::ward_checklist(wards=bk.wards, title=t(key="location_bulk.wards", name=bk.province_name), free=bk.free, error=bk.errors.fields.wards | default(value="")) }}
+        <p class="form-text m-0">{{ t(key="location_bulk.hint") }}</p>
+        {% if bk.free > 0 %}
+        <button type="submit" class="btn btn-success btn-lg w-100" x-bind:disabled="nothing">{{ atoms::icon(name="fa-plus") }} <span x-text="submitText">{{ t(key="location_bulk.submit") }}</span></button>
+        {% endif %}
+      </form>
+      {% endif %}
+    </section>
+  </div>
 </div>
 </div>
 {% endblock content %}

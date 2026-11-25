@@ -6,14 +6,23 @@
 //! the same form on the page without); showing again is one button. The
 //! list's rows carry them all (`?hide={id}` / `?delete={id}` open the
 //! confirmation there); sent with `back=list`, they land back on the list.
+//!
+//! "Add several" is a second sheet: a province chosen (`?bulk=p82`, a GET
+//! form that sends itself with JS), its wards as boxes to tick, those a
+//! preset already names said so and not offered; posted to
+//! `/admin/locations/bulk`, each ticked ward becomes a preset as the one-ward
+//! form makes it, and the list opens newest first.
+
+use std::collections::{HashMap, HashSet};
 
 use application::{
     authz::Actor,
-    constants::LOCATION_LABEL_MAX,
+    constants::{LOCATION_BULK_MAX, LOCATION_LABEL_MAX},
     inputs::LocationInput,
     outputs::{AdminLocationDto, AreaGroupDto},
     usecases::admin_usecase::HistoryOf,
 };
+use domain::models::admin_list::AdminSort;
 use axum::{extract::State, http::StatusCode, response::Response};
 use domain::{models::admin_list::LISTING_LIST_STATES, Error, ErrorCode};
 use serde::{Deserialize, Serialize};
@@ -101,6 +110,94 @@ pub struct LocationsPage {
     pub flash: Option<Flash>,
     /// The wards the create form fills itself from, by province.
     pub wards: Vec<AreaGroupDto>,
+    /// The "add several" sheet.
+    pub bulk: BulkSheet,
+}
+
+/// A ticked ward's box name: `ward.w28439`.
+const WARD_PREFIX: &str = "ward.";
+
+/// The "add several" sheet: the province chosen and its wards.
+#[derive(Serialize)]
+pub struct BulkSheet {
+    /// Opened on load: a province was chosen, or the form came back refused.
+    pub open: bool,
+    /// `p82`, empty before one is chosen.
+    pub province: String,
+    pub province_name: String,
+    pub wards: Vec<BulkWardRow>,
+    /// Its wards no preset names yet.
+    pub free: usize,
+    pub errors: FormErrors,
+    /// The GET form choosing the province, and the POST adding the wards.
+    pub choose_action: String,
+    pub action: String,
+    pub max: usize,
+}
+
+#[derive(Serialize)]
+pub struct BulkWardRow {
+    /// The box's name (`ward.w28439`).
+    pub field: String,
+    /// `w28439`, for the box's id.
+    pub value: String,
+    pub label: String,
+    pub preset: String,
+    pub taken: bool,
+    pub ticked: bool,
+}
+
+/// What the "add several" sheet shows: the province asked for, the wards
+/// ticked when it came back refused, and why.
+#[derive(Default)]
+struct BulkView {
+    open: bool,
+    province: String,
+    ticked: HashSet<String>,
+    errors: FormErrors,
+}
+
+async fn bulk_sheet(state: &AppState, actor: &Actor, view: BulkView) -> Result<BulkSheet, Error> {
+    let province = view.province.trim();
+    let found = if province.is_empty() {
+        None
+    } else {
+        state
+            .usecases
+            .admin
+            .location_bulk_choices(actor, province)
+            .await?
+    };
+    let (province, province_name, wards) = match found {
+        Some(group) => (
+            group.value,
+            group.label,
+            group
+                .wards
+                .into_iter()
+                .map(|w| BulkWardRow {
+                    field: format!("{WARD_PREFIX}{}", w.value),
+                    ticked: !w.taken && view.ticked.contains(&w.value),
+                    value: w.value,
+                    label: w.label,
+                    preset: w.preset,
+                    taken: w.taken,
+                })
+                .collect(),
+        ),
+        None => (String::new(), String::new(), Vec::new()),
+    };
+    Ok(BulkSheet {
+        open: view.open || !province.is_empty(),
+        free: wards.iter().filter(|w: &&BulkWardRow| !w.taken).count(),
+        province,
+        province_name,
+        wards,
+        errors: view.errors,
+        choose_action: url("admin_locations", &[])?,
+        action: url("admin_locations_bulk", &[])?,
+        max: LOCATION_BULK_MAX,
+    })
 }
 
 /// The list page around the create form; `asked`: the row whose hide or
@@ -113,6 +210,7 @@ struct ListView {
     asked: Asked,
     flash: Option<Flash>,
     status: StatusCode,
+    bulk: BulkView,
 }
 
 async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Response, Error> {
@@ -123,15 +221,17 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
         asked,
         flash,
         status,
+        bulk,
     } = view;
     let position = position.checked(LISTING_LIST_STATES, CATALOGUE_SORTS);
     let criteria = position.filter(LISTING_LIST_STATES);
-    let (locations, wards) = tokio::try_join!(
+    let (locations, wards, bulk) = tokio::try_join!(
         state
             .usecases
             .admin
             .list_locations_page(actor, position.page(), &criteria),
         state.usecases.admin.location_choices(actor),
+        bulk_sheet(state, actor, bulk),
     )?;
     let path = url("admin_locations", &[])?;
     let wanted_query = position.query();
@@ -200,6 +300,7 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
         keep: ListReturn::new(position),
         flash,
         wards,
+        bulk,
     };
     render_admin(
         state,
@@ -222,6 +323,8 @@ pub struct ListQuery {
     pub q: String,
     pub state: String,
     pub sort: String,
+    /// The province whose wards the "add several" sheet offers (`p82`).
+    pub bulk: String,
 }
 
 /// GET /admin/locations
@@ -247,6 +350,10 @@ pub async fn list(
         asked: Asked::new(&q.hide, &q.delete),
         flash: flash.0,
         status: StatusCode::OK,
+        bulk: BulkView {
+            province: q.bulk,
+            ..BulkView::default()
+        },
     };
     let mut response = list_page(&state, &actor, view).await?;
     flash.clear_on(&mut response);
@@ -277,6 +384,61 @@ pub async fn create(
                 asked: Asked::default(),
                 flash: None,
                 status: err.kind().status(),
+                bulk: BulkView::default(),
+            };
+            list_page(&state, &actor, view).await
+        }
+        Err(err) => Err(err),
+    }
+}
+
+/// POST /admin/locations/bulk: the ticked wards of the "add several" sheet
+/// (`ward.w28439` boxes) and its `province`, to show it again when refused.
+pub async fn create_from_wards(
+    Viewer(viewer): Viewer,
+    State(state): State<AppState>,
+    ApiForm(raw): ApiForm<HashMap<String, String>>,
+) -> Result<Response, Error> {
+    let Some(actor) = viewer else {
+        return see_other(&url("login", &[])?);
+    };
+    let wards: Vec<String> = raw
+        .keys()
+        .filter_map(|k| k.strip_prefix(WARD_PREFIX))
+        .map(str::to_owned)
+        .collect();
+    let result = state
+        .usecases
+        .admin
+        .create_locations_from_wards(&actor, &wards)
+        .await;
+    match result {
+        Ok(done) => {
+            let flash = if done.skipped.is_empty() {
+                Flash::LocationsCreated
+            } else {
+                Flash::LocationsCreatedSomeExisted
+            };
+            let newest = ListPosition {
+                sort: AdminSort::Newest.code().to_owned(),
+                ..ListPosition::default()
+            };
+            newest.back_to("admin_locations", flash)
+        }
+        Err(err) if is_refusal(&err) => {
+            let view = ListView {
+                position: ListPosition::default(),
+                form: LocationForm::default(),
+                errors: FormErrors::default(),
+                asked: Asked::default(),
+                flash: None,
+                status: err.kind().status(),
+                bulk: BulkView {
+                    open: true,
+                    province: raw.get("province").cloned().unwrap_or_default(),
+                    ticked: wards.into_iter().collect(),
+                    errors: FormErrors::from_error(&state, &err),
+                },
             };
             list_page(&state, &actor, view).await
         }

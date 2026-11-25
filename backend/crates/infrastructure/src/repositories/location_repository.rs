@@ -1,9 +1,10 @@
 use async_trait::async_trait;
 use sea_orm::{
-    sea_query::Expr, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
-    QueryOrder, QuerySelect, Select, Set,
+    sea_query::{Expr, OnConflict},
+    ColumnTrait, DatabaseConnection, DbErr, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
+    QuerySelect, Select, Set, TransactionTrait, TryInsertResult,
 };
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 use tracing::error;
 
 use domain::{
@@ -125,6 +126,70 @@ impl LocationRepositoryTrait for LocationRepository {
             .map(|r| r.last_insert_id)
             .map_err(|e| {
                 unique_or_internal(e, "label", ErrorCode::LocationLabelTaken, "location create")
+            })
+    }
+
+    async fn create_many(&self, presets: Vec<(String, f64, f64)>) -> Result<Vec<Location>, Error> {
+        let failed = |e: DbErr| {
+            error!("location create_many error: {e}");
+            Error::internal("Failed to create locations.")
+        };
+        if presets.is_empty() {
+            return Ok(Vec::new());
+        }
+        let txn = self.db.begin().await.map_err(failed)?;
+        let last: Option<Option<i32>> = LocationEntity::find()
+            .select_only()
+            .column_as(location::Column::DisplayOrder.max(), "last")
+            .into_tuple()
+            .one(&txn)
+            .await
+            .map_err(failed)?;
+        let first = last.flatten().unwrap_or(0) + 1;
+        let models = presets
+            .into_iter()
+            .zip(first..)
+            .map(|((label, lat, lng), display_order)| ActiveModel {
+                label: Set(label),
+                lat: Set(lat),
+                lng: Set(lng),
+                display_order: Set(display_order),
+                ..Default::default()
+            });
+        let inserted = LocationEntity::insert_many(models)
+            .on_conflict(
+                OnConflict::column(location::Column::Label)
+                    .do_nothing()
+                    .to_owned(),
+            )
+            .do_nothing()
+            .exec_with_returning_many(&txn)
+            .await
+            .map_err(failed)?;
+        txn.commit().await.map_err(failed)?;
+        let mut added = match inserted {
+            TryInsertResult::Inserted(rows) => rows,
+            TryInsertResult::Empty | TryInsertResult::Conflicted => Vec::new(),
+        };
+        added.sort_by_key(|r| r.display_order);
+        Ok(added.into_iter().map(to_location).collect())
+    }
+
+    async fn existing_labels(&self, labels: &[String]) -> Result<HashSet<String>, Error> {
+        if labels.is_empty() {
+            return Ok(HashSet::new());
+        }
+        LocationEntity::find()
+            .select_only()
+            .column(location::Column::Label)
+            .filter(location::Column::Label.is_in(labels.iter().cloned()))
+            .into_tuple::<String>()
+            .all(self.db.as_ref())
+            .await
+            .map(|found| found.into_iter().collect())
+            .map_err(|e| {
+                error!("location existing_labels error: {e}");
+                Error::internal("Failed to load locations.")
             })
     }
 

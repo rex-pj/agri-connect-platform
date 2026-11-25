@@ -167,6 +167,7 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("admin_alert", "/admin/alerts/{id}"),
     ("admin_alert_status", "/admin/alerts/{id}/status"),
     ("admin_locations", "/admin/locations"),
+    ("admin_locations_bulk", "/admin/locations/bulk"),
     ("admin_location", "/admin/locations/{id}"),
     ("admin_location_status", "/admin/locations/{id}/status"),
     ("admin_location_delete", "/admin/locations/{id}/delete"),

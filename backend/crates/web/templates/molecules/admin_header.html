@@ -2,9 +2,11 @@
     page's one action at its right (`action_class`: `btn-success` for "add",
     `btn-outline-secondary` for a way out, e.g. the public page).
     `action_opens`: the action is an anchor to a sheet on the page, which it
-    opens instead when the header sits inside that sheet's `dialog` scope. -#}
+    opens instead when the header sits inside that sheet's `dialog` scope.
+    `also_*`: a second, outlined action before it (e.g. "add several"), a
+    plain anchor: a sheet it leads to opens from the URL hash. -#}
 {% import "atoms/icon.html" as atoms %}
-{% macro admin_header(title, icon, sub="", back_href="", back_label="", action_href="", action_icon="", action_label="", action_class="btn-success", action_opens=false) -%}
+{% macro admin_header(title, icon, sub="", back_href="", back_label="", action_href="", action_icon="", action_label="", action_class="btn-success", action_opens=false, also_href="", also_icon="", also_label="") -%}
 <header class="admin-header">
   {% if back_href %}<a class="admin-header__back" href="{{ back_href }}">{{ atoms::icon(name="fa-arrow-left", class="me-1") }}{{ back_label }}</a>{% endif %}
   <div class="admin-header__row">
@@ -12,7 +14,11 @@
       <h1 class="admin-header__title">{{ atoms::icon(name=icon, class="text-success me-2") }}{{ title }}</h1>
       {% if sub %}<p class="admin-header__sub">{{ sub }}</p>{% endif %}
     </div>
+    {% if also_href %}<div class="admin-header__actions">
+    <a class="btn btn-outline-success admin-header__action" href="{{ also_href }}">{{ atoms::icon(name=also_icon) }} {{ also_label }}</a>
+    {% endif %}
     {% if action_href %}<a class="btn {{ action_class }} admin-header__action" href="{{ action_href }}"{% if action_opens %} x-on:click.prevent="show"{% endif %}>{{ atoms::icon(name=action_icon) }} {{ action_label }}</a>{% endif %}
+    {% if also_href %}</div>{% endif %}
   </div>
 </header>
 {%- endmacro admin_header %}

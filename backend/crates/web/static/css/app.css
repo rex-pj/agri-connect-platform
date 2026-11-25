@@ -3339,6 +3339,7 @@ ac-geolocate {
 .acct-header {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--sp-3);
   padding: var(--sp-6) var(--gutter);
   border-radius: 0 0 20px 20px;
@@ -3346,6 +3347,34 @@ ac-geolocate {
   color: #fff;
 }
 .acct-avatar {
+.acct-header__text {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.acct-header .acct-name,
+.acct-header .acct-sub {
+  overflow-wrap: anywhere;
+}
+/* The way to the visitor's own area: under the name on a phone, at the
+   header's end from 576 px. */
+.acct-header__area {
+  flex: 1 1 100%;
+  min-height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  color: #fff;
+  font-weight: 700;
+}
+.acct-header__area:hover,
+.acct-header__area:focus-visible {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+@media (min-width: 576px) {
+  .acct-header__area {
+    flex: 0 0 auto;
+  }
+}
+/* The name's first letter: who this is at a glance. */
   width: 56px;
   height: 56px;
   flex-shrink: 0;
@@ -3353,8 +3382,180 @@ ac-geolocate {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.14);
-  font-size: var(--fs-2xl);
+  background: rgba(255, 255, 255, 0.16);
+  font-size: var(--fs-xl);
+  font-weight: 800;
+}
+
+/* The account as a settings list (organisms/account_sections): two groups,
+   side by side from 992 px, never wider than reads well. */
+.acct-layout {
+  display: grid;
+  gap: var(--gap-stack);
+  width: 100%;
+  max-width: 1040px;
+  margin-inline: auto;
+}
+.acct-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-stack);
+  min-width: 0;
+}
+@media (min-width: 992px) {
+  .acct-layout {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
+/* The rows run edge to edge of their card (so its corners clip a row's
+   tint); the card's own title and notices keep its padding. */
+.acct-group {
+  overflow: hidden;
+}
+.acct-group > .alert {
+  margin: 0 0 var(--sp-2);
+}
+.acct-group > .acct-list {
+  margin: 0 calc(var(--pad-card) * -1) calc(var(--pad-card) * -1);
+  border-top: 1px solid var(--hairline);
+}
+/* A line between rows; the email's notes belong to the row above. */
+.acct-list > :not(:first-child):not(.acct-item__notes) {
+  border-top: 1px solid var(--hairline);
+}
+/* One fact: its icon, what it is over its value, and what tapping does. */
+.acct-item__row {
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--pad-card);
+}
+summary.acct-item__row {
+  list-style: none;
+  cursor: pointer;
+}
+summary.acct-item__row::-webkit-details-marker {
+  display: none;
+}
+summary.acct-item__row:hover {
+  background: var(--p50);
+}
+summary.acct-item__row:focus-visible {
+  outline: 3px solid var(--p300);
+  outline-offset: -3px;
+}
+.acct-item__icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--p50);
+  color: var(--p700);
+}
+.acct-item__text {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.acct-item__label {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+}
+.acct-item__label .badge {
+  margin-left: var(--sp-1);
+  vertical-align: 1px;
+}
+.acct-item__value {
+  color: var(--text);
+  font-size: var(--fs-base);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.acct-item__action {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--p700);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+.acct-item__chevron {
+  font-size: var(--fs-2xs);
+  transition: transform 0.15s;
+}
+.acct-item[open] .acct-item__chevron {
+  transform: rotate(180deg);
+}
+.acct-item[open] > summary {
+  background: var(--p50);
+}
+/* The unfolded form, under its row, inset like the value it changes. */
+.acct-item__form {
+  padding: var(--sp-2) var(--pad-card) var(--pad-card) calc(var(--pad-card) + 36px + var(--sp-3));
+}
+@media (max-width: 575.98px) {
+  .acct-item__form {
+    padding-left: var(--pad-card);
+  }
+}
+/* What the email waits for, shown whether its row is open or not. */
+.acct-item__notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: 0 var(--pad-card) var(--sp-3);
+}
+.acct-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: 10px;
+  font-size: var(--fs-sm);
+}
+.acct-note > span {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.acct-note > .fa-solid {
+  margin-top: 3px;
+}
+.acct-note--info {
+  background: var(--p50);
+  color: var(--p800);
+}
+.acct-note--warn {
+  background: var(--a50);
+  color: var(--a800);
+}
+.acct-note form {
+  flex: 1 1 100%;
+}
+.acct-note__btn {
+  min-height: 40px;
+  color: var(--a800);
+  border-color: var(--a600);
+}
+.acct-note__btn:hover {
+  background: var(--a100);
+  color: var(--a800);
+  border-color: var(--a600);
+}
+.acct-logout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
 }
 .acct-name {
   margin: 0;

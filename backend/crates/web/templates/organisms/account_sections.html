@@ -1,111 +1,140 @@
 {#- The signed-in visitor's own account, the same in every frame (app,
-    partner, admin): the name it is shown by, its sign-in email (and the
-    sheet that moves it to another), the password and the other devices,
-    logging out. `p` is web::pages::account::AccountPage; `card` /
-    `title_class` are the frame's card classes (`detail-card` on app pages,
-    `admin-section` in the admin panel); `logout` is where the frame's logout
-    posts. The role names are for display only; nothing here decides
-    access. Every form works without JS: the email sheet is then a card at
-    the end of the page, reached by its anchor. -#}
+    partner, admin), as a settings list: each fact one row (its icon, what
+    it is, its value, "Sửa" / "Đổi"); a row that can change unfolds its form
+    in place (`<details>`, so without JS too), open again when that form came
+    back refused. Two groups: the profile (name, role, since when) and
+    signing in (the email with its state, the password, the other devices),
+    then logging out. Side by side from 992 px.
+    `p` is web::pages::account::AccountPage; `card` / `title_class` are the
+    frame's card classes (`detail-card` on app pages, `admin-section` in the
+    admin panel); `logout` is where the frame's logout posts. The role names
+    are for display only; nothing here decides access. -#}
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/alert.html" as alerts %}
 {% import "atoms/status_badge.html" as status %}
 {% import "molecules/form_field.html" as field %}
-{% import "molecules/sheet_header.html" as sheet_head %}
+{% import "molecules/account_row.html" as row %}
 
-{#- The app and partner frames' header: avatar, name, role. -#}
+{#- The app and partner frames' header: the initial, name, email, role, and
+    the way to the visitor's own area. -#}
 {% macro account_header(p) -%}
 {% set me = p.me %}
 <header class="acct-header">
-  <span class="acct-avatar">{{ atoms::icon(name="fa-circle-user") }}</span>
-  <div>
+  <span class="acct-avatar" aria-hidden="true">{{ me.name | truncate(length=1, end="") | upper }}</span>
+  <div class="acct-header__text">
     <h1 class="acct-name">{{ me.name }}</h1>
     {% if me.full_name %}<p class="acct-sub">{{ me.email }}</p>{% endif %}
     {#- The icon of the visitor's area (decided by permissions), not of a role name. -#}
     <span class="acct-role">{% if p.area %}{{ atoms::icon(name=p.area.icon, class="me-1") }}{% else %}{{ atoms::icon(name="fa-user", class="me-1") }}{% endif %}{{ p.role_name }}</span>
   </div>
+  {% if p.area %}<a class="btn acct-header__area" href="{{ p.area.href }}">{{ atoms::icon(name=p.area.icon) }} <span>{{ p.area.label }}</span></a>{% endif %}
 </header>
 {%- endmacro account_header %}
 
 {% macro account_sections(p, limits, logout, card="detail-card", title_class="detail-card__title") -%}
 {% set me = p.me %}
-<section class="{{ card }}">
-  <h2 class="{{ title_class }}">{{ atoms::icon(name="fa-id-card", class="me-1") }} {{ t(key="account.info") }}</h2>
+<div class="acct-layout">
+<div class="acct-col">
+<section class="{{ card }} acct-group" aria-labelledby="acct-profile-title">
+  <h2 class="{{ title_class }}" id="acct-profile-title">{{ t(key="account.profile_title") }}</h2>
   {% if p.profile_saved %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="account.profile_saved")) }}{% endif %}
-  <form class="form-stack" method="post" action="{{ url_for(name="account_profile") }}">
-    {% if p.profile_errors.message and not p.profile_errors.fields %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=p.profile_errors.message) }}{% endif %}
-    {{ field::input(id="acct_name", name="full_name", label=t(key="form.full_name"), value=p.full_name, error=p.profile_errors.fields.full_name | default(value=""), autocomplete="name", maxlength=limits.full_name_max, hint=t(key="account.name_hint")) }}
-    <button type="submit" class="btn btn-success w-100">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="account.save_name") }}</button>
-  </form>
-  <dl class="acct-rows mt-3">
-    <div class="acct-row"><dt>{{ t(key="account.role") }}</dt><dd>{{ p.role_name }}</dd></div>
-    <div class="acct-row"><dt>{{ t(key="account.joined") }}</dt><dd><time datetime="{{ me.created_on | utc_iso }}">{{ me.created_on | vn_datetime }}</time></dd></div>
-  </dl>
-  {% if p.area %}<a class="btn btn-outline-success w-100 mt-2" href="{{ p.area.href }}">{{ atoms::icon(name=p.area.icon) }} {{ p.area.label }}</a>{% endif %}
-</section>
-
-<section class="{{ card }}" id="email">
-  <h2 class="{{ title_class }}">{{ atoms::icon(name="fa-envelope", class="me-1") }} {{ t(key="account.email_title") }}</h2>
-  <p class="mb-1 text-break"><strong>{{ me.email }}</strong> {{ status::email(verified=me.email_verified) }}</p>
-  <p class="small text-muted">{{ t(key="account.email_note") }}</p>
-  {% if p.email_change_sent %}{{ alerts::alert(kind="success", icon="fa-paper-plane", text=t(key="account.email_change_sent")) }}{% endif %}
-  {% if me.pending_email %}
-  <div class="alert alert-info small" role="status">
-    {{ atoms::icon(name="fa-hourglass-half", class="me-1") }}{{ t(key="account.email_pending") }} <strong class="text-break">{{ me.pending_email }}</strong>.
-    {{ t(key="account.email_pending_note") }}
+  <div class="acct-list">
+    <details class="acct-item"{% if p.profile_errors.message %} open{% endif %}>
+      <summary class="acct-item__row">
+        {{ row::head(icon="fa-user", label=t(key="form.full_name"), value=me.full_name | default(value=t(key="account.name_empty")), action=t(key="account.edit")) }}
+      </summary>
+      <form class="form-stack acct-item__form" method="post" action="{{ url_for(name="account_profile") }}">
+        {% if p.profile_errors.message and not p.profile_errors.fields %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=p.profile_errors.message) }}{% endif %}
+        {{ field::input(id="acct_name", name="full_name", label=t(key="form.full_name"), value=p.full_name, error=p.profile_errors.fields.full_name | default(value=""), autocomplete="name", maxlength=limits.full_name_max, hint=t(key="account.name_hint")) }}
+        <button type="submit" class="btn btn-success w-100">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="account.save_name") }}</button>
+      </form>
+    </details>
+    <div class="acct-item__row">{{ row::head(icon="fa-id-badge", label=t(key="account.role"), value=p.role_name) }}</div>
+    <div class="acct-item__row">
+      <span class="acct-item__icon">{{ atoms::icon(name="fa-calendar") }}</span>
+      <span class="acct-item__text">
+        <span class="acct-item__label">{{ t(key="account.joined") }}</span>
+        <span class="acct-item__value"><time datetime="{{ me.created_on | utc_iso }}">{{ me.created_on | vn_datetime }}</time></span>
+      </span>
+    </div>
   </div>
-  {% endif %}
-  {% if p.verification_sent %}{{ alerts::alert(kind="success", icon="fa-envelope-circle-check", text=t(key="account.verification_sent")) }}
-  {% elif not me.email_verified %}
-  {{ alerts::alert(kind="warning", icon="fa-envelope", text=t(key="account.email_unverified")) }}
-  <form method="post" action="{{ url_for(name="account_email_verification") }}">
-    <button type="submit" class="btn btn-outline-success w-100 mb-2">{{ atoms::icon(name="fa-paper-plane") }} {{ t(key="account.send_verification") }}</button>
-  </form>
-  {% endif %}
-  <a class="btn btn-outline-success w-100" href="#doi-email">{{ atoms::icon(name="fa-pen") }} {{ t(key="account.change_email") }}</a>
 </section>
+</div>
 
-<section class="{{ card }}" id="security">
-  <h2 class="{{ title_class }}">{{ atoms::icon(name="fa-lock", class="me-1") }} {{ t(key="account.security") }}</h2>
+<div class="acct-col">
+<section class="{{ card }} acct-group" id="security" aria-labelledby="acct-security-title">
+  <h2 class="{{ title_class }}" id="acct-security-title">{{ t(key="account.security") }}</h2>
+  {% if p.email_change_sent %}{{ alerts::alert(kind="success", icon="fa-paper-plane", text=t(key="account.email_change_sent")) }}{% endif %}
+  {% if p.verification_sent %}{{ alerts::alert(kind="success", icon="fa-envelope-circle-check", text=t(key="account.verification_sent")) }}{% endif %}
   {% if p.password_changed %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="account.password_changed")) }}{% endif %}
   {% if p.sessions_ended %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="account.sessions_ended")) }}{% endif %}
-  <form class="form-stack mt-2" method="post" action="{{ url_for(name="account_password") }}">
-    {% if p.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=p.errors.message) }}{% endif %}
-    {{ field::input(id="cp_cur", name="current_password", label=t(key="form.current_password"), type="password", error=p.errors.fields.current_password | default(value=""), required=true, autocomplete="current-password") }}
-    {{ field::input(id="cp_new", name="new_password", label=t(key="form.new_password"), type="password", error=p.errors.fields.new_password | default(value=""), required=true, autocomplete="new-password", minlength=limits.password_min_chars) }}
-    {{ field::input(id="cp_new2", name="password2", label=t(key="form.new_password_again"), type="password", error=p.errors.fields.password2 | default(value=""), required=true, autocomplete="new-password") }}
-    <p class="small text-muted mb-0">{{ t(key="account.password_note") }}</p>
-    <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-key") }} {{ t(key="account.change_password") }}</button>
-  </form>
-  <hr>
-  <p class="small text-muted">{{ t(key="account.sessions_note") }}</p>
-  <form method="post" action="{{ url_for(name="account_sessions") }}">
-    <button type="submit" class="btn btn-outline-secondary w-100">{{ atoms::icon(name="fa-mobile-screen") }} {{ t(key="account.end_sessions") }}</button>
-  </form>
+  <div class="acct-list">
+    {% set ee = p.email_errors.fields %}
+    <details class="acct-item" id="email"{% if p.email_errors.message %} open{% endif %}>
+      <summary class="acct-item__row">
+        <span class="acct-item__icon">{{ atoms::icon(name="fa-envelope") }}</span>
+        <span class="acct-item__text">
+          <span class="acct-item__label">{{ t(key="account.email_title") }} {{ status::email(verified=me.email_verified) }}</span>
+          <span class="acct-item__value">{{ me.email }}</span>
+        </span>
+        <span class="acct-item__action">{{ t(key="account.change") }} {{ atoms::icon(name="fa-chevron-down", class="acct-item__chevron") }}</span>
+      </summary>
+      <form class="form-stack acct-item__form" method="post" action="{{ url_for(name="account_email") }}">
+        <p class="small text-muted mb-0">{{ t(key="account.change_email_note") }}</p>
+        {% if p.email_errors.message and not ee %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=p.email_errors.message) }}{% endif %}
+        {{ field::input(id="ce_email", name="new_email", label=t(key="account.new_email"), type="email", value=p.new_email, error=ee.new_email | default(value=""), required=true, autocomplete="email", inputmode="email") }}
+        {{ field::input(id="ce_pw", name="current_password", label=t(key="form.current_password"), type="password", error=ee.current_password | default(value=""), required=true, autocomplete="current-password") }}
+        <button type="submit" class="btn btn-success w-100">{{ atoms::icon(name="fa-paper-plane") }} {{ t(key="account.send_change_link") }}</button>
+      </form>
+    </details>
+    {#- What the email row is waiting for, shown folded or not. -#}
+    {% if me.pending_email or not me.email_verified %}
+    <div class="acct-item__notes">
+      {% if me.pending_email %}
+      <p class="acct-note acct-note--info">{{ atoms::icon(name="fa-hourglass-half") }}<span>{{ t(key="account.email_pending") }} <strong class="text-break">{{ me.pending_email }}</strong>. {{ t(key="account.email_pending_note") }}</span></p>
+      {% endif %}
+      {% if not me.email_verified and not p.verification_sent %}
+      <div class="acct-note acct-note--warn">
+        {{ atoms::icon(name="fa-triangle-exclamation") }}
+        <span>{{ t(key="account.email_unverified") }}</span>
+        <form method="post" action="{{ url_for(name="account_email_verification") }}">
+          <button type="submit" class="btn btn-sm btn-outline-dark acct-note__btn">{{ atoms::icon(name="fa-paper-plane") }} {{ t(key="account.send_verification") }}</button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <details class="acct-item"{% if p.errors.message %} open{% endif %}>
+      <summary class="acct-item__row">
+        {{ row::head(icon="fa-key", label=t(key="form.password"), value="••••••••", action=t(key="account.change")) }}
+      </summary>
+      <form class="form-stack acct-item__form" method="post" action="{{ url_for(name="account_password") }}">
+        {% if p.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=p.errors.message) }}{% endif %}
+        {{ field::input(id="cp_cur", name="current_password", label=t(key="form.current_password"), type="password", error=p.errors.fields.current_password | default(value=""), required=true, autocomplete="current-password") }}
+        {{ field::input(id="cp_new", name="new_password", label=t(key="form.new_password"), type="password", error=p.errors.fields.new_password | default(value=""), required=true, autocomplete="new-password", minlength=limits.password_min_chars) }}
+        {{ field::input(id="cp_new2", name="password2", label=t(key="form.new_password_again"), type="password", error=p.errors.fields.password2 | default(value=""), required=true, autocomplete="new-password") }}
+        <p class="small text-muted mb-0">{{ t(key="account.password_note") }}</p>
+        <button type="submit" class="btn btn-success w-100">{{ atoms::icon(name="fa-key") }} {{ t(key="account.change_password") }}</button>
+      </form>
+    </details>
+
+    <details class="acct-item">
+      <summary class="acct-item__row">
+        {{ row::head(icon="fa-mobile-screen", label=t(key="account.devices"), value=t(key="account.devices_value"), action=t(key="account.end_short")) }}
+      </summary>
+      <form class="form-stack acct-item__form" method="post" action="{{ url_for(name="account_sessions") }}">
+        <p class="small text-muted mb-0">{{ t(key="account.sessions_note") }}</p>
+        <button type="submit" class="btn btn-outline-secondary w-100">{{ atoms::icon(name="fa-mobile-screen") }} {{ t(key="account.end_sessions") }}</button>
+      </form>
+    </details>
+  </div>
 </section>
 
-<section class="{{ card }}">
-  <h2 class="{{ title_class }}">{{ atoms::icon(name="fa-right-from-bracket", class="me-1") }} {{ t(key="common.logout") }}</h2>
-  <p class="small text-muted">{{ t(key="account.logout_note") }}</p>
-  <form method="post" action="{{ logout }}">
-    <button type="submit" class="btn btn-outline-danger btn-lg w-100">{{ atoms::icon(name="fa-right-from-bracket") }} {{ t(key="common.logout") }}</button>
-  </form>
-</section>
-
-{#- The "change email" sheet: back open when it was refused. -#}
-{% set email_open = p.email_errors.message or p.email_errors.fields %}
-{% set e = p.email_errors.fields %}
-<div x-data="dialog" data-open="{% if email_open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
-  <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
-  <section class="contact-sheet" id="doi-email" aria-labelledby="doi-email-title" :class="sheetClass">
-    {{ sheet_head::sheet_header(id="doi-email", title=t(key="account.change_email"), icon="fa-envelope") }}
-    <form class="contact-sheet__form" method="post" action="{{ url_for(name="account_email") }}">
-      {% if p.email_errors.message and not e %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=p.email_errors.message) }}{% endif %}
-      {{ field::input(id="ce_email", name="new_email", label=t(key="account.new_email"), type="email", value=p.new_email, error=e.new_email | default(value=""), required=true, autocomplete="email", inputmode="email", first=true) }}
-      {{ field::input(id="ce_pw", name="current_password", label=t(key="form.current_password"), type="password", error=e.current_password | default(value=""), required=true, autocomplete="current-password") }}
-      <p class="small text-muted mb-0">{{ t(key="account.change_email_note") }}</p>
-      <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-paper-plane") }} {{ t(key="account.send_change_link") }}</button>
-    </form>
-  </section>
+<form class="acct-logout" method="post" action="{{ logout }}">
+  <button type="submit" class="btn btn-outline-danger btn-lg w-100">{{ atoms::icon(name="fa-right-from-bracket") }} {{ t(key="common.logout") }}</button>
+  <p class="small text-muted text-center mb-0">{{ t(key="account.logout_note") }}</p>
+</form>
+</div>
 </div>
 {%- endmacro account_sections %}

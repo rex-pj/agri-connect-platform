@@ -1,0 +1,14 @@
+{#- The head of one row of the account's settings list
+    (organisms/account_sections): its icon, what it is, its value, and, for
+    a row that unfolds a form, the word that says so with a chevron. Its own
+    file: Tera resolves `self::` against the page rendering it, so the
+    organism imports this rather than calling a sibling macro. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro head(icon, label, value="", action="") -%}
+<span class="acct-item__icon">{{ atoms::icon(name=icon) }}</span>
+<span class="acct-item__text">
+  <span class="acct-item__label">{{ label }}</span>
+  {% if value %}<span class="acct-item__value">{{ value }}</span>{% endif %}
+</span>
+{% if action %}<span class="acct-item__action">{{ action }} {{ atoms::icon(name="fa-chevron-down", class="acct-item__chevron") }}</span>{% endif %}
+{%- endmacro head %}

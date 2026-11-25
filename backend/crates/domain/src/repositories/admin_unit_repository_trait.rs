@@ -21,6 +21,13 @@ pub trait AdminUnitRepositoryTrait {
     /// Every ward, by code (turned-off ones too), without its boundary.
     async fn wards(&self) -> Result<Vec<Ward>, Error>;
 
+    /// One ward by its code (a turned-off one too), without its boundary.
+    async fn ward(&self, code: &str) -> Result<Option<Ward>, Error>;
+
+    /// The active wards whose name or province's name holds every word
+    /// (accents ignored), by name, at most `limit`.
+    async fn search_wards(&self, words: &[String], limit: u64) -> Result<Vec<Ward>, Error>;
+
     /// The active ward a point lies in, else the nearest one within
     /// `snap_m` metres (a point on a coastline or in a sliver between two
     /// simplified boundaries); `None` beyond that.

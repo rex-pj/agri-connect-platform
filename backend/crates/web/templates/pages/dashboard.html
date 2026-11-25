@@ -4,12 +4,15 @@
 {% import "molecules/empty_state.html" as empty %}
 {% import "organisms/own_services.html" as own %}
 {% import "organisms/business_fields.html" as business %}
+{% import "molecules/form_field.html" as field %}
 {#- The provider's own area: services and products first (what they come to
     change; services lead unless only products are listed), then the
-    business profile. `page` is web::pages::dashboard::DashboardPage. The
-    location boxes can be typed or filled by the `ac-geolocate` island. -#}
+    business profile. `page` is web::pages::dashboard::DashboardPage. Its
+    location box is organisms/business_fields.html; while the business has
+    no position, a reminder on top leads to it. -#}
 {% block title %}{{ t(key="dashboard.title") }} | {{ site.name }}{% endblock title %}
 {% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock meta %}
+{% block vendor %}{% if page.place %}{{ field::searchable_select_assets() }}{% endif %}{% endblock vendor %}
 {% block scripts %}<script defer src="{{ asset_url(path='js/islands.js') }}"></script>{% endblock scripts %}
 {% block main %}
 {% set p = page.profile %}
@@ -35,6 +38,16 @@
     {{ empty::empty_state(icon="fa-store-slash", title=t(key="dashboard.no_business"), hint=t(key="dashboard.no_business_hint")) }}
   </section>
   {% else %}
+  {% if page.place and not p.lat %}
+  <a class="detail-card place-reminder d-flex align-items-center gap-3 text-decoration-none" href="#pf-place">
+    <span class="provider-cta__icon">{{ atoms::icon(name="fa-location-crosshairs") }}</span>
+    <span class="flex-grow-1">
+      <strong class="d-block text-body">{{ t(key="place.reminder_title") }}</strong>
+      <span class="small text-muted">{{ t(key="place.reminder_sub") }}</span>
+    </span>
+    {{ atoms::icon(name="fa-chevron-right", class="text-muted") }}
+  </a>
+  {% endif %}
   {% if page.calls is number %}
   <section class="detail-card d-flex align-items-center gap-3" aria-label="{{ t(key="dashboard.calls_label") }}">
     <span class="provider-cta__icon">{{ atoms::icon(name="fa-phone") }}</span>
@@ -116,7 +129,7 @@
     {% if page.can_edit_profile %}
     <form class="form-stack" method="post" action="{{ page.profile_action }}" novalidate>
       {% if page.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=page.errors.message) }}{% endif %}
-      {{ business::business_fields(form=page.form, errors=page.errors, limits=limits, prefix="pf") }}
+      {{ business::business_fields(form=page.form, errors=page.errors, limits=limits, prefix="pf", place=page.place) }}
       <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="dashboard.save_profile") }}</button>
     </form>
     {% else %}

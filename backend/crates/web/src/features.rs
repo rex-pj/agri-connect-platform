@@ -250,6 +250,9 @@ mod tests {
         "partner_report_csv",
         "file",
         "file_thumb",
+        // The location box's ward lookup: the provider's profile and the admin's.
+        "place_ward",
+        "place_wards",
     ];
 
     fn sample(pattern: &str) -> String {

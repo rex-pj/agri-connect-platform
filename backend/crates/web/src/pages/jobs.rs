@@ -8,7 +8,7 @@
 use application::{
     constants::REQUESTER_NAME_MAX_LEN,
     inputs::JobInput,
-    outputs::{CategoryDto, LocationDto},
+    outputs::{CategoryDto, LocationDto, WardMatchDto},
 };
 use axum::{extract::State, http::StatusCode, response::Response};
 use domain::{constants::CATEGORY_TYPE_SERVICE, Error};
@@ -37,6 +37,8 @@ fn url(name: &str) -> Result<String, Error> {
 #[serde(default)]
 pub struct JobForm {
     pub category_id: String,
+    /// A ward found by typing its name (`w28439`); with JS only.
+    pub ward: String,
     pub location_id: String,
     pub lat: String,
     pub lng: String,
@@ -51,6 +53,7 @@ impl JobForm {
             client,
             category_id: parse_opt(&self.category_id),
             location_id: parse_opt(&self.location_id),
+            ward: Some(self.ward.clone()),
             lat: optional_coordinate(&self.lat),
             lng: optional_coordinate(&self.lng),
             description: self.description.clone(),
@@ -71,6 +74,8 @@ pub struct NewQuery {
 pub struct JobPage {
     pub categories: Vec<CategoryDto>,
     pub areas: Vec<LocationDto>,
+    /// The ward the form came back with, named, so its box keeps it.
+    pub ward_choice: Option<WardMatchDto>,
     pub form: JobForm,
     pub errors: FormErrors,
     pub action: String,
@@ -89,13 +94,15 @@ async fn render(
     status: StatusCode,
 ) -> Result<Response, Error> {
     let explore = &state.usecases.explore;
-    let (categories, areas) = tokio::try_join!(
+    let (categories, areas, ward_choice) = tokio::try_join!(
         explore.get_categories(Some(CATEGORY_TYPE_SERVICE)),
         explore.get_locations(),
+        state.usecases.place.ward_choice(Some(&form.ward)),
     )?;
     let page = JobPage {
         categories,
         areas,
+        ward_choice,
         form,
         errors,
         action: url("job_post")?,

@@ -120,9 +120,128 @@ pub fn coordinate(raw: &str) -> f64 {
     raw.trim().replace(',', ".").parse().unwrap_or(f64::NAN)
 }
 
+/// What a point box holds: nothing, a point (latitude, longitude), or text
+/// that is neither (a short link, a place name).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum TypedPoint {
+    Empty,
+    Point(f64, f64),
+    Unreadable,
+}
+
+/// A point as people paste it: "10.4048, 106.1180" (what Google Maps
+/// copies), "10,4048 106,118" (comma decimals, as Vietnamese keyboards type
+/// them), or a Google Maps link: a place's own pin (`!3d10.4!4d106.1`)
+/// before the map's centre (`@10.4,106.1,17z`), or `?q=` / `?query=` /
+/// `?ll=`. A pair whose first number cannot be a latitude was written the
+/// other way round and is turned. A short link (maps.app.goo.gl) holds no
+/// point: it is unreadable. `static/js/app.js` `typedPoint` reads the same.
+pub fn typed_point(raw: &str) -> TypedPoint {
+    let text = raw.trim();
+    if text.is_empty() {
+        return TypedPoint::Empty;
+    }
+    match link_point(text).or_else(|| plain_point(text)) {
+        Some((a, b)) if a.abs() > 90.0 && b.abs() <= 90.0 => TypedPoint::Point(b, a),
+        Some((a, b)) => TypedPoint::Point(a, b),
+        None => TypedPoint::Unreadable,
+    }
+}
+
+/// The text after the first `key`.
+fn after<'a>(text: &'a str, key: &str) -> Option<&'a str> {
+    text.find(key).map(|at| &text[at + key.len()..])
+}
+
+/// The number `text` starts with (`-10.4048`), and the rest.
+fn leading_number(text: &str) -> Option<(f64, &str)> {
+    let end = text
+        .char_indices()
+        .find(|&(i, c)| !(c.is_ascii_digit() || c == '.' || (i == 0 && c == '-')))
+        .map_or(text.len(), |(i, _)| i);
+    let value: f64 = text[..end].parse().ok()?;
+    value.is_finite().then_some((value, &text[end..]))
+}
+
+/// "10.4,106.1" (or `%2C`) at the start of `text`.
+fn leading_pair(text: &str) -> Option<(f64, f64)> {
+    let (lat, rest) = leading_number(text)?;
+    let rest = rest
+        .strip_prefix(',')
+        .or_else(|| rest.strip_prefix("%2C"))
+        .or_else(|| rest.strip_prefix("%2c"))?;
+    let rest = rest.trim_start_matches(['+', ' ']);
+    leading_number(rest).map(|(lng, _)| (lat, lng))
+}
+
+fn link_point(text: &str) -> Option<(f64, f64)> {
+    if let Some(rest) = after(text, "!3d") {
+        let (lat, rest) = leading_number(rest)?;
+        let (lng, _) = leading_number(after(rest, "!4d")?)?;
+        return Some((lat, lng));
+    }
+    ["?q=", "&q=", "?query=", "&query=", "?ll=", "&ll=", "@"]
+        .iter()
+        .find_map(|key| after(text, key).and_then(leading_pair))
+}
+
+/// Two numbers apart: by a space or a semicolon (each may use a comma as
+/// its decimal mark), else by one comma.
+fn plain_point(text: &str) -> Option<(f64, f64)> {
+    let parts: Vec<&str> = text
+        .split([' ', ';', '\t'])
+        .map(|p| p.trim_end_matches(','))
+        .filter(|p| !p.is_empty())
+        .collect();
+    let pair = match parts.as_slice() {
+        [lat, lng] => (coordinate(lat), coordinate(lng)),
+        [one] => match one.split(',').collect::<Vec<_>>().as_slice() {
+            [lat, lng] => (coordinate(lat), coordinate(lng)),
+            _ => return None,
+        },
+        _ => return None,
+    };
+    (pair.0.is_finite() && pair.1.is_finite()).then_some(pair)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_point_is_read_as_people_paste_it() {
+        use TypedPoint::{Empty, Point, Unreadable};
+        let cases = [
+            ("", Empty),
+            ("  ", Empty),
+            ("10.4048, 106.1180", Point(10.4048, 106.118)),
+            ("10.4048,106.118", Point(10.4048, 106.118)),
+            ("10,4048 106,118", Point(10.4048, 106.118)),
+            ("10,4048; 106,118", Point(10.4048, 106.118)),
+            ("106.118, 10.4048", Point(10.4048, 106.118)),
+            (
+                "https://www.google.com/maps/@10.4048,106.118,17z?entry=ttu",
+                Point(10.4048, 106.118),
+            ),
+            (
+                "https://www.google.com/maps/place/Cai+Lay/@10.40,106.10,15z/data=!3m1!4b1!4m6!3m5!1s0x0:0x0!8m2!3d10.4048!4d106.118",
+                Point(10.4048, 106.118),
+            ),
+            ("https://maps.google.com/?q=10.4048,106.118", Point(10.4048, 106.118)),
+            (
+                "https://www.google.com/maps/search/?api=1&query=10.4048%2C106.118",
+                Point(10.4048, 106.118),
+            ),
+            ("https://maps.app.goo.gl/AbCdEf123", Unreadable),
+            ("https://maps.google.com/?q=Cai+Lay", Unreadable),
+            ("Cai Lậy", Unreadable),
+            ("10.4048", Unreadable),
+            ("10,4048,106,118", Unreadable),
+        ];
+        for (text, want) in cases {
+            assert_eq!(typed_point(text), want, "{text}");
+        }
+    }
 
     #[test]
     fn number_boxes_parse_leniently_but_never_guess() {

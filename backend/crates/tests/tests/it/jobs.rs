@@ -366,3 +366,90 @@ async fn posts_sent_at_the_same_moment_never_pass_a_cap() {
     );
     e.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_farmer_finds_the_commune_by_typing_and_the_post_stands_at_its_centre() {
+    let e = env_with_origin().await;
+    integration_tests::load_admin_units(&e).await;
+    let category = categories_of(&e, "service").await[0].0;
+    let (code, name) = (
+        scalar(&e, "SELECT min(code) AS v FROM wards").await,
+        scalar(
+            &e,
+            "SELECT name AS v FROM wards WHERE code = (SELECT min(code) FROM wards)",
+        )
+        .await,
+    );
+
+    // Typed without accents, the commune is offered by its full name.
+    let unaccented: String = name
+        .chars()
+        .map(|c| match c {
+            'à' | 'á' | 'ả' | 'ã' | 'ạ' | 'ă' | 'ằ' | 'ắ' | 'ẳ' | 'ẵ' | 'ặ' | 'â' | 'ầ' | 'ấ'
+            | 'ẩ' | 'ẫ' | 'ậ' => 'a',
+            'è' | 'é' | 'ẻ' | 'ẽ' | 'ẹ' | 'ê' | 'ề' | 'ế' | 'ể' | 'ễ' | 'ệ' => {
+                'e'
+            }
+            'ì' | 'í' | 'ỉ' | 'ĩ' | 'ị' => 'i',
+            'ò' | 'ó' | 'ỏ' | 'õ' | 'ọ' | 'ô' | 'ồ' | 'ố' | 'ổ' | 'ỗ' | 'ộ' | 'ơ' | 'ờ' | 'ớ'
+            | 'ở' | 'ỡ' | 'ợ' => 'o',
+            'ù' | 'ú' | 'ủ' | 'ũ' | 'ụ' | 'ư' | 'ừ' | 'ứ' | 'ử' | 'ữ' | 'ự' => {
+                'u'
+            }
+            'ỳ' | 'ý' | 'ỷ' | 'ỹ' | 'ỵ' => 'y',
+            'đ' => 'd',
+            'Đ' => 'D',
+            other => other,
+        })
+        .collect();
+    let query = unaccented.replace(' ', "+");
+    let res = send(
+        &e.router,
+        get_page(&format!("/api/places/wards?q={query}"), None),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let found = json_body(res).await;
+    assert!(
+        found["wards"]
+            .as_array()
+            .is_some_and(|w| w.iter().any(|w| w["value"] == format!("w{code}"))),
+        "{unaccented}: {found}"
+    );
+    // One letter is in nearly every name: refused, as every search.
+    let res = send(&e.router, get_page("/api/places/wards?q=a", None)).await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    // Posted with the commune only: placed at its centre.
+    let post = |ward: &str| {
+        Request::post("/api/explore/jobs")
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(header::ORIGIN, TEST_ORIGIN)
+            .body(Body::from(format!(
+                r#"{{"category_id":{category},"ward":"{ward}","description":"Phun thuoc",
+                    "requester_name":"Chu Ba","requester_phone":"0912345600"}}"#
+            )))
+            .unwrap()
+    };
+    let res = send(&e.router, post(&format!("w{code}"))).await;
+    assert_eq!(res.status(), StatusCode::CREATED);
+    assert_eq!(
+        scalar(
+            &e,
+            &format!(
+                "SELECT (ST_DWithin(j.location, w.center, 1))::text AS v \
+                 FROM job_posts j, wards w WHERE w.code = '{code}'"
+            )
+        )
+        .await,
+        "true"
+    );
+
+    // A commune nobody has: said on its box.
+    let res = send(&e.router, post("w99999")).await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    let body = json_body(res).await;
+    assert!(body["field_errors"]["ward"].is_array(), "{body}");
+    e.cleanup().await;
+}

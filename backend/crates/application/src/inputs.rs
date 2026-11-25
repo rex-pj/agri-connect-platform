@@ -56,6 +56,10 @@ pub struct UpdateProfileInput {
     pub address: Option<String>,
     pub lat: Option<f64>,
     pub lng: Option<f64>,
+    /// The ward chosen from the list (`w28439`): without a point, or with
+    /// one in another ward, the business is placed at its centre
+    /// (`PlaceUseCase::placed`).
+    pub ward: Option<String>,
 }
 
 pub struct CreateProductInput {
@@ -226,6 +230,9 @@ pub struct RegisterInput {
 pub struct JobInput {
     pub category_id: Option<i32>,
     pub location_id: Option<i32>,
+    /// A ward typed in its box (`w28439`): its centre, when the phone gave
+    /// no position.
+    pub ward: Option<String>,
     pub lat: Option<f64>,
     pub lng: Option<f64>,
     pub description: String,

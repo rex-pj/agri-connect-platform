@@ -5,8 +5,9 @@
 //! Product forms are `multipart/form-data` because they carry the photo;
 //! they work without JS. The photo is checked before anything is saved
 //! (`MediaUseCase::prepare_image`), so a bad one refuses the whole form
-//! instead of leaving a product half-saved. The profile's location can be
-//! typed or filled by the `ac-geolocate` island.
+//! instead of leaving a product half-saved. The profile's location is its
+//! ward, then the GPS button or a pin on the map (`organisms/business_fields.html`);
+//! while it has none, a reminder leads there.
 
 use application::{
     authz::Actor,
@@ -18,7 +19,8 @@ use application::{
     constants::CALL_STATS_DAYS,
     features::Feature,
     outputs::{
-        CategoryDto, CommodityDto, ProviderProductDto, ProviderProfileDto, ProviderServiceDto,
+        CategoryDto, CommodityDto, PlaceFormDto, ProviderProductDto, ProviderProfileDto,
+        ProviderServiceDto,
     },
     ports::ProcessedImage,
 };
@@ -117,6 +119,9 @@ pub struct DashboardPage {
     pub public_href: Option<String>,
     pub form: ProfileForm,
     pub errors: FormErrors,
+    /// The location box: every ward, and where the business is now;
+    /// `None` without a business or the right to edit it.
+    pub place: Option<PlaceFormDto>,
     pub profile_action: String,
     pub rows: Vec<ProductRow>,
     pub new_href: String,
@@ -242,6 +247,16 @@ async fn dashboard_page(
         }),
         _ => None,
     };
+    let place = match (&profile, actor.can(PERM_OWN_PROFILE_UPDATE)) {
+        (Some(_), true) => Some(
+            state
+                .usecases
+                .place
+                .form(form.ward_code().as_deref(), form.point())
+                .await?,
+        ),
+        _ => None,
+    };
     let body = DashboardPage {
         public_href: profile
             .as_ref()
@@ -250,6 +265,7 @@ async fn dashboard_page(
         profile,
         form,
         errors,
+        place,
         profile_action: url("provider_profile", &[])?,
         rows,
         new_href: url("provider_product_new", &[])?,

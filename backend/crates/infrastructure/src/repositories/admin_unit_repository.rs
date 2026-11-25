@@ -31,8 +31,12 @@ use domain::{
 
 use application::constants::ADMIN_UNIT_SNAP_M;
 
+use migration::search::fold;
+use sea_orm::{sea_query::BinOper, Condition};
+
 use crate::{
     entities::{business, catalogue_state, province, ward},
+    search::escape_like,
     sql::{
         advisory_xact_lock, business_location, make_point, scalar, within, DbFn, Geo, PgType,
         QueryAs,
@@ -180,8 +184,31 @@ impl From<WardRow> for Ward {
     }
 }
 
-/// The wards without their boundaries, with their point's coordinates.
+/// The wards without their boundaries, with their point's coordinates, by
+/// code.
 fn wards_query() -> sea_orm::Select<ward::Entity> {
+    ward_columns().order_by_asc(ward::Column::Code)
+}
+
+/// An active ward whose own name, or its province's, holds `word` (folded:
+/// "binh phu" finds "Xã Bình Phú"). Each table is matched on its own, the
+/// province by a subquery, never one OR over joined rows.
+fn ward_has_word(word: &str) -> Condition {
+    let pattern = fold(Expr::val(format!("%{}%", escape_like(word))));
+    let provinces = Query::select()
+        .column(province::Column::Code)
+        .from(province::Entity)
+        .and_where(
+            fold(Expr::col((province::Entity, province::Column::Name)))
+                .binary(BinOper::Like, pattern.clone()),
+        )
+        .to_owned();
+    Condition::any()
+        .add(fold(Expr::col((ward::Entity, ward::Column::FullName))).binary(BinOper::Like, pattern))
+        .add(ward::Column::ProvinceCode.in_subquery(provinces))
+}
+
+fn ward_columns() -> sea_orm::Select<ward::Entity> {
     ward::Entity::find()
         .select_only()
         .columns([
@@ -194,7 +221,6 @@ fn wards_query() -> sea_orm::Select<ward::Entity> {
         ])
         .expr_as(coordinate(DbFn::StY, ward::Entity), QueryAs::Lat)
         .expr_as(coordinate(DbFn::StX, ward::Entity), QueryAs::Lng)
-        .order_by_asc(ward::Column::Code)
 }
 
 // ── The bundled file ──────────────────────────────────────────────────────────
@@ -555,6 +581,33 @@ impl AdminUnitRepositoryTrait for AdminUnitRepository {
             .await
             .map(|rows| rows.into_iter().map(Ward::from).collect())
             .map_err(Self::fail("wards"))
+    }
+
+    async fn ward(&self, code: &str) -> Result<Option<Ward>, Error> {
+        wards_query()
+            .filter(ward::Column::Code.eq(code))
+            .into_model::<WardRow>()
+            .one(self.db.as_ref())
+            .await
+            .map(|row| row.map(Ward::from))
+            .map_err(Self::fail("ward"))
+    }
+
+    async fn search_wards(&self, words: &[String], limit: u64) -> Result<Vec<Ward>, Error> {
+        words
+            .iter()
+            .fold(
+                ward_columns().filter(ward::Column::IsActive.eq(true)),
+                |query, word| query.filter(ward_has_word(word)),
+            )
+            .order_by_asc(ward::Column::Name)
+            .order_by_asc(ward::Column::Code)
+            .limit(limit)
+            .into_model::<WardRow>()
+            .all(self.db.as_ref())
+            .await
+            .map(|rows| rows.into_iter().map(Ward::from).collect())
+            .map_err(Self::fail("search_wards"))
     }
 
     async fn ward_at(&self, lat: f64, lng: f64, snap_m: f64) -> Result<Option<Ward>, Error> {

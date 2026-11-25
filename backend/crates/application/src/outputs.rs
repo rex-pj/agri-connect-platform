@@ -346,6 +346,8 @@ pub struct ProviderProfileDto {
     pub is_verified: bool,
     pub lat: Option<f64>,
     pub lng: Option<f64>,
+    /// The ward its position lies in; `None` without a position.
+    pub ward_code: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -464,6 +466,8 @@ pub struct AdminProviderDetailDto {
     pub email_verified: bool,
     pub lat: Option<f64>,
     pub lng: Option<f64>,
+    /// The ward its position lies in; `None` without a position.
+    pub ward_code: Option<String>,
     pub services: Vec<AdminServiceItemDto>,
     pub products: Vec<AdminProductItemDto>,
     /// How many services and supplies it may list (the `listings.*`
@@ -1195,6 +1199,37 @@ pub struct AreaChoiceDto {
     pub lat: f64,
     pub lng: f64,
     pub preset: String,
+}
+
+/// Where a business is, as its location box says it: the ward (`w28439`,
+/// empty when none) and its name ("Xã Bình Phú, Đồng Tháp").
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct PlaceDto {
+    pub area: String,
+    pub label: Option<String>,
+    /// Placed at the ward's centre (chosen from the list, not on the spot).
+    pub approximate: bool,
+}
+
+/// A ward a ward box offers: `w28439`, "Xã Bình Phú, Đồng Tháp".
+#[derive(Debug, Clone, Serialize)]
+pub struct WardMatchDto {
+    pub value: String,
+    pub label: String,
+}
+
+/// The wards matching what was typed, best first.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct WardMatchesDto {
+    pub wards: Vec<WardMatchDto>,
+}
+
+/// What a location box shows: every ward to choose from, and where the
+/// business is now.
+#[derive(Debug, Clone, Serialize)]
+pub struct PlaceFormDto {
+    pub wards: Vec<AreaGroupDto>,
+    pub place: PlaceDto,
 }
 
 /// The account a partner now reads its report with.

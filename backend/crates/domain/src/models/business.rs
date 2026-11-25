@@ -31,6 +31,8 @@ pub struct BusinessProfile {
     pub is_verified: bool,
     pub lat: Option<f64>,
     pub lng: Option<f64>,
+    /// The ward its position lies in; `None` without a position.
+    pub ward_code: Option<String>,
 }
 
 /// A provider's own profile as they save it, already validated.

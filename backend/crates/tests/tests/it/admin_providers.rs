@@ -312,6 +312,7 @@ async fn the_json_api_sets_verification_explicitly() {
 #[ignore = "needs TEST_DATABASE_URL"]
 async fn an_admin_lists_a_provider_in_the_field_and_edits_its_profile() {
     let e = env_with_origin().await;
+    load_admin_units(&e).await;
     let admin = install_admin(&e).await;
     let list = body_text(send(&e.router, get_page("/admin/providers", Some(&admin))).await).await;
     assert!(
@@ -342,8 +343,7 @@ async fn an_admin_lists_a_provider_in_the_field_and_edits_its_profile() {
                 ("name", "Drone Ba Tu"),
                 ("phone", "0912345678"),
                 ("address", "Cai Lay, Dong Thap"),
-                ("lat", "10.4048"),
-                ("lng", "106.118"),
+                ("coords", "10.4048, 106.118"),
             ],
             Some(&admin),
         ),

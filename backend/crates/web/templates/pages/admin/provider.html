@@ -24,6 +24,7 @@
     the URL hash; the account form comes back open with its messages after a
     refusal. `page.body` is web::pages::admin::providers::ProviderPage. -#}
 {% block title %}{{ page.body.provider.name }} | {{ site.name }} Admin{% endblock title %}
+{% block vendor %}{% if page.body.place %}{{ field::searchable_select_assets() }}{% endif %}{% endblock vendor %}
 {% block scripts %}{% if page.body.can_edit and page.body.tab == "profile" %}<script defer src="{{ asset_url(path='js/islands.js') }}"></script>{% endif %}{% endblock scripts %}
 {% block content %}
 {% set b = page.body %}
@@ -138,7 +139,7 @@
     <h2 class="admin-section__title" id="ho-so-title">{{ t(key="dashboard.profile") }}</h2>
     <form class="form-stack" method="post" action="{{ b.profile_action }}" novalidate>
       {% if b.profile_errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.profile_errors.message) }}{% endif %}
-      {{ business::business_fields(form=b.profile, errors=b.profile_errors, limits=limits, prefix="pf") }}
+      {{ business::business_fields(form=b.profile, errors=b.profile_errors, limits=limits, prefix="pf", place=b.place) }}
       <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="dashboard.save_profile") }}</button></div>
     </form>
   </section>

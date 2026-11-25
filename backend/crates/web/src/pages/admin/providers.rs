@@ -21,7 +21,10 @@ use application::{
         PERM_PROVIDER_MANAGE, PERM_PROVIDER_STATUS_UPDATE, PERM_PROVIDER_VERIFY,
         PERM_REVIEW_MODERATE, PERM_SERVICE_MANAGE,
     },
-    outputs::{AdminPagedResponse, AdminProviderDetailDto, AdminProviderDto, ProviderActivityDto},
+    outputs::{
+        AdminPagedResponse, AdminProviderDetailDto, AdminProviderDto, PlaceFormDto,
+        ProviderActivityDto,
+    },
     usecases::admin_usecase::HistoryOf,
 };
 use axum::{extract::State, http::StatusCode, response::Response};
@@ -83,6 +86,8 @@ pub struct CreateSheet {
     pub action: String,
     pub form: ProfileForm,
     pub errors: FormErrors,
+    /// The location box: every ward, and the one typed.
+    pub place: PlaceFormDto,
 }
 
 /// The orders the provider list offers besides its own (verified first,
@@ -126,14 +131,22 @@ async fn list_page(
         let href = url("admin_provider", &[("id", &provider.id.to_string())])?;
         rows.push(ProviderRow { provider, href });
     }
-    let create = actor.can(PERM_PROVIDER_MANAGE).then(|| {
+    let create = if actor.can(PERM_PROVIDER_MANAGE) {
         let (form, errors) = typed.unwrap_or_default();
-        CreateSheet {
+        let place = state
+            .usecases
+            .place
+            .form(form.ward_code().as_deref(), form.point())
+            .await?;
+        Some(CreateSheet {
             action: path.clone(),
             form,
             errors,
-        }
-    });
+            place,
+        })
+    } else {
+        None
+    };
     let body = ProvidersPage {
         total,
         rows,
@@ -365,6 +378,8 @@ pub struct ProviderPage {
     pub profile: ProfileForm,
     /// The profile form's messages, apart so they never show in the others.
     pub profile_errors: FormErrors,
+    /// The profile's location box, on the profile tab only.
+    pub place: Option<PlaceFormDto>,
     pub errors: FormErrors,
     /// The form `errors` belong to: "account", or "" (a refused confirmation,
     /// shown above everything); "profile" when they are in `profile_errors`.
@@ -589,6 +604,16 @@ async fn provider_page(
             outcome.errors,
         ),
     };
+    let place = match tab {
+        TAB_PROFILE => Some(
+            state
+                .usecases
+                .place
+                .form(profile.ward_code().as_deref(), profile.point())
+                .await?,
+        ),
+        _ => None,
+    };
     let own = ListPosition {
         provider_id: id_text.clone(),
         ..ListPosition::default()
@@ -645,6 +670,7 @@ async fn provider_page(
         form,
         profile,
         profile_errors,
+        place,
         errors,
         failed,
         flash: outcome.flash,

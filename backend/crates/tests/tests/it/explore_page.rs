@@ -178,6 +178,7 @@ async fn bad_positions_fall_back_to_the_onboarding_and_empty_results_offer_more_
 async fn a_provider_saving_coordinates_appears_in_the_geo_api() {
     // update_location used an unbound `?` too: saving a GPS position failed.
     let e = Env::new().await;
+    integration_tests::load_admin_units(&e).await;
     let service = categories_of(&e, "service").await[0].0;
     let token = register_provider(&e.state, "nongdan", "0901234567").await;
     e.t.db

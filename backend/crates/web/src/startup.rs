@@ -14,7 +14,9 @@ use application::{
         AuditLogSubscriber, FileCleanupSubscriber, InProcessEventBus,
         InquiryNotificationSubscriber, JobNotificationSubscriber,
     },
-    ports::{EmailService, EventBus, FileStorage, PasswordHasher, TokenService, ZaloGateway},
+    ports::{
+        EmailService, EventBus, FileStorage, MapTiles, PasswordHasher, TokenService, ZaloGateway,
+    },
     settings::SettingsReader,
     usecases::{
         admin_usecase::{AdminDeps, AdminUseCase},
@@ -29,6 +31,7 @@ use application::{
         media_usecase::{MediaDeps, MediaUseCase},
         partner_usecase::{PartnerDeps, PartnerUseCase},
         permission_usecase::{PermissionDeps, PermissionUseCase},
+        place_usecase::PlaceUseCase,
         price_usecase::PriceUseCase,
         product_usecase::ProductUseCase,
         provider_dashboard_usecase::{ProviderDashboardDeps, ProviderDashboardUseCase},
@@ -48,6 +51,7 @@ use infrastructure::{
     file_storage::{ObjectFileStorage, R2Config},
     image_processor::{ImageRules, RasterImageProcessor},
     jwt_token_service::JwtTokenService,
+    map_tiles::OsmMapTiles,
     repositories::{
         admin_unit_repository::AdminUnitRepository,
         alert_repository::AlertRepository,
@@ -86,8 +90,9 @@ use crate::{
         DB_ACQUIRE_TIMEOUT_SECS, DB_MAX_CONNECTIONS, DB_STATEMENT_TIMEOUT_SECS, DEFAULT_APP_URL,
         DEFAULT_BIND_ADDR, DEFAULT_UPLOAD_DIR, DEMO_VOLUME_PROVIDERS_DEFAULT,
         DEMO_VOLUME_PROVIDERS_MAX, DEMO_VOLUME_SEED_DEFAULT, EVENT_ROLL_UP_EVERY_SECS,
-        HEALTHCHECK_TIMEOUT_SECS, RATE_LIMIT_PRUNE_EVERY_SECS, SESSION_PURGE_EVERY_SECS,
-        SMTP_PORT_DEFAULT, ZALO_GRAPH_URL, ZALO_TIMEOUT_SECS,
+        HEALTHCHECK_TIMEOUT_SECS, MAP_TILE_CLIENT, MAP_TILE_TIMEOUT_SECS, MAP_TILE_URL_DEFAULT,
+        RATE_LIMIT_PRUNE_EVERY_SECS, SESSION_PURGE_EVERY_SECS, SMTP_PORT_DEFAULT, ZALO_GRAPH_URL,
+        ZALO_TIMEOUT_SECS,
     },
     locale::{Lang, Locale, Locales},
     middleware::{origin::origin_of, rate_limit::Limiters},
@@ -372,6 +377,31 @@ fn zalo_gateway() -> Result<Option<Arc<dyn ZaloGateway>>, StartupError> {
     Ok(Some(Arc::new(gateway)))
 }
 
+/// `MAP_TILE_URL`: the tile host's `{z}/{x}/{y}` template (an HTTPS URL),
+/// OpenStreetMap's when unset. Its requests name this site (`app_url`), as
+/// the OpenStreetMap tile usage policy asks. Public so tests wire the same.
+pub fn map_tiles(app_url: &str) -> Result<Arc<dyn MapTiles>, StartupError> {
+    const NAME: &str = "MAP_TILE_URL";
+    let template = optional_env(NAME).unwrap_or_else(|| MAP_TILE_URL_DEFAULT.to_owned());
+    let placeholders = ["{z}", "{x}", "{y}"];
+    if !template.starts_with("https://") || !placeholders.iter().all(|p| template.contains(p)) {
+        return Err(StartupError::InvalidEnv {
+            name: NAME,
+            reason: "an https:// URL with {z}, {x} and {y}".to_owned(),
+        });
+    }
+    let user_agent = format!(
+        "{MAP_TILE_CLIENT}/{} (+{app_url})",
+        env!("CARGO_PKG_VERSION")
+    );
+    let tiles = OsmMapTiles::new(
+        template,
+        &user_agent,
+        std::time::Duration::from_secs(MAP_TILE_TIMEOUT_SECS),
+    )?;
+    Ok(Arc::new(tiles))
+}
+
 /// Where uploads go and how big they may be.
 #[derive(Clone)]
 pub struct Uploads {
@@ -508,6 +538,8 @@ pub struct Wiring {
     pub uploads: Uploads,
     /// The Zalo Graph API for Mini App tokens; `None` without ZALO_APP_SECRET.
     pub zalo: Option<Arc<dyn ZaloGateway>>,
+    /// The map's tiles (`MAP_TILE_URL`, else OpenStreetMap's).
+    pub map_tiles: Arc<dyn MapTiles>,
     /// REFRESH_TOKEN_DAYS.
     pub refresh_days: i64,
     /// SETUP_TOKEN: the first-admin form asks for it when set.
@@ -530,6 +562,7 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
         views,
         uploads,
         zalo,
+        map_tiles,
         refresh_days,
         setup_token,
     } = wiring;
@@ -621,6 +654,8 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
         settings: settings.clone(),
     });
 
+    let place = PlaceUseCase::new(admin_unit_repo.clone(), map_tiles);
+
     let usecases = UseCases {
         explore: ExploreUseCase::new(ExploreDeps {
             business_repo: business_repo.clone(),
@@ -652,6 +687,7 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
             refresh_repo: refresh_repo.clone(),
             call_repo: call_repo.clone(),
             audit_repo: audit_log_repo.clone(),
+            places: place.clone(),
             settings: settings.clone(),
         }),
         auth: AuthUseCase::new(AuthDeps {
@@ -689,6 +725,7 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
             location_repo.clone(),
             events.clone(),
             settings.clone(),
+            place.clone(),
         ),
         commodity: CommodityUseCase::new(
             commodity_repo.clone(),
@@ -711,6 +748,7 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
             events.clone(),
         ),
         zalo: ZaloUseCase::new(zalo),
+        place: place.clone(),
         demand,
         review: ReviewUseCase::new(ReviewDeps {
             review_repo,
@@ -726,6 +764,7 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
             call_repo: call_repo.clone(),
             inquiry_repo: inquiry_repo.clone(),
             media: media.clone(),
+            places: place.clone(),
             settings,
             events: events.clone(),
         }),
@@ -836,6 +875,7 @@ async fn prepared_state() -> Result<(AppState, String), StartupError> {
         views: views(site, locales)?,
         uploads: uploads()?,
         zalo: zalo_gateway()?,
+        map_tiles: map_tiles(&app_url)?,
         refresh_days: refresh_days()?,
         setup_token: setup_token()?,
     })?;

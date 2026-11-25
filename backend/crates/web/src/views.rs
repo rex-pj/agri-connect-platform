@@ -13,6 +13,10 @@ use application::constants::{
     PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX, SEARCH_QUERY_MAX, SEARCH_QUERY_MIN, USERNAME_MAX_LEN,
     USERNAME_MIN_LEN, VN_UTC_OFFSET_SECS,
 };
+use application::constants::{
+    GEOLOCATE_ACCURACY_MAX_M, MAP_POINT_ZOOM, MAP_START_LAT, MAP_START_LNG, MAP_START_ZOOM,
+    MAP_WARD_ZOOM, MAP_ZOOM_MAX, MAP_ZOOM_MIN,
+};
 use application::icons;
 use application::settings::{Settings, SETTING_VALUE_MAX};
 use application::validation::{is_valid_vn_phone, SLUG_PATTERN, VN_PHONE_PATTERN};
@@ -29,7 +33,7 @@ use tera::{Tera, Value};
 
 use crate::{
     app_state::AppState,
-    constants::{km, EXPLORE_DEFAULT_RADIUS_M, ZALO_CHAT_URL},
+    constants::{km, EXPLORE_DEFAULT_RADIUS_M, MAP_ATTRIBUTION_URL, ZALO_CHAT_URL},
     extract::ApiPath,
     locale::{fill, Lang, Locale, Locales},
     middleware::page_settings,
@@ -158,6 +162,25 @@ struct FieldLimits {
     slug_pattern: &'static str,
     /// The near-me radius before the visitor picks one.
     near_me_km: i64,
+    /// The map a business is placed on (`organisms/business_fields.html`).
+    map: MapLimits,
+}
+
+/// The location box's map: where its tiles are, its zooms, where it opens,
+/// and the GPS error past which a position is not taken.
+#[derive(Clone, Copy, Serialize)]
+struct MapLimits {
+    tiles: &'static str,
+    /// The credit line's link.
+    attribution_href: &'static str,
+    zoom_min: u8,
+    zoom_max: u8,
+    start_lat: f64,
+    start_lng: f64,
+    start_zoom: u8,
+    ward_zoom: u8,
+    point_zoom: u8,
+    accuracy_max_m: u32,
 }
 
 const FIELD_LIMITS: FieldLimits = FieldLimits {
@@ -188,6 +211,18 @@ const FIELD_LIMITS: FieldLimits = FieldLimits {
     price_fresh_days_max: PRICE_FRESH_DAYS_MAX,
     setting_value_max: SETTING_VALUE_MAX,
     near_me_km: km(EXPLORE_DEFAULT_RADIUS_M),
+    map: MapLimits {
+        tiles: routes::MAP_TILE_PATH,
+        attribution_href: MAP_ATTRIBUTION_URL,
+        zoom_min: MAP_ZOOM_MIN,
+        zoom_max: MAP_ZOOM_MAX,
+        start_lat: MAP_START_LAT,
+        start_lng: MAP_START_LNG,
+        start_zoom: MAP_START_ZOOM,
+        ward_zoom: MAP_WARD_ZOOM,
+        point_zoom: MAP_POINT_ZOOM,
+        accuracy_max_m: GEOLOCATE_ACCURACY_MAX_M,
+    },
 };
 
 /// What `icon_choice()` gives a template: the icon box's value as the

@@ -5484,3 +5484,67 @@ ac-geolocate {
   flex-direction: column;
   gap: 6px;
 }
+
+/* ── A business's location box (organisms/business_fields.html) ────────────── */
+/* The place in words, on top: green once placed, amber while nowhere. */
+.place-status {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  margin: 0 0 var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--p200);
+  border-radius: 12px;
+  background: var(--p50);
+}
+.place-status__icon {
+  margin-top: 2px;
+  color: var(--p600);
+  font-size: 1.25rem;
+}
+.place-status--none {
+  border-color: var(--a200);
+  background: var(--a50);
+}
+.place-status--none .place-status__icon {
+  color: var(--a800);
+}
+.place-actions {
+  display: grid;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+@media (min-width: 576px) {
+  .place-actions {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
+/* Tall enough to aim a thumb at, short enough to scroll past on a phone. */
+.place-map {
+  height: 320px;
+  margin-top: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.place-map[hidden] {
+  display: none;
+}
+.place-pin {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  color: var(--a600);
+  font-size: 34px;
+  line-height: 1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+.place-coords {
+  margin-top: var(--sp-3);
+}
+/* A list-item, so the browser keeps its disclosure triangle; 44 px to tap. */
+.place-coords summary {
+  padding: var(--sp-3) 0;
+  cursor: pointer;
+}

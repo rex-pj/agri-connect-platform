@@ -41,6 +41,7 @@ use crate::{
     ports::EventBus,
     repeats::WindowCounter,
     settings::SettingsReader,
+    usecases::place_usecase::PlaceUseCase,
     validation::{
         audit_reason, max_chars, point_wkt, typed_state, validate_coordinates, validate_phone,
     },
@@ -53,6 +54,8 @@ pub struct JobUseCase {
     location_repo: Arc<dyn LocationRepositoryTrait + Send + Sync>,
     events: Arc<dyn EventBus>,
     settings: SettingsReader,
+    /// The centre of a ward chosen instead of a preset.
+    places: PlaceUseCase,
     /// Posts per client in the last day, in memory only (never who).
     posts_by_client: WindowCounter,
 }
@@ -64,6 +67,7 @@ impl JobUseCase {
         location_repo: Arc<dyn LocationRepositoryTrait + Send + Sync>,
         events: Arc<dyn EventBus>,
         settings: SettingsReader,
+        places: PlaceUseCase,
     ) -> Self {
         Self {
             job_repo,
@@ -71,6 +75,7 @@ impl JobUseCase {
             location_repo,
             events,
             settings,
+            places,
             posts_by_client: WindowCounter::default(),
         }
     }
@@ -114,10 +119,22 @@ impl JobUseCase {
         let preset = input
             .location_id
             .and_then(|id| locations.iter().find(|l| l.id == id));
-        // The phone's position when it is a real one, else the preset's.
+        // A ward typed in its box: its centre (a database failure is no
+        // farmer's mistake and fails the post).
+        let ward = match self.places.ward_centre(input.ward.as_deref()).await {
+            Err(e) if e.code() != ErrorCode::LocationNotFound => return Err(e),
+            ward => ward,
+        };
+        // The phone's position when it is a real one, else the ward's, else
+        // the preset's.
         let position = match (input.lat, input.lng) {
             (Some(lat), Some(lng)) if validate_coordinates(lat, lng).is_ok() => Some((lat, lng)),
-            _ => preset.map(|l| (l.lat, l.lng)),
+            _ => ward
+                .as_ref()
+                .ok()
+                .copied()
+                .flatten()
+                .or_else(|| preset.map(|l| (l.lat, l.lng))),
         };
         Validation::new()
             .check(
@@ -125,6 +142,7 @@ impl JobUseCase {
                 "category_id",
                 ErrorCode::InvalidServiceCategory,
             )
+            .rule("ward", ward.map(|_| ()))
             .check(
                 position.is_none(),
                 "location_id",

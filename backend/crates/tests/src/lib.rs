@@ -184,6 +184,7 @@ pub fn state_with(
         views: views(),
         uploads,
         zalo: None,
+        map_tiles: web::startup::map_tiles("http://localhost").unwrap(),
         refresh_days: REFRESH_TOKEN_DEFAULT_DAYS,
         setup_token,
     })

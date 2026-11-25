@@ -12,6 +12,7 @@ pub mod job_usecase;
 pub mod media_usecase;
 pub mod partner_usecase;
 pub mod permission_usecase;
+pub mod place_usecase;
 pub mod price_usecase;
 pub mod product_rules;
 pub mod product_usecase;

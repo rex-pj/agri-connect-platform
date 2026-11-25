@@ -588,22 +588,324 @@ document.addEventListener("alpine:init", () => {
     },
   }));
 
-  // A location preset's create form: choosing a ward (an option carrying
-  // data-preset, data-lat, data-lng) fills the name and point, which stay
-  // editable. Without it the server fills the boxes left blank.
+  // A ward found by typing its name (pages/job_new.html): a one-item Tom
+  // Select whose choices come from the server as the name is typed (data-url:
+  // GET /api/places/wards?q=, `{wards: [{value, label}]}` best first, from
+  // data-min letters), so a farmer's page never carries every ward. The box
+  // sits in a [data-js-only] block, hidden until this shows it: without JS
+  // the area presets beside it are the choice.
+  Alpine.data("wardSearch", () => ({
+    init() {
+      if (typeof TomSelect === "undefined") return;
+      const select = this.$el;
+      const min = Number(select.dataset.min) || 1;
+      new TomSelect(select, {
+        maxItems: 1,
+        valueField: "value",
+        labelField: "label",
+        searchField: [],
+        // The server has matched and ordered them: show them as sent.
+        score: () => () => 1,
+        sortField: [{ field: "$order" }],
+        shouldLoad: (query) => query.trim().length >= min,
+        load(query, callback) {
+          const url = new URL(select.dataset.url, window.location.origin);
+          url.searchParams.set("q", query);
+          fetch(url, { credentials: "same-origin", headers: { Accept: "application/json" } })
+            .then((response) => (response.ok ? response.json() : { wards: [] }))
+            .then((body) => {
+              this.clearOptions();
+              callback(body.wards);
+            })
+            .catch(() => callback());
+        },
+        render: { no_results: noResults(select) },
+      });
+      const block = select.closest("[data-js-only]");
+      if (block) block.hidden = false;
+    },
+  }));
+
+  // The chosen option of a ward select drawn with points
+  // (molecules/form_field.html area_select): the one carrying data-preset,
+  // data-lat, data-lng, whether Tom Select draws the select or not.
+  const wardOption = (select) => {
+    const kept = select.selectedOptions[0];
+    const option = kept && kept.dataset.preset ? kept : select.tomselect?.options[select.value]?.$option;
+    return option && option.dataset.preset ? option : null;
+  };
+
+  // A location preset's create form: choosing a ward fills the name and
+  // point, which stay editable. Without it the server fills the boxes left
+  // blank.
   Alpine.data("wardFill", () => ({
     filled(event) {
       if (event.target.name !== "ward") return;
-      const select = event.target;
-      const kept = select.selectedOptions[0];
-      const option = kept && kept.dataset.preset ? kept : select.tomselect?.options[select.value]?.$option;
-      if (!option || !option.dataset.preset) return;
+      const option = wardOption(event.target);
+      if (!option) return;
       const form = this.$root;
       form.querySelector('[name="label"]').value = option.dataset.preset;
       form.querySelector('[name="lat"]').value = option.dataset.lat;
       form.querySelector('[name="lng"]').value = option.dataset.lng;
     },
   }));
+
+  // Leaflet (static/vendor/leaflet-*), loaded once, the first time a map is
+  // opened: a page that never shows one never downloads it.
+  let leaflet = null;
+  const loadLeaflet = (js, css) => {
+    const load = (element) =>
+      new Promise((resolve, reject) => {
+        element.onload = resolve;
+        element.onerror = reject;
+        document.head.append(element);
+      });
+    if (!leaflet) {
+      const link = Object.assign(document.createElement("link"), { rel: "stylesheet", href: css });
+      const script = Object.assign(document.createElement("script"), { src: js });
+      leaflet = Promise.all([load(link), load(script)]).then(() => {
+        if (!window.L) throw new Error("leaflet did not load");
+        return window.L;
+      });
+      // A failed download (weak signal) may be tried again.
+      leaflet.catch(() => {
+        leaflet = null;
+      });
+    }
+    return leaflet;
+  };
+
+  // A point as people paste it, read as the server reads it
+  // (web::pages::forms::typed_point, whose tests list the forms): "10.4048,
+  // 106.1180", comma decimals ("10,4048 106,118"), or a Google Maps link (a
+  // place's own pin `!3d…!4d…` before the map's centre `@…`, then `?q=`,
+  // `?query=`, `?ll=`). A pair written longitude first is turned. Returns
+  // [lat, lng], "" for an empty box, or null for text that is no point.
+  const typedPoint = (raw) => {
+    const text = raw.trim();
+    if (!text) return "";
+    const pairAt = (s) => {
+      const m = s.match(/^(-?\d+(?:\.\d+)?)(?:,|%2C)[+ ]*(-?\d+(?:\.\d+)?)/i);
+      return m ? [Number(m[1]), Number(m[2])] : null;
+    };
+    const fromLink = () => {
+      const pin = text.match(/!3d(-?[\d.]+)!4d(-?[\d.]+)/);
+      if (pin) return [Number(pin[1]), Number(pin[2])];
+      for (const key of ["?q=", "&q=", "?query=", "&query=", "?ll=", "&ll=", "@"]) {
+        const at = text.indexOf(key);
+        const pair = at >= 0 ? pairAt(text.slice(at + key.length)) : null;
+        if (pair) return pair;
+      }
+      return null;
+    };
+    const plain = () => {
+      const decimal = (s) => {
+        const t = s.replace(",", ".");
+        return /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : null;
+      };
+      const parts = text.split(/[ ;\t]+/).map((p) => p.replace(/,+$/, "")).filter(Boolean);
+      const halves = parts.length === 1 ? parts[0].split(",") : parts;
+      if (halves.length !== 2) return null;
+      const [lat, lng] = halves.map(decimal);
+      return lat !== null && lng !== null ? [lat, lng] : null;
+    };
+    const point = fromLink() || plain();
+    if (!point) return null;
+    const [a, b] = point;
+    return Math.abs(a) > 90 && Math.abs(b) <= 90 ? [b, a] : [a, b];
+  };
+  // A Google Maps short link: it holds no point until opened.
+  const SHORT_MAP_LINK = /(maps\.app\.goo\.gl|goo\.gl\/maps)/i;
+
+  // How long the coordinate boxes stay still before their ward is asked.
+  const PLACE_LOOKUP_PAUSE_MS = 400;
+  // Decimals kept of a point: about 10 cm, more than any GPS gives.
+  const PLACE_DECIMALS = 6;
+
+  // A business's location box (organisms/business_fields.html). The ward
+  // list, the GPS island, a paste and the map all end in the one point box
+  // (`coords`: "10.404800, 106.118000"), which the server reads with
+  // `typed_point`; the line on top says the place in words. Choosing a ward
+  // puts the point at its centre (approximate). A GPS fill, a pasted point or
+  // link, a tap on the map or a dragged pin put it there
+  // and ask the server which ward that is (data-lookup), which is then
+  // chosen in the list without moving the point again. The map is loaded
+  // only when opened, its tiles from our own route (data-tiles). Without JS
+  // the list and the boxes work alone: the server places a ward chosen
+  // without a point at its centre. The map and its pin live outside Alpine's
+  // reactive data: Leaflet breaks when its objects are proxied.
+  Alpine.data("placePicker", () => {
+    let map = null;
+    let pin = null;
+    let pause = 0;
+    let asked = 0;
+    return {
+      init() {
+        const open = this.$root.querySelector("[data-place-open]");
+        if (open) open.hidden = false;
+      },
+      box(name) {
+        return this.$root.querySelector(`[name="${name}"]`);
+      },
+      point() {
+        const point = typedPoint(this.box("coords").value);
+        return Array.isArray(point) ? point : null;
+      },
+      setPoint([lat, lng]) {
+        this.box("coords").value = `${lat.toFixed(PLACE_DECIMALS)}, ${lng.toFixed(PLACE_DECIMALS)}`;
+      },
+      say(label, note = "", none = false) {
+        const status = this.$root.querySelector("[data-place-status]");
+        status.querySelector("[data-place-label]").textContent = label;
+        status.querySelector("[data-place-note]").textContent = note;
+        status.classList.toggle("place-status--none", none);
+      },
+      // The ward in the list, without its change moving the point.
+      pickWard(value) {
+        const select = this.box("ward");
+        if (select.tomselect) select.tomselect.setValue(value, true);
+        else select.value = value;
+      },
+      // A ward chosen in the list: its centre.
+      chosen(event) {
+        if (event.target.name !== "ward") return;
+        const option = wardOption(event.target);
+        if (!option) return;
+        const point = [parseFloat(option.dataset.lat), parseFloat(option.dataset.lng)];
+        this.setPoint(point);
+        const province = option.closest("optgroup")?.label;
+        const name = option.textContent.trim();
+        this.say(province ? `${name}, ${province}` : name, this.$root.dataset.textApproximate);
+        this.movePin(point, Number(this.$root.dataset.wardZoom));
+      },
+      // The point box typed or pasted in, or the GPS island's two hidden
+      // boxes filled (it fills one, then the other: the pause covers both).
+      typed(event) {
+        const gps = "placeGps" in event.target.dataset;
+        if (!gps && event.target.name !== "coords") return;
+        clearTimeout(pause);
+        pause = setTimeout(() => {
+          const data = this.$root.dataset;
+          if (gps) {
+            const [lat, lng] = [...this.$root.querySelectorAll("[data-place-gps]")].map((b) => Number(b.value));
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+            this.setPoint([lat, lng]);
+          }
+          const typed = typedPoint(this.box("coords").value);
+          if (typed === null) {
+            const short = SHORT_MAP_LINK.test(this.box("coords").value);
+            this.say(short ? data.textShortLink : data.textUnreadable, "", true);
+            return;
+          }
+          const point = typed || null;
+          if (point) this.movePin(point, Number(data.pointZoom));
+          this.lookUp(point);
+        }, PLACE_LOOKUP_PAUSE_MS);
+      },
+      // Which ward a point lies in, said on top and chosen in the list.
+      lookUp(point) {
+        const data = this.$root.dataset;
+        if (!point) {
+          this.say(data.textNone, "", true);
+          return;
+        }
+        this.say(data.textLooking);
+        const mine = ++asked;
+        const url = new URL(data.lookup, window.location.origin);
+        url.searchParams.set("lat", point[0].toFixed(PLACE_DECIMALS));
+        url.searchParams.set("lng", point[1].toFixed(PLACE_DECIMALS));
+        fetch(url, { credentials: "same-origin", headers: { Accept: "application/json" } })
+          .then((response) => (response.ok ? response.json() : Promise.reject(response.status)))
+          .then((place) => {
+            if (mine !== asked) return;
+            if (!place.area) {
+              this.say(data.textOutside, "", true);
+              this.pickWard("");
+              return;
+            }
+            this.say(place.label, data.textExact);
+            this.pickWard(place.area);
+          })
+          .catch(() => {
+            // The point stays in the boxes and is saved; only its name is unknown.
+            if (mine === asked) this.say(`${point[0].toFixed(5)}, ${point[1].toFixed(5)}`, data.textExact);
+          });
+      },
+      openMap() {
+        const data = this.$root.dataset;
+        const holder = this.$root.querySelector("[data-place-map]");
+        const hint = this.$root.querySelector("[data-place-map-hint]");
+        const open = this.$root.querySelector("[data-place-open]");
+        holder.hidden = false;
+        hint.hidden = false;
+        open.hidden = true;
+        loadLeaflet(data.leafletJs, data.leafletCss)
+          .then((L) => this.drawMap(L, holder))
+          .catch(() => {
+            holder.hidden = true;
+            hint.textContent = data.textFailed;
+            open.hidden = false;
+          });
+      },
+      drawMap(L, holder) {
+        if (map) return;
+        const data = this.$root.dataset;
+        const [min, max] = [Number(data.zoomMin), Number(data.zoomMax)];
+        const point = this.point();
+        map = L.map(holder, { minZoom: min, maxZoom: max });
+        map.attributionControl.setPrefix(false);
+        // Leaflet takes the credit line as markup: build the link, never
+        // concatenate the words into HTML.
+        const credit = Object.assign(document.createElement("a"), {
+          href: data.attributionHref,
+          target: "_blank",
+          rel: "noopener",
+          textContent: data.attribution,
+        });
+        L.tileLayer(data.tiles, { minZoom: min, maxZoom: max, attribution: credit.outerHTML }).addTo(map);
+        if (point) {
+          map.setView(point, Number(data.pointZoom));
+          this.placePin(L, point);
+        } else {
+          map.setView([Number(data.startLat), Number(data.startLng)], Number(data.startZoom));
+        }
+        map.on("click", (event) => {
+          this.placePin(L, event.latlng);
+          this.dropped(event.latlng);
+        });
+        // Shown just now: Leaflet measures its box again.
+        setTimeout(() => map.invalidateSize());
+      },
+      // The pin, made on the first point (the map opens without one when
+      // nothing is placed yet), dragged afterwards.
+      placePin(L, latlng) {
+        if (pin) {
+          pin.setLatLng(latlng);
+          return;
+        }
+        const label = this.$root.dataset.pinLabel;
+        const icon = L.divIcon({
+          className: "place-pin",
+          html: '<i class="fa-solid fa-location-dot" aria-hidden="true"></i>',
+          iconSize: [36, 36],
+          iconAnchor: [18, 34],
+        });
+        pin = L.marker(latlng, { draggable: true, icon, title: label, alt: label }).addTo(map);
+        pin.on("dragend", () => this.dropped(pin.getLatLng()));
+      },
+      dropped(latlng) {
+        const point = [latlng.lat, latlng.lng];
+        this.setPoint(point);
+        this.lookUp(point);
+      },
+      // The map follows a point set elsewhere (the list, the GPS, typing).
+      movePin(point, zoom) {
+        if (!map) return;
+        this.placePin(window.L, point);
+        map.setView(point, zoom);
+      },
+    };
+  });
 
   // The category form's name and slug boxes. While the slug box is blank (or
   // was filled from here), typing a name fills it with the server's free slug

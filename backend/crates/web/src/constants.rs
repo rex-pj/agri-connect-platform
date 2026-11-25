@@ -153,6 +153,26 @@ pub const ZALO_GRAPH_URL: &str = "https://graph.zalo.me/v2.0/me/info";
 /// try again (a token expires two minutes after it was issued).
 pub const ZALO_TIMEOUT_SECS: u64 = 10;
 
+// ── The map a provider places its business on ─────────────────────────────────
+/// The tile host when `MAP_TILE_URL` is unset: OpenStreetMap's own, free
+/// for light use with attribution (its tile usage policy). A busier site
+/// sets a paid host of the same `{z}/{x}/{y}` form.
+pub const MAP_TILE_URL_DEFAULT: &str = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+/// How this server names itself to the tile host (its User-Agent, with the
+/// version and `APP_URL`).
+pub const MAP_TILE_CLIENT: &str = "agri-connect";
+/// Where the map's credit line leads: OpenStreetMap's copyright page, as its
+/// licence asks of every map drawn from its data.
+pub const MAP_ATTRIBUTION_URL: &str = "https://www.openstreetmap.org/copyright";
+/// How long one tile may take, in seconds.
+pub const MAP_TILE_TIMEOUT_SECS: u64 = 10;
+/// How long a browser (and Cloudflare) keeps a tile: a week, as the tile
+/// host's own answers say.
+pub const MAP_TILE_CACHE_SECS: u64 = 7 * 24 * 60 * 60;
+/// Tiles per client a minute: one view of the map is about twenty, and a
+/// provider pans and zooms. It stops a script copying the map, not a person.
+pub const MAP_TILE_RATE_LIMIT_PER_MIN: NonZeroU32 = per_minute(600);
+
 // ── `agri-connect demo-data` (the demo data at volume) ────────────────────────
 /// Providers generated when `--providers` is not given: the size the
 /// platform is tried and timed at (about 5 000 rows of each kind).

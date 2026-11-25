@@ -37,7 +37,7 @@ use crate::{
     ports::{EventBus, ProcessedImage},
     settings::SettingsReader,
     usecases::{
-        business_rules::validate_profile, media_usecase::MediaUseCase,
+        business_rules::validate_profile, media_usecase::MediaUseCase, place_usecase::PlaceUseCase,
         product_rules::validate_product, service_rules::validate_service,
     },
 };
@@ -53,6 +53,8 @@ pub struct ProviderDashboardUseCase {
     inquiry_repo: Arc<dyn InquiryRepositoryTrait + Send + Sync>,
     /// Stores a new product's photo together with the product.
     media: MediaUseCase,
+    /// A profile's ward chosen from the list, placed at its centre.
+    places: PlaceUseCase,
     /// The listing caps (`listings.*_per_business`).
     settings: SettingsReader,
     events: Arc<dyn EventBus>,
@@ -66,6 +68,7 @@ pub struct ProviderDashboardDeps {
     pub call_repo: Arc<dyn CallRepositoryTrait + Send + Sync>,
     pub inquiry_repo: Arc<dyn InquiryRepositoryTrait + Send + Sync>,
     pub media: MediaUseCase,
+    pub places: PlaceUseCase,
     pub settings: SettingsReader,
     pub events: Arc<dyn EventBus>,
 }
@@ -79,6 +82,7 @@ impl ProviderDashboardUseCase {
             call_repo: d.call_repo,
             inquiry_repo: d.inquiry_repo,
             media: d.media,
+            places: d.places,
             settings: d.settings,
             events: d.events,
         }
@@ -218,6 +222,7 @@ impl ProviderDashboardUseCase {
             is_verified: profile.is_verified,
             lat: profile.lat,
             lng: profile.lng,
+            ward_code: profile.ward_code,
         })
     }
 
@@ -247,7 +252,7 @@ impl ProviderDashboardUseCase {
         input: UpdateProfileInput,
     ) -> Result<ProviderProfileDto> {
         actor.require(PERM_OWN_PROFILE_UPDATE)?;
-        let profile = validate_profile(input)?;
+        let profile = validate_profile(self.places.placed(input).await?)?;
         let updated = self
             .business_repo
             .update_profile(actor.user_id, &profile)

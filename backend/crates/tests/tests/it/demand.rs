@@ -460,13 +460,18 @@ async fn a_business_keeps_the_ward_of_its_position() {
             )))
             .unwrap()
     };
-    // Placed before the wards are loaded: no ward yet; loading them gives
-    // every business the ward of its position.
+    // Placed before the wards are loaded (an older row: a profile edit now
+    // needs a ward to place it in): no ward yet; loading them gives every
+    // business the ward of its position.
     let by_cai_lay = r#","lat":10.415,"lng":106.085"#;
-    assert_eq!(
-        send(&e.router, profile(by_cai_lay)).await.status(),
-        StatusCode::OK
-    );
+    e.t.db
+        .execute_unprepared(
+            "UPDATE businesses SET location = \
+             ST_SetSRID(ST_MakePoint(106.085, 10.415), 4326)::geography \
+             WHERE name = 'Vườn nongdan'",
+        )
+        .await
+        .unwrap();
     assert_eq!(ward().await, "-");
     load_admin_units(&e).await;
     assert_eq!(ward().await, BINH_PHU);

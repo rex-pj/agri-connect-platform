@@ -318,6 +318,7 @@ fn json(method: &str, path: &str, token: Option<&str>, body: &str) -> Request<Bo
 #[ignore = "needs TEST_DATABASE_URL"]
 async fn the_json_api_creates_providers_and_carries_reviews() {
     let e = env_with_origin().await;
+    integration_tests::load_admin_units(&e).await;
     install_admin(&e).await;
     let admin = e
         .state

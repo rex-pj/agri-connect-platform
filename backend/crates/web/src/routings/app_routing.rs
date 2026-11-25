@@ -32,6 +32,7 @@ use crate::{
         media_handler::MediaHandler,
         partner_handler::PartnerHandler,
         permission_handler::PermissionHandler,
+        place_handler::PlaceHandler,
         price_handler::PriceHandler,
         products_handler::ProductsHandler,
         provider_dashboard_handler::ProviderDashboardHandler,
@@ -47,7 +48,7 @@ use crate::{
         timeout,
     },
     pages,
-    routes::{self, FILE_PATH, FILE_THUMB_PATH},
+    routes::{self, FILE_PATH, FILE_THUMB_PATH, MAP_TILE_PATH},
     session, views,
 };
 
@@ -216,7 +217,16 @@ impl AppRouting {
                 "/api/explore/products",
                 get(ProductsHandler::browse_products),
             )
+            // The ward a pin was dropped on, for the location box.
+            .route("/api/places/ward", get(PlaceHandler::ward))
+            // The wards matching what is typed in a ward box.
+            .route("/api/places/wards", get(PlaceHandler::wards))
             .layer(limiter(&config.limiters.public_search, Scope::AllRequests));
+
+        // ── MAP tiles (an asset of their own, own budget) ────────────────────
+        let map_routes = Router::new()
+            .route(MAP_TILE_PATH, get(PlaceHandler::tile))
+            .layer(limiter(&config.limiters.map_tiles, Scope::AllRequests));
 
         let contact_routes = Router::new()
             .route(
@@ -933,6 +943,7 @@ impl AppRouting {
         let mut router = Router::new()
             .merge(public_routes)
             .merge(search_routes)
+            .merge(map_routes)
             .merge(contact_routes)
             .merge(auth_routes)
             .merge(auth_pages)

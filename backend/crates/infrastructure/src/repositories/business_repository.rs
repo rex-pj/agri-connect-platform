@@ -131,6 +131,7 @@ struct BusinessProfileRow {
     is_verified: bool,
     lat: Option<f64>,
     lng: Option<f64>,
+    ward_code: Option<String>,
 }
 
 #[derive(FromQueryResult)]
@@ -840,6 +841,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             .column(business::Column::Description)
             .column(business::Column::Address)
             .column(business::Column::IsVerified)
+            .column(business::Column::WardCode)
             .expr_as(business_lat(), QueryAs::Lat)
             .expr_as(business_lng(), QueryAs::Lng)
             .filter(business::Column::OwnerId.eq(user_id))
@@ -863,6 +865,7 @@ impl BusinessRepositoryTrait for BusinessRepository {
             is_verified: r.is_verified,
             lat: r.lat,
             lng: r.lng,
+            ward_code: r.ward_code,
         }))
     }
 

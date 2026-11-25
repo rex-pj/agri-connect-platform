@@ -71,6 +71,7 @@ use crate::{
     usecases::{
         account_rules::account_for_role,
         business_rules::validate_profile,
+        place_usecase::PlaceUseCase,
         product_rules::{validate_product, ProductFields},
         review_usecase::one_decimal,
         service_rules::{validate_service, ServiceFields},
@@ -158,6 +159,8 @@ pub struct AdminUseCase {
     call_repo: Arc<dyn CallRepositoryTrait + Send + Sync>,
     /// A record's latest changes, for its page.
     audit_repo: Arc<dyn AuditLogRepositoryTrait + Send + Sync>,
+    /// A provider profile's ward chosen from the list, placed at its centre.
+    places: PlaceUseCase,
     /// How soon after its request a review is flagged.
     settings: SettingsReader,
 }
@@ -181,6 +184,7 @@ pub struct AdminDeps {
     pub refresh_repo: Arc<dyn RefreshTokenRepositoryTrait + Send + Sync>,
     pub call_repo: Arc<dyn CallRepositoryTrait + Send + Sync>,
     pub audit_repo: Arc<dyn AuditLogRepositoryTrait + Send + Sync>,
+    pub places: PlaceUseCase,
     pub settings: SettingsReader,
 }
 
@@ -203,6 +207,7 @@ impl AdminUseCase {
             refresh_repo: d.refresh_repo,
             call_repo: d.call_repo,
             audit_repo: d.audit_repo,
+            places: d.places,
             settings: d.settings,
         }
     }
@@ -306,6 +311,7 @@ impl AdminUseCase {
             email_verified: b.email_verified,
             lat: b.lat,
             lng: b.lng,
+            ward_code: b.ward_code,
             services: b
                 .services
                 .into_iter()
@@ -502,7 +508,7 @@ impl AdminUseCase {
     /// later. Its id.
     pub async fn create_provider(&self, actor: &Actor, input: UpdateProfileInput) -> Result<i32> {
         actor.require(PERM_PROVIDER_MANAGE)?;
-        let profile = validate_profile(input)?;
+        let profile = validate_profile(self.places.placed(input).await?)?;
         let id = self.business_repo.create(&profile, actor.user_id).await?;
         self.publish(actor, Entity::Provider, id, Change::Created, None)
             .await;
@@ -517,7 +523,7 @@ impl AdminUseCase {
         input: UpdateProfileInput,
     ) -> Result<()> {
         actor.require(PERM_PROVIDER_MANAGE)?;
-        let profile = validate_profile(input)?;
+        let profile = validate_profile(self.places.placed(input).await?)?;
         if !self
             .business_repo
             .update_profile_by_id(id, &profile, actor.user_id)

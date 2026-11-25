@@ -97,6 +97,37 @@ pub const LAT_MIN: f64 = -90.0;
 pub const LAT_MAX: f64 = 90.0;
 pub const LNG_MIN: f64 = -180.0;
 pub const LNG_MAX: f64 = 180.0;
+
+// ── The map a provider places its business on ─────────────────────────────────
+/// The map's zoom levels: 5 shows the whole country, 19 a house (the most
+/// the tile host draws). Tiles outside are refused.
+pub const MAP_ZOOM_MIN: u8 = 5;
+pub const MAP_ZOOM_MAX: u8 = 19;
+/// The map opens on the Mekong Delta when nothing is placed yet…
+pub const MAP_START_LAT: f64 = 10.25;
+pub const MAP_START_LNG: f64 = 105.9;
+pub const MAP_START_ZOOM: u8 = 9;
+/// …on a ward's centre at this zoom, on a placed point at the next.
+pub const MAP_WARD_ZOOM: u8 = 14;
+pub const MAP_POINT_ZOOM: u8 = 17;
+/// The tiles served: those touching Vietnam's mainland and near islands, so
+/// the tile route is no proxy for the rest of the world.
+pub const MAP_REGION_LAT_MIN: f64 = 8.0;
+pub const MAP_REGION_LAT_MAX: f64 = 23.5;
+pub const MAP_REGION_LNG_MIN: f64 = 102.0;
+pub const MAP_REGION_LNG_MAX: f64 = 110.0;
+/// A position the browser gives with an error larger than this (a computer
+/// placed by its internet address, a phone indoors without GPS) is not
+/// taken for a business: the provider picks the ward or the map instead.
+pub const GEOLOCATE_ACCURACY_MAX_M: u32 = 500;
+/// A business this close to its ward's centre (in degrees, about a metre)
+/// was placed by choosing the ward, not on the spot: its place is said to
+/// be approximate.
+pub const WARD_CENTRE_TOLERANCE_DEG: f64 = 0.00001;
+/// The most wards a ward box offers for the words typed: enough to see the
+/// one meant, few enough for a weak signal.
+pub const WARD_SEARCH_RESULTS: u64 = 20;
+
 pub const RADIUS_MIN_M: f64 = 100.0;
 pub const RADIUS_MAX_M: f64 = 50_000.0;
 /// Metres in a kilometre (radii are stored in metres, shown and set in km).

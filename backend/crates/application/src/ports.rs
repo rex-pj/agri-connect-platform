@@ -164,3 +164,14 @@ pub trait ZaloGateway: Send + Sync {
     /// ("849…").
     async fn phone_number(&self, access_token: &str, code: &str) -> domain::Result<String>;
 }
+
+/// The map's background pictures (OpenStreetMap tiles, `MAP_TILE_URL`),
+/// fetched by the server so a page keeps `img-src 'self'` and the tile host
+/// never sees a visitor.
+#[async_trait]
+pub trait MapTiles: Send + Sync {
+    /// The PNG of tile `x`, `y` at zoom `z`, already checked to be one of
+    /// the region's (`map_tile_not_found` when the host has none,
+    /// `map_unavailable` when it cannot be reached).
+    async fn tile(&self, z: u8, x: u32, y: u32) -> domain::Result<Vec<u8>>;
+}

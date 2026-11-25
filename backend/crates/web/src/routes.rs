@@ -15,6 +15,11 @@ const FILES_PREFIX: &str = "/files/";
 pub const STATIC_ROUTE: &str = "/static/{*path}";
 pub const STATIC_PREFIX: &str = "/static/";
 
+/// The map's tiles: the router's pattern, and the template the map
+/// fills (Leaflet writes `{z}/{x}/{y}` the same way). Never a page.
+pub const MAP_TILE_PATH: &str = "/map/tiles/{z}/{x}/{y}";
+const MAP_TILES_PREFIX: &str = "/map/tiles/";
+
 /// The probes: the router's paths and the `healthcheck` command's.
 pub const HEALTH_LIVE_PATH: &str = "/health/live";
 pub const HEALTH_READY_PATH: &str = "/health/ready";
@@ -29,6 +34,7 @@ pub fn is_asset_path(path: &str) -> bool {
     path.starts_with(STATIC_PREFIX)
         || path.starts_with(FILES_PREFIX)
         || path.starts_with(HEALTH_PREFIX)
+        || path.starts_with(MAP_TILES_PREFIX)
         || path == crate::views::FAVICON_PATH
 }
 
@@ -92,6 +98,8 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("admin_category_status", "/admin/categories/{id}/status"),
     ("admin_category_slug", "/api/admin/categories/slug"),
     ("admin_icons", "/api/admin/icons"),
+    ("place_ward", "/api/places/ward"),
+    ("place_wards", "/api/places/wards"),
     ("admin_providers", "/admin/providers"),
     ("admin_provider", "/admin/providers/{id}"),
     (
@@ -258,6 +266,7 @@ mod tests {
         assert!(FILE_PATH.starts_with(FILES_PREFIX));
         assert!(HEALTH_LIVE_PATH.starts_with(HEALTH_PREFIX));
         assert!(HEALTH_READY_PATH.starts_with(HEALTH_PREFIX));
+        assert!(MAP_TILE_PATH.starts_with(MAP_TILES_PREFIX));
         assert!(is_asset_path(crate::views::FAVICON_PATH));
         assert!(!is_asset_path("/admin/dashboard"));
     }

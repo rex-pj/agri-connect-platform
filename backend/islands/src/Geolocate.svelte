@@ -5,7 +5,9 @@
   Asks the browser for the position and goes to `href` with lat and lng
   added. With `lat-target` and `lng-target` (ids of two inputs) it fills
   those boxes instead and stays on the page, showing `done`: the provider
-  profile form uses this to set its location. All text comes from the template (Vietnamese lives there, not here).
+  profile form uses this to set its location. With `max-accuracy` (metres)
+  a position less precise than that is refused with `inaccurate`, whose
+  `{m}` is the error the browser gave. All text comes from the template (Vietnamese lives there, not here).
   Without JS the tag renders nothing, so pages always offer a form next to it
   (a location preset) that works on its own.
 
@@ -27,6 +29,8 @@
       latTarget: { type: "String", attribute: "lat-target" },
       lngTarget: { type: "String", attribute: "lng-target" },
       done: { type: "String" },
+      maxAccuracy: { type: "Number", attribute: "max-accuracy" },
+      inaccurate: { type: "String" },
     },
   }}
 />
@@ -48,6 +52,8 @@
     latTarget = "",
     lngTarget = "",
     done = "",
+    maxAccuracy = 0,
+    inaccurate = "",
   } = $props();
 
   let busy = $state(false);
@@ -72,6 +78,13 @@
     filled = false;
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
+        // A position this rough (a computer placed by its internet address)
+        // would put the business in the wrong commune: say so, keep nothing.
+        if (maxAccuracy > 0 && coords.accuracy > maxAccuracy) {
+          busy = false;
+          error = inaccurate.replace("{m}", String(Math.round(coords.accuracy)));
+          return;
+        }
         if (latTarget && lngTarget) {
           fill(latTarget, coords.latitude.toFixed(DECIMALS));
           fill(lngTarget, coords.longitude.toFixed(DECIMALS));

@@ -7,6 +7,7 @@
 {% import "molecules/pagination_nav.html" as paging %}
 {% import "molecules/row_action.html" as row %}
 {% import "molecules/sheet_header.html" as sheet_head %}
+{% import "molecules/form_field.html" as field %}
 {% import "organisms/business_fields.html" as business %}
 {#- `page.body` is web::pages::admin::providers::ProvidersPage. Verification
     and accounts are changed on each provider's page. With `provider.manage`
@@ -14,6 +15,7 @@
     section without JS), which comes back open with its messages when a rule
     is broken: a listing set up in the field, from the owner's phone. -#}
 {% block title %}{{ t(key="admin_menu.providers") }} | {{ site.name }} Admin{% endblock title %}
+{% block vendor %}{% if page.body.create %}{{ field::searchable_select_assets() }}{% endif %}{% endblock vendor %}
 {% block scripts %}{% if page.body.create %}<script defer src="{{ asset_url(path='js/islands.js') }}"></script>{% endif %}{% endblock scripts %}
 {% block content %}
 {% set b = page.body %}
@@ -62,7 +64,7 @@
     <form class="contact-sheet__form" method="post" action="{{ c.action }}" novalidate>
       {% if c.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=c.errors.message) }}{% endif %}
       <p class="small text-muted mb-0">{{ t(key="admin.add_provider_hint") }}</p>
-      {{ business::business_fields(form=c.form, errors=c.errors, limits=limits, prefix="new", first=true) }}
+      {{ business::business_fields(form=c.form, errors=c.errors, limits=limits, prefix="new", place=c.place, first=true) }}
       <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-plus") }} {{ t(key="admin.add_provider") }}</button>
     </form>
   </section>

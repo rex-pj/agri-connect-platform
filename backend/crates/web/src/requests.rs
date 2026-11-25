@@ -187,6 +187,10 @@ pub struct UpdateProfileRequest {
     pub address: Option<String>,
     pub lat: Option<f64>,
     pub lng: Option<f64>,
+    /// The ward chosen from the list (`w28439`): without a point, or with
+    /// one elsewhere, the business is placed at its centre.
+    #[serde(default)]
+    pub ward: Option<String>,
 }
 
 impl From<UpdateProfileRequest> for UpdateProfileInput {
@@ -198,6 +202,7 @@ impl From<UpdateProfileRequest> for UpdateProfileInput {
             address: r.address,
             lat: r.lat,
             lng: r.lng,
+            ward: r.ward,
         }
     }
 }
@@ -628,6 +633,9 @@ impl From<PriceRequest> for application::inputs::PriceInput {
 pub struct JobRequest {
     pub category_id: Option<i32>,
     pub location_id: Option<i32>,
+    /// A ward (`w28439`): its centre, when no `lat`/`lng` is given.
+    #[serde(default)]
+    pub ward: Option<String>,
     pub lat: Option<f64>,
     pub lng: Option<f64>,
     #[serde(default)]
@@ -644,6 +652,7 @@ impl JobRequest {
         application::inputs::JobInput {
             category_id: self.category_id,
             location_id: self.location_id,
+            ward: self.ward,
             lat: self.lat,
             lng: self.lng,
             description: self.description,
@@ -673,4 +682,18 @@ pub struct ZaloTokenRequest {
 
 fn default_price_fresh_days() -> i16 {
     application::constants::PRICE_FRESH_DAYS_DEFAULT
+}
+
+/// GET /api/places/ward: the point a pin was dropped on.
+#[derive(Deserialize)]
+pub struct PlaceQuery {
+    pub lat: f64,
+    pub lng: f64,
+}
+
+/// GET /api/places/wards: the words typed in a ward box.
+#[derive(Deserialize)]
+pub struct WardSearchQuery {
+    #[serde(default)]
+    pub q: String,
 }

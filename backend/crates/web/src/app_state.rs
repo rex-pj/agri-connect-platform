@@ -8,7 +8,7 @@ use application::{
         demand_usecase::DemandReportUseCase, explore_usecase::ExploreUseCase,
         health_usecase::HealthUseCase, job_usecase::JobUseCase, media_usecase::MediaUseCase,
         partner_usecase::PartnerUseCase, permission_usecase::PermissionUseCase,
-        price_usecase::PriceUseCase, product_usecase::ProductUseCase,
+        place_usecase::PlaceUseCase, price_usecase::PriceUseCase, product_usecase::ProductUseCase,
         provider_dashboard_usecase::ProviderDashboardUseCase, review_usecase::ReviewUseCase,
         settings_usecase::SettingsUseCase, setup_usecase::SetupUseCase,
         stats_usecase::StatsUseCase, zalo_usecase::ZaloUseCase,
@@ -45,6 +45,8 @@ pub struct UseCases {
     pub settings: SettingsUseCase,
     pub stats: StatsUseCase,
     pub zalo: ZaloUseCase,
+    /// Where a business is: wards by name, the map's tiles.
+    pub place: PlaceUseCase,
 }
 
 /// Cloned into every request, so it holds only `Arc`s. `startup.rs` builds it.

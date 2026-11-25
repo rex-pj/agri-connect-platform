@@ -4,14 +4,18 @@
 {% import "molecules/page_hero.html" as hero %}
 {% import "molecules/form_field.html" as field %}
 {#- A farmer posts a job: the service, where, what, a name and a phone.
-    Where: the `ac-geolocate` island fills the two hidden position boxes
-    (then the area may stay empty); without JS or without permission the
+    Where: the `ac-geolocate` island fills the two hidden position boxes;
+    else a ward found by typing its name (Alpine `wardSearch`, its choices
+    loaded from `place_wards`, shown with JS only: the page never carries
+    all 3 321); else an area preset, which works without JS. The server
+    takes the first given (`JobUseCase::post`). Without JS or permission the
     area is the place. `page` is web::pages::jobs::JobPage; it comes back
     with the typed values and one message per box when a rule is broken.
     While hire requests are off the page is not reached
     (`features::gate`). -#}
 {% block title %}{{ t(key="job.title") }} | {{ site.name }}{% endblock title %}
 {% block meta %}<meta name="description" content="{{ t(key="job.meta") }}">{% endblock meta %}
+{% block vendor %}{{ field::searchable_select_assets() }}{% endblock vendor %}
 {% block scripts %}<script defer src="{{ asset_url(path='js/islands.js') }}"></script>{% endblock scripts %}
 {% block main %}
 {% set f = page.form %}
@@ -29,6 +33,15 @@
         <input type="hidden" id="job-lat" name="lat" value="{{ f.lat }}">
         <input type="hidden" id="job-lng" name="lng" value="{{ f.lng }}">
         <ac-geolocate lat-target="job-lat" lng-target="job-lng" label="{{ t(key="job.use_position") }}" busy-label="{{ t(key="geolocate.busy") }}" done="{{ t(key="job.position_done") }}" denied="{{ t(key="job.position_denied") }}" failed="{{ t(key="geolocate.failed") }}" unsupported="{{ t(key="job.position_denied") }}" button-class="btn btn-outline-success btn-lg w-100 mb-2"></ac-geolocate>
+        <div class="mb-3" hidden data-js-only>
+          <label class="form-label small" for="job-ward">{{ t(key="job.or_ward") }}</label>
+          <select class="form-select{% if e.ward %} is-invalid{% endif %}" id="job-ward" name="ward" x-data="wardSearch" data-url="{{ url_for(name="place_wards") }}" data-min="{{ limits.search_min }}" data-no-results="{{ t(key="form.no_results") }}"{% if e.ward %} aria-invalid="true" aria-describedby="job-ward-error"{% endif %}>
+            <option value="">{{ t(key="job.choose_ward") }}</option>
+            {% if page.ward_choice %}<option value="{{ page.ward_choice.value }}" selected>{{ page.ward_choice.label }}</option>{% endif %}
+          </select>
+          <div class="form-text">{{ t(key="job.ward_hint") }}</div>
+          {% if e.ward %}<div class="invalid-feedback d-block" id="job-ward-error">{{ e.ward }}</div>{% endif %}
+        </div>
         <label class="form-label small" for="job-area">{{ t(key="job.or_area") }}</label>
         <select class="form-select{% if e.location_id %} is-invalid{% endif %}" id="job-area" name="location_id"{% if e.location_id %} aria-invalid="true" aria-describedby="job-area-error"{% endif %}>
           <option value="">{{ t(key="job.choose_area") }}</option>

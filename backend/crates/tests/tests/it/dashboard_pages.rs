@@ -38,6 +38,7 @@ async fn provider(e: &Env) -> (String, String) {
 #[ignore = "needs TEST_DATABASE_URL"]
 async fn the_profile_reports_every_rule_and_saves_a_location() {
     let e = env_with_origin().await;
+    integration_tests::load_admin_units(&e).await;
     let (cookie, _) = provider(&e).await;
 
     let html = page(&e, "/provider/dashboard", &cookie).await;
@@ -49,7 +50,7 @@ async fn the_profile_reports_every_rule_and_saves_a_location() {
         &e.router,
         post_form(
             "/provider/profile",
-            &[("name", ""), ("phone", "12345"), ("lat", "10.4")],
+            &[("name", ""), ("phone", "12345"), ("coords", "10.4")],
             Some(&cookie),
         ),
     )
@@ -60,7 +61,7 @@ async fn the_profile_reports_every_rule_and_saves_a_location() {
     assert!(html.contains(r#"id="pf-phone-error""#));
     assert!(
         html.contains(r#"id="pf-coord-error""#),
-        "one coordinate alone is refused"
+        "one number alone is no point"
     );
     assert!(html.contains(r#"value="12345""#), "typed phone kept");
 
@@ -71,8 +72,7 @@ async fn the_profile_reports_every_rule_and_saves_a_location() {
             &[
                 ("name", "Vườn Út Hiền"),
                 ("phone", "0901234567"),
-                ("lat", "10,4048"),
-                ("lng", "106.118"),
+                ("coords", "10,4048 106,118"),
             ],
             Some(&cookie),
         ),
@@ -82,9 +82,39 @@ async fn the_profile_reports_every_rule_and_saves_a_location() {
     assert_eq!(res.headers()[header::LOCATION], "/provider/dashboard");
     let html = page(&e, "/provider/dashboard", &cookie).await;
     assert!(html.contains("Vườn Út Hiền"));
-    assert!(html.contains(r#"value="10.4048""#), "location stored");
+    assert!(
+        html.contains(r#"value="10.4048, 106.118""#),
+        "location stored"
+    );
 
-    // Both boxes emptied: the pin comes off the map.
+    // A Google Maps link is read; a spot in the sea is refused.
+    let save = |coords: &'static str| {
+        send(
+            &e.router,
+            post_form(
+                "/provider/profile",
+                &[
+                    ("name", "Vườn Út Hiền"),
+                    ("phone", "0901234567"),
+                    ("coords", coords),
+                ],
+                Some(&cookie),
+            ),
+        )
+    };
+    let res =
+        save("https://www.google.com/maps/place/X/@10.3,106.0,15z/data=!3d10.41!4d106.12").await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let html = page(&e, "/provider/dashboard", &cookie).await;
+    assert!(
+        html.contains(r#"value="10.41, 106.12""#),
+        "the place's own pin"
+    );
+    let res = save("10.0, 107.5").await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert!(body_text(res).await.contains("không thuộc xã, phường nào"));
+
+    // The box emptied: the pin comes off the map.
     let res = send(
         &e.router,
         post_form(
@@ -92,8 +122,7 @@ async fn the_profile_reports_every_rule_and_saves_a_location() {
             &[
                 ("name", "Vườn Út Hiền"),
                 ("phone", "0901234567"),
-                ("lat", ""),
-                ("lng", ""),
+                ("coords", ""),
             ],
             Some(&cookie),
         ),
@@ -447,5 +476,162 @@ async fn an_edit_whose_photo_cannot_be_stored_saves_nothing() {
         "the new name is not saved without its photo"
     );
     assert_eq!(count(&e, "SELECT count(*) FROM files").await, 0);
+    e.cleanup().await;
+}
+
+/// One value of the first row of `sql`.
+async fn value<T: sea_orm::TryGetable>(e: &Env, sql: &str) -> T {
+    e.t.db
+        .query_one(Statement::from_string(
+            e.t.db.get_database_backend(),
+            sql.to_owned(),
+        ))
+        .await
+        .unwrap()
+        .unwrap()
+        .try_get_by_index(0)
+        .unwrap()
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_ward_chosen_places_the_business_and_the_box_says_where_in_words() {
+    let e = env_with_origin().await;
+    integration_tests::load_admin_units(&e).await;
+    let (cookie, _) = provider(&e).await;
+    let ward: String = value(&e, "SELECT code FROM wards ORDER BY code LIMIT 1").await;
+    let other: String = value(&e, "SELECT code FROM wards ORDER BY code DESC LIMIT 1").await;
+    let label: String = value(
+        &e,
+        &format!(
+            "SELECT w.full_name || ', ' || p.name FROM wards w \
+             JOIN provinces p ON p.code = w.province_code WHERE w.code = '{ward}'"
+        ),
+    )
+    .await;
+    let point = |code: &str, how: &str| {
+        format!("SELECT {how}(center::geometry)::float8 FROM wards WHERE code = '{code}'")
+    };
+    let (lat, lng): (f64, f64) = (
+        value(&e, &point(&ward, "ST_Y")).await,
+        value(&e, &point(&ward, "ST_X")).await,
+    );
+    let stored = |how: &str| format!("SELECT {how}(location::geometry)::float8 FROM businesses");
+    let profile = |extra: &[(&'static str, String)]| {
+        let mut pairs = vec![
+            ("name", "Vườn Út Hiền".to_owned()),
+            ("phone", "0901234567".to_owned()),
+        ];
+        pairs.extend(extra.iter().cloned());
+        pairs
+    };
+    let save = |pairs: Vec<(&'static str, String)>| {
+        let pairs: Vec<(&str, &str)> = pairs.iter().map(|(k, v)| (*k, v.as_str())).collect();
+        send(
+            &e.router,
+            post_form("/provider/profile", &pairs, Some(&cookie)),
+        )
+    };
+
+    // No place yet: the reminder on top, the box says so.
+    let html = page(&e, "/provider/dashboard", &cookie).await;
+    assert!(html.contains("Bà con ở gần chưa thấy bạn"));
+    assert!(html.contains("Chưa có vị trí"));
+    assert!(html.contains(r#"data-tiles="/map/tiles/{z}/{x}/{y}""#));
+
+    // A ward alone: the business stands at its centre, said to be approximate.
+    let res = save(profile(&[
+        ("ward", format!("w{ward}")),
+        ("coords", String::new()),
+    ]))
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let y: f64 = value(&e, &stored("ST_Y")).await;
+    let x: f64 = value(&e, &stored("ST_X")).await;
+    assert!(
+        (y - lat).abs() < 1e-6 && (x - lng).abs() < 1e-6,
+        "at the ward's centre"
+    );
+    let html = page(&e, "/provider/dashboard", &cookie).await;
+    assert!(html.contains(&label), "{label}");
+    assert!(html.contains("Gần đúng: giữa xã"));
+    assert!(!html.contains("Bà con ở gần chưa thấy bạn"));
+
+    // A pin inside the chosen ward is kept as pinned.
+    let inside = |how: &str| {
+        format!("SELECT {how}(ST_PointOnSurface(boundary::geometry))::float8 FROM wards WHERE code = '{ward}'")
+    };
+    let (pin_lat, pin_lng): (f64, f64) = (
+        value(&e, &inside("ST_Y")).await,
+        value(&e, &inside("ST_X")).await,
+    );
+    let res = save(profile(&[
+        ("ward", format!("w{ward}")),
+        ("coords", format!("{pin_lat}, {pin_lng}")),
+    ]))
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let y: f64 = value(&e, &stored("ST_Y")).await;
+    assert!((y - pin_lat).abs() < 1e-6, "the pin is kept");
+    let html = page(&e, "/provider/dashboard", &cookie).await;
+    assert!(html.contains("Đúng chỗ đã ghim."));
+
+    // Another ward chosen while the old pin stays: the new ward's centre.
+    let res = save(profile(&[
+        ("ward", format!("w{other}")),
+        ("coords", format!("{pin_lat}, {pin_lng}")),
+    ]))
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let code: String = value(&e, "SELECT ward_code FROM businesses").await;
+    assert_eq!(code, other, "moved to the ward chosen");
+
+    // A ward nobody has: a message on the box, nothing saved.
+    let res = save(profile(&[("ward", "w99999".to_owned())])).await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert!(body_text(res).await.contains(r#"id="pf-ward-error""#));
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_dropped_pin_is_named_by_its_ward_and_the_map_serves_only_the_region() {
+    let e = env_with_origin().await;
+    integration_tests::load_admin_units(&e).await;
+    let ward: String = value(&e, "SELECT code FROM wards ORDER BY code LIMIT 1").await;
+    let inside = |how: &str| {
+        format!("SELECT {how}(ST_PointOnSurface(boundary::geometry))::float8 FROM wards WHERE code = '{ward}'")
+    };
+    let (lat, lng): (f64, f64) = (
+        value(&e, &inside("ST_Y")).await,
+        value(&e, &inside("ST_X")).await,
+    );
+
+    let res = send(
+        &e.router,
+        get_page(&format!("/api/places/ward?lat={lat}&lng={lng}"), None),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let place = integration_tests::json_body(res).await;
+    assert_eq!(place["area"], format!("w{ward}"));
+    assert!(place["label"].as_str().is_some_and(|l| l.contains(", ")));
+
+    // Paris is in no ward of ours.
+    let res = send(
+        &e.router,
+        get_page("/api/places/ward?lat=48.85&lng=2.35", None),
+    )
+    .await;
+    let place = integration_tests::json_body(res).await;
+    assert_eq!(place["area"], "");
+
+    // A tile of Paris is refused before any tile host is asked.
+    let res = send(&e.router, get_page("/map/tiles/12/2073/1409", None)).await;
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+    assert_eq!(
+        integration_tests::json_body(res).await["code"],
+        "map_tile_not_found"
+    );
     e.cleanup().await;
 }

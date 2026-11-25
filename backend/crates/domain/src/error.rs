@@ -62,6 +62,9 @@ error_codes! {
     ZaloNotConfigured         => (Unavailable,     "zalo_not_configured"),
     ZaloUnavailable           => (Unavailable,     "zalo_unavailable"),
     ZaloTokenRejected         => (BadRequest,      "zalo_token_rejected"),
+    MapTileNotFound           => (NotFound,        "map_tile_not_found"),
+    MapUnavailable            => (Unavailable,     "map_unavailable"),
+    PlaceOutsideWards         => (BadRequest,      "place_outside_wards"),
 
     // ── Authentication / access ──────────────────────────────────────────────
     AuthenticationRequired    => (Unauthorized,    "authentication_required"),

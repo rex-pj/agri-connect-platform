@@ -40,6 +40,16 @@ pub fn preset_label(province_name: &str, ward_name: &str) -> String {
     format!("{ward_name}, {province_name}")
 }
 
+/// A ward's name as an address ends: "Xã Bình Phú, Đồng Tháp" (its full
+/// name, then its province), the full name alone when the province is not
+/// known.
+pub fn ward_label(ward: &Ward, province: Option<&Province>) -> String {
+    match province {
+        Some(p) => format!("{}, {}", ward.full_name, p.name),
+        None => ward.full_name.clone(),
+    }
+}
+
 /// Where a lead counts.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum AreaKey {
@@ -182,14 +192,10 @@ impl AdminUnits {
     pub fn label(&self, area: &AreaKey) -> Option<String> {
         match area {
             AreaKey::Province(code) => self.provinces.get(code).map(|p| p.name.clone()),
-            AreaKey::Ward(code) => {
-                self.wards
-                    .get(code)
-                    .map(|w| match self.provinces.get(&w.province_code) {
-                        Some(p) => format!("{}, {}", w.full_name, p.name),
-                        None => w.full_name.clone(),
-                    })
-            }
+            AreaKey::Ward(code) => self
+                .wards
+                .get(code)
+                .map(|w| ward_label(w, self.provinces.get(&w.province_code))),
             AreaKey::Unplaced => None,
         }
     }

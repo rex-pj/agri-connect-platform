@@ -18,8 +18,9 @@ use infrastructure::rate_limiter::InProcessRateLimiter;
 
 use crate::{
     constants::{
-        AUTH_RATE_LIMIT_PER_MIN, MEMBER_WRITE_RATE_LIMIT_PER_MIN, PUBLIC_SEARCH_RATE_LIMIT_PER_MIN,
-        PUBLIC_WRITE_RATE_LIMIT_PER_MIN, RATE_LIMIT_IPV6_PREFIX_BITS, UPLOAD_RATE_LIMIT_PER_MIN,
+        AUTH_RATE_LIMIT_PER_MIN, MAP_TILE_RATE_LIMIT_PER_MIN, MEMBER_WRITE_RATE_LIMIT_PER_MIN,
+        PUBLIC_SEARCH_RATE_LIMIT_PER_MIN, PUBLIC_WRITE_RATE_LIMIT_PER_MIN,
+        RATE_LIMIT_IPV6_PREFIX_BITS, UPLOAD_RATE_LIMIT_PER_MIN,
     },
     middleware::client_ip::ClientIp,
 };
@@ -36,6 +37,8 @@ pub struct Limiters {
     pub public_search: Arc<dyn RateLimiter>,
     /// Signed-in writes: admin and provider dashboard changes.
     pub member_write: Arc<dyn RateLimiter>,
+    /// Map tiles: many small reads while a provider moves the map.
+    pub map_tiles: Arc<dyn RateLimiter>,
     /// Image uploads (decoding is CPU work).
     pub upload: Arc<dyn RateLimiter>,
 }
@@ -53,6 +56,9 @@ impl Limiters {
             member_write: Arc::new(InProcessRateLimiter::per_minute(
                 MEMBER_WRITE_RATE_LIMIT_PER_MIN,
             )),
+            map_tiles: Arc::new(InProcessRateLimiter::per_minute(
+                MAP_TILE_RATE_LIMIT_PER_MIN,
+            )),
             upload: Arc::new(InProcessRateLimiter::per_minute(UPLOAD_RATE_LIMIT_PER_MIN)),
         }
     }
@@ -62,6 +68,7 @@ impl Limiters {
         self.public_write.forget_idle();
         self.public_search.forget_idle();
         self.member_write.forget_idle();
+        self.map_tiles.forget_idle();
         self.upload.forget_idle();
     }
 }

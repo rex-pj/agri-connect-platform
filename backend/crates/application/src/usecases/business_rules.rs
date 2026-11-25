@@ -61,6 +61,7 @@ mod tests {
             address: None,
             lat,
             lng,
+            ward: None,
         }
     }
 

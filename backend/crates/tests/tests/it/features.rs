@@ -7,8 +7,8 @@
 use application::features::Feature;
 use axum::http::{header, Request, StatusCode};
 use integration_tests::{
-    body_text, create_product, env_with_origin, get_page, install_admin, json_body, post_form,
-    register_provider, send, with_product_category, Env, TEST_ORIGIN,
+    body_text, create_product, env_with_origin, features_form, get_page, install_admin, json_body,
+    post_form, register_provider, send, with_product_category, Env, TEST_ORIGIN,
 };
 use sea_orm::{ConnectionTrait, Statement};
 use web::features::feature_of;
@@ -33,11 +33,10 @@ async fn set_stage(e: &Env, admin: &str, feature: Feature, stage: &str) {
         &e.router,
         post_form(
             "/admin/settings",
-            &[
-                ("group", "features"),
+            &features_form(&[
                 ("access.registration_open", "true"),
                 (feature.setting_key(), stage),
-            ],
+            ]),
             Some(admin),
         ),
     )
@@ -309,4 +308,145 @@ async fn a_stage_is_checked_and_a_write_of_a_closed_feature_refused() {
         .err()
         .map(|e| e.code().as_str());
     assert_eq!(err, Some("feature_off"));
+}
+
+/// The bars' and footer's links of a page: (wide bar, phone bar) tabs by
+/// href as `bottom_nav` marks them, and the footer's browse column.
+fn frame(html: &str) -> (Vec<String>, Vec<String>, Vec<String>) {
+    let bar = html
+        .split("<nav class=\"bottom-nav\"")
+        .nth(1)
+        .and_then(|rest| rest.split("</nav>").next())
+        .unwrap_or_default();
+    let (mut top, mut phone) = (Vec::new(), Vec::new());
+    for tab in bar.split("<a class=\"bottom-nav__tab").skip(1) {
+        let classes = tab.split('"').next().unwrap_or_default();
+        let href = tab
+            .split("href=\"")
+            .nth(1)
+            .and_then(|h| h.split('"').next())
+            .unwrap_or_default()
+            .to_owned();
+        if !classes.contains("d-none d-xl-flex") {
+            phone.push(href.clone());
+        }
+        if !classes.contains("d-xl-none") {
+            top.push(href);
+        }
+    }
+    let footer = html
+        .split("id=\"footer-explore\"")
+        .nth(1)
+        .and_then(|rest| rest.split("</nav>").next())
+        .map(links)
+        .unwrap_or_default();
+    (top, phone, footer)
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn an_admin_chooses_where_each_feature_is_led_to() {
+    let e = env_with_origin().await;
+    let admin = install_admin(&e).await;
+    let page = |cookie: Option<String>| {
+        let router = e.router.clone();
+        async move { body_text(send(&router, get_page("/", cookie.as_deref())).await).await }
+    };
+
+    // As it was: near me and supplies everywhere, prices and the directory
+    // on the wide bar and in the footer, hire requests nowhere.
+    let (top, phone, footer) = frame(&page(None).await);
+    for href in ["/explore", "/supplies", "/providers", "/prices"] {
+        assert!(top.iter().any(|h| h == href), "{href} on the wide bar");
+        assert!(footer.iter().any(|h| h == href), "{href} in the footer");
+    }
+    assert!(phone.iter().any(|h| h == "/explore") && !phone.iter().any(|h| h == "/prices"));
+    assert!(!top.iter().any(|h| h == "/jobs/new"));
+
+    // Prices on the phone instead of supplies, out of the footer; hire
+    // requests in the footer.
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/settings",
+            &features_form(&[
+                ("access.registration_open", "true"),
+                ("nav.supplies.phone", "false"),
+                ("nav.prices.phone", "true"),
+                ("nav.prices.footer", "false"),
+                ("nav.jobs.footer", "true"),
+            ]),
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let (top, phone, footer) = frame(&page(None).await);
+    assert!(phone.iter().any(|h| h == "/prices"), "{phone:?}");
+    assert!(!phone.iter().any(|h| h == "/supplies"), "{phone:?}");
+    assert!(
+        top.iter().any(|h| h == "/supplies"),
+        "still on the wide bar"
+    );
+    assert!(!footer.iter().any(|h| h == "/prices"), "{footer:?}");
+    assert!(footer.iter().any(|h| h == "/jobs/new"), "{footer:?}");
+
+    // A place never shows a feature that is off.
+    set_stage(&e, &admin, Feature::Jobs, "off").await;
+    let (_, _, footer) = frame(&page(None).await);
+    assert!(!footer.iter().any(|h| h == "/jobs/new"));
+
+    // A third phone tab is refused, said under the box.
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/settings",
+            &features_form(&[
+                ("access.registration_open", "true"),
+                ("nav.directory.phone", "true"),
+            ]),
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    let form = body_text(res).await;
+    assert!(form.contains("chỉ có chỗ cho 2 tính năng"), "the message");
+
+    // So is a fifth feature on the wide bar.
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/settings",
+            &features_form(&[
+                ("access.registration_open", "true"),
+                ("nav.jobs.top", "true"),
+            ]),
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert!(body_text(res)
+        .await
+        .contains("Thanh trên chỉ có chỗ cho 4 tính năng"));
+
+    // The tab shows the boxes and the preview of the menus.
+    let tab = body_text(
+        send(
+            &e.router,
+            get_page("/admin/settings?tab=features", Some(&admin)),
+        )
+        .await,
+    )
+    .await;
+    // (`set_stage` sent the form back on its default places.)
+    assert!(tab.contains(r#"name="nav.supplies.phone" value="true" checked data-room="phone""#));
+    assert!(tab.contains(r#"name="nav.prices.phone" value="true" data-room="phone""#));
+    assert!(tab.contains(r#"data-place-key="nav.jobs.footer""#));
+    assert!(tab.contains("2/2 chỗ cho tính năng"));
+    // Hire requests are off: their boxes are kept, faded, and said to count
+    // for nothing yet.
+    assert!(tab
+        .contains(r#"class="feature-row__places is-off" data-places-of="access.job_posts_open""#));
 }

@@ -932,7 +932,7 @@ mod tests {
             let site = SiteConfig::default();
             let mut views = views(site.clone())?;
             let mut shell = Shell::new(&vi, "/", None, None);
-            shell.apply_settings(&settings);
+            shell.apply_settings(&vi, &settings);
             let mut ctx = tera::Context::new();
             ctx.insert("shell", &shell);
             ctx.insert("site", &site);

@@ -19,6 +19,7 @@ use uuid::Uuid;
 use crate::{
     authz::Actor,
     catalogue::PERM_SETTING_MANAGE,
+    features::{Place, PLACEMENTS},
     outputs::{SettingDto, SettingGroupDto},
     ports::EventBus,
     settings::{
@@ -110,6 +111,7 @@ impl SettingsUseCase {
         let current = self.current().await?;
         let mut check = Validation::new();
         let parsed = typed_values(values, &mut check)?;
+        tabs_fit(&current, &parsed, &mut check);
         check.finish()?;
         self.store(actor, changes_to(&current, parsed), reason)
             .await
@@ -290,6 +292,50 @@ fn changes_to(
             })
         })
         .collect()
+}
+
+/// A bar has room for so many features (`Place::room`: the phone's, the wide
+/// top bar's): its places as they would stand after this save (sent, else
+/// stored); over it, each one sent on is refused (`phone_tabs_full`,
+/// `top_tabs_full`).
+fn tabs_fit(
+    current: &Settings,
+    parsed: &[(&'static SettingDef, SettingValue)],
+    check: &mut Validation,
+) {
+    for place in Place::ALL {
+        if let Some(room) = place.room() {
+            bar_fits(current, parsed, check, place, room);
+        }
+    }
+}
+
+fn bar_fits(
+    current: &Settings,
+    parsed: &[(&'static SettingDef, SettingValue)],
+    check: &mut Validation,
+    place: Place,
+    room: usize,
+) {
+    let bar = PLACEMENTS.iter().filter(|p| p.place == place);
+    let sent = |key: &str| parsed.iter().find(|(d, _)| d.key == key).map(|(_, v)| v);
+    let on = |key: &str| match sent(key) {
+        Some(v) => *v == SettingValue::Switch(true),
+        None => current.value(key) == Some(&SettingValue::Switch(true)),
+    };
+    if bar.clone().filter(|p| on(p.key)).count() <= room {
+        return;
+    }
+    for p in bar.filter(|p| sent(p.key) == Some(&SettingValue::Switch(true))) {
+        check.rule(
+            p.key,
+            Err(Error::new(match place {
+                Place::Top => ErrorCode::TopTabsFull,
+                _ => ErrorCode::PhoneTabsFull,
+            })
+            .with_param("max", room)),
+        );
+    }
 }
 
 /// The image setting `key`; any other key is not one to upload.

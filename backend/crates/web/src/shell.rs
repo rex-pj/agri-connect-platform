@@ -13,7 +13,7 @@ use application::{
         PERM_ADMIN_DASHBOARD_VIEW, PERM_FEATURE_PREVIEW, PERM_OWN_LISTING_CREATE,
         PERM_PARTNER_REPORT_READ,
     },
-    features::{Feature, FeaturesShown, Stage},
+    features::{Feature, FeaturesShown, Place, Stage},
     outputs::CodedDto,
     settings::{SettingGroup, Settings},
 };
@@ -81,6 +81,12 @@ pub struct ProviderCta {
 pub struct Shell {
     pub path: String,
     pub tabs: Vec<Tab>,
+    /// The footer's browse links: the pages the admin put there
+    /// (`features::Place::Footer`) that this viewer sees.
+    pub footer: Vec<Link>,
+    /// "My area" as the last tab, kept to rebuild the tabs from the settings.
+    #[serde(skip)]
+    area_tab: Dest,
     /// `None` on error pages, which are rendered without knowing the session.
     pub profile: Option<ProfileMenu>,
     /// The invitation to sell here (anonymous visitors) or the way back to
@@ -206,7 +212,7 @@ fn url(name: &str) -> String {
 }
 
 /// A link before it is worded: route name, icon and the label's text key.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Dest {
     route: &'static str,
     icon: &'static str,
@@ -355,7 +361,8 @@ impl Shell {
     pub fn new(locale: &Locale, path: &str, query: Option<&str>, actor: Option<&Actor>) -> Self {
         let mut shell = Self::without_session(locale, path, query);
         shell.may_preview = actor.is_some_and(|a| a.can(PERM_FEATURE_PREVIEW));
-        shell.tabs = tabs(locale, path, area_tab(actor));
+        shell.area_tab = area_tab(actor);
+        shell.tabs = tabs(locale, path, shell.area_tab, &default_places);
         shell.provider_cta = provider_cta(locale, actor);
         shell.profile = Some(match actor {
             None => ProfileMenu {
@@ -383,15 +390,17 @@ impl Shell {
         shell
     }
 
-    /// What the settings change in the frame: the footer's help lines, no
-    /// tab to a feature this viewer does not see (the footer's browse links
-    /// are the tabs), the preview strip, and no invitation to sign up while
-    /// sign-ups are closed.
-    pub fn apply_settings(&mut self, settings: &Settings) {
+    /// What the settings change in the frame: the footer's help lines, the
+    /// tabs and the footer's links where the admin put each feature (never
+    /// one this viewer does not see), the preview strip, and no invitation
+    /// to sign up while sign-ups are closed.
+    pub fn apply_settings(&mut self, locale: &Locale, settings: &Settings) {
         self.support = SupportLines::of(settings);
         self.features = settings.features_shown(self.may_preview);
         let features = self.features;
-        self.tabs.retain(|t| shown_href(features, &t.link.href));
+        let placed = |f: Feature, p: Place| features.has(f) && settings.placed(f, p);
+        self.tabs = tabs(locale, &self.path, self.area_tab, &placed);
+        self.footer = footer_links(locale, &placed);
         let (path, query) = self.here.split_once('?').unwrap_or((&self.here, ""));
         self.preview = feature_of(path, Some(query))
             .is_some_and(|f| settings.stage(f) == Stage::Preview && features.has(f))
@@ -451,13 +460,20 @@ impl Shell {
             features: FeaturesShown::ALL,
             preview: None,
             may_preview: false,
-            tabs: tabs(locale, path, area_of(None)),
+            tabs: tabs(locale, path, area_of(None), &default_places),
+            footer: footer_links(locale, &default_places),
+            area_tab: area_of(None),
             profile: None,
             provider_cta: None,
             search_query,
             search_url,
         }
     }
+}
+
+/// The places of a frame built before the settings are read: the defaults.
+fn default_places(feature: Feature, place: Place) -> bool {
+    application::features::default_placed(feature, place)
 }
 
 /// `href` (a path, maybe with its query) leads to no feature hidden from
@@ -467,32 +483,117 @@ fn shown_href(features: FeaturesShown, href: &str) -> bool {
     feature_of(path, Some(query)).is_none_or(|f| features.has(f))
 }
 
-fn tabs(locale: &Locale, path: &str, area: Dest) -> Vec<Tab> {
-    // (tab, the tab a phone lights instead when this one is wide only).
-    let all: [(Dest, Option<&'static str>); 7] = [
-        (dest("home", "fa-house", "nav.home"), None),
-        (dest("explore", "fa-location-dot", "nav.near_me"), None),
-        (dest("services", "fa-border-all", "nav.services"), None),
-        (dest("products", "fa-bag-shopping", "nav.products"), None),
-        // The provider directory; on a phone it is the second tab of /services.
-        (dest("providers", "fa-store", "nav.shops"), Some("services")),
-        // Crop prices; on a phone the home page's price strip leads there.
-        (dest("prices", "fa-chart-line", "nav.prices"), Some("home")),
-        (area, None),
-    ];
-    let active = |d: &Dest| is_active(path, &section_of(d.route, &url(d.route)));
-    let stand_in = all
+/// A page the frame leads to: its link, the feature it belongs to (`None`:
+/// always on both bars and in the footer) and the tab a phone lights in its
+/// stead when it is not on the phone's bar.
+struct Browse {
+    dest: Dest,
+    feature: Option<Feature>,
+    stand_in: &'static str,
+}
+
+/// Every page the frame may lead to, in the bars' and the footer's order.
+const BROWSE: [Browse; 7] = [
+    Browse {
+        dest: dest("home", "fa-house", "nav.home"),
+        feature: None,
+        stand_in: "home",
+    },
+    Browse {
+        dest: dest("explore", "fa-location-dot", "nav.near_me"),
+        feature: Some(Feature::NearMe),
+        stand_in: "home",
+    },
+    Browse {
+        dest: dest("services", "fa-border-all", "nav.services"),
+        feature: None,
+        stand_in: "services",
+    },
+    Browse {
+        dest: dest("products", "fa-bag-shopping", "nav.products"),
+        feature: Some(Feature::Supplies),
+        stand_in: "home",
+    },
+    // On a phone the directory is the second tab of /services.
+    Browse {
+        dest: dest("providers", "fa-store", "nav.shops"),
+        feature: Some(Feature::Directory),
+        stand_in: "services",
+    },
+    // On a phone the home page's price strip leads to the prices.
+    Browse {
+        dest: dest("prices", "fa-chart-line", "nav.prices"),
+        feature: Some(Feature::Prices),
+        stand_in: "home",
+    },
+    Browse {
+        dest: dest("job_new", "fa-bullhorn", "nav.jobs"),
+        feature: Some(Feature::Jobs),
+        stand_in: "home",
+    },
+];
+
+/// The pages the frame may lead to, worded, with the feature each belongs
+/// to (`None`: always there), then the phone's account tab: what the
+/// settings' preview of the frame draws.
+pub fn browse_pages(locale: &Locale) -> (Vec<(Option<Feature>, Link)>, Link) {
+    let pages = BROWSE
         .iter()
-        .find(|(d, phone)| phone.is_some() && active(d))
-        .and_then(|(_, phone)| *phone);
-    all.iter()
-        .map(|(d, phone)| Tab {
-            active: active(d),
-            active_on_phone: stand_in == Some(d.route),
-            wide_only: phone.is_some(),
-            phone_only: d.route == ACCOUNT.route,
-            link: d.link(locale),
+        .map(|b| (b.feature, b.dest.link(locale)))
+        .collect();
+    (pages, ACCOUNT.link(locale))
+}
+
+/// Whether a browse page is at `place`, by `placed` (the admin's places of
+/// the features this viewer sees).
+fn at(b: &Browse, place: Place, placed: &impl Fn(Feature, Place) -> bool) -> bool {
+    b.feature.is_none_or(|f| placed(f, place))
+}
+
+/// The bars' tabs: each browse page on the wide bar, the phone's or both,
+/// then "my area" (`area`).
+fn tabs(
+    locale: &Locale,
+    path: &str,
+    area: Dest,
+    placed: &impl Fn(Feature, Place) -> bool,
+) -> Vec<Tab> {
+    let active = |d: &Dest| is_active(path, &section_of(d.route, &url(d.route)));
+    let shown: Vec<(&Browse, bool, bool)> = BROWSE
+        .iter()
+        .map(|b| (b, at(b, Place::Top, placed), at(b, Place::Phone, placed)))
+        .filter(|(_, top, phone)| *top || *phone)
+        .collect();
+    // An active page with no phone tab lights its stand-in there.
+    let stand_in = shown
+        .iter()
+        .find(|(b, _, phone)| !phone && active(&b.dest))
+        .map(|(b, ..)| b.stand_in);
+    shown
+        .iter()
+        .map(|(b, top, phone)| Tab {
+            active: active(&b.dest),
+            active_on_phone: stand_in == Some(b.dest.route),
+            wide_only: !phone,
+            phone_only: !top,
+            link: b.dest.link(locale),
         })
+        .chain(std::iter::once(Tab {
+            active: active(&area),
+            active_on_phone: false,
+            wide_only: false,
+            phone_only: area.route == ACCOUNT.route,
+            link: area.link(locale),
+        }))
+        .collect()
+}
+
+/// The footer's browse links: each browse page the admin put there.
+fn footer_links(locale: &Locale, placed: &impl Fn(Feature, Place) -> bool) -> Vec<Link> {
+    BROWSE
+        .iter()
+        .filter(|b| at(b, Place::Footer, placed))
+        .map(|b| b.dest.link(locale))
         .collect()
 }
 
@@ -555,7 +656,7 @@ impl FromRequestParts<AppState> for Shell {
             }
         };
         let (sectors, settings) = tokio::try_join!(state.usecases.sector.shown(), read)?;
-        shell.apply_settings(&settings);
+        shell.apply_settings(state.locale(), &settings);
         shell.sector = chosen_sector(&parts.headers, &sectors);
         shell.sectors = sector_choices(state.locale(), &sectors, shell.sector.as_deref());
         Ok(shell)

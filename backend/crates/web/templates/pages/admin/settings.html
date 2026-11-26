@@ -7,6 +7,7 @@
 {% import "molecules/brand_image_field.html" as image %}
 {% import "organisms/confirm_sheet.html" as confirm %}
 {% import "atoms/logo.html" as brand %}
+{% import "molecules/nav_preview.html" as menu %}
 {#- The platform settings, laid out like the other admin pages: one tab per
     group (each counting its settings off their defaults), the group as one
     `admin-section` card (title, status line, `form-stack`, one
@@ -144,6 +145,11 @@
     </aside>
   </div>
   {% else %}
+  {#- The features tab: the form beside the menus as its boxes stand
+      (`g.nav`; Alpine `navPreview` follows each tick, without JS it shows
+      the form as shown). -#}
+  {% set n = g.nav %}
+  {% if n %}<div class="settings-split" x-data="navPreview" x-on:change="update" data-top-max="{{ n.top_max }}" data-phone-max="{{ n.phone_max }}" data-room-text="{{ t(key="settings.bar_room", used="{used}", max="{max}") }}">{% endif %}
   <section class="admin-section" aria-labelledby="settings-title">
     <h2 class="admin-section__title" id="settings-title">{{ g.title }}</h2>
     <p class="admin-status">
@@ -176,6 +182,27 @@
           <label class="btn feature-row__stage feature-row__stage--{{ o.value }}" for="{{ s.id }}-{{ o.value }}"><span class="fw-semibold">{{ o.label }}</span><span class="feature-row__stage-hint">{{ o.hint }}</span></label>
           {% endfor %}
         </div>
+        {#- Where its page is led to from: a box per place; the phone's bar
+            and the wide bar have room for `nav.phone_max` / `nav.top_max`
+            (Alpine `navPreview` greys the rest
+            once it is full; the server refuses one more either way). -#}
+        {% if fv.places %}
+        {#- Off, the boxes are faded and said to count for nothing (never
+            disabled: a disabled box is not sent, and its place would be lost). -#}
+        <fieldset class="feature-row__places{% if s.value == "off" %} is-off{% endif %}" data-places-of="{{ s.key }}">
+          <legend class="feature-row__places-title">{{ t(key="settings.places") }}</legend>
+          <p class="feature-row__off-note">{{ atoms::icon(name="fa-circle-info") }} {{ t(key="settings.places_off") }}</p>
+          <div class="feature-row__place-list">
+            {% for p in fv.places %}
+            <div class="form-check feature-row__place">
+              <input class="form-check-input{% if p.error %} is-invalid{% endif %}" type="checkbox" id="{{ p.id }}" name="{{ p.key }}" value="true"{% if p.on %} checked{% endif %}{% if p.place != "footer" %} data-room="{{ p.place }}"{% endif %}>
+              <label class="form-check-label" for="{{ p.id }}">{{ p.label }}</label>
+            </div>
+            {% endfor %}
+          </div>
+          {% for p in fv.places %}{% if p.error %}<div class="invalid-feedback d-block">{{ p.error }}</div>{% endif %}{% endfor %}
+        </fieldset>
+        {% endif %}
         <p class="form-text mb-0" id="{{ s.id }}-hint"><span class="fw-semibold">{{ t(key="settings.where") }}</span> {{ fv.where_line }}</p>
         <p class="form-text mb-0">{{ s.default_line }}{% if s.changed_on %}{% set when = s.changed_on | vn_datetime %} {{ t(key="settings.changed_on", when=when) }}{% endif %}</p>
         {% if s.error %}<div class="invalid-feedback d-block">{{ s.error }}</div>{% endif %}
@@ -197,6 +224,17 @@
       <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button></div>
     </form>
   </section>
+  {% if n %}
+  <aside class="admin-section settings-split__aside" aria-labelledby="nav-preview-title">
+    <h2 class="admin-section__title" id="nav-preview-title">{{ t(key="settings.nav_preview_title") }}</h2>
+    <p class="admin-status">{{ t(key="settings.nav_preview_sub") }} {{ t(key="settings.places_hint") }}</p>
+    {% set admins = t(key="settings.nav_preview_admins") %}
+    {{ menu::nav_bar(items=n.top, caption=t(key="settings.nav_preview_top"), place="top", admins=admins, room=t(key="settings.bar_room", used=n.top_used, max=n.top_max)) }}
+    {{ menu::nav_bar(items=n.phone, caption=t(key="settings.nav_preview_phone"), place="phone", admins=admins, room=t(key="settings.bar_room", used=n.phone_used, max=n.phone_max)) }}
+    {{ menu::nav_bar(items=n.footer, caption=t(key="settings.nav_preview_footer"), place="footer", admins=admins) }}
+  </aside>
+  </div>
+  {% endif %}
   {% endif %}
 
 

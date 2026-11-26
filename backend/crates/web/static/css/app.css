@@ -365,18 +365,22 @@ body:has(.app-nav__search-row.open) .app-main {
 .brand-logo__sun {
   fill: var(--a500);
 }
-/* The settings page's identity tab: the form, then its preview; side by
+/* The settings page's identity and features tabs: the form, then its
+   preview (the brand's, the menus'); side by
    side from 992 px, the preview staying in view while the form scrolls. */
-.brand-editor {
+.brand-editor,
+.settings-split {
   display: grid;
   gap: 16px;
   align-items: start;
 }
 @media (min-width: 992px) {
-  .brand-editor {
+  .brand-editor,
+  .settings-split {
     grid-template-columns: minmax(0, 1fr) minmax(0, 412px);
   }
-  .brand-editor__preview {
+  .brand-editor__preview,
+  .settings-split__aside {
     position: sticky;
     top: calc(var(--ash-header-h) + 16px);
   }
@@ -1308,6 +1312,27 @@ body:has(.app-nav__search-row.open) .app-main {
   .bottom-nav__tab--active {
     color: #fff;
     background: rgba(255, 255, 255, 0.16);
+  }
+}
+/* 1200 to 1399 px: six tabs (`TOP_TABS_MAX` features, home, services)
+   between the brand and the right-hand buttons, so tighter. */
+@media (min-width: 1200px) and (max-width: 1399.98px) {
+  .bottom-nav {
+    gap: 0;
+  }
+  .bottom-nav__tab {
+    gap: 5px;
+    padding: 0 10px;
+  }
+}
+/* 1200 to 1279 px: the right-hand buttons are wider than the brand, so
+   the centred tabs sit a little left of the middle and closer still. */
+@media (min-width: 1200px) and (max-width: 1279.98px) {
+  .bottom-nav {
+    left: calc(50% - 24px);
+  }
+  .bottom-nav__tab {
+    padding: 0 8px;
   }
 }
 
@@ -4090,14 +4115,20 @@ summary.acct-item__row:focus-visible {
 .feature-row__stages {
   width: 100%;
 }
+/* Bootstrap's own variables, so its `.btn:hover` keeps the border (a
+   plain `.btn` has a transparent one on hover). */
 .feature-row__stage {
+  --bs-btn-color: var(--text);
+  --bs-btn-border-color: var(--border);
+  --bs-btn-hover-color: var(--p800);
+  --bs-btn-hover-bg: var(--p50);
+  --bs-btn-hover-border-color: var(--p700);
+  --bs-btn-focus-shadow-rgb: 4, 120, 87;
   display: flex;
   flex: 1 1 0;
   flex-direction: column;
   justify-content: center;
   min-height: 56px;
-  border: 1px solid var(--border);
-  color: var(--text);
   line-height: 1.25;
 }
 .feature-row__stage-hint {
@@ -4126,6 +4157,117 @@ summary.acct-item__row:focus-visible {
   .feature-row__stage-hint {
     display: none;
   }
+}
+/* A feature's places on the features tab: three boxes in a row that
+   wraps, each a 44 px tap target. */
+.feature-row__places {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.feature-row__places-title {
+  float: none;
+  margin-bottom: 4px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.feature-row__place-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 20px;
+}
+.feature-row__place {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin: 0;
+  padding-left: 0;
+}
+.feature-row__place .form-check-input {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0;
+  float: none;
+}
+.feature-row__place .form-check-input:disabled + .form-check-label {
+  opacity: 0.5;
+}
+/* The feature is off: its places count for nothing until it is on again
+   (kept, never unticked); the note says so. */
+.feature-row__off-note {
+  display: none;
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--a800);
+}
+.feature-row__places.is-off .feature-row__place-list {
+  opacity: 0.5;
+}
+.feature-row__places.is-off .feature-row__off-note {
+  display: block;
+}
+/* The settings' preview of the menus (molecules/nav_preview): the wide
+   bar and the phone's as rows of tabs, the footer as a list; a feature in
+   preview dashed and said to be for admins only. */
+.nav-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 8px;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.nav-preview--phone {
+  flex-wrap: nowrap;
+  justify-content: space-around;
+}
+.nav-preview--phone .nav-preview__item {
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  font-size: var(--fs-2xs);
+  text-align: center;
+}
+.nav-preview--footer {
+  flex-direction: column;
+  background: var(--p900);
+  color: #fff;
+}
+.nav-preview__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: var(--fs-sm);
+}
+.nav-preview__item[hidden] {
+  display: none;
+}
+.nav-preview__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nav-preview__admins {
+  display: none;
+  font-size: var(--fs-2xs);
+  opacity: 0.8;
+}
+.nav-preview__item.is-preview {
+  border-style: dashed;
+  border-color: var(--bs-primary);
+}
+.nav-preview__item.is-preview .nav-preview__admins {
+  display: inline;
+}
+.nav-preview--phone .nav-preview__item.is-preview .nav-preview__admins {
+  display: none;
 }
 /* A page of a feature in preview, seen by an admin (layouts/app.html):
    under the top bar, saying farmers do not see it yet. */

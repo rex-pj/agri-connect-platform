@@ -168,6 +168,50 @@ document.addEventListener("alpine:init", () => {
   // typed or a file chosen, before anything is saved. The root's data-*
   // carry what is saved and the defaults; a chosen file shows from a blob:
   // URL (img-src allows blob:). Without JS the preview is what is saved.
+  // The features tab's preview of the menus (pages/admin/settings): each
+  // feature's link shown while its place is ticked and it is not off, marked
+  // while in preview; each bar's room counted (the wide bar's, the phone's),
+  // its other boxes greyed once it is full (the server refuses one more
+  // either way).
+  Alpine.data("navPreview", () => ({
+    topRoom: "",
+    phoneRoom: "",
+
+    init() {
+      this.update();
+    },
+    update() {
+      const form = this.$el.querySelector("form");
+      const boxes = form.elements;
+      for (const item of this.$el.querySelectorAll("[data-place-key]")) {
+        const placed = boxes.namedItem(item.dataset.placeKey)?.checked;
+        const stage = form.querySelector(
+          `input[name="${CSS.escape(item.dataset.stageKey)}"]:checked`,
+        )?.value;
+        item.hidden = !placed || stage === "off";
+        item.classList.toggle("is-preview", stage === "preview");
+      }
+      // An off feature's places are faded and said to count for nothing.
+      for (const places of this.$el.querySelectorAll("[data-places-of]")) {
+        const stage = form.querySelector(
+          `input[name="${CSS.escape(places.dataset.placesOf)}"]:checked`,
+        )?.value;
+        places.classList.toggle("is-off", stage === "off");
+      }
+      this.topRoom = this.room(form, "top", Number(this.$el.dataset.topMax));
+      this.phoneRoom = this.room(form, "phone", Number(this.$el.dataset.phoneMax));
+    },
+    // One bar's room line; its unticked boxes greyed once it is full.
+    room(form, place, max) {
+      const bar = [...form.querySelectorAll(`[data-room="${place}"]`)];
+      const used = bar.filter((box) => box.checked).length;
+      for (const box of bar) box.disabled = !box.checked && used >= max;
+      return this.$el.dataset.roomText
+        .replace("{used}", String(used))
+        .replace("{max}", String(max));
+    },
+  }));
+
   Alpine.data("brandPreview", () => ({
     withoutScript: false,
     name: "",

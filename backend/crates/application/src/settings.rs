@@ -32,7 +32,7 @@ use crate::{
         SERVICES_PER_BUSINESS_DEFAULT, SERVICES_PER_BUSINESS_MAX, SITE_DESCRIPTION_MAX,
         SITE_NAME_MAX, SPONSORED_SHOWN_DEFAULT, SPONSORED_SHOWN_MAX, STEADY_WEEKLY_LEADS_DEFAULT,
     },
-    features::{Feature, FeaturesShown, Stage},
+    features::{Feature, FeaturesShown, Place, Placement, Stage, PLACEMENTS},
     validation::{is_valid_vn_phone, max_chars, one_line, validate_email},
 };
 
@@ -174,6 +174,29 @@ const fn stage(feature: Feature) -> SettingDef {
     }
 }
 
+/// The `i`-th of `PLACEMENTS` as a switch of the features tab (walked, not
+/// indexed: an index past the end leaves an empty key, which
+/// `keys_are_unique_dotted_and_fit_the_column` refuses).
+const fn place(i: usize) -> SettingDef {
+    let mut rest: &[Placement] = &PLACEMENTS;
+    let mut n = i;
+    let (mut key, mut default) = ("", false);
+    while let [head, tail @ ..] = rest {
+        if n == 0 {
+            key = head.key;
+            default = head.default;
+            break;
+        }
+        n -= 1;
+        rest = tail;
+    }
+    SettingDef {
+        key,
+        group: SettingGroup::Features,
+        kind: SettingKind::Switch { default },
+    }
+}
+
 /// Every setting, in the page's order within each group.
 pub static SETTINGS: &[SettingDef] = &[
     // Empty: the deployment's own (`SITE_NAME`, `SITE_DESCRIPTION`).
@@ -227,6 +250,22 @@ pub static SETTINGS: &[SettingDef] = &[
     stage(Feature::Directory),
     stage(Feature::Reviews),
     stage(Feature::Jobs),
+    // Where each feature's page is led to from (`features::PLACEMENTS`).
+    place(0),
+    place(1),
+    place(2),
+    place(3),
+    place(4),
+    place(5),
+    place(6),
+    place(7),
+    place(8),
+    place(9),
+    place(10),
+    place(11),
+    place(12),
+    place(13),
+    place(14),
     number(
         JOB_POSTS_PER_CLIENT_PER_DAY,
         SettingGroup::Jobs,
@@ -568,6 +607,13 @@ impl Settings {
     /// `feature.preview`.
     pub fn features_shown(&self, may_preview: bool) -> FeaturesShown {
         FeaturesShown::new(|f| self.stage(f), may_preview)
+    }
+
+    /// Whether the admin put `feature`'s page at `place` (whether the
+    /// viewer sees the feature is the caller's other question). A feature
+    /// with no page is nowhere.
+    pub fn placed(&self, feature: Feature, place: Place) -> bool {
+        crate::features::placement_at(feature, place).is_some_and(|p| self.switch(p.key))
     }
 
     /// Job posts one client address may send a day.

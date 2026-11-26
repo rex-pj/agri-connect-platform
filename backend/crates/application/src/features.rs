@@ -138,6 +138,129 @@ impl Feature {
             Feature::Jobs => "fa-bullhorn",
         }
     }
+
+    /// Whether it has a page of its own to lead to from the menus (the
+    /// reviews live on the provider pages: no menu entry).
+    pub const fn has_page(self) -> bool {
+        !matches!(self, Feature::Reviews)
+    }
+}
+
+/// Where a feature's page may be led to from the frame, each place a switch
+/// on the features tab (`Placement`). The home page, the services and the
+/// account are always there; a feature hidden from the viewer is never
+/// shown, whatever its places.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Place {
+    /// The top bar of a wide screen (1200 px and more): room for
+    /// `TOP_TABS_MAX` features.
+    Top,
+    /// The tab bar of a phone: room for `PHONE_TABS_MAX` features.
+    Phone,
+    /// The footer's browse links.
+    Footer,
+}
+
+/// The features a phone's tab bar has room for, beside home, the services
+/// and the account (five tabs in all).
+pub const PHONE_TABS_MAX: usize = 2;
+/// The features the wide top bar has room for, beside home and the services,
+/// between the brand and the search, language and account buttons of a
+/// 1280 px screen (six tabs in all).
+pub const TOP_TABS_MAX: usize = 4;
+
+impl Place {
+    pub const ALL: [Place; 3] = [Place::Top, Place::Phone, Place::Footer];
+
+    /// Its locale key (`settings.place.<code>`) and form id.
+    pub const fn code(self) -> &'static str {
+        match self {
+            Place::Top => "top",
+            Place::Phone => "phone",
+            Place::Footer => "footer",
+        }
+    }
+
+    /// How many features it has room for; `None`: as many as there are.
+    pub const fn room(self) -> Option<usize> {
+        match self {
+            Place::Top => Some(TOP_TABS_MAX),
+            Place::Phone => Some(PHONE_TABS_MAX),
+            Place::Footer => None,
+        }
+    }
+}
+
+/// One feature's place: its setting and whether it is there by default (the
+/// frame as it was before it could be chosen: near me and supplies
+/// everywhere, the directory and the prices on the wide bar and in the
+/// footer, hire requests nowhere).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Placement {
+    pub feature: Feature,
+    pub place: Place,
+    pub key: &'static str,
+    pub default: bool,
+}
+
+const fn placement(feature: Feature, place: Place, key: &'static str, default: bool) -> Placement {
+    Placement {
+        feature,
+        place,
+        key,
+        default,
+    }
+}
+
+/// Every feature's places, in the features tab's order.
+pub const PLACEMENTS: [Placement; 15] = [
+    placement(Feature::Prices, Place::Top, "nav.prices.top", true),
+    placement(Feature::Prices, Place::Phone, "nav.prices.phone", false),
+    placement(Feature::Prices, Place::Footer, "nav.prices.footer", true),
+    placement(Feature::NearMe, Place::Top, "nav.near_me.top", true),
+    placement(Feature::NearMe, Place::Phone, "nav.near_me.phone", true),
+    placement(Feature::NearMe, Place::Footer, "nav.near_me.footer", true),
+    placement(Feature::Supplies, Place::Top, "nav.supplies.top", true),
+    placement(Feature::Supplies, Place::Phone, "nav.supplies.phone", true),
+    placement(
+        Feature::Supplies,
+        Place::Footer,
+        "nav.supplies.footer",
+        true,
+    ),
+    placement(Feature::Directory, Place::Top, "nav.directory.top", true),
+    placement(
+        Feature::Directory,
+        Place::Phone,
+        "nav.directory.phone",
+        false,
+    ),
+    placement(
+        Feature::Directory,
+        Place::Footer,
+        "nav.directory.footer",
+        true,
+    ),
+    placement(Feature::Jobs, Place::Top, "nav.jobs.top", false),
+    placement(Feature::Jobs, Place::Phone, "nav.jobs.phone", false),
+    placement(Feature::Jobs, Place::Footer, "nav.jobs.footer", false),
+];
+
+/// The placement a setting key holds.
+pub fn placement_of(key: &str) -> Option<&'static Placement> {
+    PLACEMENTS.iter().find(|p| p.key == key)
+}
+
+/// The placement of `feature` at `place`; `None` for a feature with no page.
+pub fn placement_at(feature: Feature, place: Place) -> Option<&'static Placement> {
+    PLACEMENTS
+        .iter()
+        .find(|p| p.feature == feature && p.place == place)
+}
+
+/// Whether `feature`'s page is at `place` by default (no setting stored).
+pub fn default_placed(feature: Feature, place: Place) -> bool {
+    placement_at(feature, place).is_some_and(|p| p.default)
 }
 
 /// Which features one viewer sees: what the frame, the pages and the JSON
@@ -213,6 +336,41 @@ mod tests {
         assert!(!Stage::Preview.shown_to(false));
         assert!(Stage::Preview.shown_to(true));
         assert!(!Stage::Off.shown_to(true));
+    }
+
+    #[test]
+    fn every_feature_with_a_page_has_each_place_once_and_the_phone_fits() {
+        let mut keys = HashSet::new();
+        for f in Feature::ALL {
+            for p in Place::ALL {
+                let found = PLACEMENTS
+                    .iter()
+                    .filter(|x| x.feature == f && x.place == p)
+                    .count();
+                assert_eq!(
+                    found,
+                    usize::from(f.has_page()),
+                    "{} {}",
+                    f.code(),
+                    p.code()
+                );
+            }
+        }
+        for p in PLACEMENTS {
+            assert!(keys.insert(p.key), "{} twice", p.key);
+            assert_eq!(placement_of(p.key), Some(&p));
+        }
+        for place in Place::ALL {
+            let by_default = PLACEMENTS
+                .iter()
+                .filter(|p| p.place == place && p.default)
+                .count();
+            assert!(
+                place.room().is_none_or(|room| by_default <= room),
+                "{}",
+                place.code()
+            );
+        }
     }
 
     #[test]

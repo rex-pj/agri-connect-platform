@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use application::{
     authz::Actor,
     constants::{ICON_MIN_SIDE, SITE_DESCRIPTION_ADVISED_MIN},
-    features::{Feature, Stage},
+    features::{placement_at, placement_of, Feature, Place, Stage, PLACEMENTS},
     outputs::{SettingDto, SettingGroupDto},
     settings::{
         SettingGroup, SettingKind, BRAND_DESCRIPTION, BRAND_ICON, BRAND_LOGO, BRAND_NAME, SETTINGS,
@@ -37,6 +37,7 @@ use crate::{
         listing::with_query,
         see_other,
     },
+    shell::{browse_pages, Link},
     views::SiteConfig,
 };
 
@@ -126,8 +127,52 @@ pub struct FeatureView {
     /// "Hiện ở: …": every way in that is hidden with it.
     pub where_line: String,
     pub stages: Vec<StageChoice>,
+    /// Where its page is led to from (top bar, phone bar, footer); empty
+    /// for a feature with no page of its own.
+    pub places: Vec<PlaceChoice>,
     /// Its page, while it is in preview as stored: open it to try it.
     pub preview_href: Option<String>,
+}
+
+/// One place of a feature's page, a checkbox (`features::Placement`).
+#[derive(Debug, Serialize)]
+pub struct PlaceChoice {
+    pub key: &'static str,
+    pub id: String,
+    /// `top`, `phone` or `footer`.
+    pub place: &'static str,
+    pub label: String,
+    pub on: bool,
+    pub error: Option<String>,
+}
+
+/// The features tab's preview of the frame: the wide bar, the phone's
+/// and the footer as the boxes stand (Alpine `navPreview` keeps it in step
+/// with what is ticked; without JS it shows the form as shown).
+#[derive(Debug, Serialize)]
+pub struct NavPreview {
+    pub top: Vec<PreviewItem>,
+    pub phone: Vec<PreviewItem>,
+    pub footer: Vec<PreviewItem>,
+    /// Each bar's room for features (`Place::room`), and how much is taken.
+    pub top_max: usize,
+    pub top_used: usize,
+    pub phone_max: usize,
+    pub phone_used: usize,
+}
+
+/// One link of the preview: a fixed one (home, services, the account), or
+/// a feature's, shown while its place is ticked and it is not off.
+#[derive(Debug, Serialize)]
+pub struct PreviewItem {
+    pub icon: &'static str,
+    pub label: String,
+    /// Its place's checkbox and its feature's stage radios; `None` fixed.
+    pub place_key: Option<&'static str>,
+    pub stage_key: Option<&'static str>,
+    pub shown: bool,
+    /// Its feature is in preview: only admins would see it.
+    pub preview: bool,
 }
 
 /// One of a feature's three choices, a radio button.
@@ -161,6 +206,8 @@ pub struct GroupView {
     pub changed: usize,
     /// The reset card's lines; empty: no reset card.
     pub resets: Vec<ResetLine>,
+    /// The features tab's preview of the frame.
+    pub nav: Option<NavPreview>,
 }
 
 #[derive(Debug, Serialize)]
@@ -208,8 +255,29 @@ fn stage_word(locale: &Locale, value: &str) -> String {
 
 /// A feature's row on the features tab: `stored` its stage as saved,
 /// `value` as shown (typed, when the form came back).
-fn feature_view(locale: &Locale, key: &str, stored: &str, value: &str) -> Option<FeatureView> {
+/// `shown` gives each box's value as the form shows it, `error_of` its
+/// message.
+fn feature_view(
+    locale: &Locale,
+    key: &str,
+    stored: &str,
+    value: &str,
+    shown: &impl Fn(&str) -> String,
+    error_of: &impl Fn(&str) -> Option<String>,
+) -> Option<FeatureView> {
     let feature = Feature::of_key(key)?;
+    let places = Place::ALL
+        .iter()
+        .filter_map(|p| placement_at(feature, *p))
+        .map(|p| PlaceChoice {
+            key: p.key,
+            id: p.key.replace('.', "-"),
+            place: p.place.code(),
+            label: locale.text(&format!("settings.place.{}", p.place.code())),
+            on: shown(p.key) == "true",
+            error: error_of(p.key),
+        })
+        .collect();
     let preview_href = (stored == Stage::Preview.code())
         .then(|| features::page_route(feature))
         .flatten()
@@ -226,8 +294,52 @@ fn feature_view(locale: &Locale, key: &str, stored: &str, value: &str) -> Option
                 checked: s.code() == value,
             })
             .collect(),
+        places,
         preview_href,
     })
+}
+
+/// The frame as the features tab's boxes stand (`shown`): the fixed pages
+/// always, a feature's while its place is ticked and it is not off.
+fn nav_preview(locale: &Locale, shown: &impl Fn(&str) -> String) -> NavPreview {
+    let (pages, account) = browse_pages(locale);
+    let item = |feature: Option<Feature>, link: &Link, place: Place| {
+        let place_key = feature.and_then(|f| placement_at(f, place)).map(|p| p.key);
+        let stage_key = feature.map(Feature::setting_key);
+        let stage = stage_key.map(shown);
+        PreviewItem {
+            icon: link.icon,
+            label: link.label.clone(),
+            shown: place_key.is_none_or(|k| shown(k) == "true")
+                && stage.as_deref() != Some(Stage::Off.code()),
+            preview: stage.as_deref() == Some(Stage::Preview.code()),
+            place_key,
+            stage_key,
+        }
+    };
+    let bar = |place: Place| -> Vec<PreviewItem> {
+        pages
+            .iter()
+            .map(|(f, link)| item(*f, link, place))
+            .collect()
+    };
+    let used = |place: Place| {
+        PLACEMENTS
+            .iter()
+            .filter(|p| p.place == place && shown(p.key) == "true")
+            .count()
+    };
+    let mut phone = bar(Place::Phone);
+    phone.push(item(None, &account, Place::Phone));
+    NavPreview {
+        top: bar(Place::Top),
+        phone,
+        footer: bar(Place::Footer),
+        top_max: Place::Top.room().unwrap_or_default(),
+        top_used: used(Place::Top),
+        phone_max: Place::Phone.room().unwrap_or_default(),
+        phone_used: used(Place::Phone),
+    }
 }
 
 /// A value as the page words it: a switch on / off, an empty text "empty".
@@ -278,6 +390,14 @@ fn default_line(locale: &Locale, site: &SiteConfig, s: &SettingDto) -> String {
 }
 
 fn label_of(locale: &Locale, key: &str) -> String {
+    // A feature's place: "Giá nông sản · Chân trang".
+    if let Some(p) = placement_of(key) {
+        return format!(
+            "{} · {}",
+            label_of(locale, p.feature.setting_key()),
+            locale.text(&format!("settings.place.{}", p.place.code()))
+        );
+    }
     locale.text(&format!("settings.key.{key}"))
 }
 
@@ -317,20 +437,26 @@ fn group_view(
             error: typed.and_then(|(_, errors)| errors.fields.get(s.key).cloned()),
         })
         .collect();
+    // A box's value as the form shows it: as typed; a box not sent keeps
+    // its stored value, except a switch, which the browser leaves out when
+    // it is off.
+    let shown = |key: &str| -> String {
+        let s = stored.settings.iter().find(|s| s.key == key);
+        match typed.map(|(values, _)| values.get(key)) {
+            Some(Some(v)) => v.clone(),
+            Some(None) if s.is_some_and(|s| s.kind == "switch") => String::new(),
+            _ => s.map(|s| s.value.clone()).unwrap_or_default(),
+        }
+    };
+    let error_of = |key: &str| typed.and_then(|(_, errors)| errors.fields.get(key).cloned());
     let settings = stored
         .settings
         .iter()
-        .filter(|s| s.kind != KIND_IMAGE)
+        // A feature's places are drawn in its own row.
+        .filter(|s| s.kind != KIND_IMAGE && placement_of(s.key).is_none())
         .map(|s| {
-            // As typed; a box not sent keeps its stored value, except a
-            // switch, which the browser leaves out when it is off.
-            let typed_value = typed.and_then(|(values, _)| match values.get(s.key) {
-                Some(v) => Some(v.clone()),
-                None if s.kind == "switch" => Some(String::new()),
-                None => None,
-            });
-            let value = typed_value.unwrap_or_else(|| s.value.clone());
-            let feature = feature_view(locale, s.key, &s.value, &value);
+            let value = shown(s.key);
+            let feature = feature_view(locale, s.key, &s.value, &value, &shown, &error_of);
             SettingView {
                 key: s.key,
                 id: s.key.replace('.', "-"),
@@ -343,7 +469,7 @@ fn group_view(
                 max: s.max,
                 default_line: default_line(locale, site, s),
                 changed_on: s.changed_on,
-                error: typed.and_then(|(_, errors)| errors.fields.get(s.key).cloned()),
+                error: error_of(s.key),
                 feature,
             }
         })
@@ -369,6 +495,7 @@ fn group_view(
         images,
         changed: stored.changed,
         resets,
+        nav: (group == SettingGroup::Features).then(|| nav_preview(locale, &shown)),
     }
 }
 

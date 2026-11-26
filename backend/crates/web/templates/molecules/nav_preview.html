@@ -1,0 +1,20 @@
+{#- One menu of the settings' preview of the frame (the wide bar, the
+    phone's, the footer): its caption, then each link it may hold. A
+    feature's link carries its place's box and its stage's radios
+    (`data-place-key`, `data-stage-key`), which Alpine `navPreview` reads to
+    show it or not; `hidden` is how the form stands without JS. `room`: a
+    bar's room line, kept in step by the same component's
+    property (`topRoom`, `phoneRoom`). -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro nav_bar(items, caption, place, admins, room="") -%}
+<figure class="brand-preview__frame">
+  <figcaption>{{ caption }}{% if room and place == "top" %} · <span x-text="topRoom">{{ room }}</span>{% elif room %} · <span x-text="phoneRoom">{{ room }}</span>{% endif %}</figcaption>
+  <ul class="nav-preview nav-preview--{{ place }}">
+    {% for i in items %}
+    <li class="nav-preview__item{% if i.preview %} is-preview{% endif %}"{% if not i.shown %} hidden{% endif %}{% if i.place_key %} data-place-key="{{ i.place_key }}" data-stage-key="{{ i.stage_key }}"{% endif %}>
+      {{ atoms::icon(name=i.icon) }}<span class="nav-preview__label">{{ i.label }}</span><span class="nav-preview__admins">{{ admins }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+</figure>
+{%- endmacro nav_bar %}

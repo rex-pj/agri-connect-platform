@@ -1,6 +1,7 @@
 {#- The page footer: who we are, where to look, the account links, and the
-    platform's own help lines. The browse links are the frame's tabs (minus
-    "my area"). The account column is the profile menu's links: sign in and
+    platform's own help lines. The browse links are `shell.footer` (the pages
+    the admin put in the footer, the settings' features tab), not
+    the frame's tabs). The account column is the profile menu's links: sign in and
     sign up for visitors, the provider dashboard or the admin panel (which is
     not a tab) and the profile for signed-in users; error pages, which do not
     know the session, leave it out. Help lines come from `shell.support` (the
@@ -30,9 +31,9 @@
     <nav class="app-footer__col app-footer__col--explore" aria-labelledby="footer-explore">
       <h2 class="app-footer__title" id="footer-explore">{{ t(key="footer.explore") }}</h2>
       <ul class="app-footer__links">
-        {% for tab in shell.tabs %}{% if not loop.last %}
-        <li><a href="{{ tab.href }}">{{ atoms::icon(name=tab.icon) }} {{ tab.label }}</a></li>
-        {% endif %}{% endfor %}
+        {% for l in shell.footer %}
+        <li><a href="{{ l.href }}">{{ atoms::icon(name=l.icon) }} {{ l.label }}</a></li>
+        {% endfor %}
       </ul>
     </nav>
 

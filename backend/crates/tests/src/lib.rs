@@ -971,3 +971,18 @@ pub async fn place_business(e: &Env, business: i32, lat: f64, lng: f64) {
 /// The client a use case is told a login comes from, in tests that call it
 /// directly (the router's requests come from `send`'s peer address).
 pub const CLIENT: &str = "127.0.0.1";
+
+/// The features tab's form as a browser sends it: the group, every place
+/// box ticked by default (a box left out is off, as an unticked one), then
+/// `pairs` (which may tick or untick more by sending `"true"` / `"false"`).
+pub fn features_form<'a>(pairs: &[(&'a str, &'a str)]) -> Vec<(&'a str, &'a str)> {
+    let mut form = vec![("group", "features")];
+    form.extend(
+        application::features::PLACEMENTS
+            .iter()
+            .filter(|p| p.default && !pairs.iter().any(|(k, _)| *k == p.key))
+            .map(|p| (p.key, "true")),
+    );
+    form.extend(pairs.iter().filter(|(_, v)| *v != "false"));
+    form
+}

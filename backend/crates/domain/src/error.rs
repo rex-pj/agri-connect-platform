@@ -52,6 +52,8 @@ error_codes! {
     Internal                  => (Internal,        "internal"),
     RouteNotFound             => (NotFound,        "route_not_found"),
     FeatureOff                => (NotFound,        "feature_off"),
+    PhoneTabsFull             => (BadRequest,      "phone_tabs_full"),
+    TopTabsFull               => (BadRequest,      "top_tabs_full"),
     ValidationFailed          => (BadRequest,      "validation_failed"),
     InvalidRequestBody        => (BadRequest,      "invalid_request_body"),
     InvalidPathParam          => (BadRequest,      "invalid_path_param"),

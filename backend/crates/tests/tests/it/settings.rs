@@ -11,8 +11,8 @@ use axum::{
 };
 use image::ImageEncoder;
 use integration_tests::{
-    body_text, categories_of, env_with_origin, get_page, install_admin, json_body, post_form,
-    post_multipart_files, register_provider, send, Env, TEST_ORIGIN,
+    body_text, categories_of, env_with_origin, features_form, get_page, install_admin, json_body,
+    post_form, post_multipart_files, register_provider, send, Env, TEST_ORIGIN,
 };
 use sea_orm::{ConnectionTrait, Statement};
 
@@ -334,7 +334,7 @@ async fn closing_the_doors_refuses_sign_ups_and_job_posts() {
     let res = save(
         &e,
         &admin,
-        &[("group", "features"), ("access.job_posts_open", "off")],
+        &features_form(&[("access.job_posts_open", "off")]),
     )
     .await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
@@ -392,11 +392,10 @@ async fn closing_the_doors_refuses_sign_ups_and_job_posts() {
     let res = save(
         &e,
         &admin,
-        &[
-            ("group", "features"),
+        &features_form(&[
             ("access.registration_open", "true"),
             ("access.job_posts_open", "on"),
-        ],
+        ]),
     )
     .await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);

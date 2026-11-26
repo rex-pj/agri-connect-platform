@@ -317,16 +317,28 @@ fn nav_preview(locale: &Locale, shown: &impl Fn(&str) -> String) -> NavPreview {
             stage_key,
         }
     };
+    // No more features on a bar than its room, the first kept, as the
+    // frame draws it (`shell::placed_pages`).
     let bar = |place: Place| -> Vec<PreviewItem> {
+        let mut taken = 0;
         pages
             .iter()
-            .map(|(f, link)| item(*f, link, place))
+            .map(|(f, link)| {
+                let mut i = item(*f, link, place);
+                if i.place_key.is_some() && i.shown {
+                    i.shown = place.room().is_none_or(|room| taken < room);
+                    taken += usize::from(i.shown);
+                }
+                i
+            })
             .collect()
     };
     let used = |place: Place| {
         PLACEMENTS
             .iter()
             .filter(|p| p.place == place && shown(p.key) == "true")
+            // An off feature's tick takes no room (`SettingsUseCase`).
+            .filter(|p| shown(p.feature.setting_key()) != Stage::Off.code())
             .count()
     };
     let mut phone = bar(Place::Phone);

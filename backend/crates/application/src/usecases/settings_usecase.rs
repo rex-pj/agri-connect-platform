@@ -19,7 +19,7 @@ use uuid::Uuid;
 use crate::{
     authz::Actor,
     catalogue::PERM_SETTING_MANAGE,
-    features::{Place, PLACEMENTS},
+    features::{Place, Placement, Stage, PLACEMENTS},
     outputs::{SettingDto, SettingGroupDto},
     ports::EventBus,
     settings::{
@@ -295,8 +295,12 @@ fn changes_to(
 }
 
 /// A bar has room for so many features (`Place::room`: the phone's, the wide
-/// top bar's): its places as they would stand after this save (sent, else
-/// stored); over it, each one sent on is refused (`phone_tabs_full`,
+/// top bar's). What takes room is a feature that shows there: ticked and
+/// not off (an off feature's ticks are kept for when it is back on). A save
+/// is refused only when it leaves a bar over its room and fuller than it
+/// was, so a state stored before the rule never blocks an unrelated change;
+/// the refusal is filed on what brought the extra feature in: its box just
+/// ticked, else its stage just turned back on (`phone_tabs_full`,
 /// `top_tabs_full`).
 fn tabs_fit(
     current: &Settings,
@@ -317,24 +321,36 @@ fn bar_fits(
     place: Place,
     room: usize,
 ) {
-    let bar = PLACEMENTS.iter().filter(|p| p.place == place);
     let sent = |key: &str| parsed.iter().find(|(d, _)| d.key == key).map(|(_, v)| v);
-    let on = |key: &str| match sent(key) {
+    let ticked_before = |p: &Placement| current.value(p.key) == Some(&SettingValue::Switch(true));
+    let ticked_after = |p: &Placement| match sent(p.key) {
         Some(v) => *v == SettingValue::Switch(true),
-        None => current.value(key) == Some(&SettingValue::Switch(true)),
+        None => ticked_before(p),
     };
-    if bar.clone().filter(|p| on(p.key)).count() <= room {
+    let shown_before = |p: &Placement| current.stage(p.feature) != Stage::Off;
+    let shown_after = |p: &Placement| match sent(p.feature.setting_key()) {
+        Some(SettingValue::Stage(stage)) => *stage != Stage::Off,
+        _ => shown_before(p),
+    };
+    let bar: Vec<&Placement> = PLACEMENTS.iter().filter(|p| p.place == place).collect();
+    let before = bar.iter().filter(|p| ticked_before(p) && shown_before(p)).count();
+    let after = bar.iter().filter(|p| ticked_after(p) && shown_after(p)).count();
+    if after <= room || after <= before {
         return;
     }
-    for p in bar.filter(|p| sent(p.key) == Some(&SettingValue::Switch(true))) {
-        check.rule(
-            p.key,
-            Err(Error::new(match place {
-                Place::Top => ErrorCode::TopTabsFull,
-                _ => ErrorCode::PhoneTabsFull,
-            })
-            .with_param("max", room)),
-        );
+    let full = || {
+        Err(Error::new(match place {
+            Place::Top => ErrorCode::TopTabsFull,
+            _ => ErrorCode::PhoneTabsFull,
+        })
+        .with_param("max", room))
+    };
+    for p in bar.iter().filter(|p| ticked_after(p) && shown_after(p)) {
+        if !ticked_before(p) {
+            check.rule(p.key, full());
+        } else if !shown_before(p) {
+            check.rule(p.feature.setting_key(), full());
+        }
     }
 }
 

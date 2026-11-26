@@ -413,13 +413,15 @@ async fn an_admin_chooses_where_each_feature_is_led_to() {
     let form = body_text(res).await;
     assert!(form.contains("chỉ có chỗ cho 2 tính năng"), "the message");
 
-    // So is a fifth feature on the wide bar.
+    // So is a fifth feature on the wide bar, once it shows (hire requests
+    // are off here: their tick alone would take no room).
     let res = send(
         &e.router,
         post_form(
             "/admin/settings",
             &features_form(&[
                 ("access.registration_open", "true"),
+                ("access.job_posts_open", "on"),
                 ("nav.jobs.top", "true"),
             ]),
             Some(&admin),
@@ -449,4 +451,120 @@ async fn an_admin_chooses_where_each_feature_is_led_to() {
     // for nothing yet.
     assert!(tab
         .contains(r#"class="feature-row__places is-off" data-places-of="access.job_posts_open""#));
+}
+
+/// Each stage and box as the features tab shows it, the way the browser
+/// sends the form back: every ticked box, every stage.
+async fn tab_as_sent(e: &Env, admin: &str) -> Vec<(String, String)> {
+    let html = body_text(
+        send(
+            &e.router,
+            get_page("/admin/settings?tab=features", Some(admin)),
+        )
+        .await,
+    )
+    .await;
+    let mut form = vec![("group".to_owned(), "features".to_owned())];
+    for input in html.split("<input ").skip(1) {
+        let tag = input.split('>').next().unwrap_or_default();
+        let attr = |name: &str| {
+            tag.split(&format!("{name}=\""))
+                .nth(1)
+                .and_then(|v| v.split('"').next())
+                .map(str::to_owned)
+        };
+        let (Some(name), Some(value)) = (attr("name"), attr("value")) else {
+            continue;
+        };
+        let checkable = tag.contains("type=\"checkbox\"") || tag.contains("type=\"radio\"");
+        if (name.starts_with("nav.") || name.starts_with("features.") || name.starts_with("access."))
+            && (!checkable || tag.contains(" checked"))
+        {
+            form.push((name, value));
+        }
+    }
+    form
+}
+
+fn with(form: &[(String, String)], key: &str, value: &str) -> Vec<(String, String)> {
+    let mut form: Vec<_> = form.iter().filter(|(k, _)| k != key).cloned().collect();
+    if value != "false" {
+        form.push((key.to_owned(), value.to_owned()));
+    }
+    form
+}
+
+async fn save_form(e: &Env, admin: &str, form: &[(String, String)]) -> StatusCode {
+    let pairs: Vec<(&str, &str)> = form.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+    send(&e.router, post_form("/admin/settings", &pairs, Some(admin)))
+        .await
+        .status()
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn an_off_feature_never_blocks_the_tab_and_comes_back_on() {
+    let e = env_with_origin().await;
+    let admin = install_admin(&e).await;
+    // As a real database stood: prices and near me off, their top boxes
+    // still ticked, hire requests added to the top bar: five ticks there.
+    e.t.db
+        .execute_unprepared(
+            "INSERT INTO platform_settings (key, value, updated_on) VALUES
+             ('features.prices', 'off', now()), ('features.near_me', 'off', now()),
+             ('nav.jobs.top', 'true', now())",
+        )
+        .await
+        .unwrap();
+    let shown = |e: &Env| {
+        let router = e.router.clone();
+        async move { json_body(send(&router, get_page("/api/explore/features", None)).await).await }
+    };
+
+    // Turning near me back on, the form as the page sends it, is saved.
+    let form = tab_as_sent(&e, &admin).await;
+    let res = save_form(&e, &admin, &with(&form, "features.near_me", "on")).await;
+    assert_eq!(res, StatusCode::SEE_OTHER, "near me back on");
+    assert_eq!(shown(&e).await["near_me"], true);
+
+    // An off feature's tick takes no room: hire requests' footer box and
+    // anything else unrelated save as well.
+    let form = tab_as_sent(&e, &admin).await;
+    let res = save_form(&e, &admin, &with(&form, "nav.prices.phone", "true")).await;
+    assert_eq!(res, StatusCode::SEE_OTHER, "an off feature's tick is kept");
+
+    // Prices back on would make five on the top bar: refused on prices
+    // itself, said why; unticking one of the others in the same save lets it.
+    let form = tab_as_sent(&e, &admin).await;
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/settings",
+            &with(&form, "features.prices", "on")
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_str()))
+                .collect::<Vec<_>>(),
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert!(body_text(res).await.contains("Thanh trên chỉ có chỗ cho 4 tính năng"));
+    assert_eq!(shown(&e).await["prices"], false);
+    let fixed = with(&with(&form, "features.prices", "on"), "nav.jobs.top", "false");
+    // Prices also takes a phone tab now: make room there too.
+    let fixed = with(&fixed, "nav.supplies.phone", "false");
+    assert_eq!(save_form(&e, &admin, &fixed).await, StatusCode::SEE_OTHER);
+    assert_eq!(shown(&e).await["prices"], true);
+
+    // Off and on again, with nothing else touched, always round-trips.
+    for feature in Feature::ALL {
+        let key = feature.setting_key();
+        let form = tab_as_sent(&e, &admin).await;
+        assert_eq!(save_form(&e, &admin, &with(&form, key, "off")).await, StatusCode::SEE_OTHER, "{key} off");
+        assert_eq!(shown(&e).await[feature.code()], false, "{key} off");
+        let form = tab_as_sent(&e, &admin).await;
+        assert_eq!(save_form(&e, &admin, &with(&form, key, "on")).await, StatusCode::SEE_OTHER, "{key} on");
+        assert_eq!(shown(&e).await[feature.code()], true, "{key} on");
+    }
 }

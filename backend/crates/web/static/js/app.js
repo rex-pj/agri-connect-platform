@@ -198,14 +198,32 @@ document.addEventListener("alpine:init", () => {
         )?.value;
         places.classList.toggle("is-off", stage === "off");
       }
+      // No more features on a bar than its room, the first kept, as the
+      // frame draws it.
+      for (const [place, max] of [
+        ["top", Number(this.$el.dataset.topMax)],
+        ["phone", Number(this.$el.dataset.phoneMax)],
+      ]) {
+        let taken = 0;
+        for (const item of this.$el.querySelectorAll(`.nav-preview--${place} [data-place-key]`)) {
+          if (item.hidden) continue;
+          item.hidden = taken >= max;
+          taken += 1;
+        }
+      }
       this.topRoom = this.room(form, "top", Number(this.$el.dataset.topMax));
       this.phoneRoom = this.room(form, "phone", Number(this.$el.dataset.phoneMax));
     },
-    // One bar's room line; its unticked boxes greyed once it is full.
+    // One bar's room line, counted as the server counts it: a ticked box of a
+    // feature that is not off. Once full, the unticked boxes of the shown
+    // features are greyed; an off feature's never are (its tick takes no
+    // room until it is back on, which the server then checks).
     room(form, place, max) {
+      const isOff = (box) =>
+        box.closest("[data-places-of]")?.classList.contains("is-off") ?? false;
       const bar = [...form.querySelectorAll(`[data-room="${place}"]`)];
-      const used = bar.filter((box) => box.checked).length;
-      for (const box of bar) box.disabled = !box.checked && used >= max;
+      const used = bar.filter((box) => box.checked && !isOff(box)).length;
+      for (const box of bar) box.disabled = !box.checked && !isOff(box) && used >= max;
       return this.$el.dataset.roomText
         .replace("{used}", String(used))
         .replace("{max}", String(max));

@@ -550,6 +550,34 @@ fn at(b: &Browse, place: Place, placed: &impl Fn(Feature, Place) -> bool) -> boo
     b.feature.is_none_or(|f| placed(f, place))
 }
 
+/// Each browse page's places (`Place::ALL` order), never more features on a
+/// bar than its room (`Place::room`), the first in the menu's order kept:
+/// the settings refuse a save that overfills a bar, but one stored before
+/// the rule must not overflow the frame either.
+pub fn placed_pages(placed: &impl Fn(Feature, Place) -> bool) -> Vec<[bool; 3]> {
+    let mut taken = [0usize; 3];
+    BROWSE
+        .iter()
+        .map(|b| {
+            let mut row = [false; 3];
+            for (i, place) in Place::ALL.into_iter().enumerate() {
+                let fits = b.feature.is_none()
+                    || place.room().is_none_or(|room| taken.get(i).is_some_and(|n| *n < room));
+                let here = at(b, place, placed) && fits;
+                if here && b.feature.is_some() {
+                    if let Some(n) = taken.get_mut(i) {
+                        *n += 1;
+                    }
+                }
+                if let Some(slot) = row.get_mut(i) {
+                    *slot = here;
+                }
+            }
+            row
+        })
+        .collect()
+}
+
 /// The bars' tabs: each browse page on the wide bar, the phone's or both,
 /// then "my area" (`area`).
 fn tabs(
@@ -561,7 +589,8 @@ fn tabs(
     let active = |d: &Dest| is_active(path, &section_of(d.route, &url(d.route)));
     let shown: Vec<(&Browse, bool, bool)> = BROWSE
         .iter()
-        .map(|b| (b, at(b, Place::Top, placed), at(b, Place::Phone, placed)))
+        .zip(placed_pages(placed))
+        .map(|(b, [top, phone, _])| (b, top, phone))
         .filter(|(_, top, phone)| *top || *phone)
         .collect();
     // An active page with no phone tab lights its stand-in there.
@@ -592,8 +621,9 @@ fn tabs(
 fn footer_links(locale: &Locale, placed: &impl Fn(Feature, Place) -> bool) -> Vec<Link> {
     BROWSE
         .iter()
-        .filter(|b| at(b, Place::Footer, placed))
-        .map(|b| b.dest.link(locale))
+        .zip(placed_pages(placed))
+        .filter(|(_, [.., footer])| *footer)
+        .map(|(b, _)| b.dest.link(locale))
         .collect()
 }
 
@@ -807,6 +837,31 @@ mod tests {
         assert_eq!(on_phone("/prices"), ["/"]);
         assert_eq!(on_phone("/services"), ["/services"]);
         assert_eq!(on_phone("/search"), Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_bar_never_holds_more_features_than_its_room() {
+        // Every feature ticked everywhere, as a state stored before the rule.
+        let rows = placed_pages(&|_, _| true);
+        let features = |i: usize| {
+            BROWSE
+                .iter()
+                .zip(&rows)
+                .filter(|(b, row)| b.feature.is_some() && row.get(i).copied().unwrap_or(false))
+                .count()
+        };
+        for (i, place) in Place::ALL.into_iter().enumerate() {
+            match place.room() {
+                Some(room) => assert_eq!(features(i), room, "{}", place.code()),
+                None => assert_eq!(features(i), 5, "the footer holds every page"),
+            }
+        }
+        // Home and the services are always on both bars and in the footer.
+        for (b, row) in BROWSE.iter().zip(&rows) {
+            if b.feature.is_none() {
+                assert_eq!(*row, [true; 3], "{}", b.dest.route);
+            }
+        }
     }
 
     #[test]

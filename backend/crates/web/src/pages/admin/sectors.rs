@@ -8,7 +8,6 @@
 use application::usecases::admin_usecase::HistoryOf;
 use axum::{extract::State, response::Response};
 use domain::{Error, ErrorCode};
-use serde::Deserialize;
 
 use crate::{
     app_state::AppState,
@@ -18,8 +17,8 @@ use crate::{
     pages::{
         admin::{
             catalogue_tabs,
-            coded::{self, CodedForm, CodedPages, CodedWordKeys, ListView, StatusForm},
-            url, CatalogueTab,
+            coded::{self, CodedForm, CodedPages, CodedWordKeys, ListQuery, ListView, StatusForm},
+            url, CatalogueTab, ListPosition,
         },
         see_other,
     },
@@ -33,8 +32,6 @@ pub const PAGES: CodedPages = CodedPages {
     create_route: "admin_sectors",
     entry_route: "admin_sector",
     status_route: "admin_sector_status",
-    related_route: "admin_commodities",
-    related_icon: "fa-leaf",
     icon: "fa-layer-group",
     not_found: ErrorCode::SectorNotFound,
     words: CodedWordKeys {
@@ -42,14 +39,12 @@ pub const PAGES: CodedPages = CodedPages {
         sub: "admin_sectors.sub",
         add: "admin_sectors.add",
         none: "admin_sectors.none",
-        hide: "admin_sectors.hide",
         hide_title: "admin_sectors.hide_title",
         what: "admin_sectors.what",
         on: "admin_sectors.on",
         off: "admin_sectors.off",
         name: "admin_sectors.name",
         name_placeholder: "admin_sectors.name_placeholder",
-        related: "admin_sectors.commodities",
         created: "admin_sectors.created",
         hidden: "admin_sectors.hidden",
         shown: "admin_sectors.shown",
@@ -62,17 +57,6 @@ pub const PAGES: CodedPages = CodedPages {
     hide_action: "hide_sector",
 };
 
-#[derive(Debug, Default, Deserialize)]
-#[serde(default)]
-pub struct ListQuery {
-    /// The sector whose hide confirmation is open.
-    pub hide: String,
-    /// The words searched.
-    pub q: String,
-    /// Shown / hidden.
-    pub state: String,
-}
-
 /// GET /admin/sectors
 pub async fn list(
     Viewer(viewer): Viewer,
@@ -83,7 +67,7 @@ pub async fn list(
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
-    let view = ListView::asked(&q.hide, flash.0).narrowed(q.q, q.state);
+    let view = ListView::asked(&q, flash.0);
     let mut response = coded::list_page(&PAGES, &state, &actor, view).await?;
     flash.clear_on(&mut response);
     Ok(response)
@@ -101,32 +85,24 @@ pub async fn create(
     coded::create(&PAGES, &state, &actor, form).await
 }
 
-/// GET /admin/sectors/{id}
-pub async fn show(
-    Viewer(viewer): Viewer,
-    flash: TakeFlash,
-    State(state): State<AppState>,
-    ApiPath(raw_id): ApiPath<String>,
-) -> Result<Response, Error> {
-    let Some(actor) = viewer else {
-        return see_other(&url("login", &[])?);
-    };
-    let mut response = coded::show(&PAGES, &state, &actor, &raw_id, flash.0).await?;
-    flash.clear_on(&mut response);
-    Ok(response)
+/// GET /admin/sectors/{id}: the sector's edit sheet on the list.
+pub async fn show(ApiPath(raw_id): ApiPath<String>) -> Result<Response, Error> {
+    coded::show(&PAGES, &raw_id)
 }
 
-/// POST /admin/sectors/{id}
+/// POST /admin/sectors/{id}: its edit sheet, back on the list position
+/// of its query.
 pub async fn update(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
     ApiPath(raw_id): ApiPath<String>,
+    ApiQuery(from): ApiQuery<ListPosition>,
     ApiForm(form): ApiForm<CodedForm>,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);
     };
-    coded::update(&PAGES, &state, &actor, &raw_id, form).await
+    coded::update(&PAGES, &state, &actor, &raw_id, from, form).await
 }
 
 /// POST /admin/sectors/{id}/status

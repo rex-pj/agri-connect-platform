@@ -274,7 +274,6 @@ pub fn menu_href(actor: &Actor, route: &str) -> Option<String> {
 /// entry leads to its first tab, the sectors.
 const MENU_OWNERS: &[(&str, &str)] = &[
     ("admin_crops", "admin_prices"),
-    ("admin_alert_kinds", "admin_alerts"),
     ("admin_commodities", "admin_sectors"),
     ("admin_categories", "admin_sectors"),
 ];
@@ -368,13 +367,13 @@ pub fn catalogue_tabs(state: &AppState, current: CatalogueTab) -> Result<Vec<Adm
         .collect())
 }
 
-/// The admin page of the sector `code` names; none for every sector.
+/// The edit sheet of the sector `code` names; none for every sector.
 pub fn sector_href(
     sectors: &[application::outputs::CodedDto],
     code: Option<&str>,
 ) -> Result<Option<String>, Error> {
     code.and_then(|c| sectors.iter().find(|s| s.code == c))
-        .map(|s| url("admin_sector", &[("id", &s.id.to_string())]))
+        .map(|s| ListPosition::default().edit_href("admin_sectors", &[], s.id))
         .transpose()
 }
 
@@ -926,12 +925,14 @@ impl ListReturn {
     }
 }
 
-/// The row confirmation a list's query asks for (`?hide={id}` /
-/// `?delete={id}`); anything not a number asks for none.
+/// The row confirmation or edit sheet a list's query asks for
+/// (`?hide={id}` / `?delete={id}` / `?edit={id}`); anything not a number
+/// asks for none.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Asked {
     pub hide: Option<i32>,
     pub delete: Option<i32>,
+    pub edit: Option<i32>,
 }
 
 impl Asked {
@@ -939,7 +940,60 @@ impl Asked {
         Self {
             hide: parse_opt(hide),
             delete: parse_opt(delete),
+            edit: None,
         }
+    }
+
+    /// The same, with the record whose edit sheet is open.
+    pub fn editing(self, edit: &str) -> Self {
+        Self {
+            edit: parse_opt(edit),
+            ..self
+        }
+    }
+}
+
+/// The id of a list's edit sheet: the anchor `?edit={id}` lands on, so
+/// without JS the browser scrolls to it.
+pub const EDIT_SHEET: &str = "sua";
+
+/// A short record edited in a sheet over its list (a sector, a service
+/// type, an area preset, an alert): it has too little to show to need a
+/// page of its own. `?edit={id}` renders the list with it open; its form
+/// posts to the record's address with the list position in the query
+/// (`ListPosition::record_href`), so saving lands back on the same view
+/// and a refusal re-opens the sheet there with its messages.
+#[derive(Serialize)]
+pub struct EditSheet<R, F> {
+    pub record: R,
+    pub form: F,
+    pub errors: FormErrors,
+    pub action: String,
+    /// Its latest changes (empty for a record kept without a history).
+    pub history: Vec<HistoryRow>,
+}
+
+/// A refused edit: the boxes as typed and their messages.
+pub type Typed<F> = Option<(F, FormErrors)>;
+
+impl<R, F> EditSheet<R, F> {
+    /// The sheet with the stored values, or the typed ones after a refusal.
+    pub fn new(record: R, typed: Typed<F>, stored: impl FnOnce(&R) -> F, action: String) -> Self {
+        let (form, errors) = match typed {
+            Some(typed) => typed,
+            None => (stored(&record), FormErrors::default()),
+        };
+        Self {
+            record,
+            form,
+            errors,
+            action,
+            history: Vec::new(),
+        }
+    }
+
+    pub fn with_history(self, history: Vec<HistoryRow>) -> Self {
+        Self { history, ..self }
     }
 }
 
@@ -1092,6 +1146,15 @@ impl ListPosition {
             &url(route, &[("id", &id.to_string())])?,
             &params,
         ))
+    }
+
+    /// The list at `route` (with `extra`, e.g. its tab) with record `id`'s
+    /// edit sheet open (`EditSheet`).
+    pub fn edit_href(&self, route: &str, extra: &[(&str, &str)], id: i32) -> Result<String, Error> {
+        let id = id.to_string();
+        let mut params = extra.to_vec();
+        params.push(("edit", &id));
+        Ok(format!("{}#{EDIT_SHEET}", self.href(route, &params)?))
     }
 
     /// Page 1 of the whole list: no position worth keeping.

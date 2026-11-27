@@ -63,7 +63,7 @@ async fn the_price_board_is_one_entry_with_its_produce_on_a_tab() {
     // Each price leads to its crop and its area.
     let prices = page(&e, "/admin/prices", &admin).await;
     assert!(prices.contains(&format!(r#"href="/admin/crops/{st25}""#)));
-    assert!(prices.contains(r#"href="/admin/locations/"#));
+    assert!(prices.contains(r#"href="/admin/locations?edit="#));
     assert!(prices.contains(r#"href="/admin/prices?tab=crops""#));
     assert!(
         !prices.contains(r#"href="/admin/crops""#),
@@ -145,7 +145,12 @@ async fn a_commodity_page_gathers_its_crops_and_supplies() {
         "SELECT id::text AS v FROM supply_types WHERE slug = 'giong'",
     )
     .await;
-    let typed = page(&e, &format!("/admin/categories/{seed}"), &admin).await;
+    let typed = page(
+        &e,
+        &format!("/admin/categories?type=product&edit={seed}"),
+        &admin,
+    )
+    .await;
     assert!(typed.contains(&format!("/admin/supplies?category_id={seed}")));
     let of_type = page(&e, &format!("/admin/supplies?category_id={seed}"), &admin).await;
     assert!(of_type.contains("Tôm thẻ giống PL12") && !of_type.contains("Phân NPK"));

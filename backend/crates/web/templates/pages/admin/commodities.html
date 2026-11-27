@@ -11,12 +11,16 @@
 {% import "molecules/sheet_header.html" as sheet_head %}
 {% import "organisms/commodity_fields.html" as fields %}
 {% import "organisms/confirm_sheet.html" as confirm %}
+{% import "organisms/edit_sheet.html" as edit_sheet %}
 {#- `page.body` is web::pages::admin::commodities::CommoditiesPage: a page of
     every commodity (hidden ones too, `b.pagination` under it) and the create
     sheet opened by the header's "add" (an anchored section without JS), which comes back open with its messages when a rule
     is broken. "Ẩn" reloads the list with that row's confirmation open
-    (`b.confirm`, in its own `dialog` scope). Row actions send `back=list`
-    and the page (`b.keep`) so they land here again. -#}
+    (`b.confirm`, in its own `dialog` scope), "Sửa" with its edit sheet open
+    (`b.edit`, web::pages::admin::EditSheet), which posts back to this list
+    position; the name and "Mở" lead to its page (its crops, its supplies).
+    Row actions send `back=list` and the page (`b.keep`) so they land here
+    again. -#}
 {% block title %}{{ t(key="admin_menu.commodities") }} | {{ site.name }} Admin{% endblock title %}
 {% block vendor %}{{ field::searchable_select_assets() }}{% endblock vendor %}
 {% block content %}
@@ -27,6 +31,8 @@
   {{ tabs::admin_tabs(tabs=b.tabs, label=t(key="admin_menu.catalogue")) }}
   {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.commodities"), chips=b.states, chips_label=t(key="admin_state.label")) }}
   {{ search::admin_results(s=b.search, total=b.total) }}
+  {% if b.flash == "commodity_created" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin_commodities.created")) }}{% endif %}
+  {% if b.flash == "commodity_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.saved")) }}{% endif %}
   {% if b.flash == "commodity_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin_commodities.hidden")) }}{% endif %}
   {% if b.flash == "commodity_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin_commodities.shown")) }}{% endif %}
 
@@ -52,6 +58,7 @@
                 {% else %}
                 {{ row::show(action=r.status_action, name=c.name, field="is_active", keep=b.keep) }}
                 {% endif %}
+                {{ row::edit(href=r.edit_href, name=c.name) }}
                 {{ row::open(href=r.href, name=c.name) }}
               </div>
             </td>
@@ -69,6 +76,24 @@
   {% set c = b.confirm %}
   <div x-data="dialog" data-open="true" x-on:keydown.escape.window="hide">
     {{ confirm::confirm_sheet(id="xac-nhan", title=t(key="admin_commodities.hide_title", name=c.name), icon="fa-eye-slash", action=c.action, button=t(key="admin.confirm_hide"), reason_max=limits.audit_reason_max, effect="hide", what=t(key="admin_commodities.what"), hidden_name="is_active", hidden_value="false", keep=b.keep) }}
+  </div>
+  {% endif %}
+
+  {% if b.edit %}
+  {% set e = b.edit %}
+  {% set c = e.record %}
+  <div x-data="dialog" data-open="true" data-drop="edit" x-on:keydown.escape.window="hide">
+    <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
+    <section class="contact-sheet" id="sua" aria-labelledby="sua-title" :class="sheetClass">
+      {{ sheet_head::sheet_header(id="sua", title=c.name, icon="fa-pen") }}
+      {% if c.is_active %}{% set said = t(key="admin_commodities.on") %}{% else %}{% set said = t(key="admin_commodities.off") %}{% endif %}
+      {{ edit_sheet::state(on=c.is_active, text=said, demo=c.is_demo) }}
+      <form class="contact-sheet__form" method="post" action="{{ e.action }}" novalidate>
+        {% if e.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=e.errors.message) }}{% endif %}
+        {{ fields::commodity_fields(form=e.form, errors=e.errors, sectors=b.sectors, name_max=limits.commodity_name_max, prefix="edit", first=true) }}
+        <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button>
+      </form>
+    </section>
   </div>
   {% endif %}
 

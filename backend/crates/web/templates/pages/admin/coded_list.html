@@ -10,14 +10,18 @@
 {% import "molecules/sheet_header.html" as sheet_head %}
 {% import "organisms/coded_fields.html" as fields %}
 {% import "organisms/confirm_sheet.html" as confirm %}
+{% import "organisms/edit_sheet.html" as edit_sheet %}
+{% import "molecules/history_list.html" as history %}
 {#- A coded list (the sectors; the alert kinds, a tab of the alerts page).
     `page.body` is web::pages::admin::coded::CodedListPage: every entry
     (hidden ones too), its words, the page's tabs when it is one, and the
     create sheet opened by the header's "add" (an anchored section without
     JS), which comes back open with its messages when a rule is broken.
     Hiding reloads the list with that row's confirmation open (`b.confirm`,
-    in its own `dialog` scope). Row actions send `back=list` (`b.keep`) so
-    they land here again. -#}
+    in its own `dialog` scope), editing with its edit sheet open (`b.edit`,
+    web::pages::admin::EditSheet: its state, the boxes, its code, its
+    history), which posts back to this list position. Row actions send the
+    position (`b.keep`) so they land here again. -#}
 {% block title %}{{ page.body.words.title }} | {{ site.name }} Admin{% endblock title %}
 {% block vendor %}{{ field::searchable_select_assets() }}{% endblock vendor %}
 {% block content %}
@@ -40,7 +44,7 @@
           {% for r in b.rows %}
           {% set s = r.entry %}
           <tr{% if not s.is_active %} class="table-light text-body-secondary"{% endif %}>
-            <td data-label="">{{ atoms::icon(name=r.icon, class="text-success me-2") }}<a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ s.name }}</a>{% if s.is_demo %} {{ status::demo() }}{% endif %}</td>
+            <td data-label="">{{ atoms::icon(name=r.icon, class="text-success me-2") }}<a class="fw-bold text-decoration-none" href="{{ r.edit_href }}">{{ s.name }}</a>{% if s.is_demo %} {{ status::demo() }}{% endif %}</td>
             <td data-label="{{ t(key="coded_form.code") }}"><code>{{ s.code }}</code></td>
             <td data-label="{{ t(key="form.display_order") }}" class="text-center">{{ s.display_order }}</td>
             <td data-label="{{ t(key="admin.col_status") }}" class="text-center cell-state">{{ status::visibility(on=s.is_active) }}</td>
@@ -51,7 +55,7 @@
                 {% else %}
                 {{ row::show(action=r.status_action, name=s.name, field="is_active", keep=b.keep) }}
                 {% endif %}
-                {{ row::open(href=r.href, name=s.name) }}
+                {{ row::edit(href=r.edit_href, name=s.name) }}
               </div>
             </td>
           </tr>
@@ -67,6 +71,26 @@
   {% set c = b.confirm %}
   <div x-data="dialog" data-open="true" x-on:keydown.escape.window="hide">
     {{ confirm::confirm_sheet(id="xac-nhan", title=b.confirm_title, icon="fa-eye-slash", action=c.action, button=t(key="admin.confirm_hide"), reason_max=limits.audit_reason_max, effect="hide", what=w.what, hidden_name="is_active", hidden_value="false", keep=b.keep) }}
+  </div>
+  {% endif %}
+
+  {% if b.edit %}
+  {% set e = b.edit %}
+  {% set s = e.record %}
+  <div x-data="dialog" data-open="true" data-drop="edit" x-on:keydown.escape.window="hide">
+    <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
+    <section class="contact-sheet" id="sua" aria-labelledby="sua-title" :class="sheetClass">
+      {{ sheet_head::sheet_header(id="sua", title=s.name, icon="fa-pen") }}
+      {% if s.is_active %}{% set said = w.on %}{% else %}{% set said = w.off %}{% endif %}
+      {{ edit_sheet::state(on=s.is_active, text=said, demo=s.is_demo, history=e.history, hide_action=b.hide_action) }}
+      <form class="contact-sheet__form" method="post" action="{{ e.action }}" novalidate>
+        {% if e.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=e.errors.message) }}{% endif %}
+        {{ fields::coded_fields(form=e.form, errors=e.errors, words=w, name_max=limits.coded_name_max, prefix="edit", first=true) }}
+        <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button>
+      </form>
+      <p class="edit-sheet__facts">{{ t(key="coded_form.code") }}: <code>{{ s.code }}</code> · {{ t(key="coded_form.code_kept") }}</p>
+      {{ history::history_list(rows=e.history, fold=true) }}
+    </section>
   </div>
   {% endif %}
 

@@ -16,6 +16,7 @@ use application::{
 };
 use axum::{extract::State, http::StatusCode, response::Response};
 use domain::{
+    constants::CATEGORY_TYPE_SERVICE,
     models::{
         admin_list::{AdminSort, LISTING_LIST_STATES},
         business::ListingRef,
@@ -174,9 +175,9 @@ async fn list_page(
             href: position.record_href("admin_service", service.id)?,
             sector_label: sector_label(state, &sectors, service.sector.as_deref()),
             sector_href: sector_href(&sectors, service.sector.as_deref())?,
-            category_href: url(
-                "admin_category",
-                &[("id", &service.category_id.to_string())],
+            category_href: super::categories::edit_href(
+                CATEGORY_TYPE_SERVICE,
+                service.category_id,
             )?,
             hide_href: position.href("admin_services", &[("hide", &id)])?,
             delete_href: position.href("admin_services", &[("delete", &id)])?,
@@ -464,10 +465,7 @@ async fn service_page(
         limits: &LIMITS,
         update_action: back.record_href("admin_service", id)?,
         max_upload_mb: max_upload_mb(state),
-        category_href: url(
-            "admin_category",
-            &[("id", &service.category_id.to_string())],
-        )?,
+        category_href: super::categories::edit_href(CATEGORY_TYPE_SERVICE, service.category_id)?,
         provider_href: url("admin_provider", &[("id", &business)])?,
         service,
         flash: outcome.flash,

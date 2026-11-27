@@ -272,7 +272,8 @@ async fn an_alert_reaches_the_home_page_while_on() {
     )
     .await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
-    let alert_page = res.headers()[header::LOCATION].to_str().unwrap().to_owned();
+    assert_eq!(res.headers()[header::LOCATION], "/admin/alerts");
+    let alert_page = scalar(&e, "SELECT '/admin/alerts/' || max(id) AS v FROM alerts").await;
 
     assert!(page(&e, "/", None).await.contains("Dịch tả heo châu Phi"));
     assert!(
@@ -344,12 +345,23 @@ async fn the_sectors_are_data_the_admin_keeps() {
         "SELECT id::text AS v FROM sectors WHERE code = 'lam-nghiep'",
     )
     .await;
-    // Its list and its own page.
+    // Its list, and its edit sheet over it (its former page moved there).
     let list = page(&e, "/admin/sectors", Some(&admin)).await;
     assert!(list.contains("Lâm nghiệp") && list.contains("lam-nghiep"));
-    assert!(page(&e, &format!("/admin/sectors/{id}"), Some(&admin))
-        .await
-        .contains("lam-nghiep"));
+    assert!(list.contains(&format!(r#"href="/admin/sectors?edit={id}#sua""#)));
+    let res = send(
+        &e.router,
+        get_page(&format!("/admin/sectors/{id}"), Some(&admin)),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::MOVED_PERMANENTLY);
+    assert_eq!(
+        res.headers()[header::LOCATION],
+        format!("/admin/sectors?edit={id}#sua").as_str()
+    );
+    let sheet = page(&e, &format!("/admin/sectors?edit={id}"), Some(&admin)).await;
+    assert!(sheet.contains(r#"id="sua""#) && sheet.contains("<code>lam-nghiep</code>"));
+    assert!(sheet.contains(r#"value="Lâm nghiệp""#));
     let services = page(&e, "/services", None).await;
     assert!(
         services.contains(r#"value="lam-nghiep""#),
@@ -409,6 +421,21 @@ async fn the_sectors_are_data_the_admin_keeps() {
     .await;
     assert_ne!(res.status(), StatusCode::SEE_OTHER);
     assert!(body_text(res).await.contains("Đã có ngành trùng tên."));
+    // Renamed onto a taken name from its sheet: the sheet comes back open,
+    // the name as typed, on the list position it was opened from.
+    let res = send(
+        &e.router,
+        post_form(
+            &format!("/admin/sectors/{id}?q=l%C3%A2m"),
+            &[("name", "Chăn nuôi"), ("display_order", "4")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    let html = body_text(res).await;
+    assert!(html.contains("Đã có ngành trùng tên.") && html.contains(r#"value="Chăn nuôi""#));
+    assert!(html.contains(&format!(r#"action="/admin/sectors/{id}?q=l%C3%A2m""#)));
 
     // Hidden: gone from the switch and the filters; its commodity stays in it.
     let res = send(

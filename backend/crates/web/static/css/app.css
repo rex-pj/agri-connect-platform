@@ -2772,6 +2772,36 @@ body:has(.app-nav__search-row.open) .app-main {
   flex-direction: column;
   gap: 16px;
 }
+/* An edit sheet over a list (organisms/edit_sheet): the record's state
+   above its form, its few read-only details and its folded history below. */
+.edit-sheet__state {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 16px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--p50);
+}
+.edit-sheet__facts {
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.history-fold {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.history-fold > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--p800);
+  font-weight: 700;
+  cursor: pointer;
+}
 /* What a confirmation will do (organisms/confirm_sheet); red when it cannot
    be undone. */
 .confirm-note {

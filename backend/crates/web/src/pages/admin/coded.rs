@@ -1,16 +1,16 @@
 //! The admin pages of the short lists kept by code (`CodedUseCase`): the
 //! sectors (`/admin/sectors`, its own menu entry) and the alert kinds (the
 //! alerts page's second tab, `/admin/alerts?tab=kinds`). One list with a
-//! create sheet, one entry's page with its edit form and visibility; each
-//! list says where its pages are and its words (`CodedPages`), the
-//! templates are shared (`pages/admin/coded_list.html`,
-//! `coded_entry.html`, `organisms/coded_fields.html`).
+//! create sheet and an edit sheet (`EditSheet`: an entry has a name, an
+//! icon and an order, too little for a page of its own); each list says
+//! where its pages are and its words (`CodedPages`), the templates are
+//! shared (`pages/admin/coded_list.html`, `organisms/coded_fields.html`).
+//! An entry's former address (`/admin/sectors/{id}`) opens its sheet.
 //!
 //! An entry is never deleted (other rows name it by its code): it is
 //! hidden. Hiding asks for confirmation and a reason (a dialog with JS, the
 //! same form on the page without); showing again is one button. The list's
-//! rows carry both (`?hide={id}` opens the confirmation there); sent with
-//! `back=list`, they land back on the list.
+//! rows carry both (`?hide={id}` opens the confirmation there).
 
 use application::{
     authz::Actor,
@@ -32,12 +32,11 @@ use crate::{
     labels::SECTOR_ICON_DEFAULT,
     pages::{
         admin::{
-            history_rows, render_admin, url, AdminTab, Asked, Badge, Confirm, HistoryRow,
-            ListPosition, ListReturn, Outcome, RecordAction, RecordHeader, RowConfirm, Says,
-            SearchBox, Toggle, BACK_TO_LIST,
+            history_rows, render_admin, url, AdminTab, Asked, EditSheet, ListPosition, ListReturn,
+            RowConfirm, SearchBox, Typed,
         },
         forms::{reason, whole_number, FormErrors},
-        parse_id, see_other,
+        moved_permanently, parse_id,
     },
 };
 
@@ -48,7 +47,6 @@ pub struct CodedWordKeys {
     pub sub: &'static str,
     pub add: &'static str,
     pub none: &'static str,
-    pub hide: &'static str,
     /// With `{name}`.
     pub hide_title: &'static str,
     pub what: &'static str,
@@ -56,8 +54,6 @@ pub struct CodedWordKeys {
     pub off: &'static str,
     pub name: &'static str,
     pub name_placeholder: &'static str,
-    /// The entry page's way to what is filed under the list.
-    pub related: &'static str,
     pub created: &'static str,
     pub hidden: &'static str,
     pub shown: &'static str,
@@ -75,11 +71,9 @@ pub struct CodedPages {
     /// The tabs of the page the list is on, when it is a tab.
     pub tabs: Option<PageTabs>,
     pub create_route: &'static str,
+    /// An entry's address: its edit sheet posts there.
     pub entry_route: &'static str,
     pub status_route: &'static str,
-    /// The entry page's header action (what is filed under the list).
-    pub related_route: &'static str,
-    pub related_icon: &'static str,
     pub icon: &'static str,
     pub not_found: ErrorCode,
     pub words: CodedWordKeys,
@@ -100,13 +94,11 @@ pub struct CodedWords {
     pub sub: String,
     pub add: String,
     pub none: String,
-    pub hide: String,
     pub what: String,
     pub on: String,
     pub off: String,
     pub name: String,
     pub name_placeholder: String,
-    pub related: String,
 }
 
 impl CodedPages {
@@ -122,13 +114,11 @@ impl CodedPages {
             sub: l.text_with(w.sub, &[("count", &count)]),
             add: l.text(w.add),
             none: l.text(w.none),
-            hide: l.text(w.hide),
             what: l.text(w.what),
             on: l.text(w.on),
             off: l.text(w.off),
             name: l.text(w.name),
             name_placeholder: l.text(w.name_placeholder),
-            related: l.text(w.related),
         }
     }
 
@@ -150,21 +140,13 @@ impl CodedPages {
         Some(state.locale().text(key))
     }
 
-    fn position(&self) -> ListPosition {
+    /// The list's position: its tab, and what a form or an address carried.
+    fn position(&self, from: ListPosition) -> ListPosition {
         ListPosition {
             tab: self.list_tab.to_owned(),
-            ..ListPosition::default()
+            ..from
         }
-    }
-
-    fn list_href(&self) -> Result<String, Error> {
-        self.position().href(self.list_route, &[])
-    }
-
-    fn redirect_to(&self, id: i32, flash: Flash) -> Result<Response, Error> {
-        let mut response = see_other(&url(self.entry_route, &[("id", &id.to_string())])?)?;
-        flash.set_on(&mut response);
-        Ok(response)
+        .checked(LISTING_LIST_STATES, &[])
     }
 }
 
@@ -207,7 +189,8 @@ pub struct CodedRow {
     pub entry: CodedDto,
     /// Its icon, or the one an entry without its own shows.
     pub icon: String,
-    pub href: String,
+    /// The list again with its edit sheet open.
+    pub edit_href: String,
     pub status_action: String,
     pub hide_href: String,
 }
@@ -223,6 +206,9 @@ pub struct CodedListPage {
     pub create_action: String,
     pub confirm: Option<RowConfirm>,
     pub confirm_title: String,
+    /// The entry whose edit sheet is open.
+    pub edit: Option<EditSheet<CodedDto, CodedForm>>,
+    pub hide_action: &'static str,
     pub keep: ListReturn,
     pub flash_text: Option<String>,
     pub search: SearchBox,
@@ -230,38 +216,52 @@ pub struct CodedListPage {
     pub states: Vec<AdminTab>,
 }
 
-/// What a list render starts from: the form as typed, its errors, the row
-/// asked about, the flash.
+/// What a list render starts from: where it is, the create form as typed
+/// and its errors, the row asked about (and its edit as typed after a
+/// refusal), the flash.
 pub struct ListView {
-    /// The words searched.
-    pub q: String,
-    /// Shown / hidden.
-    pub state: String,
+    /// The words searched, shown / hidden.
+    pub position: ListPosition,
     pub form: CodedForm,
     pub errors: FormErrors,
     pub asked: Asked,
+    pub typed: Typed<CodedForm>,
     pub flash: Option<Flash>,
     pub status: StatusCode,
 }
 
 impl ListView {
-    /// The list narrowed to the entries with `q`, shown or hidden.
-    pub fn narrowed(self, q: String, state: String) -> Self {
-        Self { q, state, ..self }
-    }
-
-    /// The list as first shown, maybe with a row's hide confirmation open.
-    pub fn asked(hide: &str, flash: Option<Flash>) -> Self {
+    /// The list as an address asks for it: narrowed to the entries with
+    /// `q`, shown or hidden, maybe a row's confirmation or edit sheet open.
+    pub fn asked(q: &ListQuery, flash: Option<Flash>) -> Self {
         Self {
-            q: String::new(),
-            state: String::new(),
+            position: ListPosition {
+                q: q.q.clone(),
+                state: q.state.clone(),
+                ..ListPosition::default()
+            },
             form: CodedForm::default(),
             errors: FormErrors::default(),
-            asked: Asked::new(hide, ""),
+            asked: Asked::new(&q.hide, "").editing(&q.edit),
+            typed: None,
             flash,
             status: StatusCode::OK,
         }
     }
+}
+
+/// A list's query.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct ListQuery {
+    /// The entry whose hide confirmation is open.
+    pub hide: String,
+    /// The entry whose edit sheet is open.
+    pub edit: String,
+    /// The words searched.
+    pub q: String,
+    /// Shown / hidden.
+    pub state: String,
 }
 
 pub async fn list_page(
@@ -272,13 +272,12 @@ pub async fn list_page(
 ) -> Result<Response, Error> {
     let entries = pages.uc(state).list(actor).await?;
     let total = entries.len();
-    let position = ListPosition {
-        q: view.q.clone(),
-        state: view.state.clone(),
-        ..pages.position()
-    }
-    .checked(LISTING_LIST_STATES, &[]);
+    let position = pages.position(view.position);
     let search = position.search_box(pages.list_route)?;
+    let edit = match view.asked.edit {
+        Some(id) => Some(edit_sheet(pages, state, actor, &position, id, view.typed).await?),
+        None => None,
+    };
     let entries: Vec<CodedDto> = match position.search() {
         Some(q) => entries
             .into_iter()
@@ -307,7 +306,7 @@ pub async fn list_page(
         }
         rows.push(CodedRow {
             icon: icon_of(&entry),
-            href: url(pages.entry_route, &[("id", &id)])?,
+            edit_href: position.edit_href(pages.list_route, &[], entry.id)?,
             status_action,
             hide_href: position.href(pages.list_route, &[("hide", &id)])?,
             entry,
@@ -331,6 +330,8 @@ pub async fn list_page(
             .map(|c| pages.hide_title(state, &c.name))
             .unwrap_or_default(),
         confirm,
+        edit,
+        hide_action: pages.hide_action,
         keep: ListReturn::new(position),
         flash_text: pages.flash_text(state, view.flash),
         search,
@@ -345,7 +346,29 @@ pub async fn list_page(
     )
 }
 
-/// POST of the create sheet.
+/// The edit sheet of entry `id`, posting back to this list position.
+async fn edit_sheet(
+    pages: &CodedPages,
+    state: &AppState,
+    actor: &Actor,
+    position: &ListPosition,
+    id: i32,
+    typed: Typed<CodedForm>,
+) -> Result<EditSheet<CodedDto, CodedForm>, Error> {
+    let (entry, history) = tokio::try_join!(
+        pages.uc(state).get(actor, id),
+        history_rows(state, actor, (pages.history)(id)),
+    )?;
+    Ok(EditSheet::new(
+        entry,
+        typed,
+        CodedForm::from_dto,
+        position.record_href(pages.entry_route, id)?,
+    )
+    .with_history(history))
+}
+
+/// POST of the create sheet: back on the list.
 pub async fn create(
     pages: &CodedPages,
     state: &AppState,
@@ -358,14 +381,16 @@ pub async fn create(
     }
     .await;
     match result {
-        Ok(id) => pages.redirect_to(id, pages.created),
+        Ok(_) => pages
+            .position(ListPosition::default())
+            .back_to(pages.list_route, pages.created),
         Err(err) if super::is_refusal(&err) => {
             let view = ListView {
-                q: String::new(),
-                state: String::new(),
+                position: ListPosition::default(),
                 errors: FormErrors::from_error(state, &err),
                 form,
                 asked: Asked::default(),
+                typed: None,
                 flash: None,
                 status: err.kind().status(),
             };
@@ -375,110 +400,23 @@ pub async fn create(
     }
 }
 
-#[derive(Serialize)]
-pub struct CodedEntryPage {
-    pub words: CodedWords,
-    pub entry: CodedDto,
-    /// Its name, state and actions (hide / show, what is filed under the
-    /// list), and the confirmation.
-    pub header: RecordHeader,
-    pub confirms: Vec<Confirm>,
-    /// Its latest changes, and the audit code of hiding it.
-    pub history: Vec<HistoryRow>,
-    pub hide_action: &'static str,
-    pub form: CodedForm,
-    pub errors: FormErrors,
-    pub update_action: String,
-    pub flash_text: Option<String>,
-}
-
-async fn entry_page(
-    pages: &CodedPages,
-    state: &AppState,
-    actor: &Actor,
-    id: i32,
-    outcome: Outcome<CodedForm>,
-) -> Result<Response, Error> {
-    let entry = pages.uc(state).get(actor, id).await?;
-    let id_text = id.to_string();
-    let path = url(pages.entry_route, &[("id", &id_text)])?;
-    let words = pages.words(state, 0);
-    // Never deleted (other rows name it): hiding is its one action.
-    let (toggle, hide) = Toggle::visibility(
-        state,
-        entry.is_active,
-        url(pages.status_route, &[("id", &id_text)])?,
-        "an-muc",
-        words.hide.clone(),
-        pages.hide_title(state, &entry.name),
-        Says::Hide(words.what.clone()),
-    )
-    .split();
-    let mut badges = vec![Badge::new("visibility", entry.is_active)];
-    if entry.is_demo {
-        badges.push(Badge::new("demo", true));
-    }
-    let header = RecordHeader {
-        title: entry.name.clone(),
-        icon: icon_of(&entry),
-        sub: None,
-        back_href: pages.list_href()?,
-        back_label: words.title.clone(),
-        badges,
-        actions: vec![
-            toggle,
-            RecordAction::link(
-                words.related.clone(),
-                pages.related_icon,
-                url(pages.related_route, &[])?,
-            ),
-        ],
-        menu: Vec::new(),
-    };
-    let body = CodedEntryPage {
-        header,
-        confirms: hide.into_iter().collect(),
-        history: history_rows(state, actor, (pages.history)(id)).await?,
-        hide_action: pages.hide_action,
-        words,
-        form: outcome.form.unwrap_or_else(|| CodedForm::from_dto(&entry)),
-        entry,
-        errors: outcome.errors,
-        update_action: path.clone(),
-        flash_text: pages.flash_text(state, outcome.flash),
-    };
-    render_admin(
-        state,
-        actor,
-        &path,
-        outcome.status,
-        "pages/admin/coded_entry.html",
-        &body,
-    )
-}
-
-/// GET of an entry's page.
-pub async fn show(
-    pages: &CodedPages,
-    state: &AppState,
-    actor: &Actor,
-    raw_id: &str,
-    flash: Option<Flash>,
-) -> Result<Response, Error> {
+/// GET of an entry's former page: its edit sheet on the list.
+pub fn show(pages: &CodedPages, raw_id: &str) -> Result<Response, Error> {
     let id = parse_id(raw_id, pages.not_found)?;
-    let outcome = Outcome {
-        flash,
-        ..Outcome::default()
-    };
-    entry_page(pages, state, actor, id, outcome).await
+    moved_permanently(&pages.position(ListPosition::default()).edit_href(
+        pages.list_route,
+        &[],
+        id,
+    )?)
 }
 
-/// POST of an entry's edit form.
+/// POST of an entry's edit sheet, from the list position in its query.
 pub async fn update(
     pages: &CodedPages,
     state: &AppState,
     actor: &Actor,
     raw_id: &str,
+    from: ListPosition,
     form: CodedForm,
 ) -> Result<Response, Error> {
     let id = parse_id(raw_id, pages.not_found)?;
@@ -488,10 +426,21 @@ pub async fn update(
     }
     .await;
     match result {
-        Ok(()) => pages.redirect_to(id, pages.saved),
+        Ok(()) => pages.position(from).back_to(pages.list_route, pages.saved),
         Err(err) if super::is_refusal(&err) => {
-            let outcome = Outcome::refused(state, &err, Some(form), false);
-            entry_page(pages, state, actor, id, outcome).await
+            let view = ListView {
+                position: from,
+                form: CodedForm::default(),
+                errors: FormErrors::default(),
+                asked: Asked {
+                    edit: Some(id),
+                    ..Asked::default()
+                },
+                typed: Some((form, FormErrors::from_error(state, &err))),
+                flash: None,
+                status: err.kind().status(),
+            };
+            list_page(pages, state, actor, view).await
         }
         Err(err) => Err(err),
     }
@@ -503,11 +452,12 @@ pub struct StatusForm {
     /// "true" to show, "false" to hide.
     pub is_active: String,
     pub reason: String,
-    /// `list` when sent from the list's row: land back there.
-    pub back: String,
+    /// The list position the row was on (`ListReturn`).
+    pub q: String,
+    pub state: String,
 }
 
-/// POST of hide / show.
+/// POST of hide / show: back on the list.
 pub async fn change_status(
     pages: &CodedPages,
     state: &AppState,
@@ -522,8 +472,11 @@ pub async fn change_status(
         .set_active(actor, id, show, reason(&form.reason))
         .await?;
     let flash = if show { pages.shown } else { pages.hidden };
-    if form.back == BACK_TO_LIST {
-        return pages.position().back_to(pages.list_route, flash);
-    }
-    pages.redirect_to(id, flash)
+    pages
+        .position(ListPosition {
+            q: form.q,
+            state: form.state,
+            ..ListPosition::default()
+        })
+        .back_to(pages.list_route, flash)
 }

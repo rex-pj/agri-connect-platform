@@ -1,11 +1,13 @@
-//! /admin/locations and /admin/locations/{id}: the location presets the
-//! explore page offers ("Đồng Tháp — Cai Lậy", "An Giang — Long Xuyên"), with a
-//! create form, and one preset's edit form, visibility and deletion.
+//! /admin/locations: the location presets the explore page offers ("Đồng
+//! Tháp — Cai Lậy", "An Giang — Long Xuyên"), with a create sheet and a
+//! preset's edit sheet (`EditSheet`, `?edit={id}`: a name, a ward, a point,
+//! no page of its own; its former address `/admin/locations/{id}` opens it).
 //!
 //! Hiding and deleting ask for confirmation and a reason (a dialog with JS,
 //! the same form on the page without); showing again is one button. The
 //! list's rows carry them all (`?hide={id}` / `?delete={id}` open the
-//! confirmation there); sent with `back=list`, they land back on the list.
+//! confirmation there) and land back on the list; a deletion refused (an
+//! area still in use) says why over it.
 //!
 //! "Add several" is a second sheet: a province chosen (`?bulk=p82`, a GET
 //! form that sends itself with JS), its wards as boxes to tick, those a
@@ -35,13 +37,12 @@ use crate::{
     middleware::auth::Viewer,
     pages::{
         admin::{
-            history_rows, is_refusal, render_admin, url, AdminTab, Asked, Badge, Confirm,
-            HistoryRow, ListPosition, ListReturn, Outcome, RecordAction, RecordHeader, RowConfirm,
-            Says, SearchBox, Toggle, BACK_TO_LIST, CATALOGUE_SORTS,
+            history_rows, is_refusal, render_admin, url, AdminTab, Asked, EditSheet, ListPosition,
+            ListReturn, RowConfirm, SearchBox, Typed, CATALOGUE_SORTS,
         },
         forms::{coordinate, reason, whole_number, FormErrors},
         listing::{past_the_end, Pagination},
-        parse_id, see_other,
+        moved_permanently, parse_id, see_other,
     },
 };
 
@@ -83,11 +84,19 @@ impl LocationForm {
 #[derive(Serialize)]
 pub struct LocationRow {
     pub location: AdminLocationDto,
-    pub href: String,
+    /// The list again with its edit sheet open.
+    pub edit_href: String,
     pub status_action: String,
     /// The list again with this row's hide / delete confirmation open.
     pub hide_href: String,
     pub delete_href: String,
+}
+
+/// A preset in its edit sheet, with its point on a map.
+#[derive(Serialize)]
+pub struct EditedLocation {
+    pub location: AdminLocationDto,
+    pub map_href: String,
 }
 
 #[derive(Serialize)]
@@ -101,6 +110,10 @@ pub struct LocationsPage {
     pub errors: FormErrors,
     pub create_action: String,
     pub confirm: Option<RowConfirm>,
+    /// The preset whose edit sheet is open.
+    pub edit: Option<EditSheet<EditedLocation, LocationForm>>,
+    /// Why a deletion was refused (an area still in use).
+    pub refusal: Option<String>,
     pub search: SearchBox,
     /// The hidden fields of every row action: land back here.
     pub keep: ListReturn,
@@ -201,13 +214,16 @@ async fn bulk_sheet(state: &AppState, actor: &Actor, view: BulkView) -> Result<B
 }
 
 /// The list page around the create form; `asked`: the row whose hide or
-/// delete confirmation is open.
+/// delete confirmation or edit sheet is open (`typed` after a refusal),
+/// `refusal`: why a deletion was refused.
 struct ListView {
     /// The list page shown (`?page=`).
     position: ListPosition,
     form: LocationForm,
     errors: FormErrors,
     asked: Asked,
+    typed: Typed<LocationForm>,
+    refusal: Option<String>,
     flash: Option<Flash>,
     status: StatusCode,
     bulk: BulkView,
@@ -219,6 +235,8 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
         form,
         errors,
         asked,
+        typed,
+        refusal,
         flash,
         status,
         bulk,
@@ -247,6 +265,28 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
         page: locations.page.to_string(),
         ..position
     };
+    let edit = match asked.edit {
+        Some(id) => {
+            let (location, history) = tokio::try_join!(
+                state.usecases.admin.get_location_admin(actor, id),
+                history_rows(state, actor, HistoryOf::Location(id)),
+            )?;
+            let edited = EditedLocation {
+                map_href: format!("{MAP_POINT_URL}{},{}", location.lat, location.lng),
+                location,
+            };
+            Some(
+                EditSheet::new(
+                    edited,
+                    typed,
+                    |e: &EditedLocation| LocationForm::from_dto(&e.location),
+                    position.record_href("admin_location", id)?,
+                )
+                .with_history(history),
+            )
+        }
+        None => None,
+    };
     let mut confirm = None;
     let mut rows = Vec::with_capacity(locations.items.len());
     for location in locations.items {
@@ -267,7 +307,7 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
             });
         }
         rows.push(LocationRow {
-            href: url("admin_location", &[("id", &id)])?,
+            edit_href: position.edit_href("admin_locations", &[], location.id)?,
             status_action,
             hide_href: position.href("admin_locations", &[("hide", &id)])?,
             delete_href: position.href("admin_locations", &[("delete", &id)])?,
@@ -297,6 +337,8 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
         errors,
         create_action: path.clone(),
         confirm,
+        edit,
+        refusal,
         keep: ListReturn::new(position),
         flash,
         wards,
@@ -318,6 +360,8 @@ pub struct ListQuery {
     /// The location whose hide / delete confirmation is open.
     pub hide: String,
     pub delete: String,
+    /// The location whose edit sheet is open.
+    pub edit: String,
     pub page: String,
     /// The words searched, shown / hidden.
     pub q: String,
@@ -347,7 +391,9 @@ pub async fn list(
         },
         form: LocationForm::default(),
         errors: FormErrors::default(),
-        asked: Asked::new(&q.hide, &q.delete),
+        asked: Asked::new(&q.hide, &q.delete).editing(&q.edit),
+        typed: None,
+        refusal: None,
         flash: flash.0,
         status: StatusCode::OK,
         bulk: BulkView {
@@ -375,13 +421,15 @@ pub async fn create(
     }
     .await;
     match result {
-        Ok(created) => redirect_to(created.id, Flash::LocationCreated),
+        Ok(_) => ListPosition::default().back_to("admin_locations", Flash::LocationCreated),
         Err(err) if is_refusal(&err) => {
             let view = ListView {
                 position: ListPosition::default(),
                 errors: FormErrors::from_error(&state, &err),
                 form,
                 asked: Asked::default(),
+                typed: None,
+                refusal: None,
                 flash: None,
                 status: err.kind().status(),
                 bulk: BulkView::default(),
@@ -431,6 +479,8 @@ pub async fn create_from_wards(
                 form: LocationForm::default(),
                 errors: FormErrors::default(),
                 asked: Asked::default(),
+                typed: None,
+                refusal: None,
                 flash: None,
                 status: err.kind().status(),
                 bulk: BulkView {
@@ -446,140 +496,19 @@ pub async fn create_from_wards(
     }
 }
 
-#[derive(Serialize)]
-pub struct LocationPage {
-    pub label_max: usize,
-    pub location: AdminLocationDto,
-    /// Its name, state and actions (hide / show; the map and deletion in
-    /// the menu), and the confirmations.
-    pub header: RecordHeader,
-    pub confirms: Vec<Confirm>,
-    /// Its latest changes: who hid or edited it, and why.
-    pub history: Vec<HistoryRow>,
-    pub form: LocationForm,
-    pub errors: FormErrors,
-    pub update_action: String,
-    pub flash: Option<Flash>,
-    /// The wards the form fills itself from, by province.
-    pub wards: Vec<AreaGroupDto>,
-}
-
-const DELETE_SHEET: &str = "xoa-khu-vuc";
-
-async fn location_page(
-    state: &AppState,
-    actor: &Actor,
-    id: i32,
-    outcome: Outcome<LocationForm>,
-) -> Result<Response, Error> {
-    let (location, wards) = tokio::try_join!(
-        state.usecases.admin.get_location_admin(actor, id),
-        state.usecases.admin.location_choices(actor),
-    )?;
-    let locale = state.locale();
-    let id_text = id.to_string();
-    let path = url("admin_location", &[("id", &id_text)])?;
-    let named = |key: &str| locale.text_with(key, &[("name", &location.label)]);
-    let (toggle, hide) = Toggle::visibility(
-        state,
-        location.is_active,
-        url("admin_location_status", &[("id", &id_text)])?,
-        "an-khu-vuc",
-        locale.text("admin.hide_location"),
-        named("admin.hide_location_title"),
-        Says::Note(locale.text("admin.hide_location_note")),
-    )
-    .split();
-    let delete = Confirm::delete(
-        DELETE_SHEET,
-        named("admin.delete_location_title"),
-        "fa-trash",
-        url("admin_location_delete", &[("id", &id_text)])?,
-        locale.text("common.confirm_delete"),
-    )
-    .saying("delete", locale.text("admin.location_what"))
-    .opened(outcome.confirm_open);
-    let mut badges = vec![Badge::new("visibility", location.is_active)];
-    if location.is_demo {
-        badges.push(Badge::new("demo", true));
-    }
-    let header = RecordHeader {
-        title: location.label.clone(),
-        icon: "fa-map-location-dot".to_owned(),
-        sub: Some(format!("{}, {}", location.lat, location.lng)),
-        back_href: url("admin_locations", &[])?,
-        back_label: locale.text("admin_menu.locations"),
-        badges,
-        actions: vec![toggle],
-        menu: vec![
-            RecordAction::link(
-                locale.text("admin.open_map"),
-                "fa-map",
-                format!("{MAP_POINT_URL}{},{}", location.lat, location.lng),
-            ),
-            RecordAction::sheet(
-                locale.text("admin.delete_location"),
-                "fa-trash",
-                DELETE_SHEET,
-                "danger",
-            ),
-        ],
-    };
-    let body = LocationPage {
-        header,
-        confirms: hide.into_iter().chain([delete]).collect(),
-        history: history_rows(state, actor, HistoryOf::Location(id)).await?,
-        label_max: LOCATION_LABEL_MAX,
-        form: outcome
-            .form
-            .unwrap_or_else(|| LocationForm::from_dto(&location)),
-        location,
-        errors: outcome.errors,
-        update_action: path.clone(),
-        flash: outcome.flash,
-        wards,
-    };
-    render_admin(
-        state,
-        actor,
-        &path,
-        outcome.status,
-        "pages/admin/location.html",
-        &body,
-    )
-}
-
-fn redirect_to(id: i32, flash: Flash) -> Result<Response, Error> {
-    let mut response = see_other(&url("admin_location", &[("id", &id.to_string())])?)?;
-    flash.set_on(&mut response);
-    Ok(response)
-}
-
-/// GET /admin/locations/{id}
-pub async fn show(
-    Viewer(viewer): Viewer,
-    flash: TakeFlash,
-    State(state): State<AppState>,
-    ApiPath(raw_id): ApiPath<String>,
-) -> Result<Response, Error> {
-    let Some(actor) = viewer else {
-        return see_other(&url("login", &[])?);
-    };
+/// GET /admin/locations/{id}: the preset's edit sheet on the list.
+pub async fn show(ApiPath(raw_id): ApiPath<String>) -> Result<Response, Error> {
     let id = parse_id(&raw_id, ErrorCode::LocationNotFound)?;
-    let outcome = Outcome {
-        flash: flash.0,
-        ..Outcome::default()
-    };
-    let mut response = location_page(&state, &actor, id, outcome).await?;
-    flash.clear_on(&mut response);
-    Ok(response)
+    moved_permanently(&ListPosition::default().edit_href("admin_locations", &[], id)?)
 }
 
-/// POST /admin/locations/{id}
+/// POST /admin/locations/{id}: its edit sheet, back on the list position
+/// of its query.
 pub async fn update(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
     ApiPath(raw_id): ApiPath<String>,
+    ApiQuery(from): ApiQuery<ListPosition>,
     ApiForm(form): ApiForm<LocationForm>,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
@@ -592,10 +521,23 @@ pub async fn update(
     }
     .await;
     match result {
-        Ok(_) => redirect_to(id, Flash::LocationSaved),
+        Ok(_) => from.back_to("admin_locations", Flash::LocationSaved),
         Err(err) if is_refusal(&err) => {
-            let outcome = Outcome::refused(&state, &err, Some(form), false);
-            location_page(&state, &actor, id, outcome).await
+            let view = ListView {
+                position: from,
+                form: LocationForm::default(),
+                errors: FormErrors::default(),
+                asked: Asked {
+                    edit: Some(id),
+                    ..Asked::default()
+                },
+                typed: Some((form, FormErrors::from_error(&state, &err))),
+                refusal: None,
+                flash: None,
+                status: err.kind().status(),
+                bulk: BulkView::default(),
+            };
+            list_page(&state, &actor, view).await
         }
         Err(err) => Err(err),
     }
@@ -607,8 +549,6 @@ pub struct StatusForm {
     /// "true" to show, "false" to hide.
     pub is_active: String,
     pub reason: String,
-    /// `list` when sent from the list's row: land back there.
-    pub back: String,
     /// The list page the row was on (`ListReturn`).
     pub page: String,
     pub q: String,
@@ -616,7 +556,7 @@ pub struct StatusForm {
     pub sort: String,
 }
 
-/// POST /admin/locations/{id}/status
+/// POST /admin/locations/{id}/status: back on the list.
 pub async fn change_status(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
@@ -638,17 +578,14 @@ pub async fn change_status(
     } else {
         Flash::LocationHidden
     };
-    if form.back == BACK_TO_LIST {
-        let position = ListPosition {
-            page: form.page,
-            q: form.q,
-            state: form.state,
-            sort: form.sort,
-            ..ListPosition::default()
-        };
-        return position.back_to("admin_locations", flash);
+    ListPosition {
+        page: form.page,
+        q: form.q,
+        state: form.state,
+        sort: form.sort,
+        ..ListPosition::default()
     }
-    redirect_to(id, flash)
+    .back_to("admin_locations", flash)
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -679,20 +616,28 @@ pub async fn delete(
         .admin
         .delete_location(&actor, id, reason(&form.reason))
         .await;
+    let position = ListPosition {
+        page: form.page,
+        q: form.q,
+        state: form.state,
+        sort: form.sort,
+        ..ListPosition::default()
+    };
     match result {
-        Ok(()) => {
-            let position = ListPosition {
-                page: form.page,
-                q: form.q,
-                state: form.state,
-                sort: form.sort,
-                ..ListPosition::default()
-            };
-            position.back_to("admin_locations", Flash::LocationDeleted)
-        }
+        Ok(()) => position.back_to("admin_locations", Flash::LocationDeleted),
         Err(err) if is_refusal(&err) => {
-            let outcome = Outcome::refused(&state, &err, None, true);
-            location_page(&state, &actor, id, outcome).await
+            let view = ListView {
+                position,
+                form: LocationForm::default(),
+                errors: FormErrors::default(),
+                asked: Asked::default(),
+                typed: None,
+                refusal: FormErrors::from_error(&state, &err).message,
+                flash: None,
+                status: err.kind().status(),
+                bulk: BulkView::default(),
+            };
+            list_page(&state, &actor, view).await
         }
         Err(err) => Err(err),
     }

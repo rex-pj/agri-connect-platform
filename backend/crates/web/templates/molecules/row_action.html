@@ -56,6 +56,13 @@
 <a class="btn btn-outline-warning row-btn row-btn--aside"href="{{ href }}" aria-label="{{ t(key="row.spam_label", name=name) }}" title="{{ t(key="row.spam_label", name=name) }}">{{ atoms::icon(name="fa-ban") }}<span class="row-btn__label">{{ t(key="row.spam") }}</span></a>
 {%- endmacro spam %}
 
+{#- A short record edited in a sheet over its list (`?edit={id}#sua`,
+    web::pages::admin::EditSheet) instead of a page of its own: in the
+    place of `open`, neutral like it. -#}
+{% macro edit(href, name) -%}
+<a class="btn btn-outline-secondary row-btn row-btn--open" href="{{ href }}" aria-label="{{ t(key="row.edit_label", name=name) }}" title="{{ t(key="row.edit_label", name=name) }}">{{ atoms::icon(name="fa-pen") }}<span class="row-btn__label">{{ t(key="row.edit") }}</span></a>
+{%- endmacro edit %}
+
 {% macro open(href, name) -%}
 <a class="btn btn-outline-secondary row-btn row-btn--open" href="{{ href }}" aria-label="{{ t(key="row.open_label", name=name) }}" title="{{ t(key="row.open_label", name=name) }}">{{ atoms::icon(name="fa-chevron-right") }}<span class="row-btn__label">{{ t(key="row.open") }}</span></a>
 {%- endmacro open %}

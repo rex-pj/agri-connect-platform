@@ -1,6 +1,8 @@
 //! /admin/commodities and /admin/commodities/{id}: what farmers raise (cây /
 //! con: rice, durian, pigs, shrimp), each in one sector, with a create
-//! sheet, and one commodity's edit form and visibility. The price board
+//! sheet and an edit sheet (`EditSheet`, `?edit={id}`), and one
+//! commodity's page: what hangs on it (its crops, its supplies, the board),
+//! its edit form and visibility. The price board
 //! groups its items by them and a supply may say which one it is for. A
 //! commodity is never deleted (its crops and supplies point to it): it is
 //! hidden.
@@ -31,11 +33,11 @@ use crate::{
     pages::{
         admin::{
             catalogue_tabs, crops::CropForm, is_refusal, render_admin, url, AdminTab, Asked,
-            CatalogueTab, ListPosition, ListReturn, Outcome, RowConfirm, SearchBox, BACK_TO_LIST,
-            CATALOGUE_SORTS,
+            CatalogueTab, EditSheet, ListPosition, ListReturn, Outcome, RowConfirm, SearchBox,
+            Typed, BACK_TO_LIST, CATALOGUE_SORTS,
         },
         forms::{reason, whole_number, FormErrors},
-        listing::{past_the_end, Pagination},
+        listing::{past_the_end, with_query, Pagination},
         parse_id, see_other,
     },
 };
@@ -83,6 +85,8 @@ pub struct CommodityRow {
     pub commodity: CommodityDto,
     pub sector_label: String,
     pub href: String,
+    /// The list again with its edit sheet open.
+    pub edit_href: String,
     pub status_action: String,
     pub hide_href: String,
 }
@@ -97,6 +101,8 @@ pub struct CommoditiesPage {
     pub errors: FormErrors,
     pub create_action: String,
     pub confirm: Option<RowConfirm>,
+    /// The commodity whose edit sheet is open.
+    pub edit: Option<EditSheet<CommodityDto, CommodityForm>>,
     pub search: SearchBox,
     pub keep: ListReturn,
     /// Every commodity, for the header's count.
@@ -113,6 +119,8 @@ struct ListView {
     form: CommodityForm,
     errors: FormErrors,
     asked: Asked,
+    /// The edit as typed after a refusal.
+    typed: Typed<CommodityForm>,
     flash: Option<Flash>,
     status: StatusCode,
 }
@@ -142,6 +150,18 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
         page: commodities.page.to_string(),
         ..asked_position
     };
+    let edit = match view.asked.edit {
+        Some(id) => {
+            let commodity = state.usecases.commodity.get(actor, id).await?;
+            Some(EditSheet::new(
+                commodity,
+                view.typed,
+                CommodityForm::from_dto,
+                sheet_action(&position, id)?,
+            ))
+        }
+        None => None,
+    };
     let mut confirm = None;
     let mut rows = Vec::with_capacity(commodities.items.len());
     for commodity in commodities.items {
@@ -157,6 +177,7 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
         rows.push(CommodityRow {
             sector_label: sector_name(&sectors, &commodity.sector),
             href: url("admin_commodity", &[("id", &id)])?,
+            edit_href: position.edit_href("admin_commodities", &[], commodity.id)?,
             status_action,
             hide_href: position.href("admin_commodities", &[("hide", &id)])?,
             commodity,
@@ -194,6 +215,7 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
         errors: view.errors,
         create_action: path.clone(),
         confirm,
+        edit,
         keep: ListReturn::new(position),
         flash: view.flash,
     };
@@ -212,6 +234,8 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
 pub struct ListQuery {
     /// The commodity whose hide confirmation is open.
     pub hide: String,
+    /// The commodity whose edit sheet is open.
+    pub edit: String,
     pub page: String,
     /// The words searched, the sector, shown / hidden.
     pub q: String,
@@ -244,7 +268,8 @@ pub async fn list(
             ..CommodityForm::default()
         },
         errors: FormErrors::default(),
-        asked: Asked::new(&q.hide, ""),
+        asked: Asked::new(&q.hide, "").editing(&q.edit),
+        typed: None,
         flash: flash.0,
         status: StatusCode::OK,
     };
@@ -268,13 +293,14 @@ pub async fn create(
     }
     .await;
     match result {
-        Ok(id) => redirect_to(id, Flash::CommodityCreated),
+        Ok(_) => ListPosition::default().back_to("admin_commodities", Flash::CommodityCreated),
         Err(err) if is_refusal(&err) => {
             let view = ListView {
                 position: ListPosition::default(),
                 errors: FormErrors::from_error(&state, &err),
                 form,
                 asked: Asked::default(),
+                typed: None,
                 flash: None,
                 status: err.kind().status(),
             };
@@ -394,6 +420,25 @@ fn redirect_to(id: i32, flash: Flash) -> Result<Response, Error> {
     Ok(response)
 }
 
+/// Where a commodity's edit sheet posts: its address, with the list
+/// position to land back on (`back=list`).
+fn sheet_action(position: &ListPosition, id: i32) -> Result<String, Error> {
+    let query = position.query();
+    let mut params = vec![("back", BACK_TO_LIST)];
+    params.extend(query.iter().map(|(k, v)| (*k, v.as_str())));
+    Ok(with_query(
+        &url("admin_commodity", &[("id", &id.to_string())])?,
+        &params,
+    ))
+}
+
+/// The query of an edit posted from the list's sheet.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct BackQuery {
+    pub back: String,
+}
+
 /// GET /admin/commodities/{id}
 pub async fn show(
     Viewer(viewer): Viewer,
@@ -414,11 +459,14 @@ pub async fn show(
     Ok(response)
 }
 
-/// POST /admin/commodities/{id}
+/// POST /admin/commodities/{id}: from its page, back there; from the
+/// list's edit sheet (`back=list`), back on that list position.
 pub async fn update(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
     ApiPath(raw_id): ApiPath<String>,
+    ApiQuery(back): ApiQuery<BackQuery>,
+    ApiQuery(from): ApiQuery<ListPosition>,
     ApiForm(form): ApiForm<CommodityForm>,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
@@ -431,7 +479,25 @@ pub async fn update(
     }
     .await;
     match result {
+        Ok(()) if back.back == BACK_TO_LIST => {
+            from.back_to("admin_commodities", Flash::CommoditySaved)
+        }
         Ok(()) => redirect_to(id, Flash::CommoditySaved),
+        Err(err) if is_refusal(&err) && back.back == BACK_TO_LIST => {
+            let view = ListView {
+                position: from,
+                form: CommodityForm::default(),
+                errors: FormErrors::default(),
+                asked: Asked {
+                    edit: Some(id),
+                    ..Asked::default()
+                },
+                typed: Some((form, FormErrors::from_error(&state, &err))),
+                flash: None,
+                status: err.kind().status(),
+            };
+            list_page(&state, &actor, view).await
+        }
         Err(err) if is_refusal(&err) => {
             let outcome = Outcome::refused(&state, &err, Some(form), false);
             commodity_page(&state, &actor, id, outcome).await

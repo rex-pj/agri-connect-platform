@@ -1,10 +1,12 @@
-//! /admin/alerts and /admin/alerts/{id}: what farmers must know at once (a
-//! disease outbreak, salt water, a storm), for one sector or all, one
-//! province or the whole region, between two days (`alert.manage`).
+//! /admin/alerts: what farmers must know at once (a disease outbreak, salt
+//! water, a storm), for one sector or all, one province or the whole
+//! region, between two days (`alert.manage`).
 //!
-//! The list carries the create sheet; an alert's page its edit form. Turning
-//! one off asks for confirmation and a reason; turning it on is one button.
-//! An alert is never deleted: it ends, or is turned off.
+//! The list carries the create sheet and an alert's edit sheet
+//! (`EditSheet`, `?edit={id}`: a few boxes, no page of its own; its former
+//! address `/admin/alerts/{id}` opens it). Turning one off asks for
+//! confirmation and a reason; turning it on is one button. An alert is
+//! never deleted: it ends, or is turned off.
 
 use application::{
     authz::Actor, inputs::AlertInput, outputs::AlertDto, usecases::admin_usecase::HistoryOf,
@@ -23,13 +25,12 @@ use crate::{
     pages::{
         admin::{
             alert_kinds::{self, TAB_KINDS},
-            coded, history_rows, is_refusal, render_admin, url, AdminTab, Asked, Badge, Confirm,
-            HistoryRow, ListPosition, ListReturn, Outcome, RecordHeader, RowConfirm, Says,
-            SearchBox, Toggle, BACK_TO_LIST, CATALOGUE_SORTS,
+            coded, history_rows, is_refusal, render_admin, url, AdminTab, Asked, EditSheet,
+            ListPosition, ListReturn, RowConfirm, SearchBox, Typed, CATALOGUE_SORTS,
         },
         forms::{reason, FormErrors},
         listing::{past_the_end, Pagination},
-        parse_id, see_other,
+        moved_permanently, parse_id, see_other,
     },
 };
 
@@ -124,9 +125,17 @@ pub struct AlertRow {
     pub alert: AlertDto,
     pub kind_label: String,
     pub reach: String,
-    pub href: String,
+    /// The list again with its edit sheet open.
+    pub edit_href: String,
     pub status_action: String,
     pub hide_href: String,
+}
+
+/// An alert in its edit sheet, with who it reaches.
+#[derive(Serialize)]
+pub struct EditedAlert {
+    pub alert: AlertDto,
+    pub reach: String,
 }
 
 #[derive(Serialize)]
@@ -143,17 +152,21 @@ pub struct AlertsPage {
     pub errors: FormErrors,
     pub create_action: String,
     pub confirm: Option<RowConfirm>,
+    /// The alert whose edit sheet is open.
+    pub edit: Option<EditSheet<EditedAlert, AlertForm>>,
     pub keep: ListReturn,
     pub pagination: Option<Pagination>,
     pub flash: Option<Flash>,
 }
 
 struct ListView {
-    /// The list page shown (`?page=`).
+    /// The list page shown (`?page=`) and its criteria.
     position: ListPosition,
     form: AlertForm,
     errors: FormErrors,
     asked: Asked,
+    /// The edit as typed after a refusal.
+    typed: Typed<AlertForm>,
     flash: Option<Flash>,
     status: StatusCode,
 }
@@ -217,6 +230,28 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
         |s| locale.text(&format!("alert_state.{s}")),
         None,
     )?;
+    let edit = match view.asked.edit {
+        Some(id) => {
+            let (alert, history) = tokio::try_join!(
+                state.usecases.alert.get(actor, id),
+                history_rows(state, actor, HistoryOf::Alert(id)),
+            )?;
+            let edited = EditedAlert {
+                reach: reach(locale, &sectors, &alert),
+                alert,
+            };
+            Some(
+                EditSheet::new(
+                    edited,
+                    view.typed,
+                    |e: &EditedAlert| AlertForm::from_dto(&e.alert),
+                    position.record_href("admin_alert", id)?,
+                )
+                .with_history(history),
+            )
+        }
+        None => None,
+    };
     let mut confirm = None;
     let mut rows = Vec::with_capacity(alerts.items.len());
     for alert in alerts.items {
@@ -231,8 +266,8 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
         }
         rows.push(AlertRow {
             kind_label: alert.kind_name.clone(),
-            reach: reach(state.locale(), &sectors, &alert),
-            href: url("admin_alert", &[("id", &id)])?,
+            reach: reach(locale, &sectors, &alert),
+            edit_href: position.edit_href("admin_alerts", &[], alert.id)?,
             status_action,
             hide_href: position.href("admin_alerts", &[("hide", &id)])?,
             alert,
@@ -250,6 +285,7 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
         errors: view.errors,
         create_action: path.clone(),
         confirm,
+        edit,
         keep: ListReturn::new(position),
         flash: view.flash,
     };
@@ -266,12 +302,14 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct ListQuery {
-    /// The alert whose "turn off" confirmation is open.
+    /// The alert (or kind) whose "turn off" confirmation is open.
     pub hide: String,
+    /// The alert (or kind) whose edit sheet is open.
+    pub edit: String,
     /// `kinds`: the second tab, the kinds of alert.
     pub tab: String,
     pub page: String,
-    /// The words searched (kinds tab).
+    /// The words searched.
     pub q: String,
     /// The kind, the sector, the state by dates (alerts tab).
     pub kind: String,
@@ -313,7 +351,13 @@ pub async fn list(
         return see_other(&url("login", &[])?);
     };
     if q.tab == TAB_KINDS {
-        let view = coded::ListView::asked(&q.hide, flash.0).narrowed(q.q, q.state);
+        let kinds = coded::ListQuery {
+            hide: q.hide,
+            edit: q.edit,
+            q: q.q,
+            state: q.state,
+        };
+        let view = coded::ListView::asked(&kinds, flash.0);
         let mut response = coded::list_page(&alert_kinds::PAGES, &state, &actor, view).await?;
         flash.clear_on(&mut response);
         return Ok(response);
@@ -330,7 +374,8 @@ pub async fn list(
         },
         form: AlertForm::default(),
         errors: FormErrors::default(),
-        asked: Asked::new(&q.hide, ""),
+        asked: Asked::new(&q.hide, "").editing(&q.edit),
+        typed: None,
         flash: flash.0,
         status: StatusCode::OK,
     };
@@ -339,7 +384,7 @@ pub async fn list(
     Ok(response)
 }
 
-/// POST /admin/alerts
+/// POST /admin/alerts: back on the list.
 pub async fn create(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
@@ -349,13 +394,14 @@ pub async fn create(
         return see_other(&url("login", &[])?);
     };
     match state.usecases.alert.create(&actor, form.input()).await {
-        Ok(id) => redirect_to(id, Flash::AlertCreated),
+        Ok(_) => ListPosition::default().back_to("admin_alerts", Flash::AlertCreated),
         Err(err) if is_refusal(&err) => {
             let view = ListView {
                 position: ListPosition::default(),
                 errors: FormErrors::from_error(&state, &err),
                 form,
                 asked: Asked::default(),
+                typed: None,
                 flash: None,
                 status: err.kind().status(),
             };
@@ -365,114 +411,19 @@ pub async fn create(
     }
 }
 
-#[derive(Serialize)]
-pub struct AlertPage {
-    pub alert: AlertDto,
-    /// Its name, state and the turn-off / on action, and the confirmation.
-    pub header: RecordHeader,
-    pub confirms: Vec<Confirm>,
-    /// Its latest changes: who turned it off or edited it, and why.
-    pub history: Vec<HistoryRow>,
-    pub reach: String,
-    pub choices: AlertChoices,
-    pub form: AlertForm,
-    pub errors: FormErrors,
-    pub update_action: String,
-    pub flash: Option<Flash>,
-}
-
-async fn alert_page(
-    state: &AppState,
-    actor: &Actor,
-    id: i32,
-    outcome: Outcome<AlertForm>,
-) -> Result<Response, Error> {
-    let (alert, sectors) = tokio::try_join!(
-        state.usecases.alert.get(actor, id),
-        state.usecases.sector.named(),
-    )?;
-    let locale = state.locale();
-    let id_text = id.to_string();
-    let path = url("admin_alert", &[("id", &id_text)])?;
-    let reach = reach(locale, &sectors, &alert);
-    // An alert is turned off, never deleted: its one action.
-    let (toggle, hide) = Toggle::visibility(
-        state,
-        alert.is_active,
-        url("admin_alert_status", &[("id", &id_text)])?,
-        "tat-canh-bao",
-        locale.text("alert.hide"),
-        locale.text_with("alert.hide_title", &[("name", &alert.title)]),
-        Says::Hide(locale.text("alert.what")),
-    )
-    .split();
-    let mut badges = vec![Badge::new("visibility", alert.live)];
-    if alert.is_demo {
-        badges.push(Badge::new("demo", true));
-    }
-    let header = RecordHeader {
-        title: alert.title.clone(),
-        icon: "fa-triangle-exclamation".to_owned(),
-        sub: Some(reach.clone()),
-        back_href: url("admin_alerts", &[])?,
-        back_label: locale.text("admin_menu.alerts"),
-        badges,
-        actions: vec![toggle],
-        menu: Vec::new(),
-    };
-    let body = AlertPage {
-        header,
-        confirms: hide.into_iter().collect(),
-        history: history_rows(state, actor, HistoryOf::Alert(id)).await?,
-        form: outcome.form.unwrap_or_else(|| AlertForm::from_dto(&alert)),
-        reach,
-        alert,
-        choices: choices(state, actor).await?,
-        errors: outcome.errors,
-        update_action: path.clone(),
-        flash: outcome.flash,
-    };
-    render_admin(
-        state,
-        actor,
-        &path,
-        outcome.status,
-        "pages/admin/alert.html",
-        &body,
-    )
-}
-
-fn redirect_to(id: i32, flash: Flash) -> Result<Response, Error> {
-    let mut response = see_other(&url("admin_alert", &[("id", &id.to_string())])?)?;
-    flash.set_on(&mut response);
-    Ok(response)
-}
-
-/// GET /admin/alerts/{id}
-pub async fn show(
-    Viewer(viewer): Viewer,
-    flash: TakeFlash,
-    State(state): State<AppState>,
-    ApiPath(raw_id): ApiPath<String>,
-) -> Result<Response, Error> {
-    let Some(actor) = viewer else {
-        return see_other(&url("login", &[])?);
-    };
+/// GET /admin/alerts/{id}: the alert's edit sheet on the list.
+pub async fn show(ApiPath(raw_id): ApiPath<String>) -> Result<Response, Error> {
     let id = parse_id(&raw_id, ErrorCode::AlertNotFound)?;
-    let outcome = Outcome {
-        flash: flash.0,
-        ..Outcome::default()
-    };
-    let mut response = alert_page(&state, &actor, id, outcome).await?;
-    flash.clear_on(&mut response);
-    Ok(response)
+    moved_permanently(&ListPosition::default().edit_href("admin_alerts", &[], id)?)
 }
 
-/// POST /admin/alerts/{id}
+/// POST /admin/alerts/{id}: its edit sheet, back on the list position of
+/// its query.
 pub async fn update(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
     ApiPath(raw_id): ApiPath<String>,
+    ApiQuery(from): ApiQuery<ListPosition>,
     ApiForm(form): ApiForm<AlertForm>,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
@@ -480,10 +431,21 @@ pub async fn update(
     };
     let id = parse_id(&raw_id, ErrorCode::AlertNotFound)?;
     match state.usecases.alert.update(&actor, id, form.input()).await {
-        Ok(()) => redirect_to(id, Flash::AlertSaved),
+        Ok(()) => from.back_to("admin_alerts", Flash::AlertSaved),
         Err(err) if is_refusal(&err) => {
-            let outcome = Outcome::refused(&state, &err, Some(form), false);
-            alert_page(&state, &actor, id, outcome).await
+            let view = ListView {
+                position: from,
+                form: AlertForm::default(),
+                errors: FormErrors::default(),
+                asked: Asked {
+                    edit: Some(id),
+                    ..Asked::default()
+                },
+                typed: Some((form, FormErrors::from_error(&state, &err))),
+                flash: None,
+                status: err.kind().status(),
+            };
+            list_page(&state, &actor, view).await
         }
         Err(err) => Err(err),
     }
@@ -495,8 +457,6 @@ pub struct StatusForm {
     /// "true" to turn on, "false" to turn off.
     pub is_active: String,
     pub reason: String,
-    /// `list` when sent from the list's row: land back there.
-    pub back: String,
     /// The list page the row was on (`ListReturn`).
     pub page: String,
     pub q: String,
@@ -506,7 +466,7 @@ pub struct StatusForm {
     pub sort: String,
 }
 
-/// POST /admin/alerts/{id}/status
+/// POST /admin/alerts/{id}/status: back on the list.
 pub async fn change_status(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
@@ -528,17 +488,14 @@ pub async fn change_status(
     } else {
         Flash::AlertHidden
     };
-    if form.back == BACK_TO_LIST {
-        let position = ListPosition {
-            page: form.page,
-            q: form.q,
-            kind: form.kind,
-            sector: form.sector,
-            state: form.state,
-            sort: form.sort,
-            ..ListPosition::default()
-        };
-        return position.back_to("admin_alerts", flash);
+    ListPosition {
+        page: form.page,
+        q: form.q,
+        kind: form.kind,
+        sector: form.sector,
+        state: form.state,
+        sort: form.sort,
+        ..ListPosition::default()
     }
-    redirect_to(id, flash)
+    .back_to("admin_alerts", flash)
 }

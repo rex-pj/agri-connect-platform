@@ -11,13 +11,17 @@
 {% import "molecules/sheet_header.html" as sheet_head %}
 {% import "organisms/category_fields.html" as fields %}
 {% import "organisms/confirm_sheet.html" as confirm %}
+{% import "organisms/edit_sheet.html" as edit_sheet %}
 {#- `page.body` is web::pages::admin::categories::CategoriesPage: the
     types of one kind (a tab per kind: service types, supply types;
     plain links), hidden ones too, a page at a time (`b.pagination`), and
     the create form of that kind, a sheet opened by the header's "add" (an anchored section without JS), which comes back open
     with its messages when a rule is broken. "Ẩn" reloads the list with that
-    row's confirmation open (`b.confirm`, in its own `dialog` scope); row
-    actions send `back=list` and the page (`b.keep`) so they land here again. -#}
+    row's confirmation open (`b.confirm`, in its own `dialog` scope); a name
+    or "Sửa" with its edit sheet open (`b.edit`, web::pages::admin::EditSheet:
+    its state, the boxes, when it was made and changed, the way to what is
+    filed under it), which posts back to this list position. Row actions
+    send the position (`b.keep`) so they land here again. -#}
 {% block title %}{{ t(key="admin_menu.catalogue") }} | {{ site.name }} Admin{% endblock title %}
 {% block vendor %}{{ field::searchable_select_assets() }}{% endblock vendor %}
 {% block content %}
@@ -31,6 +35,8 @@
   {{ tabs::admin_tabs(tabs=b.tabs, label=t(key="admin_menu.catalogue")) }}
   {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.categories"), chips=b.states, chips_label=t(key="admin_state.label")) }}
   {{ search::admin_results(s=b.search, total=b.total) }}
+  {% if b.flash == "category_created" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.category_created")) }}{% endif %}
+  {% if b.flash == "category_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.saved")) }}{% endif %}
   {% if b.flash == "category_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.category_hidden")) }}{% endif %}
   {% if b.flash == "category_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.category_shown")) }}{% endif %}
 
@@ -44,7 +50,7 @@
           {% for r in b.rows %}
           {% set c = r.category %}
           <tr{% if not c.is_active %} class="table-light text-body-secondary"{% endif %}>
-            <td data-label="">{% if c.icon %}{{ atoms::icon(name=c.icon, class="text-success me-2") }}{% endif %}<a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ c.name }}</a>{% if c.is_demo %} {{ status::demo() }}{% endif %}<code class="d-block small text-muted">{{ c.slug }}</code></td>
+            <td data-label="">{% if c.icon %}{{ atoms::icon(name=c.icon, class="text-success me-2") }}{% endif %}<a class="fw-bold text-decoration-none" href="{{ r.edit_href }}">{{ c.name }}</a>{% if c.is_demo %} {{ status::demo() }}{% endif %}<code class="d-block small text-muted">{{ c.slug }}</code></td>
             <td data-label="{{ t(key="sector.label") }}">{{ r.sector_label }}</td>
             <td data-label="{{ t(key="form.display_order") }}" class="text-center">{{ c.display_order }}</td>
             <td data-label="{{ t(key="admin.col_status") }}" class="text-center cell-state">{{ status::visibility(on=c.is_active) }}</td>
@@ -55,7 +61,7 @@
                 {% else %}
                 {{ row::show(action=r.status_action, name=c.name, field="is_active", keep=b.keep) }}
                 {% endif %}
-                {{ row::open(href=r.href, name=c.name) }}
+                {{ row::edit(href=r.edit_href, name=c.name) }}
               </div></td>
           </tr>
           {% else %}
@@ -70,6 +76,27 @@
   {% if b.confirm %}
   <div x-data="dialog" data-open="true" x-on:keydown.escape.window="hide">
     {{ confirm::confirm_sheet(id="xac-nhan", title=t(key="admin.hide_category_title", name=b.confirm.name), icon="fa-eye-slash", action=b.confirm.action, button=t(key="admin.confirm_hide"), reason_max=limits.audit_reason_max, note=hide_note, hidden_name="is_active", hidden_value="false", keep=b.keep) }}
+  </div>
+  {% endif %}
+
+  {% if b.edit %}
+  {% set e = b.edit %}
+  {% set c = e.record.category %}
+  {% if c.category_type == "service" %}{% set listings = t(key="admin.category_services") %}{% else %}{% set listings = t(key="admin.category_supplies") %}{% endif %}
+  <div x-data="dialog" data-open="true" data-drop="edit" x-on:keydown.escape.window="hide">
+    <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
+    <section class="contact-sheet" id="sua" aria-labelledby="sua-title" :class="sheetClass">
+      {{ sheet_head::sheet_header(id="sua", title=c.name, icon="fa-pen") }}
+      {% if c.is_active %}{% set said = t(key="admin.category_on") %}{% else %}{% set said = t(key="admin.category_off") %}{% endif %}
+      {{ edit_sheet::state(on=c.is_active, text=said, demo=c.is_demo) }}
+      <form class="contact-sheet__form" method="post" action="{{ e.action }}" novalidate>
+        {% if e.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=e.errors.message) }}{% endif %}
+        {{ fields::category_fields(form=e.form, errors=e.errors, limits=b.limits, sectors=b.sectors, prefix="edit", category_id=c.id) }}
+        <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button>
+      </form>
+      <p class="edit-sheet__facts">{{ t(key="admin.created_label") }} <time datetime="{{ c.created_on | utc_iso }}">{{ c.created_on | vn_datetime }}</time>{% if c.created_by_name %} · {{ c.created_by_name }}{% endif %} · {{ t(key="admin.col_updated") }} <time datetime="{{ c.updated_on | utc_iso }}">{{ c.updated_on | vn_datetime }}</time>{% if c.updated_by_name %} · {{ c.updated_by_name }}{% endif %}</p>
+      <a class="admin-section__link" href="{{ e.record.listings_href }}">{{ atoms::icon(name="fa-list") }} {{ listings }}</a>
+    </section>
   </div>
   {% endif %}
 

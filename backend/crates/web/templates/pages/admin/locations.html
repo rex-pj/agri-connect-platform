@@ -10,15 +10,20 @@
 {% import "molecules/form_field.html" as field %}
 {% import "organisms/location_fields.html" as fields %}
 {% import "organisms/confirm_sheet.html" as confirm %}
+{% import "organisms/edit_sheet.html" as edit_sheet %}
+{% import "molecules/history_list.html" as history %}
 {% import "organisms/ward_checklist.html" as checklist %}
 {#- `page.body` is web::pages::admin::locations::LocationsPage: a page of
     every location preset (hidden ones too, `b.pagination` under it) and the
     create form, a sheet opened by the header's "add" (an anchored section without JS), which comes back
     open with its messages when a rule is broken. Its ward picker comes with
-    `organisms/location_fields.html`, as on the edit page. "Ẩn" and "Xoá" reload the
-    list with that row's confirmation open (`b.confirm`, in its own `dialog`
-    scope). Row actions send `back=list` and the page (`b.keep`) so they
-    land here again. "Thêm nhiều" leads to a second sheet (`b.bulk`, its own
+    `organisms/location_fields.html`, as in the edit sheet. "Ẩn" and "Xoá"
+    reload the list with that row's confirmation open (`b.confirm`, in its
+    own `dialog` scope), a name or "Sửa" with its edit sheet open (`b.edit`,
+    web::pages::admin::EditSheet: its state, the boxes, its map, its
+    history), which posts back to this list position; a refused deletion
+    says why on top (`b.refusal`). Row actions send the position (`b.keep`)
+    so they land here again. "Thêm nhiều" leads to a second sheet (`b.bulk`, its own
     `dialog` scope): a province chosen by a GET form (`?bulk=p82`, sent on
     change with JS), then its wards ticked (`organisms/ward_checklist.html`)
     and posted to `b.bulk.action`; open on load once a province is chosen or
@@ -32,6 +37,9 @@
 <div class="admin-body">
   {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.locations"), chips=b.states, chips_label=t(key="admin_state.label")) }}
   {{ search::admin_results(s=b.search, total=b.total) }}
+  {% if b.refusal %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.refusal) }}{% endif %}
+  {% if b.flash == "location_created" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.location_created")) }}{% endif %}
+  {% if b.flash == "location_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.saved")) }}{% endif %}
   {% if b.flash == "location_hidden" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.location_hidden")) }}{% endif %}
   {% if b.flash == "location_shown" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.location_shown")) }}{% endif %}
   {% if b.flash == "location_deleted" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.location_deleted")) }}{% endif %}
@@ -48,7 +56,7 @@
           {% for r in b.rows %}
           {% set l = r.location %}
           <tr{% if not l.is_active %} class="table-light text-body-secondary"{% endif %}>
-            <td data-label=""><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ l.label }}</a>{% if l.is_demo %} {{ status::demo() }}{% endif %}</td>
+            <td data-label=""><a class="fw-bold text-decoration-none" href="{{ r.edit_href }}">{{ l.label }}</a>{% if l.is_demo %} {{ status::demo() }}{% endif %}</td>
             <td data-label="{{ t(key="location_form.coordinates") }}" class="small text-muted font-monospace">{{ l.lat }}, {{ l.lng }}</td>
             <td data-label="{{ t(key="form.display_order") }}" class="text-center">{{ l.display_order }}</td>
             <td data-label="{{ t(key="admin.col_status") }}" class="text-center cell-state">{{ status::visibility(on=l.is_active) }}</td>
@@ -60,7 +68,7 @@
                 {{ row::show(action=r.status_action, name=l.label, field="is_active", keep=b.keep) }}
                 {% endif %}
                 {{ row::delete(href=r.delete_href ~ "#xac-nhan", name=l.label) }}
-                {{ row::open(href=r.href, name=l.label) }}
+                {{ row::edit(href=r.edit_href, name=l.label) }}
               </div>
             </td>
           </tr>
@@ -81,6 +89,26 @@
     {% else %}
     {{ confirm::confirm_sheet(id="xac-nhan", title=t(key="admin.delete_location_title", name=c.name), icon="fa-trash", action=c.action, button=t(key="common.confirm_delete"), reason_max=limits.audit_reason_max, effect="delete", what=t(key="admin.location_what"), button_class="btn-danger", keep=b.keep) }}
     {% endif %}
+  </div>
+  {% endif %}
+
+  {% if b.edit %}
+  {% set e = b.edit %}
+  {% set l = e.record.location %}
+  <div x-data="dialog" data-open="true" data-drop="edit" x-on:keydown.escape.window="hide">
+    <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
+    <section class="contact-sheet" id="sua" aria-labelledby="sua-title" :class="sheetClass">
+      {{ sheet_head::sheet_header(id="sua", title=l.label, icon="fa-pen") }}
+      {% if l.is_active %}{% set said = t(key="admin.location_on") %}{% else %}{% set said = t(key="admin.location_off") %}{% endif %}
+      {{ edit_sheet::state(on=l.is_active, text=said, demo=l.is_demo, history=e.history, hide_action="hide_location") }}
+      <form class="contact-sheet__form" method="post" action="{{ e.action }}" novalidate>
+        {% if e.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=e.errors.message) }}{% endif %}
+        {{ fields::location_fields(form=e.form, errors=e.errors, label_max=b.label_max, prefix="edit", wards=b.wards, first=true) }}
+        <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button>
+      </form>
+      <a class="admin-section__link mt-3" href="{{ e.record.map_href }}" target="_blank" rel="noopener">{{ atoms::icon(name="fa-map") }} {{ t(key="admin.open_map") }}</a>
+      {{ history::history_list(rows=e.history, fold=true) }}
+    </section>
   </div>
   {% endif %}
 

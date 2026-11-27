@@ -16,6 +16,7 @@ use application::{
 };
 use axum::{extract::State, http::StatusCode, response::Response};
 use domain::{
+    constants::CATEGORY_TYPE_PRODUCT,
     models::{
         admin_list::{AdminSort, LISTING_LIST_STATES},
         business::ListingRef,
@@ -139,7 +140,7 @@ fn narrowed(
             Ok(ProviderFilter {
                 icon: "fa-tags",
                 name: first.map(|p| p.category.clone()),
-                href: url("admin_category", &[("id", &id.to_string())])?,
+                href: super::categories::edit_href(CATEGORY_TYPE_PRODUCT, id)?,
                 clear_href: list.to_owned(),
             })
         })
@@ -555,10 +556,7 @@ async fn product_page(
             "admin_provider",
             &[("id", &product.business_id.to_string())],
         )?,
-        category_href: url(
-            "admin_category",
-            &[("id", &product.category_id.to_string())],
-        )?,
+        category_href: super::categories::edit_href(CATEGORY_TYPE_PRODUCT, product.category_id)?,
         product,
         flash: outcome.flash,
     };

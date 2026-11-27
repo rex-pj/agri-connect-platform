@@ -1,0 +1,16 @@
+{#- The parts of an edit sheet over a list (web::pages::admin::EditSheet:
+    a short record edited where it is listed, never on a page of its own)
+    around its form, which each list writes with its own `*_fields`.
+    `state`: the record's state once, as its badge (`alert_state` an
+    alert's, else shown / hidden by `on`), a demo row's mark, one line on
+    what it means (`text`) and, while it is off, who turned it off and why
+    (the newest `hide_action` of `history`). `facts`: its few read-only
+    details (its code, when it was made), under the form. -#}
+{% import "atoms/status_badge.html" as status %}
+{% import "molecules/history_list.html" as history %}
+{% macro state(on, text, demo=false, alert_state="", history="", hide_action="") -%}
+<div class="edit-sheet__state">
+  <p class="admin-status mb-0">{% if alert_state %}{{ status::alert(state=alert_state) }}{% else %}{{ status::visibility(on=on) }}{% endif %}{% if demo %}{{ status::demo() }}{% endif %}<span>{{ text }}</span></p>
+  {% if hide_action and history and not on %}{% set off = history | filter(attribute="action", value=hide_action) | first %}{% if off %}{{ history::last_change(row=off) }}{% endif %}{% endif %}
+</div>
+{%- endmacro state %}

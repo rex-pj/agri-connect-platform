@@ -136,8 +136,14 @@ document.addEventListener("alpine:init", () => {
     hide() {
       this.animated = true;
       this.isOpen = false;
-      if (this.sheetId && window.location.hash === `#${this.sheetId}`) {
-        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      // `data-drop`: the query parameter that opened the sheet from the
+      // server (`?edit=`), dropped with it so a reload does not reopen it.
+      const url = new URL(window.location.href);
+      const drop = this.$el.dataset.drop;
+      const dropped = Boolean(drop) && url.searchParams.has(drop);
+      if (dropped) url.searchParams.delete(drop);
+      if (dropped || (this.sheetId && url.hash === `#${this.sheetId}`)) {
+        window.history.replaceState(null, "", url.pathname + url.search);
       }
     },
     focusFirst() {
@@ -366,12 +372,6 @@ document.addEventListener("alpine:init", () => {
     },
   }));
 
-  // A colour box (form_field.html color_select): one row of round swatches,
-  // "no colour", the suggested colours, then "another colour" (the
-  // browser's colour input, a rainbow until a colour of its own is chosen).
-  // Without JS only that input shows, with a "no colour" tick; with JS the
-  // tick hides but is still what the form sends. The swatches are painted
-  // from their data-color through the CSSOM, which the CSP allows (a style
   // A category tile's icon in the category's own colour (category_item.html):
   // set through the CSSOM, which the CSP allows (a style attribute it does
   // not); the class goes on only with the colour, so without JS the tile
@@ -383,6 +383,12 @@ document.addEventListener("alpine:init", () => {
     },
   }));
 
+  // A colour box (form_field.html color_select): one row of round swatches,
+  // "no colour", the suggested colours, then "another colour" (the
+  // browser's colour input, a rainbow until a colour of its own is chosen).
+  // Without JS only that input shows, with a "no colour" tick; with JS the
+  // tick hides but is still what the form sends. The swatches are painted
+  // from their data-color through the CSSOM, which the CSP allows (a style
   // attribute it does not).
   Alpine.data("colorSelect", () => ({
     value: "",

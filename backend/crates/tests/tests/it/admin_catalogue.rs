@@ -128,6 +128,24 @@ async fn a_category_form_reports_every_broken_rule_and_keeps_what_was_typed() {
     e.cleanup().await;
 }
 
+/// The address of the newest row of `table` under `base`
+/// (`/admin/locations/7`), where its edit sheet posts: a create lands back on
+/// the list.
+async fn newest(e: &Env, table: &str, base: &str) -> String {
+    let id = count_of(e, &format!("SELECT max(id)::bigint AS n FROM {table}")).await;
+    format!("{base}/{id}")
+}
+
+/// The list with the edit sheet of the record at `detail`: its former page
+/// moved there for good.
+async fn sheet(e: &Env, detail: &str, cookie: &str) -> String {
+    let res = send(&e.router, get_page(detail, Some(cookie))).await;
+    assert_eq!(res.status(), StatusCode::MOVED_PERMANENTLY, "{detail}");
+    let to = location_of(&res);
+    assert!(to.ends_with("#sua"), "{to}");
+    page(e, to.trim_end_matches("#sua"), cookie).await
+}
+
 async fn slug_of(e: &Env, detail: &str) -> String {
     let id = detail.rsplit('/').next().unwrap();
     e.t.db
@@ -181,7 +199,8 @@ async fn an_icon_box_finds_font_awesome_names_for_the_catalogue_keepers_only() {
     )
     .await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
-    let id = location_of(&res).rsplit('/').next().unwrap().to_owned();
+    let detail = newest(&e, "service_types", "/admin/categories").await;
+    let id = detail.rsplit('/').next().unwrap().to_owned();
     let icon: Option<String> =
         e.t.db
             .query_one(Statement::from_string(
@@ -239,14 +258,15 @@ async fn a_blank_slug_is_made_from_the_name_and_never_repeats_one() {
     )
     .await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
-    let second = location_of(&res);
+    let second = newest(&e, "service_types", "/admin/categories").await;
     assert_eq!(slug_of(&e, &second).await, "muc-bun-2");
     let res = send(
         &e.router,
         post_form("/admin/categories", &blank, Some(&admin)),
     )
     .await;
-    let third = location_of(&res);
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let third = newest(&e, "service_types", "/admin/categories").await;
     assert_eq!(slug_of(&e, &third).await, "muc-bun-3");
 
     // A category's own slug is free to it while it is edited.
@@ -285,8 +305,9 @@ async fn a_category_is_created_edited_and_hidden_from_the_public_pages() {
     )
     .await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
-    let detail = location_of(&res);
-    assert!(detail.starts_with("/admin/categories/"));
+    assert_eq!(location_of(&res), "/admin/categories?type=service");
+    let detail = newest(&e, "service_types", "/admin/categories").await;
+    let id = detail.rsplit('/').next().unwrap().to_owned();
     let mut cookie = admin.clone();
     for c in res.headers().get_all(header::SET_COOKIE) {
         if let Some(pair) = c.to_str().unwrap().split(';').next() {
@@ -294,12 +315,16 @@ async fn a_category_is_created_edited_and_hidden_from_the_public_pages() {
             cookie.push_str(pair);
         }
     }
-    let html = page(&e, &detail, &cookie).await;
+    let html = page(&e, "/admin/categories?type=service", &cookie).await;
     assert!(html.contains("Đã thêm loại."), "flash shown once");
-    assert!(html.contains(r#"value="bom-nuoc""#));
+    assert!(sheet(&e, &detail, &admin)
+        .await
+        .contains(r#"value="bom-nuoc""#));
     assert!(page(&e, "/admin/categories", &admin)
         .await
-        .contains(&format!(r#"href="{detail}""#)));
+        .contains(&format!(
+            r#"href="/admin/categories?type=service&amp;edit={id}#sua""#
+        )));
 
     let mut edited = NEW_CATEGORY.to_vec();
     edited[1] = ("name", "Bơm nước tưới");
@@ -331,12 +356,11 @@ async fn a_category_is_created_edited_and_hidden_from_the_public_pages() {
     )
     .await;
     assert!(!public.contains("bom-nuoc"), "hidden from the public");
-    let html = page(&e, &detail, &admin).await;
+    let html = sheet(&e, &detail, &admin).await;
     assert!(html.contains("Bơm nước tưới"));
     assert!(html.contains("Hiển thị lại"));
 
     // The same switch from the list's row lands back on the list.
-    let id = detail.rsplit('/').next().unwrap();
     let res = send(
         &e.router,
         post_form(
@@ -421,8 +445,10 @@ async fn a_location_is_validated_created_hidden_and_deleted() {
     )
     .await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
-    let detail = location_of(&res);
-    assert!(page(&e, &detail, &admin)
+    assert_eq!(location_of(&res), "/admin/locations");
+    let detail = newest(&e, "locations", "/admin/locations").await;
+    let id = detail.rsplit('/').next().unwrap().to_owned();
+    assert!(sheet(&e, &detail, &admin)
         .await
         .contains(r#"value="10.4048""#));
 
@@ -434,12 +460,11 @@ async fn a_location_is_validated_created_hidden_and_deleted() {
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     assert!(body_text(res).await.contains("Đã có khu vực với tên này."));
 
-    // Hiding asks first, on the page and from the list's row, like every
-    // other hide; the reason is audited.
-    assert!(page(&e, &detail, &admin)
+    // Hiding asks first, from the list's row, like every other hide; the
+    // reason is audited.
+    assert!(page(&e, "/admin/locations", &admin)
         .await
-        .contains(r##"href="#an-khu-vuc""##));
-    let id = detail.rsplit('/').next().unwrap();
+        .contains(&format!(r#"href="/admin/locations?hide={id}#xac-nhan""#)));
     let html = page(&e, &format!("/admin/locations?hide={id}"), &admin).await;
     assert!(html.contains(r#"data-open="true""#));
     assert!(html.contains("Ẩn khu vực Mỹ Phong?"));
@@ -485,7 +510,11 @@ async fn a_location_is_validated_created_hidden_and_deleted() {
         last_audit(&e, "location").await,
         "delete_location: nhập nhầm"
     );
-    let res = send(&e.router, get_page(&detail, Some(&admin))).await;
+    let res = send(
+        &e.router,
+        get_page(&format!("/admin/locations?edit={id}"), Some(&admin)),
+    )
+    .await;
     assert_eq!(res.status(), StatusCode::NOT_FOUND);
     e.cleanup().await;
 }
@@ -513,11 +542,11 @@ async fn a_location_is_filled_from_the_ward_chosen() {
     )
     .await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
-    let preset = location_of(&res);
-    let detail = page(&e, &preset, &admin).await;
+    let preset = newest(&e, "locations", "/admin/locations").await;
+    let detail = sheet(&e, &preset, &admin).await;
     assert!(detail.contains("Bình Phú, Đồng Tháp"));
 
-    // The edit form has the same picker, and the same rule.
+    // The edit sheet has the same picker, and the same rule.
     assert!(detail.contains(r#"<option value="w28378" data-preset="Mỹ Thiện, Đồng Tháp""#));
     assert!(detail.contains(r#"x-data="wardFill""#));
     let res = send(
@@ -530,9 +559,9 @@ async fn a_location_is_filled_from_the_ward_chosen() {
     )
     .await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
-    let detail = page(&e, &preset, &admin).await;
+    let detail = sheet(&e, &preset, &admin).await;
     assert!(
-        detail.contains("<title>Mỹ Thiện, Đồng Tháp"),
+        detail.contains(r#"value="Mỹ Thiện, Đồng Tháp""#),
         "renamed and moved to Mỹ Thiện"
     );
 
@@ -552,9 +581,8 @@ async fn a_location_is_filled_from_the_ward_chosen() {
     )
     .await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
-    assert!(page(&e, &location_of(&res), &admin)
-        .await
-        .contains("Cai Lậy cũ"));
+    let typed = newest(&e, "locations", "/admin/locations").await;
+    assert!(sheet(&e, &typed, &admin).await.contains("Cai Lậy cũ"));
 
     // An unknown ward is reported on its box, with what was typed kept.
     let res = send(
@@ -575,22 +603,25 @@ async fn a_location_is_filled_from_the_ward_chosen() {
 
 #[tokio::test]
 #[ignore = "needs TEST_DATABASE_URL"]
-async fn a_location_page_acts_from_its_header_and_says_who_hid_it() {
+async fn a_location_sheet_maps_it_and_says_who_hid_it() {
     let e = env_with_origin().await;
     let admin = install_admin(&e).await;
     let fields = [("label", "Tân Phú"), ("lat", "10.40"), ("lng", "106.10")];
-    let res = send(
+    send(
         &e.router,
         post_form("/admin/locations", &fields, Some(&admin)),
     )
     .await;
-    let detail = location_of(&res);
+    let detail = newest(&e, "locations", "/admin/locations").await;
+    let id = detail.rsplit('/').next().unwrap().to_owned();
+    let hide = format!(r#"href="/admin/locations?hide={id}#xac-nhan""#);
 
-    // One header: hide as its button, the map and the deletion in its menu,
-    // each confirmation opened by a link to its sheet.
-    let html = page(&e, &detail, &admin).await;
-    assert!(html.contains(r##"href="#an-khu-vuc""##));
-    assert!(html.contains(r##"href="#xoa-khu-vuc""##));
+    // Edited over the list: its row hides and deletes, each behind its
+    // confirmation; the sheet maps it and folds its history.
+    let html = sheet(&e, &detail, &admin).await;
+    assert!(html.contains(r#"id="sua""#) && html.contains(r#"data-drop="edit""#));
+    assert!(html.contains(&hide));
+    assert!(html.contains(&format!(r#"href="/admin/locations?delete={id}#xac-nhan""#)));
     assert!(html.contains("https://www.google.com/maps?q=10.4,106.1"));
     assert!(html.contains("Thêm khu vực"), "its creation in its history");
 
@@ -603,14 +634,32 @@ async fn a_location_page_acts_from_its_header_and_says_who_hid_it() {
         ),
     )
     .await;
-    assert_eq!(res.status(), StatusCode::SEE_OTHER);
-    let html = page(&e, &detail, &admin).await;
-    assert!(html.contains("Ẩn khu vực"), "the strip says who hid it");
+    assert_eq!(location_of(&res), "/admin/locations");
+    let html = sheet(&e, &detail, &admin).await;
+    assert!(html.contains("Ẩn khu vực"), "the sheet says who hid it");
     assert!(html.contains("Trùng với Tân Phú Đông"));
-    assert!(
-        !html.contains(r##"href="#an-khu-vuc""##),
-        "shown again with one button"
-    );
+    assert!(!html.contains(&hide), "shown again with one button");
+
+    // Saved from the sheet, back on the list where it was opened.
+    let res = send(
+        &e.router,
+        post_form(
+            &format!("{detail}?q=T%C3%A2n&page=1"),
+            &[("label", "Tân Phú B"), ("lat", "10.40"), ("lng", "106.10")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(location_of(&res), "/admin/locations?q=T%C3%A2n");
+    // Refused, the sheet comes back open with its message.
+    let res = send(
+        &e.router,
+        post_form(&detail, &[("label", ""), ("lat", "x")], Some(&admin)),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    let html = body_text(res).await;
+    assert!(html.contains(r#"id="sua""#) && html.contains("Toạ độ không hợp lệ."));
     e.cleanup().await;
 }
 
@@ -923,5 +972,74 @@ async fn several_locations_are_added_from_the_wards_ticked() {
     )
     .await;
     assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_commodity_and_an_alert_are_edited_in_a_sheet_over_their_list() {
+    let e = env_with_origin().await;
+    let admin = install_admin(&e).await;
+
+    // A commodity keeps its page (its crops, its supplies), and its list
+    // edits it in place: saved from the sheet, back on the list position.
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/commodities",
+            &[("name", "Chanh dây"), ("sector", "crop")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(location_of(&res), "/admin/commodities");
+    let detail = newest(&e, "commodities", "/admin/commodities").await;
+    let id = detail.rsplit('/').next().unwrap().to_owned();
+    let list = page(&e, "/admin/commodities?q=chanh", &admin).await;
+    assert!(list.contains(&format!(
+        r#"href="/admin/commodities?q=chanh&amp;edit={id}#sua""#
+    )));
+    assert!(
+        list.contains(&format!(r#"href="{detail}""#)),
+        "its page too"
+    );
+    let html = page(&e, &format!("/admin/commodities?q=chanh&edit={id}"), &admin).await;
+    let action = format!("{detail}?back=list&q=chanh");
+    assert!(html.contains(&format!(r#"action="{}""#, action.replace('&', "&amp;"))));
+    let fields = [
+        ("name", "Chanh dây tím"),
+        ("sector", "crop"),
+        ("display_order", "1"),
+        ("price_fresh_days", "14"),
+    ];
+    let res = send(&e.router, post_form(&action, &fields, Some(&admin))).await;
+    assert_eq!(location_of(&res), "/admin/commodities?q=chanh");
+    // From its page, the same form stays there.
+    let res = send(&e.router, post_form(&detail, &fields, Some(&admin))).await;
+    assert_eq!(location_of(&res), detail);
+
+    // An alert: its former page opens its sheet, which says who it reaches.
+    let today = (chrono::Utc::now() + chrono::Duration::hours(7)).date_naive();
+    let day = today.format("%Y-%m-%d").to_string();
+    let alert = [
+        ("kind", "disease"),
+        ("sector", ""),
+        ("province_code", ""),
+        ("title", "Rầy nâu"),
+        ("body", "Thăm đồng."),
+        ("starts_on", day.as_str()),
+        ("ends_on", day.as_str()),
+    ];
+    let res = send(&e.router, post_form("/admin/alerts", &alert, Some(&admin))).await;
+    assert_eq!(location_of(&res), "/admin/alerts");
+    let detail = newest(&e, "alerts", "/admin/alerts").await;
+    let html = sheet(&e, &detail, &admin).await;
+    assert!(html.contains(r#"value="Rầy nâu""#) && html.contains("Cả vùng"));
+    let mut broken = alert.to_vec();
+    broken[3] = ("title", "");
+    let res = send(&e.router, post_form(&detail, &broken, Some(&admin))).await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    let html = body_text(res).await;
+    assert!(html.contains(r#"id="sua""#) && html.contains(r#"id="edit-title-error""#));
     e.cleanup().await;
 }

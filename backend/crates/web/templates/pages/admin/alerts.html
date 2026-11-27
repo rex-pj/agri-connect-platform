@@ -10,11 +10,16 @@
 {% import "molecules/sheet_header.html" as sheet_head %}
 {% import "organisms/alert_fields.html" as fields %}
 {% import "organisms/confirm_sheet.html" as confirm %}
+{% import "organisms/edit_sheet.html" as edit_sheet %}
+{% import "molecules/history_list.html" as history %}
 {#- `page.body` is web::pages::admin::alerts::AlertsPage: every alert (the
     ones turned off too, the latest to end first) and the create sheet opened
     by the header's "add" (an anchored section without JS), which comes back
     open with its messages when a rule is broken. "Tắt" reloads the list with
-    that row's confirmation open (`b.confirm`, in its own `dialog` scope). -#}
+    that row's confirmation open (`b.confirm`, in its own `dialog` scope);
+    a title or "Sửa" with its edit sheet open (`b.edit`,
+    web::pages::admin::EditSheet: its state, the boxes, who it reaches, its
+    history), which posts back to this list position. -#}
 {% block title %}{{ t(key="admin_menu.alerts") }} | {{ site.name }} Admin{% endblock title %}
 {% block content %}
 {% set b = page.body %}
@@ -37,7 +42,7 @@
           {% for r in b.rows %}
           {% set a = r.alert %}
           <tr{% if not a.live %} class="table-light text-body-secondary"{% endif %}>
-            <td data-label=""><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ a.title }}</a>{% if a.is_demo %} {{ status::demo() }}{% endif %}</td>
+            <td data-label=""><a class="fw-bold text-decoration-none" href="{{ r.edit_href }}">{{ a.title }}</a>{% if a.is_demo %} {{ status::demo() }}{% endif %}</td>
             <td data-label="{{ t(key="alert.kind") }}">{{ r.kind_label }}</td>
             <td data-label="{{ t(key="admin.col_reach") }}" class="small"><div class="cell-short">{{ r.reach }}</div></td>
             <td data-label="{{ t(key="alert.dates") }}" class="small text-nowrap"><time datetime="{{ a.starts_on }}">{{ a.starts_on | full_date }}</time> - <time datetime="{{ a.ends_on }}">{{ a.ends_on | full_date }}</time></td>
@@ -49,7 +54,7 @@
                 {% else %}
                 {{ row::show(action=r.status_action, name=a.title, field="is_active", keep=b.keep) }}
                 {% endif %}
-                {{ row::open(href=r.href, name=a.title) }}
+                {{ row::edit(href=r.edit_href, name=a.title) }}
               </div>
             </td>
           </tr>
@@ -66,6 +71,26 @@
   {% set c = b.confirm %}
   <div x-data="dialog" data-open="true" x-on:keydown.escape.window="hide">
     {{ confirm::confirm_sheet(id="xac-nhan", title=t(key="alert.hide_title", name=c.name), icon="fa-eye-slash", action=c.action, button=t(key="admin.confirm_hide"), reason_max=limits.audit_reason_max, effect="hide", what=t(key="alert.what"), hidden_name="is_active", hidden_value="false", keep=b.keep) }}
+  </div>
+  {% endif %}
+
+  {% if b.edit %}
+  {% set e = b.edit %}
+  {% set a = e.record.alert %}
+  <div x-data="dialog" data-open="true" data-drop="edit" x-on:keydown.escape.window="hide">
+    <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
+    <section class="contact-sheet" id="sua" aria-labelledby="sua-title" :class="sheetClass">
+      {{ sheet_head::sheet_header(id="sua", title=a.title, icon="fa-pen") }}
+      {% if a.live %}{% set said = t(key="alert.on") %}{% elif a.is_active %}{% set said = t(key="alert.outside_dates") %}{% else %}{% set said = t(key="alert.off") %}{% endif %}
+      {{ edit_sheet::state(on=a.is_active, text=said, demo=a.is_demo, alert_state=a.state, history=e.history, hide_action="hide_alert") }}
+      <form class="contact-sheet__form" method="post" action="{{ e.action }}" novalidate>
+        {% if e.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=e.errors.message) }}{% endif %}
+        {{ fields::alert_fields(form=e.form, errors=e.errors, choices=b.choices, title_max=limits.alert_title_max, body_max=limits.alert_body_max, prefix="edit", first=true) }}
+        <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button>
+      </form>
+      <p class="edit-sheet__facts">{{ t(key="admin.col_reach") }}: {{ e.record.reach }}</p>
+      {{ history::history_list(rows=e.history, fold=true) }}
+    </section>
   </div>
   {% endif %}
 

@@ -222,7 +222,11 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
         }
         rows.push(PriceRow {
             crop_href: url("admin_crop", &[("id", &price.crop_id.to_string())])?,
-            area_href: url("admin_location", &[("id", &price.location_id.to_string())])?,
+            area_href: ListPosition::default().edit_href(
+                "admin_locations",
+                &[],
+                price.location_id,
+            )?,
             delete_href: position.href("admin_prices", &[("delete", &id)])?,
             price,
         });

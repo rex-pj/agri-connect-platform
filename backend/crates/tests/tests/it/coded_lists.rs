@@ -69,8 +69,21 @@ async fn the_alert_kinds_are_data_on_a_tab_of_the_alerts_page() {
         "SELECT id::text AS v FROM alert_kinds WHERE code = 'sau-benh-hai'",
     )
     .await;
-    let entry = page(&e, &format!("/admin/alert-kinds/{id}"), Some(&admin)).await;
-    assert!(entry.contains("<code>sau-benh-hai</code>"));
+    // Its former page opens its edit sheet on the tab.
+    let res = send(
+        &e.router,
+        get_page(&format!("/admin/alert-kinds/{id}"), Some(&admin)),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::MOVED_PERMANENTLY);
+    let entry = page(
+        &e,
+        &format!("/admin/alerts?tab=kinds&edit={id}"),
+        Some(&admin),
+    )
+    .await;
+    assert!(entry.contains("<code>sau-benh-hai</code>") && entry.contains(r#"id="sua""#));
+    assert!(entry.contains(&format!(r#"action="/admin/alert-kinds/{id}?tab=kinds""#)));
 
     // An alert of it: the home page shows the kind's icon.
     let today = (Utc::now() + Duration::hours(7)).date_naive();
@@ -155,9 +168,9 @@ async fn the_admin_lists_say_each_rows_type_and_sector() {
         "{row}"
     );
     // Each label leads somewhere: the type and the commodity narrow the
-    // list, the sector opens its page.
+    // list, the sector opens its edit sheet.
     assert!(
-        row.contains(r#"href="/admin/sectors/"#)
+        row.contains(r#"href="/admin/sectors?edit="#)
             && row.contains(r#"href="/admin/supplies?commodity_id="#),
         "{row}"
     );
@@ -166,7 +179,7 @@ async fn the_admin_lists_say_each_rows_type_and_sector() {
     assert!(
         services.contains("<th>Phân loại</th>")
             && services.contains("Mọi ngành")
-            && services.contains(r#"href="/admin/categories/"#)
+            && services.contains(r#"href="/admin/categories?type=service&amp;edit="#)
     );
     e.cleanup().await;
 }

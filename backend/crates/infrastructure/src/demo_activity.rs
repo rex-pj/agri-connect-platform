@@ -19,7 +19,9 @@ use std::collections::HashMap;
 
 use application::{
     constants::{ADMIN_UNIT_SNAP_M, VN_UTC_OFFSET_SECS},
+    features::Stage,
     hashing::sha256_hex,
+    posts::STATUS_PUBLISHED,
     usecases::demand_usecase::{report_weeks, vn_today},
     validation::point_wkt,
 };
@@ -37,9 +39,10 @@ use serde::Deserialize;
 use crate::{
     demo_data_repository::demo_business_ids,
     entities::{
-        alert, business, call_click, crop, crop_price, inquiry, job_post, location, partner,
-        partner_contract, partner_contract_service_type, partner_contract_supply_type,
-        partner_sponsored, product, review, search_event, service, ward,
+        alert, business, call_click, commodity, crop, crop_price, info_page, info_page_revision,
+        inquiry, job_post, location, partner, partner_contract, partner_contract_service_type,
+        partner_contract_supply_type, partner_sponsored, post, product, review, search_event,
+        service, ward,
     },
     repositories::admin_unit_repository::ward_code_at,
     sql::{geography_from_text, Geo, QueryAs},
@@ -55,6 +58,13 @@ pub(crate) struct Activity {
     pub(crate) jobs: Vec<DemoJob>,
     pub(crate) partners: Vec<DemoPartner>,
     pub(crate) alerts: Vec<DemoAlert>,
+    /// Articles, published; the volume generator keeps these as they are.
+    #[serde(default)]
+    pub(crate) posts: Vec<DemoPost>,
+    /// Information pages to start from (terms, policies, contact), in
+    /// preview: admins see them, farmers do not, until one is turned on.
+    #[serde(default)]
+    pub(crate) info_pages: Vec<DemoInfoPage>,
 }
 
 /// Call or Zalo taps on a shop (or one of its services or products), by
@@ -134,6 +144,33 @@ pub(crate) struct DemoAlert {
     pub(crate) body: String,
     pub(crate) starts_in_days: i64,
     pub(crate) ends_in_days: i64,
+}
+
+/// An information page and its text, in force since yesterday.
+#[derive(Deserialize)]
+pub(crate) struct DemoInfoPage {
+    pub(crate) code: String,
+    pub(crate) title: String,
+    pub(crate) icon: Option<String>,
+    pub(crate) footer_group: String,
+    pub(crate) in_footer: bool,
+    pub(crate) body: String,
+}
+
+/// An article published `days_ago`, for one sector, the province a demo
+/// shop lies in and one commodity (by name), each optional.
+#[derive(Deserialize)]
+pub(crate) struct DemoPost {
+    pub(crate) kind: String,
+    pub(crate) title: String,
+    pub(crate) summary: String,
+    pub(crate) body: String,
+    pub(crate) sector: Option<String>,
+    pub(crate) province_of: Option<String>,
+    pub(crate) commodity: Option<String>,
+    #[serde(default)]
+    pub(crate) pinned: bool,
+    pub(crate) days_ago: i64,
 }
 
 #[derive(Deserialize)]
@@ -675,6 +712,80 @@ pub(crate) async fn insert(
         })
         .collect();
     counts.alerts = insert_chunks(txn, alerts, "alerts").await?;
+
+    // Articles, published some days ago; a commodity by its name.
+    let commodities: HashMap<String, i32> = commodity::Entity::find()
+        .all(txn)
+        .await
+        .map_err(db_error("commodities"))?
+        .into_iter()
+        .map(|c| (c.name, c.id))
+        .collect();
+    let posts: Vec<_> = data
+        .posts
+        .iter()
+        .map(|p| post::ActiveModel {
+            kind: Set(p.kind.clone()),
+            title: Set(p.title.clone()),
+            summary: Set(p.summary.clone()),
+            body: Set(p.body.clone()),
+            sector: Set(p.sector.clone()),
+            province_code: Set(p
+                .province_of
+                .as_ref()
+                .and_then(|shop| shop_places.get(shop))
+                .map(|at| at.province.clone())),
+            commodity_id: Set(p
+                .commodity
+                .as_ref()
+                .and_then(|name| commodities.get(name).copied())),
+            status: Set(STATUS_PUBLISHED.to_owned()),
+            published_on: Set(Some(ago(p.days_ago))),
+            is_pinned: Set(p.pinned),
+            is_demo: Set(true),
+            ..Default::default()
+        })
+        .collect();
+    counts.posts = insert_chunks(txn, posts, "posts").await?;
+
+    // Information pages, each with one version; a page whose address is
+    // taken already (a real one) is passed over.
+    for (order, page) in data.info_pages.iter().enumerate() {
+        let taken = info_page::Entity::find()
+            .filter(info_page::Column::Code.eq(page.code.clone()))
+            .one(txn)
+            .await
+            .map_err(db_error("info pages"))?
+            .is_some();
+        if taken {
+            continue;
+        }
+        let id = info_page::Entity::insert(info_page::ActiveModel {
+            code: Set(page.code.clone()),
+            title: Set(page.title.clone()),
+            icon: Set(page.icon.clone()),
+            stage: Set(Stage::Preview.code().to_owned()),
+            in_footer: Set(page.in_footer),
+            footer_group: Set(page.footer_group.clone()),
+            display_order: Set(i32::try_from(order).unwrap_or(i32::MAX)),
+            is_demo: Set(true),
+            ..Default::default()
+        })
+        .exec(txn)
+        .await
+        .map_err(db_error("info page"))?
+        .last_insert_id;
+        info_page_revision::Entity::insert(info_page_revision::ActiveModel {
+            page_id: Set(id),
+            body: Set(page.body.clone()),
+            effective_on: Set(today - Duration::days(1)),
+            ..Default::default()
+        })
+        .exec(txn)
+        .await
+        .map_err(db_error("info page text"))?;
+        counts.info_pages += 1;
+    }
     Ok(counts)
 }
 

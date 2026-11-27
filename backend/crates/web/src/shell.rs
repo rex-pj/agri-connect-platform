@@ -934,7 +934,11 @@ mod tests {
         for (i, place) in Place::ALL.into_iter().enumerate() {
             match place.room() {
                 Some(room) => assert_eq!(features(i), room, "{}", place.code()),
-                None => assert_eq!(features(i), 5, "the footer holds every page"),
+                None => assert_eq!(
+                    features(i),
+                    BROWSE.iter().filter(|b| b.feature.is_some()).count(),
+                    "the footer holds every page"
+                ),
             }
         }
         // Home and the services are always on both bars and in the footer.

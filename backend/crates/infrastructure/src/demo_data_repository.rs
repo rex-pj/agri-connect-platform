@@ -37,9 +37,9 @@ use crate::{
     demo_activity::{self, insert_chunks, Activity, DemoAccount, Refs, CHUNK},
     demo_volume::{self, vocabulary, Vocabulary, WardPlace},
     entities::{
-        alert, alert_kind, business, call_click, commodity, crop, crop_price, inquiry, job_post,
-        location, partner, partner_contract, partner_contract_service_type,
-        partner_contract_supply_type, product, review, role, search_event, search_event_week,
+        alert, alert_kind, business, call_click, commodity, consent, crop, crop_price, info_page,
+        inquiry, job_post, location, partner, partner_contract, partner_contract_service_type,
+        partner_contract_supply_type, post, product, review, role, search_event, search_event_week,
         sector, service, service_type, supply_type, user,
     },
     repositories::admin_unit_repository::{ward_code_at, AdminUnitRepository},
@@ -781,8 +781,10 @@ impl DemoDataRepositoryTrait for DemoDataRepository {
             demo_rows::<review::Entity>(db, review::Column::BusinessId, "review count"),
             demo_rows::<call_click::Entity>(db, call_click::Column::BusinessId, "call count"),
         )?;
-        let (alerts, accounts) = tokio::try_join!(
+        let (alerts, posts, info_pages, accounts) = tokio::try_join!(
             flagged::<alert::Entity>(db, alert::Column::IsDemo, "alert count"),
+            flagged::<post::Entity>(db, post::Column::IsDemo, "post count"),
+            flagged::<info_page::Entity>(db, info_page::Column::IsDemo, "info page count"),
             flagged::<user::Entity>(db, user::Column::IsDemo, "account count"),
         )?;
         let (searches, prices, jobs, partners, contracts) = tokio::try_join!(
@@ -825,6 +827,8 @@ impl DemoDataRepositoryTrait for DemoDataRepository {
             partners,
             contracts,
             alerts,
+            posts,
+            info_pages,
             accounts,
         })
     }
@@ -894,6 +898,29 @@ impl DemoDataRepositoryTrait for DemoDataRepository {
             .exec(&txn)
             .await
             .map_err(db_error("remove alerts"))?
+            .rows_affected;
+        activity_removed += post::Entity::delete_many()
+            .filter(post::Column::IsDemo.eq(true))
+            .exec(&txn)
+            .await
+            .map_err(db_error("remove posts"))?
+            .rows_affected;
+        // A demo page's consents go first: they name its versions.
+        let demo_pages = Query::select()
+            .column(info_page::Column::Id)
+            .from(info_page::Entity)
+            .and_where(info_page::Column::IsDemo.eq(true))
+            .to_owned();
+        consent::Entity::delete_many()
+            .filter(consent::Column::PageId.in_subquery(demo_pages))
+            .exec(&txn)
+            .await
+            .map_err(db_error("remove consents"))?;
+        activity_removed += info_page::Entity::delete_many()
+            .filter(info_page::Column::IsDemo.eq(true))
+            .exec(&txn)
+            .await
+            .map_err(db_error("remove info pages"))?
             .rows_affected;
         activity_removed += search_event::Entity::delete_many()
             .filter(search_event::Column::IsDemo.eq(true))
@@ -968,6 +995,7 @@ impl DemoDataRepositoryTrait for DemoDataRepository {
             vec![
                 used_by(crop::Entity, crop::Column::CommodityId),
                 used_by(product::Entity, product::Column::CommodityId),
+                used_by(post::Entity, post::Column::CommodityId),
             ],
             "remove commodities",
         )
@@ -993,6 +1021,7 @@ impl DemoDataRepositoryTrait for DemoDataRepository {
                 used_by(service_type::Entity, service_type::Column::Sector),
                 used_by(supply_type::Entity, supply_type::Column::Sector),
                 used_by(alert::Entity, alert::Column::Sector),
+                used_by(post::Entity, post::Column::Sector),
             ],
             "remove sectors",
         )

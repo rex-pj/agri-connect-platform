@@ -85,6 +85,10 @@ pub struct DemoCounts {
     pub partners: u64,
     pub contracts: u64,
     pub alerts: u64,
+    /// Articles (news and guides).
+    pub posts: u64,
+    /// Information pages to start from.
+    pub info_pages: u64,
     /// Provider and partner accounts of the demo data at volume.
     pub accounts: u64,
 }
@@ -105,6 +109,8 @@ impl DemoCounts {
             self.jobs,
             self.partners,
             self.alerts,
+            self.posts,
+            self.info_pages,
             self.accounts,
         ]
         .iter()

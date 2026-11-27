@@ -242,3 +242,49 @@ async fn only_an_admin_keeps_the_articles() {
     assert_eq!(res.status(), StatusCode::FORBIDDEN);
     e.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn the_demo_data_brings_articles_and_pages_to_start_from_and_takes_them_away() {
+    let e = env_with_origin().await;
+    let actor = integration_tests::first_admin(&e.state).await;
+    let admin = sign_in(&e, "quantri", "matkhau123").await;
+    e.state
+        .usecases
+        .setup
+        .load_demo(&actor)
+        .await
+        .unwrap_or_else(|err| panic!("{err}"));
+    open_articles(&e, &admin, "on").await;
+
+    // The demo articles are published; the pages wait in preview, so a
+    // sign-up is not yet asked to accept them.
+    assert!(html_of(&e, "/articles/guides", None)
+        .await
+        .contains("Phòng rầy nâu cho lúa Đông Xuân"));
+    assert_eq!(
+        status_of(&e, "/info/lien-he", None).await,
+        StatusCode::NOT_FOUND
+    );
+    assert!(html_of(&e, "/info/lien-he", Some(&admin))
+        .await
+        .contains("preview-strip"));
+    assert!(!html_of(&e, "/register", None)
+        .await
+        .contains(r#"name="accepted_terms""#));
+
+    e.state
+        .usecases
+        .setup
+        .remove_demo(&actor)
+        .await
+        .unwrap_or_else(|err| panic!("{err}"));
+    assert!(html_of(&e, "/articles", None)
+        .await
+        .contains("Chưa có bài viết nào."));
+    assert_eq!(
+        status_of(&e, "/info/lien-he", Some(&admin)).await,
+        StatusCode::NOT_FOUND
+    );
+    e.cleanup().await;
+}

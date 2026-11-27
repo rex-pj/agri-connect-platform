@@ -1684,5 +1684,64 @@
       "starts_in_days": 0,
       "ends_in_days": 7
     }
+  ],
+  "posts": [
+    {
+      "kind": "guide",
+      "title": "Phòng rầy nâu cho lúa Đông Xuân",
+      "summary": "Ba việc giữ ruộng lúa khỏi rầy nâu từ lúc gieo đến lúc trổ.",
+      "body": "## Nhận biết rầy nâu\n\nRầy bám ở gốc lúa, hút nhựa làm lá vàng rồi cháy từng chòm.\n\n## Phòng ngừa\n\n- Gieo sạ đồng loạt, né rầy theo lịch của xã.\n- Không bón thừa đạm.\n- Thăm đồng mỗi tuần, vạch gốc lúa xem mật số rầy.\n\n## Khi rầy nhiều\n\nGọi cán bộ khuyến nông hoặc nhà cung cấp dịch vụ phun để được hướng dẫn. Làm đúng hướng dẫn trên nhãn thuốc.",
+      "sector": "crop",
+      "province_of": "Dịch vụ Nguyễn Văn An",
+      "commodity": "Lúa",
+      "pinned": true,
+      "days_ago": 6
+    },
+    {
+      "kind": "news",
+      "title": "Giá sầu riêng Ri6 nhích lên đầu mùa",
+      "summary": "Thương lái thu mua tại vườn tăng giá vài nghìn đồng mỗi ký so với tuần trước.",
+      "body": "## Diễn biến\n\nTuần này nhiều vườn ở Đồng Tháp bán sầu riêng Ri6 cao hơn tuần trước.\n\n## Lời khuyên\n\nBà con xem giá ở bảng giá nông sản trước khi chốt với thương lái, và cắt trái đủ ngày tuổi.",
+      "sector": "crop",
+      "province_of": "Vườn Tư Phát",
+      "commodity": "Sầu riêng",
+      "days_ago": 1
+    },
+    {
+      "kind": "news",
+      "title": "Tiêm phòng dịch tả heo châu Phi miễn phí đợt mới",
+      "summary": "Thú y xã tổ chức tiêm phòng cho đàn heo nuôi nhỏ lẻ trong tháng này.",
+      "body": "## Ai được tiêm\n\nHộ nuôi heo nhỏ lẻ đăng ký với thú y xã.\n\n## Chuẩn bị\n\nNhốt heo riêng, báo trước số con cần tiêm.",
+      "sector": "livestock",
+      "province_of": "Thú y Bảy Lộc",
+      "commodity": "Heo",
+      "days_ago": 3
+    }
+  ],
+  "info_pages": [
+    {
+      "code": "dieu-khoan-su-dung",
+      "title": "Điều khoản sử dụng",
+      "icon": "fa-file-contract",
+      "footer_group": "policy",
+      "in_footer": true,
+      "body": "> Bản mẫu: sửa cho đúng doanh nghiệp của bạn và nhờ luật sư xem trước khi bật.\n\n## Phạm vi\n\nĐiều khoản này áp dụng cho mọi người dùng nền tảng: bà con tìm dịch vụ, vật tư và nhà cung cấp đăng tin.\n\n## Nền tảng làm gì\n\nNền tảng nối bà con với nhà cung cấp gần nhà. Nền tảng không bán hàng, không nhận tiền thay nhà cung cấp.\n\n## Trách nhiệm của nhà cung cấp\n\n- Thông tin đúng sự thật, ảnh thật.\n- Giá và điều kiện nói rõ khi bà con gọi.\n\n## Khiếu nại\n\nGửi về đường dây hỗ trợ ở chân trang. Nền tảng trả lời trong 3 ngày làm việc."
+    },
+    {
+      "code": "chinh-sach-du-lieu-ca-nhan",
+      "title": "Chính sách dữ liệu cá nhân",
+      "icon": "fa-user-shield",
+      "footer_group": "policy",
+      "in_footer": true,
+      "body": "> Bản mẫu: sửa cho đúng doanh nghiệp của bạn và nhờ luật sư xem trước khi bật.\n\n## Dữ liệu thu thập\n\n- Bà con: tên và số điện thoại khi gửi yêu cầu liên hệ, tin cần mướn hoặc đánh giá.\n- Nhà cung cấp: email, tên, số điện thoại, địa chỉ kinh doanh.\n\n## Mục đích\n\nChuyển yêu cầu của bà con tới đúng nhà cung cấp. Báo cáo cho đối tác chỉ là số tổng, không có tên hay số điện thoại.\n\n## Thời gian lưu\n\nTin cần mướn được xoá sau một thời gian; số điện thoại của người đánh giá chỉ lưu dạng mã hoá.\n\n## Quyền của bạn\n\nBạn có thể yêu cầu xem, sửa hoặc xoá dữ liệu của mình qua đường dây hỗ trợ."
+    },
+    {
+      "code": "lien-he",
+      "title": "Liên hệ",
+      "icon": "fa-headset",
+      "footer_group": "about",
+      "in_footer": true,
+      "body": "## Đường dây hỗ trợ\n\nGọi hoặc nhắn Zalo theo số ở chân trang, giờ hành chính từ thứ Hai đến thứ Bảy.\n\n## Nhà cung cấp muốn đăng tin\n\nĐăng ký ở nút «Đăng ký nhà cung cấp», hoặc gọi đường dây hỗ trợ để được giúp tạo gian hàng."
+    }
   ]
 }

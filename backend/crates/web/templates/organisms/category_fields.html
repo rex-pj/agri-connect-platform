@@ -40,9 +40,9 @@
   </div>
 </div>
 <div class="row g-2">
-  <div class="col-sm-6">{{ field::icon_select(id=prefix ~ "-icon", name="icon", label=t(key="category_form.icon"), value=form.icon, error=errors.fields.icon | default(value="")) }}</div>
-  <div class="col-sm-3">{{ field::input(id=prefix ~ "-color", name="color", label=t(key="category_form.color"), value=form.color, error=errors.fields.color | default(value=""), maxlength=limits.color, placeholder=t(key="category_form.color_placeholder"), autocomplete="off") }}</div>
-  <div class="col-sm-3">{{ field::input(id=prefix ~ "-order", name="display_order", label=t(key="form.display_order"), value=form.display_order, type="number", inputmode="numeric", error=errors.fields.display_order | default(value="")) }}</div>
+  <div class="col-8 col-sm-9">{{ field::icon_select(id=prefix ~ "-icon", name="icon", label=t(key="category_form.icon"), value=form.icon, error=errors.fields.icon | default(value="")) }}</div>
+  <div class="col-4 col-sm-3">{{ field::input(id=prefix ~ "-order", name="display_order", label=t(key="form.display_order"), value=form.display_order, type="number", inputmode="numeric", error=errors.fields.display_order | default(value="")) }}</div>
 </div>
+{{ field::color_select(id=prefix ~ "-color", name="color", label=t(key="category_form.color"), presets=limits.color_presets, value=form.color, none=form.color_none != "", fallback=limits.color_default, error=errors.fields.color | default(value="")) }}
 {{ field::textarea(id=prefix ~ "-description", name="description", label=t(key="form.description"), value=form.description, error=errors.fields.description | default(value=""), maxlength=limits.description, rows=2) }}
 {%- endmacro category_fields %}

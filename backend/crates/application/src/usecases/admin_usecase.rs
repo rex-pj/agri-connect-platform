@@ -48,7 +48,7 @@ use crate::{
         PERM_USER_READ, PERM_USER_ROLE_UPDATE, PERM_USER_STATUS_UPDATE,
     },
     constants::{
-        ADMIN_PAGE_SIZE, CALL_STATS_DAYS, CATEGORY_COLOR_MAX, CATEGORY_DESCRIPTION_MAX,
+        ADMIN_PAGE_SIZE, CALL_STATS_DAYS, CATEGORY_DESCRIPTION_MAX,
         CATEGORY_NAME_MAX, CATEGORY_SLUG_MAX, HISTORY_SHOWN, ICON_SEARCH_RESULTS,
         LOCATION_BULK_MAX, LOCATION_LABEL_MAX, SLUG_CANDIDATES_PER_QUERY,
     },
@@ -1937,7 +1937,7 @@ fn validate_category(
     let name = input.name.trim().to_owned();
     let slug = input.slug.trim().to_owned();
     let icon = validation::icon(input.icon.as_deref());
-    let color = non_blank(input.color);
+    let color = validation::color(input.color.as_deref());
     let description = non_blank(input.description);
     let sector = input.sector.trim().to_owned();
     Validation::new()
@@ -1958,7 +1958,7 @@ fn validate_category(
         )
         .rule("slug", max_chars(&slug, CATEGORY_SLUG_MAX))
         .check(icon.is_err(), "icon", ErrorCode::InvalidIcon)
-        .rule("color", max_chars_opt(&color, CATEGORY_COLOR_MAX))
+        .check(color.is_err(), "color", ErrorCode::InvalidColor)
         .rule(
             "description",
             max_chars_opt(&description, CATEGORY_DESCRIPTION_MAX),
@@ -1978,7 +1978,7 @@ fn validate_category(
         name,
         slug,
         icon: icon.ok().flatten(),
-        color,
+        color: color.ok().flatten(),
         description,
         display_order: input.display_order,
         sector,

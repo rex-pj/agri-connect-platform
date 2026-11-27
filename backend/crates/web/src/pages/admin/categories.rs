@@ -11,9 +11,7 @@
 //! confirmation there); sent with `back=list`, it lands back on the list.
 
 use application::{
-    constants::{
-        CATEGORY_COLOR_MAX, CATEGORY_DESCRIPTION_MAX, CATEGORY_NAME_MAX, CATEGORY_SLUG_MAX,
-    },
+    constants::{CATEGORY_DESCRIPTION_MAX, CATEGORY_NAME_MAX, CATEGORY_SLUG_MAX},
     inputs::CategoryInput,
     outputs::AdminCategoryDto,
 };
@@ -27,6 +25,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     app_state::AppState,
+    constants::{COLOR_DEFAULT, COLOR_PRESETS},
     cookies::{Flash, TakeFlash},
     extract::{ApiForm, ApiPath, ApiQuery},
     labels::{sector_name, sector_options, CodeOption},
@@ -54,6 +53,9 @@ pub struct CategoryForm {
     pub slug: String,
     pub icon: String,
     pub color: String,
+    /// The colour box's "no colour" tick (`color_none`): a colour box always
+    /// sends a colour, so this is how a category has none.
+    pub color_none: String,
     pub description: String,
     pub display_order: String,
     pub sector: String,
@@ -61,11 +63,16 @@ pub struct CategoryForm {
 
 impl CategoryForm {
     fn input(&self) -> Result<CategoryInput, Error> {
+        let color = if self.color_none.is_empty() {
+            self.color.clone()
+        } else {
+            String::new()
+        };
         Ok(CategoryInput {
             name: self.name.clone(),
             slug: self.slug.clone(),
             icon: Some(self.icon.clone()),
-            color: Some(self.color.clone()),
+            color: Some(color),
             description: Some(self.description.clone()),
             display_order: whole_number(&self.display_order, "display_order")?,
             sector: self.sector.clone(),
@@ -79,6 +86,7 @@ impl CategoryForm {
             slug: c.slug.clone(),
             icon: c.icon.clone().unwrap_or_default(),
             color: c.color.clone().unwrap_or_default(),
+            color_none: String::new(),
             description: c.description.clone().unwrap_or_default(),
             display_order: c.display_order.to_string(),
             sector: c.sector.clone().unwrap_or_default(),
@@ -86,22 +94,25 @@ impl CategoryForm {
     }
 }
 
-/// The use case's length limits, for the boxes' `maxlength`.
+/// The use case's length limits, for the boxes' `maxlength`, and the colour
+/// box's swatches and starting colour.
 #[derive(Serialize)]
 pub struct Limits {
     pub name: usize,
     pub slug: usize,
     pub slug_pattern: &'static str,
-    pub color: usize,
     pub description: usize,
+    pub color_presets: &'static [&'static str],
+    pub color_default: &'static str,
 }
 
 const LIMITS: Limits = Limits {
     name: CATEGORY_NAME_MAX,
     slug: CATEGORY_SLUG_MAX,
     slug_pattern: application::validation::SLUG_PATTERN,
-    color: CATEGORY_COLOR_MAX,
     description: CATEGORY_DESCRIPTION_MAX,
+    color_presets: COLOR_PRESETS,
+    color_default: COLOR_DEFAULT,
 };
 
 #[derive(Serialize)]

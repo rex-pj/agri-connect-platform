@@ -46,6 +46,25 @@ pub fn icon(text: Option<&str>) -> Result<Option<String>> {
     }
 }
 
+/// A colour as a hex code, kept as `#rrggbb` in lower case (what a browser's
+/// colour box sends; `#RGB`, upper case and a missing `#` are taken too):
+/// `None` for blank, `invalid_color` for anything else ("green", `rgb(…)`).
+pub fn color(text: Option<&str>) -> Result<Option<String>> {
+    let Some(text) = text.map(str::trim).filter(|t| !t.is_empty()) else {
+        return Ok(None);
+    };
+    let hex = text.strip_prefix('#').unwrap_or(text);
+    if !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(Error::new(ErrorCode::InvalidColor));
+    }
+    let full: String = match hex.len() {
+        6 => hex.to_owned(),
+        3 => hex.chars().flat_map(|c| [c, c]).collect(),
+        _ => return Err(Error::new(ErrorCode::InvalidColor)),
+    };
+    Ok(Some(format!("#{}", full.to_ascii_lowercase())))
+}
+
 /// A sector code as sent (`coded`): `None` for blank (every sector),
 /// `invalid_sector` for one not in `known`.
 pub fn sector(text: &str, known: &[CodedEntry]) -> Result<Option<String>> {
@@ -228,6 +247,19 @@ pub fn typed_state(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_colour_is_kept_as_six_lower_case_hex_digits() {
+        let kept = |t: &str| color(Some(t)).ok().flatten();
+        assert_eq!(kept("#065F46"), Some("#065f46".to_owned()));
+        assert_eq!(kept(" 1e40af "), Some("#1e40af".to_owned()));
+        assert_eq!(kept("#AbC"), Some("#aabbcc".to_owned()));
+        assert!(matches!(color(Some("  ")), Ok(None)));
+        assert!(matches!(color(None), Ok(None)));
+        for bad in ["green", "#12345", "#1234567", "rgb(0,0,0)", "#gg0000", "#"] {
+            assert!(color(Some(bad)).is_err(), "{bad}");
+        }
+    }
 
     #[test]
     fn one_line_keeps_no_line_break_nor_control_character() {

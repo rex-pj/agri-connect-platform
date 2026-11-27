@@ -129,6 +129,7 @@ error_codes! {
     InvalidCommodity          => (BadRequest,      "invalid_commodity"),
     InvalidSector             => (BadRequest,      "invalid_sector"),
     InvalidIcon               => (BadRequest,      "invalid_icon"),
+    InvalidColor              => (BadRequest,      "invalid_color"),
     InvalidAlertKind          => (BadRequest,      "invalid_alert_kind"),
     AlertTitleRequired        => (BadRequest,      "alert_title_required"),
     AlertBodyRequired         => (BadRequest,      "alert_body_required"),

@@ -350,6 +350,69 @@ document.addEventListener("alpine:init", () => {
   // On a form: any change saves it. Its save button (x-show="withoutScript")
   // is only for visitors without JS.
   Alpine.data("autoSubmit", () => ({
+  // A colour box (form_field.html color_select): one row of round swatches,
+  // "no colour", the suggested colours, then "another colour" (the
+  // browser's colour input, a rainbow until a colour of its own is chosen).
+  // Without JS only that input shows, with a "no colour" tick; with JS the
+  // tick hides but is still what the form sends. The swatches are painted
+  // from their data-color through the CSSOM, which the CSP allows (a style
+  // attribute it does not).
+  Alpine.data("colorSelect", () => ({
+    value: "",
+    none: false,
+    custom: false,
+    withoutScript: false,
+
+    init() {
+      this.value = this.$refs.picker.value;
+      this.none = this.$refs.none.checked;
+      for (const swatch of this.swatches()) {
+        swatch.style.backgroundColor = swatch.dataset.color;
+      }
+      this.mark();
+    },
+    swatches() {
+      return [...this.$el.querySelectorAll("[data-color]")];
+    },
+    set(color) {
+      this.value = color.toLowerCase();
+      this.$refs.picker.value = this.value;
+      this.none = false;
+      this.$refs.none.checked = false;
+      this.mark();
+    },
+    picked() {
+      this.set(this.$refs.picker.value);
+    },
+    choose(event) {
+      this.set(event.currentTarget.dataset.color);
+    },
+    clear() {
+      this.none = true;
+      this.$refs.none.checked = true;
+      this.mark();
+    },
+    toggled() {
+      this.none = this.$refs.none.checked;
+      this.mark();
+    },
+    // The chosen swatch says so (aria-pressed draws its ring); a colour no
+    // swatch has is shown and ringed on "another colour".
+    mark() {
+      let preset = false;
+      for (const swatch of this.swatches()) {
+        const on = !this.none && swatch.dataset.color === this.value;
+        preset = preset || on;
+        swatch.setAttribute("aria-pressed", on ? "true" : "false");
+      }
+      this.$refs.noneSwatch.setAttribute("aria-pressed", this.none ? "true" : "false");
+      this.custom = !this.none && !preset;
+    },
+    get pickTone() {
+      return { "color-swatch--rainbow": !this.custom, "color-swatch--chosen": this.custom };
+    },
+  }));
+
     withoutScript: false,
 
     submit() {

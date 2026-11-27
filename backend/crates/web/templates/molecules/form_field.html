@@ -86,6 +86,39 @@
 </div>
 {%- endmacro icon_select %}
 
+{#- A colour as a hex code (`#065f46`): one row of round swatches, "no
+    colour", `presets` (one tap each), then "another colour": the browser's
+    own colour box, which opens the phone's or the system's picker, drawn
+    as a rainbow until it holds a colour no swatch has (Alpine
+    `colorSelect` paints and rings them; no inline style, no library). A
+    colour box always holds a colour, so "no colour" is a tick sent as
+    `<name>_none`: the control itself without JS (when only the colour box
+    shows), hidden but still sent with JS; `fallback` waits in the box
+    meanwhile. A stored value that is no colour code is said under the row,
+    so the form never drops it unseen. -#}
+{% macro color_select(id, name, label, presets, value="", none=false, fallback="#000000", error="") -%}
+{% set valid = value is matching("^#[0-9a-fA-F]{6}$") -%}
+{% set off = none or not valid -%}
+{% if valid %}{% set shown = value | lower %}{% else %}{% set shown = fallback %}{% endif -%}
+{% set unreadable = value and not valid -%}
+<div class="form-field" x-data="colorSelect">
+  <label class="form-label fw-semibold" for="{{ id }}">{{ label }}</label>
+  <div class="color-swatches" role="group" aria-label="{{ label }}">
+    <button type="button" class="color-swatch color-swatch--none" aria-label="{{ t(key="form.color_none") }}" title="{{ t(key="form.color_none") }}" aria-pressed="{% if off %}true{% else %}false{% endif %}" x-ref="noneSwatch" x-on:click="clear" x-cloak></button>
+    {% for c in presets %}<button type="button" class="color-swatch" data-color="{{ c }}" aria-label="{{ c }}" title="{{ c }}" aria-pressed="false" x-on:click="choose" x-cloak></button>{% endfor %}
+    <span class="color-swatch color-swatch--pick" :class="pickTone">
+      <input class="color-swatch__input{% if error %} is-invalid{% endif %}" id="{{ id }}" name="{{ name }}" type="color" value="{{ shown }}" title="{{ t(key="form.color_other") }}" aria-label="{{ t(key="form.color_other") }}" x-ref="picker" x-on:input="picked" x-on:change="picked"{% if unreadable or error %} aria-describedby="{% if unreadable %}{{ id }}-hint{% endif %}{% if unreadable and error %} {% endif %}{% if error %}{{ id }}-error{% endif %}"{% endif %}{% if error %} aria-invalid="true"{% endif %}>
+    </span>
+  </div>
+  <div class="form-check mt-2" x-show="withoutScript">
+    <input class="form-check-input" type="checkbox" id="{{ id }}-none" name="{{ name }}_none" value="1"{% if off %} checked{% endif %} x-ref="none" x-on:change="toggled">
+    <label class="form-check-label" for="{{ id }}-none">{{ t(key="form.color_none") }}</label>
+  </div>
+  {% if unreadable %}<div class="form-text text-warning-emphasis" id="{{ id }}-hint">{{ t(key="form.color_unreadable", name=value) }}</div>{% endif %}
+  {% if error %}<div class="invalid-feedback d-block" id="{{ id }}-error">{{ error }}</div>{% endif %}
+</div>
+{%- endmacro color_select %}
+
 {#- The library `area_select` and `icon_select` search with, for a page's
     `vendor` block. -#}
 {% macro searchable_select_assets() -%}

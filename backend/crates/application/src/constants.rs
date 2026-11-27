@@ -273,7 +273,6 @@ pub const ICON_SEARCH_RESULTS: usize = 60;
 /// Shops a contract's sponsor search lists at once (its page, `?q=`): the
 /// first by name, or those matching the words; an area can hold thousands.
 pub const SPONSOR_CANDIDATES_SHOWN: u64 = 20;
-pub const CATEGORY_COLOR_MAX: usize = 20;
 pub const CATEGORY_DESCRIPTION_MAX: usize = 300;
 /// Numbered slug candidates (`base`, `base-2`, …) checked per query while
 /// looking for a free one.

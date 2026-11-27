@@ -369,3 +369,129 @@ async fn the_footer_lists_the_pages_put_there_and_who_runs_the_platform() {
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     e.cleanup().await;
 }
+
+/// A page at `code`, on and written today.
+async fn publish(e: &Env, admin: &str, title: &str, code: &str) {
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/info-pages",
+            &[("title", title), ("code", code), ("footer_group", "policy")],
+            Some(admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER, "create {code}");
+    let record = res.headers()[header::LOCATION]
+        .to_str()
+        .unwrap_or_default()
+        .to_owned();
+    let (status, _) = write(
+        e,
+        admin,
+        &record,
+        &[
+            ("body", "## Nội dung\n\nĐiều khoản."),
+            ("effective_on", &day(0)),
+        ],
+    )
+    .await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
+    set_stage(e, admin, &record, "on").await;
+}
+
+fn sign_up(email: &str, ticked: bool) -> Vec<(&str, &str)> {
+    let mut form = vec![
+        ("business_name", "Vườn Sáu"),
+        ("business_phone", "0907777777"),
+        ("email", email),
+        ("password", "matkhau123"),
+        ("password2", "matkhau123"),
+    ];
+    if ticked {
+        form.push(("accepted_terms", "on"));
+    }
+    form
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn a_sign_up_accepts_the_terms_once_they_are_on_and_it_is_kept() {
+    let e = env_with_origin().await;
+    let admin = install_admin(&e).await;
+
+    // Without the pages there is nothing to accept.
+    let register = html_of(&e, "/register", None).await;
+    assert!(!register.contains(r#"name="accepted_terms""#));
+    assert!(!html_of(&e, "/jobs/new", None)
+        .await
+        .contains("consent-note"));
+
+    publish(&e, &admin, "Điều khoản sử dụng", "dieu-khoan-su-dung").await;
+    publish(
+        &e,
+        &admin,
+        "Chính sách dữ liệu cá nhân",
+        "chinh-sach-du-lieu-ca-nhan",
+    )
+    .await;
+    let register = html_of(&e, "/register", None).await;
+    assert!(register.contains(r#"name="accepted_terms""#));
+    assert!(register.contains(r#"href="/info/dieu-khoan-su-dung""#));
+    assert!(register.contains(r#"href="/info/chinh-sach-du-lieu-ca-nhan""#));
+    // The farmers' forms name the policy without a box to tick.
+    let job = html_of(&e, "/jobs/new", None).await;
+    assert!(job.contains("consent-note"));
+    assert!(job.contains(r#"href="/info/chinh-sach-du-lieu-ca-nhan""#));
+
+    // Not ticked: refused, nothing made.
+    let res = send(
+        &e.router,
+        post_form("/register", &sign_up("sau@example.vn", false), None),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert!(body_text(res)
+        .await
+        .contains("Vui lòng đồng ý với điều khoản và chính sách để tạo tài khoản."));
+    assert_eq!(
+        scalar(
+            &e,
+            "SELECT count(*)::text AS v FROM users WHERE email = 'sau@example.vn'"
+        )
+        .await,
+        "0"
+    );
+
+    // Ticked: the account keeps which versions it accepted.
+    let res = send(
+        &e.router,
+        post_form("/register", &sign_up("sau@example.vn", true), None),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        scalar(
+            &e,
+            "SELECT count(*)::text AS v FROM consents c JOIN users u ON u.id = c.user_id
+              WHERE u.email = 'sau@example.vn'"
+        )
+        .await,
+        "2"
+    );
+    e.cleanup().await;
+}
+
+async fn scalar(e: &Env, sql: &str) -> String {
+    use sea_orm::{ConnectionTrait, Statement};
+    e.t.db
+        .query_one(Statement::from_string(
+            e.t.db.get_database_backend(),
+            sql.to_owned(),
+        ))
+        .await
+        .ok()
+        .flatten()
+        .and_then(|row| row.try_get::<String>("", "v").ok())
+        .unwrap_or_default()
+}

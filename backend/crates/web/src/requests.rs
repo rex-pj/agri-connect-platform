@@ -30,6 +30,10 @@ pub struct RegisterRequest {
     pub full_name: Option<String>,
     pub business_name: String,
     pub business_phone: String,
+    /// The terms and personal data policy were accepted (asked while they
+    /// are on).
+    #[serde(default)]
+    pub accepted_terms: bool,
 }
 
 #[derive(Deserialize)]

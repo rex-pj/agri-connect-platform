@@ -611,6 +611,7 @@ pub fn signup(
         full_name: None,
         business_name: business_name.into(),
         business_phone: phone.into(),
+        accepted_terms: true,
         client: String::new(),
     }
 }

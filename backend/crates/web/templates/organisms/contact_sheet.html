@@ -9,7 +9,8 @@
 {% import "atoms/alert.html" as alerts %}
 {% import "molecules/form_field.html" as field %}
 {% import "molecules/sheet_header.html" as sheet_head %}
-{% macro contact_sheet(provider, contact, limits, return_to="", product_id="") -%}
+{% import "molecules/consent_note.html" as consent %}
+{% macro contact_sheet(provider, contact, limits, return_to="", product_id="", policy="") -%}
 <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
 <section class="contact-sheet" id="lien-he" aria-labelledby="lien-he-title" :class="sheetClass">
   {{ sheet_head::sheet_header(id="lien-he", title=t(key="contact.title"), icon="fa-comment-dots") }}
@@ -29,6 +30,7 @@
     {% endif %}
     {{ field::input(id="cs_name", name="requester_name", label=t(key="form.full_name"), value=contact.values.requester_name, error=contact.errors.requester_name | default(value=""), required=true, placeholder=t(key="contact.name_placeholder"), autocomplete="name", maxlength=limits.name_max) }}
     {{ field::textarea(id="cs_note", name="note", label=t(key="contact.note"), value=contact.values.note, error=contact.errors.note | default(value=""), placeholder=t(key="contact.note_placeholder"), maxlength=limits.note_max) }}
+    {{ consent::consent_note(href=policy) }}
     <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-paper-plane") }} {{ t(key="contact.send") }}</button>
   </form>
 </section>

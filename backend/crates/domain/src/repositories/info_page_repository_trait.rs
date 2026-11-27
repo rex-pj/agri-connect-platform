@@ -41,4 +41,12 @@ pub trait InfoPageRepositoryTrait {
 
     /// The pages with a version in force on `today`, in one query.
     async fn with_text(&self, today: NaiveDate) -> Result<Vec<i32>, Error>;
+
+    /// Of the pages at `codes` that are on, each one's version in force on
+    /// `today`, as (page, version): what a sign-up is asked to accept.
+    async fn on_in_force(&self, codes: &[&str], today: NaiveDate)
+        -> Result<Vec<(i32, i32)>, Error>;
+
+    /// That `user_id` accepted each (page, version).
+    async fn record_consents(&self, user_id: i32, accepted: &[(i32, i32)]) -> Result<(), Error>;
 }

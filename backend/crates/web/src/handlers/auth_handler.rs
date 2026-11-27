@@ -70,6 +70,7 @@ impl AuthHandler {
                 full_name: req.full_name,
                 business_name: req.business_name,
                 business_phone: req.business_phone,
+                accepted_terms: req.accepted_terms,
                 client: crate::middleware::client_ip::client_key(ip.as_deref()),
             })
             .await?;

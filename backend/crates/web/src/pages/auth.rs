@@ -6,7 +6,7 @@
 //! - /login sends a fresh installation to /setup.
 //! - Passwords are never echoed back into a re-shown form.
 
-use application::authz::Actor;
+use application::{authz::Actor, info_pages::SIGNUP_CONSENT};
 use axum::{extract::State, response::Response, Extension};
 use domain::{Error, ErrorCode};
 use serde::{Deserialize, Serialize};
@@ -18,6 +18,7 @@ use crate::{
     middleware::auth::Viewer,
     pages::{
         forms::{confirm_password, is_form_error, FormErrors},
+        info::InfoLink,
         see_other,
     },
     routes,
@@ -168,6 +169,8 @@ pub struct RegisterForm {
     pub business_phone: String,
     pub full_name: String,
     pub email: String,
+    /// The terms box: sent only when ticked.
+    pub accepted_terms: String,
     #[serde(skip_serializing)]
     pub password: String,
     #[serde(skip_serializing)]
@@ -182,6 +185,28 @@ pub struct RegisterPage {
     pub open: bool,
     /// Where a would-be provider can ask instead.
     pub support: SupportLines,
+    /// The pages a sign-up accepts, while the admin has them on; none: no
+    /// box to tick.
+    pub consent: Vec<InfoLink>,
+}
+
+/// The terms and personal data policy a sign-up accepts, as links.
+async fn consent_links(state: &AppState) -> Result<Vec<InfoLink>, Error> {
+    let pages = state.usecases.info_page.shown(false).await?;
+    let mut links = Vec::new();
+    for page in pages
+        .into_iter()
+        .filter(|p| SIGNUP_CONSENT.contains(&p.code.as_str()))
+    {
+        links.push(InfoLink {
+            href: routes::url("info_page", &[("code", &page.code)])
+                .map_err(|e| Error::internal(format!("auth links: {e}")))?,
+            title: page.title,
+            icon: page.icon,
+            preview: page.preview,
+        });
+    }
+    Ok(links)
 }
 
 pub async fn register_page(
@@ -197,6 +222,7 @@ pub async fn register_page(
         errors: FormErrors::default(),
         open: settings.registration_open(),
         support: SupportLines::of(&settings),
+        consent: consent_links(&state).await?,
     };
     render_page(
         &state,
@@ -225,6 +251,7 @@ pub async fn register(
                     full_name,
                     business_name: form.business_name.clone(),
                     business_phone: form.business_phone.clone(),
+                    accepted_terms: !form.accepted_terms.is_empty(),
                     client: crate::middleware::client_ip::client_key(ip.as_deref()),
                 })
                 .await
@@ -234,6 +261,7 @@ pub async fn register(
         Ok(login) => signed_in(&state, policy, login, None).await,
         Err(err) => {
             let settings = state.usecases.settings.current().await?;
+            let consent = consent_links(&state).await?;
             reshow(
                 &state,
                 &url("register")?,
@@ -244,6 +272,7 @@ pub async fn register(
                     errors,
                     open: settings.registration_open(),
                     support: SupportLines::of(&settings),
+                    consent,
                 },
             )
         }

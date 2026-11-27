@@ -138,6 +138,7 @@ error_codes! {
     InvalidInfoPageStage      => (BadRequest,      "invalid_info_page_stage"),
     InvalidFooterGroup        => (BadRequest,      "invalid_footer_group"),
     InvalidEffectiveDate      => (BadRequest,      "invalid_effective_date"),
+    ConsentRequired           => (BadRequest,      "consent_required"),
     InvalidProvince           => (BadRequest,      "invalid_province"),
     UnitRequired              => (BadRequest,      "unit_required"),
     InvalidPriceRange         => (BadRequest,      "invalid_price_range"),

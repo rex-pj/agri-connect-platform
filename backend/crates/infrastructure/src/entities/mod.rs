@@ -6,6 +6,7 @@ pub mod call_click;
 pub mod call_click_week;
 pub mod catalogue_state;
 pub mod commodity;
+pub mod consent;
 pub mod crop;
 pub mod crop_price;
 pub mod email_verification_token;

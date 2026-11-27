@@ -3,6 +3,7 @@
 {% import "atoms/alert.html" as alerts %}
 {% import "molecules/page_hero.html" as hero %}
 {% import "molecules/form_field.html" as field %}
+{% import "molecules/consent_note.html" as consent %}
 {#- A farmer posts a job: the service, where, what, a name and a phone.
     Where: the `ac-geolocate` island fills the two hidden position boxes;
     else a ward found by typing its name (Alpine `wardSearch`, its choices
@@ -52,6 +53,7 @@
       {{ field::textarea(id="job-description", name="description", label=t(key="job.description"), value=f.description, error=e.description | default(value=""), placeholder=t(key="job.description_placeholder"), maxlength=limits.job_description_max, rows=3) }}
       {{ field::input(id="job-name", name="requester_name", label=t(key="form.full_name"), value=f.requester_name, error=e.requester_name | default(value=""), required=true, placeholder=t(key="contact.name_placeholder"), autocomplete="name", maxlength=page.name_max) }}
       {{ field::input(id="job-phone", name="requester_phone", label=t(key="form.phone"), type="tel", value=f.requester_phone, error=e.requester_phone | default(value=""), required=true, inputmode="tel", pattern=limits.phone_pattern, autocomplete="tel", hint=t(key="job.phone_hint")) }}
+      {{ consent::consent_note(href=shell.data_policy | default(value="")) }}
       <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-bullhorn") }} {{ t(key="job.submit") }}</button>
     </form>
   </section>

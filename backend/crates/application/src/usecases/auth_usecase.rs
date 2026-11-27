@@ -13,6 +13,7 @@ use domain::{
         },
     },
     repositories::{
+        info_page_repository_trait::InfoPageRepositoryTrait,
         permission_repository_trait::PermissionRepositoryTrait,
         refresh_token_repository_trait::RefreshTokenRepositoryTrait,
         user_repository_trait::UserRepositoryTrait,
@@ -32,11 +33,13 @@ use crate::{
         REFRESH_REUSE_GRACE_SECS, SIGNUP_ATTEMPTS_PER_CLIENT, SIGNUP_CLIENT_WINDOW_SECS,
     },
     hashing::sha256_hex,
+    info_pages::SIGNUP_CONSENT,
     inputs::RegisterInput,
     outputs::{EmailConfirmedDto, LoginResponse, MeResponse},
     ports::{EmailService, EventBus, PasswordHasher, SessionClaims, TokenService},
     repeats::WindowCounter,
     settings::SettingsReader,
+    usecases::demand_usecase::vn_today,
     validation::{
         audit_reason, max_chars, max_chars_opt, non_blank, validate_email, validate_password,
         validate_phone,
@@ -58,6 +61,8 @@ pub struct AuthUseCase {
     setup_token: Option<String>,
     /// Whether providers may sign themselves up (`access.registration_open`).
     settings: SettingsReader,
+    /// The pages a sign-up accepts (`info_pages::SIGNUP_CONSENT`).
+    info_pages: Arc<dyn InfoPageRepositoryTrait + Send + Sync>,
     /// A hash no password matches, made once with the real hasher: a login
     /// for an unknown email verifies against it, so it takes as long as one
     /// for a known email.
@@ -84,6 +89,8 @@ pub struct AuthDeps {
     /// SETUP_TOKEN: when set, creating the first admin needs it.
     pub setup_token: Option<String>,
     pub settings: SettingsReader,
+    /// The terms and personal data policy a sign-up accepts.
+    pub info_page_repo: Arc<dyn InfoPageRepositoryTrait + Send + Sync>,
 }
 
 /// A browser session: a short access token and the refresh token that
@@ -120,6 +127,7 @@ impl AuthUseCase {
             refresh_days: d.refresh_days,
             setup_token: d.setup_token,
             settings: d.settings,
+            info_pages: d.info_page_repo,
             decoy_hash: Arc::default(),
             failed_logins: WindowCounter::default(),
             signups_by_client: WindowCounter::default(),
@@ -476,6 +484,11 @@ impl AuthUseCase {
         let business_phone = input.business_phone.trim().to_owned();
         let full_name = non_blank(input.full_name);
         let password = input.password;
+        // The pages to accept, once the admin made them and turned them on.
+        let consents = self
+            .info_pages
+            .on_in_force(&SIGNUP_CONSENT, vn_today(Utc::now())?)
+            .await?;
 
         Validation::new()
             .rule("email", validate_email(&email))
@@ -491,6 +504,11 @@ impl AuthUseCase {
                 max_chars(&business_name, BUSINESS_NAME_MAX),
             )
             .rule("business_phone", validate_phone(&business_phone))
+            .check(
+                !consents.is_empty() && !input.accepted_terms,
+                "accepted_terms",
+                ErrorCode::ConsentRequired,
+            )
             .finish()?;
 
         // From here on a try learns whether the email is taken, so it takes
@@ -526,6 +544,8 @@ impl AuthUseCase {
                 &business_phone,
             )
             .await?;
+        // What it agreed to, the very versions it was shown.
+        self.info_pages.record_consents(user_id, &consents).await?;
         // The account exists either way; a link that could not be made is
         // asked for again from the account page.
         if let Err(e) = self.send_email_verification(user_id, email.clone()).await {

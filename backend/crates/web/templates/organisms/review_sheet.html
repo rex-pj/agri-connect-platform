@@ -10,7 +10,8 @@
 {% import "atoms/alert.html" as alerts %}
 {% import "molecules/form_field.html" as field %}
 {% import "molecules/sheet_header.html" as sheet_head %}
-{% macro review_sheet(provider, review, stars, name_max, comment_max, phone_pattern, site_name) -%}
+{% import "molecules/consent_note.html" as consent %}
+{% macro review_sheet(provider, review, stars, name_max, comment_max, phone_pattern, site_name, policy="") -%}
 {% set e = review.errors.fields %}
 <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
 <section class="contact-sheet" id="danh-gia" aria-labelledby="danh-gia-title" :class="sheetClass">
@@ -32,6 +33,7 @@
     {{ field::input(id="rv-phone", name="reviewer_phone", label=t(key="review.phone"), type="tel", value=review.values.reviewer_phone, error=e.reviewer_phone | default(value=""), required=true, placeholder=t(key="form.phone_placeholder"), pattern=phone_pattern, inputmode="numeric", autocomplete="tel", hint=t(key="review.phone_hint"), first=true) }}
     {{ field::input(id="rv-name", name="reviewer_name", label=t(key="form.full_name"), value=review.values.reviewer_name, error=e.reviewer_name | default(value=""), required=true, autocomplete="name", maxlength=name_max) }}
     {{ field::textarea(id="rv-comment", name="comment", label=t(key="review.comment"), value=review.values.comment, error=e.comment | default(value=""), placeholder=t(key="review.comment_placeholder"), maxlength=comment_max) }}
+    {{ consent::consent_note(href=policy) }}
     <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-paper-plane") }} {{ t(key="review.send") }}</button>
   </form>
 </section>

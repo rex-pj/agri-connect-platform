@@ -544,6 +544,15 @@ async fn the_schema_refuses_rows_that_contradict_each_other() {
              INSERT INTO info_page_revisions (page_id, body, effective_on) VALUES (1, ' ', '2026-11-27')",
             "chk_info_page_revisions_body",
         ),
+        // A consent names a version of the page it names.
+        (
+            "INSERT INTO info_pages (id, code, title) VALUES (1, 'dieu-khoan', 'Điều khoản'), (2, 'bao-mat', 'Bảo mật');
+             INSERT INTO info_page_revisions (id, page_id, body, effective_on) VALUES (1, 1, 'A', '2026-11-27');
+             INSERT INTO roles (id, code, name) VALUES (900, 'thu', 'Thu');
+             INSERT INTO users (id, email, password_hash, role_id) VALUES (900, 'mot@example.vn', 'x', 900);
+             INSERT INTO consents (user_id, page_id, revision_id) VALUES (900, 2, 1)",
+            "fk_consents_revision",
+        ),
     ] {
         refused(db, sql, constraint).await;
     }

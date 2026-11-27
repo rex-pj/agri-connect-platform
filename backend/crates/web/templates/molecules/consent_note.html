@@ -1,0 +1,7 @@
+{#- One line under a farmer's form: what is done with the name and phone it
+    sends, and the personal data policy that says so (`href`, the page while
+    the admin has it on; empty: no line). No box to tick: the form stays
+    short, the line is the notice. -#}
+{% macro consent_note(href) -%}
+{% if href %}<p class="form-text consent-note">{{ t(key="consent.note_before") }} <a href="{{ href }}" target="_blank" rel="noopener">{{ t(key="consent.note_link") }}</a>{{ t(key="consent.note_after") }}</p>{% endif %}
+{%- endmacro consent_note %}

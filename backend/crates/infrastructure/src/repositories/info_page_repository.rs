@@ -10,6 +10,7 @@ use sea_orm::{
 };
 use tracing::error;
 
+use application::features::Stage;
 use domain::{
     models::info_page::{InfoPage, InfoPageFields, InfoRevision, NewInfoRevision},
     repositories::info_page_repository_trait::InfoPageRepositoryTrait,
@@ -18,6 +19,7 @@ use domain::{
 
 use crate::{
     entities::{
+        consent::{self, Entity as ConsentEntity},
         info_page::{self, Entity as PageEntity},
         info_page_revision::{self, Entity as RevisionEntity},
     },
@@ -216,5 +218,57 @@ impl InfoPageRepositoryTrait for InfoPageRepository {
             .all(self.db.as_ref())
             .await
             .map_err(Self::fail("with_text"))
+    }
+
+    async fn on_in_force(
+        &self,
+        codes: &[&str],
+        today: NaiveDate,
+    ) -> Result<Vec<(i32, i32)>, Error> {
+        let pages: Vec<i32> = PageEntity::find()
+            .select_only()
+            .column(info_page::Column::Id)
+            .filter(info_page::Column::Code.is_in(codes.to_vec()))
+            .filter(info_page::Column::Stage.eq(Stage::On.code()))
+            .order_by_asc(info_page::Column::Id)
+            .into_tuple::<i32>()
+            .all(self.db.as_ref())
+            .await
+            .map_err(Self::fail("on_in_force"))?;
+        let mut out = Vec::with_capacity(pages.len());
+        // A few pages (the sign-up's two): one indexed look each.
+        for page in pages {
+            let version = RevisionEntity::find()
+                .select_only()
+                .column(info_page_revision::Column::Id)
+                .filter(info_page_revision::Column::PageId.eq(page))
+                .filter(info_page_revision::Column::EffectiveOn.lte(today))
+                .order_by_desc(info_page_revision::Column::EffectiveOn)
+                .order_by_desc(info_page_revision::Column::Id)
+                .into_tuple::<i32>()
+                .one(self.db.as_ref())
+                .await
+                .map_err(Self::fail("on_in_force"))?;
+            if let Some(version) = version {
+                out.push((page, version));
+            }
+        }
+        Ok(out)
+    }
+
+    async fn record_consents(&self, user_id: i32, accepted: &[(i32, i32)]) -> Result<(), Error> {
+        if accepted.is_empty() {
+            return Ok(());
+        }
+        ConsentEntity::insert_many(accepted.iter().map(|(page, version)| consent::ActiveModel {
+            user_id: Set(user_id),
+            page_id: Set(*page),
+            revision_id: Set(*version),
+            ..Default::default()
+        }))
+        .exec(self.db.as_ref())
+        .await
+        .map(|_| ())
+        .map_err(Self::fail("record_consents"))
     }
 }

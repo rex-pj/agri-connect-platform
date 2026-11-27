@@ -223,6 +223,17 @@ pub enum InfoPageRevisions {
     CreatedBy,
 }
 
+/// Which version of an information page an account agreed to.
+#[derive(DeriveIden, Clone, Copy)]
+pub enum Consents {
+    Table,
+    Id,
+    UserId,
+    PageId,
+    RevisionId,
+    AcceptedOn,
+}
+
 /// The columns `service_types` and `supply_types` share: the kinds of work
 /// a provider is hired for, and the kinds of supplies one sells. Two tables,
 /// one id sequence (`Sequences::CatalogueTypeIds`), so a bare id names one

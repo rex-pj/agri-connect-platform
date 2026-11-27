@@ -14,6 +14,7 @@ use application::{
         PERM_PARTNER_REPORT_READ,
     },
     features::{Feature, FeaturesShown, Place, Stage},
+    info_pages::CODE_PERSONAL_DATA,
     outputs::{CodedDto, InfoLinkDto},
     settings::{SettingGroup, Settings},
 };
@@ -118,6 +119,9 @@ pub struct Shell {
     pub info: Vec<InfoGroup>,
     /// The page listing every information page, while one is shown.
     pub info_hub: Option<String>,
+    /// The personal data policy, while this viewer may open it: the line
+    /// under a farmer's form links to it (`molecules/consent_note.html`).
+    pub data_policy: Option<String>,
     /// The features this viewer sees (`application::features`): a way in
     /// to a hidden one is not drawn. Templates read `shell.features.<code>`;
     /// page code `Shell::shows` and `Shell::shows_href`.
@@ -472,6 +476,12 @@ impl Shell {
         } else {
             Some(url("info_pages"))
         };
+        self.data_policy = pages
+            .iter()
+            .find(|p| p.code == CODE_PERSONAL_DATA)
+            .map(|p| routes::url("info_page", &[("code", &p.code)]))
+            .transpose()
+            .map_err(|e| Error::internal(format!("shell links: {e}")))?;
         self.info = grouped(pages.into_iter().filter(|p| p.in_footer).collect())?;
         Ok(())
     }
@@ -515,6 +525,7 @@ impl Shell {
             legal: LegalLines::default(),
             info: Vec::new(),
             info_hub: None,
+            data_policy: None,
             features: FeaturesShown::ALL,
             preview: None,
             may_preview: false,

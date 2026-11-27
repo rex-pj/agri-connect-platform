@@ -219,6 +219,9 @@ pub struct RegisterInput {
     pub full_name: Option<String>,
     pub business_name: String,
     pub business_phone: String,
+    /// The terms and personal data policy were ticked (asked only while the
+    /// admin has them on: `info_pages::SIGNUP_CONSENT`).
+    pub accepted_terms: bool,
     /// Who signs up, to cap tries per client (`SIGNUP_ATTEMPTS_PER_CLIENT`):
     /// the address, kept in memory as a hash only; empty for none known.
     pub client: String,

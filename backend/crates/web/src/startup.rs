@@ -585,6 +585,7 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
     let commodity_repo = Arc::new(CommodityRepository::new(Arc::clone(&db)));
     let sector_repo = Arc::new(SectorRepository::new(Arc::clone(&db)));
     let alert_kind_repo = Arc::new(AlertKindRepository::new(Arc::clone(&db)));
+    let info_page_repo = Arc::new(InfoPageRepository::new(Arc::clone(&db)));
     let inquiry_repo = Arc::new(InquiryRepository::new(Arc::clone(&db)));
     let location_repo = Arc::new(LocationRepository::new(Arc::clone(&db)));
     let review_repo = Arc::new(ReviewRepository::new(Arc::clone(&db)));
@@ -713,6 +714,7 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
             refresh_days,
             setup_token,
             settings: settings.clone(),
+            info_page_repo: info_page_repo.clone(),
         }),
         permission: PermissionUseCase::new(PermissionDeps {
             permission_repo,
@@ -759,10 +761,7 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
             commodity_repo.clone(),
             events.clone(),
         ),
-        info_page: InfoPageUseCase::new(
-            Arc::new(InfoPageRepository::new(Arc::clone(&db))),
-            events.clone(),
-        ),
+        info_page: InfoPageUseCase::new(info_page_repo.clone(), events.clone()),
         zalo: ZaloUseCase::new(zalo),
         place: place.clone(),
         demand,

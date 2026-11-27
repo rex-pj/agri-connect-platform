@@ -64,7 +64,7 @@
 
       <a class="detail-more" href="{{ page.category_href }}">{{ atoms::icon(name=icon) }} {{ t(key="product.more_in_category", category=p.category) }} {{ atoms::icon(name="fa-chevron-right") }}</a>
 
-      {{ sheet::contact_sheet(provider=page.provider, contact=page.contact, limits=page.limits, return_to=page.return_to, product_id=p.id) }}
+      {{ sheet::contact_sheet(provider=page.provider, contact=page.contact, limits=page.limits, return_to=page.return_to, product_id=p.id, policy=shell.data_policy | default(value="")) }}
     </div>
   </div>
 </div>

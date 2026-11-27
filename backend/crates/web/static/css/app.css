@@ -6115,3 +6115,13 @@ summary.acct-item__row:focus-visible {
   font-size: var(--fs-sm);
   line-height: 1.5;
 }
+
+/* The line under a farmer's form naming the personal data policy. */
+.consent-note {
+  margin: 0 0 var(--sp-2);
+  color: var(--muted);
+}
+.consent-note a {
+  color: var(--p700);
+  font-weight: 600;
+}

@@ -121,7 +121,7 @@ fn category_row(
             Ok(CategoryTile {
                 kind,
                 fold: fold_of(i, total, HOME_TILES_PHONE, HOME_TILES_WIDE),
-                ..tile(&c.name, c.icon.as_deref().unwrap_or("fa-tag"), href)
+                ..tile(c, href)
             })
         })
         .collect::<Result<Vec<_>, Error>>()?;

@@ -372,6 +372,17 @@ document.addEventListener("alpine:init", () => {
   // Without JS only that input shows, with a "no colour" tick; with JS the
   // tick hides but is still what the form sends. The swatches are painted
   // from their data-color through the CSSOM, which the CSP allows (a style
+  // A category tile's icon in the category's own colour (category_item.html):
+  // set through the CSSOM, which the CSP allows (a style attribute it does
+  // not); the class goes on only with the colour, so without JS the tile
+  // keeps its kind's.
+  Alpine.data("tint", () => ({
+    init() {
+      this.$el.style.setProperty("--cat-tint", this.$el.dataset.color);
+      this.$el.classList.add("cat-item__icon--tinted");
+    },
+  }));
+
   // attribute it does not).
   Alpine.data("colorSelect", () => ({
     value: "",

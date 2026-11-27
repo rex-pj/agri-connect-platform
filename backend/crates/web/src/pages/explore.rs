@@ -12,7 +12,7 @@
 
 use crate::{middleware::client_ip::ClientIp, pages::visitor};
 use application::features::Feature;
-use application::outputs::{CategoryDto, LocationDto, PagedResponse, ProductDto};
+use application::outputs::{LocationDto, PagedResponse, ProductDto};
 use application::{
     constants::{LAT_MAX, LAT_MIN, LNG_MAX, LNG_MIN},
     inputs::{GeoSearchParams, SearchInput, SearchPlace},
@@ -148,10 +148,6 @@ pub(super) const TAB_PRODUCTS: &str = "products";
 
 fn url(name: &str, params: &[(&str, &str)]) -> Result<String, Error> {
     routes::url(name, params).map_err(|e| Error::internal(format!("explore links: {e}")))
-}
-
-fn icon(c: &CategoryDto) -> &str {
-    c.icon.as_deref().unwrap_or("fa-tag")
 }
 
 /// Device coordinates, if both parse and are on the globe. Anything else is
@@ -370,7 +366,7 @@ pub async fn show(
                 &[("id", &c.id.to_string()), ("slug", &c.slug)],
             )?
         };
-        let mut t = tile(&c.name, icon(c), href);
+        let mut t = tile(c, href);
         t.active = active;
         service_tiles.push(t);
     }

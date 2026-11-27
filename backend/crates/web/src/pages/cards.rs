@@ -3,7 +3,7 @@
 
 use application::{
     features::Feature,
-    outputs::{BusinessBrowseDto, BusinessSearchDto, PublicServiceDto, RatingDto},
+    outputs::{BusinessBrowseDto, BusinessSearchDto, CategoryDto, PublicServiceDto, RatingDto},
 };
 use domain::Error;
 use serde::Serialize;
@@ -203,6 +203,9 @@ pub struct CategoryTile {
     pub kind: &'static str,
     /// Where the tile waits behind its row's "+N" toggle.
     pub fold: Fold,
+    /// The category's own colour (`#rrggbb`), its icon's only: the tile's
+    /// background and shape stay its kind's, so the two errands stay apart.
+    pub color: Option<String>,
 }
 
 /// Whether a tile of a folding row (the home page's) shows before the row
@@ -218,14 +221,17 @@ pub enum Fold {
     All,
 }
 
-pub fn tile(name: &str, icon: &str, href: String) -> CategoryTile {
+/// A category's tile, leading to `href`: its name, icon (a tag when it has
+/// none) and colour.
+pub fn tile(c: &CategoryDto, href: String) -> CategoryTile {
     CategoryTile {
-        name: name.to_owned(),
-        icon: icon.to_owned(),
+        name: c.name.clone(),
+        icon: c.icon.clone().unwrap_or_else(|| "fa-tag".to_owned()),
         href,
         active: false,
         kind: "",
         fold: Fold::Shown,
+        color: c.color.clone(),
     }
 }
 

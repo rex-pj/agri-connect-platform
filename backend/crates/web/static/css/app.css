@@ -1657,6 +1657,12 @@ body:has(.app-nav__search-row.open) .app-main {
   border-color: var(--a500);
   background: var(--a50);
 }
+/* A category with a colour of its own: its icon only (Alpine `tint` sets
+   --cat-tint), the tile keeping its kind's shape and background. The chosen
+   tile below stays white on green. */
+.cat-item .cat-item__icon--tinted {
+  color: var(--cat-tint);
+}
 .cat-item--active .cat-item__icon {
   background: var(--p700);
   color: #fff;

@@ -6,7 +6,7 @@
 {% macro category_grid(items, class="") -%}
 <ul class="cat-grid{% if class %} {{ class }}{% endif %}">
   {% for item in items %}
-  <li class="{% if item.kind %}cat-grid__item--{{ item.kind }}{% endif %}">{{ molecules::category_item(name=item.name, icon=item.icon, href=item.href, active=item.active, kind=item.kind) }}</li>
+  <li class="{% if item.kind %}cat-grid__item--{{ item.kind }}{% endif %}">{{ molecules::category_item(name=item.name, icon=item.icon, href=item.href, active=item.active, kind=item.kind, color=item.color | default(value="")) }}</li>
   {% endfor %}
 </ul>
 {%- endmacro category_grid %}
@@ -21,7 +21,7 @@
 {% if row.folded_phone > 0 or row.folded_wide > 0 %}<input type="checkbox" class="cat-fold visually-hidden" id="{{ id }}">{% endif %}
 <ul class="cat-grid cat-strip">
   {% for item in row.tiles %}
-  <li class="cat-grid__item--{{ item.kind }} cat-fold--{{ item.fold }}">{{ molecules::category_item(name=item.name, icon=item.icon, href=item.href, kind=item.kind) }}</li>
+  <li class="cat-grid__item--{{ item.kind }} cat-fold--{{ item.fold }}">{{ molecules::category_item(name=item.name, icon=item.icon, href=item.href, kind=item.kind, color=item.color | default(value="")) }}</li>
   {% endfor %}
   {% if row.folded_phone > 0 or row.folded_wide > 0 %}
   <li class="cat-strip__toggle{% if row.folded_phone == 0 %} d-none d-lg-block{% elif row.folded_wide == 0 %} d-lg-none{% endif %}">

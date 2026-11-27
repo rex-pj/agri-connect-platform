@@ -31,7 +31,8 @@ use crate::{
         LEGAL_TAX_CODE_MAX, METRES_PER_KM, PRODUCTS_PER_BUSINESS_DEFAULT,
         PRODUCTS_PER_BUSINESS_MAX, RADIUS_MAX_M, REVIEW_SUSPECT_MINUTES_DEFAULT,
         SERVICES_PER_BUSINESS_DEFAULT, SERVICES_PER_BUSINESS_MAX, SITE_DESCRIPTION_MAX,
-        SITE_NAME_MAX, SPONSORED_SHOWN_DEFAULT, SPONSORED_SHOWN_MAX, STEADY_WEEKLY_LEADS_DEFAULT,
+        SITE_NAME_MAX, SITE_TAGLINE_MAX, SPONSORED_SHOWN_DEFAULT, SPONSORED_SHOWN_MAX,
+        STEADY_WEEKLY_LEADS_DEFAULT,
     },
     features::{Feature, FeaturesShown, Place, Placement, Stage, PLACEMENTS},
     validation::{is_valid_vn_phone, max_chars, one_line, validate_email},
@@ -51,6 +52,7 @@ const OFF: &str = "false";
 // ── Keys ──────────────────────────────────────────────────────────────────────
 
 pub const BRAND_NAME: &str = "brand.name";
+pub const BRAND_TAGLINE: &str = "brand.tagline";
 pub const BRAND_DESCRIPTION: &str = "brand.description";
 pub const BRAND_LOGO: &str = "brand.logo";
 pub const BRAND_ICON: &str = "brand.icon";
@@ -220,11 +222,19 @@ const fn place(i: usize) -> SettingDef {
 
 /// Every setting, in the page's order within each group.
 pub static SETTINGS: &[SettingDef] = &[
-    // Empty: the deployment's own (`SITE_NAME`, `SITE_DESCRIPTION`).
+    // Empty: the deployment's name (`SITE_NAME`); the locale's tagline and
+    // description (`home.title`, `home.meta`).
     SettingDef {
         key: BRAND_NAME,
         group: SettingGroup::Brand,
         kind: SettingKind::Text(TextRule::Line { max: SITE_NAME_MAX }),
+    },
+    SettingDef {
+        key: BRAND_TAGLINE,
+        group: SettingGroup::Brand,
+        kind: SettingKind::Text(TextRule::Line {
+            max: SITE_TAGLINE_MAX,
+        }),
     },
     SettingDef {
         key: BRAND_DESCRIPTION,
@@ -586,8 +596,14 @@ impl Settings {
         self.text(BRAND_NAME)
     }
 
-    /// The platform's description an admin chose; `None`: the deployment's
-    /// own, else the locale's.
+    /// The platform's tagline an admin chose (the home page's title after
+    /// the name); `None`: the locale's.
+    pub fn site_tagline(&self) -> Option<&str> {
+        self.text(BRAND_TAGLINE)
+    }
+
+    /// The platform's description an admin chose (the meta description);
+    /// `None`: the locale's.
     pub fn site_description(&self) -> Option<&str> {
         self.text(BRAND_DESCRIPTION)
     }
@@ -806,6 +822,8 @@ mod tests {
         assert_eq!(s.job_post_days(), JOB_POST_DAYS_DEFAULT);
         assert_eq!(s.job_notify_radius_m(), 10_000.0);
         assert!(s.registration_open());
+        // Every feature the platform ran with is on; the articles wait for
+        // their first ones.
         for f in crate::features::Feature::ALL {
             let expected = if f == crate::features::Feature::Articles {
                 Stage::Off
@@ -901,17 +919,29 @@ mod tests {
             code(def(BRAND_DESCRIPTION).parse(&"a".repeat(SITE_DESCRIPTION_MAX + 1))),
             Some(ErrorCode::FieldTooLong)
         );
+        // The tagline lands in the home page's title: one line, short.
+        assert_eq!(
+            code(def(BRAND_TAGLINE).parse(&"a".repeat(SITE_TAGLINE_MAX + 1))),
+            Some(ErrorCode::FieldTooLong)
+        );
+        assert_eq!(
+            def(BRAND_TAGLINE).parse("Thuê làm\ngần nhà").ok(),
+            Some(SettingValue::Text("Thuê làm gần nhà".into()))
+        );
     }
 
     #[test]
     fn the_brand_falls_back_to_the_deployment_until_an_admin_names_it() {
         assert_eq!(Settings::default().site_name(), None);
+        assert_eq!(Settings::default().site_tagline(), None);
         assert_eq!(Settings::default().site_description(), None);
         let s = Settings::from_stored(&[
             stored(BRAND_NAME, "Nông Kết Nối"),
+            stored(BRAND_TAGLINE, "Thuê làm gần nhà"),
             stored(BRAND_DESCRIPTION, "Thuê làm, mua vật tư."),
         ]);
         assert_eq!(s.site_name(), Some("Nông Kết Nối"));
+        assert_eq!(s.site_tagline(), Some("Thuê làm gần nhà"));
         assert_eq!(s.site_description(), Some("Thuê làm, mua vật tư."));
         // A row stored past its bound (by hand, or before a bound tightened):
         // ignored.

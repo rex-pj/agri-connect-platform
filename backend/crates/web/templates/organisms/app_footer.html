@@ -20,7 +20,7 @@
         {{ brand::logo(class="app-footer__mark", file=site.logo) }}
         {{ site.name }}
       </a>
-      <p class="app-footer__promise">{{ t(key="footer.promise") }}</p>
+      <p class="app-footer__promise">{{ site.tagline }}</p>
       <ul class="app-footer__values" aria-label="{{ t(key="footer.values_label") }}">
         <li>{{ atoms::icon(name="fa-location-dot") }} {{ t(key="footer.value_near") }}</li>
         <li>{{ atoms::icon(name="fa-phone") }} {{ t(key="footer.value_direct") }}</li>

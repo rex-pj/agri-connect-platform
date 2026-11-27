@@ -245,7 +245,7 @@ async fn a_feature_in_preview_is_seen_by_admins_only() {
         tab.contains(r#"id="features-prices-preview" value="preview" autocomplete="off" checked"#)
     );
     assert!(tab.contains("Xem thử trang"));
-    // The dashboard reminds of it.
+    // The dashboard reminds of it, with the articles (off until written).
     let dashboard =
         body_text(send(&e.router, get_page("/admin/dashboard", Some(&admin))).await).await;
     assert!(dashboard.contains("2 tính năng chưa mở cho bà con."));

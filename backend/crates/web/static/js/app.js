@@ -234,6 +234,7 @@ document.addEventListener("alpine:init", () => {
   Alpine.data("brandPreview", () => ({
     withoutScript: false,
     name: "",
+    tagline: "",
     description: "",
     nameFits: true,
     logoChosen: "",
@@ -247,6 +248,7 @@ document.addEventListener("alpine:init", () => {
     read() {
       const boxes = this.$el.querySelector("form").elements;
       this.name = boxes.namedItem("brand.name")?.value ?? "";
+      this.tagline = boxes.namedItem("brand.tagline")?.value ?? "";
       this.description = boxes.namedItem("brand.description")?.value ?? "";
       this.$nextTick(() => {
         const bar = this.$refs.barName;
@@ -274,8 +276,11 @@ document.addEventListener("alpine:init", () => {
     get shownName() {
       return this.name.trim() || this.saved.defaultName;
     },
+    get shownTagline() {
+      return this.tagline.trim() || this.saved.defaultTagline;
+    },
     get googleTitle() {
-      return `${this.shownName} | ${this.saved.homeTitle}`;
+      return `${this.shownName} | ${this.shownTagline}`;
     },
     get googleDescription() {
       return this.description.trim() || this.saved.defaultDescription;
@@ -345,11 +350,6 @@ document.addEventListener("alpine:init", () => {
     },
   }));
 
-  // A select that saves its form as soon as it changes. Without JS the
-  // form's own submit button does the same.
-  // On a form: any change saves it. Its save button (x-show="withoutScript")
-  // is only for visitors without JS.
-  Alpine.data("autoSubmit", () => ({
   // A colour box (form_field.html color_select): one row of round swatches,
   // "no colour", the suggested colours, then "another colour" (the
   // browser's colour input, a rainbow until a colour of its own is chosen).
@@ -413,6 +413,11 @@ document.addEventListener("alpine:init", () => {
     },
   }));
 
+  // A select that saves its form as soon as it changes. Without JS the
+  // form's own submit button does the same.
+  // On a form: any change saves it. Its save button (x-show="withoutScript")
+  // is only for visitors without JS.
+  Alpine.data("autoSubmit", () => ({
     withoutScript: false,
 
     submit() {

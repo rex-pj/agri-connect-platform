@@ -16,7 +16,8 @@ use application::{
     features::{placement_at, placement_of, Feature, Place, Stage, PLACEMENTS},
     outputs::{SettingDto, SettingGroupDto},
     settings::{
-        SettingGroup, SettingKind, BRAND_DESCRIPTION, BRAND_ICON, BRAND_LOGO, BRAND_NAME, SETTINGS,
+        SettingGroup, SettingKind, BRAND_DESCRIPTION, BRAND_ICON, BRAND_LOGO, BRAND_NAME,
+        BRAND_TAGLINE, SETTINGS,
     },
 };
 use axum::{extract::State, http::StatusCode, response::Response};
@@ -82,10 +83,21 @@ pub struct ImageView {
 /// What the identity tab's preview falls back on while a box is empty.
 #[derive(Debug, Serialize)]
 pub struct BrandDefaults {
-    /// `SITE_NAME`.
     pub name: String,
-    /// `SITE_DESCRIPTION`, else the home page's own.
+    pub tagline: String,
     pub description: String,
+}
+
+impl BrandDefaults {
+    /// The identity the pages show with no `brand.*` setting.
+    fn of(locale: &Locale, site: &SiteConfig) -> Self {
+        let shown = site.branded(locale, None);
+        Self {
+            name: shown.name,
+            tagline: shown.tagline,
+            description: shown.description,
+        }
+    }
 }
 
 /// `?tab=`: the group shown; anything else is the first one.
@@ -224,7 +236,7 @@ pub struct SettingsPage {
     pub image_remove_action: String,
     /// What its preview falls back on.
     pub defaults: BrandDefaults,
-    /// The introduction's advised shortest length, for its counter.
+    /// The description's advised shortest length, for its counter.
     pub description_advised: usize,
     /// The largest upload, in MB, for the photo box's line.
     pub max_mb: usize,
@@ -383,17 +395,15 @@ fn shown_value(locale: &Locale, kind: &str, value: &str) -> String {
     }
 }
 
-/// What the pages show while a `brand.*` setting is empty: the
-/// deployment's own name and description. `None` for any other key (empty:
-/// not shown).
+/// What the pages show while a `brand.*` text is empty (`SiteConfig::branded`
+/// with no settings), for its line and "back to defaults". `None` for any
+/// other key (empty: not shown).
 fn deployment_default(locale: &Locale, site: &SiteConfig, key: &str) -> Option<String> {
+    let defaults = BrandDefaults::of(locale, site);
     match key {
-        BRAND_NAME => Some(site.name.clone()),
-        BRAND_DESCRIPTION => Some(
-            site.description
-                .clone()
-                .unwrap_or_else(|| locale.text("site.description")),
-        ),
+        BRAND_NAME => Some(defaults.name),
+        BRAND_TAGLINE => Some(defaults.tagline),
+        BRAND_DESCRIPTION => Some(defaults.description),
         _ => None,
     }
 }
@@ -586,13 +596,7 @@ async fn page(state: &AppState, actor: &Actor, view: View<'_>) -> Result<Respons
         image_remove_action: url("admin_settings_image_delete", &[])?,
         description_advised: SITE_DESCRIPTION_ADVISED_MIN,
         max_mb: state.usecases.media.max_upload_bytes().div_ceil(MEBIBYTE),
-        defaults: BrandDefaults {
-            name: site.name.clone(),
-            description: site
-                .description
-                .clone()
-                .unwrap_or_else(|| locale.text("home.meta")),
-        },
+        defaults: BrandDefaults::of(locale, site),
         flash_text: view.flash.and_then(|f| match f {
             Flash::SettingsSaved => Some(locale.text("admin.saved")),
             Flash::SettingsReset => Some(locale.text("settings.reset_done")),

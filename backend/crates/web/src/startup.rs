@@ -360,15 +360,11 @@ fn router_config(app_url: &str, limiters: Limiters) -> Result<RouterConfig, Star
     })
 }
 
-/// `SITE_NAME` / `SITE_DESCRIPTION`, shown in every page's title and meta
-/// tags. The footer's help lines are settings (`application::settings`).
+/// `SITE_NAME`, shown in every page's title and every email while the
+/// `brand.name` setting is empty. The tagline, description and footer's help
+/// lines are settings only (`application::settings`).
 fn site_config() -> SiteConfig {
-    let defaults = SiteConfig::default();
-    SiteConfig {
-        name: optional_env("SITE_NAME").unwrap_or(defaults.name),
-        description: optional_env("SITE_DESCRIPTION"),
-        ..defaults
-    }
+    optional_env("SITE_NAME").map_or_else(SiteConfig::default, |name| SiteConfig { name })
 }
 
 /// `ZALO_APP_SECRET`: the Zalo app's secret key (developers.zalo.me), which

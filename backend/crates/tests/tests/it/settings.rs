@@ -254,6 +254,7 @@ async fn the_name_an_admin_chooses_reaches_every_frame() {
         &[
             ("group", "brand"),
             ("brand.name", " Nông\r\nKết Nối "),
+            ("brand.tagline", "Người làm ruộng gần nhà"),
             ("brand.description", "Thuê làm, mua vật tư gần nhà."),
         ],
     )
@@ -269,11 +270,16 @@ async fn the_name_an_admin_chooses_reaches_every_frame() {
     );
 
     let home = page(&e, "/", None).await;
-    assert!(home.contains("<title>Nông Kết Nối | "), "the page title");
+    assert!(
+        home.contains("<title>Nông Kết Nối | Người làm ruộng gần nhà</title>"),
+        "the page title: the name, then the tagline"
+    );
+    assert!(home.contains(r#"<p class="app-footer__promise">Người làm ruộng gần nhà</p>"#));
     assert!(home.contains(r#"content="Thuê làm, mua vật tư gần nhà.""#));
     assert!(!home.contains("Agri-Connect"), "no trace of the old name");
     let login = page(&e, "/login", None).await;
     assert!(login.contains(r#"<span class="auth-brand__name">Nông Kết Nối</span>"#));
+    assert!(login.contains(r#"<p class="auth-tagline">Người làm ruộng gần nhà</p>"#));
     let admin_page = page(&e, "/admin/settings", Some(&admin)).await;
     assert!(admin_page.contains("Nông Kết Nối Admin"), "the admin bar");
     let missing = send(&e.router, get_page("/no-such-page", None)).await;
@@ -290,6 +296,32 @@ async fn the_name_an_admin_chooses_reaches_every_frame() {
     let res = save(&e, &admin, &[("group", "brand"), ("action", "reset")]).await;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
     assert!(page(&e, "/", None).await.contains("<title>Agri-Connect"));
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn an_empty_brand_box_shows_what_the_pages_show() {
+    let e = env_with_origin().await;
+    let admin = install_admin(&e).await;
+    let vi = web::locale::Locale::vi().unwrap();
+    let (tagline, description) = (vi.text("home.title"), vi.text("home.meta"));
+
+    // The pages: the locale's tagline and description.
+    let home = page(&e, "/", None).await;
+    assert!(home.contains(&format!("<title>Agri-Connect | {tagline}</title>")));
+    assert!(home.contains(&format!(
+        r#"<meta name="description" content="{description}">"#
+    )));
+    let login = page(&e, "/login", None).await;
+    assert!(login.contains(&format!(r#"<p class="auth-tagline">{tagline}</p>"#)));
+
+    // The settings page offers exactly those, greyed in its boxes and in
+    // its preview.
+    let settings = page(&e, "/admin/settings", Some(&admin)).await;
+    assert!(settings.contains(&format!(r#"placeholder="{tagline}""#)));
+    assert!(settings.contains(&format!(r#"placeholder="{description}""#)));
+    assert!(settings.contains(&format!(r#"data-default-tagline="{tagline}""#)));
+    assert!(settings.contains(&format!(r#"data-default-description="{description}""#)));
 }
 
 #[tokio::test]

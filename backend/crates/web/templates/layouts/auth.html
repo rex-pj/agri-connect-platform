@@ -15,6 +15,7 @@
       {{ brand::logo(class="auth-brand__icon", file=site.logo) }}
       <span class="auth-brand__name">{{ site.name }}</span>
     </a>
+    <p class="auth-tagline">{{ site.tagline }}</p>
     {% block card %}{% endblock card %}
   </div>
   <div class="auth-bottombar">{{ lang::language_switch(languages=languages, back=shell.here, up=true) }}</div>

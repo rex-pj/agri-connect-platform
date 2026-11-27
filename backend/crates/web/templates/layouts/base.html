@@ -6,7 +6,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>{% block title %}{{ site.name }}{% endblock title %}</title>
-  {% block meta %}<meta name="description" content="{% if site.description %}{{ site.description }}{% else %}{{ t(key="site.description") }}{% endif %}">{% endblock meta %}
+  {% block meta %}<meta name="description" content="{{ site.description }}">{% endblock meta %}
   <meta name="theme-color" content="#064E3B">
   <meta name="format-detection" content="telephone=yes">
   {%- if site.icon %}

@@ -34,6 +34,7 @@
       Alpine `brandPreview` keeps in step with what is typed or chosen; without
       JS it shows what is saved. -#}
   {% set name_box = g.settings | filter(attribute="key", value="brand.name") | first %}
+  {% set tagline_box = g.settings | filter(attribute="key", value="brand.tagline") | first %}
   {% set desc_box = g.settings | filter(attribute="key", value="brand.description") | first %}
   {% set logo = g.images | filter(attribute="key", value="brand.logo") | first %}
   {% set icon = g.images | filter(attribute="key", value="brand.icon") | first %}
@@ -42,6 +43,7 @@
   {% if logo.current %}{% set logo_src = file_url(id=logo.current, variant="thumb") %}{% else %}{% set logo_src = "" %}{% endif %}
   {% if icon.current %}{% set icon_src = file_url(id=icon.current, variant="thumb") %}{% else %}{% set icon_src = "" %}{% endif %}
   {% if name_box.value %}{% set shown_name = name_box.value %}{% else %}{% set shown_name = b.defaults.name %}{% endif %}
+  {% if tagline_box.value %}{% set shown_tagline = tagline_box.value %}{% else %}{% set shown_tagline = b.defaults.tagline %}{% endif %}
   {% if desc_box.value %}{% set shown_desc = desc_box.value %}{% else %}{% set shown_desc = b.defaults.description %}{% endif %}
   {% if icon_src %}{% set tab_src = icon_src %}{% elif logo_src %}{% set tab_src = logo_src %}{% else %}{% set tab_src = builtin_icon %}{% endif %}
   {#- The home screen gets the large copy, on white (`process_icon`). -#}
@@ -51,8 +53,8 @@
   {% if logo_src %}{% set logo_tile = logo_src %}{% else %}{% set logo_tile = builtin_icon %}{% endif %}
   {% if logo.state == "uploaded" %}{% set when = logo.changed_on | vn_datetime %}{% set logo_state = t(key="settings.image_state.uploaded", when=when) %}{% else %}{% set logo_state = t(key="settings.image_state.builtin") %}{% endif %}
   {% if icon.state == "uploaded" %}{% set when = icon.changed_on | vn_datetime %}{% set icon_state = t(key="settings.image_state.uploaded", when=when) %}{% elif icon.state == "logo" %}{% set icon_state = t(key="settings.image_state.logo") %}{% else %}{% set icon_state = t(key="settings.image_state.builtin") %}{% endif %}
-  {% set google_title = shown_name ~ " | " ~ t(key="home.title") %}
-  <div class="brand-editor" x-data="brandPreview" data-default-name="{{ b.defaults.name }}" data-default-description="{{ b.defaults.description }}" data-home-title="{{ t(key="home.title") }}" data-logo="{{ logo_src }}" data-icon="{{ icon_src }}" data-logo-home="{{ logo_home }}" data-icon-home="{{ icon_home }}" data-builtin-icon="{{ builtin_icon }}" data-builtin-home="{{ builtin_home }}">
+  {% set google_title = shown_name ~ " | " ~ shown_tagline %}
+  <div class="brand-editor" x-data="brandPreview" data-default-name="{{ b.defaults.name }}" data-default-tagline="{{ b.defaults.tagline }}" data-default-description="{{ b.defaults.description }}" data-logo="{{ logo_src }}" data-icon="{{ icon_src }}" data-logo-home="{{ logo_home }}" data-icon-home="{{ icon_home }}" data-builtin-icon="{{ builtin_icon }}" data-builtin-home="{{ builtin_home }}">
     <section class="admin-section brand-editor__form" aria-labelledby="settings-title">
       <h2 class="admin-section__title" id="settings-title">{{ g.title }}</h2>
       <p class="admin-status">
@@ -66,6 +68,8 @@
         {#- Left empty, a box uses the default it shows greyed inside it. -#}
         {{ field::input(id=name_box.id, name=name_box.key, label=name_box.label, value=name_box.value, autocomplete="off", maxlength=name_box.max, placeholder=b.defaults.name, error=name_box.error | default(value=""), hint=name_box.hint ~ " " ~ t(key="settings.brand_empty"), counter=true) }}
         <p class="brand-editor__note form-text text-warning-emphasis" hidden :hidden="nameFits">{{ atoms::icon(name="fa-triangle-exclamation") }} {{ t(key="settings.name_cut") }}</p>
+
+        {{ field::input(id=tagline_box.id, name=tagline_box.key, label=tagline_box.label, value=tagline_box.value, autocomplete="off", maxlength=tagline_box.max, placeholder=b.defaults.tagline, error=tagline_box.error | default(value=""), hint=tagline_box.hint ~ " " ~ t(key="settings.brand_empty"), counter=true) }}
 
         {{ field::input(id=desc_box.id, name=desc_box.key, label=desc_box.label, value=desc_box.value, autocomplete="off", maxlength=desc_box.max, placeholder=b.defaults.description, error=desc_box.error | default(value=""), hint=desc_box.hint ~ " " ~ t(key="settings.brand_empty"), counter=true, advised=b.description_advised) }}
 
@@ -113,6 +117,7 @@
           <span class="brand-preview__mark"{% if logo_src %} hidden{% endif %} :hidden="logoCustom">{{ brand::logo(class="auth-brand__icon") }}</span>
           <img class="brand-logo brand-logo--upload auth-brand__icon"{% if logo_src %} src="{{ logo_src }}"{% else %} hidden{% endif %} :src="logoUrl" :hidden="logoBuiltin" alt="" width="96" height="96">
           <span class="auth-brand__name" x-text="shownName">{{ shown_name }}</span>
+          <p class="brand-preview__tagline" x-text="shownTagline">{{ shown_tagline }}</p>
         </div>
       </figure>
       <figure class="brand-preview__frame">

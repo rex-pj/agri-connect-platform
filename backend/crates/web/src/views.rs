@@ -61,50 +61,60 @@ pub const PAGE_CSP: &str = "default-src 'self'; script-src 'self'; style-src 'se
      img-src 'self' blob:; font-src 'self'; connect-src 'self'; form-action 'self'; \
      frame-ancestors 'none'; base-uri 'none'; object-src 'none'";
 
-/// Site identity: the `brand.*` settings an admin chose, else the
-/// deployment's `SITE_NAME` / `SITE_DESCRIPTION` (unset: the locale's
-/// `site.description`). The footer's help lines are settings
-/// (`Shell::support`).
-#[derive(Debug, Clone, Serialize)]
+/// The deployment's identity: `SITE_NAME`, what every page and email is
+/// named while the `brand.name` setting is empty. Everything else about the
+/// brand is a setting (`Site`).
+#[derive(Debug, Clone)]
 pub struct SiteConfig {
     pub name: String,
-    pub description: Option<String>,
-    /// The logo an admin uploaded (`files.id`); `None`: the built-in mark
-    /// (`atoms/logo.html`). Never from the environment.
-    pub logo: Option<String>,
-    /// The browser and home-screen icon: the one uploaded for it, else the
-    /// logo; `None`: the built-in icons under `static/`.
-    pub icon: Option<String>,
 }
 
 impl Default for SiteConfig {
     fn default() -> Self {
         Self {
             name: "Agri-Connect".to_owned(),
-            description: None,
-            logo: None,
-            icon: None,
         }
     }
 }
 
 impl SiteConfig {
-    /// This identity under what `settings` name (the request's, `None`
-    /// outside one).
-    pub fn branded(&self, settings: Option<&Settings>) -> SiteConfig {
-        SiteConfig {
+    /// The identity a page shows: the `brand.*` settings an admin chose
+    /// (the request's, `None` outside one), each empty one falling back on
+    /// this deployment's name or `locale`'s words. The one definition of
+    /// those defaults: the settings page shows them in its empty boxes.
+    pub fn branded(&self, locale: &Locale, settings: Option<&Settings>) -> Site {
+        let text = |chosen: Option<&str>, key: &str| {
+            chosen.map_or_else(|| locale.text(key), str::to_owned)
+        };
+        Site {
             name: settings
                 .and_then(Settings::site_name)
                 .unwrap_or(&self.name)
                 .to_owned(),
-            description: settings
-                .and_then(Settings::site_description)
-                .map(str::to_owned)
-                .or_else(|| self.description.clone()),
+            tagline: text(settings.and_then(Settings::site_tagline), "home.title"),
+            description: text(settings.and_then(Settings::site_description), "home.meta"),
             logo: settings.and_then(Settings::logo).map(|id| id.to_string()),
             icon: settings.and_then(Settings::icon).map(|id| id.to_string()),
         }
     }
+}
+
+/// The site identity every template sees (`site`). The footer's help lines
+/// are settings too (`Shell::support`).
+#[derive(Debug, Clone, Serialize)]
+pub struct Site {
+    pub name: String,
+    /// The home page's title after the name, and under the name on the
+    /// sign-in card.
+    pub tagline: String,
+    /// The meta description of every page without its own.
+    pub description: String,
+    /// The logo an admin uploaded (`files.id`); `None`: the built-in mark
+    /// (`atoms/logo.html`). Never from the environment.
+    pub logo: Option<String>,
+    /// The browser and home-screen icon: the one uploaded for it, else the
+    /// logo; `None`: the built-in icons under `static/`.
+    pub icon: Option<String>,
 }
 
 /// One template set per language: `t()` and the `distance` filter are bound
@@ -251,7 +261,7 @@ struct IconChoice<'a> {
 /// handler's `page`.
 #[derive(Serialize)]
 struct PageContext<'a, T: Serialize> {
-    site: &'a SiteConfig,
+    site: &'a Site,
     lang: &'static str,
     languages: Vec<LanguageOption>,
     year: i32,
@@ -323,8 +333,8 @@ impl Views {
         &self.locales
     }
 
-    /// The deployment's own identity (`SITE_NAME`, `SITE_DESCRIPTION`): what
-    /// the pages show while the `brand.*` settings are empty.
+    /// The deployment's own identity (`SITE_NAME`): what the pages show
+    /// while the `brand.*` settings are empty.
     pub fn site(&self) -> &SiteConfig {
         &self.site
     }
@@ -532,7 +542,9 @@ impl Views {
                 current: l == lang,
             })
             .collect();
-        let site = self.site.branded(page_settings::current().as_deref());
+        let site = self
+            .site
+            .branded(locale, page_settings::current().as_deref());
         let context = tera::Context::from_serialize(PageContext {
             site: &site,
             lang: lang.code(),
@@ -989,8 +1001,9 @@ mod tests {
     fn the_footer_offers_the_help_lines_that_are_set() -> Result<(), Error> {
         let vi = vi()?;
         let footer = |settings: application::settings::Settings| -> Result<String, Error> {
-            let site = SiteConfig::default();
-            let mut views = views(site.clone())?;
+            let config = SiteConfig::default();
+            let site = config.branded(&vi, None);
+            let mut views = views(config)?;
             let mut shell = Shell::new(&vi, "/", None, None);
             shell.apply_settings(&vi, &settings);
             let mut ctx = tera::Context::new();

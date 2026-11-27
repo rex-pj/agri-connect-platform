@@ -192,8 +192,8 @@ pub const DEMO_VOLUME_SEED_DEFAULT: u64 = 2_026;
 /// and amber, then the darker tones the demo catalogue uses, each dark enough
 /// for white text on it (WCAG AA). Any other colour may still be picked.
 pub const COLOR_PRESETS: &[&str] = &[
-    "#065f46", "#047857", "#14532d", "#92400e", "#a16207", "#9a3412", "#7c2d12",
-    "#7f1d1d", "#1e3a8a", "#1e40af", "#155e75", "#6d28d9",
+    "#065f46", "#047857", "#14532d", "#92400e", "#a16207", "#9a3412", "#7c2d12", "#7f1d1d",
+    "#1e3a8a", "#1e40af", "#155e75", "#6d28d9",
 ];
 /// What the colour box shows before a colour is chosen (a colour box always
 /// holds one): the platform's green.

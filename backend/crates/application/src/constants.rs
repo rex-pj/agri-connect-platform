@@ -71,8 +71,12 @@ pub const EMAIL_MAX: usize = 255;
 /// The platform's name (`brand.name`): it sits beside the logo in a phone's
 /// top bar, so it stays short.
 pub const SITE_NAME_MAX: usize = 40;
+/// The platform's tagline (`brand.tagline`): the home page's title after the
+/// name ("Name | Tagline"), which search engines cut near 60 in all.
+pub const SITE_TAGLINE_MAX: usize = 60;
 /// The platform's one-line description (`brand.description`): the meta
-/// description search engines show, which they cut near 160.
+/// description search engines show, which they cut near 160. Never shown on
+/// a page.
 pub const SITE_DESCRIPTION_MAX: usize = 160;
 /// Shorter than this, search engines often show another bit of the page
 /// instead: the settings page says so (a nudge, never a refusal).

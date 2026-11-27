@@ -9,12 +9,15 @@
 {% import "organisms/info_page_fields.html" as fields %}
 {% import "organisms/confirm_sheet.html" as confirm %}
 {% import "organisms/markdown_editor.html" as editor %}
-{#- One information page, as a record page: the header (turn on, preview,
-    turn off, the public page: `b.header`), one status strip (who sees it,
-    whether a version is in force), then its text written as a new version
-    (the form's second button shows it as it would be, saving nothing) and,
-    beside it on a wide screen, its place in the footer, its versions and
-    its history. `page.body` is web::pages::admin::info_pages::InfoPageRecord. -#}
+{#- One information page, as a record page laid out as the article editor:
+    the header (turn on, preview, turn off, the public page: `b.header`),
+    one status strip (who sees it, whether a version is in force), then on
+    the left its address and its text (the Markdown editor), on the right
+    (below on a phone) the new version's box: the day it applies from, what
+    changed, "save" and "preview" (they belong to the text's form by its
+    id; fixed at the foot of a phone's screen), then the page's settings
+    (their own form), its versions and its history. `page.body` is
+    web::pages::admin::info_pages::InfoPageRecord. -#}
 {% block title %}{{ page.body.page.title }} | {{ site.name }} Admin{% endblock title %}
 {% block vendor %}{{ field::searchable_select_assets() }}{% endblock vendor %}
 {% block content %}
@@ -22,7 +25,7 @@
 {% set p = b.page %}
 {% set te = b.text_errors.fields %}
 {{ record::record_header(h=b.header) }}
-<div class="admin-body">
+<div class="admin-body editor-page">
   {% if b.flash == "info_page_created" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="info.created")) }}{% endif %}
   {% if b.flash == "info_page_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.saved")) }}{% endif %}
   {% if b.flash == "info_page_stage_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="info.stage_saved")) }}{% endif %}
@@ -37,8 +40,8 @@
     {% set last = b.history | filter(attribute="action", value="set_info_page_status") | first %}{% if last %}{{ history::last_change(row=last) }}{% endif %}
   </section>
 
-  <div class="row g-3 g-lg-4">
-    <div class="col-lg-8 d-flex flex-column gap-3">
+  <div class="editor-layout">
+    <div class="editor-main">
       {% if b.preview %}
       <section class="admin-section" aria-labelledby="preview-title">
         <h2 class="admin-section__title" id="preview-title">{{ atoms::icon(name="fa-eye") }} {{ t(key="info.preview_title") }}</h2>
@@ -47,26 +50,28 @@
       {% endif %}
       <section class="admin-section" aria-labelledby="text-title">
         <h2 class="admin-section__title" id="text-title">{{ t(key="info.text_title") }}</h2>
-        <p class="editor-address">{{ atoms::icon(name="fa-link") }} {{ t(key="info.address") }} {% if b.public_href %}<a href="{{ b.public_href }}"><code>{{ b.public_path }}</code></a>{% else %}<code>{{ b.public_path }}</code>{% endif %}</p>
-        <form class="form-stack" method="post" action="{{ b.text_action }}" novalidate>
+        <p class="editor-address mt-0 mb-3">{{ atoms::icon(name="fa-link") }} {{ t(key="info.address") }} {% if b.public_href %}<a href="{{ b.public_href }}"><code>{{ b.public_path }}</code></a>{% else %}<code>{{ b.public_path }}</code>{% endif %}</p>
+        <form id="text-form" method="post" action="{{ b.text_action }}" novalidate>
           {{ editor::markdown_editor(id="text-body", name="body", value=b.text.body, label=t(key="info.field_body"), maxlength=limits.info_page_body_max, preview_url=b.preview_url, error=te.body | default(value=""), hint=t(key="info.body_hint")) }}
-          <div class="row g-2">
-            <div class="col-sm-5">{{ field::input(id="text-effective", name="effective_on", label=t(key="info.field_effective"), type="date", value=b.text.effective_on, error=te.effective_on | default(value=""), hint=t(key="info.effective_hint")) }}</div>
-            <div class="col-sm-7">{{ field::input(id="text-note", name="change_note", label=t(key="info.field_note"), value=b.text.change_note, error=te.change_note | default(value=""), maxlength=limits.info_page_note_max, placeholder=t(key="info.note_placeholder")) }}</div>
-          </div>
-          <div class="admin-actions">
-            <button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="info.save_text") }}</button>
-            <button type="submit" class="btn btn-outline-secondary" name="intent" value="preview">{{ atoms::icon(name="fa-eye") }} {{ t(key="info.preview_button") }}</button>
-          </div>
         </form>
       </section>
     </div>
-    <div class="col-lg-4 d-flex flex-column gap-3">
+
+    <aside class="editor-side" aria-label="{{ t(key="info.side_label") }}">
+      <section class="admin-section form-stack" aria-labelledby="version-title">
+        <h2 class="admin-section__title" id="version-title">{{ t(key="info.version_box") }}</h2>
+        {{ field::input(id="text-effective", name="effective_on", label=t(key="info.field_effective"), type="date", value=b.text.effective_on, error=te.effective_on | default(value=""), hint=t(key="info.effective_hint"), form="text-form") }}
+        {{ field::input(id="text-note", name="change_note", label=t(key="info.field_note"), value=b.text.change_note, error=te.change_note | default(value=""), maxlength=limits.info_page_note_max, placeholder=t(key="info.note_placeholder"), form="text-form") }}
+        <div class="editor-actions">
+          <button type="submit" form="text-form" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="info.save_text") }}</button>
+          <button type="submit" form="text-form" class="btn btn-outline-secondary" name="intent" value="preview">{{ atoms::icon(name="fa-eye") }} {{ t(key="info.preview_button") }}</button>
+        </div>
+      </section>
       <section class="admin-section" aria-labelledby="edit-title">
         <h2 class="admin-section__title" id="edit-title">{{ t(key="info.settings_title") }}</h2>
         <form class="form-stack" method="post" action="{{ b.update_action }}" novalidate>
           {{ fields::info_page_fields(form=b.form, errors=b.errors, groups=b.groups, prefix="edit") }}
-          <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button></div>
+          <button type="submit" class="btn btn-outline-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="info.save_settings") }}</button>
         </form>
       </section>
       <section class="admin-section" aria-labelledby="versions-title">
@@ -85,7 +90,7 @@
         </ul>
       </section>
       {{ history::history_list(rows=b.history) }}
-    </div>
+    </aside>
   </div>
 
   {% for x in b.confirms %}

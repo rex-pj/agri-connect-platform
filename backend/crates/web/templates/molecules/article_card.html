@@ -1,10 +1,11 @@
 {#- An article as a link. `article_card`: a compact row, a fixed square
-    photo beside its kind, title, summary and age (the lists, and the home
-    page's strip beside its lead). `article_feature`: the lead of the home
-    page's strip, its cover wide (16:9; a tinted panel with the kind's icon
-    without one), its kind over it, the title large, the summary, the age.
-    `a` is web::pages::articles::ArticleCard; `summary` false leaves the
-    summary out (a row beside a lead). Molecules compose atoms only. -#}
+    photo beside its kind, title, summary and age (the article lists).
+    `article_feature`: a card of the home page's strip, its cover wide
+    (16:9; a tinted panel with the kind's icon without one), then its kind,
+    age, title and summary; `row`: on a phone a row instead (a small square
+    cover, no summary), every card but the first. `a` is
+    web::pages::articles::ArticleCard; `summary` false leaves a row's
+    summary out. Molecules compose atoms only. -#}
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/article_meta.html" as meta %}
 {% macro article_card(a, summary=true) -%}
@@ -18,16 +19,15 @@
 </a>
 {%- endmacro article_card %}
 
-{% macro article_feature(a) -%}
-<a class="article-feature" href="{{ a.href }}">
+{% macro article_feature(a, row=false) -%}
+<a class="article-feature{% if row %} article-feature--row{% endif %}" href="{{ a.href }}">
   <span class="article-feature__cover{% if not a.cover_file_id %} article-feature__cover--{% if a.kind == "guide" %}guide{% else %}news{% endif %}{% endif %}">
     {% if a.cover_file_id %}<img src="{{ file_url(id=a.cover_file_id) }}" alt="" loading="lazy">{% elif a.kind == "guide" %}{{ atoms::icon(name="fa-seedling") }}{% else %}{{ atoms::icon(name="fa-newspaper") }}{% endif %}
-    <span class="article-feature__kind">{{ meta::kind_pill(kind=a.kind) }}</span>
   </span>
   <span class="article-feature__text">
+    <span class="article-card__meta">{{ meta::kind_pill(kind=a.kind) }}{% if a.is_pinned %} {{ atoms::icon(name="fa-thumbtack") }}{% endif %} {{ meta::age(a=a) }}</span>
     <strong class="article-feature__title">{{ a.title }}</strong>
     {% if a.summary %}<span class="article-feature__summary">{{ a.summary }}</span>{% endif %}
-    <span class="article-card__meta">{% if a.is_pinned %}{{ atoms::icon(name="fa-thumbtack") }} {% endif %}{{ meta::age(a=a) }}{% if a.province_name %} · {{ atoms::icon(name="fa-location-dot") }} {{ a.province_name }}{% endif %}</span>
   </span>
 </a>
 {%- endmacro article_feature %}

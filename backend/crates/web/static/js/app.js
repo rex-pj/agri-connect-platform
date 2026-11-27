@@ -6,6 +6,9 @@
 
 // The slug a suggestion endpoint gives `text` (`id`: the record edited):
 // `{slug, taken}`, or null offline or signed out (the save still checks).
+// Where the Markdown editor remembers that this browser writes side by side.
+const EDITOR_MODE_KEY = "markdown-editor-mode";
+
 async function askSlug(url, text, id) {
   const params = new URLSearchParams({ text });
   if (id) params.set("id", id);
@@ -1222,7 +1225,9 @@ document.addEventListener("alpine:init", () => {
   // words a button inserts come from the template (`data-sample-*`): no
   // words in code. Without JS the form's own preview button does the same.
   Alpine.data("markdownEditor", () => ({
-    tab: "write",
+    // "write" (the default), "preview", or "split": the preview beside the
+    // text, chosen on a wide screen and remembered by this browser.
+    mode: "write",
     html: "",
     status: "",
     count: 0,
@@ -1232,24 +1237,45 @@ document.addEventListener("alpine:init", () => {
     init() {
       this.area = this.$refs.area;
       this.count = this.area.value.length;
-      this.wide = window.matchMedia("(min-width: 1200px)");
-      if (this.wide.matches) this.render();
+      let remembered = "";
+      try {
+        remembered = window.localStorage.getItem(EDITOR_MODE_KEY) || "";
+      } catch {
+        // Storage refused (a private window): the default is fine.
+      }
+      if (remembered === "split" && window.matchMedia("(min-width: 992px)").matches) {
+        this.mode = "split";
+        this.render();
+      }
     },
-    get writing() {
-      return this.tab === "write";
-    },
-    get previewing() {
-      return this.tab === "preview";
+    remember() {
+      try {
+        window.localStorage.setItem(EDITOR_MODE_KEY, this.mode === "split" ? "split" : "");
+      } catch {
+        // Not kept: the next page opens on the default.
+      }
     },
     get writeTabClass() {
-      return this.tab === "write" ? "is-current" : "";
+      return this.mode === "write" ? "is-current" : "";
     },
     get previewTabClass() {
-      return this.tab === "preview" ? "is-current" : "";
+      return this.mode === "preview" ? "is-current" : "";
     },
-    // Which pane a phone shows; from 1200 px both (app.css).
+    get splitTabClass() {
+      return this.mode === "split" ? "is-current" : "";
+    },
+    get writing() {
+      return this.mode === "write";
+    },
+    get previewing() {
+      return this.mode === "preview";
+    },
+    get splitting() {
+      return this.mode === "split";
+    },
+    // Which panes show (app.css): the text, the preview, or both.
     get paneClass() {
-      return this.tab === "preview" ? "shows-preview" : "shows-write";
+      return `shows-${this.mode}`;
     },
     get countLabel() {
       return `${this.count}/${this.area ? this.area.maxLength : ""}`;
@@ -1261,17 +1287,24 @@ document.addEventListener("alpine:init", () => {
       return this.status === "failed";
     },
     showWrite() {
-      this.tab = "write";
+      this.mode = "write";
+      this.remember();
       this.$nextTick(() => this.area.focus());
     },
     showPreview() {
-      this.tab = "preview";
+      this.mode = "preview";
+      this.remember();
+      this.render();
+    },
+    showSplit() {
+      this.mode = "split";
+      this.remember();
       this.render();
     },
     typed() {
       this.count = this.area.value.length;
-      // On a wide screen the preview beside the text follows it.
-      if (this.wide.matches) {
+      // Side by side, the preview follows the text.
+      if (this.mode === "split") {
         clearTimeout(this.timer);
         this.timer = setTimeout(() => this.render(), 600);
       }

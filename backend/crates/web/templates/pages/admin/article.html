@@ -15,7 +15,8 @@
     the text (the Markdown editor). On the right, below on a phone: the
     publish box (its state, "save", "save and publish"), the cover photo,
     what it concerns, its history. One multipart form holds both columns;
-    its buttons stay in reach at the foot of a phone's screen. An existing
+    its buttons sit in the publish box, fixed at the foot of a phone's
+    screen. An existing
     article's header publishes, takes down, turns back into a draft and
     takes the cover off (`b.header`). `page.body` is
     web::pages::admin::articles::ArticleEditor. -#}
@@ -27,7 +28,7 @@
 {% set f = b.form %}
 {% if b.post and b.post.cover_file_id %}{% set cover = b.post.cover_file_id %}{% else %}{% set cover = "" %}{% endif %}
 {% if b.header %}{{ record::record_header(h=b.header) }}{% else %}{{ admin_head::admin_header(title=t(key="article.new_title"), icon="fa-newspaper", sub=t(key="article.new_sub"), back_href=b.back_href, back_label=t(key="admin_menu.articles")) }}{% endif %}
-<div class="admin-body">
+<div class="admin-body editor-page">
   {% if b.flash == "article_created" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="article.created")) }}{% endif %}
   {% if b.flash == "article_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.saved")) }}{% endif %}
   {% if b.flash == "article_status_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="article.status_saved")) }}{% endif %}
@@ -46,8 +47,8 @@
   <div class="editor-layout">
     <div class="editor-main admin-section">
       <div x-data="addressPreview" x-on:input="changed" data-url="{{ b.slug_url }}" data-prefix="{{ b.address_prefix }}" data-slug="{{ b.address_slug }}">
-        <label class="visually-hidden" for="post-title">{{ t(key="article.field_title") }}</label>
-        <input class="form-control editor-title{% if e.title %} is-invalid{% endif %}" id="post-title" name="title" value="{{ f.title }}" maxlength="{{ limits.post_title_max }}" placeholder="{{ t(key="article.title_placeholder") }}" required autocomplete="off"{% if e.title %} aria-invalid="true" aria-describedby="post-title-error"{% endif %}>
+        <label class="form-label fw-semibold" for="post-title">{{ t(key="article.field_title") }} <span class="text-danger" aria-hidden="true">*</span></label>
+        <input class="form-control form-control-lg editor-title{% if e.title %} is-invalid{% endif %}" id="post-title" name="title" value="{{ f.title }}" maxlength="{{ limits.post_title_max }}" placeholder="{{ t(key="article.title_placeholder") }}" required autocomplete="off"{% if e.title %} aria-invalid="true" aria-describedby="post-title-error"{% endif %}>
         {% if e.title %}<div class="invalid-feedback d-block" id="post-title-error">{{ e.title }}</div>{% endif %}
         <p class="editor-address mt-2 mb-0">{{ atoms::icon(name="fa-link") }} {{ t(key="article.address") }} <code x-text="address">{{ b.address_prefix }}{{ b.address_slug }}</code></p>
       </div>
@@ -60,6 +61,12 @@
         <h2 class="admin-section__title" id="publish-title">{{ t(key="article.publish_box") }}</h2>
         <p class="small mb-0">{% if not b.post %}{{ t(key="article.new_note") }}{% elif b.post.status == "published" %}{{ t(key="article.on") }}{% elif b.post.status == "hidden" %}{{ t(key="article.off") }}{% else %}{{ t(key="article.draft_note") }}{% endif %}</p>
         {% if b.post and b.post.status == "hidden" %}{% set off = b.history | filter(attribute="action", value="set_post_status") | first %}{% if off %}{{ history::last_change(row=off) }}{% endif %}{% endif %}
+        <div class="editor-actions">
+          <button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {% if b.post %}{{ t(key="admin.save_changes") }}{% else %}{{ t(key="article.add_draft") }}{% endif %}</button>
+          {% if not b.post or b.post.status != "published" %}<button type="submit" class="btn btn-outline-success" name="intent" value="publish">{{ atoms::icon(name="fa-paper-plane") }} {{ t(key="article.save_publish") }}</button>{% endif %}
+          <button type="submit" class="btn btn-outline-secondary" name="intent" value="preview">{{ atoms::icon(name="fa-eye") }} {{ t(key="info.preview_button") }}</button>
+          {% if not b.post %}<a class="btn btn-link" href="{{ b.back_href }}">{{ t(key="article.cancel") }}</a>{% endif %}
+        </div>
       </section>
       <section class="admin-section" aria-labelledby="cover-title">
         <h2 class="admin-section__title" id="cover-title">{{ t(key="article.cover") }}</h2>
@@ -78,12 +85,6 @@
       </section>
       {% if b.post %}{{ history::history_list(rows=b.history) }}{% endif %}
     </aside>
-  </div>
-  <div class="editor-actions">
-    <button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {% if b.post %}{{ t(key="admin.save_changes") }}{% else %}{{ t(key="article.add_draft") }}{% endif %}</button>
-    {% if not b.post or b.post.status != "published" %}<button type="submit" class="btn btn-outline-success" name="intent" value="publish">{{ atoms::icon(name="fa-paper-plane") }} {{ t(key="article.save_publish") }}</button>{% endif %}
-    <button type="submit" class="btn btn-outline-secondary" name="intent" value="preview">{{ atoms::icon(name="fa-eye") }} {{ t(key="info.preview_button") }}</button>
-    {% if not b.post %}<a class="btn btn-link" href="{{ b.back_href }}">{{ t(key="article.cancel") }}</a>{% endif %}
   </div>
   </form>
 

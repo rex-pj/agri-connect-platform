@@ -47,10 +47,7 @@
 {% if page.articles %}
 <section class="home-section">
   {{ section::section_header(title=t(key="home.articles"), more_href=url_for(name="articles")) }}
-  <div class="home-articles{% if page.articles | length == 1 %} home-articles--one{% endif %}">
-    {{ article_card::article_feature(a=page.articles | first) }}
-    {% if page.articles | length > 1 %}<div class="home-articles__more">{% for a in page.articles | slice(start=1) %}{{ article_card::article_card(a=a, summary=false) }}{% endfor %}</div>{% endif %}
-  </div>
+  <div class="home-articles">{% for a in page.articles %}{{ article_card::article_feature(a=a, row=not loop.first) }}{% endfor %}</div>
 </section>
 {% endif %}
 

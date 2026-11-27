@@ -6416,33 +6416,47 @@ summary.acct-item__row:focus-visible {
   flex-direction: column;
   gap: var(--sp-2);
 }
-.md-editor__head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-2);
-}
-.md-editor__tabs {
+/* The modes at the toolbar's end: write, preview, side by side. */
+.md-editor__modes {
   display: inline-flex;
+  margin-left: auto;
   padding: 3px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: 10px;
   background: var(--bg);
 }
-.md-editor__tab {
+.md-editor__mode {
   min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 0 var(--sp-3);
   border: 0;
-  border-radius: 999px;
+  border-radius: 8px;
   background: transparent;
   color: var(--text2);
+  font-size: var(--fs-sm);
   font-weight: 600;
 }
-.md-editor__tab.is-current {
+.md-editor__mode.is-current {
   background: var(--surface);
   color: var(--p800);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+/* Side by side only where two panes fit. */
+.md-editor__mode--wide {
+  display: none;
+}
+@media (min-width: 992px) {
+  .md-editor__mode--wide {
+    display: inline-flex;
+  }
+}
+/* On a narrow phone the modes keep their icons only. */
+@media (max-width: 575.98px) {
+  .md-editor__mode span {
+    display: none;
+  }
 }
 /* The toolbar sticks under the admin bar while a long text scrolls. */
 .md-editor__bar {
@@ -6506,22 +6520,15 @@ summary.acct-item__row:focus-visible {
   color: var(--muted);
   font-size: var(--fs-sm);
 }
-/* A phone shows one pane: the tab chosen. */
+/* One pane at a time: the text, or its preview. */
 .md-editor__panes.shows-write .md-editor__preview,
 .md-editor__panes.shows-preview .md-editor__area {
   display: none;
 }
-/* From 1200 px the preview follows the text, side by side. */
-@media (min-width: 1200px) {
-  .md-editor__tabs {
-    display: none;
-  }
-  .md-editor__panes {
+/* Side by side (from 992 px; stacked below, should the choice remain). */
+@media (min-width: 992px) {
+  .md-editor__panes.shows-split {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-  .md-editor__panes.shows-write .md-editor__preview,
-  .md-editor__panes.shows-preview .md-editor__area {
-    display: block;
   }
 }
 .md-editor__help summary {
@@ -6544,10 +6551,6 @@ summary.acct-item__row:focus-visible {
     grid-template-columns: minmax(0, 1fr) 320px;
     align-items: start;
   }
-  .editor-side {
-    position: sticky;
-    top: var(--sp-4);
-  }
 }
 .editor-main,
 .editor-side {
@@ -6556,26 +6559,18 @@ summary.acct-item__row:focus-visible {
   gap: var(--sp-3);
   min-width: 0;
 }
-/* The title as the page will show it: large, no box until focused. */
+/* The title: a plain box, larger than the others, as it heads the page. */
 .editor-title {
-  padding: var(--sp-2) 0;
-  border: 0;
-  border-bottom: 2px solid var(--hairline);
-  border-radius: 0;
-  background: transparent;
-  font-size: 1.6rem;
-  font-weight: 800;
-  line-height: 1.3;
-}
-.editor-title:focus {
-  border-bottom-color: var(--p600);
-  box-shadow: none;
+  min-height: 52px;
+  font-size: 1.25rem;
+  font-weight: 700;
 }
 .editor-address {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-1);
+  margin: var(--sp-2) 0 0;
   color: var(--muted);
   font-size: var(--fs-sm);
   word-break: break-all;
@@ -6583,28 +6578,38 @@ summary.acct-item__row:focus-visible {
 .editor-address code {
   color: var(--p700);
 }
-/* On a phone the save buttons stay in reach at the foot of the screen. */
+/* The save buttons, in the publishing box: one per line, room around
+   them. On a phone the box is far below the text, so the buttons stay
+   fixed at the foot of the screen instead (the page keeps room for them). */
 .editor-actions {
-  position: sticky;
-  bottom: 0;
-  z-index: 3;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: var(--sp-2);
-  padding: var(--sp-3);
-  border-top: 1px solid var(--hairline);
-  background: var(--surface);
+  margin-top: var(--sp-3);
 }
 .editor-actions .btn {
   min-height: 44px;
-  flex: 1 1 auto;
 }
-@media (min-width: 992px) {
+@media (max-width: 991.98px) {
+  .editor-page {
+    padding-bottom: 96px;
+  }
   .editor-actions {
-    position: static;
-    padding: 0;
-    border: 0;
-    background: transparent;
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1030;
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin: 0;
+    padding: var(--sp-3) var(--gutter) calc(var(--sp-3) + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--hairline);
+    background: var(--surface);
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
+  }
+  .editor-actions .btn {
+    flex: 1 1 auto;
   }
 }
 
@@ -6627,27 +6632,21 @@ summary.acct-item__row:focus-visible {
   color: #1e40af;
 }
 
-/* The home page's articles: one lead, the others as rows beside it. */
+/* The home page's articles: cards of one size whatever their number, four
+   across a wide screen, two on a tablet. On a phone the first is a card
+   and the others rows (a small square cover beside the words). */
 .home-articles {
   display: grid;
   gap: var(--sp-3);
 }
-.home-articles__more {
-  display: grid;
-  gap: var(--sp-2);
-  align-content: start;
-}
-.home-articles__more .article-card__thumb {
-  flex-basis: 80px;
-  height: 80px;
+@media (min-width: 768px) {
+  .home-articles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 @media (min-width: 992px) {
   .home-articles {
-    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
-  }
-  .home-articles--one {
-    grid-template-columns: minmax(0, 1fr);
-    max-width: 720px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 .article-feature {
@@ -6665,7 +6664,6 @@ summary.acct-item__row:focus-visible {
   color: var(--p700);
 }
 .article-feature__cover {
-  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -6673,7 +6671,7 @@ summary.acct-item__row:focus-visible {
   overflow: hidden;
   background: var(--p50);
   color: var(--p600);
-  font-size: 2.6rem;
+  font-size: 2.2rem;
 }
 .article-feature__cover img {
   width: 100%;
@@ -6688,24 +6686,20 @@ summary.acct-item__row:focus-visible {
   background: linear-gradient(135deg, #eff6ff, #dbeafe);
   color: #2563eb;
 }
-.article-feature__kind {
-  position: absolute;
-  top: var(--sp-3);
-  left: var(--sp-3);
-}
 .article-feature__text {
   display: flex;
+  flex: 1;
   flex-direction: column;
-  gap: var(--sp-2);
-  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  gap: var(--sp-1);
+  padding: var(--sp-3);
 }
 .article-feature__title {
   display: -webkit-box;
   overflow: hidden;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
-  font-size: 1.2rem;
-  line-height: 1.3;
+  font-size: 1.05rem;
+  line-height: 1.35;
 }
 .article-feature__summary {
   display: -webkit-box;
@@ -6713,4 +6707,23 @@ summary.acct-item__row:focus-visible {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   color: var(--text2);
+  font-size: var(--fs-sm);
+}
+/* A phone's rows: the cover a small square at the left, no summary. */
+@media (max-width: 767.98px) {
+  .article-feature--row {
+    flex-direction: row;
+    align-items: stretch;
+  }
+  .article-feature--row .article-feature__cover {
+    flex: 0 0 96px;
+    aspect-ratio: 1 / 1;
+    font-size: 1.6rem;
+  }
+  .article-feature--row .article-feature__summary {
+    display: none;
+  }
+  .article-feature--row .article-feature__title {
+    -webkit-line-clamp: 2;
+  }
 }

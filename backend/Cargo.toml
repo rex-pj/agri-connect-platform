@@ -109,6 +109,10 @@ flate2 = { version = "1", default-features = false, features = [
     "rust_backend", # pure Rust inflate for the bundled provinces and wards (admin_units.tsv.gz)
 ] }
 
+pulldown-cmark = { version = "0.13", default-features = false, features = [
+    "html", # push_html: the information pages and news posts are written in Markdown
+] }
+
 unicode-normalization = { version = "0.1", default-features = false, features = [
     "std", # NFD for slugs: "Gạo Thơm" -> "gao-thom" (pinned by application/src/slugify.fixtures.json)
 ] }

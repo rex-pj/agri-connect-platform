@@ -182,3 +182,31 @@ pub trait MapTiles: Send + Sync {
     /// `map_unavailable` when it cannot be reached).
     async fn tile(&self, z: u8, x: u32, y: u32) -> domain::Result<Vec<u8>>;
 }
+
+/// One heading of a rendered text: the outline a long page shows above it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Heading {
+    /// 2 or 3: a text's `#` is drawn as a `##`, since the page's title is
+    /// its only `<h1>`.
+    pub level: u8,
+    /// The anchor of the heading (`#dieu-1-pham-vi`), unique in the text.
+    pub id: String,
+    pub text: String,
+}
+
+/// A text written in Markdown, made into HTML that is safe to put on a page.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RenderedText {
+    pub html: String,
+    /// The `##` and `###` headings, in order.
+    pub outline: Vec<Heading>,
+}
+
+/// Turns an admin's Markdown (an information page, a news post) into HTML.
+/// No HTML written in the text ever reaches the page (it is shown as text),
+/// a link leads only to `https:`, `http:`, `mailto:`, `tel:`, a path of
+/// this site or an anchor, and an image is only one of our uploads
+/// (`/files/…`); anything else is dropped, its words kept.
+pub trait MarkdownRenderer: Send + Sync {
+    fn render(&self, source: &str) -> RenderedText;
+}

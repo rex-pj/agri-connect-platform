@@ -16,6 +16,7 @@ pub mod file_storage;
 pub mod image_processor;
 pub mod jwt_token_service;
 pub mod map_tiles;
+pub mod markdown_renderer;
 pub mod rate_limiter;
 pub mod repositories;
 pub mod search;

@@ -48,7 +48,7 @@
     {{ sheet_head::sheet_header(id="them-trang", title=t(key="info.add"), icon="fa-file-lines") }}
     <form class="contact-sheet__form" method="post" action="{{ b.create_action }}" novalidate>
       {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
-      {{ fields::info_page_fields(form=b.form, errors=b.errors, groups=b.groups, prefix="new", new=true, first=true) }}
+      {{ fields::info_page_fields(form=b.form, errors=b.errors, groups=b.groups, prefix="new", new=true, first=true, slug_url=url_for(name="admin_info_page_slug")) }}
       <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-plus") }} {{ t(key="info.add") }}</button>
     </form>
   </section>

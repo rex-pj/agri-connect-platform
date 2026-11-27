@@ -1,0 +1,11 @@
+{#- What an article is and how fresh: its kind as a coloured pill (news amber,
+    guides blue, told apart at a glance) and its age in Vietnam days
+    ("Hôm nay", "3 ngày trước"), the exact day in the tooltip. `a` is
+    web::pages::articles::ArticleCard. Atoms depend on nothing. -#}
+{% macro kind_pill(kind) -%}
+<span class="article-pill article-pill--{% if kind == "guide" %}guide{% else %}news{% endif %}">{% if kind == "guide" %}{{ t(key="article.kind.guide") }}{% else %}{{ t(key="article.kind.news") }}{% endif %}</span>
+{%- endmacro kind_pill %}
+
+{% macro age(a) -%}
+{% if a.published_on %}<time datetime="{{ a.published_on | utc_iso }}" title="{{ a.published_on | vn_datetime }}">{% if a.days_ago == 0 %}{{ t(key="prices.today") }}{% elif a.days_ago == 1 %}{{ t(key="prices.yesterday") }}{% else %}{{ t(key="prices.days_ago", count=a.days_ago) }}{% endif %}</time>{% endif %}
+{%- endmacro age %}

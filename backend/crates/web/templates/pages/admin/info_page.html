@@ -8,6 +8,7 @@
 {% import "organisms/article_body.html" as article %}
 {% import "organisms/info_page_fields.html" as fields %}
 {% import "organisms/confirm_sheet.html" as confirm %}
+{% import "organisms/markdown_editor.html" as editor %}
 {#- One information page, as a record page: the header (turn on, preview,
     turn off, the public page: `b.header`), one status strip (who sees it,
     whether a version is in force), then its text written as a new version
@@ -46,13 +47,9 @@
       {% endif %}
       <section class="admin-section" aria-labelledby="text-title">
         <h2 class="admin-section__title" id="text-title">{{ t(key="info.text_title") }}</h2>
+        <p class="editor-address">{{ atoms::icon(name="fa-link") }} {{ t(key="info.address") }} {% if b.public_href %}<a href="{{ b.public_href }}"><code>{{ b.public_path }}</code></a>{% else %}<code>{{ b.public_path }}</code>{% endif %}</p>
         <form class="form-stack" method="post" action="{{ b.text_action }}" novalidate>
-          <div class="form-field">
-            <label class="form-label fw-semibold" for="text-body">{{ t(key="info.field_body") }} <span class="text-danger" aria-hidden="true">*</span></label>
-            <textarea class="form-control font-monospace markdown-box{% if te.body %} is-invalid{% endif %}" id="text-body" name="body" rows="18" maxlength="{{ limits.info_page_body_max }}" aria-describedby="text-body-hint{% if te.body %} text-body-error{% endif %}"{% if te.body %} aria-invalid="true"{% endif %}>{{ b.text.body }}</textarea>
-            <div class="form-text" id="text-body-hint">{{ t(key="info.body_hint") }}</div>
-            {% if te.body %}<div class="invalid-feedback" id="text-body-error">{{ te.body }}</div>{% endif %}
-          </div>
+          {{ editor::markdown_editor(id="text-body", name="body", value=b.text.body, label=t(key="info.field_body"), maxlength=limits.info_page_body_max, preview_url=b.preview_url, error=te.body | default(value=""), hint=t(key="info.body_hint")) }}
           <div class="row g-2">
             <div class="col-sm-5">{{ field::input(id="text-effective", name="effective_on", label=t(key="info.field_effective"), type="date", value=b.text.effective_on, error=te.effective_on | default(value=""), hint=t(key="info.effective_hint")) }}</div>
             <div class="col-sm-7">{{ field::input(id="text-note", name="change_note", label=t(key="info.field_note"), value=b.text.change_note, error=te.change_note | default(value=""), maxlength=limits.info_page_note_max, placeholder=t(key="info.note_placeholder")) }}</div>

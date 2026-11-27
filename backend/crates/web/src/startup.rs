@@ -767,7 +767,11 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
             commodity_repo.clone(),
             events.clone(),
         ),
-        info_page: InfoPageUseCase::new(info_page_repo.clone(), events.clone()),
+        info_page: InfoPageUseCase::new(
+            info_page_repo.clone(),
+            Arc::new(PulldownMarkdownRenderer),
+            events.clone(),
+        ),
         zalo: ZaloUseCase::new(zalo),
         place: place.clone(),
         demand,

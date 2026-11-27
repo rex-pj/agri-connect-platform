@@ -1,13 +1,27 @@
 {#- An information page's boxes, shared by the create sheet and its own
     page. `form` is web::pages::admin::info_pages::InfoPageForm (as typed),
     `errors` its FormErrors, `groups` the footer's groups. The address is
-    only typed when the page is made (`new`): it never changes after. -#}
+    only typed when the page is made (`new`), and never changes after: as
+    the title is typed (Alpine `slugField`, the categories' own) the box
+    fills with a free one from it and says when the one typed is taken,
+    offering a free one; emptied, it follows the title again. Without JS a
+    blank address is made from the title on save. -#}
 {% import "molecules/form_field.html" as field %}
-{% macro info_page_fields(form, errors, groups, prefix, new=false, first=false) -%}
+{% macro info_page_fields(form, errors, groups, prefix, new=false, first=false, slug_url="") -%}
 {% set e = errors.fields %}
-{{ field::input(id=prefix ~ "-title", name="title", label=t(key="info.field_title"), value=form.title, error=e.title | default(value=""), required=true, maxlength=limits.info_page_title_max, placeholder=t(key="info.title_placeholder"), first=first) }}
 {% if new %}
-{{ field::input(id=prefix ~ "-code", name="code", label=t(key="info.field_code"), value=form.code, error=e.code | default(value=""), maxlength=limits.info_page_code_max, pattern=limits.slug_pattern, placeholder=t(key="info.code_placeholder"), hint=t(key="info.code_hint")) }}
+<div class="form-stack" x-data="slugField" x-on:input="changed" data-url="{{ slug_url }}" data-source="title" data-target="code" data-free-text="{{ t(key="info.code_free") }}" data-numbered-text="{{ t(key="info.code_numbered") }}" data-taken-text="{{ t(key="info.code_taken") }}" data-fix-text="{{ t(key="category_form.slug_fix") }}">
+  {{ field::input(id=prefix ~ "-title", name="title", label=t(key="info.field_title"), value=form.title, error=e.title | default(value=""), required=true, maxlength=limits.info_page_title_max, placeholder=t(key="info.title_placeholder"), first=first) }}
+  <div>
+    {{ field::input(id=prefix ~ "-code", name="code", label=t(key="info.field_code"), value=form.code, error=e.code | default(value=""), maxlength=limits.info_page_code_max, pattern=limits.slug_pattern, placeholder=t(key="info.code_placeholder"), autocomplete="off", hint=t(key="info.code_hint")) }}
+    <div class="slug-note" role="status" x-show="hasNote" x-cloak>
+      <span :class="noteClass" x-text="note"></span>
+      <button type="button" class="btn btn-outline-secondary" x-show="offers" x-on:click="apply">{{ t(key="category_form.slug_use") }} <code x-text="suggestion"></code></button>
+    </div>
+  </div>
+</div>
+{% else %}
+{{ field::input(id=prefix ~ "-title", name="title", label=t(key="info.field_title"), value=form.title, error=e.title | default(value=""), required=true, maxlength=limits.info_page_title_max, placeholder=t(key="info.title_placeholder"), first=first) }}
 {% endif %}
 {{ field::icon_select(id=prefix ~ "-icon", name="icon", label=t(key="info.field_icon"), value=form.icon, error=e.icon | default(value="")) }}
 <div class="row g-2">

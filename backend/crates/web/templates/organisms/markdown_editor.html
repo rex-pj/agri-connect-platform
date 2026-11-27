@@ -1,0 +1,58 @@
+{#- A text in Markdown, as an admin writes it (an article, an information
+    page): a plain textarea that works alone, which Alpine `markdownEditor`
+    gives a toolbar (bold, italic, headings, lists, quote, link, rule, and
+    Ctrl+B / Ctrl+I / Ctrl+K), the characters used, and a "preview" tab
+    rendered by the server (`preview_url`), beside the text from 1200 px.
+    The words the buttons insert come from the locale. A short guide to the
+    marks folds under it. Without JS the toolbar and tabs stay hidden and
+    the form's own preview button shows the text. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro markdown_editor(id, name, value, label, maxlength, preview_url, error="", hint="", rows=18, required=true) -%}
+<div class="md-editor" x-data="markdownEditor" data-url="{{ preview_url }}" data-sample-bold="{{ t(key="editor.sample_bold") }}" data-sample-italic="{{ t(key="editor.sample_italic") }}" data-sample-link="{{ t(key="editor.sample_link") }}" data-sample-line="{{ t(key="editor.sample_line") }}">
+  <div class="md-editor__head">
+    <label class="form-label fw-semibold mb-0" for="{{ id }}">{{ label }}{% if required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
+    <div class="md-editor__tabs" role="tablist" x-cloak>
+      <button type="button" class="md-editor__tab" role="tab" :class="writeTabClass" :aria-selected="writing" x-on:click="showWrite">{{ atoms::icon(name="fa-pen") }} {{ t(key="editor.write") }}</button>
+      <button type="button" class="md-editor__tab" role="tab" :class="previewTabClass" :aria-selected="previewing" x-on:click="showPreview">{{ atoms::icon(name="fa-eye") }} {{ t(key="editor.preview") }}</button>
+    </div>
+  </div>
+  <div class="md-editor__bar" role="toolbar" aria-label="{{ t(key="editor.toolbar") }}" aria-controls="{{ id }}" x-cloak>
+    <button type="button" class="md-editor__tool" data-md="bold" x-on:click="format" title="{{ t(key="editor.bold") }} (Ctrl+B)" aria-label="{{ t(key="editor.bold") }}">{{ atoms::icon(name="fa-bold") }}</button>
+    <button type="button" class="md-editor__tool" data-md="italic" x-on:click="format" title="{{ t(key="editor.italic") }} (Ctrl+I)" aria-label="{{ t(key="editor.italic") }}">{{ atoms::icon(name="fa-italic") }}</button>
+    <span class="md-editor__sep" aria-hidden="true"></span>
+    <button type="button" class="md-editor__tool md-editor__tool--text" data-md="h2" x-on:click="format" title="{{ t(key="editor.h2") }}" aria-label="{{ t(key="editor.h2") }}">H2</button>
+    <button type="button" class="md-editor__tool md-editor__tool--text" data-md="h3" x-on:click="format" title="{{ t(key="editor.h3") }}" aria-label="{{ t(key="editor.h3") }}">H3</button>
+    <span class="md-editor__sep" aria-hidden="true"></span>
+    <button type="button" class="md-editor__tool" data-md="ul" x-on:click="format" title="{{ t(key="editor.ul") }}" aria-label="{{ t(key="editor.ul") }}">{{ atoms::icon(name="fa-list-ul") }}</button>
+    <button type="button" class="md-editor__tool" data-md="ol" x-on:click="format" title="{{ t(key="editor.ol") }}" aria-label="{{ t(key="editor.ol") }}">{{ atoms::icon(name="fa-list-ol") }}</button>
+    <button type="button" class="md-editor__tool" data-md="quote" x-on:click="format" title="{{ t(key="editor.quote") }}" aria-label="{{ t(key="editor.quote") }}">{{ atoms::icon(name="fa-quote-left") }}</button>
+    <span class="md-editor__sep" aria-hidden="true"></span>
+    <button type="button" class="md-editor__tool" data-md="link" x-on:click="format" title="{{ t(key="editor.link") }} (Ctrl+K)" aria-label="{{ t(key="editor.link") }}">{{ atoms::icon(name="fa-link") }}</button>
+    <button type="button" class="md-editor__tool" data-md="hr" x-on:click="format" title="{{ t(key="editor.hr") }}" aria-label="{{ t(key="editor.hr") }}">{{ atoms::icon(name="fa-minus") }}</button>
+  </div>
+  <div class="md-editor__panes" :class="paneClass">
+    <textarea class="form-control md-editor__area{% if error %} is-invalid{% endif %}" id="{{ id }}" name="{{ name }}" rows="{{ rows }}" maxlength="{{ maxlength }}" x-ref="area" x-on:input="typed" x-on:keydown="keys" aria-describedby="{{ id }}-hint{% if error %} {{ id }}-error{% endif %}"{% if error %} aria-invalid="true"{% endif %}>{{ value }}</textarea>
+    <div class="md-editor__preview" x-cloak aria-live="polite">
+      <p class="md-editor__status" x-show="loading">{{ atoms::icon(name="fa-spinner fa-spin") }} {{ t(key="editor.loading") }}</p>
+      <p class="md-editor__status text-danger" x-show="failed">{{ t(key="editor.failed") }}</p>
+      <div class="article-body" x-html="html"></div>
+    </div>
+  </div>
+  {% if error %}<div class="invalid-feedback d-block" id="{{ id }}-error">{{ error }}</div>{% endif %}
+  <div class="form-text form-hint-row"><span id="{{ id }}-hint">{{ hint }}</span><span class="form-count" x-cloak x-text="countLabel" aria-hidden="true"></span></div>
+  <details class="md-editor__help">
+    <summary>{{ atoms::icon(name="fa-circle-question") }} {{ t(key="editor.help") }}</summary>
+    <table class="table table-sm mb-0">
+      <tbody>
+        <tr><td><code>## {{ t(key="editor.sample_heading") }}</code></td><td>{{ t(key="editor.help_h2") }}</td></tr>
+        <tr><td><code>**{{ t(key="editor.sample_bold") }}**</code></td><td>{{ t(key="editor.help_bold") }}</td></tr>
+        <tr><td><code>- {{ t(key="editor.sample_line") }}</code></td><td>{{ t(key="editor.help_list") }}</td></tr>
+        <tr><td><code>1. {{ t(key="editor.sample_line") }}</code></td><td>{{ t(key="editor.help_numbered") }}</td></tr>
+        <tr><td><code>> {{ t(key="editor.sample_line") }}</code></td><td>{{ t(key="editor.help_quote") }}</td></tr>
+        <tr><td><code>[{{ t(key="editor.sample_link") }}](https://…)</code></td><td>{{ t(key="editor.help_link") }}</td></tr>
+        <tr><td><code>| A | B |</code></td><td>{{ t(key="editor.help_table") }}</td></tr>
+      </tbody>
+    </table>
+  </details>
+</div>
+{%- endmacro markdown_editor %}

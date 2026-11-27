@@ -43,10 +43,11 @@ async fn open_articles(e: &Env, admin: &str, stage: &str) {
 async fn draft(e: &Env, admin: &str, kind: &str, title: &str, body: &str) -> String {
     let res = send(
         &e.router,
-        post_form(
+        post_multipart_form(
             "/admin/articles",
             &[("kind", kind), ("title", title), ("body", body)],
-            Some(admin),
+            None,
+            admin,
         ),
     )
     .await;
@@ -79,10 +80,11 @@ async fn an_article_reaches_farmers_once_published_and_the_part_is_open() {
     // Every rule at once, the sheet back open.
     let res = send(
         &e.router,
-        post_form(
+        post_multipart_form(
             "/admin/articles",
             &[("kind", "story"), ("title", " "), ("body", "")],
-            Some(&admin),
+            None,
+            &admin,
         ),
     )
     .await;
@@ -232,10 +234,11 @@ async fn only_an_admin_keeps_the_articles() {
     );
     let res = send(
         &e.router,
-        post_form(
+        post_multipart_form(
             "/admin/articles",
             &[("kind", "news"), ("title", "Giả"), ("body", "x")],
-            Some(&provider),
+            None,
+            &provider,
         ),
     )
     .await;
@@ -286,5 +289,136 @@ async fn the_demo_data_brings_articles_and_pages_to_start_from_and_takes_them_aw
         status_of(&e, "/info/lien-he", Some(&admin)).await,
         StatusCode::NOT_FOUND
     );
+    e.cleanup().await;
+}
+
+/// A JSON request as the editors' scripts send it, from our own origin.
+fn json_post(path: &str, body: &str, cookie: &str) -> axum::http::Request<axum::body::Body> {
+    axum::http::Request::post(path)
+        .header(header::CONTENT_TYPE, "application/json")
+        .header(header::ACCEPT, "application/json")
+        .header(header::ORIGIN, integration_tests::TEST_ORIGIN)
+        .header(header::COOKIE, cookie)
+        .body(axum::body::Body::from(body.to_owned()))
+        .unwrap_or_default()
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn the_editor_previews_names_and_publishes_in_one_go() {
+    let e = env_with_origin().await;
+    let admin = install_admin(&e).await;
+    open_articles(&e, &admin, "on").await;
+
+    // The new article's page: an editor of its own, not a sheet.
+    let editor = html_of(&e, "/admin/articles/new", Some(&admin)).await;
+    assert!(editor.contains(r#"x-data="markdownEditor""#));
+    assert!(editor.contains(r#"x-data="addressPreview""#));
+
+    // The preview the editor asks renders as the page will, typed HTML as text.
+    let res = send(
+        &e.router,
+        json_post(
+            "/api/admin/markdown/preview",
+            r###"{"text":"## Mục một\n\n<script>x</script>"}"###,
+            &admin,
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let json = body_text(res).await;
+    assert!(json.contains(r#"id=\"muc-mot\""#), "{json}");
+    assert!(json.contains("&lt;script&gt;"), "{json}");
+
+    // The address follows the title; an information page's is numbered
+    // while another page has it.
+    let slug = body_text(
+        send(
+            &e.router,
+            get_page(
+                "/api/admin/articles/slug?text=Gi%C3%A1%20l%C3%BAa",
+                Some(&admin),
+            ),
+        )
+        .await,
+    )
+    .await;
+    assert!(slug.contains(r#""slug":"gia-lua""#), "{slug}");
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/info-pages",
+            &[("title", "Liên hệ"), ("footer_group", "about")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let code = body_text(
+        send(
+            &e.router,
+            get_page(
+                "/api/admin/info-pages/slug?text=Li%C3%AAn%20h%E1%BB%87",
+                Some(&admin),
+            ),
+        )
+        .await,
+    )
+    .await;
+    assert!(
+        code.contains(r#""slug":"lien-he-2""#) && code.contains(r#""taken":true"#),
+        "{code}"
+    );
+    // A second page of the same title takes the next free address itself.
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/info-pages",
+            &[("title", "Liên hệ"), ("footer_group", "about")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert!(html_of(&e, "/admin/info-pages", Some(&admin))
+        .await
+        .contains("/info/lien-he-2"));
+
+    // "Save and publish": made and published at once.
+    let res = send(
+        &e.router,
+        post_multipart_form(
+            "/admin/articles",
+            &[
+                ("kind", "news"),
+                ("title", "Giá lúa tăng"),
+                ("body", "## Tin\n\nGiá lúa tăng."),
+                ("intent", "publish"),
+            ],
+            None,
+            &admin,
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let record = res.headers()[header::LOCATION]
+        .to_str()
+        .unwrap_or_default()
+        .to_owned();
+    let id = record.rsplit('/').next().unwrap_or_default().to_owned();
+    let page = html_of(&e, &format!("/articles/{id}/gia-lua-tang"), None).await;
+    assert!(page.contains("Giá lúa tăng."));
+    // The home page leads with it.
+    assert!(html_of(&e, "/", None).await.contains("article-feature"));
+
+    // Neither helper is open to a provider.
+    register_provider(&e.state, "nam", "0901234567").await;
+    let provider = sign_in(&e, "nam", "matkhau123").await;
+    let res = send(
+        &e.router,
+        json_post("/api/admin/markdown/preview", r#"{"text":"x"}"#, &provider),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
     e.cleanup().await;
 }

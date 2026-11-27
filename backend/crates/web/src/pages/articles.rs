@@ -13,8 +13,10 @@ use application::{
     constants::RELATED_POSTS_SHOWN,
     outputs::{NamedCodeDto, PostDto},
     posts::{KIND_GUIDE, KIND_NEWS},
+    usecases::demand_usecase::vn_today,
 };
 use axum::{extract::State, response::Response};
+use chrono::Utc;
 use domain::{models::post::PostQuery, Error, ErrorCode};
 use serde::{Deserialize, Serialize};
 
@@ -45,14 +47,22 @@ pub struct ArticleCard {
     #[serde(flatten)]
     pub post: PostDto,
     pub href: String,
+    /// Days since it was published, Vietnam days: "today", "3 days ago".
+    pub days_ago: Option<i64>,
 }
 
 pub fn cards(posts: Vec<PostDto>) -> Result<Vec<ArticleCard>, Error> {
+    let today = vn_today(Utc::now())?;
     posts
         .into_iter()
         .map(|post| {
+            let days_ago = match post.published_on {
+                Some(on) => Some((today - vn_today(on)?).num_days().max(0)),
+                None => None,
+            };
             Ok(ArticleCard {
                 href: canonical_url("article", post.id, &post.title)?,
+                days_ago,
                 post,
             })
         })

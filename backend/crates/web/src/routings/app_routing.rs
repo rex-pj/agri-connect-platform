@@ -27,6 +27,7 @@ use crate::{
         auth_handler::AuthHandler,
         coded_handler::{AlertKindHandler, SectorHandler},
         commodity_handler::CommodityHandler,
+        content_handler::ContentHandler,
         explore_handler::ExploreHandler,
         health_handler::HealthHandler,
         job_handler::JobHandler,
@@ -313,6 +314,7 @@ impl AppRouting {
             // An article's edit form: its cover photo and a long text.
             .merge(
                 Router::new()
+                    .route("/admin/articles", post(pages::admin::articles::create))
                     .route("/admin/articles/{id}", post(pages::admin::articles::update))
                     .layer(DefaultBodyLimit::max(
                         state.usecases.media.max_upload_bytes()
@@ -495,10 +497,8 @@ impl AppRouting {
                 "/admin/alerts/{id}/status",
                 post(pages::admin::alerts::change_status),
             )
-            .route(
-                "/admin/articles",
-                get(pages::admin::articles::list).post(pages::admin::articles::create),
-            )
+            .route("/admin/articles", get(pages::admin::articles::list))
+            .route("/admin/articles/new", get(pages::admin::articles::new))
             .route("/admin/articles/{id}", get(pages::admin::articles::show))
             .route(
                 "/admin/articles/{id}/status",
@@ -787,6 +787,15 @@ impl AppRouting {
                 get(AdminHandler::suggest_category_slug),
             )
             .route("/api/admin/icons", get(AdminHandler::search_icons))
+            .route(
+                "/api/admin/info-pages/slug",
+                get(ContentHandler::info_page_slug),
+            )
+            .route(
+                "/api/admin/articles/slug",
+                get(ContentHandler::article_slug),
+            )
+            .route("/api/admin/markdown/preview", post(ContentHandler::preview))
             .route(
                 "/api/admin/categories/{id}",
                 get(AdminHandler::get_category_detail),

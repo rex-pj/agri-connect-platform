@@ -115,6 +115,9 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("admin_category", "/admin/categories/{id}"),
     ("admin_category_status", "/admin/categories/{id}/status"),
     ("admin_category_slug", "/api/admin/categories/slug"),
+    ("admin_info_page_slug", "/api/admin/info-pages/slug"),
+    ("admin_article_slug", "/api/admin/articles/slug"),
+    ("admin_markdown_preview", "/api/admin/markdown/preview"),
     ("admin_icons", "/api/admin/icons"),
     ("place_ward", "/api/places/ward"),
     ("place_wards", "/api/places/wards"),
@@ -183,6 +186,7 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("admin_info_page_stage", "/admin/info-pages/{id}/stage"),
     ("admin_info_page_text", "/admin/info-pages/{id}/text"),
     ("admin_articles", "/admin/articles"),
+    ("admin_article_new", "/admin/articles/new"),
     ("admin_article", "/admin/articles/{id}"),
     ("admin_article_status", "/admin/articles/{id}/status"),
     (

@@ -33,10 +33,12 @@ use crate::{
     inputs::PostInput,
     outputs::{
         AdminPagedResponse, NamedCodeDto, NamedIdDto, PagedResponse, PostChoicesDto, PostDto,
+        SlugSuggestionDto,
     },
     pagination::{paginate_admin, paginate_public, total_or_count},
     ports::{EventBus, ProcessedImage},
     posts::{POST_KINDS, POST_STATUSES, STATUS_PUBLISHED},
+    slug::slugify,
     usecases::media_usecase::MediaUseCase,
     validation::{self, audit_reason, max_chars, one_line},
 };
@@ -121,6 +123,17 @@ impl PostUseCase {
             .find(id)
             .await?
             .ok_or_else(|| Error::new(ErrorCode::PostNotFound))
+    }
+
+    /// The slug of an article titled `text`: the last part of its address
+    /// (`/articles/{id}/{slug}`), shown under the title as it is typed. An
+    /// article's address starts with its id, so no slug is ever taken.
+    pub fn address_slug(&self, actor: &Actor, text: &str) -> Result<SlugSuggestionDto> {
+        actor.require(PERM_CONTENT_POST_MANAGE)?;
+        Ok(SlugSuggestionDto {
+            slug: slugify(text),
+            taken: false,
+        })
     }
 
     /// The provinces a post may concern, the shown ones: the form's

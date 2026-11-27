@@ -1748,3 +1748,10 @@ pub struct NamedIdDto {
     pub id: i32,
     pub name: String,
 }
+
+/// A text as a page would show it: the editor's preview.
+#[derive(Debug, Clone, Serialize)]
+pub struct MarkdownPreviewDto {
+    pub html: String,
+    pub outline: Vec<crate::ports::Heading>,
+}

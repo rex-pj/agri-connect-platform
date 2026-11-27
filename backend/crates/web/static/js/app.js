@@ -4,6 +4,19 @@
 // enhances markup that already works without JavaScript.
 "use strict";
 
+// The slug a suggestion endpoint gives `text` (`id`: the record edited):
+// `{slug, taken}`, or null offline or signed out (the save still checks).
+async function askSlug(url, text, id) {
+  const params = new URLSearchParams({ text });
+  if (id) params.set("id", id);
+  try {
+    const response = await fetch(`${url}?${params}`, { headers: { Accept: "application/json" } });
+    return response.ok ? await response.json() : null;
+  } catch {
+    return null;
+  }
+}
+
 document.addEventListener("alpine:init", () => {
   const Alpine = window.Alpine;
 
@@ -1101,8 +1114,10 @@ document.addEventListener("alpine:init", () => {
   // for that name; typing a slug checks it against the other categories and
   // offers a free one. Emptying the box hands it back to the name. Without JS
   // a blank slug is made on save, and the server checks every save anyway.
-  // Attributes: data-url (the suggestion endpoint), data-id (the category
-  // being edited), data-{free,numbered,taken,fix}-text (the notes).
+  // Attributes: data-url (the suggestion endpoint), data-id (the record
+  // being edited), data-{free,numbered,taken,fix}-text (the notes), and
+  // data-source / data-target: the boxes' names when they are not `name`
+  // and `slug` (an information page's `title` and `code`).
   Alpine.data("slugField", () => ({
     // "", "free", "numbered" (filled, with a number added), "taken", "fix".
     state: "",
@@ -1112,7 +1127,9 @@ document.addEventListener("alpine:init", () => {
     asked: 0,
 
     init() {
-      this.auto = this.box("slug").value.trim() === "";
+      this.source = this.$root.dataset.source || "name";
+      this.target = this.$root.dataset.target || "slug";
+      this.auto = this.box(this.target).value.trim() === "";
     },
     box(name) {
       return this.$root.querySelector(`[name="${name}"]`);
@@ -1120,11 +1137,11 @@ document.addEventListener("alpine:init", () => {
     // Input events of both boxes bubble here.
     changed(event) {
       const { name, value } = event.target;
-      if (name === "slug") {
+      if (name === this.target) {
         this.auto = value.trim() === "";
-        if (this.auto) this.ask(this.box("name").value, "name");
+        if (this.auto) this.ask(this.box(this.source).value, "name");
         else this.ask(value, "slug");
-      } else if (name === "name" && this.auto) {
+      } else if (name === this.source && this.auto) {
         this.ask(value, "name");
       }
     },
@@ -1135,23 +1152,14 @@ document.addEventListener("alpine:init", () => {
     async suggest(text, from) {
       const ticket = ++this.asked;
       const { url, id } = this.$root.dataset;
-      const params = new URLSearchParams({ text });
-      if (id) params.set("id", id);
-      let answer;
-      try {
-        const response = await fetch(`${url}?${params}`, { headers: { Accept: "application/json" } });
-        if (!response.ok) return;
-        answer = await response.json();
-      } catch {
-        // Offline or signed out: the save still checks.
-        return;
-      }
+      const answer = await askSlug(url, text, id);
+      if (!answer) return;
       // A later keystroke has asked again; its answer wins.
       if (ticket !== this.asked) return;
       this.suggestion = answer.slug;
       if (from === "name") {
         if (!this.auto) return;
-        this.box("slug").value = answer.slug;
+        this.box(this.target).value = answer.slug;
         this.state = !answer.slug ? "" : answer.taken ? "numbered" : "free";
       } else if (answer.slug === text) {
         this.state = "free";
@@ -1160,7 +1168,7 @@ document.addEventListener("alpine:init", () => {
       }
     },
     apply() {
-      this.box("slug").value = this.suggestion;
+      this.box(this.target).value = this.suggestion;
       this.auto = false;
       this.state = "free";
     },
@@ -1175,6 +1183,187 @@ document.addEventListener("alpine:init", () => {
     },
     get offers() {
       return (this.state === "taken" || this.state === "fix") && this.suggestion !== "";
+    },
+  }));
+
+  // An article's address as its title is typed: `data-prefix` (the address
+  // up to its id, or a placeholder before the article exists) and the slug
+  // the server makes of the title (`data-url`). Without JS the address is
+  // shown once saved.
+  Alpine.data("addressPreview", () => ({
+    slug: "",
+    timer: null,
+    asked: 0,
+
+    init() {
+      this.slug = this.$root.dataset.slug || "";
+    },
+    changed(event) {
+      if (event.target.name !== "title") return;
+      clearTimeout(this.timer);
+      const text = event.target.value.trim();
+      this.timer = setTimeout(() => this.suggest(text), 300);
+    },
+    async suggest(text) {
+      const ticket = ++this.asked;
+      const answer = await askSlug(this.$root.dataset.url, text);
+      if (answer && ticket === this.asked) this.slug = answer.slug;
+    },
+    get address() {
+      return `${this.$root.dataset.prefix}${this.slug}`;
+    },
+  }));
+
+  // The Markdown editor (organisms/markdown_editor.html) over a plain
+  // textarea that works alone: a toolbar (bold, italic, headings, lists,
+  // quote, link, rule) and its shortcuts (Ctrl+B, Ctrl+I, Ctrl+K), the
+  // characters used, and a "preview" tab the server renders (`data-url`, the
+  // one renderer the page uses), beside the text on a wide screen. The
+  // words a button inserts come from the template (`data-sample-*`): no
+  // words in code. Without JS the form's own preview button does the same.
+  Alpine.data("markdownEditor", () => ({
+    tab: "write",
+    html: "",
+    status: "",
+    count: 0,
+    timer: null,
+    asked: 0,
+
+    init() {
+      this.area = this.$refs.area;
+      this.count = this.area.value.length;
+      this.wide = window.matchMedia("(min-width: 1200px)");
+      if (this.wide.matches) this.render();
+    },
+    get writing() {
+      return this.tab === "write";
+    },
+    get previewing() {
+      return this.tab === "preview";
+    },
+    get writeTabClass() {
+      return this.tab === "write" ? "is-current" : "";
+    },
+    get previewTabClass() {
+      return this.tab === "preview" ? "is-current" : "";
+    },
+    // Which pane a phone shows; from 1200 px both (app.css).
+    get paneClass() {
+      return this.tab === "preview" ? "shows-preview" : "shows-write";
+    },
+    get countLabel() {
+      return `${this.count}/${this.area ? this.area.maxLength : ""}`;
+    },
+    get loading() {
+      return this.status === "loading";
+    },
+    get failed() {
+      return this.status === "failed";
+    },
+    showWrite() {
+      this.tab = "write";
+      this.$nextTick(() => this.area.focus());
+    },
+    showPreview() {
+      this.tab = "preview";
+      this.render();
+    },
+    typed() {
+      this.count = this.area.value.length;
+      // On a wide screen the preview beside the text follows it.
+      if (this.wide.matches) {
+        clearTimeout(this.timer);
+        this.timer = setTimeout(() => this.render(), 600);
+      }
+    },
+    async render() {
+      const ticket = ++this.asked;
+      this.status = "loading";
+      try {
+        const response = await fetch(this.$root.dataset.url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({ text: this.area.value }),
+        });
+        if (!response.ok) throw new Error(String(response.status));
+        const answer = await response.json();
+        if (ticket !== this.asked) return;
+        // The server's renderer writes no markup of the author's.
+        this.html = answer.html;
+        this.status = "";
+      } catch {
+        if (ticket === this.asked) this.status = "failed";
+      }
+    },
+    // A toolbar button: its `data-md` names what it does.
+    format(event) {
+      this.apply(event.currentTarget.dataset.md);
+    },
+    keys(event) {
+      if (!(event.ctrlKey || event.metaKey)) return;
+      const kind = { b: "bold", i: "italic", k: "link" }[event.key.toLowerCase()];
+      if (!kind) return;
+      event.preventDefault();
+      this.apply(kind);
+    },
+    apply(kind) {
+      const area = this.area;
+      const data = this.$root.dataset;
+      const start = area.selectionStart;
+      const end = area.selectionEnd;
+      const chosen = area.value.slice(start, end);
+      const wrap = (mark, sample) => {
+        const text = chosen || sample;
+        this.replace(start, end, `${mark}${text}${mark}`, start + mark.length, start + mark.length + text.length);
+      };
+      const lines = (prefix) => {
+        // Whole lines: from the start of the first one chosen.
+        const from = area.value.lastIndexOf("\n", start - 1) + 1;
+        const block = area.value.slice(from, end) || data.sampleLine;
+        const out = block
+          .split("\n")
+          .map((line, i) => (prefix === "1. " ? `${i + 1}. ${line}` : `${prefix}${line}`))
+          .join("\n");
+        this.replace(from, end, out, from, from + out.length);
+      };
+      switch (kind) {
+        case "bold":
+          return wrap("**", data.sampleBold);
+        case "italic":
+          return wrap("_", data.sampleItalic);
+        case "h2":
+          return lines("## ");
+        case "h3":
+          return lines("### ");
+        case "ul":
+          return lines("- ");
+        case "ol":
+          return lines("1. ");
+        case "quote":
+          return lines("> ");
+        case "link": {
+          const text = chosen || data.sampleLink;
+          const out = `[${text}](https://)`;
+          // The address chosen, ready to be typed over.
+          const at = start + text.length + 3;
+          return this.replace(start, end, out, at, at + "https://".length);
+        }
+        case "hr":
+          return this.replace(start, end, `${chosen}\n\n---\n\n`, end + 7, end + 7);
+        default:
+          return undefined;
+      }
+    },
+    // Puts `text` over [start, end) keeping the browser's undo where it can,
+    // then selects [from, to).
+    replace(start, end, text, from, to) {
+      const area = this.area;
+      area.focus();
+      area.setSelectionRange(start, end);
+      const kept = document.execCommand && document.execCommand("insertText", false, text);
+      if (!kept) area.setRangeText(text, start, end, "end");
+      area.setSelectionRange(from, to);
+      area.dispatchEvent(new Event("input", { bubbles: true }));
     },
   }));
 

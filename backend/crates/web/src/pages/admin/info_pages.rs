@@ -244,6 +244,10 @@ pub struct InfoPageRecord {
     /// The latest to come into force first.
     pub revisions: Vec<InfoRevisionDto>,
     pub public_href: Option<String>,
+    /// Its address, shown under the text's title.
+    pub public_path: String,
+    /// What the Markdown editor's preview asks.
+    pub preview_url: String,
     pub update_action: String,
     pub text_action: String,
     pub flash: Option<Flash>,
@@ -401,7 +405,9 @@ async fn record_page(
         text_errors: view.text_errors,
         preview: view.preview,
         revisions: detail.revisions,
+        public_path: url("info_page", &[("code", &page.code)])?,
         public_href,
+        preview_url: url("admin_markdown_preview", &[])?,
         update_action: path.clone(),
         text_action: url("admin_info_page_text", &[("id", &id_text)])?,
         flash: view.flash,

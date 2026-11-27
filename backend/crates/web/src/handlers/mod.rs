@@ -3,6 +3,7 @@ pub mod article_handler;
 pub mod auth_handler;
 pub mod coded_handler;
 pub mod commodity_handler;
+pub mod content_handler;
 pub mod explore_handler;
 pub mod health_handler;
 pub mod job_handler;

@@ -21,16 +21,16 @@ use domain::{
 
 use crate::{
     authz::Actor,
-    catalogue::PERM_CONTENT_PAGE_MANAGE,
+    catalogue::{PERM_CONTENT_PAGE_MANAGE, PERM_CONTENT_POST_MANAGE},
     constants::{INFO_PAGE_BODY_MAX, INFO_PAGE_CODE_MAX, INFO_PAGE_NOTE_MAX, INFO_PAGE_TITLE_MAX},
     features::Stage,
     info_pages::{FOOTER_GROUPS, FOOTER_GROUP_POLICY},
     inputs::{InfoPageInput, InfoRevisionInput},
     outputs::{
         InfoLinkDto, InfoPageDetailDto, InfoPageDto, InfoPageViewDto, InfoRevisionDto,
-        InfoVersionDto,
+        InfoVersionDto, MarkdownPreviewDto, SlugSuggestionDto,
     },
-    ports::EventBus,
+    ports::{EventBus, MarkdownRenderer},
     slug::{numbered, slugify},
     usecases::demand_usecase::vn_today,
     validation::{self, audit_reason, max_chars, one_line, validate_slug},
@@ -40,19 +40,77 @@ use crate::{
 pub const REVISION_IN_FORCE: &str = "in_force";
 pub const REVISION_UPCOMING: &str = "upcoming";
 pub const REVISION_PAST: &str = "past";
+/// How many numbered addresses are tried before giving up.
+const CODE_TRIES: u32 = 100;
 
 #[derive(Clone)]
 pub struct InfoPageUseCase {
     repo: Arc<dyn InfoPageRepositoryTrait + Send + Sync>,
+    /// What the editor's preview renders a text with.
+    markdown: Arc<dyn MarkdownRenderer>,
     events: Arc<dyn EventBus>,
 }
 
 impl InfoPageUseCase {
     pub fn new(
         repo: Arc<dyn InfoPageRepositoryTrait + Send + Sync>,
+        markdown: Arc<dyn MarkdownRenderer>,
         events: Arc<dyn EventBus>,
     ) -> Self {
-        Self { repo, events }
+        Self {
+            repo,
+            markdown,
+            events,
+        }
+    }
+
+    /// A free address for a page titled or typed `text` (`exclude`: the page
+    /// edited): its slug, numbered while another page has it. The create
+    /// sheet fills its box with it as the title is typed.
+    pub async fn suggest_code(
+        &self,
+        actor: &Actor,
+        text: &str,
+        exclude: Option<i32>,
+    ) -> Result<SlugSuggestionDto> {
+        actor.require(PERM_CONTENT_PAGE_MANAGE)?;
+        let base = numbered(&slugify(text), 1, INFO_PAGE_CODE_MAX);
+        if base.is_empty() {
+            return Ok(SlugSuggestionDto {
+                slug: base,
+                taken: false,
+            });
+        }
+        let slug = self.free_code(&base, exclude).await?;
+        Ok(SlugSuggestionDto {
+            taken: slug != base,
+            slug,
+        })
+    }
+
+    /// `base`, else `base-2`, `base-3`, … the first no other page has.
+    async fn free_code(&self, base: &str, exclude: Option<i32>) -> Result<String> {
+        for n in 1..=CODE_TRIES {
+            let candidate = numbered(base, n, INFO_PAGE_CODE_MAX);
+            match self.repo.find_by_code(&candidate).await? {
+                Some(page) if Some(page.id) != exclude => continue,
+                _ => return Ok(candidate),
+            }
+        }
+        Err(Error::field("code", ErrorCode::InfoPageCodeTaken))
+    }
+
+    /// A text as the page would show it, for the editor's preview: an
+    /// article's or a page's writer may ask.
+    pub fn preview(&self, actor: &Actor, text: &str) -> Result<MarkdownPreviewDto> {
+        if !actor.can(PERM_CONTENT_POST_MANAGE) {
+            actor.require(PERM_CONTENT_PAGE_MANAGE)?;
+        }
+        let rendered = self.markdown.render(text);
+        Ok(MarkdownPreviewDto {
+            html: rendered.html,
+            outline: rendered.outline,
+        })
     }
 
     async fn publish(&self, actor: &Actor, id: i32, change: Change, reason: Option<String>) {
@@ -102,7 +160,13 @@ impl InfoPageUseCase {
     /// A new page, off and with no text yet: its id.
     pub async fn create(&self, actor: &Actor, input: InfoPageInput) -> Result<i32> {
         actor.require(PERM_CONTENT_PAGE_MANAGE)?;
-        let fields = validate_page(input, true)?;
+        let typed_code = !input.code.trim().is_empty();
+        let mut fields = validate_page(input, true)?;
+        // A code made from the title takes the next free number; a typed
+        // one another page has is refused.
+        if !typed_code {
+            fields.code = self.free_code(&fields.code, None).await?;
+        }
         let id = self.repo.create(&fields, actor.user_id).await?;
         self.publish(actor, id, Change::Created, None).await;
         Ok(id)

@@ -1,12 +1,17 @@
-//! /admin/articles and /admin/articles/{id}: the news and the guides
-//! (`content.post.manage`).
+//! /admin/articles, /admin/articles/new and /admin/articles/{id}: the news
+//! and the guides (`content.post.manage`).
 //!
-//! The list (words, kind, sector, status chips) carries the create sheet,
-//! which makes a draft; an article's own page edits it (a multipart form:
-//! its boxes and its cover photo, the photo checked and stored before
-//! anything is saved), previews its text without saving (the form's second
-//! button), publishes, hides or turns it back into a draft (hiding asks
-//! first, with a reason), and takes the cover off. Nothing is deleted.
+//! The list (words, kind, sector, status chips) leads to the editor. The
+//! editor is one page for a new article and an existing one: the title
+//! large with the address it makes, the summary and the text (the Markdown
+//! editor) on the left; publishing, the cover photo and what the article
+//! concerns on the right, below on a phone, with the save buttons kept in
+//! reach. Its form is multipart (the cover is checked and stored before
+//! anything is saved); "save and publish" does both at once; the preview
+//! button shows the text as it would be, saving nothing (the editor's own
+//! preview with JS). An existing article's header publishes, takes down
+//! (with a reason) or turns it back into a draft, and takes the cover off.
+//! Nothing is deleted.
 
 use application::{
     authz::Actor,
@@ -28,8 +33,9 @@ use crate::{
     middleware::auth::Viewer,
     pages::{
         admin::{
-            history_rows, is_refusal, render_admin, url, Badge, Confirm, HistoryRow, ListPosition,
-            Outcome, RecordAction, RecordHeader, SearchBox, CATALOGUE_SORTS,
+            history_rows, is_refusal, render_admin, url, AdminTab, Badge, Confirm, HistoryRow,
+            ListPosition, Outcome, ReasonForm, RecordAction, RecordHeader, SearchBox,
+            CATALOGUE_SORTS,
         },
         canonical_url,
         dashboard::{max_upload_mb, prepare},
@@ -37,10 +43,13 @@ use crate::{
         listing::{past_the_end, Pagination},
         parse_id, see_other,
     },
+    slug::slugify,
 };
 
-/// The edit form's second button: show the text as it would be.
+/// The form's buttons besides "save": show the text as it would be; save
+/// and publish at once.
 const INTENT_PREVIEW: &str = "preview";
+const INTENT_PUBLISH: &str = "publish";
 const SHEET_HIDE: &str = "go-bai";
 const SHEET_COVER: &str = "bo-anh-bia";
 
@@ -57,7 +66,7 @@ pub struct PostForm {
     pub province_code: String,
     pub commodity_id: String,
     pub is_pinned: String,
-    /// `preview`: the second button.
+    /// Which button sent it: `preview`, `publish`, else a plain save.
     #[serde(skip_serializing)]
     pub intent: String,
 }
@@ -93,6 +102,14 @@ impl PostForm {
             intent: String::new(),
         }
     }
+
+    /// A new article's boxes: the news, everything else blank.
+    fn new_article() -> Self {
+        Self {
+            kind: KIND_NEWS.to_owned(),
+            ..Self::default()
+        }
+    }
 }
 
 /// A choice of a select: its value and its words.
@@ -120,6 +137,12 @@ fn status_word(locale: &Locale, status: &str) -> String {
 }
 
 fn choices(locale: &Locale, c: PostChoicesDto) -> PostChoices {
+    let pairs = |items: Vec<(String, String)>| {
+        items
+            .into_iter()
+            .map(|(value, label)| Choice { value, label })
+            .collect()
+    };
     PostChoices {
         kinds: POST_KINDS
             .into_iter()
@@ -128,32 +151,18 @@ fn choices(locale: &Locale, c: PostChoicesDto) -> PostChoices {
                 label: kind_word(locale, k),
             })
             .collect(),
-        sectors: c
-            .sectors
-            .into_iter()
-            .map(|s| Choice {
-                value: s.code,
-                label: s.name,
-            })
-            .collect(),
-        provinces: c
-            .provinces
-            .into_iter()
-            .map(|p| Choice {
-                value: p.code,
-                label: p.name,
-            })
-            .collect(),
-        commodities: c
-            .commodities
-            .into_iter()
-            .map(|c| Choice {
-                value: c.id.to_string(),
-                label: c.name,
-            })
-            .collect(),
+        sectors: pairs(c.sectors.into_iter().map(|s| (s.code, s.name)).collect()),
+        provinces: pairs(c.provinces.into_iter().map(|p| (p.code, p.name)).collect()),
+        commodities: pairs(
+            c.commodities
+                .into_iter()
+                .map(|c| (c.id.to_string(), c.name))
+                .collect(),
+        ),
     }
 }
+
+// ── The list ─────────────────────────────────────────────────────────────────
 
 #[derive(Serialize)]
 pub struct PostRow {
@@ -166,12 +175,9 @@ pub struct PostRow {
 pub struct ArticlesPage {
     pub total: i64,
     pub search: SearchBox,
-    pub states: Vec<super::AdminTab>,
+    pub states: Vec<AdminTab>,
     pub rows: Vec<PostRow>,
-    pub choices: PostChoices,
-    pub form: PostForm,
-    pub errors: FormErrors,
-    pub create_action: String,
+    pub new_href: String,
     pub pagination: Option<Pagination>,
     pub flash: Option<Flash>,
 }
@@ -187,24 +193,31 @@ pub struct ListQuery {
     pub sort: String,
 }
 
-struct ListView {
-    position: ListPosition,
-    form: PostForm,
-    errors: FormErrors,
-    flash: Option<Flash>,
-    status: StatusCode,
-}
-
-async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Response, Error> {
+/// GET /admin/articles
+pub async fn list(
+    Viewer(viewer): Viewer,
+    flash: TakeFlash,
+    State(state): State<AppState>,
+    ApiQuery(q): ApiQuery<ListQuery>,
+) -> Result<Response, Error> {
+    let Some(actor) = viewer else {
+        return see_other(&url("login", &[])?);
+    };
     let locale = state.locale();
-    let asked = view
-        .position
-        .clone()
-        .checked(&POST_STATUSES, CATALOGUE_SORTS);
+    let asked = ListPosition {
+        page: q.page,
+        q: q.q,
+        kind: q.kind,
+        sector: q.sector,
+        state: q.state,
+        sort: q.sort,
+        ..ListPosition::default()
+    }
+    .checked(&POST_STATUSES, CATALOGUE_SORTS);
     let criteria = asked.filter(&POST_STATUSES);
     let (posts, raw_choices) = tokio::try_join!(
-        state.usecases.post.list(actor, asked.page(), &criteria),
-        state.usecases.post.choices(actor),
+        state.usecases.post.list(&actor, asked.page(), &criteria),
+        state.usecases.post.choices(&actor),
     )?;
     let path = url("admin_articles", &[])?;
     let wanted_query = asked.query();
@@ -221,27 +234,25 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
         ..asked
     };
     let form_choices = choices(locale, raw_choices);
+    let to_pairs = |items: &[Choice]| {
+        items
+            .iter()
+            .map(|c| (c.value.clone(), c.label.clone()))
+            .collect()
+    };
     let search = position
         .search_box("admin_articles")?
         .picked(
             "kind",
             locale.text("article.field_kind"),
             locale.text("article.all_kinds"),
-            form_choices
-                .kinds
-                .iter()
-                .map(|k| (k.value.clone(), k.label.clone()))
-                .collect(),
+            to_pairs(&form_choices.kinds),
         )
         .picked(
             "sector",
             locale.text("sector.label"),
             locale.text("admin_pick.all_sectors"),
-            form_choices
-                .sectors
-                .iter()
-                .map(|s| (s.value.clone(), s.label.clone()))
-                .collect(),
+            to_pairs(&form_choices.sectors),
         )
         .sorted(
             locale,
@@ -264,95 +275,36 @@ async fn list_page(state: &AppState, actor: &Actor, view: ListView) -> Result<Re
             post,
         });
     }
-    let form = if view.form.kind.is_empty() {
-        PostForm {
-            kind: KIND_NEWS.to_owned(),
-            ..view.form
-        }
-    } else {
-        view.form
-    };
     let body = ArticlesPage {
         total: posts.total,
         search,
         states,
         pagination: position.pagination(&path, posts.page, posts.total_pages),
         rows,
-        choices: form_choices,
-        form,
-        errors: view.errors,
-        create_action: path.clone(),
-        flash: view.flash,
+        new_href: url("admin_article_new", &[])?,
+        flash: flash.0,
     };
-    render_admin(
-        state,
-        actor,
+    let mut response = render_admin(
+        &state,
+        &actor,
         &path,
-        view.status,
+        StatusCode::OK,
         "pages/admin/articles.html",
         &body,
-    )
-}
-
-/// GET /admin/articles
-pub async fn list(
-    Viewer(viewer): Viewer,
-    flash: TakeFlash,
-    State(state): State<AppState>,
-    ApiQuery(q): ApiQuery<ListQuery>,
-) -> Result<Response, Error> {
-    let Some(actor) = viewer else {
-        return see_other(&url("login", &[])?);
-    };
-    let view = ListView {
-        position: ListPosition {
-            page: q.page,
-            q: q.q,
-            kind: q.kind,
-            sector: q.sector,
-            state: q.state,
-            sort: q.sort,
-            ..ListPosition::default()
-        },
-        form: PostForm::default(),
-        errors: FormErrors::default(),
-        flash: flash.0,
-        status: StatusCode::OK,
-    };
-    let mut response = list_page(&state, &actor, view).await?;
+    )?;
     flash.clear_on(&mut response);
     Ok(response)
 }
 
-/// POST /admin/articles: a draft, then its own page.
-pub async fn create(
-    Viewer(viewer): Viewer,
-    State(state): State<AppState>,
-    ApiForm(form): ApiForm<PostForm>,
-) -> Result<Response, Error> {
-    let Some(actor) = viewer else {
-        return see_other(&url("login", &[])?);
-    };
-    match state.usecases.post.create(&actor, form.input(), None).await {
-        Ok(id) => redirect_to(id, Flash::ArticleCreated),
-        Err(err) if is_refusal(&err) => {
-            let view = ListView {
-                position: ListPosition::default(),
-                errors: FormErrors::from_error(&state, &err),
-                form,
-                flash: None,
-                status: err.kind().status(),
-            };
-            list_page(&state, &actor, view).await
-        }
-        Err(err) => Err(err),
-    }
-}
+// ── The editor ───────────────────────────────────────────────────────────────
 
 #[derive(Serialize)]
-pub struct ArticleRecord {
-    pub post: PostDto,
-    pub header: RecordHeader,
+pub struct ArticleEditor {
+    /// `None` while writing a new article.
+    pub post: Option<PostDto>,
+    /// An existing article's header (its states and actions); a new one has
+    /// the plain admin header.
+    pub header: Option<RecordHeader>,
     pub confirms: Vec<Confirm>,
     pub history: Vec<HistoryRow>,
     pub choices: PostChoices,
@@ -360,8 +312,15 @@ pub struct ArticleRecord {
     pub errors: FormErrors,
     /// Show the text as it would be (`markdown()`), nothing saved.
     pub preview: bool,
-    pub status_label: String,
-    pub update_action: String,
+    /// Where the form posts: the list (new) or the article (existing).
+    pub action: String,
+    pub back_href: String,
+    /// The address up to the slug (`/articles/12/`), or what stands for it
+    /// before the article exists; the slug of its title so far.
+    pub address_prefix: String,
+    pub address_slug: String,
+    pub slug_url: String,
+    pub preview_url: String,
     pub max_upload_mb: usize,
     pub flash: Option<Flash>,
 }
@@ -423,75 +382,107 @@ fn status_controls(
     (actions, menu, confirms)
 }
 
-async fn record_page(
+/// The editor of the article `id`, or of a new one (`None`).
+async fn editor_page(
     state: &AppState,
     actor: &Actor,
-    id: i32,
+    id: Option<i32>,
     outcome: Outcome<PostForm>,
     preview: bool,
 ) -> Result<Response, Error> {
-    let (post, raw_choices) = tokio::try_join!(
-        state.usecases.post.get(actor, id),
-        state.usecases.post.choices(actor),
-    )?;
     let locale = state.locale();
-    let id_text = id.to_string();
-    let path = url("admin_article", &[("id", &id_text)])?;
-    let (mut actions, mut menu, mut confirms) = status_controls(
-        locale,
-        &post,
-        &url("admin_article_status", &[("id", &id_text)])?,
-        outcome.confirm_open,
-    );
-    if post.status == STATUS_PUBLISHED {
-        actions.push(RecordAction::link(
-            locale.text("article.open_public"),
-            "fa-arrow-up-right-from-square",
-            canonical_url("article", post.id, &post.title)?,
-        ));
-    }
-    if post.cover_file_id.is_some() {
-        menu.push(RecordAction::sheet(
-            locale.text("article.remove_cover"),
-            "fa-image",
-            SHEET_COVER,
-            "danger",
-        ));
-        confirms.push(
-            Confirm::delete(
-                SHEET_COVER,
-                locale.text("article.remove_cover_title"),
-                "fa-image",
-                url("admin_article_cover_delete", &[("id", &id_text)])?,
-                locale.text("article.remove_cover"),
-            )
-            .noting(locale.text("article.remove_cover_note")),
-        );
-    }
-    let mut badges = Vec::new();
-    if post.is_demo {
-        badges.push(Badge::new("demo", true));
-    }
-    let header = RecordHeader {
-        title: post.title.clone(),
-        icon: "fa-newspaper".to_owned(),
-        sub: Some(kind_word(locale, &post.kind)),
-        back_href: url("admin_articles", &[])?,
-        back_label: locale.text("admin_menu.articles"),
-        badges,
-        actions,
-        menu,
+    let raw_choices = state.usecases.post.choices(actor).await?;
+    let post = match id {
+        Some(id) => Some(state.usecases.post.get(actor, id).await?),
+        None => None,
     };
-    let body = ArticleRecord {
+    let mut confirms = Vec::new();
+    let (header, history, action, address_prefix, path) = match &post {
+        Some(post) => {
+            let id_text = post.id.to_string();
+            let path = url("admin_article", &[("id", &id_text)])?;
+            let (mut actions, mut menu, status_confirms) = status_controls(
+                locale,
+                post,
+                &url("admin_article_status", &[("id", &id_text)])?,
+                outcome.confirm_open,
+            );
+            confirms = status_confirms;
+            if post.status == STATUS_PUBLISHED {
+                actions.push(RecordAction::link(
+                    locale.text("article.open_public"),
+                    "fa-arrow-up-right-from-square",
+                    canonical_url("article", post.id, &post.title)?,
+                ));
+            }
+            if post.cover_file_id.is_some() {
+                menu.push(RecordAction::sheet(
+                    locale.text("article.remove_cover"),
+                    "fa-image",
+                    SHEET_COVER,
+                    "danger",
+                ));
+                confirms.push(
+                    Confirm::delete(
+                        SHEET_COVER,
+                        locale.text("article.remove_cover_title"),
+                        "fa-image",
+                        url("admin_article_cover_delete", &[("id", &id_text)])?,
+                        locale.text("article.remove_cover"),
+                    )
+                    .noting(locale.text("article.remove_cover_note")),
+                );
+            }
+            let mut badges = Vec::new();
+            if post.is_demo {
+                badges.push(Badge::new("demo", true));
+            }
+            let header = RecordHeader {
+                title: post.title.clone(),
+                icon: "fa-newspaper".to_owned(),
+                sub: Some(format!(
+                    "{} · {}",
+                    kind_word(locale, &post.kind),
+                    status_word(locale, &post.status)
+                )),
+                back_href: url("admin_articles", &[])?,
+                back_label: locale.text("admin_menu.articles"),
+                badges,
+                actions,
+                menu,
+            };
+            let history = history_rows(state, actor, HistoryOf::Post(post.id)).await?;
+            let prefix = format!("{}/{id_text}/", url("articles", &[])?);
+            (Some(header), history, path.clone(), prefix, path)
+        }
+        None => {
+            let path = url("admin_article_new", &[])?;
+            let prefix = format!(
+                "{}/{}/",
+                url("articles", &[])?,
+                locale.text("article.new_id")
+            );
+            (None, Vec::new(), url("admin_articles", &[])?, prefix, path)
+        }
+    };
+    let form = outcome.form.unwrap_or_else(|| match &post {
+        Some(p) => PostForm::from_dto(p),
+        None => PostForm::new_article(),
+    });
+    let body = ArticleEditor {
+        address_slug: slugify(&form.title),
         header,
         confirms,
-        history: history_rows(state, actor, HistoryOf::Post(id)).await?,
+        history,
         choices: choices(locale, raw_choices),
-        form: outcome.form.unwrap_or_else(|| PostForm::from_dto(&post)),
+        form,
         errors: outcome.errors,
         preview,
-        status_label: status_word(locale, &post.status),
-        update_action: path.clone(),
+        action,
+        back_href: url("admin_articles", &[])?,
+        address_prefix,
+        slug_url: url("admin_article_slug", &[])?,
+        preview_url: url("admin_markdown_preview", &[])?,
         max_upload_mb: max_upload_mb(state),
         flash: outcome.flash,
         post,
@@ -512,6 +503,14 @@ fn redirect_to(id: i32, flash: Flash) -> Result<Response, Error> {
     Ok(response)
 }
 
+/// GET /admin/articles/new
+pub async fn new(Viewer(viewer): Viewer, State(state): State<AppState>) -> Result<Response, Error> {
+    let Some(actor) = viewer else {
+        return see_other(&url("login", &[])?);
+    };
+    editor_page(&state, &actor, None, Outcome::default(), false).await
+}
+
 /// GET /admin/articles/{id}
 pub async fn show(
     Viewer(viewer): Viewer,
@@ -527,13 +526,83 @@ pub async fn show(
         flash: flash.0,
         ..Outcome::default()
     };
-    let mut response = record_page(&state, &actor, id, outcome, false).await?;
+    let mut response = editor_page(&state, &actor, Some(id), outcome, false).await?;
     flash.clear_on(&mut response);
     Ok(response)
 }
 
-/// POST /admin/articles/{id}: its boxes and its cover photo, or
-/// (`intent=preview`) the page again with the text as it would show.
+/// Saves the editor of the article `id` (`None`: a new one): the preview
+/// button re-shows the page, else the cover is checked, the boxes saved and,
+/// for "save and publish", the article published.
+async fn save(
+    state: AppState,
+    actor: Actor,
+    id: Option<i32>,
+    upload: ApiMultipart,
+) -> Result<Response, Error> {
+    let max = state.usecases.media.max_upload_bytes();
+    let (form, file): (PostForm, _) = upload.into_form(IMAGE_FIELD, max).await?;
+    if form.intent == INTENT_PREVIEW {
+        let outcome = Outcome {
+            form: Some(form),
+            ..Outcome::default()
+        };
+        return editor_page(&state, &actor, id, outcome, true).await;
+    }
+    let cover = match prepare(&state, file).await {
+        Ok(cover) => cover,
+        Err(err) if is_refusal(&err) => {
+            let outcome = Outcome::photo_refused(&state, &err, form);
+            return editor_page(&state, &actor, id, outcome, false).await;
+        }
+        Err(err) => return Err(err),
+    };
+    let posts = &state.usecases.post;
+    let saved = match id {
+        Some(id) => posts
+            .update(&actor, id, form.input(), cover)
+            .await
+            .map(|()| id),
+        None => posts.create(&actor, form.input(), cover).await,
+    };
+    match saved {
+        Ok(saved_id) => {
+            if form.intent == INTENT_PUBLISH {
+                posts
+                    .set_status(&actor, saved_id, STATUS_PUBLISHED, None)
+                    .await?;
+                return redirect_to(saved_id, Flash::ArticleStatusSaved);
+            }
+            let flash = if id.is_some() {
+                Flash::ArticleSaved
+            } else {
+                Flash::ArticleCreated
+            };
+            redirect_to(saved_id, flash)
+        }
+        Err(err) if is_refusal(&err) => {
+            let outcome = Outcome::refused(&state, &err, Some(form), false);
+            editor_page(&state, &actor, id, outcome, false).await
+        }
+        Err(err) => Err(err),
+    }
+}
+
+/// POST /admin/articles: a new article, a draft unless "save and publish".
+pub async fn create(
+    Viewer(viewer): Viewer,
+    State(state): State<AppState>,
+    upload: ApiMultipart,
+) -> Result<Response, Error> {
+    let Some(actor) = viewer else {
+        return see_other(&url("login", &[])?);
+    };
+    // Who is asking, before reading the photo.
+    state.usecases.post.choices(&actor).await?;
+    save(state, actor, None, upload).await
+}
+
+/// POST /admin/articles/{id}
 pub async fn update(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
@@ -546,36 +615,7 @@ pub async fn update(
     let id = parse_id(&raw_id, ErrorCode::PostNotFound)?;
     // Who is asking, and that the article exists, before reading the photo.
     state.usecases.post.get(&actor, id).await?;
-    let max = state.usecases.media.max_upload_bytes();
-    let (form, file): (PostForm, _) = upload.into_form(IMAGE_FIELD, max).await?;
-    if form.intent == INTENT_PREVIEW {
-        let outcome = Outcome {
-            form: Some(form),
-            ..Outcome::default()
-        };
-        return record_page(&state, &actor, id, outcome, true).await;
-    }
-    let cover = match prepare(&state, file).await {
-        Ok(cover) => cover,
-        Err(err) if is_refusal(&err) => {
-            let outcome = Outcome::photo_refused(&state, &err, form);
-            return record_page(&state, &actor, id, outcome, false).await;
-        }
-        Err(err) => return Err(err),
-    };
-    match state
-        .usecases
-        .post
-        .update(&actor, id, form.input(), cover)
-        .await
-    {
-        Ok(()) => redirect_to(id, Flash::ArticleSaved),
-        Err(err) if is_refusal(&err) => {
-            let outcome = Outcome::refused(&state, &err, Some(form), false);
-            record_page(&state, &actor, id, outcome, false).await
-        }
-        Err(err) => Err(err),
-    }
+    save(state, actor, Some(id), upload).await
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -609,7 +649,7 @@ pub async fn remove_cover(
     Viewer(viewer): Viewer,
     State(state): State<AppState>,
     ApiPath(raw_id): ApiPath<String>,
-    ApiForm(form): ApiForm<super::ReasonForm>,
+    ApiForm(form): ApiForm<ReasonForm>,
 ) -> Result<Response, Error> {
     let Some(actor) = viewer else {
         return see_other(&url("login", &[])?);

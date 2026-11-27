@@ -1,39 +1,69 @@
 {% extends "layouts/app.html" %}
 {% import "atoms/icon.html" as atoms %}
 {% import "atoms/alert.html" as alerts %}
-{% import "molecules/page_hero.html" as hero %}
+{% import "molecules/help_card.html" as help %}
 {% import "organisms/article_body.html" as article %}
-{#- One information page as a visitor reads it: its title, the day the
-    version shown applies from, its outline and text, then the versions in
-    force so far. An earlier version (`?version=`) says since when it no
-    longer applies and leads to the one in force. `page` is
+{#- One information page, laid out to be read: the way back (information ›
+    its group), its icon and title, the day the version shown applies from
+    and which version it is. Then the text at a reading width with, from
+    992 px, a side column (the outline, the other pages of its group, the
+    versions folded); below, the outline folds above the text and the rest
+    follows. An earlier version (`?version=`) says since when it no longer
+    applies and leads to the one in force. Last, the help lines. `page` is
     web::pages::info::InfoPageView. -#}
 {% block title %}{{ page.page.title }} | {{ site.name }}{% endblock title %}
 {% block meta %}<meta name="description" content="{{ t(key="info.page_meta", name=page.page.title, site=site.name) }}">{% endblock meta %}
 {% block main %}
 {% set p = page.page %}
-{{ hero::page_hero(title=p.title, back_href=page.hub_href, back_label=t(key="info.hub_title"), variant="", icon=p.icon | default(value="fa-file-lines"), sub=t(key="info.effective", day=p.effective_on | full_date)) }}
-<div class="detail-body">
+<div class="reading">
+  <nav class="crumbs" aria-label="{{ t(key="info.crumbs") }}">
+    <a href="{{ page.hub_href }}">{{ t(key="info.hub_title") }}</a>
+    {% if page.group %}{{ atoms::icon(name="fa-chevron-right", class="crumbs__sep") }}<span>{% if page.group == "about" %}{{ t(key="info.group.about") }}{% else %}{{ t(key="info.group.policy") }}{% endif %}</span>{% endif %}
+  </nav>
+  <header class="reading-head reading-head--page">
+    <span class="reading-head__icon">{{ atoms::icon(name=p.icon | default(value="fa-file-lines")) }}</span>
+    <div>
+      <h1 class="reading-head__title">{{ p.title }}</h1>
+      <p class="reading-head__meta">{{ atoms::icon(name="fa-calendar-check") }} {{ t(key="info.effective", day=p.effective_on | full_date) }}{% if page.version_count > 1 %} · {{ t(key="info.version_of", n=page.version_number, total=page.version_count) }}{% endif %}</p>
+    </div>
+  </header>
   {% if p.superseded_on %}
-  {{ alerts::alert(kind="warning", icon="fa-clock-rotate-left", text=t(key="info.superseded", day=p.superseded_on | full_date)) }}
-  <p><a class="btn btn-outline-success" href="{{ page.current_href }}">{{ atoms::icon(name="fa-file-circle-check") }} {{ t(key="info.read_current") }}</a></p>
+  <div class="reading-notice">
+    {{ alerts::alert(kind="warning", icon="fa-clock-rotate-left", text=t(key="info.superseded", day=p.superseded_on | full_date)) }}
+    <a class="btn btn-outline-success" href="{{ page.current_href }}">{{ atoms::icon(name="fa-file-circle-check") }} {{ t(key="info.read_current") }}</a>
+  </div>
   {% endif %}
-  <article class="detail-card">
-    {{ article::article_body(text=p.body) }}
-  </article>
-  {% if page.versions | length > 1 %}
-  <section class="detail-card" aria-labelledby="info-versions">
-    <h2 class="detail-card__title" id="info-versions">{{ t(key="info.versions") }}</h2>
-    <ul class="info-versions">
-      {% for v in page.versions %}
-      <li>
-        {% if v.current %}<strong>{{ t(key="info.effective", day=v.effective_on | full_date) }}</strong>{% else %}<a href="{{ v.href }}">{{ t(key="info.effective", day=v.effective_on | full_date) }}</a>{% endif %}
-        {% if v.in_force %} <span class="badge text-bg-success">{{ t(key="info.in_force") }}</span>{% endif %}
-        {% if v.change_note %}<span class="d-block small text-body-secondary">{{ v.change_note }}</span>{% endif %}
-      </li>
-      {% endfor %}
-    </ul>
-  </section>
-  {% endif %}
+
+  <div class="reading-layout">
+    <article class="reading-main">
+      {{ article::article_body(text=p.body, outline_class="reading-toc--inline") }}
+    </article>
+    <aside class="reading-side" aria-label="{{ t(key="info.side") }}">
+      {{ article::outline_nav(text=p.body) }}
+      {% if page.others %}
+      <nav class="reading-side__box" aria-labelledby="info-others">
+        <h2 class="reading-side__title" id="info-others">{{ atoms::icon(name="fa-folder-open") }} {{ t(key="info.others") }}</h2>
+        <ul class="reading-links">
+          {% for o in page.others %}<li><a href="{{ o.href }}">{{ atoms::icon(name=o.icon | default(value="fa-file-lines")) }} {{ o.title }}</a></li>{% endfor %}
+        </ul>
+      </nav>
+      {% endif %}
+      {% if page.versions | length > 1 %}
+      <details class="reading-side__box reading-versions">
+        <summary class="reading-side__title">{{ atoms::icon(name="fa-clock-rotate-left") }} {{ t(key="info.versions") }} ({{ page.versions | length }})</summary>
+        <ul class="info-versions">
+          {% for v in page.versions %}
+          <li>
+            {% if v.current %}<strong>{{ t(key="info.effective", day=v.effective_on | full_date) }}</strong>{% else %}<a href="{{ v.href }}">{{ t(key="info.effective", day=v.effective_on | full_date) }}</a>{% endif %}
+            {% if v.in_force %} <span class="badge text-bg-success">{{ t(key="info.in_force") }}</span>{% endif %}
+            {% if v.change_note %}<span class="d-block small text-body-secondary">{{ v.change_note }}</span>{% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+      </details>
+      {% endif %}
+    </aside>
+  </div>
+  {{ help::help_card(support=shell.support) }}
 </div>
 {% endblock main %}

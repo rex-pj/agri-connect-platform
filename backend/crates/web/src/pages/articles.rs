@@ -239,7 +239,10 @@ pub async fn by_id(
 
 #[derive(Serialize)]
 struct ArticlePage {
-    post: PostDto,
+    /// The article, with its age.
+    article: ArticleCard,
+    /// The hub, the first step of the way back.
+    hub_href: String,
     /// Its kind's list, the way back.
     back_href: String,
     /// The price board of its commodity and the supplies for it, when it
@@ -275,26 +278,31 @@ pub async fn show(
         let href = format!("{}?commodity={c}", url(route, &[])?);
         Ok(shell.shows_href(&href).then_some(href))
     };
-    let related = state
-        .usecases
-        .post
-        .latest(
-            &PostQuery {
-                kind: Some(post.kind.clone()),
-                except: Some(post.id),
-                commodity_id: post.commodity_id,
-                ..PostQuery::default()
-            },
-            RELATED_POSTS_SHOWN,
-        )
+    // More of its kind about its commodity; none, then of its kind.
+    let more = |commodity_id| PostQuery {
+        kind: Some(post.kind.clone()),
+        except: Some(post.id),
+        commodity_id,
+        ..PostQuery::default()
+    };
+    let posts = &state.usecases.post;
+    let mut related = posts
+        .latest(&more(post.commodity_id), RELATED_POSTS_SHOWN)
         .await?;
+    if related.is_empty() && post.commodity_id.is_some() {
+        related = posts.latest(&more(None), RELATED_POSTS_SHOWN).await?;
+    }
+    let article = cards(vec![post])?
+        .pop()
+        .ok_or_else(|| Error::new(ErrorCode::PostNotFound))?;
     let page = ArticlePage {
         prices_href: with_commodity("prices")?,
         supplies_href: with_commodity("products")?,
         related: cards(related)?,
+        hub_href: url("articles", &[])?,
         back_href,
         canonical,
-        post,
+        article,
     };
     render_page(&state, &shell, "pages/article.html", &page)
 }

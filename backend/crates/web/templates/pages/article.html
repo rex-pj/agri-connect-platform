@@ -1,38 +1,61 @@
 {% extends "layouts/app.html" %}
 {% import "atoms/icon.html" as atoms %}
-{% import "molecules/page_hero.html" as hero %}
+{% import "atoms/article_meta.html" as meta %}
 {% import "molecules/share_button.html" as share %}
 {% import "molecules/article_card.html" as card %}
 {% import "organisms/article_body.html" as article %}
-{#- One article: its cover, title, kind, day and place, its text with its
-    outline, the way to the price board and the supplies of its commodity
-    (each only while shown), a share button, then the newest others of its
-    kind. `page` is web::pages::articles::ArticlePage. -#}
-{% block title %}{{ page.post.title }} | {{ site.name }}{% endblock title %}
-{% block meta %}<meta name="description" content="{% if page.post.summary %}{{ page.post.summary }}{% else %}{{ page.post.title }}{% endif %}">
+{#- One article, laid out to be read: the way back (articles › its kind),
+    its kind, age and place, the title, the summary as its lead, the cover
+    wide. Then the text at a reading width with, from 992 px, a side column
+    that follows the reader (the outline, the price board and supplies of
+    its commodity while shown, share); below 992 px the outline folds above
+    the text and the rest comes after it. Last, more of its kind as the
+    home page's cards. `page` is web::pages::articles::ArticlePage. -#}
+{% block title %}{{ page.article.title }} | {{ site.name }}{% endblock title %}
+{% block meta %}<meta name="description" content="{% if page.article.summary %}{{ page.article.summary }}{% else %}{{ page.article.title }}{% endif %}">
 <link rel="canonical" href="{{ page.canonical }}">{% endblock meta %}
 {% block main %}
-{% set p = page.post %}
-{% if p.kind == "guide" %}{% set kind = t(key="article.kind.guide") %}{% else %}{% set kind = t(key="article.kind.news") %}{% endif %}
-{{ hero::page_hero(title=p.title, back_href=page.back_href, back_label=kind, variant="", icon="fa-newspaper") }}
-<div class="detail-body">
-  <article class="detail-card">
-    {% if p.cover_file_id %}<img class="article-cover" src="{{ file_url(id=p.cover_file_id) }}" alt="">{% endif %}
-    <p class="article-meta">{{ kind }}{% if p.published_on %} · <time datetime="{{ p.published_on | utc_iso }}">{{ p.published_on | vn_datetime }}</time>{% endif %}{% if p.province_name %} · {{ atoms::icon(name="fa-location-dot") }} {{ p.province_name }}{% endif %}{% if p.commodity_name %} · {{ p.commodity_name }}{% endif %}</p>
-    {% if p.summary %}<p class="article-summary">{{ p.summary }}</p>{% endif %}
-    {{ article::article_body(text=p.body) }}
-    {% if page.prices_href or page.supplies_href %}
-    <div class="article-links">
-      {% if page.prices_href %}<a class="btn btn-outline-success" href="{{ page.prices_href }}">{{ atoms::icon(name="fa-chart-line") }} {{ t(key="article.see_prices", name=p.commodity_name | default(value="")) }}</a>{% endif %}
-      {% if page.supplies_href %}<a class="btn btn-outline-success" href="{{ page.supplies_href }}">{{ atoms::icon(name="fa-bag-shopping") }} {{ t(key="article.see_supplies", name=p.commodity_name | default(value="")) }}</a>{% endif %}
-    </div>
-    {% endif %}
-    <div class="mt-3">{{ share::share_button(title=p.title, text=p.title, url=page.canonical) }}</div>
-  </article>
+{% set a = page.article %}
+{% if a.kind == "guide" %}{% set kind = t(key="article.kind.guide") %}{% else %}{% set kind = t(key="article.kind.news") %}{% endif %}
+<div class="reading">
+  <nav class="crumbs" aria-label="{{ t(key="article.crumbs") }}">
+    <a href="{{ page.hub_href }}">{{ t(key="article.hub_title") }}</a>
+    {{ atoms::icon(name="fa-chevron-right", class="crumbs__sep") }}
+    <a href="{{ page.back_href }}">{{ kind }}</a>
+  </nav>
+  <header class="reading-head">
+    <p class="reading-head__meta">{{ meta::kind_pill(kind=a.kind) }} {{ meta::age(a=a) }}{% if a.province_name %} · {{ atoms::icon(name="fa-location-dot") }} {{ a.province_name }}{% endif %}{% if a.commodity_name %} · {{ a.commodity_name }}{% endif %}</p>
+    <h1 class="reading-head__title">{{ a.title }}</h1>
+    {% if a.summary %}<p class="reading-head__lead">{{ a.summary }}</p>{% endif %}
+  </header>
+  {% if a.cover_file_id %}<img class="reading-cover" src="{{ file_url(id=a.cover_file_id) }}" alt="">{% endif %}
+
+  <div class="reading-layout">
+    <article class="reading-main">
+      {{ article::article_body(text=a.body, outline_class="reading-toc--inline") }}
+    </article>
+    <aside class="reading-side" aria-label="{{ t(key="article.side") }}">
+      {{ article::outline_nav(text=a.body) }}
+      {% if page.prices_href or page.supplies_href %}
+      <section class="reading-side__box" aria-labelledby="reading-links-title">
+        <h2 class="reading-side__title" id="reading-links-title">{{ atoms::icon(name="fa-seedling") }} {{ a.commodity_name }}</h2>
+        <div class="d-grid gap-2">
+          {% if page.prices_href %}<a class="btn btn-outline-success" href="{{ page.prices_href }}">{{ atoms::icon(name="fa-chart-line") }} {{ t(key="article.see_prices", name=a.commodity_name | default(value="")) }}</a>{% endif %}
+          {% if page.supplies_href %}<a class="btn btn-outline-success" href="{{ page.supplies_href }}">{{ atoms::icon(name="fa-bag-shopping") }} {{ t(key="article.see_supplies", name=a.commodity_name | default(value="")) }}</a>{% endif %}
+        </div>
+      </section>
+      {% endif %}
+      <section class="reading-side__box" aria-labelledby="reading-share-title">
+        <h2 class="reading-side__title" id="reading-share-title">{{ atoms::icon(name="fa-share-nodes") }} {{ t(key="article.share_title") }}</h2>
+        {{ share::share_button(title=a.title, text=a.title, url=page.canonical) }}
+      </section>
+    </aside>
+  </div>
+
   {% if page.related %}
-  <section class="detail-card" aria-labelledby="article-more">
-    <h2 class="detail-card__title" id="article-more">{{ t(key="article.more") }}</h2>
-    <div class="article-list">{% for a in page.related %}{{ card::article_card(a=a) }}{% endfor %}</div>
+  <section class="reading-more" aria-labelledby="article-more">
+    <h2 class="reading-more__title" id="article-more">{{ t(key="article.more") }}</h2>
+    <div class="home-articles">{% for r in page.related %}{{ card::article_feature(a=r, row=not loop.first) }}{% endfor %}</div>
   </section>
   {% endif %}
 </div>

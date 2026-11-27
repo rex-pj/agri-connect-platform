@@ -435,6 +435,10 @@ async fn a_sign_up_accepts_the_terms_once_they_are_on_and_it_is_kept() {
         "chinh-sach-du-lieu-ca-nhan",
     )
     .await;
+    // A page of a group leads to the others of it.
+    let terms = html_of(&e, "/info/dieu-khoan-su-dung", None).await;
+    assert!(terms.contains("Trang khác trong mục"), "{terms}");
+    assert!(terms.contains(r#"href="/info/chinh-sach-du-lieu-ca-nhan""#));
     let register = html_of(&e, "/register", None).await;
     assert!(register.contains(r#"name="accepted_terms""#));
     assert!(register.contains(r#"href="/info/dieu-khoan-su-dung""#));

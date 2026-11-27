@@ -356,4 +356,4 @@ pub const POST_BODY_MAX: usize = 60_000;
 /// The newest articles the home page shows, while the feature is on.
 pub const HOME_POSTS_SHOWN: i64 = 4;
 /// The other articles of the same kind under one.
-pub const RELATED_POSTS_SHOWN: i64 = 3;
+pub const RELATED_POSTS_SHOWN: i64 = 4;

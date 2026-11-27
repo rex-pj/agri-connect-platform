@@ -1,13 +1,17 @@
-{#- An admin's text in Markdown, as a page shows it: its outline first when
-    it has headings (a `<details>`, opened by a tap; each line an anchor to
-    its heading), then the text. `markdown()` is the one output printed
-    unescaped: the renderer writes no markup of the author's
-    (`application::ports::MarkdownRenderer`). -#}
+{#- An admin's text in Markdown, as a page shows it. `markdown()` is the one
+    output printed unescaped: the renderer writes no markup of the author's
+    (`application::ports::MarkdownRenderer`); `outline()` its `##` and `###`
+    headings, each an anchor.
+
+    `article_body`: the outline folded above the text (when it has two
+    headings or more), then the text. `outline_class` adds a class to the
+    folded outline (`reading-toc--inline`: shown only where the side column
+    is not). `outline_nav`: the same outline as a list in a side column. -#}
 {% import "atoms/icon.html" as atoms %}
-{% macro article_body(text, outline_open=false) -%}
+{% macro article_body(text, outline_open=false, outline_class="") -%}
 {% set headings = outline(text=text) %}
 {% if headings | length > 1 %}
-<details class="article-outline"{% if outline_open %} open{% endif %}>
+<details class="article-outline {{ outline_class }}"{% if outline_open %} open{% endif %}>
   <summary class="article-outline__title">{{ atoms::icon(name="fa-list-ul") }} {{ t(key="info.outline") }}</summary>
   <ol class="article-outline__list">
     {% for h in headings %}<li class="article-outline__item article-outline__item--{{ h.level }}"><a href="#{{ h.id }}">{{ h.text }}</a></li>{% endfor %}
@@ -16,3 +20,15 @@
 {% endif %}
 <div class="article-body">{{ markdown(text=text) }}</div>
 {%- endmacro article_body %}
+
+{% macro outline_nav(text) -%}
+{% set headings = outline(text=text) %}
+{% if headings | length > 1 %}
+<nav class="reading-toc" aria-labelledby="reading-toc-title">
+  <h2 class="reading-side__title" id="reading-toc-title">{{ atoms::icon(name="fa-list-ul") }} {{ t(key="info.outline") }}</h2>
+  <ol class="reading-toc__list">
+    {% for h in headings %}<li class="reading-toc__item reading-toc__item--{{ h.level }}"><a href="#{{ h.id }}">{{ h.text }}</a></li>{% endfor %}
+  </ol>
+</nav>
+{% endif %}
+{%- endmacro outline_nav %}

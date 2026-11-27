@@ -1,0 +1,22 @@
+{#- "Still a question?": the platform's own help lines at the end of a page
+    a visitor reads to learn the rules (the information pages). `support` is
+    web::shell::SupportLines (the `support.*` settings); a line not set is
+    not shown, and with none the card is not drawn. Molecules compose atoms
+    only. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro help_card(support) -%}
+{% if support.phone or support.zalo_url or support.email %}
+<section class="help-card" aria-labelledby="help-card-title">
+  <span class="help-card__icon">{{ atoms::icon(name="fa-headset") }}</span>
+  <div class="help-card__text">
+    <h2 class="help-card__title" id="help-card-title">{{ t(key="info.help_title") }}</h2>
+    <p class="help-card__sub">{{ t(key="info.help_sub") }}</p>
+  </div>
+  <div class="help-card__actions">
+    {% if support.phone %}<a class="btn btn-success" href="tel:{{ support.phone }}">{{ atoms::icon(name="fa-phone") }} {{ support.phone | phone }}</a>{% endif %}
+    {% if support.zalo_url %}<a class="btn btn-outline-primary" href="{{ support.zalo_url }}" rel="noopener" target="_blank">{{ atoms::icon(name="fa-comment-dots") }} {{ t(key="footer.zalo") }}</a>{% endif %}
+    {% if support.email %}<a class="btn btn-outline-secondary" href="mailto:{{ support.email }}">{{ atoms::icon(name="fa-envelope") }} {{ t(key="info.help_email") }}</a>{% endif %}
+  </div>
+</section>
+{% endif %}
+{%- endmacro help_card %}

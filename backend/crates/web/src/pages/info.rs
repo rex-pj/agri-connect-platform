@@ -113,6 +113,12 @@ struct InfoPageView {
     /// Each version with its address: the one in force is the page's own.
     versions: Vec<VersionLink>,
     hub_href: String,
+    /// Which version is shown, counted from the first, and how many.
+    version_number: usize,
+    version_count: usize,
+    /// Its footer group (`about`, `policy`) and the other pages of it.
+    group: String,
+    others: Vec<InfoLink>,
 }
 
 /// GET /info/{code}
@@ -126,11 +132,26 @@ pub async fn show(
         "" => None,
         raw => Some(parse_id(raw, ErrorCode::InfoPageNotFound)?),
     };
-    let page = state
-        .usecases
-        .info_page
-        .page(&code, shell.may_preview(), version)
-        .await?;
+    let pages = &state.usecases.info_page;
+    let (page, shown) = tokio::try_join!(
+        pages.page(&code, shell.may_preview(), version),
+        pages.shown(shell.may_preview()),
+    )?;
+    // Its group, and the other pages of it.
+    let group = shown
+        .iter()
+        .find(|p| p.code == page.code)
+        .map(|p| p.footer_group.clone())
+        .unwrap_or_default();
+    let others = grouped(
+        shown
+            .into_iter()
+            .filter(|p| p.footer_group == group && p.code != page.code)
+            .collect(),
+    )?
+    .into_iter()
+    .flat_map(|g| g.links)
+    .collect();
     if page.preview {
         shell.preview = Some(url("admin_info_page", &[("id", &page.id.to_string())])?);
     }
@@ -152,7 +173,18 @@ pub async fn show(
         })
         .collect();
     let noindex = page.preview || page.superseded_on.is_some();
+    // Which version this is, counted from the first: "version 3 of 3".
+    let total = page.versions.len();
+    let number = page
+        .versions
+        .iter()
+        .position(|v| v.current)
+        .map_or(total, |i| total - i);
     let view = InfoPageView {
+        version_number: number,
+        version_count: total,
+        group,
+        others,
         page,
         current_href,
         versions,

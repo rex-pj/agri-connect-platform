@@ -132,6 +132,7 @@ async fn an_article_reaches_farmers_once_published_and_the_part_is_open() {
     assert_eq!(canonical, format!("/articles/{id}/phong-ray-nau-cho-lua"));
     let page = html_of(&e, &canonical, None).await;
     assert!(page.contains(r#"<h2 id="dau-hieu">"#));
+    assert!(page.contains(r#"class="crumbs""#) && page.contains(r#"href="/articles/guides""#));
     assert!(page.contains("&lt;script&gt;") && !page.contains("<script>alert(1)"));
     assert!(html_of(&e, "/articles", None).await.contains(&canonical));
     assert!(html_of(&e, "/articles/guides", None)

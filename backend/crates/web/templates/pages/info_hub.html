@@ -2,26 +2,32 @@
 {% import "atoms/icon.html" as atoms %}
 {% import "molecules/page_hero.html" as hero %}
 {% import "molecules/empty_state.html" as empty %}
-{#- Every information page a visitor may open, by footer group: who runs
-    the platform and how to reach it, then the policies and rules. Reached
-    from the account menu and the footer. `page` is
-    web::pages::info::HubPage. -#}
+{% import "molecules/help_card.html" as help %}
+{#- Every information page a visitor may open, by footer group (who runs
+    the platform and how to reach it, then the policies and rules), each a
+    large tile with its icon; then the platform's help lines. Reached from
+    the footer. `page` is web::pages::info::HubPage. -#}
 {% block title %}{{ t(key="info.hub_title") }} | {{ site.name }}{% endblock title %}
 {% block meta %}<meta name="description" content="{{ t(key="info.hub_meta", site=site.name) }}">{% endblock meta %}
 {% block main %}
 {{ hero::page_hero(title=t(key="info.hub_title"), back_href=url_for(name="home"), back_label=t(key="nav.home"), variant="", icon="fa-circle-info", sub=t(key="info.hub_sub")) }}
-<div class="detail-body">
+<div class="reading">
   {% for g in page.groups %}
-  <section class="detail-card" aria-labelledby="info-{{ g.code }}">
-    <h2 class="detail-card__title" id="info-{{ g.code }}">{% if g.code == "about" %}{{ t(key="info.group.about") }}{% else %}{{ t(key="info.group.policy") }}{% endif %}</h2>
-    <ul class="info-links">
+  <section class="info-group" aria-labelledby="info-{{ g.code }}">
+    <h2 class="info-group__title" id="info-{{ g.code }}">{% if g.code == "about" %}{{ t(key="info.group.about") }}{% else %}{{ t(key="info.group.policy") }}{% endif %}</h2>
+    <ul class="info-tiles">
       {% for l in g.links %}
-      <li><a class="info-links__item" href="{{ l.href }}">{{ atoms::icon(name=l.icon | default(value="fa-file-lines")) }}<span>{{ l.title }}</span>{% if l.preview %} <span class="badge text-bg-info">{{ t(key="settings.stage.preview") }}</span>{% endif %}{{ atoms::icon(name="fa-chevron-right", class="info-links__go") }}</a></li>
+      <li><a class="info-tile" href="{{ l.href }}">
+        <span class="info-tile__icon">{{ atoms::icon(name=l.icon | default(value="fa-file-lines")) }}</span>
+        <span class="info-tile__title">{{ l.title }}{% if l.preview %} <span class="badge text-bg-info">{{ t(key="settings.stage.preview") }}</span>{% endif %}</span>
+        {{ atoms::icon(name="fa-chevron-right", class="info-tile__go") }}
+      </a></li>
       {% endfor %}
     </ul>
   </section>
   {% else %}
   {{ empty::empty_state(icon="fa-circle-info", title=t(key="info.none"), action_href=url_for(name="home"), action_icon="fa-house", action_label=t(key="nav.home")) }}
   {% endfor %}
+  {{ help::help_card(support=shell.support) }}
 </div>
 {% endblock main %}

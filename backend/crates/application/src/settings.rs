@@ -27,7 +27,8 @@ use crate::{
     constants::{
         EMAIL_MAX, JOB_NOTIFY_MAX_DEFAULT, JOB_NOTIFY_RADIUS_KM_DEFAULT,
         JOB_POSTS_OPEN_PER_PHONE_DEFAULT, JOB_POSTS_PER_CLIENT_PER_DAY_DEFAULT,
-        JOB_POST_DAYS_DEFAULT, JOB_POST_KEEP_DAYS, METRES_PER_KM, PRODUCTS_PER_BUSINESS_DEFAULT,
+        JOB_POST_DAYS_DEFAULT, JOB_POST_KEEP_DAYS, LEGAL_LINE_MAX, LEGAL_NAME_MAX,
+        LEGAL_TAX_CODE_MAX, METRES_PER_KM, PRODUCTS_PER_BUSINESS_DEFAULT,
         PRODUCTS_PER_BUSINESS_MAX, RADIUS_MAX_M, REVIEW_SUSPECT_MINUTES_DEFAULT,
         SERVICES_PER_BUSINESS_DEFAULT, SERVICES_PER_BUSINESS_MAX, SITE_DESCRIPTION_MAX,
         SITE_NAME_MAX, SPONSORED_SHOWN_DEFAULT, SPONSORED_SHOWN_MAX, STEADY_WEEKLY_LEADS_DEFAULT,
@@ -56,6 +57,12 @@ pub const BRAND_ICON: &str = "brand.icon";
 pub const SUPPORT_PHONE: &str = "support.phone";
 pub const SUPPORT_ZALO_URL: &str = "support.zalo_url";
 pub const SUPPORT_EMAIL: &str = "support.email";
+pub const LEGAL_COMPANY_NAME: &str = "legal.company_name";
+pub const LEGAL_TAX_CODE: &str = "legal.tax_code";
+pub const LEGAL_ADDRESS: &str = "legal.address";
+pub const LEGAL_REPRESENTATIVE: &str = "legal.representative";
+pub const LEGAL_LICENSE: &str = "legal.license";
+pub const LEGAL_MOIT_URL: &str = "legal.moit_url";
 pub const REGISTRATION_OPEN: &str = "access.registration_open";
 pub const JOB_POSTS_PER_CLIENT_PER_DAY: &str = "jobs.posts_per_client_per_day";
 pub const JOB_POSTS_OPEN_PER_PHONE: &str = "jobs.open_per_phone";
@@ -76,6 +83,9 @@ pub enum SettingGroup {
     Brand,
     /// The platform's own help lines in the footer.
     Support,
+    /// Who runs the platform, as the law asks a website to say at the foot
+    /// of every page: the company, its tax code and address.
+    Legal,
     /// What is open to the public: sign-ups and each feature's stage
     /// (`features`).
     Features,
@@ -88,9 +98,10 @@ pub enum SettingGroup {
 }
 
 impl SettingGroup {
-    pub const ALL: [SettingGroup; 6] = [
+    pub const ALL: [SettingGroup; 7] = [
         SettingGroup::Brand,
         SettingGroup::Support,
+        SettingGroup::Legal,
         SettingGroup::Features,
         SettingGroup::Jobs,
         SettingGroup::Listings,
@@ -103,6 +114,7 @@ impl SettingGroup {
         match self {
             SettingGroup::Brand => "brand",
             SettingGroup::Support => "support",
+            SettingGroup::Legal => "legal",
             SettingGroup::Features => "features",
             SettingGroup::Jobs => "jobs",
             SettingGroup::Listings => "listings",
@@ -163,6 +175,15 @@ const fn number(
         key,
         group,
         kind: SettingKind::Number { default, min, max },
+    }
+}
+
+/// A line of the legal entity's, at most `max` characters.
+const fn legal(key: &'static str, max: usize) -> SettingDef {
+    SettingDef {
+        key,
+        group: SettingGroup::Legal,
+        kind: SettingKind::Text(TextRule::Line { max }),
     }
 }
 
@@ -237,6 +258,17 @@ pub static SETTINGS: &[SettingDef] = &[
         key: SUPPORT_EMAIL,
         group: SettingGroup::Support,
         kind: SettingKind::Text(TextRule::Email),
+    },
+    // Empty: that line is not shown (never a made-up one).
+    legal(LEGAL_COMPANY_NAME, LEGAL_NAME_MAX),
+    legal(LEGAL_TAX_CODE, LEGAL_TAX_CODE_MAX),
+    legal(LEGAL_ADDRESS, LEGAL_LINE_MAX),
+    legal(LEGAL_REPRESENTATIVE, LEGAL_NAME_MAX),
+    legal(LEGAL_LICENSE, LEGAL_LINE_MAX),
+    SettingDef {
+        key: LEGAL_MOIT_URL,
+        group: SettingGroup::Legal,
+        kind: SettingKind::Text(TextRule::HttpsUrl),
     },
     SettingDef {
         key: REGISTRATION_OPEN,
@@ -581,6 +613,33 @@ impl Settings {
 
     pub fn support_email(&self) -> Option<&str> {
         self.text(SUPPORT_EMAIL)
+    }
+
+    /// The legal entity's lines for the footer, each `None` while unset.
+    pub fn legal_company_name(&self) -> Option<&str> {
+        self.text(LEGAL_COMPANY_NAME)
+    }
+
+    pub fn legal_tax_code(&self) -> Option<&str> {
+        self.text(LEGAL_TAX_CODE)
+    }
+
+    pub fn legal_address(&self) -> Option<&str> {
+        self.text(LEGAL_ADDRESS)
+    }
+
+    pub fn legal_representative(&self) -> Option<&str> {
+        self.text(LEGAL_REPRESENTATIVE)
+    }
+
+    pub fn legal_license(&self) -> Option<&str> {
+        self.text(LEGAL_LICENSE)
+    }
+
+    /// The notice of the website to the Ministry of Industry and Trade
+    /// (online.gov.vn), its badge linking there.
+    pub fn legal_moit_url(&self) -> Option<&str> {
+        self.text(LEGAL_MOIT_URL)
     }
 
     /// Providers may sign themselves up.

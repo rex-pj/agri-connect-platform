@@ -32,14 +32,15 @@ fn url(name: &str, params: &[(&str, &str)]) -> Result<String, Error> {
     routes::url(name, params).map_err(|e| Error::internal(format!("info links: {e}")))
 }
 
-/// One group of the hub: its title and its pages.
-#[derive(Serialize)]
+/// One group of the hub and the footer: its code (its title's key) and its
+/// pages.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct InfoGroup {
     pub code: &'static str,
     pub links: Vec<InfoLink>,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct InfoLink {
     pub href: String,
     pub title: String,

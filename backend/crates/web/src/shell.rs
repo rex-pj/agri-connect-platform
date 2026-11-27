@@ -14,7 +14,7 @@ use application::{
         PERM_PARTNER_REPORT_READ,
     },
     features::{Feature, FeaturesShown, Place, Stage},
-    outputs::CodedDto,
+    outputs::{CodedDto, InfoLinkDto},
     settings::{SettingGroup, Settings},
 };
 use axum::{
@@ -35,7 +35,10 @@ use crate::{
         language::{preferred_language, LANG_COOKIE},
         page_settings,
     },
-    pages::sector::chosen_sector,
+    pages::{
+        info::{grouped, InfoGroup},
+        sector::chosen_sector,
+    },
     routes,
 };
 
@@ -107,6 +110,14 @@ pub struct Shell {
     /// The platform's own help lines in the footer (the `support.*`
     /// settings); empty when the settings could not be read.
     pub support: SupportLines,
+    /// Who runs the platform (the `legal.*` settings), at the foot of every
+    /// page; empty when the settings could not be read.
+    pub legal: LegalLines,
+    /// The information pages in the footer this viewer may open, by group
+    /// (`Shell::apply_info_pages`); none on an error page.
+    pub info: Vec<InfoGroup>,
+    /// The page listing every information page, while one is shown.
+    pub info_hub: Option<String>,
     /// The features this viewer sees (`application::features`): a way in
     /// to a hidden one is not drawn. Templates read `shell.features.<code>`;
     /// page code `Shell::shows` and `Shell::shows_href`.
@@ -134,6 +145,31 @@ impl SupportLines {
             phone: settings.support_phone().map(str::to_owned),
             zalo_url: settings.support_zalo_url().map(str::to_owned),
             email: settings.support_email().map(str::to_owned),
+        }
+    }
+}
+
+/// The legal entity's lines in the footer; one not set is not shown.
+#[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]
+pub struct LegalLines {
+    pub company_name: Option<String>,
+    pub tax_code: Option<String>,
+    pub address: Option<String>,
+    pub representative: Option<String>,
+    pub license: Option<String>,
+    pub moit_url: Option<String>,
+}
+
+impl LegalLines {
+    pub fn of(settings: &Settings) -> Self {
+        let own = |v: Option<&str>| v.map(str::to_owned);
+        Self {
+            company_name: own(settings.legal_company_name()),
+            tax_code: own(settings.legal_tax_code()),
+            address: own(settings.legal_address()),
+            representative: own(settings.legal_representative()),
+            license: own(settings.legal_license()),
+            moit_url: own(settings.legal_moit_url()),
         }
     }
 }
@@ -396,6 +432,7 @@ impl Shell {
     /// to sign up while sign-ups are closed.
     pub fn apply_settings(&mut self, locale: &Locale, settings: &Settings) {
         self.support = SupportLines::of(settings);
+        self.legal = LegalLines::of(settings);
         self.features = settings.features_shown(self.may_preview);
         let features = self.features;
         let placed = |f: Feature, p: Place| features.has(f) && settings.placed(f, p);
@@ -424,6 +461,19 @@ impl Shell {
                 self.provider_cta = None;
             }
         }
+    }
+
+    /// The footer's information pages: those this viewer may open
+    /// (`pages`, `InfoPageUseCase::shown`) the admin put in the footer, and
+    /// the way to all of them.
+    pub fn apply_info_pages(&mut self, pages: Vec<InfoLinkDto>) -> Result<(), Error> {
+        self.info_hub = if pages.is_empty() {
+            None
+        } else {
+            Some(url("info_pages"))
+        };
+        self.info = grouped(pages.into_iter().filter(|p| p.in_footer).collect())?;
+        Ok(())
     }
 
     /// This viewer holds `feature.preview`: what is in preview shows to it.
@@ -462,6 +512,9 @@ impl Shell {
             sector: None,
             sectors: Vec::new(),
             support: SupportLines::default(),
+            legal: LegalLines::default(),
+            info: Vec::new(),
+            info_hub: None,
             features: FeaturesShown::ALL,
             preview: None,
             may_preview: false,
@@ -692,8 +745,13 @@ impl FromRequestParts<AppState> for Shell {
                 None => state.usecases.settings.current().await.map(Arc::new),
             }
         };
-        let (sectors, settings) = tokio::try_join!(state.usecases.sector.shown(), read)?;
+        let (sectors, settings, info) = tokio::try_join!(
+            state.usecases.sector.shown(),
+            read,
+            state.usecases.info_page.shown(shell.may_preview),
+        )?;
         shell.apply_settings(state.locale(), &settings);
+        shell.apply_info_pages(info)?;
         shell.sector = chosen_sector(&parts.headers, &sectors);
         shell.sectors = sector_choices(state.locale(), &sectors, shell.sector.as_deref());
         Ok(shell)

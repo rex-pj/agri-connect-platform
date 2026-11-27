@@ -281,3 +281,91 @@ async fn only_an_admin_keeps_the_pages() {
     assert_eq!(res.status(), StatusCode::FORBIDDEN);
     e.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn the_footer_lists_the_pages_put_there_and_who_runs_the_platform() {
+    let e = env_with_origin().await;
+    let admin = install_admin(&e).await;
+    let record = create_terms(&e, &admin).await;
+    let (status, _) = write(
+        &e,
+        &admin,
+        &record,
+        &[
+            ("body", "## Phạm vi\n\nNội dung."),
+            ("effective_on", &day(0)),
+        ],
+    )
+    .await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
+
+    // Off: not in the footer; on: in its group, with the way to all of them.
+    assert!(!html_of(&e, "/", None).await.contains(PAGE));
+    set_stage(&e, &admin, &record, "on").await;
+    let home = html_of(&e, "/", None).await;
+    assert!(home.contains(&format!(r#"href="{PAGE}""#)), "in the footer");
+    assert!(home.contains("Chính sách &amp; quy định"));
+    assert!(home.contains(r#"href="/info""#));
+
+    // Taken out of the footer, it is still on the hub.
+    let res = send(
+        &e.router,
+        post_form(
+            &record,
+            &[("title", "Điều khoản sử dụng"), ("footer_group", "policy")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert!(!html_of(&e, "/", None)
+        .await
+        .contains(&format!(r#"href="{PAGE}""#)));
+    assert!(html_of(&e, "/info", None).await.contains(PAGE));
+
+    // The legal entity's lines, each only once set.
+    assert!(!html_of(&e, "/", None).await.contains("app-footer__entity"));
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/settings",
+            &[
+                ("group", "legal"),
+                ("legal.company_name", "Công ty TNHH Qhortus"),
+                ("legal.tax_code", "0312345678"),
+                ("legal.address", "Phường 1, Đồng Tháp"),
+                ("legal.representative", ""),
+                ("legal.license", ""),
+                ("legal.moit_url", "https://online.gov.vn/Home/WebDetails/1"),
+            ],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let home = html_of(&e, "/", None).await;
+    assert!(home.contains("Công ty TNHH Qhortus"));
+    assert!(home.contains("Mã số thuế: 0312345678"));
+    assert!(home.contains(r#"href="https://online.gov.vn/Home/WebDetails/1""#));
+    assert!(
+        !home.contains("Người đại diện:"),
+        "an empty line is not shown"
+    );
+
+    // A link that is not https is refused.
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/settings",
+            &[
+                ("group", "legal"),
+                ("legal.moit_url", "javascript:alert(1)"),
+            ],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    e.cleanup().await;
+}

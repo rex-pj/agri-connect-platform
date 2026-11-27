@@ -237,6 +237,7 @@ const fn group_icon(group: SettingGroup) -> &'static str {
     match group {
         SettingGroup::Brand => "fa-id-badge",
         SettingGroup::Support => "fa-headset",
+        SettingGroup::Legal => "fa-building-columns",
         SettingGroup::Features => "fa-toggle-on",
         SettingGroup::Jobs => "fa-bullhorn",
         SettingGroup::Listings => "fa-store",

@@ -37,6 +37,18 @@
       </ul>
     </nav>
 
+    {% for g in shell.info %}
+    <nav class="app-footer__col app-footer__col--info" aria-labelledby="footer-info-{{ g.code }}">
+      <h2 class="app-footer__title" id="footer-info-{{ g.code }}">{% if g.code == "about" %}{{ t(key="info.group.about") }}{% else %}{{ t(key="info.group.policy") }}{% endif %}</h2>
+      <ul class="app-footer__links">
+        {% for l in g.links %}
+        <li><a href="{{ l.href }}">{{ atoms::icon(name=l.icon | default(value="fa-file-lines")) }} {{ l.title }}</a></li>
+        {% endfor %}
+        {% if loop.last and shell.info_hub %}<li><a href="{{ shell.info_hub }}">{{ atoms::icon(name="fa-circle-info") }} {{ t(key="footer.info_all") }}</a></li>{% endif %}
+      </ul>
+    </nav>
+    {% endfor %}
+
     {% if shell.profile %}
     <nav class="app-footer__col app-footer__col--account" aria-labelledby="footer-account">
       <h2 class="app-footer__title" id="footer-account">{% if shell.profile.signed_in %}{{ t(key="nav.account") }}{% else %}{{ t(key="footer.providers") }}{% endif %}</h2>
@@ -63,5 +75,16 @@
     <span>© {{ year }} {{ site.name }}</span>
     <span>{{ atoms::icon(name="fa-location-dot") }} {{ t(key="site.region_line") }}</span>
   </div>
+  {% set e = shell.legal %}
+  {% if e.company_name or e.tax_code or e.address or e.license or e.representative or e.moit_url %}
+  <div class="app-footer__entity">
+    {% if e.company_name %}<p class="app-footer__entity-name">{{ e.company_name }}</p>{% endif %}
+    {% if e.tax_code %}<p>{{ t(key="footer.tax_code", code=e.tax_code) }}</p>{% endif %}
+    {% if e.license %}<p>{{ e.license }}</p>{% endif %}
+    {% if e.representative %}<p>{{ t(key="footer.representative", name=e.representative) }}</p>{% endif %}
+    {% if e.address %}<p>{{ t(key="footer.address", address=e.address) }}</p>{% endif %}
+    {% if e.moit_url %}<p><a class="app-footer__moit" href="{{ e.moit_url }}" rel="noopener" target="_blank">{{ atoms::icon(name="fa-circle-check") }} {{ t(key="footer.moit") }}</a></p>{% endif %}
+  </div>
+  {% endif %}
 </footer>
 {%- endmacro app_footer %}

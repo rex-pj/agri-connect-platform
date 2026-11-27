@@ -334,3 +334,11 @@ pub const INFO_PAGE_TITLE_MAX: usize = 160;
 pub const INFO_PAGE_BODY_MAX: usize = 60_000;
 /// What changed in a new version, as the page's version list says it.
 pub const INFO_PAGE_NOTE_MAX: usize = 300;
+
+// ── The legal entity (`legal.*` settings) ─────────────────────────────────────
+/// A company's or a person's name.
+pub const LEGAL_NAME_MAX: usize = 160;
+/// A tax code: 10 digits, 13 with a branch's suffix.
+pub const LEGAL_TAX_CODE_MAX: usize = 20;
+/// An address, or the line of the business registration.
+pub const LEGAL_LINE_MAX: usize = 250;

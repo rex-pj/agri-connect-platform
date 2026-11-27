@@ -1028,6 +1028,35 @@ body:has(.app-nav__search-row.open) .app-main {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
 }
+/* The information pages' columns follow the others in the grid. */
+.app-footer__col--info .app-footer__links {
+  grid-template-columns: minmax(0, 1fr);
+}
+/* Who runs the platform: small lines under the copyright, as the law asks. */
+.app-footer__entity {
+  max-width: 1320px;
+  margin: 8px auto 0;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+}
+.app-footer__entity p {
+  margin: 0;
+}
+.app-footer__entity-name {
+  color: #fff;
+  font-weight: 700;
+}
+.app-footer__moit,
+.app-footer__moit:hover {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  color: #fff;
+  font-weight: 600;
+}
+
 .app-footer__legal {
   max-width: 1320px;
   margin: 24px auto 0;
@@ -1190,7 +1219,10 @@ body:has(.app-nav__search-row.open) .app-main {
   }
   .app-footer__inner {
     grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr);
-    grid-template-areas: "brand explore account help";
+    /* The information pages take the second row under explore and account. */
+    grid-template-areas:
+      "brand explore account help"
+      "brand . . help";
     gap: 40px;
   }
   .app-footer__col {
@@ -1199,6 +1231,9 @@ body:has(.app-nav__search-row.open) .app-main {
   }
   .app-footer__links {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .app-footer__col--info {
+    grid-row: 2;
   }
   /* A mouse needs less room than a thumb. */
   .app-footer__links a,

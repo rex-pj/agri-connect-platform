@@ -149,7 +149,7 @@
       (`g.nav`; Alpine `navPreview` follows each tick, without JS it shows
       the form as shown). -#}
   {% set n = g.nav %}
-  {% if n %}<div class="settings-split" x-data="navPreview" x-on:change="update" data-top-max="{{ n.top_max }}" data-phone-max="{{ n.phone_max }}" data-room-text="{{ t(key="settings.bar_room", used="{used}", max="{max}") }}">{% endif %}
+  {% if n %}<div class="settings-split" x-data="navPreview" x-on:change="update" data-top-max="{{ n.top_max }}" data-phone-max="{{ n.phone_max }}" data-room-text="{{ t(key="settings.bar_room", used="{used}", max="{max}") }}" data-room-over-text="{{ t(key="settings.bar_room_over", used="{used}", max="{max}") }}">{% endif %}
   <section class="admin-section" aria-labelledby="settings-title">
     <h2 class="admin-section__title" id="settings-title">{{ g.title }}</h2>
     <p class="admin-status">
@@ -229,8 +229,8 @@
     <h2 class="admin-section__title" id="nav-preview-title">{{ t(key="settings.nav_preview_title") }}</h2>
     <p class="admin-status">{{ t(key="settings.nav_preview_sub") }} {{ t(key="settings.places_hint") }}</p>
     {% set admins = t(key="settings.nav_preview_admins") %}
-    {{ menu::nav_bar(items=n.top, caption=t(key="settings.nav_preview_top"), place="top", admins=admins, room=t(key="settings.bar_room", used=n.top_used, max=n.top_max)) }}
-    {{ menu::nav_bar(items=n.phone, caption=t(key="settings.nav_preview_phone"), place="phone", admins=admins, room=t(key="settings.bar_room", used=n.phone_used, max=n.phone_max)) }}
+    {{ menu::nav_bar(items=n.top, caption=t(key="settings.nav_preview_top"), place="top", admins=admins, room=n.top_room) }}
+    {{ menu::nav_bar(items=n.phone, caption=t(key="settings.nav_preview_phone"), place="phone", admins=admins, room=n.phone_room) }}
     {{ menu::nav_bar(items=n.footer, caption=t(key="settings.nav_preview_footer"), place="footer", admins=admins) }}
   </aside>
   </div>

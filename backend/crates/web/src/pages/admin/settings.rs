@@ -159,6 +159,10 @@ pub struct NavPreview {
     pub top_used: usize,
     pub phone_max: usize,
     pub phone_used: usize,
+    /// Each bar's room line as it stands ("2/2 chỗ cho tính năng"), said to be
+    /// over when a stored state is: the save that keeps it would be refused.
+    pub top_room: String,
+    pub phone_room: String,
 }
 
 /// One link of the preview: a fixed one (home, services, the account), or
@@ -351,7 +355,21 @@ fn nav_preview(locale: &Locale, shown: &impl Fn(&str) -> String) -> NavPreview {
         top_used: used(Place::Top),
         phone_max: Place::Phone.room().unwrap_or_default(),
         phone_used: used(Place::Phone),
+        top_room: room_line(locale, used(Place::Top), Place::Top),
+        phone_room: room_line(locale, used(Place::Phone), Place::Phone),
     }
+}
+
+/// A bar's room line: how many of its places are taken, said to be too many
+/// once they are.
+fn room_line(locale: &Locale, used: usize, place: Place) -> String {
+    let max = place.room().unwrap_or_default();
+    let key = if used > max {
+        "settings.bar_room_over"
+    } else {
+        "settings.bar_room"
+    };
+    locale.text_with(key, &[("used", &used), ("max", &max)])
 }
 
 /// A value as the page words it: a switch on / off, an empty text "empty".

@@ -224,7 +224,8 @@ document.addEventListener("alpine:init", () => {
       const bar = [...form.querySelectorAll(`[data-room="${place}"]`)];
       const used = bar.filter((box) => box.checked && !isOff(box)).length;
       for (const box of bar) box.disabled = !box.checked && !isOff(box) && used >= max;
-      return this.$el.dataset.roomText
+      const text = used > max ? this.$el.dataset.roomOverText : this.$el.dataset.roomText;
+      return text
         .replace("{used}", String(used))
         .replace("{max}", String(max));
     },

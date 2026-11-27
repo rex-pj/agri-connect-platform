@@ -477,7 +477,9 @@ async fn tab_as_sent(e: &Env, admin: &str) -> Vec<(String, String)> {
             continue;
         };
         let checkable = tag.contains("type=\"checkbox\"") || tag.contains("type=\"radio\"");
-        if (name.starts_with("nav.") || name.starts_with("features.") || name.starts_with("access."))
+        if (name.starts_with("nav.")
+            || name.starts_with("features.")
+            || name.starts_with("access."))
             && (!checkable || tag.contains(" checked"))
         {
             form.push((name, value));
@@ -549,9 +551,16 @@ async fn an_off_feature_never_blocks_the_tab_and_comes_back_on() {
     )
     .await;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
-    assert!(body_text(res).await.contains("Thanh trên chỉ có chỗ cho 4 tính năng"));
+    let refused = body_text(res).await;
+    assert!(refused.contains("Thanh trên chỉ có chỗ cho 4 tính năng"));
+    // The menus shown with the form as sent say the bar is over.
+    assert!(refused.contains("5/4 chỗ: quá chỗ"), "the room line warns");
     assert_eq!(shown(&e).await["prices"], false);
-    let fixed = with(&with(&form, "features.prices", "on"), "nav.jobs.top", "false");
+    let fixed = with(
+        &with(&form, "features.prices", "on"),
+        "nav.jobs.top",
+        "false",
+    );
     // Prices also takes a phone tab now: make room there too.
     let fixed = with(&fixed, "nav.supplies.phone", "false");
     assert_eq!(save_form(&e, &admin, &fixed).await, StatusCode::SEE_OTHER);
@@ -561,10 +570,18 @@ async fn an_off_feature_never_blocks_the_tab_and_comes_back_on() {
     for feature in Feature::ALL {
         let key = feature.setting_key();
         let form = tab_as_sent(&e, &admin).await;
-        assert_eq!(save_form(&e, &admin, &with(&form, key, "off")).await, StatusCode::SEE_OTHER, "{key} off");
+        assert_eq!(
+            save_form(&e, &admin, &with(&form, key, "off")).await,
+            StatusCode::SEE_OTHER,
+            "{key} off"
+        );
         assert_eq!(shown(&e).await[feature.code()], false, "{key} off");
         let form = tab_as_sent(&e, &admin).await;
-        assert_eq!(save_form(&e, &admin, &with(&form, key, "on")).await, StatusCode::SEE_OTHER, "{key} on");
+        assert_eq!(
+            save_form(&e, &admin, &with(&form, key, "on")).await,
+            StatusCode::SEE_OTHER,
+            "{key} on"
+        );
         assert_eq!(shown(&e).await[feature.code()], true, "{key} on");
     }
 }

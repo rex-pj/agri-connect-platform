@@ -333,8 +333,14 @@ fn bar_fits(
         _ => shown_before(p),
     };
     let bar: Vec<&Placement> = PLACEMENTS.iter().filter(|p| p.place == place).collect();
-    let before = bar.iter().filter(|p| ticked_before(p) && shown_before(p)).count();
-    let after = bar.iter().filter(|p| ticked_after(p) && shown_after(p)).count();
+    let before = bar
+        .iter()
+        .filter(|p| ticked_before(p) && shown_before(p))
+        .count();
+    let after = bar
+        .iter()
+        .filter(|p| ticked_after(p) && shown_after(p))
+        .count();
     if after <= room || after <= before {
         return;
     }

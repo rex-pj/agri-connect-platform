@@ -562,7 +562,9 @@ pub fn placed_pages(placed: &impl Fn(Feature, Place) -> bool) -> Vec<[bool; 3]> 
             let mut row = [false; 3];
             for (i, place) in Place::ALL.into_iter().enumerate() {
                 let fits = b.feature.is_none()
-                    || place.room().is_none_or(|room| taken.get(i).is_some_and(|n| *n < room));
+                    || place
+                        .room()
+                        .is_none_or(|room| taken.get(i).is_some_and(|n| *n < room));
                 let here = at(b, place, placed) && fits;
                 if here && b.feature.is_some() {
                     if let Some(n) = taken.get_mut(i) {

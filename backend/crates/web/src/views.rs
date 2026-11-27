@@ -10,8 +10,9 @@ use application::constants::{
     BUSINESS_DESCRIPTION_MAX, BUSINESS_NAME_MAX, CODED_NAME_MAX, COMMODITY_NAME_MAX, CROP_NAME_MAX,
     CROP_UNIT_MAX, FULL_NAME_MAX, INFO_PAGE_BODY_MAX, INFO_PAGE_CODE_MAX, INFO_PAGE_NOTE_MAX,
     INFO_PAGE_TITLE_MAX, JOB_DESCRIPTION_MAX, PASSWORD_MIN_CHARS, PASSWORD_RESET_EXPIRY_HOURS,
-    PRICE_FRESH_DAYS_MAX, PRICE_NOTE_MAX, PRODUCT_DESCRIPTION_MAX, PRODUCT_NAME_MAX,
-    PRODUCT_UNIT_MAX, SEARCH_QUERY_MAX, SEARCH_QUERY_MIN, VN_UTC_OFFSET_SECS,
+    POST_BODY_MAX, POST_SUMMARY_MAX, POST_TITLE_MAX, PRICE_FRESH_DAYS_MAX, PRICE_NOTE_MAX,
+    PRODUCT_DESCRIPTION_MAX, PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX, SEARCH_QUERY_MAX,
+    SEARCH_QUERY_MIN, VN_UTC_OFFSET_SECS,
 };
 use application::constants::{
     GEOLOCATE_ACCURACY_MAX_M, MAP_POINT_ZOOM, MAP_START_LAT, MAP_START_LNG, MAP_START_ZOOM,
@@ -153,6 +154,9 @@ struct FieldLimits {
     info_page_title_max: usize,
     info_page_body_max: usize,
     info_page_note_max: usize,
+    post_title_max: usize,
+    post_summary_max: usize,
+    post_body_max: usize,
     price_note_max: usize,
     job_description_max: usize,
     /// The most days a commodity's prices may stay on the board.
@@ -211,6 +215,9 @@ const FIELD_LIMITS: FieldLimits = FieldLimits {
     info_page_title_max: INFO_PAGE_TITLE_MAX,
     info_page_body_max: INFO_PAGE_BODY_MAX,
     info_page_note_max: INFO_PAGE_NOTE_MAX,
+    post_title_max: POST_TITLE_MAX,
+    post_summary_max: POST_SUMMARY_MAX,
+    post_body_max: POST_BODY_MAX,
     price_note_max: PRICE_NOTE_MAX,
     job_description_max: JOB_DESCRIPTION_MAX,
     price_fresh_days_max: PRICE_FRESH_DAYS_MAX,

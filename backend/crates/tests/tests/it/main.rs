@@ -13,6 +13,7 @@ mod admin_pages;
 mod admin_providers;
 mod admin_toolbar;
 mod admin_users;
+mod articles;
 mod auth_pages;
 mod authz;
 mod call_clicks;

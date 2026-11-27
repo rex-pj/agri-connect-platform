@@ -16,6 +16,7 @@ pub mod inputs;
 pub mod outputs;
 pub mod pagination;
 pub mod ports;
+pub mod posts;
 pub mod repeats;
 pub mod settings;
 pub mod slug;

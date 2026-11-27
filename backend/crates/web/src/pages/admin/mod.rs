@@ -4,6 +4,7 @@
 
 pub mod alert_kinds;
 pub mod alerts;
+pub mod articles;
 pub mod categories;
 pub mod coded;
 pub mod commodities;
@@ -31,10 +32,10 @@ use application::{
     authz::Actor,
     catalogue::{
         PERM_ADMIN_DASHBOARD_VIEW, PERM_ALERT_MANAGE, PERM_CATEGORY_MANAGE,
-        PERM_CONTENT_PAGE_MANAGE, PERM_INQUIRY_READ, PERM_JOB_MODERATE, PERM_LISTING_MODERATE,
-        PERM_LOCATION_MANAGE, PERM_PARTNER_MANAGE, PERM_PRICE_MANAGE, PERM_PROVIDER_READ,
-        PERM_REPORT_DEMAND_READ, PERM_REVIEW_MODERATE, PERM_ROLE_READ, PERM_SERVICE_MANAGE,
-        PERM_SETTING_MANAGE, PERM_SYSTEM_DEMO_MANAGE, PERM_USER_READ,
+        PERM_CONTENT_PAGE_MANAGE, PERM_CONTENT_POST_MANAGE, PERM_INQUIRY_READ, PERM_JOB_MODERATE,
+        PERM_LISTING_MODERATE, PERM_LOCATION_MANAGE, PERM_PARTNER_MANAGE, PERM_PRICE_MANAGE,
+        PERM_PROVIDER_READ, PERM_REPORT_DEMAND_READ, PERM_REVIEW_MODERATE, PERM_ROLE_READ,
+        PERM_SERVICE_MANAGE, PERM_SETTING_MANAGE, PERM_SYSTEM_DEMO_MANAGE, PERM_USER_READ,
     },
     constants::SEARCH_QUERY_MAX,
     usecases::admin_usecase::HistoryOf,
@@ -155,6 +156,12 @@ const MENU: &[(Option<&str>, &[Entry])] = &[
                 "fa-triangle-exclamation",
                 "admin_menu.alerts",
                 PERM_ALERT_MANAGE,
+            ),
+            (
+                "admin_articles",
+                "fa-newspaper",
+                "admin_menu.articles",
+                PERM_CONTENT_POST_MANAGE,
             ),
             (
                 "admin_info_pages",

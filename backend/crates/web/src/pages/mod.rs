@@ -3,6 +3,7 @@
 
 pub mod account;
 pub mod admin;
+pub mod articles;
 pub mod auth;
 pub mod cards;
 pub mod dashboard;

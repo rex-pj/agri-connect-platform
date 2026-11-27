@@ -4,6 +4,7 @@
 {% import "organisms/product_card.html" as products %}
 {% import "organisms/service_card.html" as services %}
 {% import "molecules/section_header.html" as section %}
+{% import "molecules/article_card.html" as article_card %}
 {% import "molecules/geo_cta.html" as geo %}
 {% import "molecules/empty_state.html" as empty %}
 {% import "molecules/provider_cta.html" as seller %}
@@ -40,6 +41,13 @@
   <ul class="detail-card list-unstyled mb-0 price-strip">
     {% for l in page.prices %}{{ price::price_line(l=l, show_area=not page.prices_area, compact=true, wide_only=loop.index > page.prices_on_phone) }}{% endfor %}
   </ul>
+</section>
+{% endif %}
+
+{% if page.articles %}
+<section class="home-section">
+  {{ section::section_header(title=t(key="home.articles"), more_href=url_for(name="articles")) }}
+  <div class="article-list">{% for a in page.articles %}{{ article_card::article_card(a=a) }}{% endfor %}</div>
 </section>
 {% endif %}
 

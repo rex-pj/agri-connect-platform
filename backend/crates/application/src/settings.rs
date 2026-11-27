@@ -187,11 +187,11 @@ const fn legal(key: &'static str, max: usize) -> SettingDef {
     }
 }
 
-const fn stage(feature: Feature) -> SettingDef {
+const fn stage(feature: Feature, default: Stage) -> SettingDef {
     SettingDef {
         key: feature.setting_key(),
         group: SettingGroup::Features,
-        kind: SettingKind::Stage { default: Stage::On },
+        kind: SettingKind::Stage { default },
     }
 }
 
@@ -276,12 +276,14 @@ pub static SETTINGS: &[SettingDef] = &[
         kind: SettingKind::Switch { default: true },
     },
     // Every feature open by default: the platform ran with all of them.
-    stage(Feature::Prices),
-    stage(Feature::NearMe),
-    stage(Feature::Supplies),
-    stage(Feature::Directory),
-    stage(Feature::Reviews),
-    stage(Feature::Jobs),
+    stage(Feature::Prices, Stage::On),
+    stage(Feature::NearMe, Stage::On),
+    stage(Feature::Supplies, Stage::On),
+    stage(Feature::Directory, Stage::On),
+    stage(Feature::Reviews, Stage::On),
+    stage(Feature::Jobs, Stage::On),
+    // Off until there are articles to read: an empty list looks abandoned.
+    stage(Feature::Articles, Stage::Off),
     // Where each feature's page is led to from (`features::PLACEMENTS`).
     place(0),
     place(1),
@@ -298,6 +300,9 @@ pub static SETTINGS: &[SettingDef] = &[
     place(12),
     place(13),
     place(14),
+    place(15),
+    place(16),
+    place(17),
     number(
         JOB_POSTS_PER_CLIENT_PER_DAY,
         SettingGroup::Jobs,
@@ -802,7 +807,12 @@ mod tests {
         assert_eq!(s.job_notify_radius_m(), 10_000.0);
         assert!(s.registration_open());
         for f in crate::features::Feature::ALL {
-            assert_eq!(s.stage(f), Stage::On, "{}", f.code());
+            let expected = if f == crate::features::Feature::Articles {
+                Stage::Off
+            } else {
+                Stage::On
+            };
+            assert_eq!(s.stage(f), expected, "{}", f.code());
         }
         assert_eq!(s.support_phone(), None);
     }

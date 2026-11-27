@@ -342,3 +342,15 @@ pub const LEGAL_NAME_MAX: usize = 160;
 pub const LEGAL_TAX_CODE_MAX: usize = 20;
 /// An address, or the line of the business registration.
 pub const LEGAL_LINE_MAX: usize = 250;
+
+// ── Articles (news and guides) ────────────────────────────────────────────────
+/// An article's title and its summary, the cards' line and the page's
+/// description.
+pub const POST_TITLE_MAX: usize = 160;
+pub const POST_SUMMARY_MAX: usize = 300;
+/// An article's text in Markdown.
+pub const POST_BODY_MAX: usize = 60_000;
+/// The newest articles the home page shows, while the feature is on.
+pub const HOME_POSTS_SHOWN: i64 = 3;
+/// The other articles of the same kind under one.
+pub const RELATED_POSTS_SHOWN: i64 = 3;

@@ -17,6 +17,7 @@ pub mod job_repository_trait;
 pub mod location_repository_trait;
 pub mod partner_repository_trait;
 pub mod permission_repository_trait;
+pub mod post_repository_trait;
 pub mod price_repository_trait;
 pub mod product_repository_trait;
 pub mod refresh_token_repository_trait;

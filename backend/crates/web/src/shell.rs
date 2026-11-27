@@ -562,7 +562,7 @@ struct Browse {
 }
 
 /// Every page the frame may lead to, in the bars' and the footer's order.
-const BROWSE: [Browse; 7] = [
+const BROWSE: [Browse; 8] = [
     Browse {
         dest: dest("home", "fa-house", "nav.home"),
         feature: None,
@@ -598,6 +598,11 @@ const BROWSE: [Browse; 7] = [
     Browse {
         dest: dest("job_new", "fa-bullhorn", "nav.jobs"),
         feature: Some(Feature::Jobs),
+        stand_in: "home",
+    },
+    Browse {
+        dest: dest("articles", "fa-newspaper", "nav.articles"),
+        feature: Some(Feature::Articles),
         stand_in: "home",
     },
 ];

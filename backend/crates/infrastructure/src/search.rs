@@ -11,7 +11,7 @@ use sea_orm::{
 
 use crate::admin_list::{phone_contains, phone_digits};
 use crate::entities::{
-    business, crop_price, inquiry, job_post, partner, product, review, service, user,
+    business, crop_price, inquiry, job_post, partner, post, product, review, service, user,
 };
 
 /// A text column the searches match.
@@ -35,6 +35,8 @@ pub enum SearchColumn {
     PartnerContactName,
     PartnerEmail,
     PriceNote,
+    PostTitle,
+    PostSummary,
 }
 
 impl SearchColumn {
@@ -77,6 +79,8 @@ impl SearchColumn {
             }
             Self::PartnerEmail => (partner::Entity, partner::Column::Email).into_column_ref(),
             Self::PriceNote => (crop_price::Entity, crop_price::Column::Note).into_column_ref(),
+            Self::PostTitle => (post::Entity, post::Column::Title).into_column_ref(),
+            Self::PostSummary => (post::Entity, post::Column::Summary).into_column_ref(),
         }
     }
 }
@@ -112,6 +116,8 @@ const ADMIN_REVIEW_SEARCH_COLUMNS: &[SearchColumn] = &[ReviewReviewerName, Revie
 const ADMIN_JOB_SEARCH_COLUMNS: &[SearchColumn] = &[JobRequesterName, JobDescription];
 const ADMIN_PARTNER_SEARCH_COLUMNS: &[SearchColumn] =
     &[PartnerName, PartnerContactName, PartnerEmail];
+/// The admin's article search: a few hundred rows, read by admins only.
+const ADMIN_POST_SEARCH_COLUMNS: &[SearchColumn] = &[PostTitle, PostSummary];
 
 /// Postgres' default LIKE escape character.
 const LIKE_ESCAPE: char = '\\';
@@ -268,6 +274,13 @@ pub fn admin_partner_search(search: Option<&str>) -> Condition {
             || text_contains(ADMIN_PARTNER_SEARCH_COLUMNS, q),
             |digits| phone_contains(partner::Column::Phone, &digits),
         )
+    })
+}
+
+/// The admin's article search: the title or the summary.
+pub fn admin_post_search(search: Option<&str>) -> Condition {
+    typed(search).map_or_else(Condition::all, |q| {
+        text_contains(ADMIN_POST_SEARCH_COLUMNS, q)
     })
 }
 

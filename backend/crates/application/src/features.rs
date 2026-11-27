@@ -83,16 +83,20 @@ pub enum Feature {
     Reviews,
     /// Hire requests: a farmer's post, a provider's list of them.
     Jobs,
+    /// Articles: the news and the guides (`/articles`), the home page's
+    /// newest.
+    Articles,
 }
 
 impl Feature {
-    pub const ALL: [Feature; 6] = [
+    pub const ALL: [Feature; 7] = [
         Feature::Prices,
         Feature::NearMe,
         Feature::Supplies,
         Feature::Directory,
         Feature::Reviews,
         Feature::Jobs,
+        Feature::Articles,
     ];
 
     /// Its stable name: the key of `FeaturesShown` (templates read
@@ -106,6 +110,7 @@ impl Feature {
             Feature::Directory => "directory",
             Feature::Reviews => "reviews",
             Feature::Jobs => "jobs",
+            Feature::Articles => "articles",
         }
     }
 
@@ -119,6 +124,7 @@ impl Feature {
             Feature::Directory => "features.directory",
             Feature::Reviews => "features.reviews",
             Feature::Jobs => "access.job_posts_open",
+            Feature::Articles => "features.articles",
         }
     }
 
@@ -136,6 +142,7 @@ impl Feature {
             Feature::Directory => "fa-store",
             Feature::Reviews => "fa-star",
             Feature::Jobs => "fa-bullhorn",
+            Feature::Articles => "fa-newspaper",
         }
     }
 
@@ -213,7 +220,7 @@ const fn placement(feature: Feature, place: Place, key: &'static str, default: b
 }
 
 /// Every feature's places, in the features tab's order.
-pub const PLACEMENTS: [Placement; 15] = [
+pub const PLACEMENTS: [Placement; 18] = [
     placement(Feature::Prices, Place::Top, "nav.prices.top", true),
     placement(Feature::Prices, Place::Phone, "nav.prices.phone", false),
     placement(Feature::Prices, Place::Footer, "nav.prices.footer", true),
@@ -244,6 +251,15 @@ pub const PLACEMENTS: [Placement; 15] = [
     placement(Feature::Jobs, Place::Top, "nav.jobs.top", false),
     placement(Feature::Jobs, Place::Phone, "nav.jobs.phone", false),
     placement(Feature::Jobs, Place::Footer, "nav.jobs.footer", false),
+    // Nowhere until the admin puts it: the top bar is full.
+    placement(Feature::Articles, Place::Top, "nav.articles.top", false),
+    placement(Feature::Articles, Place::Phone, "nav.articles.phone", false),
+    placement(
+        Feature::Articles,
+        Place::Footer,
+        "nav.articles.footer",
+        false,
+    ),
 ];
 
 /// The placement a setting key holds.

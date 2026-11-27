@@ -9,7 +9,7 @@ use application::{
         health_usecase::HealthUseCase, info_page_usecase::InfoPageUseCase, job_usecase::JobUseCase,
         media_usecase::MediaUseCase, partner_usecase::PartnerUseCase,
         permission_usecase::PermissionUseCase, place_usecase::PlaceUseCase,
-        price_usecase::PriceUseCase, product_usecase::ProductUseCase,
+        post_usecase::PostUseCase, price_usecase::PriceUseCase, product_usecase::ProductUseCase,
         provider_dashboard_usecase::ProviderDashboardUseCase, review_usecase::ReviewUseCase,
         settings_usecase::SettingsUseCase, setup_usecase::SetupUseCase,
         stats_usecase::StatsUseCase, zalo_usecase::ZaloUseCase,
@@ -31,6 +31,8 @@ pub struct UseCases {
     pub alert: AlertUseCase,
     /// The information pages: terms, policies, contact, the legal entity.
     pub info_page: InfoPageUseCase,
+    /// Articles: the news and the guides.
+    pub post: PostUseCase,
     pub commodity: CommodityUseCase,
     /// The sectors the platform serves.
     pub sector: CodedUseCase,

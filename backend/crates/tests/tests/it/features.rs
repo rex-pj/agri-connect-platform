@@ -248,7 +248,7 @@ async fn a_feature_in_preview_is_seen_by_admins_only() {
     // The dashboard reminds of it.
     let dashboard =
         body_text(send(&e.router, get_page("/admin/dashboard", Some(&admin))).await).await;
-    assert!(dashboard.contains("1 tính năng chưa mở cho bà con."));
+    assert!(dashboard.contains("2 tính năng chưa mở cho bà con."));
 }
 
 #[tokio::test]

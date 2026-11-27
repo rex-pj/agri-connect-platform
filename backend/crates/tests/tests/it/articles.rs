@@ -1,0 +1,244 @@
+//! Articles: made drafts by an admin, read by farmers once published and the
+//! articles feature is open, each kind a list of its own address, one
+//! article at its own slug, its text never carrying typed HTML, and the
+//! admin's pages closed to everyone else.
+//! Database tests need TEST_DATABASE_URL and `--include-ignored`.
+
+use application::features::Feature;
+use axum::http::{header, StatusCode};
+use integration_tests::{
+    body_text, env_with_origin, features_form, get_page, install_admin, post_form,
+    post_multipart_form, register_provider, send, sign_in, Env,
+};
+
+async fn status_of(e: &Env, path: &str, cookie: Option<&str>) -> StatusCode {
+    send(&e.router, get_page(path, cookie)).await.status()
+}
+
+async fn html_of(e: &Env, path: &str, cookie: Option<&str>) -> String {
+    let res = send(&e.router, get_page(path, cookie)).await;
+    let status = res.status();
+    let html = body_text(res).await;
+    assert_eq!(status, StatusCode::OK, "{path}: {html}");
+    html
+}
+
+async fn open_articles(e: &Env, admin: &str, stage: &str) {
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/settings",
+            &features_form(&[
+                ("access.registration_open", "true"),
+                (Feature::Articles.setting_key(), stage),
+            ]),
+            Some(admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER, "articles {stage}");
+}
+
+/// A draft; its admin page's address.
+async fn draft(e: &Env, admin: &str, kind: &str, title: &str, body: &str) -> String {
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/articles",
+            &[("kind", kind), ("title", title), ("body", body)],
+            Some(admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER, "create {title}");
+    res.headers()[header::LOCATION]
+        .to_str()
+        .unwrap_or_default()
+        .to_owned()
+}
+
+async fn set_status(e: &Env, admin: &str, record: &str, status: &str) {
+    let res = send(
+        &e.router,
+        post_form(
+            &format!("{record}/status"),
+            &[("status", status), ("reason", "kiểm tra")],
+            Some(admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER, "status {status}");
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn an_article_reaches_farmers_once_published_and_the_part_is_open() {
+    let e = env_with_origin().await;
+    let admin = install_admin(&e).await;
+
+    // Every rule at once, the sheet back open.
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/articles",
+            &[("kind", "story"), ("title", " "), ("body", "")],
+            Some(&admin),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    let html = body_text(res).await;
+    assert!(html.contains("Vui lòng chọn loại bài: tin tức hoặc kiến thức."));
+    assert!(html.contains("Vui lòng nhập tiêu đề bài viết."));
+    assert!(html.contains("Vui lòng nhập nội dung bài viết."));
+
+    let record = draft(
+        &e,
+        &admin,
+        "guide",
+        "Phòng rầy nâu cho lúa",
+        "## Dấu hiệu\n\nLá vàng.\n\n<script>alert(1)</script>",
+    )
+    .await;
+    let id = record.rsplit('/').next().unwrap_or_default().to_owned();
+
+    // The part is off until the admin opens it.
+    assert_eq!(
+        status_of(&e, "/articles", None).await,
+        StatusCode::NOT_FOUND
+    );
+    open_articles(&e, &admin, "on").await;
+    let hub = html_of(&e, "/articles", None).await;
+    assert!(
+        hub.contains("Chưa có bài viết nào."),
+        "a draft is not public"
+    );
+    assert_eq!(
+        status_of(&e, &format!("/articles/{id}"), None).await,
+        StatusCode::NOT_FOUND
+    );
+
+    // Published: on the hub, its kind's list, its own slug; never the other
+    // kind's list.
+    set_status(&e, &admin, &record, "published").await;
+    let res = send(&e.router, get_page(&format!("/articles/{id}"), None)).await;
+    assert_eq!(res.status(), StatusCode::MOVED_PERMANENTLY);
+    let canonical = res.headers()[header::LOCATION]
+        .to_str()
+        .unwrap_or_default()
+        .to_owned();
+    assert_eq!(canonical, format!("/articles/{id}/phong-ray-nau-cho-lua"));
+    let page = html_of(&e, &canonical, None).await;
+    assert!(page.contains(r#"<h2 id="dau-hieu">"#));
+    assert!(page.contains("&lt;script&gt;") && !page.contains("<script>alert(1)"));
+    assert!(html_of(&e, "/articles", None).await.contains(&canonical));
+    assert!(html_of(&e, "/articles/guides", None)
+        .await
+        .contains(&canonical));
+    assert!(!html_of(&e, "/articles/news", None)
+        .await
+        .contains(&canonical));
+    assert_eq!(
+        status_of(&e, &format!("/articles/{id}/sai-duong-dan"), None).await,
+        StatusCode::MOVED_PERMANENTLY
+    );
+    // The JSON API reads the same.
+    let json = body_text(
+        send(
+            &e.router,
+            get_page("/api/explore/articles?kind=guide", None),
+        )
+        .await,
+    )
+    .await;
+    assert!(json.contains("Phòng rầy nâu cho lúa"), "{json}");
+
+    // The home page's strip while the part is shown.
+    assert!(html_of(&e, "/", None).await.contains(&canonical));
+
+    // An edit (multipart, no photo) is saved; its preview saves nothing.
+    let res = send(
+        &e.router,
+        post_multipart_form(
+            &record,
+            &[
+                ("kind", "guide"),
+                ("title", "Phòng rầy nâu cho lúa"),
+                ("summary", "Ba bước giữ ruộng."),
+                ("body", "## Bản xem trước"),
+                ("intent", "preview"),
+            ],
+            None,
+            &admin,
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::OK);
+    assert!(body_text(res).await.contains(r#"<h2 id="ban-xem-truoc">"#));
+    assert!(!html_of(&e, &canonical, None)
+        .await
+        .contains("Bản xem trước"));
+    let res = send(
+        &e.router,
+        post_multipart_form(
+            &record,
+            &[
+                ("kind", "guide"),
+                ("title", "Phòng rầy nâu cho lúa"),
+                ("summary", "Ba bước giữ ruộng."),
+                ("body", "## Dấu hiệu\n\nLá vàng úa."),
+            ],
+            None,
+            &admin,
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert!(html_of(&e, &canonical, None)
+        .await
+        .contains("Ba bước giữ ruộng."));
+
+    // Taken down: gone from farmers; its history says why.
+    set_status(&e, &admin, &record, "hidden").await;
+    assert_eq!(status_of(&e, &canonical, None).await, StatusCode::NOT_FOUND);
+    let admin_page = html_of(&e, &record, Some(&admin)).await;
+    assert!(admin_page.contains("Đổi trạng thái bài viết"));
+
+    // The part off again: nothing of it shows, not even to the admin.
+    set_status(&e, &admin, &record, "published").await;
+    open_articles(&e, &admin, "off").await;
+    assert_eq!(
+        status_of(&e, &canonical, Some(&admin)).await,
+        StatusCode::NOT_FOUND
+    );
+    assert!(!html_of(&e, "/", None).await.contains(&canonical));
+    e.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs TEST_DATABASE_URL"]
+async fn only_an_admin_keeps_the_articles() {
+    let e = env_with_origin().await;
+    install_admin(&e).await;
+    register_provider(&e.state, "nam", "0901234567").await;
+    let provider = sign_in(&e, "nam", "matkhau123").await;
+    assert_eq!(
+        status_of(&e, "/admin/articles", None).await,
+        StatusCode::SEE_OTHER
+    );
+    assert_eq!(
+        status_of(&e, "/admin/articles", Some(&provider)).await,
+        StatusCode::FORBIDDEN
+    );
+    let res = send(
+        &e.router,
+        post_form(
+            "/admin/articles",
+            &[("kind", "news"), ("title", "Giả"), ("body", "x")],
+            Some(&provider),
+        ),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    e.cleanup().await;
+}

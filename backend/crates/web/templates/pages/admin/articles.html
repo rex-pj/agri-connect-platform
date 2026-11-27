@@ -1,0 +1,60 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "atoms/admin_thumb.html" as thumb %}
+{% import "atoms/status_badge.html" as status %}
+{% import "molecules/admin_header.html" as header %}
+{% import "molecules/admin_search.html" as search %}
+{% import "molecules/pagination_nav.html" as paging %}
+{% import "molecules/row_action.html" as row %}
+{% import "molecules/sheet_header.html" as sheet_head %}
+{% import "organisms/post_fields.html" as fields %}
+{#- Every article (drafts and hidden ones too), the latest changed first:
+    the toolbar (words, kind, sector, status chips, order), the table, the
+    create sheet opened by the header's "add" (an anchored section without
+    JS), which makes a draft and comes back open with its messages.
+    `page.body` is web::pages::admin::articles::ArticlesPage. -#}
+{% block title %}{{ t(key="admin_menu.articles") }} | {{ site.name }} Admin{% endblock title %}
+{% block content %}
+{% set b = page.body %}
+<div x-data="dialog" data-open="{% if b.errors.message or b.errors.fields %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+{{ header::admin_header(title=t(key="admin_menu.articles"), icon="fa-newspaper", sub=t(key="article.admin_sub"), action_href="#them-bai", action_icon="fa-plus", action_label=t(key="article.add"), action_opens=true) }}
+<div class="admin-body">
+  {{ search::admin_search(s=b.search, placeholder=t(key="admin_search.articles"), chips=b.states, chips_label=t(key="admin_state.label")) }}
+  {{ search::admin_results(s=b.search, total=b.total) }}
+  <div class="admin-card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 admin-table admin-table--cards">
+        <thead class="admin-table-head">
+          <tr><th>{{ t(key="article.field_title") }}</th><th>{{ t(key="article.field_kind") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
+        </thead>
+        <tbody>
+          {% for r in b.rows %}
+          {% set p = r.post %}
+          <tr{% if p.status != "published" %} class="table-light text-body-secondary"{% endif %}>
+            <td data-label=""><div class="d-flex align-items-center gap-2">{{ thumb::admin_thumb(file_id=p.cover_file_id | default(value="")) }}<div><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ p.title }}</a>{% if p.is_pinned %} {{ atoms::icon(name="fa-thumbtack") }}{% endif %}{% if p.is_demo %} {{ status::demo() }}{% endif %}{% if p.province_name %}<div class="small text-body-secondary">{{ p.province_name }}</div>{% endif %}</div></div></td>
+            <td data-label="{{ t(key="article.field_kind") }}">{{ r.kind_label }}</td>
+            <td data-label="{{ t(key="admin.col_status") }}" class="text-center cell-state">{% if p.status == "published" %}<span class="badge text-bg-success">{{ t(key="article.status.published") }}</span>{% elif p.status == "hidden" %}<span class="badge text-bg-secondary">{{ t(key="article.status.hidden") }}</span>{% else %}<span class="badge text-bg-info">{{ t(key="article.status.draft") }}</span>{% endif %}</td>
+            <td data-label="" class="text-end"><div class="row-actions">{{ row::open(href=r.href, name=p.title) }}</div></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="text-center text-muted py-4">{{ search::empty(s=b.search, none=t(key="article.admin_none")) }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% if b.pagination %}{{ paging::pagination_nav(p=b.pagination) }}{% endif %}
+
+  <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
+  <section class="contact-sheet" id="them-bai" aria-labelledby="them-bai-title" :class="sheetClass">
+    {{ sheet_head::sheet_header(id="them-bai", title=t(key="article.add"), icon="fa-newspaper") }}
+    <form class="contact-sheet__form" method="post" action="{{ b.create_action }}" novalidate>
+      {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
+      {{ fields::post_fields(form=b.form, errors=b.errors, choices=b.choices, prefix="new", first=true) }}
+      <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-plus") }} {{ t(key="article.add_draft") }}</button>
+    </form>
+  </section>
+</div>
+</div>
+{% endblock content %}

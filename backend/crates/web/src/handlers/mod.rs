@@ -1,4 +1,5 @@
 pub mod admin_handler;
+pub mod article_handler;
 pub mod auth_handler;
 pub mod coded_handler;
 pub mod commodity_handler;

@@ -1,0 +1,34 @@
+{% extends "layouts/app.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "molecules/page_hero.html" as hero %}
+{% import "molecules/sector_switch.html" as sector %}
+{% import "molecules/empty_state.html" as empty %}
+{% import "molecules/section_header.html" as section %}
+{% import "molecules/article_card.html" as card %}
+{#- The articles' hub: the tabs (each kind an address of its own), the
+    sector switch, then the newest news and the newest guides, each with
+    the way to its whole list. `page` is web::pages::articles::HubPage. -#}
+{% block title %}{{ t(key="article.hub_title") }} | {{ site.name }}{% endblock title %}
+{% block meta %}<meta name="description" content="{{ t(key="article.hub_meta", site=site.name) }}">{% endblock meta %}
+{% block main %}
+{{ hero::page_hero(title=t(key="article.hub_title"), back_href=url_for(name="home"), back_label=t(key="nav.home"), variant="", icon="fa-newspaper", sub=t(key="article.hub_sub")) }}
+<div class="detail-body">
+  <nav class="article-tabs" aria-label="{{ t(key="article.tabs_label") }}">
+    {% for tab in page.tabs %}<a class="article-tabs__tab{% if tab.current %} is-current{% endif %}" href="{{ tab.href }}"{% if tab.current %} aria-current="page"{% endif %}>{% if tab.code == "news" %}{{ t(key="article.kind.news") }}{% elif tab.code == "guide" %}{{ t(key="article.kind.guide") }}{% else %}{{ t(key="article.all") }}{% endif %}</a>{% endfor %}
+  </nav>
+  {{ sector::sector_switch(sectors=shell.sectors, back=shell.here) }}
+  {% set_global any = false %}
+  {% for s in page.sections %}
+  {% if s.items %}
+  {% set_global any = true %}
+  <section aria-labelledby="articles-{{ s.kind }}">
+    <div id="articles-{{ s.kind }}">{% if s.kind == "guide" %}{{ section::section_header(title=t(key="article.kind.guide"), more_href=s.href, more_label=t(key="article.see_all")) }}{% else %}{{ section::section_header(title=t(key="article.kind.news"), more_href=s.href, more_label=t(key="article.see_all")) }}{% endif %}</div>
+    <div class="article-list">{% for a in s.items %}{{ card::article_card(a=a) }}{% endfor %}</div>
+  </section>
+  {% endif %}
+  {% endfor %}
+  {% if not any %}
+  {{ empty::empty_state(icon="fa-newspaper", title=t(key="article.none"), action_href=url_for(name="home"), action_icon="fa-house", action_label=t(key="nav.home")) }}
+  {% endif %}
+</div>
+{% endblock main %}

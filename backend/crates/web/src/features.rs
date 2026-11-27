@@ -80,6 +80,10 @@ const RULES: &[(Feature, &[Rule])] = &[
             Under("/api/provider/jobs"),
         ],
     ),
+    (
+        Feature::Articles,
+        &[Under("/articles"), Under("/api/explore/articles")],
+    ),
 ];
 
 /// The page that shows `feature` best, by route name: where its preview is
@@ -92,6 +96,7 @@ pub const fn page_route(feature: Feature) -> Option<&'static str> {
         Feature::Directory => Some("providers"),
         Feature::Reviews => None,
         Feature::Jobs => Some("job_new"),
+        Feature::Articles => Some("articles"),
     }
 }
 

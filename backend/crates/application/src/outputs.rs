@@ -1710,3 +1710,41 @@ pub struct InfoPageViewDto {
     /// are not public).
     pub versions: Vec<InfoVersionDto>,
 }
+
+/// An article, as the admin's list and page, the public lists and its page
+/// show it.
+#[derive(Debug, Clone, Serialize)]
+pub struct PostDto {
+    pub id: i32,
+    /// `news` or `guide`.
+    pub kind: String,
+    pub title: String,
+    pub summary: String,
+    pub body: String,
+    pub cover_file_id: Option<String>,
+    pub sector: Option<String>,
+    pub province_code: Option<String>,
+    pub province_name: Option<String>,
+    pub commodity_id: Option<i32>,
+    pub commodity_name: Option<String>,
+    /// `draft`, `published` or `hidden`.
+    pub status: String,
+    pub published_on: Option<chrono::DateTime<chrono::Utc>>,
+    pub is_pinned: bool,
+    pub is_demo: bool,
+}
+
+/// The choices of an article's form: what it may concern.
+#[derive(Debug, Clone, Serialize)]
+pub struct PostChoicesDto {
+    pub sectors: Vec<NamedCodeDto>,
+    pub provinces: Vec<NamedCodeDto>,
+    pub commodities: Vec<NamedIdDto>,
+}
+
+/// A choice named by its id (a commodity).
+#[derive(Debug, Clone, Serialize)]
+pub struct NamedIdDto {
+    pub id: i32,
+    pub name: String,
+}

@@ -16,6 +16,7 @@ pub mod job;
 pub mod location;
 pub mod partner;
 pub mod permission;
+pub mod post;
 pub mod price;
 pub mod product;
 pub mod review;

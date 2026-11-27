@@ -69,6 +69,9 @@ pub const MULTIPART_OVERHEAD_BYTES: usize = 64 * 1024;
 /// The files the settings page's identity form may carry at once: the logo
 /// and the browser icon.
 pub const BRAND_FORM_FILES: usize = 2;
+/// The most bytes one character takes in UTF-8: room for a text box of so
+/// many characters in a body limit.
+pub const MAX_UTF8_BYTES: usize = 4;
 /// The multipart field the image arrives in.
 pub const IMAGE_FIELD: &str = "image";
 /// An id is never reused (a new image gets a new id), so a cached copy can

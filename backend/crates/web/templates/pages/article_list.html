@@ -1,0 +1,37 @@
+{% extends "layouts/app.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "molecules/page_hero.html" as hero %}
+{% import "molecules/sector_switch.html" as sector %}
+{% import "molecules/empty_state.html" as empty %}
+{% import "molecules/pagination_nav.html" as paging %}
+{% import "molecules/article_card.html" as card %}
+{#- One kind's articles (the news, or the guides), paged: the tabs, the
+    sector switch, a province (a GET form sent on change, Alpine
+    `autoSubmit`; a plain form without JS), the list. `page` is
+    web::pages::articles::ListPage. -#}
+{% block title %}{% if page.kind == "guide" %}{{ t(key="article.kind.guide") }}{% else %}{{ t(key="article.kind.news") }}{% endif %}{% if page.province_name %} {{ page.province_name }}{% endif %} | {{ site.name }}{% endblock title %}
+{% block meta %}<meta name="description" content="{% if page.kind == "guide" %}{{ t(key="article.guides_meta", site=site.name) }}{% else %}{{ t(key="article.news_meta", site=site.name) }}{% endif %}">{% endblock meta %}
+{% block main %}
+{% if page.kind == "guide" %}{% set title = t(key="article.kind.guide") %}{% set sub = t(key="article.guides_sub") %}{% else %}{% set title = t(key="article.kind.news") %}{% set sub = t(key="article.news_sub") %}{% endif %}
+{{ hero::page_hero(title=title, back_href=url_for(name="articles"), back_label=t(key="article.hub_title"), variant="", icon="fa-newspaper", sub=sub) }}
+<div class="detail-body">
+  <nav class="article-tabs" aria-label="{{ t(key="article.tabs_label") }}">
+    {% for tab in page.tabs %}<a class="article-tabs__tab{% if tab.current %} is-current{% endif %}" href="{{ tab.href }}"{% if tab.current %} aria-current="page"{% endif %}>{% if tab.code == "news" %}{{ t(key="article.kind.news") }}{% elif tab.code == "guide" %}{{ t(key="article.kind.guide") }}{% else %}{{ t(key="article.all") }}{% endif %}</a>{% endfor %}
+  </nav>
+  {{ sector::sector_switch(sectors=shell.sectors, back=shell.here) }}
+  <form class="article-filter" method="get" action="{{ page.action }}" x-data="autoSubmit">
+    <label class="form-label small fw-semibold" for="article-province">{{ t(key="article.province") }}</label>
+    <select class="form-select" id="article-province" name="province">
+      <option value="">{{ t(key="article.whole_region") }}</option>
+      {% for p in page.provinces %}<option value="{{ p.code }}"{% if p.code == page.province %} selected{% endif %}>{{ p.name }}</option>{% endfor %}
+    </select>
+    <noscript><button type="submit" class="btn btn-outline-success mt-2">{{ t(key="article.apply") }}</button></noscript>
+  </form>
+  {% if page.items %}
+  <div class="article-list">{% for a in page.items %}{{ card::article_card(a=a) }}{% endfor %}</div>
+  {% if page.pagination %}{{ paging::pagination_nav(p=page.pagination) }}{% endif %}
+  {% else %}
+  {{ empty::empty_state(icon="fa-newspaper", title=t(key="article.none"), action_href=url_for(name="articles"), action_icon="fa-newspaper", action_label=t(key="article.hub_title")) }}
+  {% endif %}
+</div>
+{% endblock main %}

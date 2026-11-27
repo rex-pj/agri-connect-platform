@@ -20,6 +20,7 @@ mod m20261127_000008_account_email;
 mod m20261128_000009_user_reference_indexes;
 mod m20261129_000010_info_pages;
 mod m20261130_000011_consents;
+mod m20261201_000012_posts;
 pub mod schema;
 pub mod search;
 
@@ -40,6 +41,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20261128_000009_user_reference_indexes::Migration),
             Box::new(m20261129_000010_info_pages::Migration),
             Box::new(m20261130_000011_consents::Migration),
+            Box::new(m20261201_000012_posts::Migration),
         ]
     }
 }

@@ -1,0 +1,15 @@
+{#- One article as a compact row: its cover (a fixed square, a placeholder
+    without one), its kind, title, summary and day, the whole row a link to
+    its page. `a` is web::pages::articles::ArticleCard. Molecules compose
+    atoms only. -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro article_card(a) -%}
+<a class="article-card" href="{{ a.href }}">
+  <span class="article-card__thumb">{% if a.cover_file_id %}<img src="{{ file_url(id=a.cover_file_id, variant="thumb") }}" alt="" loading="lazy" width="120" height="120">{% else %}{{ atoms::icon(name="fa-newspaper") }}{% endif %}</span>
+  <span class="article-card__text">
+    <span class="article-card__meta">{% if a.is_pinned %}{{ atoms::icon(name="fa-thumbtack") }} {% endif %}{% if a.kind == "guide" %}{{ t(key="article.kind.guide") }}{% else %}{{ t(key="article.kind.news") }}{% endif %}{% if a.published_on %} · <time datetime="{{ a.published_on | utc_iso }}">{{ a.published_on | vn_datetime }}</time>{% endif %}{% if a.province_name %} · {{ a.province_name }}{% endif %}</span>
+    <strong class="article-card__title">{{ a.title }}</strong>
+    {% if a.summary %}<span class="article-card__summary">{{ a.summary }}</span>{% endif %}
+  </span>
+</a>
+{%- endmacro article_card %}

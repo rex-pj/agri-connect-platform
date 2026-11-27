@@ -15,6 +15,7 @@ pub mod job_repository;
 pub mod location_repository;
 pub mod partner_repository;
 pub mod permission_repository;
+pub mod post_repository;
 pub mod price_repository;
 pub mod product_repository;
 pub mod refresh_token_repository;

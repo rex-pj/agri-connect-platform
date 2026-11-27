@@ -9,12 +9,14 @@
 //! (`prices::remembered_area`), and its title then names that area.
 
 use application::{
+    constants::HOME_POSTS_SHOWN,
     features::Feature,
     outputs::{CategoryDto, ProductDto},
 };
 use axum::{extract::State, http::HeaderMap, response::Response};
 use domain::{
     constants::{CATEGORY_TYPE_PRODUCT, CATEGORY_TYPE_SERVICE},
+    models::post::PostQuery,
     Error,
 };
 use serde::Serialize;
@@ -27,6 +29,7 @@ use crate::{
     },
     labels::{alert_reach, SECTOR_ICON_DEFAULT},
     pages::{
+        articles::{cards, ArticleCard},
         cards::{rated_services, tile, CategoryTile, ServiceCard},
         prices::{remembered_area, PriceLine},
     },
@@ -57,6 +60,8 @@ pub struct HomePage {
     pub prices_on_phone: usize,
     /// How many featured services a phone shows (the rest from 768 px).
     pub services_on_phone: usize,
+    /// The newest articles, every sector's, while the part is shown.
+    pub articles: Vec<ArticleCard>,
 }
 
 /// One row of category tiles and what it is for ("Thuê làm", "Mua vật tư").
@@ -165,6 +170,19 @@ pub async fn show(
         other => other,
     };
 
+    // The newest articles: read only while the part is shown.
+    let articles = if shell.shows(Feature::Articles) {
+        cards(
+            state
+                .usecases
+                .post
+                .latest(&PostQuery::default(), HOME_POSTS_SHOWN)
+                .await?,
+        )?
+    } else {
+        Vec::new()
+    };
+
     // Near-me needs no tile: it has a tab and the banner under the rows.
     let rows = [
         (
@@ -232,6 +250,7 @@ pub async fn show(
         prices_area,
         prices_on_phone: HOME_PRICES_ON_PHONE,
         services_on_phone: HOME_SERVICES_ON_PHONE,
+        articles,
         services: rated_services(&state, &shell, featured.featured_services).await?,
         products: featured
             .featured_products

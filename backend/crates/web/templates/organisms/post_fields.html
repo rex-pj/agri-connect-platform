@@ -1,0 +1,30 @@
+{#- An article's boxes, shared by the create sheet and its own page. `form`
+    is web::pages::admin::articles::PostForm (as typed), `errors` its
+    FormErrors, `choices` the kinds, sectors, provinces and commodities. A
+    blank sector is every sector, a blank province the whole region. `full`:
+    its own page's boxes (summary, sector, province, commodity, pinned);
+    the sheet asks only the kind, title and text. -#}
+{% import "molecules/form_field.html" as field %}
+{% macro post_fields(form, errors, choices, prefix, full=false, first=false) -%}
+{% set e = errors.fields %}
+{{ field::select(id=prefix ~ "-kind", name="kind", label=t(key="article.field_kind"), options=choices.kinds, value_key="value", label_key="label", value=form.kind, error=e.kind | default(value=""), required=true) }}
+{{ field::input(id=prefix ~ "-title", name="title", label=t(key="article.field_title"), value=form.title, error=e.title | default(value=""), required=true, maxlength=limits.post_title_max, placeholder=t(key="article.title_placeholder"), first=first) }}
+{% if full %}
+{{ field::input(id=prefix ~ "-summary", name="summary", label=t(key="article.field_summary"), value=form.summary, error=e.summary | default(value=""), maxlength=limits.post_summary_max, hint=t(key="article.summary_hint"), counter=true) }}
+<div class="row g-2">
+  <div class="col-sm-4">{{ field::select(id=prefix ~ "-sector", name="sector", label=t(key="sector.label"), options=choices.sectors, value_key="value", label_key="label", value=form.sector, error=e.sector | default(value=""), placeholder=t(key="sector.all")) }}</div>
+  <div class="col-sm-4">{{ field::select(id=prefix ~ "-province", name="province_code", label=t(key="article.province"), options=choices.provinces, value_key="value", label_key="label", value=form.province_code, error=e.province_code | default(value=""), placeholder=t(key="article.whole_region")) }}</div>
+  <div class="col-sm-4">{{ field::select(id=prefix ~ "-commodity", name="commodity_id", label=t(key="article.field_commodity"), options=choices.commodities, value_key="value", label_key="label", value=form.commodity_id, error=e.commodity_id | default(value=""), placeholder=t(key="article.no_commodity")) }}</div>
+</div>
+<div class="form-check form-field">
+  <input class="form-check-input" type="checkbox" id="{{ prefix }}-pinned" name="is_pinned" value="on"{% if form.is_pinned %} checked{% endif %}>
+  <label class="form-check-label" for="{{ prefix }}-pinned">{{ t(key="article.field_pinned") }}</label>
+</div>
+{% endif %}
+<div class="form-field">
+  <label class="form-label fw-semibold" for="{{ prefix }}-body">{{ t(key="article.field_body") }} <span class="text-danger" aria-hidden="true">*</span></label>
+  <textarea class="form-control font-monospace markdown-box{% if e.body %} is-invalid{% endif %}" id="{{ prefix }}-body" name="body" rows="{% if full %}18{% else %}8{% endif %}" maxlength="{{ limits.post_body_max }}" aria-describedby="{{ prefix }}-body-hint{% if e.body %} {{ prefix }}-body-error{% endif %}"{% if e.body %} aria-invalid="true"{% endif %}>{{ form.body }}</textarea>
+  <div class="form-text" id="{{ prefix }}-body-hint">{{ t(key="info.body_hint") }}</div>
+  {% if e.body %}<div class="invalid-feedback" id="{{ prefix }}-body-error">{{ e.body }}</div>{% endif %}
+</div>
+{%- endmacro post_fields %}

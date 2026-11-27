@@ -24,6 +24,7 @@ pub mod partner_sponsored;
 pub mod password_reset_token;
 pub mod permission;
 pub mod platform_setting;
+pub mod post;
 pub mod product;
 pub mod province;
 pub mod refresh_token;

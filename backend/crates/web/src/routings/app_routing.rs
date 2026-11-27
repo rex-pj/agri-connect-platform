@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use application::ports::RateLimiter;
+use application::{constants::POST_BODY_MAX, ports::RateLimiter};
 use axum::{
     extract::DefaultBodyLimit,
     http::{header, HeaderValue},
@@ -19,10 +19,11 @@ use tower_http::{
 
 use crate::{
     app_state::AppState,
-    constants::{BRAND_FORM_FILES, MULTIPART_OVERHEAD_BYTES, REQUEST_ID_MAX_LEN},
+    constants::{BRAND_FORM_FILES, MAX_UTF8_BYTES, MULTIPART_OVERHEAD_BYTES, REQUEST_ID_MAX_LEN},
     error_response::render_errors,
     handlers::{
         admin_handler::AdminHandler,
+        article_handler::ArticleHandler,
         auth_handler::AuthHandler,
         coded_handler::{AlertKindHandler, SectorHandler},
         commodity_handler::CommodityHandler,
@@ -154,6 +155,11 @@ impl AppRouting {
             .route("/jobs/new", get(pages::jobs::new))
             .route("/info", get(pages::info::hub))
             .route("/info/{code}", get(pages::info::show))
+            .route("/articles", get(pages::articles::hub))
+            .route("/articles/news", get(pages::articles::news))
+            .route("/articles/guides", get(pages::articles::guides))
+            .route("/articles/{id}", get(pages::articles::by_id))
+            .route("/articles/{id}/{slug}", get(pages::articles::show))
             .route(
                 "/services/category/{id}/{slug}",
                 get(pages::services::category),
@@ -183,6 +189,8 @@ impl AppRouting {
                 get(ExploreHandler::get_explore_data),
             )
             .route("/api/explore/alerts", get(ExploreHandler::list_alerts))
+            .route("/api/explore/articles", get(ArticleHandler::list))
+            .route("/api/explore/articles/{id}", get(ArticleHandler::get))
             .route("/api/explore/features", get(ExploreHandler::features))
             .route(
                 "/api/explore/categories",
@@ -299,6 +307,16 @@ impl AppRouting {
                     )
                     .layer(DefaultBodyLimit::max(
                         BRAND_FORM_FILES * state.usecases.media.max_upload_bytes()
+                            + MULTIPART_OVERHEAD_BYTES,
+                    )),
+            )
+            // An article's edit form: its cover photo and a long text.
+            .merge(
+                Router::new()
+                    .route("/admin/articles/{id}", post(pages::admin::articles::update))
+                    .layer(DefaultBodyLimit::max(
+                        state.usecases.media.max_upload_bytes()
+                            + POST_BODY_MAX * MAX_UTF8_BYTES
                             + MULTIPART_OVERHEAD_BYTES,
                     )),
             )
@@ -476,6 +494,19 @@ impl AppRouting {
             .route(
                 "/admin/alerts/{id}/status",
                 post(pages::admin::alerts::change_status),
+            )
+            .route(
+                "/admin/articles",
+                get(pages::admin::articles::list).post(pages::admin::articles::create),
+            )
+            .route("/admin/articles/{id}", get(pages::admin::articles::show))
+            .route(
+                "/admin/articles/{id}/status",
+                post(pages::admin::articles::change_status),
+            )
+            .route(
+                "/admin/articles/{id}/cover/delete",
+                post(pages::admin::articles::remove_cover),
             )
             .route(
                 "/admin/info-pages",

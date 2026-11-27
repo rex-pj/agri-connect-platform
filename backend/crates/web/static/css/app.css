@@ -6125,3 +6125,122 @@ summary.acct-item__row:focus-visible {
   color: var(--p700);
   font-weight: 600;
 }
+
+/* ── Articles (news, guides) ──────────────────────────────────────────────── */
+/* The tabs: each kind an address of its own, a large tap each. */
+.article-tabs {
+  display: flex;
+  gap: var(--sp-2);
+  overflow-x: auto;
+}
+.article-tabs__tab {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text2);
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.article-tabs__tab.is-current {
+  border-color: var(--p600);
+  background: var(--p50);
+  color: var(--p800);
+}
+.article-filter {
+  max-width: 22rem;
+}
+.article-list {
+  display: grid;
+  gap: var(--sp-3);
+}
+@media (min-width: 992px) {
+  .article-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+/* One article: a fixed square photo beside its words, as the service rows. */
+.article-card {
+  display: flex;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+}
+.article-card__thumb {
+  flex: 0 0 104px;
+  height: 104px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--p50);
+  color: var(--p600);
+  font-size: 1.6rem;
+}
+.article-card__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.article-card__text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.article-card__meta {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+.article-card__title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.35;
+}
+.article-card__summary {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  color: var(--text2);
+  font-size: var(--fs-sm);
+}
+@media (min-width: 768px) {
+  .article-card__thumb {
+    flex-basis: 120px;
+    height: 120px;
+  }
+}
+.article-cover {
+  width: 100%;
+  max-height: 22rem;
+  margin-bottom: var(--sp-3);
+  border-radius: 12px;
+  object-fit: cover;
+}
+.article-meta {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.article-summary {
+  color: var(--text2);
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+.article-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+}

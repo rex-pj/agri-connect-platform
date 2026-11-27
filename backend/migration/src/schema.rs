@@ -223,6 +223,29 @@ pub enum InfoPageRevisions {
     CreatedBy,
 }
 
+/// An article: a news post or a guide.
+#[derive(DeriveIden, Clone, Copy)]
+pub enum Posts {
+    Table,
+    Id,
+    Kind,
+    Title,
+    Summary,
+    Body,
+    CoverFileId,
+    Sector,
+    ProvinceCode,
+    CommodityId,
+    Status,
+    PublishedOn,
+    IsPinned,
+    IsDemo,
+    CreatedOn,
+    UpdatedOn,
+    CreatedBy,
+    UpdatedBy,
+}
+
 /// Which version of an information page an account agreed to.
 #[derive(DeriveIden, Clone, Copy)]
 pub enum Consents {

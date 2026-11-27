@@ -278,3 +278,18 @@ pub struct InfoRevisionInput {
     pub effective_on: Option<chrono::NaiveDate>,
     pub change_note: String,
 }
+
+/// An article's boxes as typed (create and edit).
+#[derive(Debug, Clone, Default)]
+pub struct PostInput {
+    pub kind: String,
+    pub title: String,
+    pub summary: String,
+    pub body: String,
+    /// Blank: every sector.
+    pub sector: String,
+    /// Blank: the whole region.
+    pub province_code: String,
+    pub commodity_id: Option<i32>,
+    pub is_pinned: bool,
+}

@@ -27,6 +27,7 @@ pub enum Entity {
     JobPost,
     Alert,
     InfoPage,
+    Post,
     /// The platform settings (one record: `entity_id` 0).
     Setting,
 }
@@ -52,6 +53,7 @@ impl Entity {
             Entity::JobPost => "job_post",
             Entity::Alert => "alert",
             Entity::InfoPage => "info_page",
+            Entity::Post => "post",
             Entity::Setting => "setting",
         }
     }

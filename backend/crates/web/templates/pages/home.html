@@ -44,13 +44,6 @@
 </section>
 {% endif %}
 
-{% if page.articles %}
-<section class="home-section">
-  {{ section::section_header(title=t(key="home.articles"), more_href=url_for(name="articles")) }}
-  <div class="home-articles">{% for a in page.articles %}{{ article_card::article_feature(a=a, row=not loop.first) }}{% endfor %}</div>
-</section>
-{% endif %}
-
 {% if page.services %}
 <section class="home-section">
   {{ section::section_header(title=t(key="home.featured_services"), more_href=url_for(name="services")) }}
@@ -69,12 +62,19 @@
 </section>
 {% endif %}
 
-{% if shell.provider_cta %}
-<section class="home-section">{{ seller::provider_cta(cta=shell.provider_cta) }}</section>
-{% endif %}
-
 {% if not page.products and not page.services %}
 {% if shell.features.near_me %}{{ empty::empty_state(icon="fa-seedling", title=t(key="home.empty"), hint=t(key="home.empty_hint"), action_href=url_for(name="explore"), action_icon="fa-location-dot", action_label=t(key="home.empty_action")) }}
 {% else %}{{ empty::empty_state(icon="fa-seedling", title=t(key="home.empty"), action_href=url_for(name="services"), action_icon="fa-border-all", action_label=t(key="nav.services")) }}{% endif %}
+{% endif %}
+
+{% if page.articles %}
+<section class="home-section">
+  {{ section::section_header(title=t(key="home.articles"), more_href=url_for(name="articles")) }}
+  <div class="home-articles">{% for a in page.articles %}{{ article_card::article_feature(a=a, row=not loop.first) }}{% endfor %}</div>
+</section>
+{% endif %}
+
+{% if shell.provider_cta %}
+<section class="home-section">{{ seller::provider_cta(cta=shell.provider_cta) }}</section>
 {% endif %}
 {% endblock main %}

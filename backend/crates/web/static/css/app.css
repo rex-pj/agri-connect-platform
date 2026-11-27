@@ -6818,12 +6818,26 @@ summary.acct-item__row:focus-visible {
   line-height: 1.55;
 }
 /* An information page: its icon beside its title. */
+/* The icon centred on the title's line, the day under the title: the
+   title's box gives its two lines to the grid. */
 .reading-head--page {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--sp-3);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--sp-3);
+}
+.reading-head--page > div {
+  display: contents;
+}
+.reading-head--page .reading-head__icon {
+  grid-row: 1;
+  width: 52px;
+}
+.reading-head--page .reading-head__title {
+  grid-column: 2;
 }
 .reading-head--page .reading-head__meta {
+  grid-column: 2;
   margin: var(--sp-2) 0 0;
 }
 .reading-head__icon {

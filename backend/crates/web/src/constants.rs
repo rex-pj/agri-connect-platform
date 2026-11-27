@@ -83,9 +83,11 @@ pub const DEFAULT_UPLOAD_DIR: &str = "./data/uploads";
 // ── Home page ─────────────────────────────────────────────────────────────────
 /// Featured products shown: one row on a wide screen, three on a phone.
 pub const HOME_PRODUCT_COUNT: usize = 6;
-/// Category tiles of each kind before its "all" tile on a wide screen; a
-/// phone shows one fewer, so each kind is one row of four there.
-pub const HOME_CATEGORY_TILES: usize = 4;
+/// Tiles in one home row of categories below 992 px (`.cat-strip`): the row
+/// shown folded, its last place the "+N" toggle when more do not fit.
+pub const HOME_TILES_PHONE: usize = 4;
+/// The same from 992 px, where each errand takes half the page.
+pub const HOME_TILES_WIDE: usize = 5;
 /// How many crop prices the home page shows (each crop's newest).
 pub const HOME_PRICES_SHOWN: usize = 4;
 /// How many featured services the home page shows on a phone, where each

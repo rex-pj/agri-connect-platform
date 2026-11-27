@@ -185,5 +185,13 @@ async fn the_home_page_puts_each_errand_in_a_section_of_its_own() {
         home.contains(r#"title="Nạo vét""#),
         "the whole name on hover"
     );
+    // Each row is one line until opened: the rest wait behind a "+N"
+    // toggle (a label for a checkbox, so without JS too), and the header
+    // leads to the whole list.
+    assert_eq!(home.matches("Xem tất cả").count(), 2);
+    let toggles = home.matches(r#"class="cat-fold visually-hidden""#).count();
+    assert!(toggles >= 1, "the demo catalogue overflows a row");
+    assert_eq!(home.matches(r#"<label for="more-"#).count(), toggles);
+    assert!(home.contains("cat-fold--all") || home.contains("cat-fold--phone"));
     e.cleanup().await;
 }

@@ -12,22 +12,22 @@
 {#- Home, in the order a farmer on a phone needs it: the alerts (one line
     each, opened by a tap; the others folded; search is the top bar's), the
     category shortcuts in two labelled rows, one per errand
-    (hire: services; buy: supplies), each ending in an "all" tile, the
+    (hire: services; buy: supplies), each one line until its "+N" tile
+    opens the rest, its header leading to the whole list, the
     near-me banner, the newest crop prices (each crop's, linking to /prices:
     on a phone the only way there, so high on the page), featured services
     (one per verified provider, `page.services_on_phone` of them on a phone),
     the "post a job" card, then featured products. A part of a feature
     this visitor does not see (`shell.features`) is left out.
     `page` is web::pages::home::HomePage. -#}
-{% block title %}{{ site.name }} | {{ t(key="home.title") }}{% endblock title %}
-{% block meta %}<meta name="description" content="{% if site.description %}{{ site.description }}{% else %}{{ t(key="home.meta") }}{% endif %}">{% endblock meta %}
+{% block title %}{{ site.name }} | {{ site.tagline }}{% endblock title %}
 {% block main %}
 {{ banner::alert_banner(alerts=page.alerts) }}
 <div class="home-categories home-categories--strip">
   {% for row in page.rows %}
   <section class="home-errand">
-    <h2 class="home-categories__title">{{ row.title }}</h2>
-    {{ grid::category_grid(items=row.tiles, class="cat-strip") }}
+    {{ section::section_header(title=row.title, more_href=row.all_href, more_label=t(key="home.all_categories")) }}
+    {{ grid::folding_grid(row=row) }}
   </section>
   {% endfor %}
 </div>

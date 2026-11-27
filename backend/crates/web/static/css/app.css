@@ -1951,13 +1951,52 @@ body:has(.app-nav__search-row.open) .app-main {
 .home-categories--strip {
   padding-bottom: 0;
 }
-/* The name of a row of tiles: what it is for ("Thuê làm", "Mua vật tư"),
-   the page's two errands, so a heading, not a caption. */
-.home-categories__title {
-  font-size: var(--fs-base);
-  font-weight: 800;
-  color: var(--text);
-  margin: 0 4px 4px;
+/* A row's header (its errand, "Xem tất cả" to the whole list) lines up with
+   the tiles, which sit 4 px in from the gutter. */
+.home-errand .section-header {
+  padding-inline: 4px;
+}
+/* A folded row (organisms/category_grid.html `folding_grid`): one line, the
+   rest behind its "+N" tile, the label of the hidden checkbox before it.
+   Below 992 px the row has one place fewer, so a `phone` tile folds there. */
+.cat-strip > .cat-fold--all {
+  display: none;
+}
+@media (max-width: 991.98px) {
+  .cat-strip > .cat-fold--phone {
+    display: none;
+  }
+}
+.cat-fold:checked + .cat-strip > .cat-fold--all,
+.cat-fold:checked + .cat-strip > .cat-fold--phone {
+  display: block;
+}
+.cat-fold__open,
+.cat-fold:checked + .cat-strip .cat-fold__closed {
+  display: none;
+}
+.cat-fold:checked + .cat-strip .cat-fold__open {
+  display: inline;
+}
+.cat-strip__toggle .cat-item {
+  cursor: pointer;
+  user-select: none;
+}
+.cat-fold:focus-visible + .cat-strip .cat-strip__toggle .cat-item__icon {
+  box-shadow: 0 0 0 3px var(--p400);
+}
+/* The opened tiles arrive in place, not with a jump. */
+@media (prefers-reduced-motion: no-preference) {
+  .cat-fold:checked + .cat-strip > .cat-fold--all,
+  .cat-fold:checked + .cat-strip > .cat-fold--phone {
+    animation: cat-unfold 0.18s ease-out;
+  }
+}
+@keyframes cat-unfold {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 }
 /* Each errand a section of its own: stacked on a phone, side by side from
    992 px (half the page each), so the two rows take one band, not two. */

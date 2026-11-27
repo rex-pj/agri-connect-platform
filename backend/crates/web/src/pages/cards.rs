@@ -198,13 +198,24 @@ pub struct CategoryTile {
     pub icon: String,
     pub href: String,
     pub active: bool,
-    /// Shown from 992 px only, where the row has room for one more tile.
-    pub wide_only: bool,
-    /// `service` or `product` (a category's type: its shape and colour), or
+    /// `service` or `product` (a category's type: its colour and shape), or
     /// blank.
     pub kind: &'static str,
-    /// The "all" tile ending a kind's run: outlined, not filled.
-    pub more: bool,
+    /// Where the tile waits behind its row's "+N" toggle.
+    pub fold: Fold,
+}
+
+/// Whether a tile of a folding row (the home page's) shows before the row
+/// is opened.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Fold {
+    /// Always shown.
+    Shown,
+    /// Shown folded from 992 px only, where the row has more room.
+    Phone,
+    /// Shown only once the row is opened.
+    All,
 }
 
 pub fn tile(name: &str, icon: &str, href: String) -> CategoryTile {
@@ -213,8 +224,60 @@ pub fn tile(name: &str, icon: &str, href: String) -> CategoryTile {
         icon: icon.to_owned(),
         href,
         active: false,
-        wide_only: false,
         kind: "",
-        more: false,
+        fold: Fold::Shown,
+    }
+}
+
+/// How many tiles a folded row of `per_row` places shows out of `total`:
+/// all when they fit, else one place fewer, the last place being the toggle.
+pub fn folded_count(total: usize, per_row: usize) -> usize {
+    if total <= per_row {
+        total
+    } else {
+        per_row.saturating_sub(1)
+    }
+}
+
+/// The fold of the `i`th of `total` tiles in a row of `phone` places below
+/// 992 px and `wide` from there (`phone` ≤ `wide`).
+pub fn fold_of(i: usize, total: usize, phone: usize, wide: usize) -> Fold {
+    if i < folded_count(total, phone) {
+        Fold::Shown
+    } else if i < folded_count(total, wide) {
+        Fold::Phone
+    } else {
+        Fold::All
+    }
+}
+
+#[cfg(test)]
+mod fold_tests {
+    use super::{fold_of, folded_count, Fold};
+
+    #[test]
+    fn a_row_that_fits_folds_nothing() {
+        assert_eq!(folded_count(4, 4), 4);
+        assert!((0..4).all(|i| fold_of(i, 4, 4, 5) == Fold::Shown));
+    }
+
+    #[test]
+    fn a_longer_row_keeps_its_last_place_for_the_toggle() {
+        assert_eq!(folded_count(9, 4), 3);
+        assert_eq!(folded_count(9, 5), 4);
+        let folds: Vec<_> = (0..6).map(|i| fold_of(i, 9, 4, 5)).collect();
+        assert_eq!(
+            folds,
+            [
+                Fold::Shown,
+                Fold::Shown,
+                Fold::Shown,
+                Fold::Phone,
+                Fold::All,
+                Fold::All
+            ]
+        );
+        // Five fit a wide row but not a phone's: the phone folds two.
+        assert_eq!(fold_of(4, 5, 4, 5), Fold::Phone);
     }
 }

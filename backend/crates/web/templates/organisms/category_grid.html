@@ -1,11 +1,35 @@
-{#- Grid of category tiles; each item has name, icon, href, active,
-    wide_only (shown from 992 px), kind (`service` / `product`, or blank)
-    and more (the outlined "all" tile). `class` is added to the list. -#}
+{#- Grid of category tiles; each item has name, icon, href, active, kind
+    (`service` / `product`, or blank) and fold (`shown`, `phone`, `all`:
+    web::pages::cards::Fold). `class` is added to the list. -#}
+{% import "atoms/icon.html" as atoms %}
 {% import "molecules/category_item.html" as molecules %}
 {% macro category_grid(items, class="") -%}
 <ul class="cat-grid{% if class %} {{ class }}{% endif %}">
   {% for item in items %}
-  <li class="{% if item.kind %}cat-grid__item--{{ item.kind }}{% endif %}{% if item.wide_only %} d-none d-lg-block{% endif %}">{{ molecules::category_item(name=item.name, icon=item.icon, href=item.href, active=item.active, kind=item.kind, more=item.more) }}</li>
+  <li class="{% if item.kind %}cat-grid__item--{{ item.kind }}{% endif %}">{{ molecules::category_item(name=item.name, icon=item.icon, href=item.href, active=item.active, kind=item.kind) }}</li>
   {% endfor %}
 </ul>
 {%- endmacro category_grid %}
+
+{#- A row of tiles folded to one line (`.cat-strip`: four places, five from
+    992 px), its last place a "+N" toggle opening the rest in place and
+    then folding them back. The toggle is a label for a hidden checkbox, so
+    it works without JS and adds no round trip. `row` is
+    web::pages::home::TileRow; no toggle where nothing is folded. -#}
+{% macro folding_grid(row) -%}
+{% set id = "more-" ~ row.kind -%}
+{% if row.folded_phone > 0 or row.folded_wide > 0 %}<input type="checkbox" class="cat-fold visually-hidden" id="{{ id }}">{% endif %}
+<ul class="cat-grid cat-strip">
+  {% for item in row.tiles %}
+  <li class="cat-grid__item--{{ item.kind }} cat-fold--{{ item.fold }}">{{ molecules::category_item(name=item.name, icon=item.icon, href=item.href, kind=item.kind) }}</li>
+  {% endfor %}
+  {% if row.folded_phone > 0 or row.folded_wide > 0 %}
+  <li class="cat-strip__toggle{% if row.folded_phone == 0 %} d-none d-lg-block{% elif row.folded_wide == 0 %} d-lg-none{% endif %}">
+    <label for="{{ id }}" class="cat-item cat-item--more{% if row.kind == "product" %} cat-item--product{% endif %}">
+      <span class="cat-item__icon"><span class="cat-fold__closed">{{ atoms::icon(name="fa-plus") }}</span><span class="cat-fold__open">{{ atoms::icon(name="fa-chevron-up") }}</span></span>
+      <span class="cat-item__label"><span class="cat-fold__closed"><span class="d-lg-none">{{ t(key="home.more_categories", count=row.folded_phone) }}</span><span class="d-none d-lg-inline">{{ t(key="home.more_categories", count=row.folded_wide) }}</span></span><span class="cat-fold__open">{{ t(key="home.fewer_categories") }}</span></span>
+    </label>
+  </li>
+  {% endif %}
+</ul>
+{%- endmacro folding_grid %}

@@ -24,13 +24,13 @@ use serde::Serialize;
 use crate::{
     app_state::AppState,
     constants::{
-        HOME_CATEGORY_TILES, HOME_PRICES_ON_PHONE, HOME_PRICES_SHOWN, HOME_PRODUCT_COUNT,
-        HOME_SERVICES_ON_PHONE,
+        HOME_PRICES_ON_PHONE, HOME_PRICES_SHOWN, HOME_PRODUCT_COUNT, HOME_SERVICES_ON_PHONE,
+        HOME_TILES_PHONE, HOME_TILES_WIDE,
     },
     labels::{alert_reach, SECTOR_ICON_DEFAULT},
     pages::{
         articles::{cards, ArticleCard},
-        cards::{rated_services, tile, CategoryTile, ServiceCard},
+        cards::{fold_of, folded_count, rated_services, tile, CategoryTile, ServiceCard},
         prices::{remembered_area, PriceLine},
     },
     routes,
@@ -64,10 +64,19 @@ pub struct HomePage {
     pub articles: Vec<ArticleCard>,
 }
 
-/// One row of category tiles and what it is for ("Thuê làm", "Mua vật tư").
+/// One row of category tiles and what it is for ("Thuê làm", "Mua vật tư"),
+/// folded to one line until its "+N" toggle opens it.
 #[derive(Serialize)]
 pub struct TileRow {
     pub title: String,
+    /// `service` / `product`: the tiles' kind, and the toggle's id.
+    pub kind: &'static str,
+    /// The kind's whole list, from the row's header.
+    pub all_href: String,
+    /// Tiles hidden while folded below 992 px (0: no toggle there).
+    pub folded_phone: usize,
+    /// The same from 992 px.
+    pub folded_wide: usize,
     pub tiles: Vec<CategoryTile>,
 }
 
@@ -87,44 +96,43 @@ fn url(name: &str, params: &[(&str, &str)]) -> Result<String, Error> {
     routes::url(name, params).map_err(|e| Error::internal(format!("home links: {e}")))
 }
 
-/// The first `HOME_CATEGORY_TILES` categories of `kind`, each linking to its
-/// listing (`route`), then an "all" tile to the kind's whole list
-/// (`all_route`). A phone row holds one tile fewer, so the last category is
-/// wide-only: either way a kind fills exactly one row. No categories, no
-/// tiles.
-fn category_tiles(
+/// Every category of `kind` as a row (`title`), each tile linking to its
+/// listing (`route`), the row's header to the kind's whole list
+/// (`all_route`). Folded, the row is one line (`HOME_TILES_PHONE` places,
+/// `HOME_TILES_WIDE` from 992 px), its last place the "+N" toggle when the
+/// rest do not fit; opened, every tile. No categories, no row.
+fn category_row(
     state: &AppState,
+    title: &str,
     categories: &[CategoryDto],
     kind: &'static str,
     route: &str,
     all_route: &str,
-) -> Result<Vec<CategoryTile>, Error> {
+) -> Result<Option<TileRow>, Error> {
     if categories.is_empty() {
-        return Ok(Vec::new());
+        return Ok(None);
     }
-    let mut tiles = categories
+    let total = categories.len();
+    let tiles = categories
         .iter()
-        .take(HOME_CATEGORY_TILES)
         .enumerate()
         .map(|(i, c)| {
             let href = url(route, &[("id", &c.id.to_string()), ("slug", &c.slug)])?;
             Ok(CategoryTile {
                 kind,
-                wide_only: i + 1 == HOME_CATEGORY_TILES,
+                fold: fold_of(i, total, HOME_TILES_PHONE, HOME_TILES_WIDE),
                 ..tile(&c.name, c.icon.as_deref().unwrap_or("fa-tag"), href)
             })
         })
         .collect::<Result<Vec<_>, Error>>()?;
-    tiles.push(CategoryTile {
+    Ok(Some(TileRow {
+        title: state.locale().text(title),
         kind,
-        more: true,
-        ..tile(
-            &state.locale().text("home.all_categories"),
-            "fa-grip",
-            url(all_route, &[])?,
-        )
-    });
-    Ok(tiles)
+        all_href: url(all_route, &[])?,
+        folded_phone: total - folded_count(total, HOME_TILES_PHONE),
+        folded_wide: total - folded_count(total, HOME_TILES_WIDE),
+        tiles,
+    }))
 }
 
 pub async fn show(
@@ -185,33 +193,25 @@ pub async fn show(
 
     // Near-me needs no tile: it has a tab and the banner under the rows.
     let rows = [
-        (
+        category_row(
+            &state,
             "home.row_services",
-            category_tiles(
-                &state,
-                &service_categories,
-                CATEGORY_TYPE_SERVICE,
-                "service_category",
-                "services",
-            )?,
-        ),
-        (
+            &service_categories,
+            CATEGORY_TYPE_SERVICE,
+            "service_category",
+            "services",
+        )?,
+        category_row(
+            &state,
             "home.row_supplies",
-            category_tiles(
-                &state,
-                &product_categories,
-                CATEGORY_TYPE_PRODUCT,
-                "product_category",
-                "products",
-            )?,
-        ),
+            &product_categories,
+            CATEGORY_TYPE_PRODUCT,
+            "product_category",
+            "products",
+        )?,
     ]
     .into_iter()
-    .filter(|(_, tiles)| !tiles.is_empty())
-    .map(|(key, tiles)| TileRow {
-        title: state.locale().text(key),
-        tiles,
-    })
+    .flatten()
     .collect();
 
     let page = HomePage {

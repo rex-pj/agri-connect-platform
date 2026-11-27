@@ -26,6 +26,7 @@ mod explore_page;
 mod features;
 mod home;
 mod inbox;
+mod info_pages;
 mod jobs;
 mod language;
 mod lockout;

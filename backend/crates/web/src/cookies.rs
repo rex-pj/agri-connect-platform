@@ -110,6 +110,10 @@ pub enum Flash {
     AlertSaved,
     AlertHidden,
     AlertShown,
+    InfoPageCreated,
+    InfoPageSaved,
+    InfoPageStageSaved,
+    InfoPageTextSaved,
     JobPosted,
     JobStatusSaved,
     SettingsSaved,
@@ -121,7 +125,7 @@ pub enum Flash {
 }
 
 impl Flash {
-    const ALL: [Flash; 86] = [
+    const ALL: [Flash; 90] = [
         Flash::ContactSent,
         Flash::PasswordReset,
         Flash::DemoLoaded,
@@ -200,6 +204,10 @@ impl Flash {
         Flash::AlertSaved,
         Flash::AlertHidden,
         Flash::AlertShown,
+        Flash::InfoPageCreated,
+        Flash::InfoPageSaved,
+        Flash::InfoPageStageSaved,
+        Flash::InfoPageTextSaved,
         Flash::JobPosted,
         Flash::JobStatusSaved,
         Flash::SettingsSaved,
@@ -290,6 +298,10 @@ impl Flash {
             Flash::AlertSaved => "alert_saved",
             Flash::AlertHidden => "alert_hidden",
             Flash::AlertShown => "alert_shown",
+            Flash::InfoPageCreated => "info_page_created",
+            Flash::InfoPageSaved => "info_page_saved",
+            Flash::InfoPageStageSaved => "info_page_stage_saved",
+            Flash::InfoPageTextSaved => "info_page_text_saved",
             Flash::JobPosted => "job_posted",
             Flash::JobStatusSaved => "job_status_saved",
             Flash::SettingsSaved => "settings_saved",

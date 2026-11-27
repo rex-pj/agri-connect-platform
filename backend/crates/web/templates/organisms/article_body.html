@@ -1,0 +1,18 @@
+{#- An admin's text in Markdown, as a page shows it: its outline first when
+    it has headings (a `<details>`, opened by a tap; each line an anchor to
+    its heading), then the text. `markdown()` is the one output printed
+    unescaped: the renderer writes no markup of the author's
+    (`application::ports::MarkdownRenderer`). -#}
+{% import "atoms/icon.html" as atoms %}
+{% macro article_body(text, outline_open=false) -%}
+{% set headings = outline(text=text) %}
+{% if headings | length > 1 %}
+<details class="article-outline"{% if outline_open %} open{% endif %}>
+  <summary class="article-outline__title">{{ atoms::icon(name="fa-list-ul") }} {{ t(key="info.outline") }}</summary>
+  <ol class="article-outline__list">
+    {% for h in headings %}<li class="article-outline__item article-outline__item--{{ h.level }}"><a href="#{{ h.id }}">{{ h.text }}</a></li>{% endfor %}
+  </ol>
+</details>
+{% endif %}
+<div class="article-body">{{ markdown(text=text) }}</div>
+{%- endmacro article_body %}

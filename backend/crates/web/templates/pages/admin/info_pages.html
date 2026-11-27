@@ -1,0 +1,57 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "atoms/status_badge.html" as status %}
+{% import "molecules/admin_header.html" as header %}
+{% import "molecules/form_field.html" as field %}
+{% import "molecules/row_action.html" as row %}
+{% import "molecules/sheet_header.html" as sheet_head %}
+{% import "organisms/info_page_fields.html" as fields %}
+{#- Every information page (off ones too), by footer group and order: a
+    short whole list. The create sheet, opened by the header's "add" (an
+    anchored section without JS), makes a page off and without text; its
+    own page is where it is written and turned on. `page.body` is
+    web::pages::admin::info_pages::InfoPagesPage. -#}
+{% block title %}{{ t(key="admin_menu.info_pages") }} | {{ site.name }} Admin{% endblock title %}
+{% block vendor %}{{ field::searchable_select_assets() }}{% endblock vendor %}
+{% block content %}
+{% set b = page.body %}
+<div x-data="dialog" data-open="{% if b.errors.message or b.errors.fields %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+{{ header::admin_header(title=t(key="admin_menu.info_pages"), icon="fa-file-lines", sub=t(key="info.admin_sub"), action_href="#them-trang", action_icon="fa-plus", action_label=t(key="info.add"), action_opens=true) }}
+<div class="admin-body">
+  <div class="admin-card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 admin-table admin-table--cards">
+        <thead class="admin-table-head">
+          <tr><th>{{ t(key="info.field_title") }}</th><th>{{ t(key="info.col_group") }}</th><th class="text-center">{{ t(key="info.col_text") }}</th><th class="text-center">{{ t(key="admin.col_status") }}</th><th class="text-end"><span class="visually-hidden">{{ t(key="admin.col_actions") }}</span></th></tr>
+        </thead>
+        <tbody>
+          {% for r in b.rows %}
+          {% set p = r.page %}
+          <tr{% if p.stage == "off" or not p.has_text %} class="table-light text-body-secondary"{% endif %}>
+            <td data-label=""><a class="fw-bold text-decoration-none" href="{{ r.href }}">{{ atoms::icon(name=p.icon | default(value="fa-file-lines"), class="me-1") }}{{ p.title }}</a>{% if p.is_demo %} {{ status::demo() }}{% endif %}<div class="small text-body-secondary">/info/{{ p.code }}</div></td>
+            <td data-label="{{ t(key="info.col_group") }}">{{ r.group_label }}{% if p.in_footer %}<div class="small text-body-secondary">{{ atoms::icon(name="fa-table-columns") }} {{ t(key="info.in_footer") }}</div>{% endif %}</td>
+            <td data-label="{{ t(key="info.col_text") }}" class="text-center small">{% if p.has_text %}{{ t(key="info.has_text") }}{% else %}{{ t(key="info.no_text") }}{% endif %}</td>
+            <td data-label="{{ t(key="admin.col_status") }}" class="text-center cell-state">{{ status::stage(code=p.stage) }}</td>
+            <td data-label="" class="text-end"><div class="row-actions">{{ row::open(href=r.href, name=p.title) }}</div></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-center text-muted py-4">{{ t(key="info.admin_none") }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="sheet-backdrop" x-show="isOpen" x-cloak x-on:click="hide"></div>
+  <section class="contact-sheet" id="them-trang" aria-labelledby="them-trang-title" :class="sheetClass">
+    {{ sheet_head::sheet_header(id="them-trang", title=t(key="info.add"), icon="fa-file-lines") }}
+    <form class="contact-sheet__form" method="post" action="{{ b.create_action }}" novalidate>
+      {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
+      {{ fields::info_page_fields(form=b.form, errors=b.errors, groups=b.groups, prefix="new", new=true, first=true) }}
+      <button type="submit" class="btn btn-success btn-lg w-100">{{ atoms::icon(name="fa-plus") }} {{ t(key="info.add") }}</button>
+    </form>
+  </section>
+</div>
+</div>
+{% endblock content %}

@@ -10,6 +10,8 @@ pub mod crop;
 pub mod crop_price;
 pub mod email_verification_token;
 pub mod file;
+pub mod info_page;
+pub mod info_page_revision;
 pub mod inquiry;
 pub mod job_post;
 pub mod location;

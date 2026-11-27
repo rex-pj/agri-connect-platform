@@ -43,7 +43,7 @@ fn group_key(key: &str) -> &'static str {
         "user" | "role" => "permission_group.users",
         "provider" => "permission_group.providers",
         "listing" | "service" => "permission_group.listings",
-        "category" | "location" | "price" | "alert" => "permission_group.catalogue",
+        "category" | "location" | "price" | "alert" | "content" => "permission_group.catalogue",
         "inquiry" | "review" | "job" => "permission_group.feedback",
         "report" | "partner" => "permission_group.business",
         "own" => "permission_group.own",

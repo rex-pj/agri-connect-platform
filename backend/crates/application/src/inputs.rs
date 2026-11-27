@@ -254,3 +254,24 @@ pub struct AlertInput {
     pub starts_on: Option<chrono::NaiveDate>,
     pub ends_on: Option<chrono::NaiveDate>,
 }
+
+/// An information page's boxes as typed (create and edit; the code is only
+/// read when the page is made, and a blank one is made from the title).
+#[derive(Debug, Clone, Default)]
+pub struct InfoPageInput {
+    pub code: String,
+    pub title: String,
+    pub icon: String,
+    pub in_footer: bool,
+    pub footer_group: String,
+    pub display_order: Option<i32>,
+}
+
+/// A new version of a page's text as typed: in force from `effective_on`
+/// (none: today).
+#[derive(Debug, Clone, Default)]
+pub struct InfoRevisionInput {
+    pub body: String,
+    pub effective_on: Option<chrono::NaiveDate>,
+    pub change_note: String,
+}

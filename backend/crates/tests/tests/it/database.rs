@@ -520,6 +520,30 @@ async fn the_schema_refuses_rows_that_contradict_each_other() {
              INSERT INTO commodities (name, sector, price_fresh_days) VALUES ('Lúa', 'crop', 0)",
             "chk_commodities_price_fresh_days",
         ),
+        // An information page's address is a slug, its title says
+        // something, who sees it and its footer group are of the lists,
+        // and a version of its text is never blank.
+        (
+            "INSERT INTO info_pages (code, title) VALUES ('Dieu Khoan', 'Điều khoản')",
+            "chk_info_pages_code",
+        ),
+        (
+            "INSERT INTO info_pages (code, title) VALUES ('dieu-khoan', '  ')",
+            "chk_info_pages_title",
+        ),
+        (
+            "INSERT INTO info_pages (code, title, stage) VALUES ('dieu-khoan', 'Điều khoản', 'public')",
+            "chk_info_pages_stage",
+        ),
+        (
+            "INSERT INTO info_pages (code, title, footer_group) VALUES ('dieu-khoan', 'Điều khoản', 'side')",
+            "chk_info_pages_footer_group",
+        ),
+        (
+            "INSERT INTO info_pages (id, code, title) VALUES (1, 'dieu-khoan', 'Điều khoản');
+             INSERT INTO info_page_revisions (page_id, body, effective_on) VALUES (1, ' ', '2026-11-27')",
+            "chk_info_page_revisions_body",
+        ),
     ] {
         refused(db, sql, constraint).await;
     }

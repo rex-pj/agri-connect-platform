@@ -36,3 +36,8 @@
 {% macro email(verified) -%}
 {% if verified %}<span class="badge text-bg-success"><i class="fa-solid fa-envelope-circle-check" aria-hidden="true"></i> {{ t(key="status.email_verified") }}</span>{% else %}<span class="badge text-bg-secondary">{{ t(key="status.email_unverified") }}</span>{% endif %}
 {%- endmacro email %}
+
+{#- Who sees a page or a feature: on (everyone), preview (admins only), off. -#}
+{% macro stage(code) -%}
+{% if code == "on" %}<span class="badge text-bg-success">{{ t(key="settings.stage.on") }}</span>{% elif code == "preview" %}<span class="badge text-bg-info">{{ t(key="settings.stage.preview") }}</span>{% else %}<span class="badge text-bg-secondary">{{ t(key="settings.stage.off") }}</span>{% endif %}
+{%- endmacro stage %}

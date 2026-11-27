@@ -11,6 +11,7 @@ pub mod explore;
 pub mod forms;
 pub mod home;
 pub mod inbox;
+pub mod info;
 pub mod jobs;
 pub mod language;
 pub mod listing;

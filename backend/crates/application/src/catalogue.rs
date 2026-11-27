@@ -42,6 +42,7 @@ pub const PERM_PARTNER_REPORT_READ: &str = "partner.report.read";
 pub const PERM_PRICE_MANAGE: &str = "price.manage";
 pub const PERM_JOB_MODERATE: &str = "job.moderate";
 pub const PERM_ALERT_MANAGE: &str = "alert.manage";
+pub const PERM_CONTENT_PAGE_MANAGE: &str = "content.page.manage";
 pub const PERM_SYSTEM_DEMO_MANAGE: &str = "system.demo.manage";
 pub const PERM_SETTING_MANAGE: &str = "setting.manage";
 pub const PERM_FEATURE_PREVIEW: &str = "feature.preview";
@@ -187,6 +188,10 @@ pub static PERMISSIONS: &[PermissionSeed] = &[
     },
     PermissionSeed {
         key: PERM_ALERT_MANAGE,
+        default_roles: ADMIN,
+    },
+    PermissionSeed {
+        key: PERM_CONTENT_PAGE_MANAGE,
         default_roles: ADMIN,
     },
     PermissionSeed {

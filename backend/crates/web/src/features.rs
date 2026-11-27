@@ -257,6 +257,9 @@ mod tests {
         // The location box's ward lookup: the provider's profile and the admin's.
         "place_ward",
         "place_wards",
+        // Each information page is on, in preview or off by its own row.
+        "info_pages",
+        "info_page",
     ];
 
     fn sample(pattern: &str) -> String {

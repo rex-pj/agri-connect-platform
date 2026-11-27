@@ -426,6 +426,11 @@ impl Shell {
         }
     }
 
+    /// This viewer holds `feature.preview`: what is in preview shows to it.
+    pub fn may_preview(&self) -> bool {
+        self.may_preview
+    }
+
     /// This viewer sees `feature`.
     pub fn shows(&self, feature: Feature) -> bool {
         self.features.has(feature)

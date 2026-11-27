@@ -190,6 +190,39 @@ pub enum PlatformSettings {
     UpdatedBy,
 }
 
+/// The information pages (terms, policies, contact, the legal entity): each
+/// shown, in preview or off, maybe in the footer.
+#[derive(DeriveIden, Clone, Copy)]
+pub enum InfoPages {
+    Table,
+    Id,
+    Code,
+    Title,
+    Icon,
+    Stage,
+    InFooter,
+    FooterGroup,
+    DisplayOrder,
+    IsDemo,
+    CreatedOn,
+    UpdatedOn,
+    CreatedBy,
+    UpdatedBy,
+}
+
+/// The versions of an information page's text, each in force from its day.
+#[derive(DeriveIden, Clone, Copy)]
+pub enum InfoPageRevisions {
+    Table,
+    Id,
+    PageId,
+    Body,
+    EffectiveOn,
+    ChangeNote,
+    CreatedOn,
+    CreatedBy,
+}
+
 /// The columns `service_types` and `supply_types` share: the kinds of work
 /// a provider is hired for, and the kinds of supplies one sells. Two tables,
 /// one id sequence (`Sequences::CatalogueTypeIds`), so a bare id names one

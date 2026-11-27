@@ -10,6 +10,7 @@ pub mod coded;
 pub mod commodity;
 pub mod demand;
 pub mod file;
+pub mod info_page;
 pub mod inquiry;
 pub mod job;
 pub mod location;

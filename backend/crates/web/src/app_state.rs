@@ -6,9 +6,10 @@ use application::{
         admin_usecase::AdminUseCase, alert_usecase::AlertUseCase, auth_usecase::AuthUseCase,
         coded_usecase::CodedUseCase, commodity_usecase::CommodityUseCase,
         demand_usecase::DemandReportUseCase, explore_usecase::ExploreUseCase,
-        health_usecase::HealthUseCase, job_usecase::JobUseCase, media_usecase::MediaUseCase,
-        partner_usecase::PartnerUseCase, permission_usecase::PermissionUseCase,
-        place_usecase::PlaceUseCase, price_usecase::PriceUseCase, product_usecase::ProductUseCase,
+        health_usecase::HealthUseCase, info_page_usecase::InfoPageUseCase, job_usecase::JobUseCase,
+        media_usecase::MediaUseCase, partner_usecase::PartnerUseCase,
+        permission_usecase::PermissionUseCase, place_usecase::PlaceUseCase,
+        price_usecase::PriceUseCase, product_usecase::ProductUseCase,
         provider_dashboard_usecase::ProviderDashboardUseCase, review_usecase::ReviewUseCase,
         settings_usecase::SettingsUseCase, setup_usecase::SetupUseCase,
         stats_usecase::StatsUseCase, zalo_usecase::ZaloUseCase,
@@ -28,6 +29,8 @@ pub struct UseCases {
     pub product: ProductUseCase,
     pub admin: AdminUseCase,
     pub alert: AlertUseCase,
+    /// The information pages: terms, policies, contact, the legal entity.
+    pub info_page: InfoPageUseCase,
     pub commodity: CommodityUseCase,
     /// The sectors the platform serves.
     pub sector: CodedUseCase,

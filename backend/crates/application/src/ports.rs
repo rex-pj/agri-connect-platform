@@ -184,7 +184,7 @@ pub trait MapTiles: Send + Sync {
 }
 
 /// One heading of a rendered text: the outline a long page shows above it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct Heading {
     /// 2 or 3: a text's `#` is drawn as a `##`, since the page's title is
     /// its only `<h1>`.

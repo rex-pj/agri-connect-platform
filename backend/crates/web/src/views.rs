@@ -8,15 +8,17 @@ use std::{collections::HashMap, sync::Arc};
 use application::constants::{
     ALERT_BODY_MAX, ALERT_TITLE_MAX, AUDIT_REASON_MAX, BUSINESS_ADDRESS_MAX,
     BUSINESS_DESCRIPTION_MAX, BUSINESS_NAME_MAX, CODED_NAME_MAX, COMMODITY_NAME_MAX, CROP_NAME_MAX,
-    CROP_UNIT_MAX, FULL_NAME_MAX, JOB_DESCRIPTION_MAX, PASSWORD_MIN_CHARS,
-    PASSWORD_RESET_EXPIRY_HOURS, PRICE_FRESH_DAYS_MAX, PRICE_NOTE_MAX, PRODUCT_DESCRIPTION_MAX,
-    PRODUCT_NAME_MAX, PRODUCT_UNIT_MAX, SEARCH_QUERY_MAX, SEARCH_QUERY_MIN, VN_UTC_OFFSET_SECS,
+    CROP_UNIT_MAX, FULL_NAME_MAX, INFO_PAGE_BODY_MAX, INFO_PAGE_CODE_MAX, INFO_PAGE_NOTE_MAX,
+    INFO_PAGE_TITLE_MAX, JOB_DESCRIPTION_MAX, PASSWORD_MIN_CHARS, PASSWORD_RESET_EXPIRY_HOURS,
+    PRICE_FRESH_DAYS_MAX, PRICE_NOTE_MAX, PRODUCT_DESCRIPTION_MAX, PRODUCT_NAME_MAX,
+    PRODUCT_UNIT_MAX, SEARCH_QUERY_MAX, SEARCH_QUERY_MIN, VN_UTC_OFFSET_SECS,
 };
 use application::constants::{
     GEOLOCATE_ACCURACY_MAX_M, MAP_POINT_ZOOM, MAP_START_LAT, MAP_START_LNG, MAP_START_ZOOM,
     MAP_WARD_ZOOM, MAP_ZOOM_MAX, MAP_ZOOM_MIN,
 };
 use application::icons;
+use application::ports::MarkdownRenderer;
 use application::settings::{Settings, SETTING_VALUE_MAX};
 use application::validation::{is_valid_vn_phone, SLUG_PATTERN, VN_PHONE_PATTERN};
 use axum::{
@@ -147,6 +149,10 @@ struct FieldLimits {
     crop_unit_max: usize,
     alert_title_max: usize,
     alert_body_max: usize,
+    info_page_code_max: usize,
+    info_page_title_max: usize,
+    info_page_body_max: usize,
+    info_page_note_max: usize,
     price_note_max: usize,
     job_description_max: usize,
     /// The most days a commodity's prices may stay on the board.
@@ -201,6 +207,10 @@ const FIELD_LIMITS: FieldLimits = FieldLimits {
     crop_unit_max: CROP_UNIT_MAX,
     alert_title_max: ALERT_TITLE_MAX,
     alert_body_max: ALERT_BODY_MAX,
+    info_page_code_max: INFO_PAGE_CODE_MAX,
+    info_page_title_max: INFO_PAGE_TITLE_MAX,
+    info_page_body_max: INFO_PAGE_BODY_MAX,
+    info_page_note_max: INFO_PAGE_NOTE_MAX,
     price_note_max: PRICE_NOTE_MAX,
     job_description_max: JOB_DESCRIPTION_MAX,
     price_fresh_days_max: PRICE_FRESH_DAYS_MAX,
@@ -286,10 +296,16 @@ fn param_text(value: &Value) -> String {
 }
 
 impl Views {
-    pub fn new(site: SiteConfig, locales: Arc<Locales>) -> Result<Self, Error> {
+    /// `markdown`: what the templates' `markdown()` and `outline()` render
+    /// an admin's text with (`application::ports::MarkdownRenderer`).
+    pub fn new(
+        site: SiteConfig,
+        locales: Arc<Locales>,
+        markdown: Arc<dyn MarkdownRenderer>,
+    ) -> Result<Self, Error> {
         Ok(Self {
-            vi: Self::build(Arc::clone(locales.get(Lang::Vi)))?,
-            en: Self::build(Arc::clone(locales.get(Lang::En)))?,
+            vi: Self::build(Arc::clone(locales.get(Lang::Vi)), Arc::clone(&markdown))?,
+            en: Self::build(Arc::clone(locales.get(Lang::En)), markdown)?,
             site,
             locales,
         })
@@ -314,9 +330,14 @@ impl Views {
     }
 
     /// Every template, with the functions and filters bound to `locale`.
-    fn build(locale: Arc<Locale>) -> Result<Tera, Error> {
+    fn build(locale: Arc<Locale>, markdown: Arc<dyn MarkdownRenderer>) -> Result<Tera, Error> {
         let mut tera = Tera::default();
         tera.set_escape_fn(escape_html);
+        // markdown(text=…): an admin's Markdown as HTML, the one output a
+        // template never escapes, since the renderer writes no markup of the
+        // author's (`MarkdownRenderer`). outline(text=…): its headings.
+        tera.register_function("markdown", MarkdownHtml(Arc::clone(&markdown)));
+        tera.register_function("outline", MarkdownOutline(markdown));
         let templates: Vec<(String, String)> = TemplateFiles::iter()
             .filter_map(|name| {
                 let file = TemplateFiles::get(&name)?;
@@ -778,6 +799,34 @@ fn serve_static(path: &str, query: Option<&str>) -> Result<Response, Error> {
     Ok(response)
 }
 
+/// `markdown(text=…)`: the renderer's HTML, marked safe. Only the renderer
+/// may write markup a template prints as it is: it turns every typed HTML
+/// into text and keeps only links and images that cannot run a script.
+struct MarkdownHtml(Arc<dyn MarkdownRenderer>);
+
+impl tera::Function for MarkdownHtml {
+    fn call(&self, args: &HashMap<String, Value>) -> tera::Result<Value> {
+        let text = string_arg(args, "text", "markdown")?;
+        Ok(Value::String(self.0.render(text).html))
+    }
+
+    fn is_safe(&self) -> bool {
+        true
+    }
+}
+
+/// `outline(text=…)`: the text's `##` and `###` headings with their
+/// anchors, escaped like any value.
+struct MarkdownOutline(Arc<dyn MarkdownRenderer>);
+
+impl tera::Function for MarkdownOutline {
+    fn call(&self, args: &HashMap<String, Value>) -> tera::Result<Value> {
+        let text = string_arg(args, "text", "outline")?;
+        tera::to_value(self.0.render(text).outline)
+            .map_err(|e| tera::Error::msg(format!("outline: {e}")))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -840,7 +889,11 @@ mod tests {
 
     fn views(site: SiteConfig) -> Result<Views, Error> {
         let locales = Locales::load().map_err(|e| Error::internal(e.to_string()))?;
-        Views::new(site, Arc::new(locales))
+        Views::new(
+            site,
+            Arc::new(locales),
+            Arc::new(infrastructure::markdown_renderer::PulldownMarkdownRenderer),
+        )
     }
 
     #[test]

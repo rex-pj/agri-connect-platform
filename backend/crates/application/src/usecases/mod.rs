@@ -8,6 +8,7 @@ pub mod commodity_usecase;
 pub mod demand_usecase;
 pub mod explore_usecase;
 pub mod health_usecase;
+pub mod info_page_usecase;
 pub mod job_usecase;
 pub mod media_usecase;
 pub mod partner_usecase;

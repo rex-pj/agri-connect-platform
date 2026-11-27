@@ -1,0 +1,100 @@
+{% extends "layouts/admin.html" %}
+{% import "atoms/icon.html" as atoms %}
+{% import "atoms/alert.html" as alerts %}
+{% import "atoms/status_badge.html" as status %}
+{% import "molecules/form_field.html" as field %}
+{% import "molecules/history_list.html" as history %}
+{% import "organisms/record_header.html" as record %}
+{% import "organisms/article_body.html" as article %}
+{% import "organisms/info_page_fields.html" as fields %}
+{% import "organisms/confirm_sheet.html" as confirm %}
+{#- One information page, as a record page: the header (turn on, preview,
+    turn off, the public page: `b.header`), one status strip (who sees it,
+    whether a version is in force), then its text written as a new version
+    (the form's second button shows it as it would be, saving nothing) and,
+    beside it on a wide screen, its place in the footer, its versions and
+    its history. `page.body` is web::pages::admin::info_pages::InfoPageRecord. -#}
+{% block title %}{{ page.body.page.title }} | {{ site.name }} Admin{% endblock title %}
+{% block vendor %}{{ field::searchable_select_assets() }}{% endblock vendor %}
+{% block content %}
+{% set b = page.body %}
+{% set p = b.page %}
+{% set te = b.text_errors.fields %}
+{{ record::record_header(h=b.header) }}
+<div class="admin-body">
+  {% if b.flash == "info_page_created" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="info.created")) }}{% endif %}
+  {% if b.flash == "info_page_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="admin.saved")) }}{% endif %}
+  {% if b.flash == "info_page_stage_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="info.stage_saved")) }}{% endif %}
+  {% if b.flash == "info_page_text_saved" %}{{ alerts::alert(kind="success", icon="fa-circle-check", text=t(key="info.text_saved")) }}{% endif %}
+  {% if b.errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.errors.message) }}{% endif %}
+  {% if b.text_errors.message %}{{ alerts::alert(kind="danger", icon="fa-triangle-exclamation", text=b.text_errors.message) }}{% endif %}
+
+  <section class="admin-section record-strip" aria-labelledby="status-title">
+    <h2 class="visually-hidden" id="status-title">{{ t(key="admin.status_now") }}</h2>
+    <p class="small mb-0">{{ status::stage(code=p.stage) }} {% if p.stage == "on" %}{{ t(key="info.stage_on") }}{% elif p.stage == "preview" %}{{ t(key="info.stage_preview") }}{% else %}{{ t(key="info.stage_off") }}{% endif %}</p>
+    {% if not p.has_text %}<p class="small mb-0 text-warning-emphasis">{{ atoms::icon(name="fa-circle-exclamation") }} {{ t(key="info.no_text_note") }}</p>{% endif %}
+    {% set last = b.history | filter(attribute="action", value="set_info_page_status") | first %}{% if last %}{{ history::last_change(row=last) }}{% endif %}
+  </section>
+
+  <div class="row g-3 g-lg-4">
+    <div class="col-lg-8 d-flex flex-column gap-3">
+      {% if b.preview %}
+      <section class="admin-section" aria-labelledby="preview-title">
+        <h2 class="admin-section__title" id="preview-title">{{ atoms::icon(name="fa-eye") }} {{ t(key="info.preview_title") }}</h2>
+        {{ article::article_body(text=b.text.body, outline_open=true) }}
+      </section>
+      {% endif %}
+      <section class="admin-section" aria-labelledby="text-title">
+        <h2 class="admin-section__title" id="text-title">{{ t(key="info.text_title") }}</h2>
+        <form class="form-stack" method="post" action="{{ b.text_action }}" novalidate>
+          <div class="form-field">
+            <label class="form-label fw-semibold" for="text-body">{{ t(key="info.field_body") }} <span class="text-danger" aria-hidden="true">*</span></label>
+            <textarea class="form-control font-monospace markdown-box{% if te.body %} is-invalid{% endif %}" id="text-body" name="body" rows="18" maxlength="{{ limits.info_page_body_max }}" aria-describedby="text-body-hint{% if te.body %} text-body-error{% endif %}"{% if te.body %} aria-invalid="true"{% endif %}>{{ b.text.body }}</textarea>
+            <div class="form-text" id="text-body-hint">{{ t(key="info.body_hint") }}</div>
+            {% if te.body %}<div class="invalid-feedback" id="text-body-error">{{ te.body }}</div>{% endif %}
+          </div>
+          <div class="row g-2">
+            <div class="col-sm-5">{{ field::input(id="text-effective", name="effective_on", label=t(key="info.field_effective"), type="date", value=b.text.effective_on, error=te.effective_on | default(value=""), hint=t(key="info.effective_hint")) }}</div>
+            <div class="col-sm-7">{{ field::input(id="text-note", name="change_note", label=t(key="info.field_note"), value=b.text.change_note, error=te.change_note | default(value=""), maxlength=limits.info_page_note_max, placeholder=t(key="info.note_placeholder")) }}</div>
+          </div>
+          <div class="admin-actions">
+            <button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="info.save_text") }}</button>
+            <button type="submit" class="btn btn-outline-secondary" name="intent" value="preview">{{ atoms::icon(name="fa-eye") }} {{ t(key="info.preview_button") }}</button>
+          </div>
+        </form>
+      </section>
+    </div>
+    <div class="col-lg-4 d-flex flex-column gap-3">
+      <section class="admin-section" aria-labelledby="edit-title">
+        <h2 class="admin-section__title" id="edit-title">{{ t(key="info.settings_title") }}</h2>
+        <form class="form-stack" method="post" action="{{ b.update_action }}" novalidate>
+          {{ fields::info_page_fields(form=b.form, errors=b.errors, groups=b.groups, prefix="edit") }}
+          <div class="admin-actions"><button type="submit" class="btn btn-success">{{ atoms::icon(name="fa-floppy-disk") }} {{ t(key="admin.save_changes") }}</button></div>
+        </form>
+      </section>
+      <section class="admin-section" aria-labelledby="versions-title">
+        <h2 class="admin-section__title" id="versions-title">{{ t(key="info.versions") }}</h2>
+        <ul class="info-versions">
+          {% for r in b.revisions %}
+          <li>
+            <span class="fw-semibold">{{ t(key="info.effective", day=r.effective_on | full_date) }}</span>
+            {% if r.state == "in_force" %}<span class="badge text-bg-success">{{ t(key="info.revision.in_force") }}</span>{% elif r.state == "upcoming" %}<span class="badge text-bg-info">{{ t(key="info.revision.upcoming") }}</span>{% else %}<span class="badge text-bg-secondary">{{ t(key="info.revision.past") }}</span>{% endif %}
+            {% if r.change_note %}<span class="d-block small">{{ r.change_note }}</span>{% endif %}
+            <span class="d-block small text-body-secondary">{{ t(key="info.written") }} <time datetime="{{ r.created_on | utc_iso }}">{{ r.created_on | vn_datetime }}</time></span>
+          </li>
+          {% else %}
+          <li class="text-body-secondary small">{{ t(key="info.no_versions") }}</li>
+          {% endfor %}
+        </ul>
+      </section>
+      {{ history::history_list(rows=b.history) }}
+    </div>
+  </div>
+
+  {% for x in b.confirms %}
+  <div x-data="dialog" data-open="{% if x.open %}true{% else %}false{% endif %}" x-on:keydown.escape.window="hide">
+    {{ confirm::confirm_sheet(id=x.id, title=x.title, icon=x.icon, action=x.action, button=x.button, reason_max=limits.audit_reason_max, effect=x.effect, what=x.what, note=x.note, hidden_name=x.hidden_name, hidden_value=x.hidden_value, button_class=x.button_class) }}
+  </div>
+  {% endfor %}
+</div>
+{% endblock content %}

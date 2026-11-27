@@ -26,6 +26,7 @@ pub enum Entity {
     CropPrice,
     JobPost,
     Alert,
+    InfoPage,
     /// The platform settings (one record: `entity_id` 0).
     Setting,
 }
@@ -50,6 +51,7 @@ impl Entity {
             Entity::CropPrice => "crop_price",
             Entity::JobPost => "job_post",
             Entity::Alert => "alert",
+            Entity::InfoPage => "info_page",
             Entity::Setting => "setting",
         }
     }
@@ -105,6 +107,11 @@ pub enum Change {
     },
     /// It was just made (an inquiry a farmer sent).
     Created,
+    /// A new version of its text was written (an information page), in
+    /// force from `effective_on` (`YYYY-MM-DD`).
+    Revised {
+        effective_on: String,
+    },
     /// Settings changed, each as "key: before → after".
     SettingsChanged {
         changes: Vec<String>,

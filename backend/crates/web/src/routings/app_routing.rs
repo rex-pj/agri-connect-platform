@@ -152,6 +152,8 @@ impl AppRouting {
             .route("/services", get(pages::services::list))
             .route("/prices", get(pages::prices::show))
             .route("/jobs/new", get(pages::jobs::new))
+            .route("/info", get(pages::info::hub))
+            .route("/info/{code}", get(pages::info::show))
             .route(
                 "/services/category/{id}/{slug}",
                 get(pages::services::category),
@@ -474,6 +476,22 @@ impl AppRouting {
             .route(
                 "/admin/alerts/{id}/status",
                 post(pages::admin::alerts::change_status),
+            )
+            .route(
+                "/admin/info-pages",
+                get(pages::admin::info_pages::list).post(pages::admin::info_pages::create),
+            )
+            .route(
+                "/admin/info-pages/{id}",
+                get(pages::admin::info_pages::show).post(pages::admin::info_pages::update),
+            )
+            .route(
+                "/admin/info-pages/{id}/stage",
+                post(pages::admin::info_pages::change_stage),
+            )
+            .route(
+                "/admin/info-pages/{id}/text",
+                post(pages::admin::info_pages::write_text),
             )
             .route(
                 "/admin/locations",

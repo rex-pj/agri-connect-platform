@@ -9,6 +9,7 @@ pub mod commodity_repository;
 pub mod demand_repository;
 pub mod file_repository;
 pub mod health_repository;
+pub mod info_page_repository;
 pub mod inquiry_repository;
 pub mod job_repository;
 pub mod location_repository;

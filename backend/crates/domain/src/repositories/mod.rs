@@ -11,6 +11,7 @@ pub mod demand_repository_trait;
 pub mod demo_data_repository_trait;
 pub mod file_repository_trait;
 pub mod health_repository_trait;
+pub mod info_page_repository_trait;
 pub mod inquiry_repository_trait;
 pub mod job_repository_trait;
 pub mod location_repository_trait;

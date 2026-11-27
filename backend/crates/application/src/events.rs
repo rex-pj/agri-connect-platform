@@ -90,6 +90,7 @@ pub fn audit_action(event: &DomainEvent) -> String {
         (Change::Updated, _) => format!("update_{entity}"),
         (Change::StatusChanged { .. }, _) => format!("set_{entity}_status"),
         (Change::Created, _) => format!("create_{entity}"),
+        (Change::Revised { .. }, _) => format!("revise_{entity}"),
         (Change::Auth(what), _) => what.as_str().into(),
         (Change::SettingsChanged { .. }, _) => "change_settings".into(),
     }
@@ -113,6 +114,8 @@ impl EventSubscriber for AuditLogSubscriber {
             (Change::AccountAssigned { email }, _) => Some(email.clone()),
             (Change::StatusChanged { status }, Some(r)) => Some(format!("{status}: {r}")),
             (Change::StatusChanged { status }, None) => Some(status.clone()),
+            (Change::Revised { effective_on }, Some(r)) => Some(format!("{effective_on}: {r}")),
+            (Change::Revised { effective_on }, None) => Some(effective_on.clone()),
             (Change::Contract { about, .. }, Some(r)) => Some(format!("{about}: {r}")),
             (Change::Contract { about, .. }, None) => Some(about.clone()),
             // "key: before → after; …: reason".

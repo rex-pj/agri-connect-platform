@@ -1,0 +1,21 @@
+{#- An information page's boxes, shared by the create sheet and its own
+    page. `form` is web::pages::admin::info_pages::InfoPageForm (as typed),
+    `errors` its FormErrors, `groups` the footer's groups. The address is
+    only typed when the page is made (`new`): it never changes after. -#}
+{% import "molecules/form_field.html" as field %}
+{% macro info_page_fields(form, errors, groups, prefix, new=false, first=false) -%}
+{% set e = errors.fields %}
+{{ field::input(id=prefix ~ "-title", name="title", label=t(key="info.field_title"), value=form.title, error=e.title | default(value=""), required=true, maxlength=limits.info_page_title_max, placeholder=t(key="info.title_placeholder"), first=first) }}
+{% if new %}
+{{ field::input(id=prefix ~ "-code", name="code", label=t(key="info.field_code"), value=form.code, error=e.code | default(value=""), maxlength=limits.info_page_code_max, pattern=limits.slug_pattern, placeholder=t(key="info.code_placeholder"), hint=t(key="info.code_hint")) }}
+{% endif %}
+{{ field::icon_select(id=prefix ~ "-icon", name="icon", label=t(key="info.field_icon"), value=form.icon, error=e.icon | default(value="")) }}
+<div class="row g-2">
+  <div class="col-7">{{ field::select(id=prefix ~ "-group", name="footer_group", label=t(key="info.field_group"), options=groups, value_key="value", label_key="label", value=form.footer_group, error=e.footer_group | default(value="")) }}</div>
+  <div class="col-5">{{ field::input(id=prefix ~ "-order", name="display_order", label=t(key="info.field_order"), type="number", value=form.display_order, error=e.display_order | default(value=""), inputmode="numeric") }}</div>
+</div>
+<div class="form-check form-field">
+  <input class="form-check-input" type="checkbox" id="{{ prefix }}-footer" name="in_footer" value="on"{% if form.in_footer %} checked{% endif %}>
+  <label class="form-check-label" for="{{ prefix }}-footer">{{ t(key="info.field_in_footer") }}</label>
+</div>
+{%- endmacro info_page_fields %}

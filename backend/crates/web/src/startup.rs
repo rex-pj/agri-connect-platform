@@ -27,6 +27,7 @@ use application::{
         demand_usecase::{DemandDeps, DemandReportUseCase},
         explore_usecase::{ExploreDeps, ExploreUseCase},
         health_usecase::HealthUseCase,
+        info_page_usecase::InfoPageUseCase,
         job_usecase::JobUseCase,
         media_usecase::{MediaDeps, MediaUseCase},
         partner_usecase::{PartnerDeps, PartnerUseCase},
@@ -52,6 +53,7 @@ use infrastructure::{
     image_processor::{ImageRules, RasterImageProcessor},
     jwt_token_service::JwtTokenService,
     map_tiles::OsmMapTiles,
+    markdown_renderer::PulldownMarkdownRenderer,
     repositories::{
         admin_unit_repository::AdminUnitRepository,
         alert_repository::AlertRepository,
@@ -64,6 +66,7 @@ use infrastructure::{
         demand_repository::DemandRepository,
         file_repository::FileRepository,
         health_repository::HealthRepository,
+        info_page_repository::InfoPageRepository,
         inquiry_repository::InquiryRepository,
         job_repository::JobRepository,
         location_repository::LocationRepository,
@@ -553,7 +556,11 @@ pub struct Wiring {
 
 /// The templates of every language over `locales`, with the site identity.
 pub fn views(site: SiteConfig, locales: Arc<Locales>) -> Result<Arc<Views>, StartupError> {
-    Ok(Arc::new(Views::new(site, locales)?))
+    Ok(Arc::new(Views::new(
+        site,
+        locales,
+        Arc::new(PulldownMarkdownRenderer),
+    )?))
 }
 
 /// Wires every use case. Public so integration tests can build the exact
@@ -750,6 +757,10 @@ pub fn build_state(wiring: Wiring) -> Result<AppState, StartupError> {
             Arc::new(PriceRepository::new(Arc::clone(&db))),
             location_repo,
             commodity_repo.clone(),
+            events.clone(),
+        ),
+        info_page: InfoPageUseCase::new(
+            Arc::new(InfoPageRepository::new(Arc::clone(&db))),
             events.clone(),
         ),
         zalo: ZaloUseCase::new(zalo),

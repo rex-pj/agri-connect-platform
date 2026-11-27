@@ -5944,3 +5944,139 @@ summary.acct-item__row:focus-visible {
   padding: var(--sp-3) 0;
   cursor: pointer;
 }
+
+/* ── Information pages: an admin's Markdown as a page reads it ───────────── */
+/* The text at a reading width, its headings anchored below a sticky bar. */
+.article-body {
+  max-width: 70ch;
+  color: var(--text);
+  font-size: var(--fs-base);
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.article-body > :first-child {
+  margin-top: 0;
+}
+.article-body h2,
+.article-body h3,
+.article-body h4 {
+  margin: var(--sp-5) 0 var(--sp-2);
+  font-weight: 800;
+  line-height: 1.3;
+  scroll-margin-top: var(--sp-8);
+}
+.article-body h2 {
+  font-size: 1.2rem;
+}
+.article-body h3 {
+  font-size: 1.05rem;
+}
+.article-body h4 {
+  font-size: 1rem;
+}
+.article-body ul,
+.article-body ol {
+  padding-left: 1.4rem;
+}
+.article-body li + li {
+  margin-top: var(--sp-1);
+}
+.article-body a {
+  color: var(--p700);
+  font-weight: 600;
+}
+.article-body blockquote {
+  margin: var(--sp-3) 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-left: 4px solid var(--p300);
+  background: var(--p50);
+}
+.article-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 12px;
+}
+.article-body table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+.article-body th,
+.article-body td {
+  padding: var(--sp-1) var(--sp-2);
+  border: 1px solid var(--border);
+}
+/* The outline: folded by default on a long page, a tap opens it. */
+.article-outline {
+  margin-bottom: var(--sp-4);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--bg);
+}
+.article-outline__title {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-weight: 700;
+  cursor: pointer;
+}
+.article-outline__list {
+  margin: var(--sp-1) 0 var(--sp-2);
+  padding-left: 1.4rem;
+}
+.article-outline__item a {
+  display: inline-block;
+  padding: var(--sp-1) 0;
+  color: var(--text2);
+}
+.article-outline__item--3 {
+  margin-left: var(--sp-3);
+  font-size: var(--fs-sm);
+}
+/* The hub's links: one large row each. */
+.info-links {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.info-links__item {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
+  border-bottom: 1px solid var(--hairline);
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+.info-links li:last-child .info-links__item {
+  border-bottom: 0;
+}
+.info-links__item > span:first-of-type {
+  flex: 1;
+}
+.info-links__go {
+  color: var(--muted);
+}
+.info-versions {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.info-versions li {
+  padding: var(--sp-2) 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.info-versions li:last-child {
+  border-bottom: 0;
+}
+/* The admin's Markdown box: room to write a policy. */
+.markdown-box {
+  min-height: 20rem;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}

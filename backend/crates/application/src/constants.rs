@@ -325,3 +325,12 @@ pub const JOB_POSTS_OPEN_PER_PHONE_DEFAULT: i64 = 3;
 pub const JOB_NOTIFY_RADIUS_KM_DEFAULT: i64 = RADIUS_DEFAULT_M as i64 / METRES_PER_KM;
 /// At most this many providers (the nearest) are emailed about one job.
 pub const JOB_NOTIFY_MAX_DEFAULT: i64 = 20;
+
+// ── Information pages ─────────────────────────────────────────────────────────
+/// An information page's address (`/info/{code}`) and title.
+pub const INFO_PAGE_CODE_MAX: usize = 60;
+pub const INFO_PAGE_TITLE_MAX: usize = 160;
+/// A page's text in Markdown: room for a full policy, not a book.
+pub const INFO_PAGE_BODY_MAX: usize = 60_000;
+/// What changed in a new version, as the page's version list says it.
+pub const INFO_PAGE_NOTE_MAX: usize = 300;

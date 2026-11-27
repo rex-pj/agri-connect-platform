@@ -1629,3 +1629,84 @@ pub struct ListingActivityDto {
 pub struct IconMatchesDto {
     pub icons: Vec<String>,
 }
+
+/// An information page as the admin's list and page show it.
+#[derive(Debug, Clone, Serialize)]
+pub struct InfoPageDto {
+    pub id: i32,
+    pub code: String,
+    pub title: String,
+    pub icon: Option<String>,
+    /// `on`, `preview` or `off`.
+    pub stage: &'static str,
+    pub in_footer: bool,
+    pub footer_group: String,
+    pub display_order: i32,
+    pub is_demo: bool,
+    /// It has a version in force: a page without one shows nowhere.
+    pub has_text: bool,
+}
+
+/// One version of a page's text: `state` is `in_force`, `upcoming` (its
+/// day has not come) or `past` (a later one is in force).
+#[derive(Debug, Clone, Serialize)]
+pub struct InfoRevisionDto {
+    pub id: i32,
+    pub body: String,
+    pub effective_on: chrono::NaiveDate,
+    pub change_note: Option<String>,
+    pub created_on: chrono::DateTime<chrono::Utc>,
+    pub state: &'static str,
+}
+
+/// An information page with every version, for its admin page.
+#[derive(Debug, Clone, Serialize)]
+pub struct InfoPageDetailDto {
+    pub page: InfoPageDto,
+    /// The latest to come into force first.
+    pub revisions: Vec<InfoRevisionDto>,
+}
+
+/// A page a visitor may open: the footer's and the hub's links.
+#[derive(Debug, Clone, Serialize)]
+pub struct InfoLinkDto {
+    pub code: String,
+    pub title: String,
+    pub icon: Option<String>,
+    pub footer_group: String,
+    pub in_footer: bool,
+    /// Seen only by who may preview it.
+    pub preview: bool,
+}
+
+/// One version a visitor may read, for the page's version list.
+#[derive(Debug, Clone, Serialize)]
+pub struct InfoVersionDto {
+    pub id: i32,
+    pub effective_on: chrono::NaiveDate,
+    pub change_note: Option<String>,
+    /// The one shown.
+    pub current: bool,
+}
+
+/// An information page as a visitor reads it: the version in force (or an
+/// earlier one asked for), in Markdown.
+#[derive(Debug, Clone, Serialize)]
+pub struct InfoPageViewDto {
+    pub id: i32,
+    pub code: String,
+    pub title: String,
+    pub icon: Option<String>,
+    /// In preview: only who may preview it sees it.
+    pub preview: bool,
+    /// Its text in Markdown: the page renders it (`markdown()`), with
+    /// its outline.
+    pub body: String,
+    pub effective_on: chrono::NaiveDate,
+    pub change_note: Option<String>,
+    /// An earlier version is shown: no longer in force since this day.
+    pub superseded_on: Option<chrono::NaiveDate>,
+    /// Every version in force so far, the latest first (the upcoming ones
+    /// are not public).
+    pub versions: Vec<InfoVersionDto>,
+}
